@@ -6,8 +6,8 @@ module TProperty where
 -- Exception:
 --   Prelude.head: empty list
 --   CallStack (from HasCallStack):
---     error, called at libraries/base/GHC/List.hs:1782:3 in base:GHC.List
---     errorEmptyList, called at libraries/base/GHC/List.hs:89:11 in base:GHC.List
---     badHead, called at libraries/base/GHC/List.hs:83:28 in base:GHC.List
+--     error, called at libraries/base/GHC/List.hs:2004:3 in base:GHC.List
+--     errorEmptyList, called at libraries/base/GHC/List.hs:90:11 in base:GHC.List
+--     badHead, called at libraries/base/GHC/List.hs:84:28 in base:GHC.List
 --     head, called at <interactive>:1:27 in interactive:Ghci2
 -- []

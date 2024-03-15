@@ -19,6 +19,7 @@ import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
 import           Data.Text                     (Text)
+import           Ide.Plugin.Error              (PluginError)
 import           Language.Haskell.TH.Syntax    (Lift)
 
 
@@ -137,12 +138,12 @@ data HieFunMaskKind kind where
 
 data SemanticLog
   = LogShake Shake.Log
+  | LogDependencyError PluginError
   | LogNoAST FilePath
   | LogConfig SemanticTokensConfig
   | LogMsg String
   | LogNoVF
   | LogSemanticTokensDeltaMisMatch Text (Maybe Text)
-  deriving (Show)
 
 instance Pretty SemanticLog where
   pretty theLog = case theLog of
@@ -154,6 +155,7 @@ instance Pretty SemanticLog where
     LogSemanticTokensDeltaMisMatch previousIdFromRequest previousIdFromCache
                       -> "SemanticTokensDeltaMisMatch: previousIdFromRequest: " <> pretty previousIdFromRequest
                       <> " previousIdFromCache: " <> pretty previousIdFromCache
+    LogDependencyError err -> "SemanticTokens' dependency error: " <> pretty err
 
 
 type SemanticTokenId = Text

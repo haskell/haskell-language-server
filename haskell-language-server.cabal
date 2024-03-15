@@ -64,7 +64,9 @@ common pedantic
   if flag(pedantic)
     ghc-options:
       -Werror
-      -- Note [unused-packages] Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
+      -- Note [unused-packages]
+      -- ~~~~~~~~~~~~~~~~~~~~~~
+      -- Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
       -- MIN_VERSION_<pkg> is CPP macro that cabal defines only when <pkg> is declared as a dependency.
       -- But -Wunused-packages still reports it as unused dependency if it's not imported.
       -- For packages with such "unused" dependencies we demote -Wunused-packages error
@@ -144,6 +146,58 @@ test-suite hls-cabal-fmt-plugin-tests
 
   if flag(isolateCabalfmtTests)
     build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+    cpp-options: -Dhls_isolate_cabalfmt_tests
+
+-----------------------------
+-- cabal-gild plugin
+-----------------------------
+
+flag cabalgild
+  description: Enable cabal-gild plugin
+  default:     True
+  manual:      True
+
+common cabalgild
+  if flag(cabalgild)
+    build-depends: haskell-language-server:hls-cabal-gild-plugin
+    cpp-options: -Dhls_cabalgild
+
+flag isolateCabalGildTests
+  description: Should tests search for 'cabal-gild' on the $PATH or shall we install it via build-tool-depends?
+  -- By default, search on the PATH
+  default:     False
+  manual:      True
+
+library hls-cabal-gild-plugin
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.CabalGild
+  hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
+  build-depends:
+    , base            >=4.12 && <5
+    , directory
+    , filepath
+    , ghcide          == 2.7.0.0
+    , hls-plugin-api  == 2.7.0.0
+    , lsp-types
+    , text
+    , mtl
+    , process-extras
+
+test-suite hls-cabal-gild-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , directory
+    , filepath
+    , haskell-language-server:hls-cabal-gild-plugin
+    , hls-test-utils        == 2.7.0.0
+
+  if flag(isolateCabalGildTests)
+    build-tool-depends: cabal-gild:cabal-gild ^>=1.1
+    cpp-options: -Dhls_isolate_cabalgild_tests
 
 -----------------------------
 -- cabal plugin
@@ -508,6 +562,7 @@ library hls-rename-plugin
     , mtl
     , mod
     , syb
+    , row-types
     , text
     , transformers
     , unordered-containers
@@ -526,6 +581,9 @@ test-suite hls-rename-plugin-tests
     , hls-plugin-api
     , haskell-language-server:hls-rename-plugin
     , hls-test-utils             == 2.7.0.0
+    , lens
+    , lsp-types
+    , text
 
 -----------------------------
 -- retrie plugin
@@ -589,13 +647,20 @@ test-suite hls-retrie-plugin-tests
 -- hlint plugin
 -----------------------------
 
+flag ghc-lib
+  description:
+    Use ghc-lib-parser rather than the ghc library (requires hlint and
+    ghc-lib-parser-ex to also be built with it)
+  default: True
+  manual: True
+
 flag hlint
   description: Enable hlint plugin
   default:     True
   manual:      True
 
 common hlint
-  if flag(hlint) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(hlint)
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
@@ -624,11 +689,17 @@ library hls-hlint-plugin
     , text
     , transformers
     , unordered-containers
-    , ghc-lib-parser
     , ghc-lib-parser-ex
     , apply-refact
 
-  cpp-options:   -DHLINT_ON_GHC_LIB
+  if flag(ghc-lib)
+    cpp-options:   -DGHC_LIB
+    build-depends:
+        ghc-lib-parser
+  else
+    build-depends:
+        ghc
+      , ghc-boot
 
   default-extensions:
     DataKinds
@@ -1261,7 +1332,7 @@ flag floskell
   manual:      True
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.7) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell)
     build-depends: haskell-language-server:hls-floskell-plugin
     cpp-options: -Dhls_floskell
 
@@ -1399,7 +1470,7 @@ flag stylishHaskell
   manual:      True
 
 common stylishHaskell
-  if flag(stylishHaskell) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(stylishHaskell)
     build-depends: haskell-language-server:hls-stylish-haskell-plugin
     cpp-options: -Dhls_stylishHaskell
 
@@ -1416,7 +1487,7 @@ library hls-stylish-haskell-plugin
     , hls-plugin-api   == 2.7.0.0
     , lsp-types
     , mtl
-    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2
+    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
     , text
 
 
@@ -1611,6 +1682,61 @@ test-suite hls-semantic-tokens-plugin-tests
     , data-default
     , row-types
 
+-----------------------------
+-- notes plugin
+-----------------------------
+
+flag notes
+  description: Enable notes plugin
+  default:     True
+  manual:      True
+
+common notes
+  if flag(notes)
+    build-depends: haskell-language-server:hls-notes-plugin
+    cpp-options: -Dhls_notes
+
+library hls-notes-plugin
+  import: defaults, pedantic, warnings
+  buildable: True
+  exposed-modules:
+    Ide.Plugin.Notes
+  hs-source-dirs:     plugins/hls-notes-plugin/src
+  build-depends:
+    , base >=4.12 && <5
+    , array
+    , ghcide == 2.7.0.0
+    , hls-graph == 2.7.0.0
+    , hls-plugin-api == 2.7.0.0
+    , lens
+    , lsp >=2.4
+    , mtl >= 2.2
+    , regex-tdfa >= 1.3.1
+    , text
+    , text-rope
+    , unordered-containers
+  default-extensions:
+      DataKinds
+    , DeriveAnyClass
+    , DerivingStrategies
+    , OverloadedStrings
+    , LambdaCase
+    , TypeFamilies
+
+test-suite hls-notes-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-notes-plugin/test
+  main-is:          NotesTest.hs
+  build-depends:
+    , base
+    , directory
+    , filepath
+    , ghcide:ghcide-test-utils
+    , haskell-language-server:hls-notes-plugin
+    , hls-test-utils == 2.7.0.0
+  default-extensions: OverloadedStrings
+
 ----------------------------
 ----------------------------
 -- HLS
@@ -1625,6 +1751,7 @@ library
                   , cabal
                   , callHierarchy
                   , cabalfmt
+                  , cabalgild
                   , changeTypeSignature
                   , class
                   , eval
@@ -1649,6 +1776,7 @@ library
                   , refactor
                   , overloadedRecordDot
                   , semanticTokens
+                  , notes
 
   exposed-modules:
     Ide.Arguments
@@ -1831,8 +1959,6 @@ test-suite wrapper-test
 benchmark benchmark
     import:           defaults, warnings
     -- Depends on shake-bench which is unbuildable after this point
-    if impl(ghc >= 9.5)
-      buildable: False
     type: exitcode-stdio-1.0
     ghc-options: -threaded
     main-is: Main.hs
@@ -1840,7 +1966,6 @@ benchmark benchmark
     build-tool-depends:
         ghcide-bench:ghcide-bench,
         hp2pretty:hp2pretty,
-        implicit-hie:gen-hie
     default-extensions:
         LambdaCase
         RecordWildCards

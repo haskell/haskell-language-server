@@ -56,6 +56,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-gadt-plugin`                   | 2    |                          |
 | `hls-hlint-plugin`                  | 2    |                          |
 | `hls-module-name-plugin`            | 2    |                          |
+| `hls-notes-plugin`                  | 2    |                          |
 | `hls-qualify-imported-names-plugin` | 2    |                          |
 | `hls-ormolu-plugin`                 | 2    |                          |
 | `hls-rename-plugin`                 | 2    |                          |

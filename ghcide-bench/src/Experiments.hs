@@ -607,15 +607,25 @@ callCommandLogging cmd = do
     output cmd
     callCommand cmd
 
+simpleCabalCradleContent :: String
+simpleCabalCradleContent = "cradle:\n  cabal:\n"
+
+simpleStackCradleContent :: String
+simpleStackCradleContent = "cradle:\n  stack:\n"
+
+-- | Setup the benchmark
+-- we need to create a hie.yaml file for the examples
+-- or the hie.yaml file would be searched in the parent directories recursively
+-- implicit-hie is error prone for the example test `lsp-types-2.1.1.0`
+-- we are using the simpleCabalCradleContent for the hie.yaml file instead.
+-- it works if we have cabal > 3.2.
 setup :: HasConfig => IO SetupResult
 setup = do
---   when alreadyExists $ removeDirectoryRecursive examplesPath
-  benchDir <- case exampleDetails (example ?config) of
+  benchDir <- case exampleDetails(example ?config) of
       ExamplePath examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
-          unless alreadyExists $
-                cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
+          unless alreadyExists $ writeFile hieYamlPath simpleCabalCradleContent
           return examplePath
       ExampleScript examplePath' scriptArgs -> do
           let exampleDir = examplesPath </> exampleName (example ?config)
@@ -626,8 +636,8 @@ setup = do
             cmd_ (Cwd exampleDir) examplePath scriptArgs
             let hieYamlPath = exampleDir </> "hie.yaml"
             alreadyExists <- doesFileExist hieYamlPath
-            unless alreadyExists $
-                  cmd_ (Cwd exampleDir) (FileStdout hieYamlPath) ("gen-hie"::String)
+            unless alreadyExists $ writeFile hieYamlPath simpleCabalCradleContent
+
           return exampleDir
       ExampleHackage ExamplePackage{..} -> do
         let path = examplesPath </> package
@@ -640,7 +650,7 @@ setup = do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
                 callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 let hieYamlPath = path </> "hie.yaml"
-                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String)
+                writeFile hieYamlPath simpleCabalCradleContent
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
@@ -668,8 +678,7 @@ setup = do
                                 ,"compiler"]
                             ]
                         )
-
-                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String) ["--stack"::String]
+                writeFile hieYamlPath simpleStackCradleContent
         return path
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True

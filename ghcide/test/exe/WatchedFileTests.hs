@@ -17,7 +17,6 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
--- import Test.QuickCheck.Instances ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils

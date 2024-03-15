@@ -232,7 +232,7 @@ resolveWTextEdit ideState (RefineAll uri) = do
   pure $ mkWorkspaceEdit uri edits pm
 mkWorkspaceEdit :: Uri -> [ImportEdit] -> PositionMapping -> WorkspaceEdit
 mkWorkspaceEdit uri edits pm =
-      WorkspaceEdit {_changes = Just $ Map.fromList [(uri, mapMaybe toWEdit edits)]
+      WorkspaceEdit {_changes = Just $ Map.singleton uri  (mapMaybe toWEdit edits)
                     , _documentChanges = Nothing
                     , _changeAnnotations = Nothing}
   where toWEdit ImportEdit{ieRange, ieText} =

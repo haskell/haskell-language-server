@@ -46,6 +46,7 @@ library
     , lens
     , lsp-test                ^>=0.17
     , lsp-types               ^>=2.1
+    , safe-exceptions
     , tasty
     , tasty-expected-failure
     , tasty-golden

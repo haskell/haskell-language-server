@@ -21,20 +21,18 @@ examples:
   # Medium-sized project without TH
   - name: cabal
     package: Cabal
-    version: 3.6.3.0
+    version: 3.10.2.1
     modules:
         - src/Distribution/Simple.hs
-        - src/Distribution/Types/Module.hs
-        #- src/Distribution/Simple/Configure.hs
-        #- src/Distribution/Simple/BuildTarget.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
     extra-args: [] # extra HLS command line args
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
-    version: 1.5.0.0
+    version: 2.1.1.0
     modules:
-        - src/Language/LSP/Types/WatchedFiles.hs
-        - src/Language/LSP/Types/CallHierarchy.hs
+        - src/Language/LSP/Protocol/Types/SemanticTokens.hs
+        - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
 
   - name: MultiLayerModules
     path: bench/MultiLayerModules.sh

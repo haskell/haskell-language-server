@@ -155,7 +155,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
           -- We want to avoid that the list of cancelled requests
           -- keeps growing if we receive cancellations for requests
           -- that do not exist or have already been processed.
-          when (reqId `elem` queued) $
+          when (reqId `Set.member` queued) $
               modifyTVar cancelledRequests (Set.insert reqId)
   let clearReqId reqId = atomically $ do
           modifyTVar pendingRequests (Set.delete reqId)
