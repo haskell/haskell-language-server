@@ -12,6 +12,7 @@ module Development.IDE.Graph.Database(
     ,shakeGetBuildEdges) where
 import           Control.Concurrent.STM.Stats            (readTVarIO)
 import           Data.Dynamic
+import           Data.Foldable                           (fold)
 import           Data.Maybe
 import           Development.IDE.Graph.Classes           ()
 import           Development.IDE.Graph.Internal.Action
