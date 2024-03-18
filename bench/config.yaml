@@ -94,6 +94,7 @@ experiments:
     - "edit-header"
     - "edit"
     - "hover"
+    - "semanticTokens"
     - "hover after edit"
     # - "hover after cradle edit"
     - "getDefinition"
@@ -194,6 +195,7 @@ configurations:
   - qualifyImportedNames
   - rename
   - stylish-haskell
+  - semanticTokens
 # - alternateNumberFormat
 # - callHierarchy
 # - changeTypeSignature
