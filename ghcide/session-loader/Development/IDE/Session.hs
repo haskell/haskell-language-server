@@ -595,7 +595,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                         this_target_details = TargetDetails (TargetFile _cfp) this_error_env this_dep_info [_cfp]
                         this_flags = (this_error_env, this_dep_info)
                         this_error_env = ([this_error], Nothing)
-                        this_error = ideErrorWithSource (Just "crade") (Just DiagnosticSeverity_Error) _cfp
+                        this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) _cfp
                                        $ T.unlines
                                        [ "No cradle target found. Is this file listed in the targets of your cradle?"
                                        , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
