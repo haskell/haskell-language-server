@@ -55,7 +55,7 @@ tests recorder logger = do
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
               case lens of
                 Left (ResponseError {_code = InR ErrorCodes_InternalError, _message}) ->
-                  liftIO $ assertBool "We caught an error, but it wasn't ours!"
+                    liftIO $ assertBool "We caught an error, but it wasn't ours!"
                           (T.isInfixOf "divide by zero" _message && T.isInfixOf (coerce pluginId) _message)
                 _ -> liftIO $ assertFailure $ show lens
 

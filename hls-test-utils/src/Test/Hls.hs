@@ -470,6 +470,7 @@ setupTestEnvironment = do
   createDirectoryIfMissing True testCacheDir
   setEnv "XDG_CACHE_HOME" testCacheDir
   pure testRoot
+
 goldenWithHaskellDocFormatter
   :: Pretty b
   => Config
