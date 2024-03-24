@@ -14,8 +14,8 @@ import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import           Development.IDE.Types.Location
 import qualified FuzzySearch
-import           Ide.Logger                        (Logger, Recorder,
-                                                    WithPriority, cmapWithPrio)
+import           Ide.Logger                        (Recorder, WithPriority,
+                                                    cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
@@ -36,8 +36,8 @@ import           Test.Tasty.HUnit
 import           TestUtils
 import           Text.Printf                       (printf)
 
-tests :: Recorder (WithPriority Log) -> Logger -> TestTree
-tests recorder logger = do
+tests :: Recorder (WithPriority Log) -> TestTree
+tests recorder = do
   testGroup "Unit"
      [ testCase "empty file path does NOT work with the empty String literal" $
          uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just "."
@@ -82,7 +82,7 @@ tests recorder logger = do
                 ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
             priorityPluginDescriptor i = (defaultPluginDescriptor (fromString $ show i) ""){pluginPriority = i}
 
-        testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger plugins) $ do
+        testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) plugins) $ do
             _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ reverse <$> readIORef orderRef
