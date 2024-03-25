@@ -11,11 +11,8 @@
 module Development.IDE.Core.Rules(
     -- * Types
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
-    Priority(..), GhcSessionIO(..), GetClientSettings(..),
+    GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
-    priorityTypeCheck,
-    priorityGenerateCore,
-    priorityFilesOfInterest,
     runAction,
     toIdeResult,
     defineNoFile,
@@ -249,15 +246,6 @@ getParsedModuleWithComments = use GetParsedModuleWithComments
 ------------------------------------------------------------
 -- Rules
 -- These typically go from key to value and are oracles.
-
-priorityTypeCheck :: Priority
-priorityTypeCheck = Priority 0
-
-priorityGenerateCore :: Priority
-priorityGenerateCore = Priority (-1)
-
-priorityFilesOfInterest :: Priority
-priorityFilesOfInterest = Priority (-2)
 
 -- | WARNING:
 -- We currently parse the module both with and without Opt_Haddock, and
@@ -682,7 +670,6 @@ typeCheckRuleDefinition
     -> ParsedModule
     -> Action (IdeResult TcModuleResult)
 typeCheckRuleDefinition hsc pm = do
-  setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   unlift <- askUnliftIO
@@ -936,7 +923,6 @@ generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts
 generateCore runSimplifier file = do
     packageState <- hscEnv <$> use_ GhcSessionDeps file
     tm <- use_ TypeCheck file
-    setPriority priorityGenerateCore
     liftIO $ compileModule runSimplifier packageState (tmrModSummary tm) (tmrTypechecked tm)
 
 generateCoreRule :: Recorder (WithPriority Log) -> Rules ()
