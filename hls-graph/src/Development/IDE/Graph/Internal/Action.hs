@@ -11,7 +11,6 @@ module Development.IDE.Graph.Internal.Action
 , apply
 , applyWithoutDependency
 , parallel
-, reschedule
 , runActions
 , Development.IDE.Graph.Internal.Action.getDirtySet
 , getKeysAndVisitedAge
@@ -40,10 +39,6 @@ alwaysRerun :: Action ()
 alwaysRerun = do
     ref <- Action $ asks actionDeps
     liftIO $ modifyIORef' ref (AlwaysRerunDeps mempty <>)
-
--- No-op for now
-reschedule :: Double -> Action ()
-reschedule _ = pure ()
 
 parallel :: [Action a] -> Action [a]
 parallel [] = pure []

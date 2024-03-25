@@ -15,8 +15,6 @@ module Development.IDE.Graph(
     ShakeValue, RuleResult,
     -- * Special rules
     alwaysRerun,
-    -- * Batching
-    reschedule,
     -- * Actions for inspecting the keys in the database
     getDirtySet,
     getKeysAndVisitedAge,
