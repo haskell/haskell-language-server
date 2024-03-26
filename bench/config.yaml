@@ -106,6 +106,8 @@ experiments:
     - "code actions after cradle edit"
     - "documentSymbols after edit"
     - "hole fit suggestions"
+    - "eval execute single-line code lens"
+    - "eval execute multi-line code lens"
 
 # An ordered list of versions to analyze
 versions:
