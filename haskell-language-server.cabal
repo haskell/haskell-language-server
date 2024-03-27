@@ -1188,6 +1188,51 @@ test-suite hls-gadt-plugin-tests
     , hls-test-utils              == 2.7.0.0
     , text
 
+
+-----------------------------
+-- inlay hints plugin
+-----------------------------
+
+flag inlayHints
+  description: Enable inlayHints plugin
+  default:     True
+  manual:      True
+
+common inlayHints
+  if flag(inlayHints)
+    build-depends: haskell-language-server:hls-inlay-hints-plugin
+    cpp-options: -DinlayHints
+
+library hls-inlay-hints-plugin
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.InlayHints
+  hs-source-dirs:   plugins/hls-inlay-hints-plugin/src
+  build-depends:
+      base                  >=4.12 && <5
+    , containers
+    , deepseq
+    , extra
+    , ghcide                == 2.7.0.0
+    , hashable
+    , hls-plugin-api        == 2.7.0.0
+    , lsp                   >=2.4
+    , transformers
+    , text
+
+  default-extensions: DataKinds
+
+test-suite hls-inlay-hints-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-inlay-hints-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , filepath
+    , haskell-language-server:hls-inlay-hints-plugin
+    , hls-test-utils              == 2.7.0.0
+    , text
+
 -----------------------------
 -- explicit fixity plugin
 -----------------------------
@@ -1777,6 +1822,7 @@ library
                   , overloadedRecordDot
                   , semanticTokens
                   , notes
+                  , inlayHints
 
   exposed-modules:
     Ide.Arguments
