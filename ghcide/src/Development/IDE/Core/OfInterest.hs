@@ -48,6 +48,7 @@ import           Ide.Logger                               (Pretty (pretty),
                                                            logDebug)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
+import qualified Data.Aeson as Aeson
 
 data Log = LogShake Shake.Log
   deriving Show
