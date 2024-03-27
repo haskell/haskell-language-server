@@ -10,7 +10,7 @@ import           Test.Hls (TestTree, ignoreTestBecause)
 
 -- | Disable test unless the eval flag is set
 requiresEvalPlugin            :: TestTree -> TestTree
-#if eval
+#if hls_eval
 requiresEvalPlugin            = id
 #else
 requiresEvalPlugin            = ignoreTestBecause "Eval plugin disabled"
@@ -19,7 +19,7 @@ requiresEvalPlugin            = ignoreTestBecause "Eval plugin disabled"
 -- * Formatters
 -- | Disable test unless the floskell flag is set
 requiresFloskellPlugin        :: TestTree -> TestTree
-#if floskell
+#if hls_floskell
 requiresFloskellPlugin        = id
 #else
 requiresFloskellPlugin        = ignoreTestBecause "Floskell plugin disabled"
@@ -27,7 +27,7 @@ requiresFloskellPlugin        = ignoreTestBecause "Floskell plugin disabled"
 
 -- | Disable test unless the fourmolu flag is set
 requiresFourmoluPlugin        :: TestTree -> TestTree
-#if fourmolu
+#if hls_fourmolu
 requiresFourmoluPlugin        = id
 #else
 requiresFourmoluPlugin        = ignoreTestBecause "Fourmolu plugin disabled"
@@ -35,7 +35,7 @@ requiresFourmoluPlugin        = ignoreTestBecause "Fourmolu plugin disabled"
 
 -- | Disable test unless the ormolu flag is set
 requiresOrmoluPlugin          :: TestTree -> TestTree
-#if ormolu
+#if hls_ormolu
 requiresOrmoluPlugin          = id
 #else
 requiresOrmoluPlugin          = ignoreTestBecause "Ormolu plugin disabled"
