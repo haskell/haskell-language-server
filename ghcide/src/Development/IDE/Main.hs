@@ -11,7 +11,9 @@ module Development.IDE.Main
 ,Log(..)
 ) where
 
-import           Control.Concurrent.Extra                 (withNumCapabilities)
+import           Control.Concurrent.Extra                 (Chan, newChan,
+                                                           withNumCapabilities,
+                                                           writeChan)
 import           Control.Concurrent.MVar                  (newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
@@ -63,6 +65,7 @@ import           Development.IDE.Graph                    (action)
 import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
                                                            setupLSP)
 import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
+import           Development.IDE.LSP.Server
 import           Development.IDE.Main.HeapStats           (withHeapStats)
 import qualified Development.IDE.Main.HeapStats           as HeapStats
 import qualified Development.IDE.Monitoring.EKG           as EKG
@@ -356,19 +359,26 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   putMVar ideStateVar ide
                   pure ide
 
-            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+            -- Send everything over a channel, since you need to wait until after initialise before
+            -- LspFuncs is available
+            clientMsgChan :: Chan ReactorMessage <- newChan
+
+            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState clientMsgChan
                 -- See Note [Client configuration in Rules]
                 onConfigChange cfg = do
                   -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
                   let cfgObj = J.toJSON cfg
-                  mide <- liftIO $ tryReadMVar ideStateVar
-                  case mide of
-                    Nothing -> pure ()
-                    Just ide -> liftIO $ do
-                        let msg = T.pack $ show cfg
-                        logDebug (Shake.ideLogger ide) $ "Configuration changed: " <> msg
-                        modifyClientSettings ide (const $ Just cfgObj)
-                        setSomethingModified Shake.VFSUnmodified ide [toKey Rules.GetClientSettings emptyFilePath] "config change"
+                  let configChangeIO = do
+                        mide <- liftIO $ tryReadMVar ideStateVar
+                        case mide of
+                            Nothing -> pure ()
+                            Just ide -> liftIO $ do
+                                let msg = T.pack $ show cfg
+                                logDebug (Shake.ideLogger ide) $ "Configuration changed: " <> msg
+                                modifyClientSettings ide (const $ Just cfgObj)
+                                setSomethingModified Shake.VFSUnmodified ide [toKey Rules.GetClientSettings emptyFilePath] "config change"
+                  liftIO $ writeChan clientMsgChan $ ReactorNotification configChangeIO
+
 
             runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
             dumpSTMStats
