@@ -103,9 +103,7 @@ import qualified Ide.Plugin.Notes                  as Notes
 import qualified Ide.Plugin.Floskell               as Floskell
 #endif
 
-#if hls_fourmolu
 import qualified Ide.Plugin.Fourmolu               as Fourmolu
-#endif
 
 #if hls_cabalfmt
 import qualified Ide.Plugin.CabalFmt               as CabalFmt
@@ -161,9 +159,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_floskell
       Floskell.descriptor "floskell" :
 #endif
-#if hls_fourmolu
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
-#endif
 #if hls_cabalfmt
       let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif

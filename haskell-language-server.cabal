@@ -1370,19 +1370,18 @@ flag fourmolu
   default:     True
   manual:      True
 
-common fourmolu
-  if flag(fourmolu)
-    build-depends: haskell-language-server:hls-fourmolu-plugin
-    cpp-options: -Dhls_fourmolu
-
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
+
+  if flag(fourmolu)
+    build-depends: fourmolu        ^>= 0.14 || ^>= 0.15
+    cpp-options: -Dhls_fourmolu
+
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>= 0.14 || ^>= 0.15
     , ghc-boot-th
     , ghcide          == 2.7.0.0
     , hls-plugin-api  == 2.7.0.0
@@ -1393,12 +1392,16 @@ library hls-fourmolu-plugin
     , text
     , transformers
 
-
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
+
+  if !flag(fourmolu)
+    buildable: False
+
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
   main-is:          Main.hs
+
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
@@ -1770,7 +1773,6 @@ library
                   , explicitFixity
                   , explicitFields
                   , floskell
-                  , fourmolu
                   , ormolu
                   , stylishHaskell
                   , refactor
@@ -1797,6 +1799,7 @@ library
     , ghc
     , ghcide                == 2.7.0.0
     , githash               >=0.1.6.1
+    , haskell-language-server:{hls-fourmolu-plugin}
     , hie-bios
     , hls-plugin-api        == 2.7.0.0
     , optparse-applicative

@@ -7,9 +7,13 @@
 
 module Ide.Plugin.Fourmolu (
     descriptor,
-    provider,
     LogEvent,
 ) where
+
+#if hls_fourmolu
+import           Ormolu
+import           Ormolu.Config
+#endif
 
 import           Control.Exception
 import           Control.Lens                    ((^.))
@@ -36,22 +40,40 @@ import           Language.LSP.Protocol.Lens      (HasTabSize (tabSize))
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
-import           Ormolu
-import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 import           Text.Read                       (readMaybe)
 
+data LogEvent
+    = NoVersion Text
+    | ConfigPath FilePath
+    | NoConfigPath FilePath [FilePath]
+    | StdErr Text
+    | LogCompiledInVersion String
+    | LogExternalVersion [Int]
+    deriving (Show)
+
+instance Pretty LogEvent where
+    pretty = \case
+        NoVersion t -> "Couldn't get Fourmolu version:" <> line <> indent 2 (pretty t)
+        ConfigPath p -> "Loaded Fourmolu config from: " <> pretty (show p)
+        NoConfigPath expected ps -> "No " <> pretty expected <> " found in any of:"
+            <> line <> indent 2 (vsep (map (pretty . show) ps))
+        StdErr t -> "Fourmolu stderr:" <> line <> indent 2 (pretty t)
+        LogCompiledInVersion v -> "Using compiled in fourmolu-" <> pretty v
+        LogExternalVersion v ->
+            "Using external fourmolu"
+            <> if null v then "" else "-"
+            <> pretty (intercalate "." $ map show v)
+
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-    (defaultPluginDescriptor plId desc)
-        { pluginHandlers = mkFormattingHandlers $ provider recorder plId
+    (defaultPluginDescriptor plId pluginDesc)
+        { pluginHandlers = handlers recorder plId
         , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
         }
-  where
-    desc = "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> VERSION_fourmolu
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean, 'PropertyKey "path" 'TString]
 properties =
@@ -64,6 +86,12 @@ properties =
             #external
             "Call out to an external \"fourmolu\" executable, rather than using the bundled library."
             False
+
+pluginDesc :: Text
+handlers :: Recorder (WithPriority LogEvent) -> PluginId -> PluginHandlers IdeState
+#if hls_fourmolu
+pluginDesc = "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> VERSION_fourmolu
+handlers recorder plId = mkFormattingHandlers $ provider recorder plId
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
 provider recorder plId ideState token typ contents fp fo = ExceptT $ withIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
@@ -84,7 +112,7 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ withIndefin
                         logWith recorder Info $ ConfigPath file
                         pure opts
                     ConfigNotFound searchDirs -> do
-                        logWith recorder Info $ NoConfigPath searchDirs
+                        logWith recorder Info $ NoConfigPath configFileName searchDirs
                         pure emptyConfig
                     ConfigParseError f err -> do
                         lift $ sendNotification SMethod_WindowShowMessage $
@@ -158,28 +186,6 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ withIndefin
                 logWith recorder Info $ StdErr err
                 throwError $ PluginInternalError $ "Fourmolu failed with exit code " <> T.pack (show n)
 
-data LogEvent
-    = NoVersion Text
-    | ConfigPath FilePath
-    | NoConfigPath [FilePath]
-    | StdErr Text
-    | LogCompiledInVersion String
-    | LogExternalVersion [Int]
-    deriving (Show)
-
-instance Pretty LogEvent where
-    pretty = \case
-        NoVersion t -> "Couldn't get Fourmolu version:" <> line <> indent 2 (pretty t)
-        ConfigPath p -> "Loaded Fourmolu config from: " <> pretty (show p)
-        NoConfigPath ps -> "No " <> pretty configFileName <> " found in any of:"
-            <> line <> indent 2 (vsep (map (pretty . show) ps))
-        StdErr t -> "Fourmolu stderr:" <> line <> indent 2 (pretty t)
-        LogCompiledInVersion v -> "Using compiled in fourmolu-" <> pretty v
-        LogExternalVersion v ->
-            "Using external fourmolu"
-            <> if null v then "" else "-"
-            <> pretty (intercalate "." $ map show v)
-
 convertDynFlags :: DynFlags -> [String]
 convertDynFlags df =
     let pp = ["-pgmF=" <> p | not (null p)]
@@ -201,4 +207,9 @@ mwhen b x = if b then x else mempty
 #if !MIN_VERSION_fourmolu(0,14,0)
 resolvePrinterOpts :: [PrinterOptsPartial] -> PrinterOptsTotal
 resolvePrinterOpts = foldr fillMissingPrinterOpts defaultPrinterOpts
+#endif
+
+#else
+pluginDesc = "DISABLED: Provides formatting of Haskell files via fourmolu."
+handlers = mempty
 #endif
