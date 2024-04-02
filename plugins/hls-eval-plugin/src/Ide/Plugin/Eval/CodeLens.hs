@@ -228,7 +228,7 @@ runEvalCmd plId st mtoken EvalParams{..} =
                         evalGhcEnv final_hscEnv $ do
                             runTests evalCfg (st, fp) tests
 
-            let workspaceEditsMap = Map.fromList [(_uri, addFinalReturn mdlText edits)]
+            let workspaceEditsMap = Map.singleton _uri (addFinalReturn mdlText edits)
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
@@ -277,6 +277,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
                    . flip xopt_unset  LangExt.MonomorphismRestriction
                    . flip gopt_set    Opt_ImplicitImportQualified
                    . flip gopt_unset  Opt_DiagnosticsShowCaret
+                   . setBackend ghciBackend
                    $ (ms_hspp_opts ms) {
                         useColor = Never
                       , canUseColor = False }

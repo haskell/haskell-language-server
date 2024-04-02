@@ -11,13 +11,13 @@ module Development.IDE.Graph.Internal.Action
 , apply
 , applyWithoutDependency
 , parallel
-, reschedule
 , runActions
 , Development.IDE.Graph.Internal.Action.getDirtySet
 , getKeysAndVisitedAge
 ) where
 
 import           Control.Concurrent.Async
+import           Control.DeepSeq                         (force)
 import           Control.Exception
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -38,11 +38,7 @@ type ShakeValue a = (Show a, Typeable a, Eq a, Hashable a, NFData a)
 alwaysRerun :: Action ()
 alwaysRerun = do
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef ref (AlwaysRerunDeps mempty <>)
-
--- No-op for now
-reschedule :: Double -> Action ()
-reschedule _ = pure ()
+    liftIO $ modifyIORef' ref (AlwaysRerunDeps mempty <>)
 
 parallel :: [Action a] -> Action [a]
 parallel [] = pure []
@@ -120,7 +116,8 @@ apply ks = do
     stack <- Action $ asks actionStack
     (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef ref (ResultDeps (fromListKeySet $ toList is) <>)
+    let !ks = force $ fromListKeySet $ toList is
+    liftIO $ modifyIORef' ref (ResultDeps [ks] <>)
     pure vs
 
 -- | Evaluate a list of keys without recording any dependencies.

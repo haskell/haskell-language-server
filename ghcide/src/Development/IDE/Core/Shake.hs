@@ -51,12 +51,10 @@ module Development.IDE.Core.Shake(
     HLS.getClientConfig,
     getPluginConfigAction,
     knownTargets,
-    setPriority,
     ideLogger,
     actionLogger,
     getVirtualFile,
     FileVersion(..),
-    Priority(..),
     updatePositionMapping,
     updatePositionMappingHelper,
     deleteValue, recordDirtyKeys,
@@ -1306,11 +1304,6 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             ]
             | otherwise = c
 
-
-newtype Priority = Priority Double
-
-setPriority :: Priority -> Action ()
-setPriority (Priority p) = reschedule p
 
 ideLogger :: IdeState -> Logger
 ideLogger IdeState{shakeExtras=ShakeExtras{logger}} = logger

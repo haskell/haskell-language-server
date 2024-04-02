@@ -5,11 +5,10 @@ packages:
          ./hls-graph
          ./ghcide
          ./ghcide-bench
-         ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-02-25T00:00:00Z
+index-state: 2024-03-09T08:17:00Z
 
 tests: True
 test-show-details: direct

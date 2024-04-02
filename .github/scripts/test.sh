@@ -48,6 +48,8 @@ test_all_hls() {
             fi
         fi
     done
+    # install the recommended GHC version so the wrapper can launch HLS
+    ghcup install ghc --set recommended
     "$bindir/haskell-language-server-wrapper${ext}" typecheck "${test_module}" || fail "failed to typecheck with HLS wrapper"
 }
 

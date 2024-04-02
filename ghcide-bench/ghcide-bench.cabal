@@ -2,7 +2,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide-bench
-version:            2.6.0.0
+version:            2.7.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             The Haskell IDE team
@@ -67,8 +67,7 @@ library
         directory,
         extra,
         filepath,
-        ghcide,
-        ghcide-test-utils,
+        ghcide:{ghcide, ghcide-test-utils},
         hashable,
         lens,
         lsp-test,
@@ -90,7 +89,6 @@ test-suite test
     default-language: GHC2021
     build-tool-depends:
         ghcide:ghcide,
-        implicit-hie:gen-hie
     main-is: Main.hs
     hs-source-dirs: test
     ghc-options: -Wunused-packages

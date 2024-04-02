@@ -25,7 +25,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (toJSON)
 import           Data.Char                            (isLower, isUpper)
 import           Data.List                            (intercalate, minimumBy,
-                                                       stripPrefix, uncons)
+                                                       stripPrefix)
 import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (mapMaybe)
@@ -138,7 +138,7 @@ action recorder state uri = do
 -- directories are nested inside each other.
 pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
 pathModuleNames recorder state normFilePath filePath
-  | isLower . head $ takeFileName filePath = return ["Main"]
+  | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
       (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
       srcPaths <- liftIO $ evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
@@ -156,12 +156,16 @@ pathModuleNames recorder state normFilePath filePath
       let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
       pure (map moduleNameFrom suffixes)
   where
+    firstLetter :: (Char -> Bool) -> FilePath -> Bool
+    firstLetter _ []       = False
+    firstLetter pred (c:_) = pred c
+
     moduleNameFrom =
       T.pack
         . intercalate "."
         -- Do not suggest names whose components start from a lower-case char,
         -- they are guaranteed to be malformed.
-        . filter (maybe False (isUpper . fst) . uncons)
+        . filter (firstLetter isUpper)
         . splitDirectories
         . dropExtension
 

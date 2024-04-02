@@ -667,7 +667,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         , "func x y = x + y"
         ]
         [ if ghcVersion >= GHC98
-          then "func :: a -> a -> a" -- 9.8 has a different suggestion
+          then "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
           else "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
@@ -697,7 +697,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         , "func x y = x + y"
         ]
         [ if ghcVersion >= GHC98
-          then "func::a -> a -> a" -- 9.8 has a different suggestion
+          then "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
           else "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
@@ -1725,7 +1725,7 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    [ ignoreForGhcVersions [GHC90, GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    [ ignoreForGhcVersions [GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
   ]
   where

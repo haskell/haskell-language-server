@@ -122,7 +122,7 @@ commentsToSections isLHS Comments {..} =
                      in case parseMaybe lineGroupP $ NE.toList lcs of
                             Nothing -> mempty
                             Just (mls, rs) ->
-                                ( maybe mempty (uncurry Map.singleton) ((theRan,) <$> mls)
+                                ( maybe mempty (Map.singleton theRan) mls
                                 , -- orders setup sections in ascending order
                                   if null rs
                                     then mempty

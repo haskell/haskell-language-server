@@ -7,4 +7,4 @@ type Dummy = 1 + 1
 -- >>> type N = 1
 -- >>> type M = 40
 -- >>> :kind N + M + 1
--- N + M + 1 :: Nat
+-- N + M + 1 :: Natural

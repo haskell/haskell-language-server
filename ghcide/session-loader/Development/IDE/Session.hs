@@ -495,14 +495,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                 -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
                 -- and also not find 'TargetModule Foo'.
                 fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                pure $ map (\fp -> (TargetFile fp, [fp])) (nubOrd (f:fs))
+                pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                return [(targetTarget, found)]
+                return [(targetTarget, Set.fromList found)]
           hasUpdate <- join $ atomically $ do
             known <- readTVar knownTargetsVar
             let known' = flip mapHashed known $ \k ->
-                            HM.unionWith (<>) k $ HM.fromList $ map (second Set.fromList) knownTargets
+                            HM.unionWith (<>) k $ HM.fromList knownTargets
                 hasUpdate = if known /= known' then Just (unhashed known') else Nothing
             writeTVar knownTargetsVar known'
             logDirtyKeys <- recordDirtyKeys extras GetKnownTargets [emptyFilePath]

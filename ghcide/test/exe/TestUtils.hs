@@ -163,9 +163,6 @@ xfail = flip expectFailBecause
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = ignoreFor (BrokenForOS Windows)
 
-ignoreForGHC92Plus :: String -> TestTree -> TestTree
-ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94, GHC96, GHC98])
-
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
 
@@ -304,22 +301,18 @@ defToLocation (InL (Definition (InR ls))) = ls
 defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_targetRange}) -> Location _targetUri _targetRange) <$> defLink
 defToLocation (InR (InR Null)) = []
 
--- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
-thDollarIdx :: UInt
-thDollarIdx | ghcVersion >= GHC90 = 1
-            | otherwise = 0
-
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do
     config <- getConfigFromEnv
     cwd <- getCurrentDirectory
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
-    let projDir = "."
+
     let server = IDE.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
             { IDE.argsHandleIn = pure hInRead
             , IDE.argsHandleOut = pure hOutWrite
             }
 
-    flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
-        runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session
+    withTempDir $ \dir -> do
+        flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
+            runSessionWithHandles hInWrite hOutRead config lspTestCaps dir session

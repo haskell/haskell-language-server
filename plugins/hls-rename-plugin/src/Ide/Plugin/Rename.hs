@@ -25,6 +25,7 @@ import           Data.List.NonEmpty                    (NonEmpty ((:|)),
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
+import           Data.Row
 import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
@@ -57,43 +58,66 @@ import           Language.LSP.Server
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
-    { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
-    , pluginConfigDescriptor = defaultConfigDescriptor
-        { configCustomConfig = mkCustomConfig properties }
-    }
+descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
+    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
+        { pluginHandlers = mconcat
+              [ mkPluginHandler SMethod_TextDocumentRename renameProvider
+              , mkPluginHandler SMethod_TextDocumentPrepareRename prepareRenameProvider
+              ]
+        , pluginConfigDescriptor = defaultConfigDescriptor
+            { configCustomConfig = mkCustomConfig properties }
+        }
+
+prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
+prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
+    nfp <- getNormalizedFilePathE uri
+    namesUnderCursor <- getNamesAtPos state nfp pos
+    -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
+    -- and doesn't even allow you to create full rename request.
+    -- This handler deliberately approximates "things that definitely can't be renamed"
+    -- to mean "there is no Name at given position".
+    --
+    -- In particular it allows some cases through (e.g. cross-module renames),
+    -- so that the full rename handler can give more informative error about them.
+    let renameValid = not $ null namesUnderCursor
+    pure $ InL $ PrepareRenameResult $ InR $ InR $ #defaultBehavior .== renameValid
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
-        nfp <- getNormalizedFilePathE uri
-        directOldNames <- getNamesAtPos state nfp pos
-        directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
+    nfp <- getNormalizedFilePathE uri
+    directOldNames <- getNamesAtPos state nfp pos
+    directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
-        {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
-           indirect references through punned names. To find the transitive closure, we do a pass of
-           the direct references to find the references for any punned names.
-           See the `IndirectPuns` test for an example. -}
-        indirectOldNames <- concat . filter ((>1) . length) <$>
-            mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
-        let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
-            matchesDirect n = occNameFS (nameOccName n) `elem` directFS
-              where
-                directFS = map (occNameFS. nameOccName) directOldNames
-        refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
+    {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
+        indirect references through punned names. To find the transitive closure, we do a pass of
+        the direct references to find the references for any punned names.
+        See the `IndirectPuns` test for an example. -}
+    indirectOldNames <- concat . filter ((>1) . length) <$>
+        mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
+    let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
+           where
+             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
+             directFS = map (occNameFS . nameOccName) directOldNames
 
-        -- Validate rename
-        crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
-        unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
-        when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
+    case oldNames of
+        -- There were no Names at given position (e.g. rename triggered within a comment or on a keyword)
+        [] -> throwError $ PluginInvalidParams "No symbol to rename at given position"
+        _  -> do
+            refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
 
-        -- Perform rename
-        let newName = mkTcOcc $ T.unpack newNameText
-            filesRefs = collectWith locToUri refs
-            getFileEdit (uri, locations) = do
-              verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
-              getSrcEdit state verTxtDocId (replaceRefs newName locations)
-        fileEdits <- mapM getFileEdit filesRefs
-        pure $ InL $ fold fileEdits
+            -- Validate rename
+            crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
+            unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
+            when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
+
+            -- Perform rename
+            let newName = mkTcOcc $ T.unpack newNameText
+                filesRefs = collectWith locToUri refs
+                getFileEdit (uri, locations) = do
+                    verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
+                    getSrcEdit state verTxtDocId (replaceRefs newName locations)
+            fileEdits <- mapM getFileEdit filesRefs
+            pure $ InL $ fold fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::

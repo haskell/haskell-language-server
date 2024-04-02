@@ -33,15 +33,14 @@ import           Development.IDE                          (Action,
                                                            WithPriority,
                                                            cmapWithPrio, define,
                                                            fromNormalizedFilePath,
-                                                           hieKind, use_)
-import           Development.IDE.Core.PluginUtils         (runActionE,
+                                                           hieKind)
+import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
 import           Development.IDE.Core.Rules               (toIdeResult)
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake               (ShakeExtras (..),
                                                            getShakeExtras,
-                                                           getVirtualFile,
-                                                           useWithStale_)
+                                                           getVirtualFile)
 import           Development.IDE.GHC.Compat               hiding (Warning)
 import           Development.IDE.GHC.Compat.Util          (mkFastString)
 import           Ide.Logger                               (logWith)
@@ -124,8 +123,8 @@ semanticTokensFullDelta recorder state pid param = do
 getSemanticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
-    (HAR {..}) <- lift $ use_ GetHieAst nfp
-    (DKMap {getTyThingMap}, _) <- lift $ useWithStale_ GetDocMap nfp
+    (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
+    (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
     ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap

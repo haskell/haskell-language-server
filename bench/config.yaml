@@ -21,18 +21,18 @@ examples:
   # Medium-sized project without TH
   - name: cabal
     package: Cabal
-    version: 3.6.3.0
+    version: 3.10.2.1
     modules:
         - src/Distribution/Simple.hs
-        - src/Distribution/Types/Module.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
     extra-args: [] # extra HLS command line args
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
-    version: 1.5.0.0
+    version: 2.1.1.0
     modules:
-        - src/Language/LSP/Types/WatchedFiles.hs
-        - src/Language/LSP/Types/CallHierarchy.hs
+        - src/Language/LSP/Protocol/Types/SemanticTokens.hs
+        - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
 
   - name: MultiLayerModules
     path: bench/MultiLayerModules.sh
@@ -94,6 +94,7 @@ experiments:
     - "edit-header"
     - "edit"
     - "hover"
+    - "semanticTokens"
     - "hover after edit"
     # - "hover after cradle edit"
     - "getDefinition"
@@ -105,6 +106,8 @@ experiments:
     - "code actions after cradle edit"
     - "documentSymbols after edit"
     - "hole fit suggestions"
+    - "eval execute single-line code lens"
+    - "eval execute multi-line code lens"
 
 # An ordered list of versions to analyze
 versions:
@@ -129,7 +132,7 @@ versions:
 # WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
 # will be unable to send plugin configurations to earlier HLS versions. This causes
 # all plugins in those versions to always be enabled.
-# In addition bench proactively disables all plugins it knows about besides the 
+# In addition bench proactively disables all plugins it knows about besides the
 # ones in the following list. However because it can only disable plugins it
 # knows about, any plugins that are in old versions but were removed from HLS
 # before the current bench will not be disabled.
@@ -194,6 +197,7 @@ configurations:
   - qualifyImportedNames
   - rename
   - stylish-haskell
+  - semanticTokens
 # - alternateNumberFormat
 # - callHierarchy
 # - changeTypeSignature

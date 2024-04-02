@@ -26,7 +26,8 @@ import           Control.Applicative.Combinators    (skipManyTill)
 import           Control.Concurrent.Async           (withAsync)
 import           Control.Exception.Safe             (IOException, handleAny,
                                                      try)
-import           Control.Lens                       (_Just, (&), (.~), (^.))
+import           Control.Lens                       (_Just, (&), (.~), (^.),
+                                                     (^?))
 import           Control.Lens.Extras                (is)
 import           Control.Monad.Extra                (allM, forM, forM_, forever,
                                                      unless, void, when,
@@ -100,7 +101,19 @@ allWithIdentifierPos f docs = case applicableDocs of
 
 experiments :: HasConfig => [Bench]
 experiments =
-    [ ---------------------------------------------------------------------------------------
+    [
+      bench "semanticTokens" $ \docs -> do
+        liftIO $ putStrLn "Starting semanticTokens"
+        r <- forM docs $ \DocumentPositions{..} -> do
+            changeDoc doc [charEdit stringLiteralP]
+            waitForProgressStart
+            waitForProgressDone
+            tks <- getSemanticTokens doc
+            case tks ^? LSP._L of
+                Just _  -> return True
+                Nothing -> return False
+        return $ and r,
+      ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
@@ -228,7 +241,7 @@ experiments =
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit  =TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
                                                            .+ #rangeLength .== Nothing
                                                            .+ #text .== t
                 bottom = Position maxBound 0
@@ -253,6 +266,63 @@ experiments =
                 case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute single-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+                                                           .+ #rangeLength .== Nothing
+                                                           .+ #text .== t
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "-- >>> 1 + 2"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute multi-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+                                                           .+ #rangeLength .== Nothing
+                                                           .+ #text .== t
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "data T = A | B | C | D"
+                    , "  deriving (Show, Eq, Ord, Bounded, Enum)"
+                    , ""
+                    , "{-"
+                    , ">>> import Data.List (nub)"
+                    , ">>> xs = ([minBound..maxBound] ++ [minBound..maxBound] :: [T])"
+                    , ">>> nub xs"
+                    , "-}"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
         )
     ]
     where hasDefinitions (InL (Definition (InL _)))  = True
@@ -316,7 +386,7 @@ versionP = maybeReader $ extract . readP_to_S parseVersion
       extract parses = listToMaybe [ res | (res,"") <- parses]
 
 output :: (MonadIO m, HasConfig) => String -> m ()
-output = if quiet?config then (\_ -> pure ()) else liftIO . putStrLn
+output = if quiet ?config then (\_ -> pure ()) else liftIO . putStrLn
 
 ---------------------------------------------------------------------------------------
 
@@ -594,15 +664,25 @@ callCommandLogging cmd = do
     output cmd
     callCommand cmd
 
+simpleCabalCradleContent :: String
+simpleCabalCradleContent = "cradle:\n  cabal:\n"
+
+simpleStackCradleContent :: String
+simpleStackCradleContent = "cradle:\n  stack:\n"
+
+-- | Setup the benchmark
+-- we need to create a hie.yaml file for the examples
+-- or the hie.yaml file would be searched in the parent directories recursively
+-- implicit-hie is error prone for the example test `lsp-types-2.1.1.0`
+-- we are using the simpleCabalCradleContent for the hie.yaml file instead.
+-- it works if we have cabal > 3.2.
 setup :: HasConfig => IO SetupResult
 setup = do
---   when alreadyExists $ removeDirectoryRecursive examplesPath
   benchDir <- case exampleDetails(example ?config) of
       ExamplePath examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
-          unless alreadyExists $
-                cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
+          unless alreadyExists $ writeFile hieYamlPath simpleCabalCradleContent
           return examplePath
       ExampleScript examplePath' scriptArgs -> do
           let exampleDir = examplesPath </> exampleName (example ?config)
@@ -613,8 +693,8 @@ setup = do
             cmd_ (Cwd exampleDir) examplePath scriptArgs
             let hieYamlPath = exampleDir </> "hie.yaml"
             alreadyExists <- doesFileExist hieYamlPath
-            unless alreadyExists $
-                  cmd_ (Cwd exampleDir) (FileStdout hieYamlPath) ("gen-hie"::String)
+            unless alreadyExists $ writeFile hieYamlPath simpleCabalCradleContent
+
           return exampleDir
       ExampleHackage ExamplePackage{..} -> do
         let path = examplesPath </> package
@@ -627,7 +707,7 @@ setup = do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
                 callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 let hieYamlPath = path </> "hie.yaml"
-                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String)
+                writeFile hieYamlPath simpleCabalCradleContent
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
@@ -655,13 +735,12 @@ setup = do
                                 ,"compiler"]
                             ]
                         )
-
-                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String) ["--stack"::String]
+                writeFile hieYamlPath simpleStackCradleContent
         return path
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
-  let cleanUp = case exampleDetails(example ?config) of
+  let cleanUp = case exampleDetails (example ?config) of
         ExampleHackage _  -> removeDirectoryRecursive examplesPath
         ExampleScript _ _ -> removeDirectoryRecursive examplesPath
         ExamplePath _     -> return ()

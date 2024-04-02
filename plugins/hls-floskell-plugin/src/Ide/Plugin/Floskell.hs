@@ -8,6 +8,7 @@ module Ide.Plugin.Floskell
 
 import           Control.Monad.Except        (throwError)
 import           Control.Monad.IO.Class
+import           Data.List                   (find)
 import qualified Data.Text                   as T
 import qualified Data.Text.Lazy              as TL
 import           Development.IDE             hiding (pluginHandlers)
@@ -53,7 +54,8 @@ findConfigOrDefault file = do
   case mbConf of
     Just confFile -> readAppConfig confFile
     Nothing ->
-      let gibiansky = head (filter (\s -> styleName s == "gibiansky") styles)
-      in pure $ defaultAppConfig { appStyle = gibiansky }
+      pure $ case find (\s -> styleName s == "gibiansky") styles of
+        Just gibiansky -> defaultAppConfig { appStyle = gibiansky }
+        Nothing        -> defaultAppConfig
 
 -- ---------------------------------------------------------------------

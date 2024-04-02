@@ -148,7 +148,7 @@ rules recorder plId = do
                   FiascoL es -> do
                       logWith recorder Development.IDE.Warning (LogWarnConf es)
                       -- If we can't read the config file, default to using all inspections:
-                      let allInspections = HM.fromList [(relativeHsFilePath, inspectionsIds)]
+                      let allInspections = HM.singleton relativeHsFilePath inspectionsIds
                       pure (allInspections, [])
                   ResultL _warnings stanConfig -> do
                       -- HashMap of *relative* file paths to info about enabled checks for those file paths.

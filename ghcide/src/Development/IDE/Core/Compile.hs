@@ -436,6 +436,7 @@ tcRnModule hsc_env tc_helpers pmod = do
 
 
 -- Note [Clearing mi_globals after generating an iface]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- GHC populates the mi_global field in interfaces for GHCi if we are using the bytecode
 -- interpreter.
 -- However, this field is expensive in terms of heap usage, and we don't use it in HLS
@@ -1366,7 +1367,7 @@ loadHieFile ncu f = do
 
 
 {- Note [Recompilation avoidance in the presence of TH]
-
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Most versions of GHC we currently support don't have a working implementation of
 code unloading for object code, and no version of GHC supports this on certain
 platforms like Windows. This makes it completely infeasible for interactive use,
@@ -1736,6 +1737,7 @@ pathToModuleName = mkModuleName . map rep
       rep c = c
 
 {- Note [Guidelines For Using CPP In GHCIDE Import Statements]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   GHCIDE's interface with GHC is extensive, and unfortunately, because we have
   to work with multiple versions of GHC, we have several files that need to use
   a lot of CPP. In order to simplify the CPP in the import section of every file
