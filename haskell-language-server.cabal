@@ -1372,25 +1372,32 @@ flag fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
-  exposed-modules:  Ide.Plugin.Fourmolu
+
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
+  exposed-modules:  Ide.Plugin.Fourmolu
+  other-modules: Ide.Plugin.Fourmolu.Common
 
   if flag(fourmolu)
-    build-depends: fourmolu        ^>= 0.14 || ^>= 0.15
-    cpp-options: -Dhls_fourmolu
+    build-depends:
+      fourmolu        ^>= 0.14 || ^>= 0.15
+      , filepath
+      , ghc-boot-th
+      , lens
+      , lsp
+      , mtl
+      , process-extras  >= 0.7.1
+      , transformers
+    hs-source-dirs: plugins/hls-fourmolu-plugin/real
+    other-modules: Ide.Plugin.Fourmolu.Impl
+  else
+    hs-source-dirs: plugins/hls-fourmolu-plugin/disabled
+    other-modules: Ide.Plugin.Fourmolu.Impl
 
   build-depends:
     , base            >=4.12 && <5
-    , filepath
-    , ghc-boot-th
     , ghcide          == 2.7.0.0
     , hls-plugin-api  == 2.7.0.0
-    , lens
-    , lsp
-    , mtl
-    , process-extras  >= 0.7.1
     , text
-    , transformers
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
