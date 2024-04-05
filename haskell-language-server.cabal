@@ -1205,8 +1205,14 @@ common inlayHints
 
 library hls-inlay-hints-plugin
   import:           defaults, pedantic, warnings
-  exposed-modules:  Ide.Plugin.InlayHints
   hs-source-dirs:   plugins/hls-inlay-hints-plugin/src
+  exposed-modules:
+    Ide.Plugin.InlayHints
+    Ide.Plugin.InlayHints.Types
+
+    Ide.Plugin.InlayHints.Fixity
+    Ide.Plugin.InlayHints.LocalBinding
+  other-modules:
   build-depends:
       base                  >=4.12 && <5
     , containers
@@ -1216,6 +1222,7 @@ library hls-inlay-hints-plugin
     , hashable
     , hls-plugin-api        == 2.7.0.0
     , lsp                   >=2.4
+    , mtl
     , transformers
     , text
 
