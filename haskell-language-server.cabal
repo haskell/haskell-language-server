@@ -1889,6 +1889,10 @@ test-suite func-test
                     , warnings
                     , pedantic
                     , refactor
+                    , eval
+                    , fourmolu
+                    , ormolu
+                    , floskell
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server,
