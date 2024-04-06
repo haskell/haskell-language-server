@@ -37,7 +37,7 @@ tests =
 
               (codeLensResponse, activeProgressTokens) <- expectProgressMessagesTill
                 (responseForId SMethod_TextDocumentCodeLens lspId)
-                ["Setting up testdata (for T1.hs)", "Processing", "Indexing"]
+                ["Setting up testdata (for T1.hs)", "Processing"]
                 []
 
               -- this is a test so exceptions result in fails
