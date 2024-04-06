@@ -47,7 +47,7 @@ import           Test.Hls                           (HasCallStack,
                                                      runSessionWithServerInTmpDir,
                                                      runSessionWithServerInTmpDir',
                                                      testCase, testGroup,
-                                                     waitForAction, (@?=))
+                                                     waitForAction, (@?=), expectNoMoreDiagnostics)
 import qualified Test.Hls.FileSystem                as FS
 import           Test.Hls.FileSystem                (file, text)
 
@@ -299,5 +299,45 @@ main =
         semanticTokensValuePatternTests,
         semanticTokensFunctionTests,
         semanticTokensConfigTest,
-        semanticTokensFullDeltaTests
+        semanticTokensFullDeltaTests,
+        sessionDepsArePickedUp
       ]
+
+
+sessionDepsArePickedUp :: TestTree
+sessionDepsArePickedUp = testCase "session-deps-are-picked-up" $ runSessionWithServerInTmpDir def semanticTokensPlugin
+  (mkFs [file "Foo.hs" (text fooContent) , file "hie.yaml" (text "cradle: {direct: {arguments: [-XOverloadedStrings]}}")])
+  $ do
+    doc <- openDoc "Foo.hs" "haskell"
+    liftIO $ putStrLn "Waiting for kick start"
+    expectNoMoreDiagnostics 2 doc "typecheck"
+    liftIO $ writeFile "hie.yaml" "cradle: {direct: {arguments: []}}"
+    -- sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams [FileEvent (filePathToUri $ toAbsFp dir "hie.yaml") FileChangeType_Changed]
+    -- Send change event.
+    let change =
+          TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 4 0) (Position 4 0)
+                                              .+ #rangeLength .== Nothing
+                                              .+ #text .== "\n"
+    liftIO $ writeFile "Foo.hs" fooContent2
+    changeDoc doc [change]
+    -- expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (3, 6), "Couldn't match type")])]
+    expectNoMoreDiagnostics 2 doc "typecheck"
+    return ()
+      where
+    fooContent2 =
+      unlines
+        [ "module Foo where",
+          "import Data.Text",
+          "foo :: Text",
+          "",
+          "foo = \"hello\"",
+          "x=1"
+        ]
+
+    fooContent =
+      Text.unlines
+        [ "module Foo where",
+          "import Data.Text",
+          "foo :: Text",
+          "foo = \"hello\""
+        ]
