@@ -198,17 +198,6 @@ See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 ## Measuring, benchmarking and tracing
 
-### Metrics
-
-When ghcide is built with the `ekg` flag, HLS opens a metrics server on port 8999 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
-
-- `ghcide.values_count` - count of build results in the store
-- `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)
-- `ghcide.build_count` - build count. A key is GC'ed if it is dirty and older than 100 builds
-- `ghcide.dirty_keys_count` - non transitive count of dirty build keys
-- `ghcide.indexing_pending_count` - count of items in the indexing queue
-- `ghcide.exports_map_count` - count of identifiers in the exports map.
-
 ### Benchmarks
 
 If you are touching performance sensitive code, take the time to run a differential

@@ -28,13 +28,6 @@ source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server.git
 
-flag ekg
-  description:
-    Enable EKG monitoring of the build graph and other metrics on port 8999
-
-  default:     False
-  manual:      True
-
 flag pedantic
   description: Enable -Werror
   default:     False
@@ -178,7 +171,6 @@ library
     Development.IDE.LSP.Server
     Development.IDE.Main
     Development.IDE.Main.HeapStats
-    Development.IDE.Monitoring.EKG
     Development.IDE.Monitoring.OpenTelemetry
     Development.IDE.Plugin
     Development.IDE.Plugin.Completions
@@ -217,13 +209,6 @@ library
   if flag(pedantic)
     ghc-options:
       -Werror
-
-  if flag(ekg)
-    build-depends:
-      , ekg-core
-      , ekg-wai
-
-    cpp-options:   -DMONITORING_EKG
 
 flag test-exe
   description: Build the ghcide-test-preprocessor executable
