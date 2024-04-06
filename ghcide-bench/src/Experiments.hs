@@ -241,7 +241,7 @@ experiments =
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit  =TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
                                                            .+ #rangeLength .== Nothing
                                                            .+ #text .== t
                 bottom = Position maxBound 0
@@ -266,6 +266,63 @@ experiments =
                 case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute single-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+                                                           .+ #rangeLength .== Nothing
+                                                           .+ #text .== t
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "-- >>> 1 + 2"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute multi-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+                                                           .+ #rangeLength .== Nothing
+                                                           .+ #text .== t
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "data T = A | B | C | D"
+                    , "  deriving (Show, Eq, Ord, Bounded, Enum)"
+                    , ""
+                    , "{-"
+                    , ">>> import Data.List (nub)"
+                    , ">>> xs = ([minBound..maxBound] ++ [minBound..maxBound] :: [T])"
+                    , ">>> nub xs"
+                    , "-}"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
         )
     ]
     where hasDefinitions (InL (Definition (InL _)))  = True

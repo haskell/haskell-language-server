@@ -277,6 +277,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
                    . flip xopt_unset  LangExt.MonomorphismRestriction
                    . flip gopt_set    Opt_ImplicitImportQualified
                    . flip gopt_unset  Opt_DiagnosticsShowCaret
+                   . setBackend ghciBackend
                    $ (ms_hspp_opts ms) {
                         useColor = Never
                       , canUseColor = False }
