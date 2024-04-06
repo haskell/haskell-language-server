@@ -118,6 +118,8 @@ flag isolateCabalfmtTests
 
 library hls-cabal-fmt-plugin
   import:           defaults, pedantic, warnings
+  if !flag(cabalfmt)
+    buildable: False
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
   build-depends:
@@ -134,6 +136,8 @@ library hls-cabal-fmt-plugin
 
 test-suite hls-cabal-fmt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabalfmt)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/test
   main-is:          Main.hs
@@ -170,6 +174,8 @@ flag isolateCabalGildTests
 
 library hls-cabal-gild-plugin
   import:           defaults, pedantic, warnings
+  if !flag(cabalgild)
+    buildable: False
   exposed-modules:  Ide.Plugin.CabalGild
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
   build-depends:
@@ -185,6 +191,8 @@ library hls-cabal-gild-plugin
 
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabalgild)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
   main-is:          Main.hs
@@ -215,6 +223,8 @@ common cabal
 
 library hls-cabal-plugin
   import:           defaults, pedantic, warnings
+  if !flag(cabal)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
@@ -258,6 +268,8 @@ library hls-cabal-plugin
 
 test-suite hls-cabal-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabal)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-plugin/test
   main-is:          Main.hs
@@ -296,6 +308,8 @@ common class
 
 library hls-class-plugin
   import:           defaults, pedantic, warnings
+  if !flag(class)
+    buildable: False
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
                     , Ide.Plugin.Class.CodeLens
@@ -326,6 +340,8 @@ library hls-class-plugin
 
 test-suite hls-class-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(class)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-class-plugin/test
   main-is:          Main.hs
@@ -355,7 +371,8 @@ common callHierarchy
 
 library hls-call-hierarchy-plugin
   import: defaults, pedantic, warnings
-  buildable: True
+  if !flag(callHierarchy)
+    buildable: False
   exposed-modules:    Ide.Plugin.CallHierarchy
   other-modules:
     Ide.Plugin.CallHierarchy.Internal
@@ -380,6 +397,8 @@ library hls-call-hierarchy-plugin
 
 test-suite hls-call-hierarchy-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(callHierarchy)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-call-hierarchy-plugin/test
   main-is:          Main.hs
@@ -413,6 +432,8 @@ common eval
 
 library hls-eval-plugin
   import: defaults, pedantic, warnings
+  if !flag(eval)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Eval.Types
@@ -459,6 +480,8 @@ library hls-eval-plugin
 
 test-suite hls-eval-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(eval)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-eval-plugin/test
   main-is:          Main.hs
@@ -493,6 +516,8 @@ flag importLens
 
 library hls-explicit-imports-plugin
   import:           defaults, pedantic, warnings
+  if !flag(importlens)
+    buildable: False
   exposed-modules:  Ide.Plugin.ExplicitImports
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/src
   build-depends:
@@ -515,6 +540,8 @@ library hls-explicit-imports-plugin
 
 test-suite hls-explicit-imports-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(importlens)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/test
   main-is:          Main.hs
@@ -545,6 +572,8 @@ common rename
 
 library hls-rename-plugin
   import:           defaults, pedantic, warnings
+  if !flag(rename)
+    buildable: False
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
@@ -570,6 +599,8 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(rename)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-rename-plugin/test
   main-is:          Main.hs
@@ -601,6 +632,8 @@ common retrie
 
 library hls-retrie-plugin
   import:           defaults, pedantic, warnings
+  if !flag(retrie)
+    buildable: False
   exposed-modules:  Ide.Plugin.Retrie
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
@@ -631,6 +664,8 @@ library hls-retrie-plugin
 
 test-suite hls-retrie-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(retrie)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-retrie-plugin/test
   main-is:          Main.hs
@@ -666,6 +701,8 @@ common hlint
 
 library hls-hlint-plugin
   import:           defaults, pedantic, warnings
+  if !flag(hlint)
+    buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
   build-depends:
@@ -706,6 +743,8 @@ library hls-hlint-plugin
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(hlint)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
   main-is:          Main.hs
@@ -738,7 +777,7 @@ common stan
 
 library hls-stan-plugin
   import:           defaults, pedantic, warnings
-  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
     buildable: True
   else
     buildable: False
@@ -766,7 +805,7 @@ library hls-stan-plugin
 
 test-suite hls-stan-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
     buildable: True
   else
     buildable: False
@@ -801,6 +840,8 @@ common moduleName
 
 library hls-module-name-plugin
   import:           defaults, pedantic, warnings
+  if !flag(modulename)
+    buildable: False
   exposed-modules:  Ide.Plugin.ModuleName
   hs-source-dirs:   plugins/hls-module-name-plugin/src
   build-depends:
@@ -818,6 +859,8 @@ library hls-module-name-plugin
 
 test-suite hls-module-name-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(modulename)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-module-name-plugin/test
   main-is:          Main.hs
@@ -843,6 +886,8 @@ common pragmas
 
 library hls-pragmas-plugin
   import:           defaults, pedantic, warnings
+  if !flag(pragmas)
+    buildable: False
   exposed-modules:  Ide.Plugin.Pragmas
   hs-source-dirs:   plugins/hls-pragmas-plugin/src
   build-depends:
@@ -859,6 +904,8 @@ library hls-pragmas-plugin
 
 test-suite hls-pragmas-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(pragmas)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-pragmas-plugin/test
   main-is:          Main.hs
@@ -888,6 +935,8 @@ common splice
 
 library hls-splice-plugin
   import:           defaults, pedantic, warnings
+  if !flag(splice)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
@@ -916,6 +965,8 @@ library hls-splice-plugin
 
 test-suite hls-splice-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(splice)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-splice-plugin/test
   main-is:          Main.hs
@@ -943,6 +994,8 @@ common alternateNumberFormat
 
 library hls-alternate-number-format-plugin
   import:           defaults, pedantic, warnings
+  if !flag(alternateNumberFormat)
+    buildable: False
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/src
@@ -968,6 +1021,8 @@ library hls-alternate-number-format-plugin
 
 test-suite hls-alternate-number-format-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(alternateNumberFormat)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/test
   other-modules:    Properties.Conversion
@@ -1003,6 +1058,8 @@ common qualifyImportedNames
 
 library hls-qualify-imported-names-plugin
   import:           defaults, pedantic, warnings
+  if !flag(qualifyImportedNames)
+    buildable: False
   exposed-modules:  Ide.Plugin.QualifyImportedNames
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/src
   build-depends:
@@ -1021,6 +1078,8 @@ library hls-qualify-imported-names-plugin
 
 test-suite hls-qualify-imported-names-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(qualifyImportedNames)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/test
   main-is:          Main.hs
@@ -1047,6 +1106,8 @@ common codeRange
 
 library hls-code-range-plugin
   import:           defaults, pedantic, warnings
+  if !flag(codeRange)
+    buildable: False
   exposed-modules:
     Ide.Plugin.CodeRange
     Ide.Plugin.CodeRange.Rules
@@ -1070,6 +1131,8 @@ library hls-code-range-plugin
 
 test-suite hls-code-range-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(codeRange)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-code-range-plugin/test
   main-is:          Main.hs
@@ -1104,6 +1167,8 @@ common changeTypeSignature
 
 library hls-change-type-signature-plugin
   import:           defaults, pedantic, warnings
+  if !flag(changeTypeSignature)
+    buildable: False
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/src
   build-depends:
@@ -1125,6 +1190,8 @@ library hls-change-type-signature-plugin
 
 test-suite hls-change-type-signature-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(changeTypeSignature)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/test
   main-is:          Main.hs
@@ -1155,6 +1222,8 @@ common gadt
 
 library hls-gadt-plugin
   import:           defaults, pedantic, warnings
+  if !flag(gadt)
+    buildable: False
   exposed-modules:  Ide.Plugin.GADT
   other-modules:    Ide.Plugin.GHC
   hs-source-dirs:   plugins/hls-gadt-plugin/src
@@ -1178,6 +1247,8 @@ library hls-gadt-plugin
 
 test-suite hls-gadt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(gadt)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-gadt-plugin/test
   main-is:          Main.hs
@@ -1204,6 +1275,8 @@ common explicitFixity
 
 library hls-explicit-fixity-plugin
   import:           defaults, pedantic, warnings
+  if !flag(explicitFixity)
+    buildable: False
   exposed-modules:  Ide.Plugin.ExplicitFixity
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
@@ -1221,6 +1294,8 @@ library hls-explicit-fixity-plugin
 
 test-suite hls-explicit-fixity-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(explicitFixity)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/test
   main-is:          Main.hs
@@ -1247,6 +1322,8 @@ common explicitFields
 
 library hls-explicit-record-fields-plugin
   import:           defaults, pedantic, warnings
+  if !flag(explicitFields)
+    buildable: False
   exposed-modules:  Ide.Plugin.ExplicitFields
   build-depends:
     , base                  >=4.12 && <5
@@ -1267,6 +1344,8 @@ library hls-explicit-record-fields-plugin
 
 test-suite hls-explicit-record-fields-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(explicitFields)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/test
   main-is:          Main.hs
@@ -1293,6 +1372,8 @@ common overloadedRecordDot
 
 library hls-overloaded-record-dot-plugin
   import:           defaults, pedantic, warnings
+  if !flag(overloadedRecordDot)
+    buildable: False
   exposed-modules:  Ide.Plugin.OverloadedRecordDot
   build-depends:
     , base                  >=4.16 && <5
@@ -1311,6 +1392,8 @@ library hls-overloaded-record-dot-plugin
 
 test-suite hls-overloaded-record-dot-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(overloadedRecordDot)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
   main-is:          Main.hs
@@ -1338,6 +1421,8 @@ common floskell
 
 library hls-floskell-plugin
   import:           defaults, pedantic, warnings
+  if !flag(floskell)
+    buildable: False
   exposed-modules:  Ide.Plugin.Floskell
   hs-source-dirs:   plugins/hls-floskell-plugin/src
   build-depends:
@@ -1352,6 +1437,8 @@ library hls-floskell-plugin
 
 test-suite hls-floskell-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(floskell)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-floskell-plugin/test
   main-is:          Main.hs
@@ -1377,6 +1464,8 @@ common fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
+  if !flag(fourmolu)
+    buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
   build-depends:
@@ -1396,6 +1485,8 @@ library hls-fourmolu-plugin
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(fourmolu)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
   main-is:          Main.hs
@@ -1426,6 +1517,8 @@ common ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
+  if !flag(ormolu)
+    buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
   build-depends:
@@ -1445,6 +1538,8 @@ library hls-ormolu-plugin
 
 test-suite hls-ormolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(ormolu)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
@@ -1476,6 +1571,8 @@ common stylishHaskell
 
 library hls-stylish-haskell-plugin
   import:           defaults, pedantic, warnings
+  if !flag(stylishHaskell)
+    buildable: False
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
   build-depends:
@@ -1493,6 +1590,8 @@ library hls-stylish-haskell-plugin
 
 test-suite hls-stylish-haskell-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(stylishHaskell)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
   main-is:          Main.hs
@@ -1518,6 +1617,8 @@ common refactor
 
 library hls-refactor-plugin
   import:           defaults, pedantic, warnings
+  if !flag(refactor)
+    buildable: False
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
                     Development.IDE.Plugin.CodeAction
@@ -1575,6 +1676,8 @@ library hls-refactor-plugin
 
 test-suite hls-refactor-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(refactor)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-refactor-plugin/test
   main-is:          Main.hs
@@ -1618,7 +1721,8 @@ common semanticTokens
 
 library hls-semantic-tokens-plugin
   import: defaults, pedantic, warnings
-  buildable: True
+  if !flag(semanticTokens)
+    buildable: False
   exposed-modules:
     Ide.Plugin.SemanticTokens
     Ide.Plugin.SemanticTokens.Types
@@ -1658,6 +1762,8 @@ library hls-semantic-tokens-plugin
 
 test-suite hls-semantic-tokens-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(semanticTokens)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-semantic-tokens-plugin/test
   main-is:          SemanticTokensTest.hs
@@ -1698,7 +1804,8 @@ common notes
 
 library hls-notes-plugin
   import: defaults, pedantic, warnings
-  buildable: True
+  if !flag(notes)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Notes
   hs-source-dirs:     plugins/hls-notes-plugin/src
@@ -1725,6 +1832,8 @@ library hls-notes-plugin
 
 test-suite hls-notes-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(notes)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-notes-plugin/test
   main-is:          NotesTest.hs
