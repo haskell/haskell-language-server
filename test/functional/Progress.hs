@@ -37,7 +37,7 @@ tests =
 
               (codeLensResponse, activeProgressTokens) <- expectProgressMessagesTill
                 (responseForId SMethod_TextDocumentCodeLens lspId)
-                ["Setting up testdata (for T1.hs)", "Processing", "Indexing"]
+                ["Setting up testdata (for T1.hs)", "Processing"]
                 []
 
               -- this is a test so exceptions result in fails
@@ -59,7 +59,7 @@ tests =
                 void configurationRequest
                 setHlsConfig (formatLspConfig "ormolu")
                 doc <- openDoc "Format.hs" "haskell"
-                expectProgressMessages ["Setting up testdata (for Format.hs)", "Processing", "Indexing"] []
+                expectProgressMessages ["Setting up format (for Format.hs)", "Processing", "Indexing"] []
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressMessages ["Formatting Format.hs"] []
         , requiresFourmoluPlugin $ testCase "fourmolu plugin sends progress notifications" $ do
@@ -67,7 +67,7 @@ tests =
                 void configurationRequest
                 setHlsConfig (formatLspConfig "fourmolu")
                 doc <- openDoc "Format.hs" "haskell"
-                expectProgressMessages ["Setting up testdata (for Format.hs)", "Processing", "Indexing"] []
+                expectProgressMessages ["Setting up format (for Format.hs)", "Processing", "Indexing"] []
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressMessages ["Formatting Format.hs"] []
         ]
