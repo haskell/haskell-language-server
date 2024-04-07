@@ -1,11 +1,9 @@
 
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs #-}
 
 module DependentFileTest (tests) where
 
 import           Control.Monad.IO.Class         (liftIO)
-import           Data.Row
 import qualified Data.Text                      as T
 import           Development.IDE.Test           (expectDiagnostics)
 import           Development.IDE.Types.Location
@@ -51,8 +49,10 @@ tests = testGroup "addDependentFile"
             [FileEvent (filePathToUri "dep-file.txt") FileChangeType_Changed ]
 
         -- Modifying Baz will now trigger Foo to be rebuilt as well
-        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 2 0) (Position 2 6)
-                                                         .+ #rangeLength .== Nothing
-                                                         .+ #text .== "f = ()"
+        let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                { _range = Range (Position 2 0) (Position 2 6)
+                , _rangeLength = Nothing
+                , _text = "f = ()"
+                }
         changeDoc doc [change]
         expectDiagnostics [("Foo.hs", [])]

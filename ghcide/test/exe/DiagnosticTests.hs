@@ -1,6 +1,5 @@
 
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs #-}
 
 module DiagnosticTests (tests) where
 
@@ -9,7 +8,6 @@ import qualified Control.Lens                    as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class          (liftIO)
 import           Data.List.Extra
-import           Data.Row
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import           Development.IDE.GHC.Util
@@ -46,9 +44,11 @@ tests = testGroup "diagnostics"
       let content = T.unlines [ "module Testing wher" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 15) (Position 0 19)
-                                                       .+ #rangeLength .== Nothing
-                                                       .+ #text .== "where"
+      let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 15) (Position 0 19)
+              , _rangeLength = Nothing
+              , _text = "where"
+              }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [])]
   , testSessionWait "introduce syntax error" $ do
@@ -56,18 +56,22 @@ tests = testGroup "diagnostics"
       doc <- createDoc "Testing.hs" "haskell" content
       void $ skipManyTill anyMessage (message SMethod_WindowWorkDoneProgressCreate)
       waitForProgressBegin
-      let change = TextDocumentContentChangeEvent$ InL $ #range .== Range (Position 0 15) (Position 0 18)
-                                                      .+ #rangeLength .== Nothing
-                                                      .+ #text .== "wher"
+      let change = TextDocumentContentChangeEvent$ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 15) (Position 0 18)
+              , _rangeLength = Nothing
+              , _text = "wher"
+              }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
   , testSessionWait "update syntax error" $ do
       let content = T.unlines [ "module Testing(missing) where" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'")])]
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 15) (Position 0 16)
-                                                       .+ #rangeLength .== Nothing
-                                                       .+ #text .== "l"
+      let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 15) (Position 0 16)
+              , _rangeLength = Nothing
+              , _text = "l"
+              }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'")])]
   , testSessionWait "variable not in scope" $ do
@@ -143,9 +147,11 @@ tests = testGroup "diagnostics"
             , "import ModuleA"
             ]
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 0) (Position 0 20)
-                                                       .+ #rangeLength .== Nothing
-                                                       .+ #text .== ""
+      let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 0) (Position 0 20)
+              , _rangeLength = Nothing
+              , _text = ""
+              }
       changeDoc docA [change]
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module")])]
   , testSessionWait "add missing module" $ do
@@ -397,7 +403,7 @@ tests = testGroup "diagnostics"
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
           liftIO $ fileUri @?= uriB
-          let msg :: T.Text = (head diags) ^. L.message
+          let msg :: T.Text = head diags ^. L.message
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)
           closeDoc a
@@ -463,7 +469,7 @@ tests = testGroup "diagnostics"
       [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
 
     -- Change y from Int to B which introduces a type error in A (imported from P)
-    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
                     T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     expectDiagnostics
       [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
@@ -471,7 +477,7 @@ tests = testGroup "diagnostics"
 
     -- Open A and edit to fix the type error
     adoc <- createDoc aPath "haskell" aSource
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $
+    changeDoc adoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
                     T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
 
     expectDiagnostics
@@ -489,10 +495,10 @@ tests = testGroup "diagnostics"
       doc <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
 
-      changeDoc doc [TextDocumentContentChangeEvent  . InR . (.==) #text $ "module Foo() where" ]
+      changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ "module Foo() where" ]
       expectDiagnostics []
 
-      changeDoc doc [TextDocumentContentChangeEvent  . InR . (.==) #text $ T.unlines
+      changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ T.unlines
             [ "module Foo() where" , "import MissingModule" ] ]
       expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
 
@@ -504,12 +510,18 @@ tests = testGroup "diagnostics"
   ]
   where
       editPair x y = let p = Position x y ; p' = Position x (y+2) in
-        (TextDocumentContentChangeEvent $ InL $ #range .== Range p p
-                                             .+ #rangeLength .== Nothing
-                                             .+ #text .== "fd"
-        ,TextDocumentContentChangeEvent $ InL $ #range .== Range p p'
-                                             .+ #rangeLength .== Nothing
-                                             .+ #text .== "")
+        (TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range p p
+              , _rangeLength = Nothing
+              , _text = "fd"
+              }
+
+        ,TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range p' p'
+              , _rangeLength = Nothing
+              , _text = ""
+              }
+        )
       editHeader = editPair 0 0
       editImport = editPair 2 10
       editBody   = editPair 3 10

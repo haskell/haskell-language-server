@@ -25,7 +25,6 @@ import           Data.List.NonEmpty                    (NonEmpty ((:|)),
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
-import           Data.Row
 import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
@@ -80,7 +79,7 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     -- In particular it allows some cases through (e.g. cross-module renames),
     -- so that the full rename handler can give more informative error about them.
     let renameValid = not $ null namesUnderCursor
-    pure $ InL $ PrepareRenameResult $ InR $ InR $ #defaultBehavior .== renameValid
+    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do

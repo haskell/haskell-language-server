@@ -290,7 +290,6 @@ test-suite hls-cabal-plugin-tests
     , text
     , text-rope
     , transformers
-    , row-types
 
 -----------------------------
 -- class plugin
@@ -352,7 +351,6 @@ test-suite hls-class-plugin-tests
     , hls-test-utils     == 2.7.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -498,7 +496,6 @@ test-suite hls-eval-plugin-tests
     , lens
     , lsp-types
     , text
-    , row-types
 
 -----------------------------
 -- import lens plugin
@@ -553,7 +550,6 @@ test-suite hls-explicit-imports-plugin-tests
     , hls-test-utils   == 2.7.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -591,7 +587,6 @@ library hls-rename-plugin
     , mtl
     , mod
     , syb
-    , row-types
     , text
     , transformers
     , unordered-containers
@@ -758,7 +753,6 @@ test-suite hls-hlint-plugin-tests
     , hls-test-utils      == 2.7.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -976,7 +970,6 @@ test-suite hls-splice-plugin-tests
     , haskell-language-server:hls-splice-plugin
     , hls-test-utils == 2.7.0.0
     , text
-    , row-types
 
 -----------------------------
 -- alternate number format plugin
@@ -1786,7 +1779,6 @@ test-suite hls-semantic-tokens-plugin-tests
     , ghcide                == 2.7.0.0
     , hls-plugin-api        == 2.7.0.0
     , data-default
-    , row-types
 
 -----------------------------
 -- notes plugin

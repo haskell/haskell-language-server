@@ -167,7 +167,7 @@ goldenWithHaskellDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDoc = goldenWithDoc "haskell"
+goldenWithHaskellDoc = goldenWithDoc LanguageKind_Haskell
 
 goldenWithHaskellDocInTmpDir
   :: Pretty b
@@ -180,7 +180,7 @@ goldenWithHaskellDocInTmpDir
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDocInTmpDir = goldenWithDocInTmpDir "haskell"
+goldenWithHaskellDocInTmpDir = goldenWithDocInTmpDir LanguageKind_Haskell
 
 goldenWithHaskellAndCaps
   :: Pretty b
@@ -237,11 +237,11 @@ goldenWithCabalDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithCabalDoc = goldenWithDoc "cabal"
+goldenWithCabalDoc = goldenWithDoc (LanguageKind_Custom "cabal")
 
 goldenWithDoc
   :: Pretty b
-  => T.Text
+  => LanguageKind
   -> Config
   -> PluginTestDescriptor b
   -> TestName
@@ -251,19 +251,19 @@ goldenWithDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithDoc fileType config plugin title testDataDir path desc ext act =
+goldenWithDoc languageKind config plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
   $ runSessionWithServer config plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
-    doc <- openDoc (path <.> ext) fileType
+    doc <- openDoc (path <.> ext) languageKind
     void waitForBuildQueue
     act doc
     documentContents doc
 
 goldenWithDocInTmpDir
   :: Pretty b
-  => T.Text
+  => LanguageKind
   -> Config
   -> PluginTestDescriptor b
   -> TestName
@@ -273,12 +273,12 @@ goldenWithDocInTmpDir
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithDocInTmpDir fileType config plugin title tree path desc ext act =
+goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
   goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
   $ runSessionWithServerInTmpDir config plugin tree
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
-    doc <- openDoc (path <.> ext) fileType
+    doc <- openDoc (path <.> ext) languageKind
     void waitForBuildQueue
     act doc
     documentContents doc

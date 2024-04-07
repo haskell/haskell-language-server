@@ -1,10 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE OverloadedLabels    #-}
 
 module PositionMappingTests (tests) where
 
 import qualified Data.EnumMap.Strict                  as EM
-import           Data.Row
 import qualified Data.Text                            as T
 import           Data.Text.Utf16.Rope.Mixed           (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
@@ -32,8 +30,7 @@ import           Test.Tasty.QuickCheck
 
 enumMapMappingTest :: TestTree
 enumMapMappingTest = testCase "enumMapMappingTest" $ do
-  let mkChangeEvent :: Range -> Text -> TextDocumentContentChangeEvent
-      mkChangeEvent r t = TextDocumentContentChangeEvent $ InL $ #range .== r .+ #rangeLength .== Nothing .+ #text .== t
+  let
       mkCE :: UInt -> UInt -> UInt -> UInt -> Text -> TextDocumentContentChangeEvent
       mkCE l1 c1 l2 c2 = mkChangeEvent (Range (Position l1 c1) (Position l2 c2))
       events :: [(Int32, [TextDocumentContentChangeEvent])]
@@ -45,6 +42,9 @@ enumMapMappingTest = testCase "enumMapMappingTest" $ do
   updatePose (Position 0 4) @?= Just (Position 0 9)
   updatePose (Position 0 5) @?= Just (Position 0 10)
 
+mkChangeEvent :: Range -> Text -> TextDocumentContentChangeEvent
+mkChangeEvent r t = TextDocumentContentChangeEvent $ InL
+    TextDocumentContentChangePartial {_range = r, _rangeLength = Nothing, _text = t}
 
 tests ::  TestTree
 tests =
@@ -167,10 +167,7 @@ tests =
                         rope <- genRope
                         range <- genRange rope
                         PrintableText replacement <- arbitrary
-                        let newRope = runIdentity $ applyChange mempty rope
-                                (TextDocumentContentChangeEvent $ InL $ #range .== range
-                                                                     .+ #rangeLength .== Nothing
-                                                                     .+ #text .== replacement)
+                        let newRope = runIdentity $ applyChange mempty rope $ mkChangeEvent range replacement
                         newPos <- genPosition newRope
                         pure (range, replacement, newPos)
                 forAll

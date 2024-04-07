@@ -1,6 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE ViewPatterns             #-}
 module Main
@@ -10,7 +9,6 @@ module Main
 import           Control.Lens                  ((^.))
 import           Data.Either.Extra
 import           Data.Foldable                 (find)
-import           Data.Row                      ((.+), (.==))
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Traversable              (for)
@@ -93,9 +91,12 @@ codeActionBreakFile fp l c = goldenWithImportActions " code action" fp codeActio
   case find ((== Just "Make all imports explicit") . caTitle) actions of
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
-  where edit = TextDocumentContentChangeEvent $ InL $ #range .== pointRange 2 29
-                                                   .+ #rangeLength .== Nothing
-                                                   .+ #text .== "x"
+  where edit = TextDocumentContentChangeEvent $ InL
+          TextDocumentContentChangePartial
+            { _range = pointRange 2 29
+            , _rangeLength = Nothing
+            , _text = "x"
+            }
 
 codeActionStaleAction :: FilePath -> Int -> Int -> TestTree
 codeActionStaleAction fp l c = goldenWithImportActions " code action" fp codeActionResolveCaps $ \doc -> do
@@ -109,9 +110,12 @@ codeActionStaleAction fp l c = goldenWithImportActions " code action" fp codeAct
         \case Just _  -> liftIO $ assertFailure "Code action still valid"
               Nothing -> pure ()
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
-  where edit = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 6 0) (Position 6 0)
-                                                   .+ #rangeLength .== Nothing
-                                                   .+ #text .== "\ntesting = undefined"
+  where edit = TextDocumentContentChangeEvent $ InL
+          TextDocumentContentChangePartial
+            { _range = Range (Position 6 0) (Position 6 0)
+            , _rangeLength = Nothing
+            , _text = "\ntesting = undefined"
+            }
 
 codeActionAllResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
 codeActionAllResolveGoldenTest fp l c = goldenWithImportActions " code action resolve" fp codeActionResolveCaps $ \doc -> do

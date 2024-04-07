@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiWayIf        #-}
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -15,7 +14,6 @@ import           Data.Aeson.Types           (Pair, Result (Success))
 import           Data.List                  (isInfixOf)
 import           Data.List.Extra            (nubOrdOn)
 import qualified Data.Map                   as Map
-import           Data.Row
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (Config)
 import qualified Ide.Plugin.Config          as Plugin
@@ -303,7 +301,7 @@ evalInFile fp e expected = runSessionWithServerInTmpDir def evalPlugin (mkFs $ F
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
   let withEval = origin <> e
-  changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ withEval]
+  changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ withEval]
   executeLensesBackwards doc
   result <- fmap T.strip . T.stripPrefix withEval <$> documentContents doc
   liftIO $ result @?= Just (T.strip expected)

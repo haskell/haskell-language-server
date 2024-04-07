@@ -25,7 +25,7 @@ import           Control.Monad.Trans.Reader
 import qualified Control.Monad.Trans.State.Strict     as State
 import           Data.Dynamic
 import           Data.Either
-import           Data.Foldable                        (fold, for_, traverse_)
+import           Data.Foldable                        (for_, traverse_)
 import           Data.IORef.Extra
 import           Data.List.NonEmpty                   (unzip)
 import           Data.Maybe
