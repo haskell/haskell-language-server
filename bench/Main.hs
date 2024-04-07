@@ -202,8 +202,6 @@ buildHls Cabal root out = actionBracket
         liftIO $ writeFile projectLocal $ unlines
             ["package haskell-language-server"
             ,"  ghc-options: -eventlog -rtsopts"
-            ,"package ghcide"
-            ,"  flags: +ekg"
             ]
         return projectLocalExists)
     (\projectLocalExists -> do

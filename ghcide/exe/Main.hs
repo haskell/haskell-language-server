@@ -18,7 +18,6 @@ import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
 import           Development.IDE.Core.Tracing             (withTelemetryLogger)
 import qualified Development.IDE.Main                     as IDEMain
-import qualified Development.IDE.Monitoring.EKG           as EKG
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import           Development.IDE.Types.Options
@@ -148,5 +147,5 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                 , optRunSubset = not argsConservativeChangeTracking
                 , optVerifyCoreFile = argsVerifyCoreFile
                 }
-        , IDEMain.argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger argsMonitoringPort
+        , IDEMain.argsMonitoring = OpenTelemetry.monitoring
         }

@@ -65,7 +65,6 @@ import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
 import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
 import           Development.IDE.Main.HeapStats           (withHeapStats)
 import qualified Development.IDE.Main.HeapStats           as HeapStats
-import qualified Development.IDE.Monitoring.EKG           as EKG
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import           Development.IDE.Plugin                   (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS               (asGhcIdePlugin)
@@ -259,7 +258,7 @@ defaultArguments recorder logger plugins = Arguments
                 -- the language server tests without the redirection.
                 putStr " " >> hFlush stdout
                 return newStdout
-        , argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger 8999
+        , argsMonitoring = OpenTelemetry.monitoring
         }
 
 
