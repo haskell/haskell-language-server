@@ -1,12 +1,10 @@
 
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs #-}
 
 module CradleTests (tests) where
 
 import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
-import           Data.Row
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat      (GhcVersion (..))
 import           Development.IDE.GHC.Util
@@ -63,7 +61,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             doc <- createDoc "B.hs" "haskell" "module B where\nimport Data.Foo"
             msgs <- someTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 1
-            changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ "module B where\nimport Data.Maybe"]
+            changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ "module B where\nimport Data.Maybe"]
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 0
             _ <- createDoc "A.hs" "haskell" "module A where\nimport LoadCradleBar"
@@ -222,9 +220,11 @@ sessionDepsArePickedUp = testSession'
         [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed ]
     -- Send change event.
     let change =
-          TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 4 0) (Position 4 0)
-                                              .+ #rangeLength .== Nothing
-                                              .+ #text .== "\n"
+          TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 4 0) (Position 4 0)
+              , _rangeLength = Nothing
+              , _text = "\n"
+              }
     changeDoc doc [change]
     -- Now no errors.
     expectDiagnostics [("Foo.hs", [])]

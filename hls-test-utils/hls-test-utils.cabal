@@ -56,7 +56,7 @@ library
     , tasty-rerun
     , temporary
     , text
-    , row-types
+
   ghc-options:      -Wall -Wunused-packages
 
   if flag(pedantic)

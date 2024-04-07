@@ -1,10 +1,6 @@
-
-{-# LANGUAGE OverloadedLabels #-}
-
 module GarbageCollectionTests (tests) where
 
 import           Control.Monad.IO.Class      (liftIO)
-import           Data.Row
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
 import           Development.IDE.Test        (expectCurrentDiagnostics,
@@ -15,7 +11,6 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
--- import Test.QuickCheck.Instances ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
@@ -74,14 +69,14 @@ tests = testGroup "garbage collection"
                         , "a = ()"
                         ]
             doc <- generateGarbage "A" dir
-            changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ edit]
+            changeDoc doc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument edit]
             builds <- waitForTypecheck doc
             liftIO $ assertBool "it still builds" builds
             expectCurrentDiagnostics doc [(DiagnosticSeverity_Error, (2,4), "Couldn't match expected type")]
         ]
   ]
   where
-    isExpected k = any (`T.isPrefixOf` k) ["GhcSessionIO"]
+    isExpected k = "GhcSessionIO" `T.isPrefixOf` k
 
     generateGarbage :: String -> FilePath -> Session TextDocumentIdentifier
     generateGarbage modName dir = do

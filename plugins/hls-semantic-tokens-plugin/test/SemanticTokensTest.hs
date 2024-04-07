@@ -1,6 +1,6 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedLabels  #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE OverloadedStrings        #-}
 
 import           Control.Lens                       ((^.), (^?))
 import           Control.Monad.IO.Class             (liftIO)
@@ -177,7 +177,7 @@ semanticTokensConfigTest =
 
 semanticTokensFullDeltaTests :: TestTree
 semanticTokensFullDeltaTests =
-  testGroup "semanticTokensFullDeltaTests" $
+  testGroup "semanticTokensFullDeltaTests"
     [ testCase "null delta since unchanged" $ do
         let file1 = "TModuleA.hs"
         let expectDelta = InR (InL (SemanticTokensDelta (Just "1") []))
@@ -197,12 +197,11 @@ semanticTokensFullDeltaTests =
           _ <- waitForAction "TypeCheck" doc1
           _ <- Test.getSemanticTokens doc1
           -- open the file and append a line to it
-          let change =
-                TextDocumentContentChangeEvent $
-                  InL $
-                    #range .== Range (Position 4 0) (Position 4 6)
-                      .+ #rangeLength .== Nothing
-                      .+ #text .== "foo = 1"
+          let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                { _range = Range (Position 4 0) (Position 4 6)
+                , _rangeLength = Nothing
+                , _text = "foo = 1"
+                }
           changeDoc doc1 [change]
           _ <- waitForAction "TypeCheck" doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
@@ -216,12 +215,11 @@ semanticTokensFullDeltaTests =
           _ <- waitForAction "TypeCheck" doc1
           _ <- Test.getSemanticTokens doc1
           -- open the file and append a line to it
-          let change =
-                TextDocumentContentChangeEvent $
-                  InL $
-                    #range .== Range (Position 2 0) (Position 2 28)
-                      .+ #rangeLength .== Nothing
-                      .+ #text .== Text.replicate 28 " "
+          let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                { _range = Range (Position 2 0) (Position 2 28)
+                , _rangeLength = Nothing
+                , _text = Text.replicate 28 " "
+                }
           changeDoc doc1 [change]
           _ <- waitForAction "TypeCheck" doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
