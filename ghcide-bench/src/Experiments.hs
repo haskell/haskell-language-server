@@ -47,7 +47,8 @@ import qualified Data.Text                          as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
 import           Development.IDE.Test.Diagnostic
-import           Development.Shake                  (CmdOption (Cwd), cmd_)
+import           Development.Shake                  (CmdOption (Cwd),
+                                                     cmd_)
 import           Experiments.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L

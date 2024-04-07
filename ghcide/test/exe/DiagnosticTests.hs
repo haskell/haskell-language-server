@@ -1,4 +1,3 @@
-
 {-# LANGUAGE GADTs #-}
 
 module DiagnosticTests (tests) where
