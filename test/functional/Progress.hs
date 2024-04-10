@@ -26,12 +26,12 @@ tests =
     testGroup
         "window/workDoneProgress"
         [ testCase "sends indefinite progress notifications" $
-            runSession hlsLspCommand progressCaps "test/testdata/diagnostics" $ do
+            runSessionWithConfig (def {ignoreProgressNotifications = False}) hlsLspCommand progressCaps "test/testdata/diagnostics" $ do
                 let path = "Foo.hs"
                 _ <- openDoc path "haskell"
                 expectProgressMessages [pack ("Setting up diagnostics (for " ++ path ++ ")"), "Processing", "Indexing"] []
         , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
-            runSession hlsLspCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
+            runSessionWithConfig (def {ignoreProgressNotifications = False}) hlsLspCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
               doc <- openDoc "T1.hs" "haskell"
               lspId <- sendRequest SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
 
@@ -55,7 +55,7 @@ tests =
                       expectProgressMessages ["Evaluating"] activeProgressTokens
                   _ -> error $ "Unexpected response result: " ++ show response
         , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
-            runSessionWithConfig (def { ignoreConfigurationRequests = False }) hlsLspCommand progressCaps "test/testdata/format" $ do
+            runSessionWithConfig (def { ignoreConfigurationRequests = False, ignoreProgressNotifications = False }) hlsLspCommand progressCaps "test/testdata/format" $ do
                 void configurationRequest
                 setHlsConfig (formatLspConfig "ormolu")
                 doc <- openDoc "Format.hs" "haskell"
@@ -63,7 +63,7 @@ tests =
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressMessages ["Formatting Format.hs"] []
         , requiresFourmoluPlugin $ testCase "fourmolu plugin sends progress notifications" $ do
-            runSessionWithConfig (def { ignoreConfigurationRequests = False }) hlsLspCommand progressCaps "test/testdata/format" $ do
+            runSessionWithConfig (def { ignoreConfigurationRequests = False, ignoreProgressNotifications = False }) hlsLspCommand progressCaps "test/testdata/format" $ do
                 void configurationRequest
                 setHlsConfig (formatLspConfig "fourmolu")
                 doc <- openDoc "Format.hs" "haskell"
