@@ -136,6 +136,7 @@ getConfigFromEnv = do
   timeoutOverride <- fmap read <$> getEnv "LSP_TIMEOUT"
   return defaultConfig
     { messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride
+    , ignoreProgressNotifications = False
     , logColor
     }
   where
