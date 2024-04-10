@@ -42,7 +42,6 @@ import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
-import           System.IO.Unsafe                      (unsafeInterleaveIO)
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
@@ -197,18 +196,10 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
     let root = LSP.resRootPath env
     dir <- maybe getCurrentDirectory return root
     dbLoc <- getHieDbLoc dir
-
-    -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
-    -- to 'getIdeState', so we use this dirty trick
-    dbMVar <- newEmptyMVar
-    ~(WithHieDbShield withHieDb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
-
-    ide <- getIdeState env root withHieDb hieChan
-
     let initConfig = parseConfiguration params
-
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
-    registerIdeConfiguration (shakeExtras ide) initConfig
+    dbMVar <- newEmptyMVar
+
 
     let handleServerException (Left e) = do
             logWith recorder Error $ LogReactorThreadException e
@@ -245,6 +236,10 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     ReactorNotification act -> handle exceptionInHandler act
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
+
+    (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
+    ide <- getIdeState env root withHieDb hieChan
+    registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
 
