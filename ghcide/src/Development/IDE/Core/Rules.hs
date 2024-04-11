@@ -701,9 +701,20 @@ loadGhcSession recorder ghcSessionDepsConfig = do
     defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GhcSessionIO -> do
         alwaysRerun
         opts <- getIdeOptions
+        config <- getClientConfigAction
         res <- optGhcSession opts
 
-        let fingerprint = LBS.toStrict $ B.encode $ hash (sessionVersion res)
+        let fingerprint = LBS.toStrict $ LBS.concat
+                [ B.encode (hash (sessionVersion res))
+                -- When the session version changes, reload all session
+                -- hsc env sessions
+                , B.encode (show (sessionLoading config))
+                -- The loading config affects session loading.
+                -- Invalidate all build nodes.
+                -- Changing the session loading config will increment
+                -- the 'sessionVersion', thus we don't generate the same fingerprint
+                -- twice by accident.
+                ]
         return (fingerprint, res)
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do

@@ -25,7 +25,7 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe               as Safe
 import           Control.Monad
-import           Control.Monad.Extra
+import           Control.Monad.Extra                  as Extra
 import           Control.Monad.IO.Class
 import qualified Crypto.Hash.SHA1                     as H
 import           Data.Aeson                           hiding (Error)
@@ -52,13 +52,13 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake           hiding (Log, Priority,
                                                        knownTargets, withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
-import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
                                                        Var, Warning, getOptions)
 import qualified Development.IDE.GHC.Compat.Core      as GHC
 import           Development.IDE.GHC.Compat.Env       hiding (Logger)
 import           Development.IDE.GHC.Compat.Units     (UnitId)
+import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
@@ -70,6 +70,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
+import qualified HIE.Bios.Cradle                      as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
@@ -80,6 +81,8 @@ import           Ide.Logger                           (Pretty (pretty),
                                                        nest,
                                                        toCologActionWithPrio,
                                                        vcat, viaShow, (<+>))
+import           Ide.Types                            (SessionLoadingPreferenceConfig (..),
+                                                       sessionLoading)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
@@ -123,7 +126,8 @@ import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Driver.Make                      (checkHomeUnitsClosed)
-import           GHC.Types.Error                      (errMsgDiagnostic, singleMessage)
+import           GHC.Types.Error                      (errMsgDiagnostic,
+                                                       singleMessage)
 import           GHC.Unit.State
 #endif
 
@@ -149,6 +153,7 @@ data Log
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogHieBios HieBios.Log
+  | LogSessionLoadingChanged
 deriving instance Show Log
 
 instance Pretty Log where
@@ -219,6 +224,8 @@ instance Pretty Log where
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> viaShow componentCache
     LogHieBios msg -> pretty msg
+    LogSessionLoadingChanged ->
+      "Session Loading config changed, reloading the full session."
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -449,6 +456,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
   filesMap <- newVar HM.empty :: IO (Var FilesMap)
   -- Version of the mappings above
   version <- newVar 0
+  biosSessionLoadingVar <- newVar Nothing :: IO (Var (Maybe SessionLoadingPreferenceConfig))
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
   -- This caches the mapping from Mod.hs -> hie.yaml
   cradleLoc <- liftIO $ memoIO $ \v -> do
@@ -463,6 +471,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
   runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
+    clientConfig <- getClientConfigAction
     extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
     let invalidateShakeCache :: IO ()
@@ -653,7 +662,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfp
                   old_files <- readIORef cradle_files
-                  res <- cradleToOptsAndLibDir recorder cradle cfp old_files
+                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
                   addTag "result" (show res)
                   return res
 
@@ -681,11 +690,38 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
                return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
+    let
+        -- | We allow users to specify a loading strategy.
+        -- Check whether this config was changed since the last time we have loaded
+        -- a session.
+        --
+        -- If the loading configuration changed, we likely should restart the session
+        -- in its entirety.
+        didSessionLoadingPreferenceConfigChange :: IO Bool
+        didSessionLoadingPreferenceConfigChange = do
+          mLoadingConfig <- readVar biosSessionLoadingVar
+          case mLoadingConfig of
+            Nothing -> do
+              writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
+              pure False
+            Just loadingConfig -> do
+              writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
+              pure (loadingConfig /= sessionLoading clientConfig)
+
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
     -- Returns the Ghc session and the cradle dependencies
     let sessionOpts :: (Maybe FilePath, FilePath)
                     -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
+          Extra.whenM didSessionLoadingPreferenceConfigChange $ do
+            logWith recorder Info LogSessionLoadingChanged
+            -- If the dependencies are out of date then clear both caches and start
+            -- again.
+            modifyVar_ fileToFlags (const (return Map.empty))
+            modifyVar_ filesMap (const (return HM.empty))
+            -- Don't even keep the name cache, we start from scratch here!
+            modifyVar_ hscEnvs (const (return Map.empty))
+
           v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
           cfp <- makeAbsolute file
           case HM.lookup (toNormalizedFilePath' cfp) v of
@@ -696,6 +732,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- If the dependencies are out of date then clear both caches and start
                   -- again.
                   modifyVar_ fileToFlags (const (return Map.empty))
+                  modifyVar_ filesMap (const (return HM.empty))
                   -- Keep the same name cache
                   modifyVar_ hscEnvs (return . Map.adjust (const []) hieYaml )
                   consultCradle hieYaml cfp
@@ -715,7 +752,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
-      opts <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
+      opts <- join $ mask_ $ modifyVar runningCradle $ \as -> do
         -- If the cradle is not finished, then wait for it to finish.
         void $ wait as
         asyncRes <- async $ getOptions file
@@ -725,14 +762,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
-cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> Cradle Void -> FilePath -> [FilePath]
+cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> Cradle Void -> FilePath -> [FilePath]
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
-cradleToOptsAndLibDir recorder cradle file old_files = do
+cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
     -- let noneCradleFoundMessage :: FilePath -> T.Text
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
-    cradleRes <- HieBios.getCompilerOptions file old_files cradle
+    cradleRes <- HieBios.getCompilerOptions file loadStyle cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
@@ -749,6 +786,11 @@ cradleToOptsAndLibDir recorder cradle file old_files = do
         CradleNone -> do
             logWith recorder Info $ LogNoneCradleFound file
             return (Left [])
+
+    where
+        loadStyle = case loadConfig of
+            PreferSingleComponentLoading -> LoadFile
+            PreferMultiComponentLoading  -> LoadWithContext old_fps
 
 #if MIN_VERSION_ghc(9,3,0)
 emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
@@ -1150,7 +1192,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
         -- component to be created. In case the cradle doesn't list all the targets for
         -- the component, in which case things will be horribly broken anyway.
         --
-        -- When we have a single component that is caused to be loaded due to a
+        -- When we have a singleComponent that is caused to be loaded due to a
         -- file, we assume the file is part of that component. This is useful
         -- for bare GHC sessions, such as many of the ones used in the testsuite
         --
