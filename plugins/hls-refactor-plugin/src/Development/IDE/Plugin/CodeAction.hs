@@ -1984,7 +1984,7 @@ regExImports msg
 #if MIN_VERSION_ghc(9,7,0)
                           "\\(at ([^:]+:[^ ]+)\\)"
 #else
-                           "\\(([^:]+:[^ ]+)\\)"
+                          "\\(([^:]+:[^ ]+)\\)"
 #endif
     , mods <- [mod | [_,mod] <- mods']
     , srcspans <- [srcspan | [_,srcspan] <- srcspans']
