@@ -96,6 +96,7 @@ import           Ide.Logger                         (Pretty (pretty),
                                                      cfilter, cmapWithPrio,
                                                      logWith,
                                                      makeDefaultStderrRecorder,
+                                                     defaultLoggingColumns,
                                                      (<+>))
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
