@@ -27,6 +27,7 @@ module Ide.Logger
   , module PrettyPrinterModule
   , renderStrict
   , toCologActionWithPrio
+  , defaultLoggingColumns
   ) where
 
 import           Colog.Core                    (LogAction (..), Severity,
