@@ -1973,15 +1973,18 @@ regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
     _          -> Nothing
 
 -- | Process a list of (module_name, filename:src_span) values
--- | Eg. [(Data.Map, app/ModuleB.hs:2:1-18), (Data.HashMap.Strict, app/ModuleB.hs:3:1-29)]
+--
+-- Eg. [(Data.Map, app/ModuleB.hs:2:1-18), (Data.HashMap.Strict, app/ModuleB.hs:3:1-29)]
 regExImports :: T.Text -> Maybe [(T.Text, T.Text)]
 regExImports msg
     | Just mods' <- allMatchRegex msg "‘([^’]*)’"
     , Just srcspans' <- allMatchRegex msg
+    -- This regex has to be able to deal both with single-line srcpans like "(/path/to/File.hs:2:1-18)"
+    -- as well as multi-line srcspans like "(/path/to/File.hs:(3,1)-(5,2))"
 #if MIN_VERSION_ghc(9,7,0)
-                          "\\(at ([^)]*)\\)"
+                          "\\(at ([^:]+:[^ ]+)\\)"
 #else
-                          "\\(([^)]*)\\)"
+                           "\\(([^:]+:[^ ]+)\\)"
 #endif
     , mods <- [mod | [_,mod] <- mods']
     , srcspans <- [srcspan | [_,srcspan] <- srcspans']
