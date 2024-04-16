@@ -1,6 +1,8 @@
 
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedLabels   #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 module InitializeResponseTests (tests) where
 

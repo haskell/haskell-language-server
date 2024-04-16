@@ -2156,6 +2156,7 @@ test-suite ghcide-tests
 
   main-is:            Main.hs
   other-modules:
+    Config
     AsyncTests
     BootTests
     ClientSettingsTests
