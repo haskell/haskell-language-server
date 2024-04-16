@@ -1,6 +1,8 @@
 
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedLabels   #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 module InitializeResponseTests (tests) where
 
@@ -11,18 +13,12 @@ import qualified Data.Text                         as T
 import           Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import qualified Language.LSP.Protocol.Lens        as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types       hiding
-                                                   (SemanticTokenAbsolute (..),
-                                                    SemanticTokenRelative (..),
-                                                    SemanticTokensEdit (..),
-                                                    mkRange)
 import           Language.LSP.Test
 
+import           Config                            (dummyPlugin, mkIdeTestFs)
 import           Control.Lens                      ((^.))
 import           Development.IDE.Plugin.Test       (blockCommandId)
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           TestUtils
+import           Test.Hls
 
 tests :: TestTree
 tests = withResource acquire release tests where
@@ -90,7 +86,7 @@ tests = withResource acquire release tests where
   innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
 
   acquire :: IO (TResponseMessage Method_Initialize)
-  acquire = run initializeResponse
+  acquire = runSessionWithServerInTmpDir def dummyPlugin (mkIdeTestFs []) initializeResponse
 
   release :: TResponseMessage Method_Initialize -> IO ()
   release = mempty
