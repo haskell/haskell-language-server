@@ -80,7 +80,7 @@ import           Data.Proxy                         (Proxy (Proxy))
 import qualified Data.Text                          as T
 import qualified Data.Text.Lazy                     as TL
 import qualified Data.Text.Lazy.Encoding            as TL
-import           Development.IDE                    (IdeState)
+import           Development.IDE                    (IdeState, LoggingColumn (ThreadIdColumn))
 import           Development.IDE.Main               hiding (Log)
 import qualified Development.IDE.Main               as Ghcide
 import qualified Development.IDE.Main               as IDEMain
