@@ -16,14 +16,12 @@ import           Development.IDE                          (action)
 import           Development.IDE.Core.OfInterest          (kick)
 import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
-import           Development.IDE.Core.Tracing             (withTelemetryLogger)
+import           Development.IDE.Core.Tracing             (withTelemetryRecorder)
 import qualified Development.IDE.Main                     as IDEMain
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import           Development.IDE.Types.Options
-import           GHC.Stack                                (emptyCallStack)
-import           Ide.Logger                               (Logger (Logger),
-                                                           LoggingColumn (DataColumn, PriorityColumn),
+import           Ide.Logger                               (LoggingColumn (DataColumn, PriorityColumn),
                                                            Pretty (pretty),
                                                            Priority (Debug, Error, Info),
                                                            WithPriority (WithPriority, priority),
@@ -71,7 +69,7 @@ ghcideVersion = do
              <> gitHashSection
 
 main :: IO ()
-main = withTelemetryLogger $ \telemetryLogger -> do
+main = withTelemetryRecorder $ \telemetryRecorder -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
       cmapWithPrio pretty
@@ -109,23 +107,20 @@ main = withTelemetryLogger $ \telemetryLogger -> do
           (lspLogRecorder & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
                           & cfilter (\WithPriority{ priority } -> priority >= minPriority)) <>
           (lspMessageRecorder & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
-                              & cfilter (\WithPriority{ priority } -> priority >= Error))
-
-    -- exists so old-style logging works. intended to be phased out
-    let logger = Logger $ \p m -> Logger.logger_ docWithFilteredPriorityRecorder (WithPriority p emptyCallStack (pretty m))
+                              & cfilter (\WithPriority{ priority } -> priority >= Error)) <>
+          telemetryRecorder
 
     let recorder = docWithFilteredPriorityRecorder
                  & cmapWithPrio pretty
 
     let arguments =
           if argsTesting
-          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
-          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
+          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) hlsPlugins
+          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) hlsPlugins
 
     IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
         { IDEMain.argsProjectRoot = Just argsCwd
         , IDEMain.argCommand = argsCommand
-        , IDEMain.argsLogger = IDEMain.argsLogger arguments <> pure telemetryLogger
         , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins arguments <> pluginDescToIdePlugins [lspRecorderPlugin]
 
         , IDEMain.argsRules = do

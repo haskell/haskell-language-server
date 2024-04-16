@@ -22,8 +22,7 @@ import           Development.IDE.Core.FileExists  (fileExistsRules)
 import           Development.IDE.Core.OfInterest  hiding (Log, LogShake)
 import           Development.IDE.Graph
 import           Development.IDE.Types.Options    (IdeOptions (..))
-import           Ide.Logger                       as Logger (Logger,
-                                                             Pretty (pretty),
+import           Ide.Logger                       as Logger (Pretty (pretty),
                                                              Priority (Debug),
                                                              Recorder,
                                                              WithPriority,
@@ -63,14 +62,13 @@ initialise :: Recorder (WithPriority Log)
            -> IdePlugins IdeState
            -> Rules ()
            -> Maybe (LSP.LanguageContextEnv Config)
-           -> Logger
            -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> WithHieDb
            -> IndexQueue
            -> Monitoring
            -> IO IdeState
-initialise recorder defaultConfig plugins mainRule lspEnv logger debouncer options withHieDb hiedbChan metrics = do
+initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan metrics = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
@@ -80,7 +78,6 @@ initialise recorder defaultConfig plugins mainRule lspEnv logger debouncer optio
         lspEnv
         defaultConfig
         plugins
-        logger
         debouncer
         shakeProfiling
         (optReportProgress options)

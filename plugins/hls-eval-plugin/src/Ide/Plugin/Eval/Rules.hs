@@ -33,22 +33,15 @@ import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        addIdeGlobal,
                                                        getIdeGlobalAction,
                                                        getIdeGlobalState)
-import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
 import           GHC.Parser.Annotation
-import           Ide.Logger                           (Pretty (pretty),
-                                                       Recorder, WithPriority,
+import           Ide.Logger                           (Recorder, WithPriority,
                                                        cmapWithPrio)
 import           Ide.Plugin.Eval.Types
 
-newtype Log = LogShake Shake.Log deriving Show
-
-instance Pretty Log where
-  pretty = \case
-    LogShake shakeLog -> pretty shakeLog
 
 rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do

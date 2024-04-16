@@ -41,6 +41,8 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
+import           Ide.Logger                                   (Pretty (..),
+                                                               viaShow)
 import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
 
@@ -339,6 +341,9 @@ data FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus
+
+instance Pretty FileOfInterestStatus where
+    pretty = viaShow
 
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)

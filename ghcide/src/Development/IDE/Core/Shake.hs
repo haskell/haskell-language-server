@@ -168,11 +168,11 @@ import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog                 hiding (addEvent)
+import qualified Prettyprinter                          as Pretty
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
-
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -191,6 +191,12 @@ data Log
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
   | LogDefineEarlyCutoffRuleNoDiagHasDiag !FileDiagnostic
   | LogDefineEarlyCutoffRuleCustomNewnessHasDiag !FileDiagnostic
+  | LogCancelledAction !T.Text
+  | LogSessionInitialised
+  | LogLookupPersistentKey !T.Text
+  | LogShakeGarbageCollection !T.Text !Int !Seconds
+  -- * OfInterest Log messages
+  | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
   deriving Show
 
 instance Pretty Log where
@@ -224,6 +230,16 @@ instance Pretty Log where
     LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
       "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
       <+> pretty (showDiagnosticsColored [fileDiagnostic])
+    LogCancelledAction action ->
+        pretty action <+> "was cancelled"
+    LogSessionInitialised -> "Shake session initialized"
+    LogLookupPersistentKey key ->
+        "LOOKUP PERSISTENT FOR:" <+> pretty key
+    LogShakeGarbageCollection label number duration ->
+        pretty label <+> "of" <+> pretty number <+> "keys (took " <+> pretty (showDuration duration) <> ")"
+    LogSetFilesOfInterest ofInterest ->
+        "Set files of interst to" <> Pretty.line
+            <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -254,7 +270,7 @@ data ShakeExtras = ShakeExtras
     { --eventer :: LSP.FromServerMessage -> IO ()
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
-    ,logger :: Logger
+    ,shakeRecorder :: Recorder (WithPriority Log)
     ,idePlugins :: IdePlugins IdeState
     ,globals :: TVar (HMap.HashMap TypeRep Dynamic)
       -- ^ Registry of global state used by rules.
@@ -439,7 +455,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           | otherwise = do
           pmap <- readTVarIO persistentKeys
           mv <- runMaybeT $ do
-            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP PERSISTENT FOR: " ++ show k
+            liftIO $ logWith (shakeRecorder s) Debug $ LogLookupPersistentKey (T.pack $ show k)
             f <- MaybeT $ pure $ lookupKeyMap (newKey k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
@@ -602,7 +618,6 @@ shakeOpen :: Recorder (WithPriority Log)
           -> Maybe (LSP.LanguageContextEnv Config)
           -> Config
           -> IdePlugins IdeState
-          -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
           -> IdeReportProgress
@@ -613,7 +628,7 @@ shakeOpen :: Recorder (WithPriority Log)
           -> Monitoring
           -> Rules ()
           -> IO IdeState
-shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
+shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
   withHieDb indexQueue opts monitoring rules = mdo
@@ -660,7 +675,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
-        pure ShakeExtras{..}
+        pure ShakeExtras{shakeRecorder = recorder, ..}
     shakeDb  <-
         shakeNewDatabase
             opts { shakeExtra = newShakeExtra shakeExtras }
@@ -707,7 +722,7 @@ shakeSessionInit recorder ide@IdeState{..} = do
     vfs <- vfsSnapshot (lspEnv shakeExtras)
     initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
-    logDebug (ideLogger ide) "Shake session initialized"
+    logWith recorder Debug LogSessionInitialised
 
 shakeShut :: IdeState -> IO ()
 shakeShut IdeState{..} = do
@@ -775,7 +790,7 @@ shakeRestart recorder IdeState{..} vfs reason acts =
 --
 --   Appropriate for user actions other than edits.
 shakeEnqueue :: ShakeExtras -> DelayedAction a -> IO (IO a)
-shakeEnqueue ShakeExtras{actionQueue, logger} act = do
+shakeEnqueue ShakeExtras{actionQueue, shakeRecorder} act = do
     (b, dai) <- instantiateDelayedAction act
     atomicallyNamed "actionQueue - push" $ pushQueue dai actionQueue
     let wait' barrier =
@@ -784,7 +799,7 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
                     fail $ "internal bug: forever blocked on MVar for " <>
                             actionName act)
               , Handler (\e@AsyncCancelled -> do
-                  logPriority logger Debug $ T.pack $ actionName act <> " was cancelled"
+                  logWith shakeRecorder Debug $ LogCancelledAction (T.pack $ actionName act)
 
                   atomicallyNamed "actionQueue - abort" $ abortQueue dai actionQueue
                   throw e)
@@ -908,13 +923,12 @@ garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection
 garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
 garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
-    ShakeExtras{state, dirtyKeys, lspEnv, logger, ideTesting} <- getShakeExtras
+    ShakeExtras{state, dirtyKeys, lspEnv, shakeRecorder, ideTesting} <- getShakeExtras
     (n::Int, garbage) <- liftIO $
         foldM (removeDirtyKey dirtyKeys state) (0,[]) agedKeys
     t <- liftIO start
     when (n>0) $ liftIO $ do
-        logDebug logger $ T.pack $
-            label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
+        logWith shakeRecorder Debug $ LogShakeGarbageCollection (T.pack label) n t
     when (coerce ideTesting) $ liftIO $ mRunLspT lspEnv $
         LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/GC"))
                              (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
@@ -1305,13 +1319,11 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
             | otherwise = c
 
 
-ideLogger :: IdeState -> Logger
-ideLogger IdeState{shakeExtras=ShakeExtras{logger}} = logger
+ideLogger :: IdeState -> Recorder (WithPriority Log)
+ideLogger IdeState{shakeExtras=ShakeExtras{shakeRecorder}} = shakeRecorder
 
-actionLogger :: Action Logger
-actionLogger = do
-    ShakeExtras{logger} <- getShakeExtras
-    return logger
+actionLogger :: Action (Recorder (WithPriority Log))
+actionLogger = shakeRecorder <$> getShakeExtras
 
 --------------------------------------------------------------------------------
 type STMDiagnosticStore = STM.Map NormalizedUri StoreItem

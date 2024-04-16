@@ -1,4 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PartialTypeSignatures    #-}
 
@@ -7,21 +8,31 @@ module Main (main) where
 import           Control.Monad                     (void)
 import qualified Data.Map                          as M
 import           Data.Text                         (Text)
-import qualified Development.IDE.GHC.ExactPrint
+import qualified Development.IDE.GHC.ExactPrint    as ExactPrint
 import qualified Development.IDE.Plugin.CodeAction as Refactor
+import           Ide.Logger
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Retrie                 as Retrie
 import           System.FilePath
 import           Test.Hls
 
+data LogWrap
+    = RetrieLog Retrie.Log
+    | ExactPrintLog ExactPrint.Log
+
+instance Pretty LogWrap where
+    pretty = \case
+        RetrieLog msg -> pretty msg
+        ExactPrintLog msg -> pretty msg
+
 main :: IO ()
 main = defaultTestRunner tests
 
-retriePlugin :: PluginTestDescriptor a
-retriePlugin = mkPluginTestDescriptor' Retrie.descriptor "retrie"
+retriePlugin :: PluginTestDescriptor LogWrap
+retriePlugin =  mkPluginTestDescriptor (Retrie.descriptor . cmapWithPrio RetrieLog) "retrie"
 
-refactorPlugin :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
-refactorPlugin = mkPluginTestDescriptor Refactor.iePluginDescriptor "refactor"
+refactorPlugin :: PluginTestDescriptor LogWrap
+refactorPlugin = mkPluginTestDescriptor (Refactor.iePluginDescriptor  . cmapWithPrio ExactPrintLog) "refactor"
 
 tests :: TestTree
 tests = testGroup "Retrie"
@@ -79,7 +90,7 @@ goldenWithRetrie title path act =
 runWithRetrie :: Session a -> IO a
 runWithRetrie = runSessionWithServer def testPlugins testDataDir
 
-testPlugins :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
+testPlugins :: PluginTestDescriptor LogWrap
 testPlugins =
     retriePlugin <>
     refactorPlugin  -- needed for the GetAnnotatedParsedSource rule

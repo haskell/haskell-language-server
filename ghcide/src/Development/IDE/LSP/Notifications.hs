@@ -41,12 +41,25 @@ import           Numeric.Natural
 data Log
   = LogShake Shake.Log
   | LogFileStore FileStore.Log
+  | LogOpenTextDocument !Uri
+  | LogOpenedTextDocument !Uri
+  | LogModifiedTextDocument !Uri
+  | LogSavedTextDocument !Uri
+  | LogClosedTextDocument !Uri
+  | LogWatchedFileEvents !Text.Text
+  | LogWarnNoWatchedFilesSupport
   deriving Show
 
 instance Pretty Log where
   pretty = \case
     LogShake msg     -> pretty msg
     LogFileStore msg -> pretty msg
+    LogOpenedTextDocument uri ->  "Opened text document:" <+> pretty (getUri uri)
+    LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
+    LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
+    LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
+    LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
+    LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
@@ -61,7 +74,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
           -- For example, vscode restores previously unsaved contents on open
           addFileOfInterest ide file Modified{firstOpen=True}
           setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
-          logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
+          logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
@@ -69,14 +82,14 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         whenUriFile _uri $ \file -> do
           addFileOfInterest ide file Modified{firstOpen=False}
           setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
-        logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
+        logWith recorder Debug $ LogModifiedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             addFileOfInterest ide file OnDisk
             setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file
-        logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
+        logWith recorder Debug $ LogSavedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
@@ -85,7 +98,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
               let msg = "Closed text document: " <> getUri _uri
               scheduleGarbageCollection ide
               setSomethingModified (VFSModified vfs) ide [] $ Text.unpack msg
-              logDebug (ideLogger ide) msg
+              logWith recorder Debug $ LogClosedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWatchedFiles $
       \ide vfs _ (DidChangeWatchedFilesParams fileEvents) -> liftIO $ do
@@ -102,7 +115,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
                 ]
         unless (null fileEvents') $ do
             let msg = show fileEvents'
-            logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
+            logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
             modifyFileExists ide fileEvents'
             resetFileStore ide fileEvents'
             setSomethingModified (VFSModified vfs) ide [] msg
@@ -133,7 +146,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
       let globs = watchedGlobs opts
       success <- registerFileWatches globs
       unless success $
-        liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
+        liftIO $ logWith recorder Warning LogWarnNoWatchedFilesSupport
   ],
 
     -- The ghcide descriptors should come last'ish so that the notification handlers

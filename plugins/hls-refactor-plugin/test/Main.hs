@@ -1501,6 +1501,30 @@ extendImportTests = testGroup "extend import actions"
                     , "f :: Foo"
                     , "f = undefined"
                     ])
+        , testSession "data constructor with two multiline import lists that can be extended with it" $ template
+            []
+            ("A.hs", T.unlines
+                [ "module A where"
+                , "import Prelude ("
+                , " )"
+                , "import Data.Maybe ("
+                , " )"
+                , "f = Nothing"
+                ])
+            (Range (Position 5 5) (Position 5 6))
+            [ "Add Maybe(..) to the import list of Data.Maybe"
+            , "Add Maybe(..) to the import list of Prelude"
+            , "Add Maybe(Nothing) to the import list of Data.Maybe"
+            , "Add Maybe(Nothing) to the import list of Prelude"
+            ]
+            (T.unlines
+                ["module A where"
+                , "import Prelude ("
+                , " )"
+                , "import Data.Maybe (Maybe (..)"
+                , " )"
+                , "f = Nothing"
+                ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x
