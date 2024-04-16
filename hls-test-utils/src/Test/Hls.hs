@@ -80,7 +80,7 @@ import           Data.Proxy                         (Proxy (Proxy))
 import qualified Data.Text                          as T
 import qualified Data.Text.Lazy                     as TL
 import qualified Data.Text.Lazy.Encoding            as TL
-import           Development.IDE                    (IdeState)
+import           Development.IDE                    (IdeState, LoggingColumn (ThreadIdColumn))
 import           Development.IDE.Main               hiding (Log)
 import qualified Development.IDE.Main               as Ghcide
 import qualified Development.IDE.Main               as IDEMain
@@ -94,6 +94,7 @@ import           Ide.Logger                         (Pretty (pretty),
                                                      Priority (..), Recorder,
                                                      WithPriority (WithPriority, priority),
                                                      cfilter, cmapWithPrio,
+                                                     defaultLoggingColumns,
                                                      logWith,
                                                      makeDefaultStderrRecorder,
                                                      (<+>))
@@ -348,7 +349,7 @@ pluginTestRecorder = do
 -- See 'runSessionWithServer'' for details.
 initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a))
 initialiseTestRecorder envVars = do
-    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just $ ThreadIdColumn : defaultLoggingColumns)
     -- There are potentially multiple environment variables that enable this logger
     definedEnvVars <- forM envVars (\var -> fromMaybe "0" <$> lookupEnv var)
     let logStdErr = any (/= "0") definedEnvVars
