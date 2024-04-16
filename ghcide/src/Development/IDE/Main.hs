@@ -94,14 +94,13 @@ import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
 import           HIE.Bios.Cradle                          (findCradle)
 import qualified HieDb.Run                                as HieDb
-import           Ide.Logger                               (Logger,
-                                                           Pretty (pretty),
+import           Ide.Logger                               (Pretty (pretty),
                                                            Priority (Info),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio,
-                                                           logDebug, logWith,
-                                                           nest, vsep, (<+>))
+                                                           logWith, nest, vsep,
+                                                           (<+>))
 import           Ide.Plugin.Config                        (CheckParents (NeverCheck),
                                                            Config, checkParents,
                                                            checkProject,
@@ -139,6 +138,7 @@ data Log
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
   | LogSetInitialDynFlagsException !SomeException
+  | LogConfigurationChange T.Text
   | LogService Service.Log
   | LogShake Shake.Log
   | LogGhcIde GhcIde.Log
@@ -163,6 +163,7 @@ instance Pretty Log where
       "shouldRunSubset:" <+> pretty shouldRunSubset
     LogSetInitialDynFlagsException e ->
       "setInitialDynFlags:" <+> pretty (displayException e)
+    LogConfigurationChange msg -> "Configuration changed:" <+> pretty msg
     LogService msg -> pretty msg
     LogShake msg -> pretty msg
     LogGhcIde msg -> pretty msg
@@ -209,7 +210,6 @@ commandP plugins =
 data Arguments = Arguments
     { argsProjectRoot           :: Maybe FilePath
     , argCommand                :: Command
-    , argsLogger                :: IO Logger
     , argsRules                 :: Rules ()
     , argsHlsPlugins            :: IdePlugins IdeState
     , argsGhcidePlugin          :: Plugin Config  -- ^ Deprecated
@@ -225,11 +225,10 @@ data Arguments = Arguments
     , argsMonitoring            :: IO Monitoring
     }
 
-defaultArguments :: Recorder (WithPriority Log) -> Logger -> IdePlugins IdeState -> Arguments
-defaultArguments recorder logger plugins = Arguments
+defaultArguments :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
+defaultArguments recorder plugins = Arguments
         { argsProjectRoot = Nothing
         , argCommand = LSP
-        , argsLogger = pure logger
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)) <> plugins
@@ -262,11 +261,11 @@ defaultArguments recorder logger plugins = Arguments
         }
 
 
-testing :: Recorder (WithPriority Log) -> Logger -> IdePlugins IdeState -> Arguments
-testing recorder logger plugins =
+testing :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
+testing recorder plugins =
   let
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions } =
-        defaultArguments recorder logger plugins
+        defaultArguments recorder plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
@@ -287,7 +286,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
   fun = do
     setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
-    logger <- argsLogger
     hSetBuffering stderr LineBuffering
 
     let hlsPlugin = asGhcIdePlugin (cmapWithPrio LogPluginHLS recorder) argsHlsPlugins
@@ -346,7 +344,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                       argsHlsPlugins
                       rules
                       (Just env)
-                      logger
                       debouncer
                       ideOptions
                       withHieDb
@@ -365,7 +362,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     Nothing -> pure ()
                     Just ide -> liftIO $ do
                         let msg = T.pack $ show cfg
-                        logDebug (Shake.ideLogger ide) $ "Configuration changed: " <> msg
+                        logWith recorder Debug $ LogConfigurationChange msg
                         modifyClientSettings ide (const $ Just cfgObj)
                         setSomethingModified Shake.VFSUnmodified ide [toKey Rules.GetClientSettings emptyFilePath] "config change"
 
@@ -402,7 +399,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing logger debouncer ideOptions hiedb hieChan mempty
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -440,7 +437,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing logger debouncer ideOptions hiedb hieChan mempty
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide

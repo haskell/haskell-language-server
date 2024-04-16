@@ -50,6 +50,7 @@ data Log
   | LogCancelledRequest !SomeLspId
   | LogSession Session.Log
   | LogLspServer LspServerLog
+  | LogServerShutdownMessage
   deriving Show
 
 instance Pretty Log where
@@ -73,6 +74,7 @@ instance Pretty Log where
       "Cancelled request" <+> viaShow requestId
     LogSession msg -> pretty msg
     LogLspServer msg -> pretty msg
+    LogServerShutdownMessage -> "Received shutdown message"
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
@@ -169,7 +171,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
         [ userHandlers
         , cancelHandler cancelRequest
         , exitHandler exit
-        , shutdownHandler stopReactorLoop
+        , shutdownHandler recorder stopReactorLoop
         ]
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
@@ -256,10 +258,10 @@ cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \T
         toLspId (InL x) = IdInt x
         toLspId (InR y) = IdString y
 
-shutdownHandler :: IO () -> LSP.Handlers (ServerM c)
-shutdownHandler stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
+shutdownHandler :: Recorder (WithPriority Log) -> IO () -> LSP.Handlers (ServerM c)
+shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
     (_, ide) <- ask
-    liftIO $ logDebug (ideLogger ide) "Received shutdown message"
+    liftIO $ logWith recorder Debug LogServerShutdownMessage
     -- stop the reactor to free up the hiedb connection
     liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable

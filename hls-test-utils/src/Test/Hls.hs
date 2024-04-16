@@ -89,12 +89,9 @@ import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBu
 import qualified Development.IDE.Plugin.Test        as Test
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
-import           GHC.Stack                          (emptyCallStack)
 import           GHC.TypeLits
-import           Ide.Logger                         (Doc, Logger (Logger),
-                                                     Pretty (pretty),
-                                                     Priority (..),
-                                                     Recorder (Recorder, logger_),
+import           Ide.Logger                         (Pretty (pretty),
+                                                     Priority (..), Recorder,
                                                      WithPriority (WithPriority, priority),
                                                      cfilter, cmapWithPrio,
                                                      logWith,
@@ -338,8 +335,7 @@ mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 -- @
 pluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
 pluginTestRecorder = do
-  (recorder, _) <- initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
-  pure recorder
+  initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
 -- | Generic recorder initialisation for plugins and the HLS server for test-cases.
 --
@@ -350,7 +346,7 @@ pluginTestRecorder = do
 --
 -- We have to return the base logger function for HLS server logging initialisation.
 -- See 'runSessionWithServer'' for details.
-initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a), WithPriority (Doc ann) -> IO ())
+initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a))
 initialiseTestRecorder envVars = do
     docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing
     -- There are potentially multiple environment variables that enable this logger
@@ -361,9 +357,7 @@ initialiseTestRecorder envVars = do
           if logStdErr then cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
           else mempty
 
-        Recorder {logger_} = docWithFilteredPriorityRecorder
-
-    pure (cmapWithPrio pretty docWithFilteredPriorityRecorder, logger_)
+    pure (cmapWithPrio pretty docWithFilteredPriorityRecorder)
 
 -- ------------------------------------------------------------
 -- Run an HLS server testing a specific plugin
@@ -426,7 +420,7 @@ runSessionWithServerInTmpDir' ::
   IO a
 runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
   testRoot <- setupTestEnvironment
-  (recorder, _) <- initialiseTestRecorder
+  recorder <- initialiseTestRecorder
     ["LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
 
   -- Do not clean up the temporary directory if this variable is set to anything but '0'.
@@ -608,18 +602,16 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
     -- It is also in better accordance with 'pluginTestRecorder' which uses "HLS_TEST_PLUGIN_LOG_STDERR".
     -- At last, "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
     -- under test.
-    (recorder, logger_) <- initialiseTestRecorder
+    recorder <- initialiseTestRecorder
       ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
     let
         sconf' = sconf { lspConfig = hlsConfigToClientConfig conf }
-        -- exists until old logging style is phased out
-        logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
         hlsPlugins = IdePlugins [Test.blockCommandDescriptor "block-command"] <> plugins
 
-        arguments@Arguments{ argsIdeOptions, argsLogger } =
-            testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
+        arguments@Arguments{ argsIdeOptions } =
+            testing (cmapWithPrio LogIDEMain recorder) hlsPlugins
 
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
@@ -634,7 +626,6 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
                 { argsHandleIn = pure inR
                 , argsHandleOut = pure outW
                 , argsDefaultHlsConfig = conf
-                , argsLogger = argsLogger
                 , argsIdeOptions = ideOptions
                 , argsProjectRoot = Just root
                 }

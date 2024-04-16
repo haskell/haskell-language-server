@@ -7,7 +7,7 @@ module Development.IDE.Core.Tracing
     , otTracedGarbageCollection
     , withTrace
     , withEventTrace
-    , withTelemetryLogger
+    , withTelemetryRecorder
     )
 where
 
@@ -26,7 +26,7 @@ import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Diagnostics (FileDiagnostic,
                                                     showDiagnostics)
 import           Development.IDE.Types.Location    (Uri (..))
-import           Ide.Logger                        (Logger (Logger))
+import           Ide.Logger
 import           Ide.Types                         (PluginId (..))
 import           Language.LSP.Protocol.Types       (NormalizedFilePath,
                                                     fromNormalizedFilePath)
@@ -51,16 +51,20 @@ withEventTrace name act
   | otherwise = act (\_ -> pure ())
 
 -- | Returns a logger that produces telemetry events in a single span
-withTelemetryLogger :: (MonadIO m, MonadMask m) => (Logger -> m a) -> m a
-withTelemetryLogger k = withSpan "Logger" $ \sp ->
+withTelemetryRecorder :: (MonadIO m, MonadMask m) => (Recorder (WithPriority (Doc a)) -> m c) -> m c
+withTelemetryRecorder k = withSpan "Logger" $ \sp ->
     -- Tracy doesn't like when we create a new span for every log line.
     -- To workaround that, we create a single span for all log events.
     -- This is fine since we don't care about the span itself, only about the events
-    k $ Logger $ \p m ->
-            addEvent sp (fromString $ show p) (encodeUtf8 $ trim m)
-    where
-        -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
-        trim = T.take (fromIntegral(maxBound :: Word16) - 10)
+    k $ telemetryLogRecorder sp
+
+-- | Returns a logger that produces telemetry events in a single span.
+telemetryLogRecorder :: SpanInFlight -> Recorder (WithPriority (Doc a))
+telemetryLogRecorder sp = Recorder $ \WithPriority {..} ->
+  liftIO $ addEvent sp (fromString $ show priority) (encodeUtf8 $ trim $ renderStrict $ layoutCompact $ payload)
+  where
+    -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
+    trim = T.take (fromIntegral(maxBound :: Word16) - 10)
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
