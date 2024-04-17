@@ -162,7 +162,6 @@ import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Protocol.Types            (SemanticTokens)
 import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)

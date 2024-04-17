@@ -12,7 +12,6 @@ import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char
 import           Data.Dynamic                            (toDyn)
-import           Data.Foldable                           (fold)
 import qualified Data.HashMap.Strict                     as Map
 import           Data.List                               (dropWhileEnd, foldl',
                                                           intercalate,
