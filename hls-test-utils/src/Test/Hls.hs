@@ -80,9 +80,9 @@ import           Data.Proxy                         (Proxy (Proxy))
 import qualified Data.Text                          as T
 import qualified Data.Text.Lazy                     as TL
 import qualified Data.Text.Lazy.Encoding            as TL
-import           Development.IDE                    (IdeState, LoggingColumn (ThreadIdColumn))
+import           Development.IDE                    (IdeState,
+                                                     LoggingColumn (ThreadIdColumn))
 import           Development.IDE.Main               hiding (Log)
-import qualified Development.IDE.Main               as Ghcide
 import qualified Development.IDE.Main               as IDEMain
 import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                      WaitForIdeRuleResult (ideResultSuccess))
@@ -622,7 +622,7 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
                     }
 
     server <- async $
-        Ghcide.defaultMain (cmapWithPrio LogIDEMain recorder)
+        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder)
             arguments
                 { argsHandleIn = pure inR
                 , argsHandleOut = pure outW
