@@ -49,8 +49,7 @@ import qualified Data.Text                          as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
 import           Development.IDE.Test.Diagnostic
-import           Development.Shake                  (CmdOption (Cwd, FileStdout),
-                                                     cmd_)
+import           Development.Shake                  (CmdOption (Cwd), cmd_)
 import           Experiments.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
@@ -128,7 +127,7 @@ experiments =
         (\docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
              [ FileEvent hieYamlUri FileChangeType_Changed ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         ),
@@ -210,7 +209,7 @@ experiments =
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
              [ FileEvent hieYamlUri FileChangeType_Changed ]
             waitForProgressStart
             waitForProgressStart
@@ -777,7 +776,7 @@ setupDocumentContents config =
 findEndOfImports :: [DocumentSymbol] -> Maybe Position
 findEndOfImports (DocumentSymbol{_kind = SymbolKind_Module, _name = "imports", _range} : _) =
     Just $ Position (succ $ _line $ _end _range) 4
-findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just (cc)}] =
+findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just cc}] =
     findEndOfImports cc
 findEndOfImports (DocumentSymbol{_range} : _) =
     Just $ _range ^. L.start

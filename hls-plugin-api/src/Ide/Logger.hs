@@ -46,7 +46,6 @@ import           Data.Foldable                 (for_)
 import           Data.Functor.Contravariant    (Contravariant (contramap))
 import           Data.Maybe                    (fromMaybe)
 import           Data.Text                     (Text)
-import qualified Data.Text                     as T
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
 import           Data.Time                     (defaultTimeLocale, formatTime,
