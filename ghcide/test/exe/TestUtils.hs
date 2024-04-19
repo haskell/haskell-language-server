@@ -248,10 +248,10 @@ runWithExtraFiles prefix s = withTempDir $ \dir -> do
 copyTestDataFiles :: FilePath -> FilePath -> IO ()
 copyTestDataFiles dir prefix = do
   -- Copy all the test data files to the temporary workspace
-  testDataFiles <- getDirectoryFilesIO ("test/data" </> prefix) ["//*"]
+  testDataFiles <- getDirectoryFilesIO ("ghcide/test/data" </> prefix) ["//*"]
   for_ testDataFiles $ \f -> do
     createDirectoryIfMissing True $ dir </> takeDirectory f
-    copyFile ("test/data" </> prefix </> f) (dir </> f)
+    copyFile ("ghcide/test/data" </> prefix </> f) (dir </> f)
 
 withLongTimeout :: IO a -> IO a
 withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIMEOUT")
@@ -263,7 +263,7 @@ lspTestCapsNoFileWatches = lspTestCaps & L.workspace . Lens._Just . L.didChangeW
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
-  source <- liftIO $ readFileUtf8 $ "test/data" </> path
+  source <- liftIO $ readFileUtf8 $ "ghcide/test/data" </> path
   createDoc path "haskell" source
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
