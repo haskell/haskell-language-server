@@ -3,7 +3,6 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Avoid restricted function" #-}
 
 module Ide.Plugin.InlayHints.Hole (holeInlayHints, holeRule) where
 
@@ -16,7 +15,6 @@ import           Data.Hashable                        (Hashable)
 import qualified Data.Map                             as M
 import           Data.Maybe                           (maybeToList)
 import qualified Data.Text                            as T
-import qualified Debug.Trace                          as Debug
 import           Development.IDE                      (Action,
                                                        GetHieAst (GetHieAst),
                                                        HieKind (HieFresh, HieFromDisk),
@@ -134,11 +132,7 @@ atPoints (HAR _ hf _ _ (kind :: HieKind hietype)) =
           let astInfo = info ast
               -- TODO: need ONLY hole
               -- Maybe there's only one solution left: regex diagnostic :(
-              isHole a = (==) "HsUnboundVar" $ fst $ Debug.trace (case M.toList
-                $ nodeIdentifiers astInfo of
-                    [x] -> show $ printOutputable $ fst x
-                    _   -> "oops"
-                ) id $ Debug.traceShowId a
+              isHole = (==) "HsUnboundVar" . fst
               nullIds = M.null $ nodeIdentifiers astInfo
            in case nodeType astInfo of
             (x:_) | (any isHole $ nodeAnnotations astInfo) && nullIds -> Just x
