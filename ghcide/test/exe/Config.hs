@@ -17,8 +17,12 @@ mkIdeTestFs = FS.mkVirtualFileTree testDataDir
 dummyPlugin :: PluginTestDescriptor ()
 dummyPlugin = mkPluginTestDescriptor (\_ pid -> defaultPluginDescriptor pid "dummyTestPlugin") "core"
 
-runWithDummyPlugin :: FS.VirtualFileTree -> Session a -> IO a
+runWithDummyPlugin :: (TestRunner cont a) => FS.VirtualFileTree -> cont -> IO a
 runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
+
+-- testSessionWithCorePlugin ::(TestRunner cont ()) => TestName -> FS.VirtualFileTree -> cont -> TestTree
+testWithDummyPlugin :: (TestRunner cont ()) => String -> FS.VirtualFileTree -> cont -> TestTree
+testWithDummyPlugin caseName vfs = testCase caseName . runWithDummyPlugin vfs
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')

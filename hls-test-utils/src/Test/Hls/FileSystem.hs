@@ -20,6 +20,7 @@ module Test.Hls.FileSystem
   , directory
   , text
   , ref
+  , copyDir
   -- * Cradle helpers
   , directCradle
   , simpleCabalCradle
@@ -66,6 +67,7 @@ data VirtualFileTree =
 data FileTree
   = File FilePath Content
   | Directory FilePath [FileTree]
+  | CopiedDirectory FilePath
   deriving (Show, Eq, Ord)
 
 data Content
@@ -99,15 +101,23 @@ materialise rootDir' fileTree testDataDir' = do
       rootDir = FP.normalise rootDir'
 
       persist :: FilePath -> FileTree -> IO ()
-      persist fp (File name cts) = case cts of
-        Inline txt -> T.writeFile (fp </> name) txt
-        Ref path -> copyFile (testDataDir </> FP.normalise path) (fp </> takeFileName name)
-      persist fp (Directory name nodes) = do
-        createDirectory (fp </> name)
-        mapM_ (persist (fp </> name)) nodes
+      persist root (File name cts) = case cts of
+        Inline txt -> T.writeFile (root </> name) txt
+        Ref path -> copyFile (testDataDir </> FP.normalise path) (root </> takeFileName name)
+      persist root (Directory name nodes) = do
+        createDirectory (root </> name)
+        mapM_ (persist (root </> name)) nodes
+      persist root (CopiedDirectory name) = do
+        nodes <- copyDir' testDataDir' name
+        mapM_ (persist root) nodes
 
   traverse_ (persist rootDir) fileTree
   pure $ FileSystem rootDir fileTree testDataDir
+    where -- | Copy a directory into a test project.
+        copyDir' :: FilePath -> FilePath -> IO [FileTree]
+        copyDir' root dir = do
+            files <- listDirectory (root </> dir)
+            traverse (\f -> pure $ copy (dir </> f)) files
 
 -- | Materialise a virtual file tree in the 'rootDir' directory.
 --
@@ -153,6 +163,9 @@ file fp cts = File fp cts
 -- The filepath is always resolved to the root of the test data dir.
 copy :: FilePath -> FileTree
 copy fp = File fp (Ref fp)
+
+copyDir :: FilePath -> FileTree
+copyDir dir = CopiedDirectory dir
 
 directory :: FilePath -> [FileTree] -> FileTree
 directory name nodes = Directory name nodes
