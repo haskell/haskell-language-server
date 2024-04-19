@@ -1,4 +1,6 @@
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 
 module ReferenceTests (tests) where
 
