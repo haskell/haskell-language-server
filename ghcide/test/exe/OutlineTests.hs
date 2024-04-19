@@ -31,7 +31,7 @@ tests =
   testGroup
     "outline"
     [ testSymbolsA
-        "module"
+        "type class:"
         ["module A where", "class A a where a :: a -> Bool"]
         [ moduleSymbol
             "A"
