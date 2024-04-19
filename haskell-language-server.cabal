@@ -1211,6 +1211,7 @@ library hls-inlay-hints-plugin
     Ide.Plugin.InlayHints.Types
 
     Ide.Plugin.InlayHints.Fixity
+    Ide.Plugin.InlayHints.Hole
     Ide.Plugin.InlayHints.LocalBinding
   other-modules:
   build-depends:

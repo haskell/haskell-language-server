@@ -3,12 +3,14 @@
 
 module Ide.Plugin.InlayHints(descriptor) where
 
+import           Data.Foldable                      (sequenceA_, traverse_)
 import           Development.IDE                    (IdeState)
 import           Development.IDE.Core.PluginUtils   (runActionE)
 import           Ide.Logger                         (Recorder, WithPriority)
 import           Ide.Plugin.Error                   (getNormalizedFilePathE)
 import           Ide.Plugin.InlayHints.Fixity       (fixityInlayHints,
                                                      fixityRule)
+import           Ide.Plugin.InlayHints.Hole         (holeInlayHints, holeRule)
 import           Ide.Plugin.InlayHints.LocalBinding (localBindingInlayHints,
                                                      localBindingRule)
 import           Ide.Plugin.InlayHints.Types        (InlayHintLog)
@@ -24,9 +26,11 @@ import           Language.LSP.Protocol.Types        (InlayHintParams (InlayHintP
 
 descriptor :: Recorder (WithPriority InlayHintLog) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = (defaultPluginDescriptor pluginId "Provides Info in Inlay Hints")
-    { pluginRules = do
-        fixityRule recorder
-        localBindingRule recorder
+    { pluginRules = traverse_ ($ recorder) [
+        fixityRule
+        , holeRule
+        , localBindingRule
+        ]
     , pluginHandlers =
         mkPluginHandler SMethod_TextDocumentInlayHint
         $ \state _pid (InlayHintParams _ (TextDocumentIdentifier uri) _) -> do
@@ -35,6 +39,7 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId "Provides Info 
                 fmap (foldr (<>) (InR Null)) $ traverse ($ nfp)
                     [
                     fixityInlayHints
+                    , holeInlayHints
                     , localBindingInlayHints
                     ]
     }

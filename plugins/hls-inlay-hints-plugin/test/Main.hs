@@ -1,4 +1,12 @@
-module Main where
+module Main (main) where
 
 main :: IO ()
-main = print "ok"
+main =
+    let
+      greeting :: String
+      greeting = "Bonjour"
+      greetings = unwords $ replicate times greeting;
+      who = "Tom"
+      times = 123;
+     in
+      putStrLn $ unwords [ greetings, who ]
