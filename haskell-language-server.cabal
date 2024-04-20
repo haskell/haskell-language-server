@@ -1214,6 +1214,7 @@ library hls-inlay-hints-plugin
     Ide.Plugin.InlayHints.Hole
     Ide.Plugin.InlayHints.LocalBinding
   other-modules:
+    Ide.Plugin.InlayHints.Config
   build-depends:
       base                  >=4.12 && <5
     , containers
