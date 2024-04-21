@@ -109,16 +109,18 @@ materialise rootDir' fileTree testDataDir' = do
         createDirectory (root </> name)
         mapM_ (persist (root </> name)) nodes
       persist root (CopiedDirectory name) = do
-        nodes <- copyDir' testDataDir' name
-        mapM_ (persist root) nodes
+        copyDir' root name
+
+      copyDir' :: FilePath -> FilePath -> IO ()
+      copyDir' root dir = do
+        files <- fmap FP.normalise . lines <$> withCurrentDirectory (testDataDir </> dir) (readProcess "git" ["ls-files", "--cached", "--modified", "--others"] "")
+        mapM_ (createDirectoryIfMissing True . ((root </>) . takeDirectory)) files
+        mapM_ (\f -> putStrLn $ (testDataDir </> dir </> f) <> ":" <> (root </> f) ) files
+        mapM_ (\f -> copyFile (testDataDir </> dir </> f) (root </> f)) files
+        return ()
 
   traverse_ (persist rootDir) fileTree
   pure $ FileSystem rootDir fileTree testDataDir
-    where -- | Copy a directory into a test project.
-        copyDir' :: FilePath -> FilePath -> IO [FileTree]
-        copyDir' root dir = do
-            files <- lines <$> withCurrentDirectory (root </> dir) (readProcess "git" ["ls-files", "--cached", "--modified", "--others"] "")
-            traverse (\f -> pure $ copy (dir </> f)) files
 
 -- | Materialise a virtual file tree in the 'rootDir' directory.
 --
