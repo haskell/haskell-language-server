@@ -65,9 +65,9 @@ data VirtualFileTree =
     } deriving (Eq, Ord, Show)
 
 data FileTree
-  = File FilePath Content
-  | Directory FilePath [FileTree]
-  | CopiedDirectory FilePath
+  = File FilePath Content -- ^ Create a file with the given content.
+  | Directory FilePath [FileTree] -- ^ Create a directory with the given files.
+  | CopiedDirectory FilePath -- ^ Copy a directory from the test data dir.
   deriving (Show, Eq, Ord)
 
 data Content
@@ -164,6 +164,8 @@ file fp cts = File fp cts
 copy :: FilePath -> FileTree
 copy fp = File fp (Ref fp)
 
+-- | Copy a directory into a test project.
+-- The filepath is always resolved to the root of the test data dir.
 copyDir :: FilePath -> FileTree
 copyDir dir = CopiedDirectory dir
 
