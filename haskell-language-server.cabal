@@ -614,6 +614,7 @@ test-suite hls-rename-plugin-tests
     , hls-test-utils             == 2.7.0.0
     , lens
     , lsp-types
+    , row-types
     , text
 
 -----------------------------
