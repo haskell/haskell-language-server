@@ -41,7 +41,7 @@ import           GHC.Parser.Annotation
 import           Ide.Logger                           (Recorder, WithPriority,
                                                        cmapWithPrio)
 import           Ide.Plugin.Eval.Types
-
+import Debug.Trace
 
 rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do
@@ -56,13 +56,13 @@ instance IsIdeGlobal EvaluatingVar
 queueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
 queueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
-    atomicModifyIORef' var (\fs -> (Set.insert nfp fs, ()))
+    atomicModifyIORef' var (\fs -> (trace ("TRACE: queueForEvaluation: " <> show nfp ) $ Set.insert nfp fs, ()))
 
 unqueueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
 unqueueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     -- remove the module from the Evaluating state, so that next time it won't evaluate to True
-    atomicModifyIORef' var $ \fs -> (Set.delete nfp fs, ())
+    atomicModifyIORef' var $ \fs -> (trace ("TRACE: unqueueForEvaluation: " <> show nfp ) $ Set.delete nfp fs, ())
 
 apiAnnComments' :: ParsedModule -> [SrcLoc.RealLocated EpaCommentTok]
 apiAnnComments' pm = do
@@ -110,7 +110,7 @@ isEvaluatingRule :: Recorder (WithPriority Log) -> Rules ()
 isEvaluatingRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsEvaluating f -> do
     alwaysRerun
     EvaluatingVar var <- getIdeGlobalAction
-    b <- liftIO $ (f `Set.member`) <$> readIORef var
+    b <- fmap (ts2 "isMemberEvaluatingVar" f) . liftIO $ (f `Set.member`) <$> readIORef var
     return (Just (if b then BS.singleton 1 else BS.empty), Just b)
 
 -- Redefine the NeedsCompilation rule to set the linkable type to Just _
@@ -120,7 +120,7 @@ isEvaluatingRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $
 -- leading to much better performance of the evaluate code lens
 redefinedNeedsCompilation :: Recorder (WithPriority Log) -> Rules ()
 redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation f -> do
-    isEvaluating <- use_ IsEvaluating f
+    isEvaluating <- ts2 "isEvaluating" f  <$> use_ IsEvaluating f
 
     if not isEvaluating then needsCompilationRule f else do
         ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps f
@@ -128,4 +128,7 @@ redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake re
             linkableType = computeLinkableTypeForDynFlags df'
             fp = encodeLinkableType $ Just linkableType
 
-        pure (Just fp, Just (Just linkableType))
+        pure (Just fp, ts2 "redefinedNeedsCompilation" f $ Just (Just linkableType))
+
+ts2 :: Show a => String -> NormalizedFilePath -> a -> a
+ts2 label nfp x = trace ("TRACE: " <> label <> "=" <> show x <> "(" <> show nfp <> ")") x

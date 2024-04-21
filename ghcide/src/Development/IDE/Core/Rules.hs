@@ -181,7 +181,7 @@ import           GHC                                          (mgModSummaries)
 import qualified Data.IntMap                                  as IM
 #endif
 
-
+import Debug.Trace
 
 data Log
   = LogShake Shake.Log
@@ -951,7 +951,7 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       hsc <- hscEnv <$> use_ GhcSessionDeps f
       let compile = fmap ([],) $ use GenerateCore f
       se <- getShakeExtras
-      (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc linkableType compile tmr
+      (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc (ts2 "linkableType" f linkableType) compile tmr
       let fp = hiFileFingerPrint <$> mbHiFile
       hiDiags <- case mbHiFile of
         Just hiFile
@@ -980,6 +980,12 @@ incrementRebuildCount = do
   count <- getRebuildCountVar <$> getIdeGlobalAction
   liftIO $ atomically $ modifyTVar' count (+1)
 
+ts :: Show a => String -> a -> a
+ts label x = trace ("TRACE: " <> label <> "=" <> show x) x
+
+ts2 :: Show a => String -> NormalizedFilePath -> a -> a
+ts2 label nfp x = trace ("TRACE: " <> label <> "=" <> show x <> " (" <> show nfp <> ")") x
+
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
 -- `.hie` and `.o` file (if needed) were also successfully written
@@ -1005,7 +1011,7 @@ regenerateHiFile sess f ms compNeeded = do
                 se <- getShakeExtras
 
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags'', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
+                (diags'', !res) <- writeCoreFileIfNeeded se hsc (ts2 "compNeeded" f compNeeded) compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
