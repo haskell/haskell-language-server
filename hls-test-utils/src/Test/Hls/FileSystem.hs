@@ -34,10 +34,12 @@ module Test.Hls.FileSystem
 import           Data.Foldable               (traverse_)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
+import           Debug.Trace                 (traceShow, traceShowM)
 import           Development.IDE             (NormalizedFilePath)
 import           Language.LSP.Protocol.Types (toNormalizedFilePath)
 import           System.Directory
 import           System.FilePath             as FP
+import           System.Process.Extra        (readProcess)
 
 -- ----------------------------------------------------------------------------
 -- Top Level definitions
@@ -116,7 +118,7 @@ materialise rootDir' fileTree testDataDir' = do
     where -- | Copy a directory into a test project.
         copyDir' :: FilePath -> FilePath -> IO [FileTree]
         copyDir' root dir = do
-            files <- listDirectory (root </> dir)
+            files <- lines <$> withCurrentDirectory (root </> dir) (readProcess "git" ["ls-files", "--cached", "--modified"] "")
             traverse (\f -> pure $ copy (dir </> f)) files
 
 -- | Materialise a virtual file tree in the 'rootDir' directory.
