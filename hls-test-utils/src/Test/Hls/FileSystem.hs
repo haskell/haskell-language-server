@@ -34,7 +34,6 @@ module Test.Hls.FileSystem
 import           Data.Foldable               (traverse_)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
-import           Debug.Trace                 (traceShow, traceShowM)
 import           Development.IDE             (NormalizedFilePath)
 import           Language.LSP.Protocol.Types (toNormalizedFilePath)
 import           System.Directory
