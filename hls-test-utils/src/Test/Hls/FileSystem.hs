@@ -117,7 +117,8 @@ materialise rootDir' fileTree testDataDir' = do
     where -- | Copy a directory into a test project.
         copyDir' :: FilePath -> FilePath -> IO [FileTree]
         copyDir' root dir = do
-            files <- lines <$> withCurrentDirectory (root </> dir) (readProcess "git" ["ls-files", "--cached", "--modified"] "")
+            files <- lines <$> withCurrentDirectory (root </> dir) (readProcess "git" ["ls-files", "--cached", "--modified", "--others"] "")
+            mapM putStrLn files
             traverse (\f -> pure $ copy (dir </> f)) files
 
 -- | Materialise a virtual file tree in the 'rootDir' directory.
