@@ -224,7 +224,7 @@ setFileModified recorder vfs state saved nfp = do
           CheckOnSave -> saved
           _           -> False
     join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") []
+    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] []
     when checkParents $
       typecheckParents recorder state nfp
 
@@ -251,7 +251,7 @@ setSomethingModified vfs state keys reason = do
         writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
         modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
             foldl' (flip insertKeySet) x keys
-    void $ restartShakeSession (shakeExtras state) vfs reason []
+    void $ restartShakeSession (shakeExtras state) vfs reason [] keys
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do

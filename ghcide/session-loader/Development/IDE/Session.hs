@@ -623,7 +623,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           invalidateShakeCache
 
           -- The VFS doesn't change on cradle edits, re-use the old one.
-          restartShakeSession VFSUnmodified "new component" []
+          restartShakeSession VFSUnmodified "new component" [] []
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject

@@ -133,7 +133,7 @@ Then we restart the shake session, so that changes to our virtual files are actu
 restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO ()
 restartCabalShakeSession shakeExtras vfs file actionMsg = do
   join $ atomically $ Shake.recordDirtyKeys shakeExtras GetModificationTime [file]
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) []
+  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] []
 
 -- ----------------------------------------------------------------
 -- Plugin Rules
