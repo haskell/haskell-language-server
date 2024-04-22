@@ -1,0 +1,1674 @@
+  :info command
+    :i behaves exactly the same as :info: -04-21T05:33:40.080004Z | Info | Test Project located in directory: /tmp/hls-test-root/extra-dir-7722997002003
+ThreadId 13 | 2024-04-21T05:33:40.082178Z | Info | Heap statistics are not enabled (RTS option -T is needed)
+--> {
+    "id": 0,
+    "jsonrpc": "2.0",
+    "method": "initialize",
+    "params": {
+        "capabilities": {
+            "general": {
+                "markdown": {
+                    "allowedTags": [],
+                    "parser": ""
+                },
+                "positionEncodings": [
+                    "utf-16"
+                ],
+                "regularExpressions": {
+                    "engine": ""
+                },
+                "staleRequestSupport": {
+                    "cancel": true,
+                    "retryOnContentModified": []
+                }
+            },
+            "notebookDocument": {
+                "synchronization": {
+                    "dynamicRegistration": true,
+                    "executionSummarySupport": true
+                }
+            },
+            "textDocument": {
+                "callHierarchy": {
+                    "dynamicRegistration": true
+                },
+                "codeAction": {
+                    "codeActionLiteralSupport": {
+                        "codeActionKind": {
+ThreadId 13 | 2024-04-21T05:33:40.083129Z | Info | Starting LSP server...
+                            "valueSet": [
+                                "",
+                                "quickfix",
+                                "refactor",
+                                "refactor.extract",
+  If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!
+                                "refactor.inline",
+  PluginIds: [ ghcide-completions
+                                "refactor.rewrite",
+             , ghcide-hover-and-symbols
+             , test
+             , block-command
+                                "source",
+                                "source.organizeImports",
+                                "source.fixAll"
+                            ]
+                        }
+             , ghcide-type-lenses
+                    },
+                    "dataSupport": true,
+             , eval
+                    "disabledSupport": true,
+             , ghcide-core ]
+                    "dynamicRegistration": true,
+                    "honorsChangeAnnotations": true,
+                    "isPreferredSupport": true,
+                    "resolveSupport": {
+                        "properties": []
+                    }
+                },
+                "codeLens": {
+                    "dynamicRegistration": true
+                },
+                "colorProvider": {
+                    "dynamicRegistration": true
+                },
+                "completion": {
+                    "completionItem": {
+                        "commitCharactersSupport": true,
+                        "deprecatedSupport": true,
+ThreadId 16 | 2024-04-21T05:33:40.083618Z | Info | Starting server
+                        "documentationFormat": [
+                            "plaintext",
+                            "markdown"
+                        ],
+                        "insertReplaceSupport": true,
+                        "insertTextModeSupport": {
+                            "valueSet": []
+                        },
+                        "labelDetailsSupport": true,
+                        "preselectSupport": true,
+                        "resolveSupport": {
+                            "properties": [
+                                "documentation",
+                                "details"
+                            ]
+                        },
+                        "snippetSupport": true,
+                        "tagSupport": {
+                            "valueSet": []
+                        }
+                    },
+                    "completionItemKind": {
+                        "valueSet": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            17,
+                            18,
+                            19,
+                            20,
+                            21,
+                            22,
+                            23,
+                            24,
+                            25
+                        ]
+                    },
+                    "completionList": {
+                        "itemDefaults": []
+                    },
+                    "contextSupport": true,
+                    "dynamicRegistration": true,
+                    "insertTextMode": 1
+                },
+                "declaration": {
+                    "dynamicRegistration": true,
+                    "linkSupport": true
+                },
+                "definition": {
+                    "dynamicRegistration": true,
+                    "linkSupport": true
+                },
+                "diagnostic": {
+                    "dynamicRegistration": true,
+                    "relatedDocumentSupport": true
+                },
+                "documentHighlight": {
+                    "dynamicRegistration": true
+                },
+                "documentLink": {
+                    "dynamicRegistration": true,
+                    "tooltipSupport": true
+                },
+                "documentSymbol": {
+                    "dynamicRegistration": true,
+                    "hierarchicalDocumentSymbolSupport": true,
+                    "labelSupport": true,
+                    "symbolKind": {
+                        "valueSet": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            17,
+                            18,
+                            19,
+                            20,
+                            21,
+                            22,
+                            23,
+                            24,
+                            25,
+                            26
+                        ]
+                    },
+                    "tagSupport": {
+                        "valueSet": [
+                            1
+                        ]
+                    }
+                },
+                "foldingRange": {
+                    "dynamicRegistration": true,
+                    "foldingRange": {
+                        "collapsedText": true
+                    },
+                    "foldingRangeKind": {
+                        "valueSet": []
+                    }
+                },
+                "formatting": {
+                    "dynamicRegistration": true
+                },
+                "hover": {
+                    "contentFormat": [
+                        "plaintext",
+                        "markdown"
+                    ],
+                    "dynamicRegistration": true
+                },
+                "implementation": {
+                    "dynamicRegistration": true,
+                    "linkSupport": true
+                },
+                "inlayHint": {
+                    "dynamicRegistration": true,
+                    "resolveSupport": {
+                        "properties": []
+                    }
+                },
+                "inlineValue": {
+                    "dynamicRegistration": true
+                },
+                "linkedEditingRange": {
+                    "dynamicRegistration": true
+                },
+                "moniker": {
+                    "dynamicRegistration": true
+                },
+                "onTypeFormatting": {
+                    "dynamicRegistration": true
+                },
+                "publishDiagnostics": {
+                    "codeDescriptionSupport": true,
+                    "dataSupport": true,
+                    "relatedInformation": true,
+                    "tagSupport": {
+                        "valueSet": [
+                            1,
+                            2
+                        ]
+                    },
+                    "versionSupport": true
+                },
+                "rangeFormatting": {
+                    "dynamicRegistration": true
+                },
+                "references": {
+                    "dynamicRegistration": true
+                },
+                "rename": {
+                    "dynamicRegistration": true,
+                    "honorsChangeAnnotations": true,
+                    "prepareSupport": true,
+                    "prepareSupportDefaultBehavior": 1
+                },
+                "selectionRange": {
+                    "dynamicRegistration": true
+                },
+                "semanticTokens": {
+                    "augmentsSyntaxTokens": true,
+                    "dynamicRegistration": true,
+                    "formats": [
+                        "relative"
+                    ],
+                    "multilineTokenSupport": true,
+                    "overlappingTokenSupport": true,
+                    "requests": {
+                        "full": {
+                            "delta": true
+                        },
+                        "range": true
+                    },
+                    "serverCancelSupport": true,
+                    "tokenModifiers": [
+                        "declaration",
+                        "definition",
+                        "readonly",
+                        "static",
+                        "deprecated",
+                        "abstract",
+                        "async",
+                        "modification",
+                        "documentation",
+                        "defaultLibrary"
+                    ],
+                    "tokenTypes": [
+                        "namespace",
+                        "type",
+                        "class",
+                        "enum",
+                        "interface",
+                        "struct",
+                        "typeParameter",
+                        "parameter",
+                        "variable",
+                        "property",
+                        "enumMember",
+                        "event",
+                        "function",
+                        "method",
+                        "macro",
+                        "keyword",
+                        "modifier",
+                        "comment",
+                        "string",
+                        "number",
+                        "regexp",
+                        "operator",
+                        "decorator"
+                    ]
+                },
+                "signatureHelp": {
+                    "contextSupport": true,
+                    "dynamicRegistration": true,
+                    "signatureInformation": {
+                        "activeParameterSupport": true,
+                        "documentationFormat": [
+                            "plaintext",
+                            "markdown"
+                        ],
+                        "parameterInformation": {
+                            "labelOffsetSupport": true
+                        }
+                    }
+                },
+                "synchronization": {
+                    "didSave": true,
+                    "dynamicRegistration": true,
+                    "willSave": true,
+                    "willSaveWaitUntil": true
+                },
+                "typeDefinition": {
+                    "dynamicRegistration": true,
+                    "linkSupport": true
+                },
+                "typeHierarchy": {
+                    "dynamicRegistration": true
+                }
+            },
+            "window": {
+                "showDocument": {
+                    "support": true
+                },
+                "showMessage": {},
+                "workDoneProgress": true
+            },
+            "workspace": {
+                "applyEdit": true,
+                "codeLens": {
+                    "refreshSupport": true
+                },
+                "configuration": true,
+                "diagnostics": {
+                    "refreshSupport": true
+                },
+                "didChangeConfiguration": {
+                    "dynamicRegistration": true
+                },
+                "didChangeWatchedFiles": {
+                    "dynamicRegistration": true,
+                    "relativePatternSupport": true
+                },
+                "executeCommand": {
+                    "dynamicRegistration": true
+                },
+                "fileOperations": {
+                    "didCreate": true,
+                    "didDelete": true,
+                    "didRename": true,
+                    "dynamicRegistration": true,
+                    "willCreate": true,
+                    "willDelete": true,
+                    "willRename": true
+                },
+                "inlayHint": {
+                    "refreshSupport": true
+                },
+                "inlineValue": {
+                    "refreshSupport": true
+                },
+                "semanticTokens": {
+                    "refreshSupport": true
+                },
+                "symbol": {
+                    "dynamicRegistration": true,
+                    "resolveSupport": {
+                        "properties": []
+                    },
+                    "symbolKind": {
+                        "valueSet": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            17,
+                            18,
+                            19,
+                            20,
+                            21,
+                            22,
+                            23,
+                            24,
+                            25,
+                            26
+                        ]
+                    },
+                    "tagSupport": {
+                        "valueSet": [
+                            1
+                        ]
+                    }
+                },
+                "workspaceEdit": {
+                    "changeAnnotationSupport": {
+                        "groupsOnLabel": true
+                    },
+                    "documentChanges": true,
+                    "normalizesLineEndings": true,
+                    "resourceOperations": [
+                        "create",
+                        "delete",
+                        "rename"
+                    ]
+                },
+                "workspaceFolders": true
+            }
+        },
+        "clientInfo": {
+            "name": "lsp-test",
+            "version": "0.17.0.0"
+        },
+        "initializationOptions": {
+            "haskell": {
+                "cabalFormattingProvider": "cabal-gild",
+                "checkParents": "CheckOnSave",
+                "checkProject": true,
+                "formattingProvider": "ormolu",
+                "maxCompletions": 40,
+                "plugin": {}
+            }
+        },
+        "locale": "/tmp/hls-test-root/extra-dir-7722997002003",
+        "processId": 137693,
+        "rootUri": "file:///tmp/hls-test-root/extra-dir-7722997002003",
+        "trace": "off"
+    }
+}
+ThreadId 16 | 2024-04-21T05:33:40.087497Z | Debug | LSP: set new config: {
+  "cabalFormattingProvider": "cabal-gild",
+  "checkParents": "CheckOnSave",
+  "checkProject": true,
+  "formattingProvider": "ormolu",
+  "maxCompletions": 40,
+  "plugin": {  }
+}
+ThreadId 16 | 2024-04-21T05:33:40.087849Z | Info | Registering IDE configuration: IdeConfiguration {workspaceFolders = fromList [NormalizedUri 1194874234821284928 "file:///tmp/hls-test-root/extra-dir-7722997002003"], clientSettings = hashed (Just (Object (fromList [("haskell",Object (fromList [("cabalFormattingProvider",String "cabal-gild"),("checkParents",String "CheckOnSave"),("checkProject",Bool True),("formattingProvider",String "ormolu"),("maxCompletions",Number 40.0),("plugin",Object (fromList []))]))])))}
+ThreadId 16 | 2024-04-21T05:33:40.090475Z | Info | Started LSP server in 0.01s
+ThreadId 16 | 2024-04-21T05:33:42.161261Z | Debug | cabal exec -v0 -- ghc --print-libdir
+ThreadId 16 | 2024-04-21T05:33:42.284873Z | Debug | cabal exec -v0 -- ghc -package-env=- -ignore-dot-ghci -e Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)
+ThreadId 16 | 2024-04-21T05:33:44.396517Z | Debug | cabal --builddir=/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527 v2-exec --with-compiler /tmp/hls-test-root/.cache/hie-bios/wrapper-b54f81dea4c0e6d1626911c526bc4e36 --with-hc-pkg /tmp/hls-test-root/.cache/hie-bios/ghc-pkg-52b27bcbc99783734f3bc8675da2338b ghc -v0 -- --print-libdir
+  Environment Variables
+    HIE_BIOS_GHC: /home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/bin/ghc-9.4.8
+    HIE_BIOS_GHC_ARGS: -B/home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/lib
+ThreadId 16 | 2024-04-21T05:33:44.397746Z | Debug | Setting initial dynflags...
+ThreadId 16 | 2024-04-21T05:33:44.397802Z | Debug | shouldRunSubset: True
+ThreadId 33 | 2024-04-21T05:33:44.397953Z | Debug | Initializing exports map from hiedb
+ThreadId 33 | 2024-04-21T05:33:44.398131Z | Debug | Done initializing exports map from hiedb. Size: 0
+<-- {
+    "id": 0,
+    "jsonrpc": "2.0",
+    "result": {
+        "capabilities": {
+            "codeLensProvider": {
+                "resolveProvider": true,
+                "workDoneProgress": false
+            },
+            "completionProvider": {
+                "resolveProvider": true,
+                "triggerCharacters": [
+                    "."
+                ],
+                "workDoneProgress": false
+            },
+            "definitionProvider": {
+                "workDoneProgress": false
+            },
+            "documentHighlightProvider": {
+                "workDoneProgress": false
+            },
+            "documentSymbolProvider": {
+                "workDoneProgress": false
+            },
+            "executeCommandProvider": {
+                "commands": [
+                    "137693:block-command:ghcide.command.block",
+                    "137693:ghcide-type-lenses:typesignature.add",
+                    "137693:eval:evalCommand"
+                ],
+                "workDoneProgress": false
+            },
+            "hoverProvider": {
+                "workDoneProgress": false
+            },
+            "positionEncoding": "utf-16",
+            "referencesProvider": {
+                "workDoneProgress": false
+            },
+            "semanticTokensProvider": {
+                "legend": {
+                    "tokenModifiers": [
+                        "declaration",
+                        "definition",
+                        "readonly",
+                        "static",
+                        "deprecated",
+                        "abstract",
+                        "async",
+                        "modification",
+                        "documentation",
+                        "defaultLibrary"
+                    ],
+                    "tokenTypes": [
+                        "namespace",
+                        "type",
+                        "class",
+                        "enum",
+                        "interface",
+                        "struct",
+                        "typeParameter",
+                        "parameter",
+                        "variable",
+                        "property",
+                        "enumMember",
+                        "event",
+                        "function",
+                        "method",
+                        "macro",
+                        "keyword",
+                        "modifier",
+                        "comment",
+                        "string",
+                        "number",
+                        "regexp",
+                        "operator",
+                        "decorator"
+                    ]
+                },
+                "workDoneProgress": false
+            },
+            "textDocumentSync": {
+                "change": 2,
+                "openClose": true,
+                "save": {}
+            },
+            "typeDefinitionProvider": {
+                "workDoneProgress": false
+            },
+            "workspace": {
+                "workspaceFolders": {
+                    "changeNotifications": true,
+                    "supported": true
+                }
+            },
+            "workspaceSymbolProvider": {
+                "resolveProvider": false,
+                "workDoneProgress": false
+            }
+        }
+    }
+}
+--> {
+    "jsonrpc": "2.0",
+    "method": "initialized",
+    "params": {}
+}
+--> {
+    "jsonrpc": "2.0",
+    "method": "textDocument/didOpen",
+    "params": {
+        "textDocument": {
+            "languageId": "haskell",
+ThreadId 21 | 2024-04-21T05:33:44.399595Z | Debug | Shake session initialized
+            "text": "module TI_Info (Eq, Ord, Foo) where\n\nimport InfoUtil (Eq, Ord, Foo)\n\n-- >>> :i Foo\n",
+            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs",
+            "version": 0
+        }
+    }
+}
+--> {
+    "id": 1,
+ThreadId 16 | 2024-04-21T05:33:44.400048Z | Debug | VFS: opening file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+    "jsonrpc": "2.0",
+    "method": "textDocument/codeLens",
+    "params": {
+        "textDocument": {
+            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+        }
+    }
+}
+--> {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": [
+        {
+            "cabalFormattingProvider": "cabal-gild",
+            "checkParents": "CheckOnSave",
+            "checkProject": true,
+            "formattingProvider": "ormolu",
+ThreadId 21 | 2024-04-21T05:33:44.400592Z | Debug | Set files of interst to
+            "maxCompletions": 40,
+    [ ( /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+            "plugin": {}
+    , Modified {firstOpen = True} ) ]
+        }
+    ]
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/start",
+    "params": []
+}
+ThreadId 16 | 2024-04-21T05:33:44.400835Z | Debug | LSP: set new config: {
+  "cabalFormattingProvider": "cabal-gild",
+  "checkParents": "CheckOnSave",
+  "checkProject": true,
+  "formattingProvider": "ormolu",
+  "maxCompletions": 40,
+--> {
+  "plugin": {  }
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result": null
+}
+}
+ThreadId 35 | 2024-04-21T05:33:44.400990Z | Debug | Finished build session
+AsyncCancelled
+<-- {
+ThreadId 16 | 2024-04-21T05:33:44.401016Z | Debug | Configuration changed: Config {checkParents = CheckOnSave, checkProject = True, formattingProvider = "ormolu", cabalFormattingProvider = "cabal-gild", maxCompletions = 40, plugins = fromList []}
+    "id": 2,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": "3"
+    }
+}
+ThreadId 21 | 2024-04-21T05:33:44.401083Z | Debug | Restarting build session due to /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs (modified)
+Action Queue: []
+Keys: [ IsFileOfInterest; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+      , GetModificationTime; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs ]
+Aborting previous build session took 0.00s
+ThreadId 21 | 2024-04-21T05:33:44.401389Z | Debug | Opened text document: file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/done",
+    "params": []
+}
+ThreadId 50 | 2024-04-21T05:33:44.401410Z | Debug | Finished build session
+AsyncCancelled
+ThreadId 16 | 2024-04-21T05:33:44.401416Z | Debug | Restarting build session due to config change
+Action Queue: []
+Keys: [ IsFileOfInterest; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+      , GetModificationTime; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+      , GetClientSettings;  ]
+Aborting previous build session took 0.00s
+ThreadId 67 | 2024-04-21T05:33:44.402171Z | Debug | Finished: codeLens.config Took: 0.00s
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/start",
+    "params": [
+        "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+    ]
+}
+ThreadId 73 | 2024-04-21T05:33:44.402219Z | Info | Cradle path: TI_Info.hs
+--> {
+    "id": 4,
+    "jsonrpc": "2.0",
+    "result": null
+}
+<-- {
+    "id": 4,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": "8"
+ThreadId 86 | 2024-04-21T05:33:44.403086Z | Debug | Cradle: Cradle{ cradleRootDir = "/tmp/hls-test-root/extra-dir-7722997002003", cradleOptsProg = CradleAction: Cabal}
+    }
+}
+ThreadId 86 | 2024-04-21T05:33:44.403159Z | Info | invoking build tool to determine build flags (this may take some time depending on the cache)
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/cradle/loaded",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+}
+--> {
+    "id": 5,
+    "jsonrpc": "2.0",
+    "result": null
+}
+<-- {
+    "id": 5,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": 0
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": 0,
+        "value": {
+            "cancellable": false,
+            "kind": "begin",
+            "title": "Setting up extra-dir-7722997002003 (for TI_Info.hs)"
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "8",
+        "value": {
+            "kind": "begin",
+            "title": "Processing"
+        }
+    }
+}
+ThreadId 86 | 2024-04-21T05:33:44.416476Z | Debug | cabal --numeric-version
+ThreadId 86 | 2024-04-21T05:33:44.480297Z | Debug | cabal exec -v0 -- ghc --print-libdir
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "8",
+        "value": {
+            "kind": "report",
+            "message": "1/2"
+        }
+    }
+}
+ThreadId 86 | 2024-04-21T05:33:44.603735Z | Debug | cabal exec -v0 -- ghc -package-env=- -ignore-dot-ghci -e Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)
+ThreadId 86 | 2024-04-21T05:33:44.667321Z | Debug | cabal --builddir=/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527 v2-exec --with-compiler /tmp/hls-test-root/.cache/hie-bios/wrapper-b54f81dea4c0e6d1626911c526bc4e36 --with-hc-pkg /tmp/hls-test-root/.cache/hie-bios/ghc-pkg-52b27bcbc99783734f3bc8675da2338b ghc -v0 -- --numeric-version
+  Environment Variables
+    HIE_BIOS_GHC: /home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/bin/ghc-9.4.8
+    HIE_BIOS_GHC_ARGS: -B/home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/lib
+ThreadId 86 | 2024-04-21T05:33:44.730917Z | Debug | cabal exec -v0 -- ghc --print-libdir
+ThreadId 86 | 2024-04-21T05:33:44.854131Z | Debug | cabal exec -v0 -- ghc -package-env=- -ignore-dot-ghci -e Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)
+ThreadId 86 | 2024-04-21T05:33:44.855554Z | Info | cabal --builddir=/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527 v2-repl --with-compiler /tmp/hls-test-root/.cache/hie-bios/wrapper-b54f81dea4c0e6d1626911c526bc4e36 --with-hc-pkg /tmp/hls-test-root/.cache/hie-bios/ghc-pkg-52b27bcbc99783734f3bc8675da2338b /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+  Environment Variables
+    HIE_BIOS_OUTPUT: /tmp/HIE_BIOS_OUTPUT137693-10
+    HIE_BIOS_GHC: /home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/bin/ghc-9.4.8
+    HIE_BIOS_GHC_ARGS: -B/home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/lib
+ThreadId 115 | 2024-04-21T05:33:44.882869Z | Debug | Build profile: -w ghc-9.4.8 -O1
+ThreadId 115 | 2024-04-21T05:33:44.883181Z | Debug | In order, the following will be built (use -v for more details):
+ThreadId 115 | 2024-04-21T05:33:44.883271Z | Debug |  - info-util-0.1.0.0 (lib) (first run)
+ThreadId 115 | 2024-04-21T05:33:44.883314Z | Debug |  - test-0.1.0.0 (lib) (first run)
+ThreadId 115 | 2024-04-21T05:33:44.912145Z | Debug | Configuring library for info-util-0.1.0.0..
+ThreadId 115 | 2024-04-21T05:33:47.137937Z | Debug | Preprocessing library for info-util-0.1.0.0..
+ThreadId 115 | 2024-04-21T05:33:47.138447Z | Debug | Building library for info-util-0.1.0.0..
+ThreadId 115 | 2024-04-21T05:33:47.331223Z | Debug | [1 of 1] Compiling InfoUtil         ( InfoUtil.hs, /tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/info-util-0.1.0.0/build/InfoUtil.o, /tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/info-util-0.1.0.0/build/InfoUtil.dyn_o )
+ThreadId 115 | 2024-04-21T05:33:48.000540Z | Debug | Configuring library for test-0.1.0.0..
+ThreadId 115 | 2024-04-21T05:33:50.224102Z | Debug | Preprocessing library for test-0.1.0.0..
+ThreadId 86 | 2024-04-21T05:33:50.312905Z | Debug | cabal exec -v0 -- ghc --print-libdir
+ThreadId 86 | 2024-04-21T05:33:50.436364Z | Debug | cabal exec -v0 -- ghc -package-env=- -ignore-dot-ghci -e Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)
+ThreadId 86 | 2024-04-21T05:33:50.500086Z | Debug | cabal --builddir=/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527 v2-exec --with-compiler /tmp/hls-test-root/.cache/hie-bios/wrapper-b54f81dea4c0e6d1626911c526bc4e36 --with-hc-pkg /tmp/hls-test-root/.cache/hie-bios/ghc-pkg-52b27bcbc99783734f3bc8675da2338b ghc -v0 -- --print-libdir
+  Environment Variables
+    HIE_BIOS_GHC: /home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/bin/ghc-9.4.8
+    HIE_BIOS_GHC_ARGS: -B/home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/lib
+ThreadId 73 | 2024-04-21T05:33:50.500304Z | Debug | Session loading result: Right (ComponentOptions {componentOptions = ["-fbuilding-cabal-package","-O0","-outputdir","/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build","-odir","/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build","-hidir","/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build","-stubdir","/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build","-i","-i/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build","-i.","-i/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build/autogen","-i/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build/global-autogen","-I/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build/autogen","-I/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build/global-autogen","-I/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build","-optP-include","-optP/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/build/autogen/cabal_macros.h","-this-unit-id","test-0.1.0.0-inplace","-hide-all-packages","-Wmissing-home-modules","-no-user-package-db","-package-db","/home/jhrcek/.cabal/store/ghc-9.4.8/package.db","-package-db","/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/packagedb/ghc-9.4.8","-package-db","/tmp/hls-test-root/.cache/hie-bios/dist-extra-dir-7722997002003-a858756e7e353bfdf5fe7499b9985527/build/x86_64-linux/ghc-9.4.8/test-0.1.0.0/package.conf.inplace","-package-id","QuickCheck-2.14.3-6d46b31beaadf7d12e5091bd9fdcf0838c453ecf7bd3949eb3ae15eebaa95a83","-package-id","base-4.17.2.1","-package-id","info-util-0.1.0.0-inplace","-XHaskell2010","TProperty","TPropertyError","TInfo","TInfoMany","TInfoBang","TInfoBangMany","TI_Info","-Wall","-fwarn-unused-imports","-hide-all-packages"], componentRoot = "/tmp/hls-test-root/extra-dir-7722997002003", componentDependencies = ["test.cabal","cabal.project","cabal.project.local"]},"/home/jhrcek/.ghcup/ghc/9.4.8/lib/ghc-9.4.8/lib")
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": 0,
+        "value": {
+            "kind": "end"
+        }
+    }
+}
+ThreadId 73 | 2024-04-21T05:33:50.542053Z | Info | Interface files cache directory: /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b
+ThreadId 73 | 2024-04-21T05:33:50.558684Z | Info | Making new HscEnv. In-place unit ids: [test-0.1.0.0-inplace]
+ThreadId 73 | 2024-04-21T05:33:50.694216Z | Debug | New component cache HscEnvEq: (([],Just HscEnvEq 10),fromList [("/tmp/hls-test-root/extra-dir-7722997002003/hie.yaml",Just 2024-04-21 05:33:40.079417133 UTC),("cabal.project",Just 2024-04-21 05:33:40.080417136 UTC),("cabal.project.local",Nothing),("test.cabal",Just 2024-04-21 05:33:40.080417136 UTC)])
+ThreadId 73 | 2024-04-21T05:33:50.695972Z | Debug | Known files updated:
+  fromList [(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"]),(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs"]),(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs"]),(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs"]),(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"]),(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs"]),(TargetFile NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs",fromList ["/tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs"])]
+ThreadId 73 | 2024-04-21T05:33:50.696231Z | Debug | Restarting build session due to new component
+Action Queue: [ codeLens.GetGlobalBindingTypeSigs
+              , eval.GetParsedModuleWithComments ]
+Keys: [ IsFileOfInterest; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+      , GetModificationTime; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs
+      , GhcSessionIO;
+      , GetKnownTargets;  ]
+Aborting previous build session took 0.00s
+ThreadId 60 | 2024-04-21T05:33:50.696248Z | Debug | Finished build session
+AsyncCancelled
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/start",
+    "params": [
+        "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+    ]
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "8",
+        "value": {
+            "kind": "end"
+        }
+    }
+}
+--> {
+    "id": 6,
+    "jsonrpc": "2.0",
+    "result": null
+}
+<-- {
+    "id": 6,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": "13"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "13",
+        "value": {
+            "kind": "begin",
+            "title": "Processing"
+        }
+    }
+}
+ThreadId 157 | 2024-04-21T05:33:50.703309Z | Debug | Finished: eval.GetParsedModuleWithComments Took: 0.01s
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs")
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs")
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs")
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs")
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs")
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs")
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs")
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs")
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs")
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs")
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs")
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs")
+TRACE: compNeeded=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs")
+TRACE: compNeeded=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs")
+TRACE: compNeeded=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs")
+TRACE: compNeeded=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs")
+TRACE: compNeeded=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs")
+TRACE: compNeeded=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs")
+ThreadId 153 | 2024-04-21T05:33:50.740719Z | Debug | Finished: codeLens.GetGlobalBindingTypeSigs Took: 0.04s
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [
+            {
+                "code": "-Wunused-imports",
+                "message": "The import of â from module â is redundant",
+                "range": {
+                    "end": {
+                        "character": 30,
+                        "line": 2
+                    },
+                    "start": {
+                        "character": 0,
+                        "line": 2
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 30,
+                                    "line": 2
+                                },
+                                "start": {
+                                    "character": 0,
+                                    "line": 2
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+                        },
+                        "message": "TypeCheck"
+                    }
+                ],
+                "severity": 2,
+                "source": "typecheck",
+                "tags": [
+                    1
+                ]
+            }
+        ],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs",
+        "version": 0
+    }
+}
+ThreadId 237 | 2024-04-21T05:33:50.763156Z | Debug | SUCCEEDED LOADING HIE FILE FOR /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoMany.hie
+ThreadId 237 | 2024-04-21T05:33:50.763234Z | Debug | Re-indexing hie file for /tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs
+--> {
+    "id": 10,
+    "jsonrpc": "2.0",
+    "result": null
+}
+ThreadId 239 | 2024-04-21T05:33:50.763491Z | Debug | SUCCEEDED LOADING HIE FILE FOR /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TProperty.hie
+ThreadId 231 | 2024-04-21T05:33:50.763496Z | Debug | SUCCEEDED LOADING HIE FILE FOR /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBangMany.hie
+<-- {
+    "id": 10,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": "21"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+ThreadId 239 | 2024-04-21T05:33:50.763562Z | Debug | Re-indexing hie file for /tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "begin",
+            "title": "Indexing"
+        }
+    }
+}
+ThreadId 238 | 2024-04-21T05:33:50.763605Z | Debug | SUCCEEDED LOADING HIE FILE FOR /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TProperty.hie
+<-- {
+    "jsonrpc": "2.0",
+ThreadId 231 | 2024-04-21T05:33:50.763666Z | Debug | Re-indexing hie file for /tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs
+    "method": "$/progress",
+ThreadId 233 | 2024-04-21T05:33:50.763935Z | Debug | SUCCEEDED LOADING HIE FILE FOR /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBang.hie
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (0/5)..."
+        }
+    }
+}
+ThreadId 238 | 2024-04-21T05:33:50.764176Z | Debug | Re-indexing hie file for /tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs
+<-- {
+    "id": 1,
+ThreadId 233 | 2024-04-21T05:33:50.764329Z | Debug | Re-indexing hie file for /tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs
+    "jsonrpc": "2.0",
+    "result": [
+        {
+            "command": {
+                "arguments": [
+                    {
+                        "evalId": 0,
+                        "module_": {
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+                        },
+                        "sections": [
+                            {
+                                "sectionFormat": {
+                                    "tag": "SingleLine"
+                                },
+                                "sectionLanguage": "Plain",
+                                "sectionName": "",
+                                "sectionTests": [
+                                    {
+                                        "tag": "Example",
+                                        "testLines": [
+                                            " :i Foo"
+                                        ],
+                                        "testOutput": [],
+                                        "testRange": {
+                                            "end": {
+                                                "character": 13,
+                                                "line": 4
+                                            },
+                                            "start": {
+                                                "character": 0,
+                                                "line": 4
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "command": "137693:eval:evalCommand",
+                "title": "Evaluate..."
+            },
+            "range": {
+                "end": {
+                    "character": 0,
+                    "line": 5
+                },
+                "start": {
+                    "character": 0,
+                    "line": 4
+                }
+            }
+        }
+    ]
+}
+--> {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "method": "workspace/executeCommand",
+    "params": {
+        "arguments": [
+            {
+                "evalId": 0,
+                "module_": {
+                    "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+                },
+                "sections": [
+                    {
+                        "sectionFormat": {
+                            "tag": "SingleLine"
+                        },
+                        "sectionLanguage": "Plain",
+                        "sectionName": "",
+                        "sectionTests": [
+                            {
+                                "tag": "Example",
+                                "testLines": [
+                                    " :i Foo"
+                                ],
+                                "testOutput": [],
+                                "testRange": {
+                                    "end": {
+                                        "character": 13,
+                                        "line": 4
+                                    },
+                                    "start": {
+                                        "character": 0,
+                                        "line": 4
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "command": "137693:eval:evalCommand"
+    }
+}
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs")
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [
+            {
+                "code": "-Wunused-imports",
+TRACE: queueForEvaluation: NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+                "message": "The import of â from module â is redundant",
+                "range": {
+                    "end": {
+                        "character": 35,
+                        "line": 2
+                    },
+                    "start": {
+                        "character": 0,
+                        "line": 2
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 35,
+                                    "line": 2
+                                },
+                                "start": {
+                                    "character": 0,
+                                    "line": 2
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs"
+                        },
+                        "message": "GetModIfaceFromDisk"
+                    }
+                ],
+                "severity": 2,
+                "source": "typecheck",
+                "tags": [
+                    1
+                ]
+            }
+        ],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [
+            {
+                "code": "-Wunused-imports",
+                "message": "The import of â from module â is redundant",
+                "range": {
+                    "end": {
+                        "character": 35,
+                        "line": 2
+                    },
+                    "start": {
+                        "character": 0,
+                        "line": 2
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 35,
+                                    "line": 2
+                                },
+                                "start": {
+                                    "character": 0,
+                                    "line": 2
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs"
+                        },
+                        "message": "GetModIfaceFromDisk"
+                    }
+                ],
+                "severity": 2,
+                "source": "typecheck",
+                "tags": [
+                    1
+                ]
+            }
+        ],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs"
+    }
+}
+TRACE: isEvaluating=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs")
+<-- {
+ThreadId 148 | 2024-04-21T05:33:50.767468Z | Debug | Finished build session
+AsyncCancelled
+ThreadId 409 | 2024-04-21T05:33:50.767537Z | Debug | Restarting build session due to Eval
+Action Queue: [InitialLoad]
+Keys: [ GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TProperty.hi
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBangMany.hi
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfo.hi
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoMany.hi
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBang.hi
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfo.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TProperty.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBangMany.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoMany.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBang.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TI_Info.hie ]
+Aborting previous build session took 0.00s
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [
+            {
+                "code": "-Wunused-imports",
+                "message": "The import of â from module â is redundant",
+                "range": {
+                    "end": {
+                        "character": 30,
+                        "line": 2
+                    },
+                    "start": {
+                        "character": 0,
+                        "line": 2
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 30,
+                                    "line": 2
+                                },
+                                "start": {
+                                    "character": 0,
+                                    "line": 2
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs"
+                        },
+                        "message": "GetModIfaceFromDisk"
+                    }
+                ],
+                "severity": 2,
+                "source": "typecheck",
+                "tags": [
+                    1
+                ]
+            }
+        ],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [
+            {
+                "code": "-Wunused-imports",
+                "message": "The import of â from module â is redundant",
+                "range": {
+                    "end": {
+                        "character": 30,
+                        "line": 2
+                    },
+                    "start": {
+                        "character": 0,
+                        "line": 2
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 30,
+                                    "line": 2
+                                },
+                                "start": {
+                                    "character": 0,
+                                    "line": 2
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"
+                        },
+                        "message": "GetModIfaceFromDisk"
+                    }
+                ],
+                "severity": 2,
+                "source": "typecheck",
+                "tags": [
+                    1
+                ]
+            }
+        ],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (1/7)..."
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (2/7)..."
+        }
+    }
+}
+TRACE: linkableType=Nothing (NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs")
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (3/8)..."
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (4/8)..."
+        }
+    }
+}
+--> {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "result": null
+}
+<-- {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": 1
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TProperty.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (5/8)..."
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (6/8)..."
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "report",
+            "message": " (7/8)..."
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/start",
+    "params": [
+        "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+    ]
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "13",
+        "value": {
+            "kind": "end"
+        }
+    }
+}
+--> {
+    "id": 12,
+    "jsonrpc": "2.0",
+    "result": null
+}
+<-- {
+    "id": 12,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": "24"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "ghcide/reference/ready",
+    "params": "/tmp/hls-test-root/extra-dir-7722997002003/TPropertyError.hs"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": "21",
+        "value": {
+            "kind": "end",
+            "message": "Finished indexing 8 files"
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": 1,
+        "value": {
+            "cancellable": true,
+            "kind": "begin",
+            "title": "Evaluating"
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/done",
+    "params": [
+        "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+    ]
+}
+ThreadId 428 | 2024-04-21T05:33:50.771915Z | Debug | Finished: runEvalCmd Took: 0.00s
+TRACE: unqueueForEvaluation: NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [
+            {
+                "message": "called GetLinkable for a file without a linkable: NormalizedFilePath \"/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs\"\nCallStack (from HasCallStack):\n  error, called at src/Development/IDE/Core/Rules.hs:1074:18 in ghcide-2.7.0.0-inplace:Development.IDE.Core.Rules",
+                "range": {
+                    "end": {
+                        "character": 0,
+                        "line": 1
+                    },
+                    "start": {
+                        "character": 0,
+                        "line": 0
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 0,
+ThreadId 409 | 2024-04-21T05:33:50.772469Z | Debug | Restarting build session due to Eval
+Action Queue: [InitialLoad]
+Keys: [ GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfo.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TProperty.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBangMany.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoMany.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TInfoBang.hie
+      , GetModificationTime; /tmp/hls-test-root/.cache/ghcide/test-0.1.0.0-inplace-a69b9349d8eb1e5391c6596f62fcfe33d189fd7b/TI_Info.hie
+                                    "line": 1
+                                },
+      , IsEvaluating; /tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs ]
+                                "start": {
+                                    "character": 0,
+                                    "line": 0
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+                        },
+                        "message": "GetLinkable"
+                    }
+                ],
+                "severity": 1,
+                "source": "compiler"
+            },
+            {
+                "code": "-Wunused-imports",
+                "message": "The import of â from module â is redundant",
+                "range": {
+                    "end": {
+                        "character": 30,
+                        "line": 2
+                    },
+                    "start": {
+Aborting previous build session took 0.00s
+                        "character": 0,
+                        "line": 2
+                    }
+                },
+                "relatedInformation": [
+                    {
+                        "location": {
+                            "range": {
+                                "end": {
+                                    "character": 30,
+ThreadId 423 | 2024-04-21T05:33:50.772569Z | Debug | Finished build session
+                                    "line": 2
+                                },
+AsyncCancelled
+                                "start": {
+                                    "character": 0,
+                                    "line": 2
+                                }
+                            },
+                            "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+                        },
+                        "message": "TypeCheck"
+                    }
+ThreadId 408 | 2024-04-21T05:33:50.772814Z | Error | eval: Internal Error: BadDependency "GetLinkable"
+                ],
+                "severity": 2,
+                "source": "typecheck",
+                "tags": [
+                    1
+                ]
+            }
+        ],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs",
+        "version": 0
+    }
+}
+TRACE: isMemberEvaluatingVar=False(NormalizedFilePath "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs")
+<-- {
+    "jsonrpc": "2.0",
+    "method": "$/progress",
+    "params": {
+        "token": 1,
+        "value": {
+            "kind": "end"
+        }
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/start",
+ThreadId 539 | 2024-04-21T05:33:50.774176Z | Debug | Finished: InitialLoad Took: 0.00s
+    "params": [
+        "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+    ]
+}
+--> {
+    "id": 13,
+    "jsonrpc": "2.0",
+    "result": null
+}
+<-- {
+    "id": 13,
+    "jsonrpc": "2.0",
+    "method": "window/workDoneProgress/create",
+    "params": {
+        "token": "26"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "kick/done",
+    "params": [
+        "/tmp/hls-test-root/extra-dir-7722997002003/TI_Info.hs"
+    ]
+}
+<-- {
+    "error": {
+        "code": -32603,
+        "message": "eval: Internal Error: BadDependency \"GetLinkable\""
+    },
+    "id": 2,
+    "jsonrpc": "2.0"
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoMany.hs"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoBang.hs"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfoBangMany.hs"
+    }
+}
+<-- {
+    "jsonrpc": "2.0",
+    "method": "textDocument/publishDiagnostics",
+    "params": {
+        "diagnostics": [],
+        "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"
+    }
+}
+--> {
+    "id": 0,
+    "jsonrpc": "2.0",
+    "method": "shutdown"
+}
+ThreadId 16 | 2024-04-21T05:34:50.936340Z | Debug | Received shutdown message
+ThreadId 533 | 2024-04-21T05:34:50.936551Z | Debug | Finished build session
+AsyncCancelled
+<-- {
+    "id": 0,
+    "jsonrpc": "2.0",
+    "result": null
+}
+--> {
+    "jsonrpc": "2.0",
+    "method": "exit"
+}
+ThreadId 20 | 2024-04-21T05:34:50.937513Z | Info | Reactor thread stopped
+                                          FAIL
+      Exception: Timed out waiting to receive a message from the server.
+      Last message received:
+      {
+          "jsonrpc": "2.0",
+          "method": "textDocument/publishDiagnostics",
+          "params": {
+              "diagnostics": [],
+              "uri": "file:///tmp/hls-test-root/extra-dir-7722997002003/TInfo.hs"
+          }
+      }
+
+1 out of 1 tests failed (70.86s)
+Command failed at iteration 35
