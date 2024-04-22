@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell-actions/setup@v2.7.0
+    - uses: haskell-actions/setup@v2.7.1
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
