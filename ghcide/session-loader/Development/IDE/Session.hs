@@ -813,7 +813,7 @@ setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
 #if MIN_VERSION_ghc(9,3,0)
--- This function checks then important property that if both p and q are home units
+-- This function checks the important property that if both p and q are home units
 -- then any dependency of p, which transitively depends on q is also a home unit.
 -- GHC had an implementation of this function, but it was horribly inefficient
 -- We should move back to the GHC implementation on compilers where
