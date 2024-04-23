@@ -822,7 +822,7 @@ test-suite hls-stan-plugin-tests
     , lens
     , lsp-types
     , text
- default-extensions:
+  default-extensions:
     OverloadedStrings
 
 -----------------------------
