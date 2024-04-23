@@ -493,10 +493,9 @@ import qualified GHC.Unit.Module              as Module
 import           GHC.Unit.State               (ModuleOrigin (..))
 import           GHC.Utils.Error              (Severity (..), emptyMessages
 #if MIN_VERSION_ghc(9,3,0)
-                                              , mkPlainErrorMsgEnvelope)
-#else
-                                              )
+                                              , mkPlainErrorMsgEnvelope
 #endif
+                                              )
 import           GHC.Utils.Panic              hiding (try)
 import qualified GHC.Utils.Panic.Plain        as Plain
 
