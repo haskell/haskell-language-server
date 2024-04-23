@@ -52,6 +52,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake           hiding (Log, Priority,
                                                        knownTargets, withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
+import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
                                                        Var, Warning, getOptions)
@@ -122,10 +123,11 @@ import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Driver.Make                      (checkHomeUnitsClosed)
-import           GHC.Types.Error                      (errMsgDiagnostic)
+import           GHC.Types.Error                      (errMsgDiagnostic, singleMessage)
 import           GHC.Unit.State
 #endif
 
+import           GHC.Data.Graph.Directed
 import           GHC.ResponseFile
 
 data Log
@@ -810,6 +812,65 @@ setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 #endif
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
+#if MIN_VERSION_ghc(9,3,0)
+-- This function checks the important property that if both p and q are home units
+-- then any dependency of p, which transitively depends on q is also a home unit.
+-- GHC had an implementation of this function, but it was horribly inefficient
+-- We should move back to the GHC implementation on compilers where
+-- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/12162 is included
+checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> [DriverMessages]
+checkHomeUnitsClosed' ue home_id_set
+    | OS.null bad_unit_ids = []
+    | otherwise = [singleMessage $ GHC.mkPlainErrorMsgEnvelope rootLoc $ DriverHomePackagesNotClosed (OS.toList bad_unit_ids)]
+  where
+    bad_unit_ids = upwards_closure OS.\\ home_id_set
+    rootLoc = mkGeneralSrcSpan (Compat.fsLit "<command line>")
+
+    graph :: Graph (Node UnitId UnitId)
+    graph = graphFromEdgedVerticesUniq graphNodes
+
+    -- downwards closure of graph
+    downwards_closure
+      = graphFromEdgedVerticesUniq [ DigraphNode uid uid (OS.toList deps)
+                                   | (uid, deps) <- Map.toList (allReachable graph node_key)]
+
+    inverse_closure = transposeG downwards_closure
+
+    upwards_closure = OS.fromList $ map node_key $ reachablesG inverse_closure [DigraphNode uid uid [] | uid <- OS.toList home_id_set]
+
+    all_unit_direct_deps :: UniqMap UnitId (OS.Set UnitId)
+    all_unit_direct_deps
+      = unitEnv_foldWithKey go emptyUniqMap $ ue_home_unit_graph ue
+      where
+        go rest this this_uis =
+           plusUniqMap_C OS.union
+             (addToUniqMap_C OS.union external_depends this (OS.fromList $ this_deps))
+             rest
+           where
+             external_depends = mapUniqMap (OS.fromList . unitDepends)
+#if !MIN_VERSION_ghc(9,7,0)
+                              $ listToUniqMap $ Map.toList
+#endif
+
+                              $ unitInfoMap this_units
+             this_units = homeUnitEnv_units this_uis
+             this_deps = [ Compat.toUnitId unit | (unit,Just _) <- explicitUnits this_units]
+
+    graphNodes :: [Node UnitId UnitId]
+    graphNodes = go OS.empty home_id_set
+      where
+        go done todo
+          = case OS.minView todo of
+              Nothing -> []
+              Just (uid, todo')
+                | OS.member uid done -> go done todo'
+                | otherwise -> case lookupUniqMap all_unit_direct_deps uid of
+                    Nothing -> pprPanic "uid not found" (Compat.ppr (uid, all_unit_direct_deps))
+                    Just depends ->
+                      let todo'' = (depends OS.\\ done) `OS.union` todo'
+                      in DigraphNode uid uid (OS.toList depends) : go (OS.insert uid done) todo''
+#endif
+
 -- | Create a mapping from FilePaths to HscEnvEqs
 -- This combines all the components we know about into
 -- an appropriate session, which is a multi component
@@ -838,11 +899,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
               Compat.initUnits dfs hsc_env
 
 #if MIN_VERSION_ghc(9,3,0)
-    let closure_errs = checkHomeUnitsClosed (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv') pkg_deps
-        pkg_deps = do
-          home_unit_id <- uids
-          home_unit_env <- maybeToList $ unitEnv_lookup_maybe home_unit_id $ hsc_HUG hscEnv'
-          map (home_unit_id,) (map (Compat.toUnitId . fst) $ explicitUnits $ homeUnitEnv_units home_unit_env)
+    let closure_errs = checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
         multi_errs = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp . T.pack . Compat.printWithoutUniques) closure_errs
         bad_units = OS.fromList $ concat $ do
             x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages closure_errs
