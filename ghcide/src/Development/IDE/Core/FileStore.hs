@@ -216,15 +216,17 @@ setFileModified :: Recorder (WithPriority Log)
                 -> Bool -- ^ Was the file saved?
                 -> NormalizedFilePath
                 -> IO ()
-setFileModified recorder vfs state saved nfp = do
+                -> IO ()
+setFileModified recorder vfs state saved nfp actionBefore = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
     doCheckParents <- optCheckParents ideOptions
     let checkParents = case doCheckParents of
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] []
+    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+        actionBefore
+        join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     when checkParents $
       typecheckParents recorder state nfp
 
@@ -244,14 +246,15 @@ typecheckParentsAction recorder nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: VFSModified -> IdeState -> [Key] -> String -> IO ()
-setSomethingModified vfs state keys reason = do
+setSomethingModified :: VFSModified -> IdeState -> [Key] -> String -> IO () -> IO ()
+setSomethingModified vfs state keys reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
-    atomically $ do
-        writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
-        modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
-            foldl' (flip insertKeySet) x keys
-    void $ restartShakeSession (shakeExtras state) vfs reason [] keys
+    void $ restartShakeSession (shakeExtras state) vfs reason [] $ do
+        actionBetweenSession
+        atomically $ do
+            writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+            modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
+                foldl' (flip insertKeySet) x keys
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do

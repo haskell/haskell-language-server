@@ -611,19 +611,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                                        [ "No cradle target found. Is this file listed in the targets of your cradle?"
                                        , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
                                        ]
-
-          void $ modifyVar' fileToFlags $
-              Map.insert hieYaml this_flags_map
-          void $ modifyVar' filesMap $
-              flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
-
-          void $ extendKnownTargets all_targets
-
-          -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
-          invalidateShakeCache
-
           -- The VFS doesn't change on cradle edits, re-use the old one.
-          restartShakeSession VFSUnmodified "new component" [] []
+          restartShakeSession VFSUnmodified "new component" [] $ do
+            void $ modifyVar' fileToFlags $
+                Map.insert hieYaml this_flags_map
+            void $ modifyVar' filesMap $
+                flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
+            void $ extendKnownTargets all_targets
+            -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
+            invalidateShakeCache
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject

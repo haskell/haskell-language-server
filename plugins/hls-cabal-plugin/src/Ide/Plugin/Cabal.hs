@@ -90,26 +90,26 @@ descriptor recorder plId =
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
-                  addFileOfInterest recorder ide file Modified{firstOpen = True}
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(opened)"
+                  restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
+                    addFileOfInterest recorder ide file Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocModified _uri
-                  addFileOfInterest recorder ide file Modified{firstOpen = False}
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(changed)"
+                  restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
+                    addFileOfInterest recorder ide file Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
               \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocSaved _uri
-                  addFileOfInterest recorder ide file OnDisk
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(saved)"
+                  restartCabalShakeSession (shakeExtras ide) vfs file "(saved)" $
+                    addFileOfInterest recorder ide file OnDisk
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
               \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocClosed _uri
-                  deleteFileOfInterest recorder ide file
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(closed)"
+                  restartCabalShakeSession (shakeExtras ide) vfs file "(closed)" $
+                    deleteFileOfInterest recorder ide file
           ]
     , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
@@ -132,8 +132,8 @@ Then we restart the shake session, so that changes to our virtual files are actu
 -}
 restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO ()
 restartCabalShakeSession shakeExtras vfs file actionMsg = do
-  join $ atomically $ Shake.recordDirtyKeys shakeExtras GetModificationTime [file]
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] []
+  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $
+    join $ atomically $ Shake.recordDirtyKeys shakeExtras GetModificationTime [file]
 
 -- ----------------------------------------------------------------
 -- Plugin Rules

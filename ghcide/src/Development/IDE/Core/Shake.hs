@@ -300,7 +300,7 @@ data ShakeExtras = ShakeExtras
         :: VFSModified
         -> String
         -> [DelayedAction ()]
-        -> [Key]
+        -> IO ()
         -> IO ()
 #if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
@@ -760,14 +760,14 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> [Key] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts keys =
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO () -> IO ()
+shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
     withMVar'
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
               res <- shakeDatabaseProfile shakeDb
-              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+              ioActionBetweenShakeSession
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
