@@ -25,7 +25,7 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe               as Safe
 import           Control.Monad
-import           Control.Monad.Extra
+import           Control.Monad.Extra                  as Extra
 import           Control.Monad.IO.Class
 import qualified Crypto.Hash.SHA1                     as H
 import           Data.Aeson                           hiding (Error)
@@ -58,6 +58,7 @@ import           Development.IDE.GHC.Compat.Core      hiding (Target,
 import qualified Development.IDE.GHC.Compat.Core      as GHC
 import           Development.IDE.GHC.Compat.Env       hiding (Logger)
 import           Development.IDE.GHC.Compat.Units     (UnitId)
+import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
@@ -69,6 +70,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
+import qualified HIE.Bios.Cradle                      as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
@@ -79,6 +81,8 @@ import           Ide.Logger                           (Pretty (pretty),
                                                        nest,
                                                        toCologActionWithPrio,
                                                        vcat, viaShow, (<+>))
+import           Ide.Types                            (SessionLoadingPreferenceConfig (..),
+                                                       sessionLoading)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
@@ -122,10 +126,12 @@ import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Driver.Make                      (checkHomeUnitsClosed)
-import           GHC.Types.Error                      (errMsgDiagnostic)
+import           GHC.Types.Error                      (errMsgDiagnostic,
+                                                       singleMessage)
 import           GHC.Unit.State
 #endif
 
+import           GHC.Data.Graph.Directed
 import           GHC.ResponseFile
 
 data Log
@@ -147,6 +153,7 @@ data Log
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogHieBios HieBios.Log
+  | LogSessionLoadingChanged
 deriving instance Show Log
 
 instance Pretty Log where
@@ -217,6 +224,8 @@ instance Pretty Log where
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> viaShow componentCache
     LogHieBios msg -> pretty msg
+    LogSessionLoadingChanged ->
+      "Session Loading config changed, reloading the full session."
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -447,6 +456,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
   filesMap <- newVar HM.empty :: IO (Var FilesMap)
   -- Version of the mappings above
   version <- newVar 0
+  biosSessionLoadingVar <- newVar Nothing :: IO (Var (Maybe SessionLoadingPreferenceConfig))
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
   -- This caches the mapping from Mod.hs -> hie.yaml
   cradleLoc <- liftIO $ memoIO $ \v -> do
@@ -461,6 +471,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
   runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
+    clientConfig <- getClientConfigAction
     extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
     let invalidateShakeCache :: IO ()
@@ -651,7 +662,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfp
                   old_files <- readIORef cradle_files
-                  res <- cradleToOptsAndLibDir recorder cradle cfp old_files
+                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
                   addTag "result" (show res)
                   return res
 
@@ -679,11 +690,38 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
                return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
+    let
+        -- | We allow users to specify a loading strategy.
+        -- Check whether this config was changed since the last time we have loaded
+        -- a session.
+        --
+        -- If the loading configuration changed, we likely should restart the session
+        -- in its entirety.
+        didSessionLoadingPreferenceConfigChange :: IO Bool
+        didSessionLoadingPreferenceConfigChange = do
+          mLoadingConfig <- readVar biosSessionLoadingVar
+          case mLoadingConfig of
+            Nothing -> do
+              writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
+              pure False
+            Just loadingConfig -> do
+              writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
+              pure (loadingConfig /= sessionLoading clientConfig)
+
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
     -- Returns the Ghc session and the cradle dependencies
     let sessionOpts :: (Maybe FilePath, FilePath)
                     -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
+          Extra.whenM didSessionLoadingPreferenceConfigChange $ do
+            logWith recorder Info LogSessionLoadingChanged
+            -- If the dependencies are out of date then clear both caches and start
+            -- again.
+            modifyVar_ fileToFlags (const (return Map.empty))
+            modifyVar_ filesMap (const (return HM.empty))
+            -- Don't even keep the name cache, we start from scratch here!
+            modifyVar_ hscEnvs (const (return Map.empty))
+
           v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
           cfp <- makeAbsolute file
           case HM.lookup (toNormalizedFilePath' cfp) v of
@@ -694,6 +732,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- If the dependencies are out of date then clear both caches and start
                   -- again.
                   modifyVar_ fileToFlags (const (return Map.empty))
+                  modifyVar_ filesMap (const (return HM.empty))
                   -- Keep the same name cache
                   modifyVar_ hscEnvs (return . Map.adjust (const []) hieYaml )
                   consultCradle hieYaml cfp
@@ -713,7 +752,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
-      opts <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
+      opts <- join $ mask_ $ modifyVar runningCradle $ \as -> do
         -- If the cradle is not finished, then wait for it to finish.
         void $ wait as
         asyncRes <- async $ getOptions file
@@ -723,14 +762,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
-cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> Cradle Void -> FilePath -> [FilePath]
+cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> Cradle Void -> FilePath -> [FilePath]
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
-cradleToOptsAndLibDir recorder cradle file old_files = do
+cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
     -- let noneCradleFoundMessage :: FilePath -> T.Text
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
-    cradleRes <- HieBios.getCompilerOptions file old_files cradle
+    cradleRes <- HieBios.getCompilerOptions file loadStyle cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
@@ -747,6 +786,11 @@ cradleToOptsAndLibDir recorder cradle file old_files = do
         CradleNone -> do
             logWith recorder Info $ LogNoneCradleFound file
             return (Left [])
+
+    where
+        loadStyle = case loadConfig of
+            PreferSingleComponentLoading -> LoadFile
+            PreferMultiComponentLoading  -> LoadWithContext old_fps
 
 #if MIN_VERSION_ghc(9,3,0)
 emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
@@ -810,6 +854,65 @@ setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 #endif
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
+#if MIN_VERSION_ghc(9,3,0)
+-- This function checks the important property that if both p and q are home units
+-- then any dependency of p, which transitively depends on q is also a home unit.
+-- GHC had an implementation of this function, but it was horribly inefficient
+-- We should move back to the GHC implementation on compilers where
+-- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/12162 is included
+checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> [DriverMessages]
+checkHomeUnitsClosed' ue home_id_set
+    | OS.null bad_unit_ids = []
+    | otherwise = [singleMessage $ GHC.mkPlainErrorMsgEnvelope rootLoc $ DriverHomePackagesNotClosed (OS.toList bad_unit_ids)]
+  where
+    bad_unit_ids = upwards_closure OS.\\ home_id_set
+    rootLoc = mkGeneralSrcSpan (Compat.fsLit "<command line>")
+
+    graph :: Graph (Node UnitId UnitId)
+    graph = graphFromEdgedVerticesUniq graphNodes
+
+    -- downwards closure of graph
+    downwards_closure
+      = graphFromEdgedVerticesUniq [ DigraphNode uid uid (OS.toList deps)
+                                   | (uid, deps) <- Map.toList (allReachable graph node_key)]
+
+    inverse_closure = transposeG downwards_closure
+
+    upwards_closure = OS.fromList $ map node_key $ reachablesG inverse_closure [DigraphNode uid uid [] | uid <- OS.toList home_id_set]
+
+    all_unit_direct_deps :: UniqMap UnitId (OS.Set UnitId)
+    all_unit_direct_deps
+      = unitEnv_foldWithKey go emptyUniqMap $ ue_home_unit_graph ue
+      where
+        go rest this this_uis =
+           plusUniqMap_C OS.union
+             (addToUniqMap_C OS.union external_depends this (OS.fromList $ this_deps))
+             rest
+           where
+             external_depends = mapUniqMap (OS.fromList . unitDepends)
+#if !MIN_VERSION_ghc(9,7,0)
+                              $ listToUniqMap $ Map.toList
+#endif
+
+                              $ unitInfoMap this_units
+             this_units = homeUnitEnv_units this_uis
+             this_deps = [ Compat.toUnitId unit | (unit,Just _) <- explicitUnits this_units]
+
+    graphNodes :: [Node UnitId UnitId]
+    graphNodes = go OS.empty home_id_set
+      where
+        go done todo
+          = case OS.minView todo of
+              Nothing -> []
+              Just (uid, todo')
+                | OS.member uid done -> go done todo'
+                | otherwise -> case lookupUniqMap all_unit_direct_deps uid of
+                    Nothing -> pprPanic "uid not found" (Compat.ppr (uid, all_unit_direct_deps))
+                    Just depends ->
+                      let todo'' = (depends OS.\\ done) `OS.union` todo'
+                      in DigraphNode uid uid (OS.toList depends) : go (OS.insert uid done) todo''
+#endif
+
 -- | Create a mapping from FilePaths to HscEnvEqs
 -- This combines all the components we know about into
 -- an appropriate session, which is a multi component
@@ -838,11 +941,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
               Compat.initUnits dfs hsc_env
 
 #if MIN_VERSION_ghc(9,3,0)
-    let closure_errs = checkHomeUnitsClosed (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv') pkg_deps
-        pkg_deps = do
-          home_unit_id <- uids
-          home_unit_env <- maybeToList $ unitEnv_lookup_maybe home_unit_id $ hsc_HUG hscEnv'
-          map (home_unit_id,) (map (Compat.toUnitId . fst) $ explicitUnits $ homeUnitEnv_units home_unit_env)
+    let closure_errs = checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
         multi_errs = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp . T.pack . Compat.printWithoutUniques) closure_errs
         bad_units = OS.fromList $ concat $ do
             x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages closure_errs
@@ -1093,7 +1192,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
         -- component to be created. In case the cradle doesn't list all the targets for
         -- the component, in which case things will be horribly broken anyway.
         --
-        -- When we have a single component that is caused to be loaded due to a
+        -- When we have a singleComponent that is caused to be loaded due to a
         -- file, we assume the file is part of that component. This is useful
         -- for bare GHC sessions, such as many of the ones used in the testsuite
         --

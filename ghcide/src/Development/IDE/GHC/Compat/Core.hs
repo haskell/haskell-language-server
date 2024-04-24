@@ -543,6 +543,7 @@ import qualified GHC.Unit.Finder as GHC
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
+import GHC.Utils.Error (mkPlainErrorMsgEnvelope)
 import GHC.Driver.Env.KnotVars
 import GHC.Unit.Module.Graph
 import GHC.Driver.Errors.Types

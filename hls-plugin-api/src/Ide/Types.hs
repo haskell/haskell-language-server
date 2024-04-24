@@ -22,7 +22,7 @@ module Ide.Types
 , IdeNotification(..)
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
-, Config(..), PluginConfig(..), CheckParents(..)
+, Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
@@ -65,6 +65,7 @@ import           Control.Monad.Error.Class     (MonadError (throwError))
 import           Control.Monad.Trans.Class     (MonadTrans (lift))
 import           Control.Monad.Trans.Except    (ExceptT, runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
+import qualified Data.Aeson.Types              as A
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
@@ -170,6 +171,7 @@ data Config =
     , formattingProvider      :: !T.Text
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
+    , sessionLoading          :: !SessionLoadingPreferenceConfig
     , plugins                 :: !(Map.Map PluginId PluginConfig)
     } deriving (Show,Eq)
 
@@ -180,6 +182,7 @@ instance ToJSON Config where
            , "formattingProvider"          .= formattingProvider
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
+           , "sessionLoading"              .= sessionLoading
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
 
@@ -194,6 +197,7 @@ instance Default Config where
     -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
+    , sessionLoading              = PreferSingleComponentLoading
     , plugins                     = mempty
     }
 
@@ -205,6 +209,39 @@ data CheckParents
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+
+data SessionLoadingPreferenceConfig
+    = PreferSingleComponentLoading
+    -- ^ Always load only a singleComponent when a new component
+    -- is discovered.
+    | PreferMultiComponentLoading
+    -- ^ Always prefer loading multiple components in the cradle
+    -- at once. This might not be always possible, if the tool doesn't
+    -- support multiple components loading.
+    --
+    -- The cradle can decide how to handle these situations, and whether
+    -- to honour the preference at all.
+  deriving stock (Eq, Ord, Show, Generic)
+
+instance Pretty SessionLoadingPreferenceConfig where
+    pretty PreferSingleComponentLoading = "Prefer Single Component Loading"
+    pretty PreferMultiComponentLoading  = "Prefer Multiple Components Loading"
+
+instance ToJSON SessionLoadingPreferenceConfig where
+    toJSON PreferSingleComponentLoading =
+        String "singleComponent"
+    toJSON PreferMultiComponentLoading =
+        String "multipleComponents"
+
+instance FromJSON SessionLoadingPreferenceConfig where
+    parseJSON (String val) = case val of
+        "singleComponent"    -> pure PreferSingleComponentLoading
+        "multipleComponents" -> pure PreferMultiComponentLoading
+        _ -> A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.parseFail $ "Expected one of \"singleComponent\" or \"multipleComponents\" but got " <> T.unpack val )
+    parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.typeMismatch "String" o)
 
 -- | A PluginConfig is a generic configuration for a given HLS plugin.  It
 -- provides a "big switch" to turn it on or off as a whole, as well as small

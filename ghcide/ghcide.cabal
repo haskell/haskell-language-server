@@ -78,7 +78,7 @@ library
     , Glob
     , haddock-library              >=1.8      && <1.12
     , hashable
-    , hie-bios                     ==0.13.1
+    , hie-bios                     ^>=0.14.0
     , hie-compat                   ^>=0.3.0.0
     , hiedb                        ^>= 0.6.0.0
     , hls-graph                    == 2.7.0.0
