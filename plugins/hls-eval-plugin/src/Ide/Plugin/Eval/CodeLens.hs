@@ -211,10 +211,8 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
-              (do queueForEvaluation st nfp
-                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
-              (do unqueueForEvaluation st nfp
-                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
+              (setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval" $ queueForEvaluation st nfp)
+              (setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval" $ unqueueForEvaluation st nfp)
               (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId

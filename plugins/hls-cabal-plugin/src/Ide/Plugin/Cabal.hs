@@ -130,9 +130,10 @@ needs to be re-parsed. That's what we do when we record the dirty key that our p
 rule depends on.
 Then we restart the shake session, so that changes to our virtual files are actually picked up.
 -}
-restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO ()
-restartCabalShakeSession shakeExtras vfs file actionMsg = do
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $
+restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO () -> IO ()
+restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = do
+  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+    actionBetweenSession
     join $ atomically $ Shake.recordDirtyKeys shakeExtras GetModificationTime [file]
 
 -- ----------------------------------------------------------------

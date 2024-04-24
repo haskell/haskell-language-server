@@ -766,8 +766,8 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-              res <- shakeDatabaseProfile shakeDb
               ioActionBetweenShakeSession
+              res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
