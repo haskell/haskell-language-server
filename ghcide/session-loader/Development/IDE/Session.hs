@@ -106,7 +106,7 @@ import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
-import           Development.IDE.Types.Shake          (WithHieDb)
+import           Development.IDE.Types.Shake          (WithHieDb, toKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -474,10 +474,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
     clientConfig <- getClientConfigAction
     extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
-    let invalidateShakeCache :: IO ()
-        invalidateShakeCache = do
+    let invalidateShakeCache = do
             void $ modifyVar' version succ
-            join $ atomically $ recordDirtyKeys extras GhcSessionIO [emptyFilePath]
+            return $ toKey GhcSessionIO emptyFilePath
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
@@ -516,10 +515,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                             HM.unionWith (<>) k $ HM.fromList knownTargets
                 hasUpdate = if known /= known' then Just (unhashed known') else Nothing
             writeTVar knownTargetsVar known'
-            logDirtyKeys <- recordDirtyKeys extras GetKnownTargets [emptyFilePath]
-            return (logDirtyKeys >> pure hasUpdate)
+            return (pure hasUpdate)
           for_ hasUpdate $ \x ->
             logWith recorder Debug $ LogKnownFilesUpdated x
+          return $ toKey GetKnownTargets emptyFilePath
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
@@ -617,9 +616,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                 Map.insert hieYaml this_flags_map
             void $ modifyVar' filesMap $
                 flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
-            void $ extendKnownTargets all_targets
+            key1 <- extendKnownTargets all_targets
+            key2 <- invalidateShakeCache
+            return [key1, key2]
             -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
-            invalidateShakeCache
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject

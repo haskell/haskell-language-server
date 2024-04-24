@@ -57,7 +57,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
-    deleteValue, recordDirtyKeys, recordDirtyKeySet,
+    deleteValue, recordDirtyKeys,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -300,7 +300,7 @@ data ShakeExtras = ShakeExtras
         :: VFSModified
         -> String
         -> [DelayedAction ()]
-        -> IO ()
+        -> IO [Key]
         -> IO ()
 #if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
@@ -569,21 +569,10 @@ deleteValue ShakeExtras{dirtyKeys, state} key file = do
     modifyTVar' dirtyKeys $ insertKeySet (toKey key file)
 
 recordDirtyKeys
-  :: Shake.ShakeValue k
-  => ShakeExtras
-  -> k
-  -> [NormalizedFilePath]
-  -> STM (IO ())
-recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
-    modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x (toKey key <$> file)
-    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
-        addEvent (fromString $ unlines $ "dirty " <> show key : map fromNormalizedFilePath file)
-
-recordDirtyKeySet
   :: ShakeExtras
   -> [Key]
   -> STM (IO ())
-recordDirtyKeySet ShakeExtras{dirtyKeys} keys = do
+recordDirtyKeys ShakeExtras{dirtyKeys} keys = do
     modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x keys
     return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
         addEvent (fromString $ unlines $ "dirty " : map show keys)
@@ -769,13 +758,14 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO () -> IO ()
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
     withMVar'
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-              ioActionBetweenShakeSession
+              keys <- ioActionBetweenShakeSession
+              join $ atomically $ recordDirtyKeys shakeExtras keys
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras

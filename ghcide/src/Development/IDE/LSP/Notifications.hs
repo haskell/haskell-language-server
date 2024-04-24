@@ -96,8 +96,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
           whenUriFile _uri $ \file -> do
               let msg = "Closed text document: " <> getUri _uri
               setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
-                deleteFileOfInterest ide file
                 scheduleGarbageCollection ide
+                deleteFileOfInterest ide file
               logWith recorder Debug $ LogClosedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWatchedFiles $
@@ -117,8 +117,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
             let msg = show fileEvents'
             logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
             setSomethingModified (VFSModified vfs) ide msg $ do
-                modifyFileExists ide fileEvents'
                 resetFileStore ide fileEvents'
+                modifyFileExists ide fileEvents'
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWorkspaceFolders $
       \ide _ _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do

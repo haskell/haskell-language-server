@@ -85,8 +85,7 @@ import           Development.IDE.Core.RuleTypes               (GetLinkable (GetL
                                                                GetModuleGraph (GetModuleGraph),
                                                                GhcSessionDeps (GhcSessionDeps),
                                                                ModSummaryResult (msrModSummary))
-import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified),
-                                                               recordDirtyKeys)
+import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
 import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcSpan (getLoc),
                                                                          unLoc)
@@ -216,12 +215,13 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                join $ atomically $ recordDirtyKeys (shakeExtras st) IsEvaluating [nfp]
                 queueForEvaluation st nfp
+                return [toKey IsEvaluating nfp]
                 )
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                join $ atomically $ recordDirtyKeys (shakeExtras st) IsEvaluating [nfp]
-                unqueueForEvaluation st nfp)
+                unqueueForEvaluation st nfp
+                return [toKey IsEvaluating nfp]
+                )
               (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId

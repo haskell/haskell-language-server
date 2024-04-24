@@ -49,6 +49,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake                  (toKey)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Logger                                   (Pretty (pretty),
                                                                Priority (Info),
@@ -215,7 +216,7 @@ setFileModified :: Recorder (WithPriority Log)
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
                 -> NormalizedFilePath
-                -> IO ()
+                -> IO [Key]
                 -> IO ()
 setFileModified recorder vfs state saved nfp actionBefore = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
@@ -225,8 +226,8 @@ setFileModified recorder vfs state saved nfp actionBefore = do
           CheckOnSave -> saved
           _           -> False
     restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
-        actionBefore
-        join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
+        keys<-actionBefore
+        return (toKey GetModificationTime nfp:keys)
     when checkParents $
       typecheckParents recorder state nfp
 
@@ -246,13 +247,13 @@ typecheckParentsAction recorder nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: VFSModified -> IdeState -> String -> IO () -> IO ()
+setSomethingModified :: VFSModified -> IdeState -> String -> IO [Key] -> IO ()
 setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
     void $ restartShakeSession (shakeExtras state) vfs reason [] $ do
-        actionBetweenSession
-        atomically $ do
-            writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+        keys <- actionBetweenSession
+        atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+        return keys
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do

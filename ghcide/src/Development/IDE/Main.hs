@@ -56,7 +56,6 @@ import           Development.IDE.Core.Service             (initialise,
 import qualified Development.IDE.Core.Service             as Service
 import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
                                                            IndexQueue,
-                                                           recordDirtyKeys,
                                                            shakeSessionInit,
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
@@ -367,7 +366,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         setSomethingModified Shake.VFSUnmodified ide "config change" $ do
                             logWith recorder Debug $ LogConfigurationChange msg
                             modifyClientSettings ide (const $ Just cfgObj)
-                            join $ atomically $ recordDirtyKeys (shakeExtras ide) Rules.GetClientSettings [emptyFilePath]
+                            return [toKey Rules.GetClientSettings emptyFilePath]
 
             runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
             dumpSTMStats

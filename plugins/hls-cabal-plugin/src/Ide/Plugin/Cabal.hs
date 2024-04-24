@@ -24,9 +24,10 @@ import           Data.Typeable
 import           Development.IDE                             as D
 import           Development.IDE.Core.Shake                  (restartShakeSession)
 import qualified Development.IDE.Core.Shake                  as Shake
-import           Development.IDE.Graph                       (alwaysRerun)
+import           Development.IDE.Graph                       (Key, alwaysRerun)
 import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
 import qualified Development.IDE.Plugin.Completions.Types    as Ghcide
+import           Development.IDE.Types.Shake                 (toKey)
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
@@ -130,11 +131,11 @@ needs to be re-parsed. That's what we do when we record the dirty key that our p
 rule depends on.
 Then we restart the shake session, so that changes to our virtual files are actually picked up.
 -}
-restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO () -> IO ()
+restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
 restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = do
   restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
-    actionBetweenSession
-    join $ atomically $ Shake.recordDirtyKeys shakeExtras GetModificationTime [file]
+    keys <- actionBetweenSession
+    return (toKey GetModificationTime file:keys)
 
 -- ----------------------------------------------------------------
 -- Plugin Rules
@@ -250,24 +251,26 @@ getCabalFilesOfInterestUntracked = do
   OfInterestCabalVar var <- Shake.getIdeGlobalAction
   liftIO $ readVar var
 
-addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO ()
+addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest recorder state f v = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   (prev, files) <- modifyVar var $ \dict -> do
     let (prev, new) = HashMap.alterF (,Just v) f dict
     pure (new, (prev, new))
-  when (prev /= Just v) $ do
-    join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-    log' Debug $ LogFOI files
+  if prev /= Just v
+    then do
+        log' Debug $ LogFOI files
+        return [toKey IsCabalFileOfInterest f]
+    else return []
  where
   log' = logWith recorder
 
-deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
+deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO [Key]
 deleteFileOfInterest recorder state f = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   files <- modifyVar' var $ HashMap.delete f
-  join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
   log' Debug $ LogFOI files
+  return [toKey IsFileOfInterest f]
  where
   log' = logWith recorder
 
