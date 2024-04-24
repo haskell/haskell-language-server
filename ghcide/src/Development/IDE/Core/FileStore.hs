@@ -246,15 +246,13 @@ typecheckParentsAction recorder nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: VFSModified -> IdeState -> [Key] -> String -> IO () -> IO ()
-setSomethingModified vfs state keys reason actionBetweenSession = do
+setSomethingModified :: VFSModified -> IdeState -> String -> IO () -> IO ()
+setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
     void $ restartShakeSession (shakeExtras state) vfs reason [] $ do
         actionBetweenSession
         atomically $ do
             writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
-            modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
-                foldl' (flip insertKeySet) x keys
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do

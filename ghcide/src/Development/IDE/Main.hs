@@ -18,8 +18,8 @@ import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Exception.Safe                   (SomeException,
                                                            catchAny,
                                                            displayException)
-import           Control.Monad.Extra                      (concatMapM, unless,
-                                                           when)
+import           Control.Monad.Extra                      (concatMapM, join,
+                                                           unless, when)
 import           Control.Monad.IO.Class                   (liftIO)
 import qualified Data.Aeson                               as J
 import           Data.Coerce                              (coerce)
@@ -56,6 +56,7 @@ import           Development.IDE.Core.Service             (initialise,
 import qualified Development.IDE.Core.Service             as Service
 import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
                                                            IndexQueue,
+                                                           recordDirtyKeys,
                                                            shakeSessionInit,
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
@@ -89,7 +90,8 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            optModifyDynFlags,
                                                            optTesting)
 import           Development.IDE.Types.Shake              (WithHieDb, toKey)
-import           GHC.Conc                                 (getNumProcessors)
+import           GHC.Conc                                 (atomically,
+                                                           getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
 import           HIE.Bios.Cradle                          (findCradle)
@@ -362,9 +364,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     Nothing -> pure ()
                     Just ide -> liftIO $ do
                         let msg = T.pack $ show cfg
-                        logWith recorder Debug $ LogConfigurationChange msg
-                        modifyClientSettings ide (const $ Just cfgObj)
-                        setSomethingModified Shake.VFSUnmodified ide [toKey Rules.GetClientSettings emptyFilePath] "config change" $ return ()
+                        setSomethingModified Shake.VFSUnmodified ide "config change" $ do
+                            logWith recorder Debug $ LogConfigurationChange msg
+                            modifyClientSettings ide (const $ Just cfgObj)
+                            join $ atomically $ recordDirtyKeys (shakeExtras ide) Rules.GetClientSettings [emptyFilePath]
 
             runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
             dumpSTMStats

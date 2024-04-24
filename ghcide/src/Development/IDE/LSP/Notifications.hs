@@ -95,7 +95,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
               let msg = "Closed text document: " <> getUri _uri
-              setSomethingModified (VFSModified vfs) ide [] (Text.unpack msg) $ do
+              setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
                 deleteFileOfInterest ide file
                 scheduleGarbageCollection ide
               logWith recorder Debug $ LogClosedTextDocument _uri
@@ -116,7 +116,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         unless (null fileEvents') $ do
             let msg = show fileEvents'
             logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
-            setSomethingModified (VFSModified vfs) ide [] msg $ do
+            setSomethingModified (VFSModified vfs) ide msg $ do
                 modifyFileExists ide fileEvents'
                 resetFileStore ide fileEvents'
 

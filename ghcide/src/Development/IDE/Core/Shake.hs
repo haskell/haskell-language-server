@@ -57,7 +57,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
-    deleteValue, recordDirtyKeys,
+    deleteValue, recordDirtyKeys, recordDirtyKeySet,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -578,6 +578,15 @@ recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
     modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x (toKey key <$> file)
     return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
         addEvent (fromString $ unlines $ "dirty " <> show key : map fromNormalizedFilePath file)
+
+recordDirtyKeySet
+  :: ShakeExtras
+  -> [Key]
+  -> STM (IO ())
+recordDirtyKeySet ShakeExtras{dirtyKeys} keys = do
+    modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x keys
+    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
+        addEvent (fromString $ unlines $ "dirty " : map show keys)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
