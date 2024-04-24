@@ -71,7 +71,7 @@ import           Language.LSP.VFS
 import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
-
+import           Debug.Trace
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
@@ -250,7 +250,10 @@ setSomethingModified vfs state keys reason = do
     atomically $ do
         writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
         modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
-            foldl' (flip insertKeySet) x keys
+            foldl' (\xs k ->
+              --trace ("TRACE: insertDirkyKey: " <> show k) $
+
+             insertKeySet k xs) x keys
     void $ restartShakeSession (shakeExtras state) vfs reason []
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool

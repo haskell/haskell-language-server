@@ -181,7 +181,7 @@ import           GHC                                          (mgModSummaries)
 import qualified Data.IntMap                                  as IM
 #endif
 
-import Debug.Trace
+import           Debug.Trace
 
 data Log
   = LogShake Shake.Log
