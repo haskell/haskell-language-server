@@ -111,7 +111,7 @@ modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO [Ke
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   -- Masked to ensure that the previous values are flushed together with the map update
-  keys <- join $ mask_ $ atomicallyNamed "modifyFileExists" $ do
+  keys <- mask_ $ atomicallyNamed "modifyFileExists" $ do
     forM_ changes $ \(f,c) ->
         case fromChange c of
             Just c' -> STM.focus (Focus.insert c') f var
@@ -123,7 +123,7 @@ modifyFileExists state changes = do
     mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
     let keys1 = map (toKey GetFileExists . fst) fileExistChanges
     let keys2 = map (toKey GetModificationTime . fst) fileModifChanges
-    return $ return (keys1 <> keys2)
+    return (keys1 <> keys2)
   return keys
 
 fromChange :: FileChangeType -> Maybe Bool
