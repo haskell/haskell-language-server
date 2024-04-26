@@ -111,7 +111,7 @@ modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO [Ke
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   -- Masked to ensure that the previous values are flushed together with the map update
-  keys <- mask_ $ atomicallyNamed "modifyFileExists" $ do
+  mask_ $ atomicallyNamed "modifyFileExists" $ do
     forM_ changes $ \(f,c) ->
         case fromChange c of
             Just c' -> STM.focus (Focus.insert c') f var
