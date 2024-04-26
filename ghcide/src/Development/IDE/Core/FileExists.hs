@@ -124,7 +124,6 @@ modifyFileExists state changes = do
     let keys1 = map (toKey GetFileExists . fst) fileExistChanges
     let keys2 = map (toKey GetModificationTime . fst) fileModifChanges
     return (keys1 <> keys2)
-  return keys
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FileChangeType_Created = Just True

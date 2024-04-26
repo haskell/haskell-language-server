@@ -250,10 +250,8 @@ typecheckParentsAction recorder nfp = do
 setSomethingModified :: VFSModified -> IdeState -> String -> IO [Key] -> IO ()
 setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
-    void $ restartShakeSession (shakeExtras state) vfs reason [] $ do
-        keys <- actionBetweenSession
-        atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
-        return keys
+    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+    void $ restartShakeSession (shakeExtras state) vfs reason [] actionBetweenSession
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do

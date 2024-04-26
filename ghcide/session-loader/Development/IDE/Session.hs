@@ -610,12 +610,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                                        [ "No cradle target found. Is this file listed in the targets of your cradle?"
                                        , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
                                        ]
+
+          void $ modifyVar' fileToFlags $ Map.insert hieYaml this_flags_map
+          void $ modifyVar' filesMap $ flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
           -- The VFS doesn't change on cradle edits, re-use the old one.
           restartShakeSession VFSUnmodified "new component" [] $ do
-            void $ modifyVar' fileToFlags $
-                Map.insert hieYaml this_flags_map
-            void $ modifyVar' filesMap $
-                flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
             key1 <- extendKnownTargets all_targets
             key2 <- invalidateShakeCache
             return [key1, key2]
