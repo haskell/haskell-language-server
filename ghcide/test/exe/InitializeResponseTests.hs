@@ -13,7 +13,8 @@ import qualified Language.LSP.Protocol.Lens        as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Test
 
-import           Config                            (dummyPlugin, mkIdeTestFs)
+import           Config                            (dummyPlugin, mkIdeTestFs,
+                                                    runWithDummyPlugin)
 import           Control.Lens                      ((^.))
 import           Development.IDE.Plugin.Test       (blockCommandId)
 import           Test.Hls
@@ -84,7 +85,7 @@ tests = withResource acquire release tests where
   innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
 
   acquire :: IO (TResponseMessage Method_Initialize)
-  acquire = runSessionWithServerInTmpDir def dummyPlugin (mkIdeTestFs []) initializeResponse
+  acquire = runWithDummyPlugin (mkIdeTestFs []) initializeResponse
 
   release :: TResponseMessage Method_Initialize -> IO ()
   release = mempty

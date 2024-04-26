@@ -1,9 +1,12 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module Config where
+
 import           Ide.Types           (defaultPluginDescriptor)
 import           System.FilePath     ((</>))
-import           Test.Hls            (PluginTestDescriptor,
-                                      mkPluginTestDescriptor)
+import           Test.Hls
 import qualified Test.Hls.FileSystem as FS
+import           Test.Hls.FileSystem (FileSystem)
 
 testDataDir :: FilePath
 testDataDir = "ghcide" </> "test" </> "data"
@@ -13,4 +16,20 @@ mkIdeTestFs = FS.mkVirtualFileTree testDataDir
 
 -- * A dummy plugin for testing ghcIde
 dummyPlugin :: PluginTestDescriptor ()
-dummyPlugin = mkPluginTestDescriptor (\_ pid ->defaultPluginDescriptor pid "dummyTestPlugin") "core"
+dummyPlugin = mkPluginTestDescriptor (\_ pid -> defaultPluginDescriptor pid "dummyTestPlugin") "core"
+
+runWithDummyPlugin ::  FS.VirtualFileTree -> Session a -> IO a
+runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
+
+runWithDummyPlugin' ::  FS.VirtualFileTree -> (FileSystem -> Session a) -> IO a
+runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
+
+-- testSessionWithCorePlugin ::(TestRunner cont ()) => TestName -> FS.VirtualFileTree -> cont -> TestTree
+testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
+testWithDummyPlugin caseName vfs = testCase caseName . runWithDummyPlugin vfs
+
+testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPlugin' caseName vfs = testCase caseName . runWithDummyPlugin' vfs
+
+pattern R :: UInt -> UInt -> UInt -> UInt -> Range
+pattern R x y x' y' = Range (Position x y) (Position x' y')
