@@ -33,6 +33,8 @@ module Test.Hls
     runSessionWithServerAndCapsInTmpDir,
     runSessionWithServer',
     runSessionWithServerInTmpDir',
+    -- continuation version that take a FileSystem
+    runSessionWithServerInTmpDirCont',
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -363,26 +365,36 @@ initialiseTestRecorder envVars = do
 -- ------------------------------------------------------------
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
-
-runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
-runSessionWithServer config plugin fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) config def fullCaps fp act
-
-runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
-runSessionWithServerAndCaps config plugin caps fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) config def caps fp act
-
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
-runSessionWithServerInTmpDir config plugin tree act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServerInTmpDir' (plugin recorder) config def fullCaps tree act
+runSessionWithServerInTmpDir config plugin tree act = runSessionWithServerInTmpDirCont' config plugin tree (const act)
 
-runSessionWithServerAndCapsInTmpDir :: Pretty b => Config ->  PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> Session a -> IO a
-runSessionWithServerAndCapsInTmpDir config plugin caps tree act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServerInTmpDir' (plugin recorder) config def caps tree act
+runSessionWithServerAndCapsInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> Session a -> IO a
+runSessionWithServerAndCapsInTmpDir config plugin caps tree act = runSessionWithServerAndCapsInTmpDirCont config plugin caps tree (const act)
+
+runSessionWithServerInTmpDirCont' :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
+runSessionWithServerInTmpDirCont' config plugin tree act = do
+    recorder <- pluginTestRecorder
+    runSessionWithServerInTmpDirCont (plugin recorder) config def fullCaps tree act
+
+runSessionWithServerAndCapsInTmpDirCont :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
+runSessionWithServerAndCapsInTmpDirCont config plugin caps tree act = do
+    recorder <- pluginTestRecorder
+    runSessionWithServerInTmpDirCont (plugin recorder) config def caps tree act
+
+runSessionWithServerInTmpDir' ::
+    -- | Plugins to load on the server.
+    --
+    -- For improved logging, make sure these plugins have been initalised with
+    -- the recorder produced by @pluginTestRecorder@.
+    IdePlugins IdeState ->
+    -- | lsp config for the server
+    Config ->
+    -- | config for the test session
+    SessionConfig ->
+    ClientCapabilities ->
+    VirtualFileTree ->
+    Session a -> IO a
+runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont plugins conf sessConf caps tree (const act)
 
 -- | Host a server, and run a test session on it.
 --
@@ -405,46 +417,55 @@ runSessionWithServerAndCapsInTmpDir config plugin caps tree act = do
 -- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
 --
 -- Note: cwd will be shifted into a temporary directory in @Session a@
-runSessionWithServerInTmpDir' ::
-  -- | Plugins to load on the server.
-  --
-  -- For improved logging, make sure these plugins have been initalised with
-  -- the recorder produced by @pluginTestRecorder@.
-  IdePlugins IdeState ->
-  -- | lsp config for the server
-  Config ->
-  -- | config for the test session
-  SessionConfig ->
-  ClientCapabilities ->
-  VirtualFileTree ->
-  Session a ->
-  IO a
-runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
-  testRoot <- setupTestEnvironment
-  recorder <- initialiseTestRecorder
-    ["LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
+runSessionWithServerInTmpDirCont ::
+    -- | Plugins to load on the server.
+    --
+    -- For improved logging, make sure these plugins have been initalised with
+    -- the recorder produced by @pluginTestRecorder@.
+    IdePlugins IdeState ->
+    -- | lsp config for the server
+    Config ->
+    -- | config for the test session
+    SessionConfig ->
+    ClientCapabilities ->
+    VirtualFileTree ->
+    (FileSystem -> Session a) -> IO a
+runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
+    testRoot <- setupTestEnvironment
+    recorder <- initialiseTestRecorder
+        ["LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
 
-  -- Do not clean up the temporary directory if this variable is set to anything but '0'.
-  -- Aids debugging.
-  cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
-  let runTestInDir action = case cleanupTempDir of
-        Just val
-          | val /= "0" -> do
-            (tempDir, _) <- newTempDirWithin testRoot
-            a <- action tempDir
-            logWith recorder Debug LogNoCleanup
-            pure a
+    -- Do not clean up the temporary directory if this variable is set to anything but '0'.
+    -- Aids debugging.
+    cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
+    let runTestInDir action = case cleanupTempDir of
+            Just val | val /= "0" -> do
+                (tempDir, _) <- newTempDirWithin testRoot
+                a <- action tempDir
+                logWith recorder Debug LogNoCleanup
+                pure a
 
-        _ -> do
-          (tempDir, cleanup) <- newTempDirWithin testRoot
-          a <- action tempDir `finally` cleanup
-          logWith recorder Debug LogCleanup
-          pure a
+            _ -> do
+                (tempDir, cleanup) <- newTempDirWithin testRoot
+                a <- action tempDir `finally` cleanup
+                logWith recorder Debug LogCleanup
+                pure a
 
-  runTestInDir $ \tmpDir -> do
-    logWith recorder Info $ LogTestDir tmpDir
-    _fs <- FS.materialiseVFT tmpDir tree
-    runSessionWithServer' plugins conf sessConf caps tmpDir act
+    runTestInDir $ \tmpDir -> do
+        logWith recorder Info $ LogTestDir tmpDir
+        fs <- FS.materialiseVFT tmpDir tree
+        runSessionWithServer' plugins conf sessConf caps tmpDir (act fs)
+
+runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
+runSessionWithServer config plugin fp act = do
+  recorder <- pluginTestRecorder
+  runSessionWithServer' (plugin recorder) config def fullCaps fp act
+
+runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
+runSessionWithServerAndCaps config plugin caps fp act = do
+  recorder <- pluginTestRecorder
+  runSessionWithServer' (plugin recorder) config def caps fp act
+
 
 -- | Setup the test environment for isolated tests.
 --
