@@ -28,8 +28,7 @@ import           Language.LSP.Protocol.Types    hiding
                                                  SemanticTokensEdit (..),
                                                  mkRange)
 import           Language.LSP.Test
-import           Test.Hls                       (knownBrokenInEnv,
-                                                 waitForTypecheck)
+import           Test.Hls                       (waitForTypecheck)
 import qualified Test.Hls.FileSystem            as FS
 import           Test.Hls.FileSystem            (file, text)
 import           Test.Hls.Util                  (knownBrokenOnWindows)
@@ -50,18 +49,18 @@ tests
     , testGroup "doc" completionDocTests
     ]
 
-testSessionPluginEmpty :: TestName -> Session () -> TestTree
-testSessionPluginEmpty name = testCase name . runWithDummyPlugin (mkIdeTestFs [FS.directCradle ["A.hs"]])
+testSessionEmpty :: TestName -> Session () -> TestTree
+testSessionEmpty name = testCase name . runWithDummyPlugin (mkIdeTestFs [FS.directCradle ["A.hs"]])
 
-testSessionPluginEmptyWithCradle :: TestName -> T.Text -> Session () -> TestTree
-testSessionPluginEmptyWithCradle name cradle = testCase name . runWithDummyPlugin (mkIdeTestFs [file "hie.yaml" (text cradle)])
+testSessionEmptyWithCradle :: TestName -> T.Text -> Session () -> TestTree
+testSessionEmptyWithCradle name cradle = testCase name . runWithDummyPlugin (mkIdeTestFs [file "hie.yaml" (text cradle)])
 
-testSessionPluginSingleFile :: TestName -> FilePath -> T.Text -> Session () -> TestTree
-testSessionPluginSingleFile testName fp txt session =
+testSessionSingleFile :: TestName -> FilePath -> T.Text -> Session () -> TestTree
+testSessionSingleFile testName fp txt session =
     testWithDummyPlugin testName (mkIdeTestFs [FS.directCradle [T.pack fp] , file fp (text txt)]) session
 
 completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
-completionTest name src pos expected = testSessionPluginSingleFile name "A.hs" (T.unlines src) $ do
+completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
     docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
     compls <- getAndResolveCompletions docId pos
@@ -201,7 +200,7 @@ localCompletionTests = [
         [("abcd", CompletionItemKind_Function, "abcd", True, False, Nothing)
         ,("abcde", CompletionItemKind_Function, "abcde", True, False, Nothing)
         ],
-    testSessionPluginEmpty "incomplete entries" $ do
+    testSessionEmpty "incomplete entries" $ do
         let src a = "data Data = " <> a
         doc <- createDoc "A.hs" "haskell" $ src "AAA"
         void $ waitForTypecheck doc
@@ -299,7 +298,7 @@ otherCompletionTests = [
       (Position 3 11)
       [("Integer", CompletionItemKind_Struct, "Integer", True, True, Nothing)],
 
-    testSessionPluginEmpty "duplicate record fields" $ do
+    testSessionEmpty "duplicate record fields" $ do
       void $
         createDoc "B.hs" "haskell" $
           T.unlines
@@ -320,7 +319,7 @@ otherCompletionTests = [
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
       liftIO $ take 1 compls' @?= ["member"],
 
-    testSessionPluginEmpty "maxCompletions" $ do
+    testSessionEmpty "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -333,7 +332,7 @@ otherCompletionTests = [
 
 packageCompletionTests :: [TestTree]
 packageCompletionTests =
-  [ testSessionPluginEmptyWithCradle "fromList" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, A]}}" $ do
+  [ testSessionEmptyWithCradle "fromList" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, A]}}" $ do
 
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
@@ -354,7 +353,7 @@ packageCompletionTests =
               , "'GHC.Exts"
               ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
 
-  , testSessionPluginEmpty "Map" $ do
+  , testSessionEmpty "Map" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -374,7 +373,7 @@ packageCompletionTests =
               , "'Data.Map.Lazy"
               , "'Data.Map.Strict"
               ]
-  , testSessionPluginEmpty "no duplicates" $ do
+  , testSessionEmpty "no duplicates" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -396,7 +395,7 @@ packageCompletionTests =
                 ) compls
         liftIO $ length duplicate @?= 1
 
-  , testSessionPluginEmpty "non-local before global" $ do
+  , testSessionEmpty "non-local before global" $ do
     -- non local completions are more specific
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
@@ -417,7 +416,7 @@ packageCompletionTests =
 
 projectCompletionTests :: [TestTree]
 projectCompletionTests =
-    [ testSessionPluginEmptyWithCradle "from hiedb" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
+    [ testSessionEmptyWithCradle "from hiedb" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
                "anidentifier = ()"
@@ -436,7 +435,7 @@ projectCompletionTests =
               , _label == "anidentifier"
               ]
         liftIO $ compls' @?= ["Defined in 'A"],
-      testSessionPluginEmptyWithCradle "auto complete project imports" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}" $ do
+      testSessionEmptyWithCradle "auto complete project imports" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}" $ do
         _ <- createDoc "ALocalModule.hs" "haskell" $ T.unlines
             [  "module ALocalModule (anidentifier) where",
                "anidentifier = ()"
@@ -451,7 +450,7 @@ projectCompletionTests =
         let item = head $ filter ((== "ALocalModule") . (^. L.label)) compls
         liftIO $ do
           item ^. L.label @?= "ALocalModule",
-      testSessionPluginEmptyWithCradle "auto complete functions from qualified imports without alias" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
+      testSessionEmptyWithCradle "auto complete functions from qualified imports without alias" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
                "anidentifier = ()"
@@ -466,7 +465,7 @@ projectCompletionTests =
         let item = head compls
         liftIO $ do
           item ^. L.label @?= "anidentifier",
-      testSessionPluginEmptyWithCradle "auto complete functions from qualified imports with alias"
+      testSessionEmptyWithCradle "auto complete functions from qualified imports with alias"
                   "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
@@ -486,7 +485,7 @@ projectCompletionTests =
 
 completionDocTests :: [TestTree]
 completionDocTests =
-  [ testSessionPluginEmpty "local define" $ do
+  [ testSessionEmpty "local define" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = ()"
@@ -494,14 +493,14 @@ completionDocTests =
         ]
       let expected = "*Defined at line 2, column 1 in this module*\n"
       test doc (Position 2 8) "foo" Nothing [expected]
-  , testSessionPluginEmpty "local empty doc" $ do
+  , testSessionEmpty "local empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = ()"
         , "bar = fo"
         ]
       test doc (Position 2 8) "foo" Nothing ["*Defined at line 2, column 1 in this module*\n"]
-  , testSessionPluginEmpty "local single line doc without newline" $ do
+  , testSessionEmpty "local single line doc without newline" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |docdoc"
@@ -509,7 +508,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\n\n\ndocdoc\n"]
-  , testSessionPluginEmpty "local multi line doc with newline" $ do
+  , testSessionEmpty "local multi line doc with newline" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- | abcabc"
@@ -518,7 +517,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n\n\nabcabc\n"]
-  , testSessionPluginEmpty "local multi line doc without newline" $ do
+  , testSessionEmpty "local multi line doc without newline" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |     abcabc"
@@ -528,28 +527,28 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n\n\nabcabc \n\ndef\n"]
-  , testSessionPluginEmpty "extern empty doc" $ do
+  , testSessionEmpty "extern empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = od"
         ]
       let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
-  ,  testSessionPluginEmpty "extern single line doc without '\\n'" $ do
+  ,  testSessionEmpty "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
-  ,  testSessionPluginEmpty "extern mulit line doc" $ do
+  ,  testSessionEmpty "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n"
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
-  , testSessionPluginEmpty "extern defined doc" $ do
+  , testSessionEmpty "extern defined doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
