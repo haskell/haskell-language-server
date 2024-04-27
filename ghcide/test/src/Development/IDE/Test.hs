@@ -45,6 +45,7 @@ import           Data.Maybe                      (fromJust)
 import           Data.Proxy
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
+import           Debug.Trace                     (traceShowM)
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult,
                                                   ideResultSuccess)
@@ -124,7 +125,9 @@ expectDiagnosticsWithTags :: HasCallStack => [(String, [(DiagnosticSeverity, Cur
 expectDiagnosticsWithTags expected = do
     let f = getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
         next = unwrapDiagnostic <$> skipManyTill anyMessage diagnostic
+    traceShowM $ "Trace: " <> show expected
     expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) f expected
+    traceShowM $ "Trace: " <> show expected'
     expectDiagnosticsWithTags' next expected'
 
 expectDiagnosticsWithTags' ::
@@ -134,18 +137,20 @@ expectDiagnosticsWithTags' ::
   m ()
 expectDiagnosticsWithTags' next m | null m = do
     (_,actual) <- next
+    traceShowM $ "Trace: " <> show actual
     case actual of
         [] ->
             return ()
         _ ->
             liftIO $ assertFailure $ "Got unexpected diagnostics:" <> show actual
-
+-- get the next diagnostic message and check and remove the expected diagnostics from the map
 expectDiagnosticsWithTags' next expected = go expected
   where
     go m
       | Map.null m = pure ()
       | otherwise = do
         (fileUri, actual) <- next
+        traceShowM $ "Trace: " <> show actual
         canonUri <- liftIO $ toNormalizedUri <$> canonicalizeUri fileUri
         case Map.lookup canonUri m of
           Nothing -> do
