@@ -6,7 +6,6 @@
 
 module Ide.Plugin.Cabal (descriptor, Log (..)) where
 
-import           Control.Concurrent.STM
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Lens                                ((^.))
