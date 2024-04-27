@@ -120,10 +120,10 @@ modifyFileExists state changes = do
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
             partition ((== FileChangeType_Changed) . snd) changes
-    mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+    keys0 <- concat <$> mapM (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
     let keys1 = map (toKey GetFileExists . fst) fileExistChanges
     let keys2 = map (toKey GetModificationTime . fst) fileModifChanges
-    return (keys1 <> keys2)
+    return (keys0 <> keys1 <> keys2)
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FileChangeType_Created = Just True

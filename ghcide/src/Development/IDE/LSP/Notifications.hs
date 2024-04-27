@@ -117,8 +117,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
             let msg = show fileEvents'
             logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
             setSomethingModified (VFSModified vfs) ide msg $ do
-                resetFileStore ide fileEvents'
-                modifyFileExists ide fileEvents'
+                ks1 <- resetFileStore ide fileEvents'
+                ks2 <- modifyFileExists ide fileEvents'
+                return (ks1 <> ks2)
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWorkspaceFolders $
       \ide _ _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do

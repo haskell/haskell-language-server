@@ -563,10 +563,11 @@ deleteValue
   => ShakeExtras
   -> k
   -> NormalizedFilePath
-  -> STM ()
+  -> STM [Key]
 deleteValue ShakeExtras{dirtyKeys, state} key file = do
     STM.delete (toKey key file) state
-    modifyTVar' dirtyKeys $ insertKeySet (toKey key file)
+    return [toKey key file]
+
 
 recordDirtyKeys
   :: ShakeExtras

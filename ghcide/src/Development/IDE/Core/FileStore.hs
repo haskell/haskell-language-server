@@ -149,24 +149,24 @@ isInterface :: NormalizedFilePath -> Bool
 isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM ()
+resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO ()
+resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
     -- FOI filtering is done by the caller (LSP Notification handler)
-    forM_ changes $ \(nfp, c) -> do
-        case c of
-            LSP.FileChangeType_Changed
-            --  already checked elsewhere |  not $ HM.member nfp fois
-              -> atomically $
-               deleteValue (shakeExtras ideState) GetModificationTime nfp
-            _ -> pure ()
+    fmap concat <$>
+        forM changes $ \(nfp, c) -> do
+            case c of
+                LSP.FileChangeType_Changed
+                    --  already checked elsewhere |  not $ HM.member nfp fois
+                    -> atomically $ deleteValue (shakeExtras ideState) GetModificationTime nfp
+                _ -> pure []
 
 
 modificationTime :: FileVersion -> Maybe UTCTime
