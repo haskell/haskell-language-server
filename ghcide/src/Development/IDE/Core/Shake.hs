@@ -1200,7 +1200,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Just (v@(Succeeded _ x), diags) -> do
                         ver <- estimateFileVersionUnsafely key (Just x) file
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
-                        return $ Just $ RunResult ChangedNothing old (A v) mempty
+                        return $ Just $ RunResult ChangedNothing old (A v) $ return ()
                     _ -> return Nothing
             _ ->
                 -- assert that a "clean" rule is never a cache miss
