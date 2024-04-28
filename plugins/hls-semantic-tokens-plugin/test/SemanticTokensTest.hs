@@ -9,8 +9,6 @@ import qualified Data.Aeson.KeyMap                  as KV
 import           Data.Default
 import           Data.Functor                       (void)
 import           Data.Map.Strict                    as Map hiding (map)
-import           Data.Row                           ((.==))
-import           Data.Row.Records                   ((.+))
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)

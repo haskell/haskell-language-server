@@ -609,7 +609,6 @@ test-suite hls-rename-plugin-tests
     , hls-test-utils             == 2.7.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -2126,7 +2125,6 @@ test-suite ghcide-tests
     , QuickCheck
     , random
     , regex-tdfa              ^>=1.3.1
-    , row-types
     , shake
     , sqlite-simple
     , stm
