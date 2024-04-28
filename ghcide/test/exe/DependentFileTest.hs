@@ -8,7 +8,6 @@ import           Config
 import           Control.Monad.IO.Class         (liftIO)
 import           Data.Row
 import qualified Data.Text                      as T
-import           Debug.Trace                    (traceShowM)
 import           Development.IDE.Test           (expectDiagnostics)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Message
@@ -30,7 +29,6 @@ tests = testGroup "addDependentFile"
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        traceShowM "beginning test"
         let depFilePath = toAbsFp dir "dep-file.txt"
         liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
@@ -43,14 +41,11 @@ tests = testGroup "addDependentFile"
               , "               f <- qRunIO (readFile \"dep-file.txt\")"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
-        traceShowM "before create Foo.hs"
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
         _fooDoc <- createDoc "Foo.hs" "haskell" fooContent
-        traceShowM "created foo"
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
             [("Foo.hs", [(DiagnosticSeverity_Error, (4,11), "Couldn't match type")])]
-        traceShowM "after expectDiagnostics"
         -- Now modify the dependent file
         liftIO $ writeFile depFilePath "B"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
@@ -61,5 +56,4 @@ tests = testGroup "addDependentFile"
                                                          .+ #rangeLength .== Nothing
                                                          .+ #text .== "f = ()"
         changeDoc doc [change]
-        traceShowM "before last expectDiagnostics"
         expectDiagnostics [("Foo.hs", [])]
