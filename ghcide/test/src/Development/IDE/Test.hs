@@ -139,7 +139,7 @@ expectDiagnosticsWithTags' next m | null m = do
             return ()
         _ ->
             liftIO $ assertFailure $ "Got unexpected diagnostics:" <> show actual
--- get the next diagnostic message and check and remove the expected diagnostics from the map
+
 expectDiagnosticsWithTags' next expected = go expected
   where
     go m
