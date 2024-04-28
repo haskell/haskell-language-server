@@ -27,6 +27,7 @@ import qualified StmContainers.Map                  as SMap
 import           StmContainers.Map                  (Map)
 import           System.Time.Extra                  (Seconds)
 import           UnliftIO                           (MonadUnliftIO)
+import Control.Concurrent.STM (STM)
 
 #if !MIN_VERSION_base(4,18,0)
 import           Control.Applicative                (liftA2)
@@ -202,10 +203,9 @@ data RunResult value = RunResult
         -- ^ The value to store in the Shake database.
     ,runValue   :: value
         -- ^ The value to return from 'Development.Shake.Rule.apply'.
+    ,runHook    :: STM ()
+        -- ^ The value to return from 'Development.Shake.Rule.apply'.
     } deriving Functor
-
-instance NFData value => NFData (RunResult value) where
-    rnf (RunResult x1 x2 x3) = rnf x1 `seq` x2 `seq` rnf x3
 
 ---------------------------------------------------------------------
 -- EXCEPTIONS

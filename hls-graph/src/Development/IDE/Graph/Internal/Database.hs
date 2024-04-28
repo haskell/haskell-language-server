@@ -200,7 +200,9 @@ compute db@Database{..} stack key mode result = do
                     (getResultDepsDefault mempty previousDeps)
                     deps
         _ -> pure ()
-    atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
+    atomicallyNamed "compute and run hook" $ do
+        runHook
+        SMap.focus (updateStatus $ Clean res) key databaseValues
     pure res
 
 updateStatus :: Monad m => Status -> Focus.Focus KeyDetails m ()

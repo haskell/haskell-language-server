@@ -1200,7 +1200,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Just (v@(Succeeded _ x), diags) -> do
                         ver <- estimateFileVersionUnsafely key (Just x) file
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
-                        return $ Just $ RunResult ChangedNothing old $ A v
+                        return $ Just $ RunResult ChangedNothing old (A v) mempty
                     _ -> return Nothing
             _ ->
                 -- assert that a "clean" rule is never a cache miss
@@ -1224,7 +1224,6 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Nothing -> do
                         pure (toShakeValue ShakeStale mbBs, staleV)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult mbBs, Succeeded ver v)
-                liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics (vfsVersion =<< ver) diags
                 let eq = case (bs, fmap decodeShakeValue mbOld) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
@@ -1234,9 +1233,9 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         _                                     -> False
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
-                    (encodeShakeValue bs) $
-                    A res
-        liftIO $ atomicallyNamed "define - dirtyKeys" $ modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
+                    (encodeShakeValue bs)
+                    (A res)
+                    (setValues state key file res (Vector.fromList diags) >> modifyTVar' dirtyKeys (deleteKeySet $ toKey key file))
         return res
   where
     -- Highly unsafe helper to compute the version of a file
