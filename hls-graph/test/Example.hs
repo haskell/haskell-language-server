@@ -22,13 +22,13 @@ type instance RuleResult (Rule a) = a
 
 ruleUnit :: Rules ()
 ruleUnit = addRule $ \(Rule :: Rule ()) _old _mode -> do
-    return $ RunResult ChangedRecomputeDiff "" ()
+    return $ RunResult ChangedRecomputeDiff "" () mempty
 
 -- | Depends on Rule @()
 ruleBool :: Rules ()
 ruleBool = addRule $ \Rule _old _mode -> do
     () <- apply1 Rule
-    return $ RunResult ChangedRecomputeDiff "" True
+    return $ RunResult ChangedRecomputeDiff "" True mempty
 
 
 data CondRule = CondRule
