@@ -272,9 +272,7 @@ library ghcide-test-utils
 
   hs-source-dirs: test/src test/cabal
   exposed-modules:
-    Development.IDE.Test
     Development.IDE.Test.Runfiles
-    Development.IDE.Test.Diagnostic
 
   build-depends:
       aeson,

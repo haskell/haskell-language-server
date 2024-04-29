@@ -2074,7 +2074,7 @@ benchmark benchmark
     main-is: Main.hs
     hs-source-dirs: bench
     build-tool-depends:
-        ghcide-bench:ghcide-bench,
+        haskell-language-server:ghcide-bench,
         hp2pretty:hp2pretty,
     default-extensions:
         LambdaCase
@@ -2089,7 +2089,7 @@ benchmark benchmark
       , directory
       , extra
       , filepath
-      , ghcide-bench
+      , haskell-language-server:ghcide-bench-lib
       , haskell-language-server
       , hls-plugin-api
       , lens
@@ -2199,3 +2199,97 @@ test-suite ghcide-tests
     OverloadedStrings
     RecordWildCards
     ViewPatterns
+
+
+executable ghcide-bench
+    default-language: GHC2021
+    build-depends:
+        aeson,
+        base,
+        bytestring,
+        containers,
+        data-default,
+        directory,
+        extra,
+        filepath,
+        hls-plugin-api,
+        hls-test-utils,
+        lens,
+        lsp-test,
+        lsp-types,
+        optparse-applicative,
+        process,
+        safe-exceptions,
+        hls-graph,
+        shake,
+        tasty-hunit >= 0.10,
+        text,
+        haskell-language-server:ghcide-bench-lib,
+    hs-source-dirs: ghcide-bench/exe
+    ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
+    main-is: Main.hs
+    default-extensions:
+        LambdaCase
+        OverloadedStrings
+        RecordWildCards
+        ViewPatterns
+
+library ghcide-bench-lib
+    default-language: GHC2021
+    hs-source-dirs: ghcide-bench/src
+    ghc-options: -Wall -Wno-name-shadowing
+    exposed-modules:
+        Experiments.Types
+        Experiments
+    build-depends:
+        aeson,
+        async,
+        base == 4.*,
+        binary,
+        bytestring,
+        deepseq,
+        directory,
+        extra,
+        filepath,
+        ghcide:{ghcide, ghcide-test-utils},
+        hashable,
+        lens,
+        lsp-test,
+        lsp-types,
+        optparse-applicative,
+        parser-combinators,
+        process,
+        safe-exceptions,
+        shake,
+        text,
+        hls-test-utils,
+        row-types
+    default-extensions:
+        LambdaCase
+        RecordWildCards
+        ViewPatterns
+
+
+test-suite ghcide-bench-test
+    type: exitcode-stdio-1.0
+    default-language: GHC2021
+    build-tool-depends:
+        ghcide:ghcide,
+    main-is: Main.hs
+    hs-source-dirs: ghcide-bench/test
+    ghc-options: -Wunused-packages
+    ghc-options: -threaded -Wall
+    build-depends:
+        base,
+        extra,
+        haskell-language-server:ghcide-bench-lib,
+        lsp-test ^>= 0.17,
+        tasty,
+        tasty-hunit >= 0.10,
+        tasty-rerun,
+        hls-test-utils
+    default-extensions:
+        LambdaCase
+        OverloadedStrings
+        RecordWildCards
+        ViewPatterns

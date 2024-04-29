@@ -4,7 +4,6 @@ packages:
          ./shake-bench
          ./hls-graph
          ./ghcide
-         ./ghcide-bench
          ./hls-plugin-api
          ./hls-test-utils
 
