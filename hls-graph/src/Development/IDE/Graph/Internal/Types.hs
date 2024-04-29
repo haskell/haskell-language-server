@@ -5,6 +5,7 @@
 
 module Development.IDE.Graph.Internal.Types where
 
+import           Control.Concurrent.STM             (STM)
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
@@ -27,7 +28,6 @@ import qualified StmContainers.Map                  as SMap
 import           StmContainers.Map                  (Map)
 import           System.Time.Extra                  (Seconds)
 import           UnliftIO                           (MonadUnliftIO)
-import Control.Concurrent.STM (STM)
 
 #if !MIN_VERSION_base(4,18,0)
 import           Control.Applicative                (liftA2)
