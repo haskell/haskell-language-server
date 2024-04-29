@@ -517,7 +517,7 @@ tests = testGroup "diagnostics"
               }
 
         ,TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
-              { _range = Range p' p'
+              { _range = Range p p'
               , _rangeLength = Nothing
               , _text = ""
               }
