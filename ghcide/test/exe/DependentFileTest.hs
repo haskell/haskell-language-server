@@ -4,6 +4,7 @@
 
 module DependentFileTest (tests) where
 
+import           Config
 import           Control.Monad.IO.Class         (liftIO)
 import           Data.Row
 import qualified Data.Text                      as T
@@ -16,19 +17,19 @@ import           Language.LSP.Protocol.Types    hiding
                                                  SemanticTokensEdit (..),
                                                  mkRange)
 import           Language.LSP.Test
-import           System.FilePath
+import           Test.Hls.FileSystem            (FileSystem, toAbsFp)
 import           Test.Tasty
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "addDependentFile"
-    [testGroup "file-changed" [testSession' "test" test]
+    [testGroup "file-changed" [testWithDummyPlugin' "test" (mkIdeTestFs []) test]
     ]
     where
+      test :: FileSystem -> Session ()
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        let depFilePath = dir </> "dep-file.txt"
+        let depFilePath = toAbsFp dir "dep-file.txt"
         liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
@@ -41,7 +42,7 @@ tests = testGroup "addDependentFile"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
-        _ <- createDoc "Foo.hs" "haskell" fooContent
+        _fooDoc <- createDoc "Foo.hs" "haskell" fooContent
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
             [("Foo.hs", [(DiagnosticSeverity_Error, (4,11), "Couldn't match type")])]
