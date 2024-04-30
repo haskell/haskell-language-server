@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 module Main
@@ -12,7 +11,6 @@ import           Data.Functor               (void)
 import           Data.List                  (find)
 import qualified Data.Map                   as Map
 import           Data.Maybe                 (fromJust, isJust)
-import           Data.Row                   ((.+), (.==))
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (Config (..))
 import qualified Ide.Plugin.Config          as Plugin
@@ -139,16 +137,22 @@ suggestionsTests =
         doc <- openDoc "Base.hs" "haskell"
         testHlintDiagnostics doc
 
-        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
-                                                         .+ #rangeLength .== Nothing
-                                                         .+ #text .== "x"
+        let change = TextDocumentContentChangeEvent $ InL
+              TextDocumentContentChangePartial
+                { _range = Range (Position 1 8) (Position 1 12)
+                , _rangeLength = Nothing
+                , _text = "x"
+                }
+
         changeDoc doc [change]
         expectNoMoreDiagnostics 3 doc "hlint"
 
-        let change' = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
-                                                          .+ #rangeLength .== Nothing
-                                                          .+ #text .== "id x"
-
+        let change' = TextDocumentContentChangeEvent $ InL
+              TextDocumentContentChangePartial
+                { _range = Range (Position 1 8) (Position 1 12)
+                , _rangeLength = Nothing
+                , _text = "id x"
+                }
         changeDoc doc [change']
         testHlintDiagnostics doc
 

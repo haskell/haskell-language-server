@@ -1,10 +1,7 @@
 
-{-# LANGUAGE OverloadedLabels #-}
-
 module THTests (tests) where
 
 import           Control.Monad.IO.Class      (liftIO)
-import           Data.Row
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Test        (expectCurrentDiagnostics,
@@ -142,9 +139,9 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
     -- generate an artificial warning to avoid timing out if the TH change does not propagate
-    changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource <> "\nfoo=()"]
+    changeDoc cdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ cSource <> "\nfoo=()"]
 
     -- Check that the change propagates to C
     expectDiagnostics
@@ -176,11 +173,11 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
 
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
-    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ bSource']
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
     waitForProgressBegin
     waitForAllProgressDone
 

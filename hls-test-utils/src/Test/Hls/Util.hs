@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
@@ -58,7 +57,6 @@ import           Data.Bool                       (bool)
 import           Data.Default
 import           Data.List.Extra                 (find)
 import           Data.Proxy
-import           Data.Row
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
@@ -89,11 +87,11 @@ codeActionSupportCaps = def & L.textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = def { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
-    literalSupport = #codeActionKind .==  (#valueSet .== [])
+    literalSupport = ClientCodeActionLiteralOptions (ClientCodeActionKindOptions [])
 
 codeActionResolveCaps :: ClientCapabilities
 codeActionResolveCaps = Test.fullCaps
-                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (#properties .== ["edit"])
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ ClientCodeActionResolveOptions {_properties= ["edit"]}
                           & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 codeActionNoResolveCaps :: ClientCapabilities

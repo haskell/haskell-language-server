@@ -15,7 +15,6 @@ import           Control.Monad.IO.Class         (liftIO)
 import           Data.Default
 import           Data.List.Extra
 import           Data.Maybe
-import           Data.Row
 import qualified Data.Text                      as T
 import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
 import           Development.IDE.Types.Location
@@ -205,7 +204,7 @@ localCompletionTests = [
         doc <- createDoc "A.hs" "haskell" $ src "AAA"
         void $ waitForTypecheck doc
         let editA rhs =
-                changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ src rhs]
+                changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ src rhs]
         editA "AAAA"
         void $ waitForTypecheck doc
         editA "AAAAA"
