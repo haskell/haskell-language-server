@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE ImplicitParams     #-}
 {-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE OverloadedLabels   #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
@@ -43,7 +42,6 @@ import           Data.Either                        (fromRight)
 import           Data.List
 import           Data.Maybe
 import           Data.Proxy
-import           Data.Row                           hiding (switch)
 import           Data.Text                          (Text)
 import qualified Data.Text                          as T
 import           Data.Version
@@ -71,15 +69,19 @@ import           Text.Printf
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
-    TextDocumentContentChangeEvent $ InL $ #range .== Range p p
-                                        .+ #rangeLength .== Nothing
-                                        .+ #text .== "a"
+    TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+        { _range = Range p p
+        , _rangeLength = Nothing
+        , _text = "a"
+        }
 
 headerEdit :: TextDocumentContentChangeEvent
 headerEdit =
-    TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 0) (Position 0 0)
-                                        .+ #rangeLength .== Nothing
-                                        .+ #text .== "-- header comment \n"
+    TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+        { _range = Range (Position 0 0) (Position 0 0)
+        , _rangeLength = Nothing
+        , _text = "-- header comment \n"
+        }
 
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
@@ -240,9 +242,11 @@ experiments =
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
-                                                           .+ #rangeLength .== Nothing
-                                                           .+ #text .== t
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
                 bottom = Position maxBound 0
                 t = T.unlines
                     [""
@@ -270,9 +274,11 @@ experiments =
       benchWithSetup
         "eval execute single-line code lens"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
-                                                           .+ #rangeLength .== Nothing
-                                                           .+ #text .== t
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
                 bottom = Position maxBound 0
                 t = T.unlines
                     [ ""
@@ -295,9 +301,11 @@ experiments =
       benchWithSetup
         "eval execute multi-line code lens"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit = TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
-                                                           .+ #rangeLength .== Nothing
-                                                           .+ #text .== t
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
                 bottom = Position maxBound 0
                 t = T.unlines
                     [ ""
@@ -551,7 +559,7 @@ runBenchmarksFun dir allBenchmarks = do
     lspTestCaps =
       fullCaps
         & (L.window . _Just) .~ WindowClientCapabilities (Just True) Nothing Nothing
-        & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (#properties .== ["edit"])
+        & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (ClientCodeActionResolveOptions ["edit"])
         & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 showMs :: Seconds -> String
@@ -755,10 +763,12 @@ setupDocumentContents config =
 
         -- Setup the special positions used by the experiments
         lastLine <- fromIntegral . length . T.lines <$> documentContents doc
-        changeDoc doc [TextDocumentContentChangeEvent $ InL
-                        $ #range .== Range (Position lastLine 0) (Position lastLine 0)
-                       .+ #rangeLength .== Nothing
-                       .+ #text .== T.unlines [ "_hygienic = \"hygienic\"" ]]
+        changeDoc doc [TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                        { _range = Range (Position lastLine 0) (Position lastLine 0)
+                        , _rangeLength = Nothing
+                        , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
+                        }
+                      ]
         let
         -- Points to a string in the target file,
         -- convenient for hygienic edits

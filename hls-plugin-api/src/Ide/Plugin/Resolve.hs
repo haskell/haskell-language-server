@@ -1,6 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-| This module currently includes helper functions to provide fallback support
 to code actions that use resolve in HLS. The difference between the two
@@ -26,7 +25,6 @@ import           Control.Monad.Trans.Except    (ExceptT (..))
 
 import qualified Data.Aeson                    as A
 import           Data.Maybe                    (catMaybes)
-import           Data.Row                      ((.!))
 import qualified Data.Text                     as T
 import           GHC.Generics                  (Generic)
 import           Ide.Logger
@@ -190,7 +188,7 @@ supportsCodeActionResolve :: ClientCapabilities -> Bool
 supportsCodeActionResolve caps =
     caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
     && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
-        Just row -> "edit" `elem` row .! #properties
+        Just ClientCodeActionResolveOptions{_properties} -> "edit" `elem` _properties
         _        -> False
 
 internalError :: T.Text -> PluginError

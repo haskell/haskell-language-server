@@ -1,12 +1,11 @@
-{-# LANGUAGE OverloadedLabels  #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE OverloadedStrings        #-}
 
 module Main (main) where
 
 import           Control.Lens               ((^.))
 import           Data.Aeson
 import qualified Data.Map                   as M
-import           Data.Row                   ((.+), (.==))
 import           Data.Text                  (Text, pack)
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename          as Rename
@@ -81,9 +80,11 @@ tests = testGroup "Rename"
         expectNoMoreDiagnostics 3 doc "typecheck"
 
         -- Update the document so it doesn't compile
-        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 2 13) (Position 2 17)
-                                                         .+ #rangeLength .== Nothing
-                                                         .+ #text .== "A"
+        let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 2 13) (Position 2 17)
+              , _rangeLength = Nothing
+              , _text = "A"
+              }
         changeDoc doc [change]
         diags@(tcDiag : _) <- waitForDiagnosticsFrom doc
 
@@ -101,9 +102,11 @@ tests = testGroup "Rename"
           renameErr ^. L.message @?= "rename: Rule Failed: GetHieAst"
 
         -- Update the document so it compiles
-        let change' = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 2 13) (Position 2 14)
-                                                          .+ #rangeLength .== Nothing
-                                                          .+ #text .== "Int"
+        let change' = TextDocumentContentChangeEvent $  InL TextDocumentContentChangePartial
+              { _range = Range (Position 2 13) (Position 2 14)
+              , _rangeLength = Nothing
+              , _text = "Int"
+              }
         changeDoc doc [change']
         expectNoMoreDiagnostics 3 doc "typecheck"
 

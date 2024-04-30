@@ -86,8 +86,8 @@ library
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.4.0.0
-    , lsp-types                    ^>=2.1.0.0
+    , lsp                          ^>=2.5.0.0
+    , lsp-types                    ^>=2.2.0.0
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
@@ -272,9 +272,7 @@ library ghcide-test-utils
 
   hs-source-dirs: test/src test/cabal
   exposed-modules:
-    Development.IDE.Test
     Development.IDE.Test.Runfiles
-    Development.IDE.Test.Diagnostic
 
   build-depends:
       aeson,

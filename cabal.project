@@ -4,11 +4,10 @@ packages:
          ./shake-bench
          ./hls-graph
          ./ghcide
-         ./ghcide-bench
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-04-23T12:00:00Z
+index-state: 2024-04-30T10:44:19Z
 
 tests: True
 test-show-details: direct

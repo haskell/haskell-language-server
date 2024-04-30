@@ -1,12 +1,10 @@
 
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE DataKinds #-}
 
 module InitializeResponseTests (tests) where
 
 import           Control.Monad
 import           Data.List.Extra
-import           Data.Row
 import qualified Data.Text                         as T
 import           Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import qualified Language.LSP.Protocol.Lens        as L
@@ -55,8 +53,13 @@ tests = withResource acquire release tests where
     , chk "NO color"                   (^. L.colorProvider) Nothing
     , chk "NO folding range"          _foldingRangeProvider Nothing
     , che "   execute command"      _executeCommandProvider [typeLensCommandId, blockCommandId]
-    , chk "   workspace"                   (^. L.workspace) (Just $ #workspaceFolders .== Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}
-                                                                 .+ #fileOperations   .== Nothing)
+    , chk "   workspace"                   (^. L.workspace) (Just $ WorkspaceOptions
+                                                                      { _workspaceFolders = Just WorkspaceFoldersServerCapabilities
+                                                                           { _supported = Just True
+                                                                           , _changeNotifications = Just (InR True)
+                                                                           }
+                                                                      , _fileOperations = Nothing
+                                                                      })
     , chk "NO experimental"             (^. L.experimental) Nothing
     ] where
 
