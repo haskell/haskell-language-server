@@ -47,7 +47,7 @@ library
     , hls-plugin-api          == 2.7.0.0
     , lens
     , lsp-test                ^>=0.17
-    , lsp-types               ^>=2.1
+    , lsp-types               ^>=2.2
     , safe-exceptions
     , tasty
     , tasty-expected-failure

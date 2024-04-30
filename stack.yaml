@@ -20,15 +20,9 @@ extra-deps:
 - hiedb-0.6.0.0
 - hie-bios-0.14.0
 - implicit-hie-0.1.4.0
-# TODO switch to hackage release when new version published
-# - lsp-2.4.0.0
-# - lsp-test-0.17.0.0
-# - lsp-types-2.1.1.0
-- url: https://github.com/haskell/lsp/archive/b3c18fe44124eedd1ce9138321e753b08784ddba.tar.gz
-  subdirs:
-    - lsp
-    - lsp-types
-    - lsp-test
+- lsp-2.5.0.0
+- lsp-test-0.17.0.1
+- lsp-types-2.2.0.0
 - monad-dijkstra-0.1.1.4
 
 # stan and friends

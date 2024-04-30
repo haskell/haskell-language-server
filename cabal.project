@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-04-23T12:00:00Z
+index-state: 2024-04-30T10:44:19Z
 
 tests: True
 test-show-details: direct
@@ -41,11 +41,3 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd
-
-source-repository-package
-  type:git
-  location: https://github.com/haskell/lsp
-  tag: b3c18fe44124eedd1ce9138321e753b08784ddba
-  subdir: lsp
-  subdir: lsp-test
-  subdir: lsp-types
