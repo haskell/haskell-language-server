@@ -20,7 +20,7 @@ import           Test.Tasty
 
 tests :: TestTree
 tests = testGroup "addDependentFile"
-    [testGroup "file-changed" [testWithDummyPlugin' "test" (mkIdeTestFs []) test]
+    [testGroup "file-changed" [testWithDummyPluginEmpty' "test" test]
     ]
     where
       test :: FileSystem -> Session ()
