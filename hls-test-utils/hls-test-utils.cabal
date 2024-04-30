@@ -29,6 +29,8 @@ library
     Test.Hls
     Test.Hls.Util
     Test.Hls.FileSystem
+    Development.IDE.Test
+    Development.IDE.Test.Diagnostic
 
   hs-source-dirs:   src
   build-depends:
