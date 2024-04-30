@@ -15,11 +15,11 @@ import           Language.LSP.Protocol.Types   hiding
                                                 mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
+import           Config
 import           Development.IDE.Plugin.Test   (TestRequest (BlockSeconds),
                                                 blockCommandId)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Config
 
 -- | Test if ghcide asynchronously handles Commands and user Requests
 tests :: TestTree
