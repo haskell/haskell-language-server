@@ -109,7 +109,7 @@ import           Prelude                            hiding (log)
 import           System.Directory                   (createDirectoryIfMissing,
                                                      getCurrentDirectory,
                                                      getTemporaryDirectory,
-                                                     setCurrentDirectory)
+                                                     setCurrentDirectory, canonicalizePath)
 import           System.Environment                 (lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                    (newTempDirWithin)
@@ -451,7 +451,8 @@ runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock 
                 logWith recorder Debug LogCleanup
                 pure a
 
-    runTestInDir $ \tmpDir -> do
+    runTestInDir $ \tmpDir' -> do
+        tmpDir <- canonicalizePath tmpDir'
         logWith recorder Info $ LogTestDir tmpDir
         fs <- FS.materialiseVFT tmpDir tree
         runSessionWithServer' plugins conf sessConf caps tmpDir (act fs)
