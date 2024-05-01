@@ -262,10 +262,10 @@ shutdownHandler :: Recorder (WithPriority Log) -> IO () -> LSP.Handlers (ServerM
 shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
     (_, ide) <- ask
     liftIO $ logWith recorder Debug LogServerShutdownMessage
-    -- stop the reactor to free up the hiedb connection
-    liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
+    -- stop the reactor to free up the hiedb connection
+    liftIO stopReactor
     resp $ Right Null
 
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
