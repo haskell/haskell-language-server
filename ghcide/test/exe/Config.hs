@@ -40,5 +40,13 @@ testWithDummyPluginEmpty caseName = testWithDummyPlugin caseName $ mkIdeTestFs [
 testWithDummyPluginEmpty' :: String -> (FileSystem -> Session ()) -> TestTree
 testWithDummyPluginEmpty' caseName = testWithDummyPlugin' caseName $ mkIdeTestFs []
 
+runWithExtraFiles :: String -> (FileSystem -> Session a) -> IO a
+runWithExtraFiles dirName action = do
+    let vfs = mkIdeTestFs [FS.copyDir dirName]
+    runWithDummyPlugin' vfs action
+
+testWithExtraFiles :: String -> String -> (FileSystem -> Session ()) -> TestTree
+testWithExtraFiles testName dirName action = testCase testName $ runWithExtraFiles dirName action
+
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
