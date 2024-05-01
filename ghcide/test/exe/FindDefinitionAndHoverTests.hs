@@ -17,12 +17,14 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 -- import           TestUtils
 import           Config
+import           Debug.Trace                (traceM)
 import           Development.IDE            (readFileUtf8)
 import           Development.IDE.Test       (expectDiagnostics,
                                              standardizeQuotes)
+import           System.Directory           (copyFile)
 import           System.FilePath            ((</>))
 import           Test.Hls
-import           Test.Hls.FileSystem        (copyDir, toAbsFp)
+import           Test.Hls.FileSystem        (copy, copyDir, file, toAbsFp)
 import           Text.Regex.TDFA            ((=~))
 
 tests :: TestTree
@@ -91,11 +93,11 @@ tests = let
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
     , testGroup "hover"      $ mapMaybe snd tests
-    , checkFileCompiles sourceFilePath $
+    , testGroup "hover compile" [checkFileCompiles sourceFilePath $
         expectDiagnostics
           [ ( "GotoHover.hs", [(DiagnosticSeverity_Error, (62, 7), "Found hole: _")])
           , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _")])
-          ]
+          ]]
     , testGroup "type-definition" typeDefinitionTests
     , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
 
@@ -231,11 +233,6 @@ xfail = flip expectFailBecause
 
 checkFileCompiles :: FilePath -> Session () -> TestTree
 checkFileCompiles fp diag =
-   testWithDummyPluginEmpty' ("hover: Does " ++ fp ++ " compile") $ \fs -> do
-    void (openTestDataDoc $ toAbsFp fs fp)
+   testWithDummyPlugin ("hover: Does " ++ fp ++ " compile") (mkIdeTestFs [copyDir "hover"]) $ do
+    _ <- openDoc fp "haskell"
     diag
-
-openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
-openTestDataDoc path = do
-  source <- liftIO $ readFileUtf8 $ "ghcide/test/data" </> path
-  createDoc path "haskell" source

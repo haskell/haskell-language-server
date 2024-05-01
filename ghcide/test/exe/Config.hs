@@ -28,6 +28,12 @@ runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 runWithDummyPlugin' ::  FS.VirtualFileTree -> (FileSystem -> Session a) -> IO a
 runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
 
+runWithDummyPluginAndCap :: ClientCapabilities -> Session () -> IO ()
+runWithDummyPluginAndCap cap = runSessionWithServerAndCapsInTmpDir def dummyPlugin cap (mkIdeTestFs [])
+
+testWithDummyPluginAndCap :: String -> ClientCapabilities -> Session () -> TestTree
+testWithDummyPluginAndCap caseName cap = testCase caseName . runWithDummyPluginAndCap cap
+
 -- testSessionWithCorePlugin ::(TestRunner cont ()) => TestName -> FS.VirtualFileTree -> cont -> TestTree
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
 testWithDummyPlugin caseName vfs = testCase caseName . runWithDummyPlugin vfs
