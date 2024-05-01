@@ -241,10 +241,6 @@ withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIME
 lspTestCapsNoFileWatches :: ClientCapabilities
 lspTestCapsNoFileWatches = lspTestCaps & L.workspace . Lens._Just . L.didChangeWatchedFiles .~ Nothing
 
-
-pattern R :: UInt -> UInt -> UInt -> UInt -> Range
-pattern R x y x' y' = Range (Position x y) (Position x' y')
-
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do
     config <- getConfigFromEnv

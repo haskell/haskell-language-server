@@ -47,8 +47,6 @@ testWithDummyPluginEmpty' caseName = testWithDummyPlugin' caseName $ mkIdeTestFs
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
 
-
-
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
   | ExpectLocation Location
