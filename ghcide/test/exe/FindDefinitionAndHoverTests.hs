@@ -1,56 +1,47 @@
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 module FindDefinitionAndHoverTests (tests) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class         (liftIO)
 import           Data.Foldable
 import           Data.Maybe
-import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
-import           Development.IDE.GHC.Util
-import           Development.IDE.Test           (expectDiagnostics,
-                                                 standardizeQuotes)
-import           Development.IDE.Types.Location
-import qualified Language.LSP.Protocol.Lens     as L
-import           Language.LSP.Protocol.Types    hiding
-                                                (SemanticTokenAbsolute (..),
-                                                 SemanticTokenRelative (..),
-                                                 SemanticTokensEdit (..),
-                                                 mkRange)
+import qualified Data.Text                  as T
+import qualified Language.LSP.Protocol.Lens as L
 import           Language.LSP.Test
-import           System.FilePath
-import           System.Info.Extra              (isWindows)
+import           System.Info.Extra          (isWindows)
 
-import           Control.Lens                   ((^.))
+import           Control.Lens               ((^.))
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
-import           Text.Regex.TDFA                ((=~))
+-- import           TestUtils
+import           Config
+import           Development.IDE            (readFileUtf8)
+import           Development.IDE.Test       (expectDiagnostics,
+                                             standardizeQuotes)
+import           System.FilePath            ((</>))
+import           Test.Hls
+import           Test.Hls.FileSystem        (copyDir, toAbsFp)
+import           Text.Regex.TDFA            ((=~))
 
 tests :: TestTree
 tests = let
-
   tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> String -> Session [Expect] -> String -> TestTree
-  tst (get, check) pos sfp targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
-
-    -- Dirty the cache to check that definitions work even in the presence of iface files
-    liftIO $ runInDir dir $ do
-      let fooPath = dir </> "Foo.hs"
-      fooSource <- liftIO $ readFileUtf8 fooPath
-      fooDoc <- createDoc fooPath "haskell" fooSource
-      _ <- getHover fooDoc $ Position 4 3
-      closeDoc fooDoc
-
-    doc <- openTestDataDoc (dir </> sfp)
-    waitForProgressDone
-    found <- get doc pos
-    check found targetRange
+  tst (get, check) pos sfp targetRange title =
+    testWithDummyPlugin title (mkIdeTestFs [copyDir "hover"]) $ do
+        doc <- openDoc sfp "haskell"
+        waitForProgressDone
+        _x <- waitForTypecheck doc
+        found <- get doc pos
+        check found targetRange
 
 
 
-  checkHover :: Maybe Hover -> Session [Expect] -> Session ()
+  checkHover :: (HasCallStack) => Maybe Hover -> Session [Expect] -> Session ()
   checkHover hover expectations = traverse_ check =<< expectations where
 
+    check :: (HasCallStack) => Expect -> Session ()
     check expected =
       case hover of
         Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
@@ -117,8 +108,15 @@ tests = let
     , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
     ]
 
+  test :: (HasCallStack) => (TestTree -> a) -> (TestTree -> b) -> Position -> [Expect] -> String -> (a, b)
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
+  testM :: (HasCallStack) => (TestTree -> a)
+    -> (TestTree -> b)
+    -> Position
+    -> Session [Expect]
+    -> String
+    -> (a, b)
   testM runDef runHover look expect title =
     ( runDef   $ tst def   look sourceFilePath expect title
     , runHover $ tst hover look sourceFilePath expect title ) where
@@ -228,8 +226,16 @@ tests = let
         no = const Nothing -- don't run this test at all
         --skip = const Nothing -- unreliable, don't run
 
+xfail :: TestTree -> String -> TestTree
+xfail = flip expectFailBecause
+
 checkFileCompiles :: FilePath -> Session () -> TestTree
 checkFileCompiles fp diag =
-  testSessionWithExtraFiles "hover" ("Does " ++ fp ++ " compile") $ \dir -> do
-    void (openTestDataDoc (dir </> fp))
+   testWithDummyPluginEmpty' ("hover: Does " ++ fp ++ " compile") $ \fs -> do
+    void (openTestDataDoc $ toAbsFp fs fp)
     diag
+
+openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
+openTestDataDoc path = do
+  source <- liftIO $ readFileUtf8 $ "ghcide/test/data" </> path
+  createDoc path "haskell" source
