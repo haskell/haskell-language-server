@@ -1,5 +1,6 @@
 module IfaceTests (tests) where
 
+import           Config
 import           Control.Monad.IO.Class        (liftIO)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Util
@@ -17,10 +18,9 @@ import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra               hiding (withTempDir)
+import           Test.Hls.FileSystem           (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Config
-import Test.Hls.FileSystem (toAbsFp)
 
 tests :: TestTree
 tests = testGroup "Interface loading tests"

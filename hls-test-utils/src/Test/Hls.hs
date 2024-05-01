@@ -106,10 +106,11 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Test
 import           Prelude                            hiding (log)
-import           System.Directory                   (createDirectoryIfMissing,
+import           System.Directory                   (canonicalizePath,
+                                                     createDirectoryIfMissing,
                                                      getCurrentDirectory,
                                                      getTemporaryDirectory,
-                                                     setCurrentDirectory, canonicalizePath)
+                                                     setCurrentDirectory)
 import           System.Environment                 (lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                    (newTempDirWithin)
