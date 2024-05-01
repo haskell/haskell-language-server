@@ -31,5 +31,14 @@ testWithDummyPlugin caseName vfs = testCase caseName . runWithDummyPlugin vfs
 testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FileSystem -> Session ()) -> TestTree
 testWithDummyPlugin' caseName vfs = testCase caseName . runWithDummyPlugin' vfs
 
+runWithDummyPluginEmpty :: Session a -> IO a
+runWithDummyPluginEmpty = runWithDummyPlugin $ mkIdeTestFs []
+
+testWithDummyPluginEmpty :: String -> Session () -> TestTree
+testWithDummyPluginEmpty caseName = testWithDummyPlugin caseName $ mkIdeTestFs []
+
+testWithDummyPluginEmpty' :: String -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPluginEmpty' caseName = testWithDummyPlugin' caseName $ mkIdeTestFs []
+
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')

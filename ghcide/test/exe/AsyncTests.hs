@@ -15,17 +15,17 @@ import           Language.LSP.Protocol.Types   hiding
                                                 mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
+import           Config
 import           Development.IDE.Plugin.Test   (TestRequest (BlockSeconds),
                                                 blockCommandId)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 -- | Test if ghcide asynchronously handles Commands and user Requests
 tests :: TestTree
 tests = testGroup "async"
     [
-      testSession "command" $ do
+      testWithDummyPluginEmpty "command" $ do
             -- Execute a command that will block forever
             let req = ExecuteCommandParams Nothing blockCommandId Nothing
             void $ sendRequest SMethod_WorkspaceExecuteCommand req
@@ -38,7 +38,7 @@ tests = testGroup "async"
             codeLenses <- getAndResolveCodeLenses doc
             liftIO $ [ _title | CodeLens{_command = Just Command{_title}} <- codeLenses] @=?
               [ "foo :: a -> a" ]
-    , testSession "request" $ do
+    , testWithDummyPluginEmpty "request" $ do
             -- Execute a custom request that will block for 1000 seconds
             void $ sendRequest (SMethod_CustomMethod (Proxy @"test")) $ toJSON $ BlockSeconds 1000
             -- Load a file and check for code actions. Will only work if the request is run asynchronously
