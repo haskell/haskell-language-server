@@ -472,6 +472,7 @@ isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
 isQualifiedImport ImportDecl{}                              = True
 isQualifiedImport _                                         = False
 
+-- | Like getNodeIds but with generated node removed
 getSourceNodeIds :: HieAST a -> Map.Map Identifier (IdentifierDetails a)
 getSourceNodeIds = Map.foldl' combineNodeIds Map.empty . Map.filterWithKey (\k _ -> k == SourceInfo) . getSourcedNodeInfo . sourcedNodeInfo
 
