@@ -54,8 +54,7 @@ tests = testGroup "highlight"
           ]
         highlights <- getHighlights doc (Position 3 17)
         liftIO $ highlights @?=
-          [
-          DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Write)
+          [ DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Write)
           , DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Read)
           ]
   ]
