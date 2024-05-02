@@ -56,6 +56,7 @@ import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
+import           Development.IDE.GHC.Compat           (getSourceNodeIds)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
@@ -167,7 +168,7 @@ documentHighlight hf rf pos = pure highlights
   where
     -- We don't want to show document highlights for evidence variables, which are supposed to be invisible
     notEvidence = not . any isEvidenceContext . identInfo
-    ns = concat $ pointCommand hf pos (rights . M.keys . M.filter notEvidence . getNodeIds)
+    ns = concat $ pointCommand hf pos (rights . M.keys . M.filter notEvidence . getSourceNodeIds)
     highlights = do
       n <- ns
       ref <- fromMaybe [] (M.lookup (Right n) rf)
