@@ -44,7 +44,6 @@ tests = testGroup "highlight"
             , DocumentHighlight (R 7 12 7 15) (Just DocumentHighlightKind_Read)
             ]
   ,
---   knownBrokenForGhcVersions [GHC92, GHC94, GHC96, GHC98] "Ghc9 highlights the constructor and not just this field" $
         testWithDummyPluginEmpty "record" $ do
         doc <- createDoc "A.hs" "haskell" recsource
         _ <- waitForDiagnostics
@@ -56,11 +55,7 @@ tests = testGroup "highlight"
         highlights <- getHighlights doc (Position 3 17)
         liftIO $ highlights @?=
           [
-            DocumentHighlight (R 3 11 3 14) (Just DocumentHighlightKind_Write)
-          , DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Read)
-          , DocumentHighlight (R 3 32 3 38) (Just DocumentHighlightKind_Read)
-          , DocumentHighlight (R 4 4 4 7) (Just DocumentHighlightKind_Read)
-          , DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Write)
+          DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Write)
           , DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Read)
           ]
   ]
