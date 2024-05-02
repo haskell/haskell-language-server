@@ -49,6 +49,7 @@ import           CompletionTests
 import           CPPTests
 import           CradleTests
 import           DependentFileTest
+import           Development.IDE              (LoggingColumn (..))
 import           DiagnosticTests
 import           ExceptionTests
 import           FindDefinitionAndHoverTests
@@ -71,7 +72,6 @@ import           SymlinkTests
 import           THTests
 import           UnitTests
 import           WatchedFileTests
-import Development.IDE (LoggingColumn(..))
 
 main :: IO ()
 main = do
