@@ -1,5 +1,6 @@
 module IfaceTests (tests) where
 
+import           Config
 import           Control.Monad.IO.Class        (liftIO)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Util
@@ -17,9 +18,9 @@ import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra               hiding (withTempDir)
+import           Test.Hls.FileSystem           (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "Interface loading tests"
@@ -33,10 +34,10 @@ tests = testGroup "Interface loading tests"
 
 -- | test that TH reevaluates across interfaces
 ifaceTHTest :: TestTree
-ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
-    let aPath = dir </> "THA.hs"
-        bPath = dir </> "THB.hs"
-        cPath = dir </> "THC.hs"
+ifaceTHTest = testWithExtraFiles "iface-th-test" "TH" $ \dir -> do
+    let aPath = dir `toAbsFp` "THA.hs"
+        bPath = dir `toAbsFp` "THB.hs"
+        cPath = dir `toAbsFp` "THC.hs"
 
     aSource <- liftIO $ readFileUtf8 aPath -- [TH] a :: ()
     _bSource <- liftIO $ readFileUtf8 bPath -- a :: ()
@@ -55,10 +56,10 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     closeDoc cdoc
 
 ifaceErrorTest :: TestTree
-ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \dir -> do
+ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
     configureCheckProject True
-    let bPath = dir </> "B.hs"
-        pPath = dir </> "P.hs"
+    let bPath = dir `toAbsFp` "B.hs"
+        pPath = dir `toAbsFp` "P.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
@@ -104,9 +105,9 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectNoMoreDiagnostics 2
 
 ifaceErrorTest2 :: TestTree
-ifaceErrorTest2 = testCase "iface-error-test-2" $ runWithExtraFiles "recomp" $ \dir -> do
-    let bPath = dir </> "B.hs"
-        pPath = dir </> "P.hs"
+ifaceErrorTest2 = testWithExtraFiles "iface-error-test-2" "recomp" $ \dir -> do
+    let bPath = dir `toAbsFp` "B.hs"
+        pPath = dir `toAbsFp` "P.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
@@ -138,9 +139,9 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ runWithExtraFiles "recomp" $ \
     expectNoMoreDiagnostics 2
 
 ifaceErrorTest3 :: TestTree
-ifaceErrorTest3 = testCase "iface-error-test-3" $ runWithExtraFiles "recomp" $ \dir -> do
-    let bPath = dir </> "B.hs"
-        pPath = dir </> "P.hs"
+ifaceErrorTest3 = testWithExtraFiles "iface-error-test-3" "recomp" $ \dir -> do
+    let bPath = dir `toAbsFp` "B.hs"
+        pPath = dir `toAbsFp` "P.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
