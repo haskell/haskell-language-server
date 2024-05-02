@@ -418,7 +418,7 @@ csvRules build = do
     let resultsPrev = tail allResultsPrev
     let resultsCur = tail allResultsCur
     let resultDiff = zipWith convertToDiffResults resultsCur resultsPrev
-    writeFileChanged out $ unlines $ show out2 : head allResultsCur : resultDiff
+    writeFileChanged out $ unlines $ head allResultsCur : resultDiff
   -- aggregate all configurations for an experiment
   priority 3 $ build -/- "*/*/*/results.csv" %> genConfig "results.csv"
     "Configuration" (map confName <$> askOracle (GetConfigurations ()))
