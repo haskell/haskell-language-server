@@ -206,26 +206,6 @@ knownIssueFor solution = go . \case
             Ignore -> ignoreTestBecause
         go False = const id
 
-data Expect
-  = ExpectRange Range -- Both gotoDef and hover should report this range
-  | ExpectLocation Location
---  | ExpectDefRange Range -- Only gotoDef should report this range
-  | ExpectHoverRange Range -- Only hover should report this range
-  | ExpectHoverText [T.Text] -- the hover message must contain these snippets
-  | ExpectHoverExcludeText [T.Text] -- the hover message must _not_ contain these snippets
-  | ExpectHoverTextRegex T.Text -- the hover message must match this pattern
-  | ExpectExternFail -- definition lookup in other file expected to fail
-  | ExpectNoDefinitions
-  | ExpectNoHover
---  | ExpectExtern -- TODO: as above, but expected to succeed: need some more info in here, once we have some working examples
-  deriving Eq
-
-mkR :: UInt -> UInt -> UInt -> UInt -> Expect
-mkR startLine startColumn endLine endColumn = ExpectRange $ mkRange startLine startColumn endLine endColumn
-
-mkL :: Uri -> UInt -> UInt -> UInt -> UInt -> Expect
-mkL uri startLine startColumn endLine endColumn = ExpectLocation $ Location uri $ mkRange startLine startColumn endLine endColumn
-
 
 
 testSessionWithExtraFiles :: FilePath -> String -> (FilePath -> Session ()) -> TestTree
@@ -260,46 +240,6 @@ withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIME
 
 lspTestCapsNoFileWatches :: ClientCapabilities
 lspTestCapsNoFileWatches = lspTestCaps & L.workspace . Lens._Just . L.didChangeWatchedFiles .~ Nothing
-
-openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
-openTestDataDoc path = do
-  source <- liftIO $ readFileUtf8 $ "ghcide/test/data" </> path
-  createDoc path "haskell" source
-
-pattern R :: UInt -> UInt -> UInt -> UInt -> Range
-pattern R x y x' y' = Range (Position x y) (Position x' y')
-
-checkDefs :: Definition |? ([DefinitionLink] |? Null) -> Session [Expect] -> Session ()
-checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpectations where
-  check (ExpectRange expectedRange) = do
-    def <- assertOneDefinitionFound defs
-    assertRangeCorrect def expectedRange
-  check (ExpectLocation expectedLocation) = do
-    def <- assertOneDefinitionFound defs
-    liftIO $ do
-      canonActualLoc <- canonicalizeLocation def
-      canonExpectedLoc <- canonicalizeLocation expectedLocation
-      canonActualLoc @?= canonExpectedLoc
-  check ExpectNoDefinitions = do
-    liftIO $ assertBool "Expecting no definitions" $ null defs
-  check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
-  check _ = pure () -- all other expectations not relevant to getDefinition
-
-  assertOneDefinitionFound :: [Location] -> Session Location
-  assertOneDefinitionFound [def] = pure def
-  assertOneDefinitionFound xs = liftIO . assertFailure $ "Expecting exactly one definition, got " <> show (length xs)
-
-  assertRangeCorrect Location{_range = foundRange} expectedRange =
-    liftIO $ expectedRange @=? foundRange
-
-canonicalizeLocation :: Location -> IO Location
-canonicalizeLocation (Location uri range) = Location <$> canonicalizeUri uri <*> pure range
-
-defToLocation :: Definition |? ([DefinitionLink] |? Null) -> [Location]
-defToLocation (InL (Definition (InL l))) = [l]
-defToLocation (InL (Definition (InR ls))) = ls
-defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_targetRange}) -> Location _targetUri _targetRange) <$> defLink
-defToLocation (InR (InR Null)) = []
 
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do
