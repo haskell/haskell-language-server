@@ -71,10 +71,11 @@ import           SymlinkTests
 import           THTests
 import           UnitTests
 import           WatchedFileTests
+import Development.IDE (LoggingColumn(..))
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
+  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [ThreadIdColumn, PriorityColumn, DataColumn])
 
   let docWithFilteredPriorityRecorder =
         docWithPriorityRecorder
