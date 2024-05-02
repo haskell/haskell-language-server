@@ -57,7 +57,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
-    deleteValue, recordDirtyKeys,
+    deleteValue,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -569,15 +569,6 @@ deleteValue ShakeExtras{dirtyKeys, state} key file = do
     return [toKey key file]
 
 
-recordDirtyKeys
-  :: ShakeExtras
-  -> [Key]
-  -> STM (IO ())
-recordDirtyKeys ShakeExtras{dirtyKeys} keys = do
-    modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x keys
-    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
-        addEvent (fromString $ unlines $ "dirty " : map show keys)
-
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
   forall k v.
@@ -766,7 +757,7 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
         (\runner -> do
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
               keys <- ioActionBetweenShakeSession
-              join $ atomically $ recordDirtyKeys shakeExtras keys
+              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
