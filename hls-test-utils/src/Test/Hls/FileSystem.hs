@@ -115,7 +115,6 @@ materialise rootDir' fileTree testDataDir' = do
       copyDir' root dir = do
         files <- fmap FP.normalise . lines <$> withCurrentDirectory (testDataDir </> dir) (readProcess "git" ["ls-files", "--cached", "--modified", "--others"] "")
         mapM_ (createDirectoryIfMissing True . ((root </>) . takeDirectory)) files
-        mapM_ (\f -> putStrLn $ (testDataDir </> dir </> f) <> ":" <> (root </> f) ) files
         mapM_ (\f -> copyFile (testDataDir </> dir </> f) (root </> f)) files
         return ()
 
