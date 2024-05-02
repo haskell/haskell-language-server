@@ -38,6 +38,7 @@ module Development.IDE.GHC.Compat(
     mkFastStringByteString,
     nodeInfo',
     getNodeIds,
+    getSourceNodeIds,
     sourceNodeInfo,
     generatedNodeInfo,
     simpleNodeInfoCompat,
@@ -471,7 +472,9 @@ isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
 isQualifiedImport ImportDecl{}                              = True
 isQualifiedImport _                                         = False
 
-
+-- | Like getNodeIds but with generated node removed
+getSourceNodeIds :: HieAST a -> Map.Map Identifier (IdentifierDetails a)
+getSourceNodeIds = Map.foldl' combineNodeIds Map.empty . Map.filterWithKey (\k _ -> k == SourceInfo) . getSourcedNodeInfo . sourcedNodeInfo
 
 getNodeIds :: HieAST a -> Map.Map Identifier (IdentifierDetails a)
 getNodeIds = Map.foldl' combineNodeIds Map.empty . getSourcedNodeInfo . sourcedNodeInfo
