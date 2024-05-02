@@ -147,7 +147,9 @@ allTargetsForExample prof baseFolder ex = do
     configurations <- askOracle $ GetConfigurations ()
     let buildFolder = baseFolder </> profilingPath prof
     return $
-        [buildFolder </> getExampleName ex </> "results.csv"]
+        [
+            buildFolder </> getExampleName ex </> "results.csv"
+            , buildFolder </> getExampleName ex </> "resultDiff.csv"]
         ++ [ buildFolder </> getExampleName ex </> escaped (escapeExperiment e) <.> "svg"
              | e <- experiments
            ]
