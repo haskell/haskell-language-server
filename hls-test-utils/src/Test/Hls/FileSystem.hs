@@ -128,8 +128,7 @@ materialise rootDir' fileTree testDataDir' = do
 --
 -- File references in 'virtualFileTree' are resolved relative to the @vftOriginalRoot@.
 materialiseVFT :: FilePath -> VirtualFileTree -> IO FileSystem
-materialiseVFT root fs =
-  materialise root (vftTree fs) (vftOriginalRoot fs)
+materialiseVFT root fs = materialise root (vftTree fs) (vftOriginalRoot fs)
 
 -- ----------------------------------------------------------------------------
 -- Test definition helpers

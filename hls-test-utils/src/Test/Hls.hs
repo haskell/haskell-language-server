@@ -106,7 +106,8 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Test
 import           Prelude                            hiding (log)
-import           System.Directory                   (createDirectoryIfMissing,
+import           System.Directory                   (canonicalizePath,
+                                                     createDirectoryIfMissing,
                                                      getCurrentDirectory,
                                                      getTemporaryDirectory,
                                                      setCurrentDirectory)
@@ -451,7 +452,10 @@ runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock 
                 logWith recorder Debug LogCleanup
                 pure a
 
-    runTestInDir $ \tmpDir -> do
+    runTestInDir $ \tmpDir' -> do
+        -- we canonicalize the path, so that we do not need to do
+        -- cannibalization during the test when we compare two paths
+        tmpDir <- canonicalizePath tmpDir'
         logWith recorder Info $ LogTestDir tmpDir
         fs <- FS.materialiseVFT tmpDir tree
         runSessionWithServer' plugins conf sessConf caps tmpDir (act fs)
