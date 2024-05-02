@@ -25,6 +25,7 @@ import           Language.LSP.Test
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
 -- import Test.QuickCheck.Instances ()
+import           Config                          (checkDefs, mkL)
 import           Control.Lens                    ((^.))
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           GHC.TypeLits                    (symbolVal)
