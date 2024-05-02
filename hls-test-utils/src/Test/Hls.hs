@@ -453,6 +453,8 @@ runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock 
                 pure a
 
     runTestInDir $ \tmpDir' -> do
+        -- we canonicalize the path, so that we do not need to do
+        -- cannibalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
         logWith recorder Info $ LogTestDir tmpDir
         fs <- FS.materialiseVFT tmpDir tree
