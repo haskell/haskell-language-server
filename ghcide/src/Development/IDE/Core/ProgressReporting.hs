@@ -33,9 +33,14 @@ import qualified Focus
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types    as LSP
+import           Language.LSP.Server            (ProgressAmount (..),
+                                                 ProgressCancellable (..),
+                                                 withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
 import           System.Time.Extra
+import           UnliftIO                       (MonadUnliftIO (..),
+                                                 UnliftIO (unliftIO), toIO)
 import           UnliftIO.Exception             (bracket_)
 
 data ProgressEvent
@@ -117,76 +122,30 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
         progressStop   =  updateStateVar StopProgress
-        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgress inProgressState)
-
+        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgressNew inProgressState)
         inProgress = updateStateForFile inProgressState
     return ProgressReporting{..}
     where
-        lspShakeProgress InProgressState{..} = do
+        lspShakeProgressNew InProgressState{..} = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
-            u <- ProgressToken . InR . T.pack . show . hashUnique <$> liftIO newUnique
-
-            b <- liftIO newBarrier
-            void $ LSP.runLspT lspEnv $ LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
-                LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-            liftIO $ async $ do
-                ready <- waitBarrier b
-                LSP.runLspT lspEnv $ for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
+            async $ LSP.runLspT lspEnv $ withProgress "Processing" Nothing NotCancellable $ \update -> loop update 0
             where
-                start token = LSP.sendNotification SMethod_Progress $
-                    LSP.ProgressParams
-                        { _token = token
-                        , _value = toJSON $ WorkDoneProgressBegin
-                          { _kind = AString @"begin"
-                          ,  _title = "Processing"
-                          , _cancellable = Nothing
-                          , _message = Nothing
-                          , _percentage = Nothing
-                          }
-                        }
-                stop token = LSP.sendNotification SMethod_Progress
-                    LSP.ProgressParams
-                        { _token = token
-                        , _value = toJSON $ WorkDoneProgressEnd
-                          { _kind = AString @"end"
-                           , _message = Nothing
-                          }
-                        }
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
-                loop token prevPct = do
+                loop update prevPct = do
                     done <- liftIO $ readTVarIO doneVar
                     todo <- liftIO $ readTVarIO todoVar
                     liftIO $ sleep after
-                    if todo == 0 then loop token 0 else do
-                        let
-                            nextFrac :: Double
+                    if todo == 0 then loop update 0 else do
+                        let nextFrac :: Double
                             nextFrac = fromIntegral done / fromIntegral todo
                             nextPct :: UInt
                             nextPct = floor $ 100 * nextFrac
                         when (nextPct /= prevPct) $
-                          LSP.sendNotification SMethod_Progress $
-                          LSP.ProgressParams
-                              { _token = token
-                              , _value = case optProgressStyle of
-                                  Explicit -> toJSON $ WorkDoneProgressReport
-                                    { _kind = AString @"report"
-                                    , _cancellable = Nothing
-                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
-                                    , _percentage = Nothing
-                                    }
-                                  Percentage -> toJSON $ WorkDoneProgressReport
-                                    { _kind = AString @"report"
-                                    , _cancellable = Nothing
-                                    , _message = Nothing
-                                    , _percentage = Just nextPct
-                                    }
-                                  NoProgress -> error "unreachable"
-                              }
-                        loop token nextPct
-
+                            update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+                        loop update nextPct
         updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
