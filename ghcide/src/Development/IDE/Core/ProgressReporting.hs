@@ -77,7 +77,7 @@ updateState start (Event KickStarted)   NotStarted  = pure $ Running start
 updateState start (Event KickStarted)   (Running a) = join a $> Running start
 updateState _     (Event KickCompleted) (Running a) = join a $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = join a $> Stopped
+updateState _     StopProgress          (Running a) = a $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
@@ -144,7 +144,7 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                 b <- liftIO newBarrier
                 LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
                     LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-                return $ async $ do
+                liftIO $ async $ do
                     ready <- waitBarrier b
                     LSP.runLspT lspEnv $ withProgress "Processing" (Just u) Cancellable $ \update -> loopUntil cancelProgress update 0
             return (Control.Concurrent.Strict.putMVar cancelProgress ())
