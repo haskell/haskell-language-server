@@ -39,8 +39,10 @@ import           Language.LSP.Server            (ProgressAmount (..),
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
 import           System.Time.Extra
+import qualified UnliftIO                       as MonadUnliftIO
 import           UnliftIO                       (MonadUnliftIO (..),
-                                                 UnliftIO (unliftIO), toIO)
+                                                 UnliftIO (unliftIO), newMVar,
+                                                 putMVar, toIO)
 import           UnliftIO.Exception             (bracket_)
 
 data ProgressEvent
@@ -64,18 +66,18 @@ noProgressReporting = return $ ProgressReporting
 data State
     = NotStarted
     | Stopped
-    | Running (Async ())
+    | Running (IO (IO ()))
 
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: IO (Async ()) -> Transition -> State -> IO State
+updateState :: IO (IO ()) -> Transition -> State -> IO State
 updateState _      _                    Stopped     = pure Stopped
-updateState start (Event KickStarted)   NotStarted  = Running <$> start
-updateState start (Event KickStarted)   (Running a) = cancel a >> Running <$> start
-updateState _     (Event KickCompleted) (Running a) = cancel a $> NotStarted
+updateState start (Event KickStarted)   NotStarted  = pure $ Running start
+updateState start (Event KickStarted)   (Running a) = join a $> Running start
+updateState _     (Event KickCompleted) (Running a) = join a $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = cancel a $> Stopped
+updateState _     StopProgress          (Running a) = join a $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
@@ -107,6 +109,12 @@ recordProgress InProgressState{..} file shift = do
         return (prev, new)
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
+-- | Runs the action until it ends or until the given MVar is put.
+--   Rethrows any exceptions.
+untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
+untilMVar mvar io = void $
+    MonadUnliftIO.waitAnyCancel =<< traverse MonadUnliftIO.async [ io , MonadUnliftIO.readMVar mvar ]
+
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
 --   before the end of the grace period).
@@ -130,8 +138,18 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
-            async $ LSP.runLspT lspEnv $ withProgress "Processing" Nothing NotCancellable $ \update -> loop update 0
+            cancelProgress <- Control.Concurrent.Strict.newEmptyMVar
+            LSP.runLspT lspEnv $ do
+                u <- ProgressToken . InR . T.pack . show . hashUnique <$> liftIO newUnique
+                b <- liftIO newBarrier
+                LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
+                    LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
+                return $ async $ do
+                    ready <- waitBarrier b
+                    LSP.runLspT lspEnv $ withProgress "Processing" (Just u) Cancellable $ \update -> loopUntil cancelProgress update 0
+            return (Control.Concurrent.Strict.putMVar cancelProgress ())
             where
+                loopUntil m a b = untilMVar m $ loop a b
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
                 loop update prevPct = do
