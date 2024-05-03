@@ -3,6 +3,7 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE NumericUnderscores    #-}
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
@@ -273,6 +274,12 @@ exitHandler exit = LSP.notificationHandler SMethod_Exit $ const $ liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.optTextDocumentSync   = Just $ tweakTDS origTDS
+                   -- Generally people start to notice that something is taking a while at about 1s, so
+                   -- that's when we start reporting progress
+                   , LSP.optProgressStartDelay = 1_00_000
+                   -- Once progress is being reported, it's nice to see that it's moving reasonably quickly,
+                   -- but not so fast that it's ugly. This number is a bit made up
+                   , LSP.optProgressUpdateDelay = 1_00_000
                    }
     where
         tweakTDS tds = tds{_openClose=Just True, _change=Just TextDocumentSyncKind_Incremental, _save=Just $ InR $ SaveOptions Nothing}

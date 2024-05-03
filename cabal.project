@@ -41,3 +41,9 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd
+
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  tag: 1b9cc1da253454e102e7fc66038a6ed0b5e9dff1
+  subdir: lsp
