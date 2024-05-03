@@ -12,11 +12,13 @@ module Development.IDE.Core.ProgressReporting
   )
    where
 
-import           Control.Concurrent.Async
 import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
                                                  modifyTVar', newTVarIO,
                                                  readTVarIO)
-import           Control.Concurrent.Strict
+import           Control.Concurrent.Strict      (MVar, modifyVar_, newBarrier,
+                                                 newEmptyMVar, newVar,
+                                                 signalBarrier, threadDelay,
+                                                 waitBarrier)
 import           Control.Monad.Extra            hiding (loop)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
@@ -39,10 +41,10 @@ import           Language.LSP.Server            (ProgressAmount (..),
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
 import           System.Time.Extra
-import qualified UnliftIO                       as MonadUnliftIO
 import           UnliftIO                       (MonadUnliftIO (..),
-                                                 UnliftIO (unliftIO), newMVar,
-                                                 putMVar, toIO)
+                                                 UnliftIO (unliftIO), async,
+                                                 newMVar, putMVar, readMVar,
+                                                 toIO, waitAnyCancel)
 import           UnliftIO.Exception             (bracket_)
 
 data ProgressEvent
@@ -113,7 +115,7 @@ recordProgress InProgressState{..} file shift = do
 --   Rethrows any exceptions.
 untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
 untilMVar mvar io = void $
-    MonadUnliftIO.waitAnyCancel =<< traverse MonadUnliftIO.async [ io , MonadUnliftIO.readMVar mvar ]
+    waitAnyCancel =<< traverse async [ io , readMVar mvar ]
 
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
@@ -138,16 +140,16 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
-            cancelProgress <- Control.Concurrent.Strict.newEmptyMVar
+            cancelProgress <- newEmptyMVar
             LSP.runLspT lspEnv $ do
                 u <- ProgressToken . InR . T.pack . show . hashUnique <$> liftIO newUnique
                 b <- liftIO newBarrier
                 LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
                     LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-                liftIO $ async $ do
-                    ready <- waitBarrier b
-                    LSP.runLspT lspEnv $ withProgress "Processing" (Just u) Cancellable $ \update -> loopUntil cancelProgress update 0
-            return (Control.Concurrent.Strict.putMVar cancelProgress ())
+                async $ do
+                    ready <- liftIO $ waitBarrier b
+                    withProgress "Processing" (Just u) Cancellable $ \update -> loopUntil cancelProgress update 0
+            return (putMVar cancelProgress ())
             where
                 loopUntil m a b = untilMVar m $ loop a b
                 loop _ _ | optProgressStyle == NoProgress =
