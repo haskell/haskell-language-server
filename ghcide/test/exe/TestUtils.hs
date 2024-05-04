@@ -45,33 +45,9 @@ import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 
+import           Config                          (lspTestCaps)
 import           LogType
 
--- | Wait for the next progress begin step
-waitForProgressBegin :: Session ()
-waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | Lens.is _workDoneProgressBegin v-> Just ()
-  _ -> Nothing
-
--- | Wait for the first progress end step
--- Also implemented in hls-test-utils Test.Hls
-waitForProgressDone :: Session ()
-waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | Lens.is _workDoneProgressEnd v -> Just ()
-  _ -> Nothing
-
--- | Wait for all progress to be done
--- Needs at least one progress done notification to return
--- Also implemented in hls-test-utils Test.Hls
-waitForAllProgressDone :: Session ()
-waitForAllProgressDone = loop
-  where
-    loop = do
-      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) |Lens.is _workDoneProgressEnd v-> Just ()
-        _ -> Nothing
-      done <- null <$> getIncompleteProgressSessions
-      unless done loop
 
 run :: Session a -> IO a
 run s = run' (const s)
@@ -126,9 +102,6 @@ withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   dir' <- canonicalizePath dir
   f dir'
-
-lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 getConfigFromEnv :: IO SessionConfig
 getConfigFromEnv = do
@@ -235,11 +208,6 @@ copyTestDataFiles dir prefix = do
 
 withLongTimeout :: IO a -> IO a
 withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIMEOUT")
-
-
-
-lspTestCapsNoFileWatches :: ClientCapabilities
-lspTestCapsNoFileWatches = lspTestCaps & L.workspace . Lens._Just . L.didChangeWatchedFiles .~ Nothing
 
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do

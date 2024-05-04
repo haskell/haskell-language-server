@@ -35,6 +35,7 @@ module Test.Hls
     runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
     runSessionWithServerInTmpDirCont',
+    runSessionWithServerAndCapsInTmpDirCont,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -42,6 +43,7 @@ module Test.Hls
     waitForProgressDone,
     waitForAllProgressDone,
     waitForBuildQueue,
+    waitForProgressBegin,
     waitForTypecheck,
     waitForAction,
     hlsConfigToClientConfig,
@@ -665,6 +667,12 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
             (t, _) <- duration $ cancel server
             putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
     pure x
+
+-- | Wait for the next progress begin step
+waitForProgressBegin :: Session ()
+waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressBegin v-> Just ()
+  _ -> Nothing
 
 -- | Wait for the next progress end step
 waitForProgressDone :: Session ()

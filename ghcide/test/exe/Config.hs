@@ -2,10 +2,13 @@
 
 module Config where
 
+import           Control.Lens.Setter         ((.~))
 import           Data.Foldable               (traverse_)
+import           Data.Function               ((&))
 import qualified Data.Text                   as T
 import           Development.IDE.Test        (canonicalizeUri)
 import           Ide.Types                   (defaultPluginDescriptor)
+import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Null (..))
 import           System.FilePath             ((</>))
 import           Test.Hls
@@ -31,8 +34,14 @@ runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
 runWithDummyPluginAndCap :: ClientCapabilities -> Session () -> IO ()
 runWithDummyPluginAndCap cap = runSessionWithServerAndCapsInTmpDir def dummyPlugin cap (mkIdeTestFs [])
 
+runWithDummyPluginAndCap' :: ClientCapabilities -> (FileSystem -> Session ()) -> IO ()
+runWithDummyPluginAndCap' cap = runSessionWithServerAndCapsInTmpDirCont def dummyPlugin cap (mkIdeTestFs [])
+
 testWithDummyPluginAndCap :: String -> ClientCapabilities -> Session () -> TestTree
 testWithDummyPluginAndCap caseName cap = testCase caseName . runWithDummyPluginAndCap cap
+
+testWithDummyPluginAndCap' :: String -> ClientCapabilities -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPluginAndCap' caseName cap = testCase caseName . runWithDummyPluginAndCap' cap
 
 -- testSessionWithCorePlugin ::(TestRunner cont ()) => TestName -> FS.VirtualFileTree -> cont -> TestTree
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
@@ -114,3 +123,9 @@ defToLocation (InL (Definition (InL l))) = [l]
 defToLocation (InL (Definition (InR ls))) = ls
 defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_targetRange}) -> Location _targetUri _targetRange) <$> defLink
 defToLocation (InR (InR Null)) = []
+
+lspTestCaps :: ClientCapabilities
+lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+
+lspTestCapsNoFileWatches :: ClientCapabilities
+lspTestCapsNoFileWatches = lspTestCaps & L.workspace . traverse . L.didChangeWatchedFiles .~ Nothing

@@ -30,17 +30,20 @@ import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
 
+import           Config
 import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (whenJust)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
+import           Test.Hls                        (waitForProgressBegin,
+                                                  waitForTypecheck)
+import           Test.Hls.FileSystem             (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "diagnostics"
-  [ testSessionWait "fix syntax error" $ do
+  [ testWithDummyPluginEmpty "fix syntax error" $ do
       let content = T.unlines [ "module Testing wher" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
@@ -51,7 +54,7 @@ tests = testGroup "diagnostics"
               }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [])]
-  , testSessionWait "introduce syntax error" $ do
+  , testWithDummyPluginEmpty "introduce syntax error" $ do
       let content = T.unlines [ "module Testing where" ]
       doc <- createDoc "Testing.hs" "haskell" content
       void $ skipManyTill anyMessage (message SMethod_WindowWorkDoneProgressCreate)
@@ -63,7 +66,7 @@ tests = testGroup "diagnostics"
               }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
-  , testSessionWait "update syntax error" $ do
+  , testWithDummyPluginEmpty "update syntax error" $ do
       let content = T.unlines [ "module Testing(missing) where" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'")])]
@@ -74,7 +77,7 @@ tests = testGroup "diagnostics"
               }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'")])]
-  , testSessionWait "variable not in scope" $ do
+  , testWithDummyPluginEmpty "variable not in scope" $ do
       let content = T.unlines
             [ "module Testing where"
             , "foo :: Int -> Int -> Int"
@@ -90,7 +93,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-  , testSessionWait "type error" $ do
+  , testWithDummyPluginEmpty "type error" $ do
       let content = T.unlines
             [ "module Testing where"
             , "foo :: Int -> String -> Int"
@@ -102,7 +105,7 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'")]
           )
         ]
-  , testSessionWait "typed hole" $ do
+  , testWithDummyPluginEmpty "typed hole" $ do
       let content = T.unlines
             [ "module Testing where"
             , "foo :: Int -> String"
@@ -129,7 +132,7 @@ tests = testGroup "diagnostics"
         expectedDs aMessage =
           [ ("A.hs", [(DiagnosticSeverity_Error, (2,4), aMessage)])
           , ("B.hs", [(DiagnosticSeverity_Error, (3,4), bMessage)])]
-        deferralTest title binding msg = testSessionWait title $ do
+        deferralTest title binding msg = testWithDummyPluginEmpty title $ do
           _ <- createDoc "A.hs" "haskell" $ sourceA binding
           _ <- createDoc "B.hs" "haskell"   sourceB
           expectDiagnostics $ expectedDs msg
@@ -139,7 +142,7 @@ tests = testGroup "diagnostics"
     , deferralTest "out of scope var"    "unbound" "Variable not in scope"
     ]
 
-  , testSessionWait "remove required module" $ do
+  , testWithDummyPluginEmpty "remove required module" $ do
       let contentA = T.unlines [ "module ModuleA where" ]
       docA <- createDoc "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
@@ -154,7 +157,7 @@ tests = testGroup "diagnostics"
               }
       changeDoc docA [change]
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module")])]
-  , testSessionWait "add missing module" $ do
+  , testWithDummyPluginEmpty "add missing module" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
@@ -164,22 +167,21 @@ tests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
-  , testCase "add missing module (non workspace)" $
+  , testWithDummyPluginAndCap' "add missing module (non workspace)" lspTestCapsNoFileWatches $ \tmpDir -> do
     -- By default lsp-test sends FileWatched notifications for all files, which we don't want
     -- as non workspace modules will not be watched by the LSP server.
     -- To work around this, we tell lsp-test that our client doesn't have the
     -- FileWatched capability, which is enough to disable the notifications
-    withTempDir $ \tmpDir -> runInDir'' lspTestCapsNoFileWatches tmpDir "." "." [] $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
             ]
-      _ <- createDoc (tmpDir </> "ModuleB.hs") "haskell" contentB
-      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
+      _ <- createDoc (tmpDir `toAbsFp` "ModuleB.hs") "haskell" contentB
+      expectDiagnostics [(tmpDir `toAbsFp` "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
       let contentA = T.unlines [ "module ModuleA where" ]
-      _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
-      expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
-  , testSessionWait "cyclic module dependency" $ do
+      _ <- createDoc (tmpDir `toAbsFp` "ModuleA.hs") "haskell" contentA
+      expectDiagnostics [(tmpDir `toAbsFp` "ModuleB.hs", [])]
+  , testWithDummyPluginEmpty "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import ModuleB"
@@ -198,7 +200,7 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
-  , testSession' "deeply nested cyclic module dependency" $ \path -> do
+  , testWithDummyPluginEmpty' "deeply nested cyclic module dependency" $ \path -> do
       let contentA = unlines
             [ "module ModuleA where" , "import ModuleB" ]
       let contentB = unlines
@@ -209,17 +211,17 @@ tests = testGroup "diagnostics"
             [ "module ModuleD where" , "import ModuleC" ]
           cradle =
             "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
-      liftIO $ writeFile (path </> "ModuleA.hs") contentA
-      liftIO $ writeFile (path </> "ModuleB.hs") contentB
-      liftIO $ writeFile (path </> "ModuleC.hs") contentC
-      liftIO $ writeFile (path </> "hie.yaml") cradle
+      liftIO $ writeFile (path `toAbsFp` "ModuleA.hs") contentA
+      liftIO $ writeFile (path `toAbsFp` "ModuleB.hs") contentB
+      liftIO $ writeFile (path `toAbsFp` "ModuleC.hs") contentC
+      liftIO $ writeFile (path `toAbsFp` "hie.yaml") cradle
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
         [ ( "ModuleB.hs"
           , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
-  , testSessionWait "cyclic module dependency with hs-boot" $ do
+  , testWithDummyPluginEmpty "cyclic module dependency with hs-boot" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import {-# SOURCE #-} ModuleB"
@@ -238,7 +240,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSession' "bidirectional module dependency with hs-boot" $ \path -> do
+  , testWithDummyPluginEmpty' "bidirectional module dependency with hs-boot" $ \path -> do
       let cradle = unlines
             [ "cradle:"
             , "  direct: {arguments: [ModuleA, ModuleB]}"
@@ -260,13 +262,13 @@ tests = testGroup "diagnostics"
       let contentAboot = T.unlines
             [ "module ModuleA where"
             ]
-      liftIO $ writeFile (path </> "hie.yaml") cradle
+      liftIO $ writeFile (path `toAbsFp` "hie.yaml") cradle
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSessionWait "correct reference used with hs-boot" $ do
+  , testWithDummyPluginEmpty "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import {-# SOURCE #-} ModuleA()"
@@ -292,7 +294,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
       expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSessionWait "redundant import" $ do
+  , testWithDummyPluginEmpty "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
@@ -306,7 +308,7 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Warning, (2, 0), "The import of 'ModuleA' is redundant", Just DiagnosticTag_Unnecessary)]
           )
         ]
-  , testSessionWait "redundant import even without warning" $ do
+  , testWithDummyPluginEmpty "redundant import even without warning" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wno-unused-imports -Wmissing-signatures #-}"
@@ -318,7 +320,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSessionWait "package imports" $ do
+  , testWithDummyPluginEmpty "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
             , "x :: Integer"
@@ -356,7 +358,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-  , testSessionWait "unqualified warnings" $ do
+  , testWithDummyPluginEmpty "unqualified warnings" $ do
       let fooContent = T.unlines
             [ "{-# OPTIONS_GHC -Wredundant-constraints #-}"
             , "module Foo where"
@@ -374,7 +376,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-    , testSessionWait "lower-case drive" $ do
+    , testWithDummyPluginEmpty "lower-case drive" $ do
           let aContent = T.unlines
                 [ "module A.A where"
                 , "import A.B ()"
@@ -407,7 +409,7 @@ tests = testGroup "diagnostics"
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)
           closeDoc a
-  , testSessionWait "strip file path" $ do
+  , testWithDummyPluginEmpty "strip file path" $ do
       let
           name = "Testing"
           content = T.unlines
@@ -426,8 +428,8 @@ tests = testGroup "diagnostics"
             Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
           failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
       Lens.mapMOf_ offenders failure notification
-  , testSession' "-Werror in cradle is ignored" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml")
+  , testWithDummyPluginEmpty' "-Werror in cradle is ignored" $ \sessionDir -> do
+      liftIO $ writeFile (sessionDir `toAbsFp` "hie.yaml")
         "cradle: {direct: {arguments: [\"-Wall\", \"-Werror\"]}}"
       let fooContent = T.unlines
             [ "module Foo where"
@@ -440,7 +442,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-  , testSessionWait "-Werror in pragma is ignored" $ do
+  , testWithDummyPluginEmpty "-Werror in pragma is ignored" $ do
       let fooContent = T.unlines
             [ "{-# OPTIONS_GHC -Wall -Werror #-}"
             , "module Foo() where"
@@ -455,9 +457,9 @@ tests = testGroup "diagnostics"
           )
         ]
   , testCase "typecheck-all-parents-of-interest" $ runWithExtraFiles "recomp" $ \dir -> do
-    let bPath = dir </> "B.hs"
-        pPath = dir </> "P.hs"
-        aPath = dir </> "A.hs"
+    let bPath = dir `toAbsFp` "B.hs"
+        pPath = dir `toAbsFp` "P.hs"
+        aPath = dir `toAbsFp` "A.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
@@ -490,7 +492,7 @@ tests = testGroup "diagnostics"
       ]
     expectNoMoreDiagnostics 1
 
-  , testSessionWait "deduplicate missing module diagnostics" $  do
+  , testWithDummyPluginEmpty "deduplicate missing module diagnostics" $  do
       let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
       doc <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
@@ -552,7 +554,7 @@ cancellationTestGroup name edits sessionDepsOutcome parseOutcome tcOutcome = tes
     ]
 
 cancellationTemplate :: (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Maybe (String, Bool) -> TestTree
-cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ runTestNoKick $ do
+cancellationTemplate (edit, undoEdit) mbKey = testWithDummyPluginEmpty (maybe "-" fst mbKey) $ do
       doc <- createDoc "Foo.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wall #-}"
             , "module Foo where"
@@ -578,7 +580,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
       expectNoMoreDiagnostics 0.5
     where
         -- similar to run except it disables kick
-        runTestNoKick s = withTempDir $ \dir -> runInDir' dir "." "." ["--test-no-kick"] s
+        -- runTestNoKick s = runWithDummyPluginEmpty dir "." "." ["--test-no-kick"] s
 
         typeCheck doc = do
             WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
