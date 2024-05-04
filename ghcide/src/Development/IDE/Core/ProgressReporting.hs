@@ -79,7 +79,7 @@ updateState start (Event KickStarted)   NotStarted  = pure $ Running start
 updateState start (Event KickStarted)   (Running a) = join a $> Running start
 updateState _     (Event KickCompleted) (Running a) = join a $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = a $> Stopped
+updateState _     StopProgress          (Running a) = join a $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
