@@ -156,6 +156,8 @@ jobs:
     - name: Display results
       run: |
         column -s, -t < bench-results/unprofiled/${{ matrix.example }}/results.csv | tee bench-results/unprofiled/${{ matrix.example }}/results.txt
+        echo
+        echo "Performance Diff(comparing to its previous Version):"
         column -s, -t < bench-results/unprofiled/${{ matrix.example }}/resultDiff.csv | tee bench-results/unprofiled/${{ matrix.example }}/resultDiff.txt
 
     - name: tar benchmarking artifacts
