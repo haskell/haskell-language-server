@@ -21,7 +21,7 @@ import qualified Development.IDE.Main                     as IDEMain
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import           Development.IDE.Types.Options
-import           Ide.Logger                               (LoggingColumn (DataColumn, PriorityColumn),
+import           Ide.Logger                               (LoggingColumn (..),
                                                            Pretty (pretty),
                                                            Priority (Debug, Error, Info),
                                                            WithPriority (WithPriority, priority),
@@ -73,7 +73,7 @@ main = withTelemetryRecorder $ \telemetryRecorder -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
       cmapWithPrio pretty
-      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
+      <$> makeDefaultStderrRecorder (Just [ThreadIdColumn, PriorityColumn, DataColumn])
 
     let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
