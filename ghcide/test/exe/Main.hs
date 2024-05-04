@@ -49,6 +49,7 @@ import           CompletionTests
 import           CPPTests
 import           CradleTests
 import           DependentFileTest
+import           Development.IDE              (LoggingColumn (..))
 import           DiagnosticTests
 import           ExceptionTests
 import           FindDefinitionAndHoverTests
@@ -74,7 +75,7 @@ import           WatchedFileTests
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
+  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [ThreadIdColumn, PriorityColumn, DataColumn])
 
   let docWithFilteredPriorityRecorder =
         docWithPriorityRecorder
