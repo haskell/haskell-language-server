@@ -391,7 +391,7 @@ parseMaxResidencyAndAllocations input =
 
 
 --------------------------------------------------------------------------------
-addGeParentOracle = void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
+addGetParentOracle = void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
 -- | Rules to aggregate the CSV output of individual experiments
 csvRules :: forall example . RuleResultForExample example => FilePattern -> Rules ()
 csvRules build = do
