@@ -48,7 +48,7 @@ module Development.Benchmark.Rules
   (
       buildRules, MkBuildRules(..), OutputFolder, ProjectRoot,
       benchRules, MkBenchRules(..), BenchProject(..), ProfilingMode(..),
-      addGeParentOracle,
+      addGetParentOracle,
       csvRules,
       svgRules,
       heapProfileRules,
@@ -391,6 +391,9 @@ parseMaxResidencyAndAllocations input =
 
 
 --------------------------------------------------------------------------------
+-- | oracles to get previous version of a given version
+-- used for diff the results
+addGetParentOracle :: Rules ()
 addGetParentOracle = void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
 -- | Rules to aggregate the CSV output of individual experiments
 csvRules :: forall example . RuleResultForExample example => FilePattern -> Rules ()
@@ -446,7 +449,7 @@ convertToDiffResults line baseLine = intercalate "," diffResults
 
 showItemDiffResult ::  (Item, Maybe Double) -> String
 showItemDiffResult (ItemString x, _) = x
-showItemDiffResult (_, Nothing)      = "Nah"
+showItemDiffResult (_, Nothing)      = "NA"
 showItemDiffResult (Mem x, Just y)   = printf "%.2f" (y * 100 - 100) <> "%"
 showItemDiffResult (Time x, Just y)  = printf "%.2f" (y * 100 - 100) <> "%"
 
@@ -464,9 +467,10 @@ parseLine = map f . splitOn ","
   where
     f x
       | "MB" `isSuffixOf` x = Mem $ read $ reverse $ drop 2 $ reverse x
-      --   is it double
-      | any isAlpha x = ItemString x
-      | otherwise = Time $ read x
+      | otherwise =
+            case readMaybe @Double x of
+                Just time -> Time time
+                Nothing   -> ItemString x
 
 --------------------------------------------------------------------------------
 
