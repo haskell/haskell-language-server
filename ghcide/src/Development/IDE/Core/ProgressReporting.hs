@@ -79,7 +79,7 @@ updateState start (Event KickStarted)   NotStarted  = pure $ Running start
 updateState start (Event KickStarted)   (Running a) = signalBarrier a () $> Running start
 updateState _     (Event KickCompleted) (Running a) = signalBarrier a () $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = putMVar a () $> Stopped
+updateState _     StopProgress          (Running a) = signalBarrier a () $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
