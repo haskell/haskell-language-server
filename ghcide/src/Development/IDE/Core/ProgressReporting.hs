@@ -68,18 +68,18 @@ noProgressReporting = return $ ProgressReporting
 data State
     = NotStarted
     | Stopped
-    | Running (IO (IO ()))
+    | Running (MVar ())
 
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: IO (IO ()) -> Transition -> State -> IO State
+updateState :: MVar () -> Transition -> State -> IO State
 updateState _      _                    Stopped     = pure Stopped
 updateState start (Event KickStarted)   NotStarted  = pure $ Running start
-updateState start (Event KickStarted)   (Running a) = join a $> Running start
-updateState _     (Event KickCompleted) (Running a) = join a $> NotStarted
+updateState start (Event KickStarted)   (Running a) = putMVar a () $> Running start
+updateState _     (Event KickCompleted) (Running a) = putMVar a () $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = join a $> Stopped
+updateState _     StopProgress          (Running a) = putMVar a () $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
@@ -102,7 +102,7 @@ recordProgress InProgressState{..} file shift = do
             (Just 0, 0) -> pure ()
             (Just 0, _) -> modifyTVar' doneVar pred
             (Just _, 0) -> modifyTVar' doneVar (+1)
-            (Just _, _) -> pure()
+            (Just _, _) -> pure ()
   where
     alterPrevAndNew = do
         prev <- Focus.lookup
@@ -132,7 +132,9 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
         progressStop   =  updateStateVar StopProgress
-        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgressNew inProgressState)
+        updateStateVar tran = do
+            start <- lspShakeProgressNew inProgressState
+            modifyVar_ progressState $ updateState start tran
         inProgress = updateStateForFile inProgressState
     return ProgressReporting{..}
     where
@@ -149,7 +151,7 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                 async $ do
                     ready <- liftIO $ waitBarrier b
                     withProgress "Processing" (Just u) Cancellable $ \update -> loopUntil cancelProgress update 0
-            return (putMVar cancelProgress ())
+            return cancelProgress
             where
                 loopUntil m a b = untilMVar m $ loop a b
                 loop _ _ | optProgressStyle == NoProgress =
