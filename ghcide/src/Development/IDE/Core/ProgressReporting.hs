@@ -138,7 +138,7 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
             cancelProgress <- newBarrier
-            LSP.runLspT lspEnv $ withProgress "Processing" Nothing Cancellable $ \update ->
+            async $ LSP.runLspT lspEnv $ withProgress "Processing" Nothing Cancellable $ \update ->
                 race (liftIO $ waitBarrier cancelProgress) (loop update 0)
             return cancelProgress
             where
