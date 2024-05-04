@@ -464,7 +464,7 @@ parseLine = map f . splitOn ","
   where
     f x
       | "MB" `isSuffixOf` x = Mem $ read $ reverse $ drop 2 $ reverse x
-      --   is is double
+      --   is it double
       | any isAlpha x = ItemString x
       | otherwise = Time $ read x
 
