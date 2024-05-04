@@ -459,7 +459,6 @@ diffItem _ _ = (ItemString "no match", Nothing)
 data Item = Mem Int | Time Double | ItemString String
   deriving (Show)
 
--- split on ','
 parseLine :: String -> [Item]
 parseLine = map f . splitOn ","
   where
