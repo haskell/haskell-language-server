@@ -15,10 +15,10 @@ module Development.IDE.Core.ProgressReporting
 import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
                                                  modifyTVar', newTVarIO,
                                                  readTVarIO)
-import           Control.Concurrent.Strict      (MVar, modifyVar_, newBarrier,
-                                                 newEmptyMVar, newVar,
-                                                 signalBarrier, threadDelay,
-                                                 waitBarrier)
+import           Control.Concurrent.Strict      (Barrier, MVar, modifyVar_,
+                                                 newBarrier, newEmptyMVar,
+                                                 newVar, signalBarrier,
+                                                 threadDelay, waitBarrier)
 import           Control.Monad.Extra            hiding (loop)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
@@ -43,8 +43,8 @@ import qualified StmContainers.Map              as STM
 import           System.Time.Extra
 import           UnliftIO                       (MonadUnliftIO (..),
                                                  UnliftIO (unliftIO), async,
-                                                 newMVar, putMVar, readMVar,
-                                                 toIO, waitAnyCancel)
+                                                 newMVar, putMVar, race,
+                                                 readMVar, toIO, waitAnyCancel)
 import           UnliftIO.Exception             (bracket_)
 
 data ProgressEvent
@@ -68,16 +68,16 @@ noProgressReporting = return $ ProgressReporting
 data State
     = NotStarted
     | Stopped
-    | Running (MVar ())
+    | Running (Barrier ())
 
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: MVar () -> Transition -> State -> IO State
+updateState :: Barrier () -> Transition -> State -> IO State
 updateState _      _                    Stopped     = pure Stopped
 updateState start (Event KickStarted)   NotStarted  = pure $ Running start
-updateState start (Event KickStarted)   (Running a) = putMVar a () $> Running start
-updateState _     (Event KickCompleted) (Running a) = putMVar a () $> NotStarted
+updateState start (Event KickStarted)   (Running a) = signalBarrier a () $> Running start
+updateState _     (Event KickCompleted) (Running a) = signalBarrier a () $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
 updateState _     StopProgress          (Running a) = putMVar a () $> Stopped
 updateState _     StopProgress          st          = pure st
@@ -111,11 +111,6 @@ recordProgress InProgressState{..} file shift = do
         return (prev, new)
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
--- | Runs the action until it ends or until the given MVar is put.
---   Rethrows any exceptions.
-untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
-untilMVar mvar io = void $
-    waitAnyCancel =<< traverse async [ io , readMVar mvar ]
 
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
@@ -142,18 +137,11 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
-            cancelProgress <- newEmptyMVar
-            LSP.runLspT lspEnv $ do
-                u <- ProgressToken . InR . T.pack . show . hashUnique <$> liftIO newUnique
-                b <- liftIO newBarrier
-                LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
-                    LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-                async $ do
-                    ready <- liftIO $ waitBarrier b
-                    withProgress "Processing" (Just u) Cancellable $ \update -> loopUntil cancelProgress update 0
+            cancelProgress <- newBarrier
+            LSP.runLspT lspEnv $ withProgress "Processing" Nothing Cancellable $ \update ->
+                race (liftIO $ waitBarrier cancelProgress) (loop update 0)
             return cancelProgress
             where
-                loopUntil m a b = untilMVar m $ loop a b
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
                 loop update prevPct = do
