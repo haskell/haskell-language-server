@@ -44,7 +44,8 @@ import           System.Time.Extra
 import           UnliftIO                       (MonadUnliftIO (..),
                                                  UnliftIO (unliftIO), async,
                                                  newMVar, putMVar, race,
-                                                 readMVar, toIO, waitAnyCancel)
+                                                 readMVar, toIO, wait, waitAny,
+                                                 waitAnyCancel)
 import           UnliftIO.Exception             (bracket_)
 
 data ProgressEvent
@@ -68,18 +69,18 @@ noProgressReporting = return $ ProgressReporting
 data State
     = NotStarted
     | Stopped
-    | Running (Barrier ())
+    | Running (IO ())
 
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: Barrier () -> Transition -> State -> IO State
+updateState :: IO () -> Transition -> State -> IO State
 updateState _      _                    Stopped     = pure Stopped
 updateState start (Event KickStarted)   NotStarted  = pure $ Running start
-updateState start (Event KickStarted)   (Running a) = signalBarrier a () $> Running start
-updateState _     (Event KickCompleted) (Running a) = signalBarrier a () $> NotStarted
+updateState start (Event KickStarted)   (Running a) = a $> Running start
+updateState _     (Event KickCompleted) (Running a) = a $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = signalBarrier a () $> Stopped
+updateState _     StopProgress          (Running a) = a $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
@@ -137,10 +138,10 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
-            cancelProgress <- newBarrier
-            async $ LSP.runLspT lspEnv $ withProgress "Processing" Nothing Cancellable $ \update ->
-                race (liftIO $ waitBarrier cancelProgress) (loop update 0)
-            return cancelProgress
+            cancelProgressB <- newBarrier
+            job <- async $ LSP.runLspT lspEnv $ withProgress "Processing" Nothing Cancellable $ \update ->
+                race (liftIO $ waitBarrier cancelProgressB) (loop update 0)
+            return (signalBarrier cancelProgressB () >> wait job >> return ())
             where
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
