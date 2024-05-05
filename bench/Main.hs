@@ -163,6 +163,7 @@ createBuildSystem config = do
 
   buildRules build hlsBuildRules
   benchRules build (MkBenchRules (askOracle $ GetSamples ()) benchHls warmupHls "haskell-language-server" (parallelism configStatic))
+  addGetParentOracle
   csvRules build
   svgRules build
   heapProfileRules build
