@@ -60,6 +60,7 @@ instance NFData Unlinked where
   rnf (DotA f)   = rnf f
   rnf (DotDLL f) = rnf f
   rnf (BCOs a b) = seqCompiledByteCode a `seq` liftRnf rwhnf b
+  rnf  _         = error "rnf: not implemented for Unlinked"
 instance Show PackageFlag where show = unpack . printOutputable
 instance Show InteractiveImport where show = unpack . printOutputable
 instance Show PackageName  where show = unpack . printOutputable

@@ -41,7 +41,6 @@ import           Numeric.Natural
 data Log
   = LogShake Shake.Log
   | LogFileStore FileStore.Log
-  | LogOpenTextDocument !Uri
   | LogOpenedTextDocument !Uri
   | LogModifiedTextDocument !Uri
   | LogSavedTextDocument !Uri
