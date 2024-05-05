@@ -35,6 +35,7 @@ flag pedantic
 
 common warnings
   ghc-options:
+    -Werror=incomplete-patterns
     -Wall
     -Wincomplete-uni-patterns
     -Wunused-packages
@@ -43,6 +44,7 @@ common warnings
     -fno-ignore-asserts
 
 library
+  import: warnings
   default-language:   GHC2021
   build-depends:
     , aeson
