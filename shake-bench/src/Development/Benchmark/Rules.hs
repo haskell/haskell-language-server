@@ -48,6 +48,7 @@ module Development.Benchmark.Rules
   (
       buildRules, MkBuildRules(..), OutputFolder, ProjectRoot,
       benchRules, MkBenchRules(..), BenchProject(..), ProfilingMode(..),
+      addGetParentOracle,
       csvRules,
       svgRules,
       heapProfileRules,
@@ -77,11 +78,13 @@ import           Data.Aeson                                (FromJSON (..),
 import           Data.Aeson.Lens                           (AsJSON (_JSON),
                                                             _Object, _String)
 import           Data.ByteString.Lazy                      (ByteString)
-import           Data.Char                                 (isDigit)
-import           Data.List                                 (find, isInfixOf,
+import           Data.Char                                 (isAlpha, isDigit)
+import           Data.List                                 (find, intercalate,
+                                                            isInfixOf,
+                                                            isSuffixOf,
                                                             stripPrefix,
                                                             transpose)
-import           Data.List.Extra                           (lower)
+import           Data.List.Extra                           (lower, splitOn)
 import           Data.Maybe                                (fromMaybe)
 import           Data.String                               (fromString)
 import           Data.Text                                 (Text)
@@ -144,7 +147,9 @@ allTargetsForExample prof baseFolder ex = do
     configurations <- askOracle $ GetConfigurations ()
     let buildFolder = baseFolder </> profilingPath prof
     return $
-        [buildFolder </> getExampleName ex </> "results.csv"]
+        [
+            buildFolder </> getExampleName ex </> "results.csv"
+            , buildFolder </> getExampleName ex </> "resultDiff.csv"]
         ++ [ buildFolder </> getExampleName ex </> escaped (escapeExperiment e) <.> "svg"
              | e <- experiments
            ]
@@ -186,6 +191,8 @@ phonyRules prefix executableName prof buildFolder examples = do
         exampleTargets <- forM examples $ \ex ->
             allTargetsForExample prof buildFolder ex
         need $ (buildFolder </> profilingPath prof </> "results.csv")
+             : concat exampleTargets
+        need $ (buildFolder </> profilingPath prof </> "resultDiff.csv")
              : concat exampleTargets
     phony (prefix <> "all-binaries") $ need =<< allBinaries buildFolder executableName
 --------------------------------------------------------------------------------
@@ -384,69 +391,92 @@ parseMaxResidencyAndAllocations input =
 
 
 --------------------------------------------------------------------------------
-
+-- | oracles to get previous version of a given version
+-- used for diff the results
+addGetParentOracle :: Rules ()
+addGetParentOracle = void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
 -- | Rules to aggregate the CSV output of individual experiments
 csvRules :: forall example . RuleResultForExample example => FilePattern -> Rules ()
 csvRules build = do
+  let genConfig resultName prefixName prefixOracles out = do
+        configurations <- prefixOracles
+        let allResultFiles = [takeDirectory out </> c </> resultName | c <- configurations ]
+        allResults <- traverse readFileLines allResultFiles
+        let header = head $ head allResults
+            results = map tail allResults
+            header' = prefixName <> ", " <> header
+            results' = zipWith (\v -> map (\l -> v <> ", " <> l)) configurations results
+        writeFileChanged out $ unlines $ header' : interleave results'
   -- build results for every experiment*example
-  build -/- "*/*/*/*/results.csv" %> \out -> do
+  priority 1 $ build -/- "*/*/*/*/results.csv" %> \out -> do
       experiments <- askOracle $ GetExperiments ()
-
       let allResultFiles = [takeDirectory out </> escaped (escapeExperiment e) <.> "csv" | e <- experiments]
       allResults <- traverse readFileLines allResultFiles
-
       let header = head $ head allResults
           results = map tail allResults
       writeFileChanged out $ unlines $ header : concat results
-
+  priority 2 $ build -/- "*/*/*/*/resultDiff.csv" %> \out -> do
+    let out2@[b, flav, example, ver, conf, exp_] = splitDirectories out
+    prev <- fmap T.unpack $ askOracle $ GetParent $ T.pack ver
+    allResultsCur <- readFileLines $ joinPath [b ,flav, example, ver, conf] </> "results.csv"
+    allResultsPrev <- readFileLines $ joinPath [b ,flav, example, prev, conf] </> "results.csv"
+    let resultsPrev = tail allResultsPrev
+    let resultsCur = tail allResultsCur
+    let resultDiff = zipWith convertToDiffResults resultsCur resultsPrev
+    writeFileChanged out $ unlines $ head allResultsCur : resultDiff
   -- aggregate all configurations for an experiment
-  build -/- "*/*/*/results.csv" %> \out -> do
-    configurations <- map confName <$> askOracle (GetConfigurations ())
-    let allResultFiles = [takeDirectory out </> c </> "results.csv" | c <- configurations ]
-
-    allResults <- traverse readFileLines allResultFiles
-
-    let header = head $ head allResults
-        results = map tail allResults
-        header' = "configuration, " <> header
-        results' = zipWith (\v -> map (\l -> v <> ", " <> l)) configurations results
-
-    writeFileChanged out $ unlines $ header' : interleave results'
-
+  priority 3 $ build -/- "*/*/*/results.csv" %> genConfig "results.csv"
+    "Configuration" (map confName <$> askOracle (GetConfigurations ()))
+  priority 3 $ build -/- "*/*/*/resultDiff.csv" %> genConfig "resultDiff.csv"
+    "Configuration" (map confName <$> askOracle (GetConfigurations ()))
   -- aggregate all experiments for an example
-  build -/- "*/*/results.csv" %> \out -> do
-    versions <- map (T.unpack . humanName) <$> askOracle (GetVersions ())
-    let allResultFiles = [takeDirectory out </> v </> "results.csv" | v <- versions]
-
-    allResults <- traverse readFileLines allResultFiles
-
-    let header = head $ head allResults
-        results = map tail allResults
-        header' = "version, " <> header
-        results' = zipWith (\v -> map (\l -> v <> ", " <> l)) versions results
-
-    writeFileChanged out $ unlines $ header' : interleave results'
-
+  priority 4 $ build -/- "*/*/results.csv" %> genConfig "results.csv"
+        "Version" (map (T.unpack . humanName) <$> askOracle (GetVersions ()))
+  priority 4 $ build -/- "*/*/resultDiff.csv" %> genConfig "resultDiff.csv"
+        "Version" (map (T.unpack . humanName) <$> askOracle (GetVersions ()))
   -- aggregate all examples
-  build -/- "*/results.csv" %> \out -> do
-    examples <- map (getExampleName @example) <$> askOracle (GetExamples ())
-    let allResultFiles = [takeDirectory out </> e </> "results.csv" | e <- examples]
+  priority 5 $ build -/- "*/results.csv" %> genConfig "results.csv"
+        "Example" (map getExampleName <$> askOracle (GetExamples ()))
+  priority 5 $ build -/- "*/resultDiff.csv" %> genConfig "resultDiff.csv"
+        "Example" (map getExampleName <$> askOracle (GetExamples ()))
 
-    allResults <- traverse readFileLines allResultFiles
+convertToDiffResults :: String -> String -> String
+convertToDiffResults line baseLine = intercalate "," diffResults
+        where items = parseLine line
+              baseItems = parseLine baseLine
+              diffItems = zipWith diffItem items baseItems
+              diffResults = map showItemDiffResult diffItems
 
-    let header = head $ head allResults
-        results = map tail allResults
-        header' = "example, " <> header
-        results' = zipWith (\e -> map (\l -> e <> ", " <> l)) examples results
+showItemDiffResult ::  (Item, Maybe Double) -> String
+showItemDiffResult (ItemString x, _) = x
+showItemDiffResult (_, Nothing)      = "NA"
+showItemDiffResult (Mem x, Just y)   = printf "%.2f" (y * 100 - 100) <> "%"
+showItemDiffResult (Time x, Just y)  = printf "%.2f" (y * 100 - 100) <> "%"
 
-    writeFileChanged out $ unlines $ header' : concat results'
+diffItem :: Item -> Item -> (Item, Maybe Double)
+diffItem (Mem x) (Mem y) = (Mem x, Just $ fromIntegral x / fromIntegral y)
+diffItem (Time x) (Time y) = (Time x, if y == 0 then Nothing else Just $ x / y)
+diffItem (ItemString x) (ItemString y) = (ItemString x, Nothing)
+diffItem _ _ = (ItemString "no match", Nothing)
+
+data Item = Mem Int | Time Double | ItemString String
+  deriving (Show)
+
+parseLine :: String -> [Item]
+parseLine = map f . splitOn ","
+  where
+    f x
+      | "MB" `isSuffixOf` x = Mem $ read $ reverse $ drop 2 $ reverse x
+      | otherwise =
+            case readMaybe @Double x of
+                Just time -> Time time
+                Nothing   -> ItemString x
 
 --------------------------------------------------------------------------------
 
 -- | Rules to produce charts for the GC stats
 svgRules :: FilePattern -> Rules ()
 svgRules build = do
-  void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
   -- chart GC stats for an experiment on a given revision
   priority 1 $
     build -/- "*/*/*/*/*.svg" %> \out -> do
