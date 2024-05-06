@@ -476,7 +476,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                       } <- getShakeExtras
     let invalidateShakeCache = do
             void $ modifyVar' version succ
-            return $ toKey GhcSessionIO emptyFilePath
+            return $ toNoFileKey GhcSessionIO
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
