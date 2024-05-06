@@ -77,6 +77,7 @@ module Development.IDE.Core.Shake(
     ) where
 
 import           Control.Concurrent.Async
+import           Control.Concurrent.Extra               (signalBarrier)
 import           Control.Concurrent.STM
 import           Control.Concurrent.STM                 (writeTQueue)
 import           Control.Concurrent.STM.Stats           (atomicallyNamed)
@@ -174,7 +175,6 @@ import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
-import Control.Concurrent.Extra (signalBarrier)
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -766,8 +766,8 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
         withMVar'
             shakeSession
             (\runner -> do
-                signalBarrier barrier ()
                 (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                signalBarrier barrier ()
                 keys <- ioActionBetweenShakeSession
                 atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
                 res <- shakeDatabaseProfile shakeDb
