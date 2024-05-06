@@ -518,7 +518,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
             return (pure hasUpdate)
           for_ hasUpdate $ \x ->
             logWith recorder Debug $ LogKnownFilesUpdated x
-          return $ toKey GetKnownTargets emptyFilePath
+          return $ toNoFileKey GetKnownTargets
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
