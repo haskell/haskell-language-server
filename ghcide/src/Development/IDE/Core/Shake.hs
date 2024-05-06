@@ -762,12 +762,11 @@ delayedAction a = do
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
     barrier <- newBarrier
-    atomically $ writeTQueue (shakeOpQueue $ shakeExtras) $
+    atomically $ writeTQueue (shakeOpQueue $ shakeExtras) $ do
         withMVar'
             shakeSession
             (\runner -> do
                 (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                signalBarrier barrier ()
                 keys <- ioActionBetweenShakeSession
                 atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
                 res <- shakeDatabaseProfile shakeDb
@@ -782,6 +781,7 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
             -- See https://github.com/haskell/ghcide/issues/79
             (\() -> do
             (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+        signalBarrier barrier ()
     waitBarrier barrier
         where
             logErrorAfter :: Seconds -> IO () -> IO ()
