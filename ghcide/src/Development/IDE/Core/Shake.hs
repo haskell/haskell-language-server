@@ -174,6 +174,7 @@ import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
+import Control.Concurrent.Extra (signalBarrier)
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -759,31 +760,34 @@ delayedAction a = do
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
+shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
+    barrier <- newBarrier
     atomically $ writeTQueue (shakeOpQueue $ shakeExtras) $
-    withMVar'
-        shakeSession
-        (\runner -> do
-              (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-              keys <- ioActionBetweenShakeSession
-              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
-              res <- shakeDatabaseProfile shakeDb
-              backlog <- readTVarIO $ dirtyKeys shakeExtras
-              queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+        withMVar'
+            shakeSession
+            (\runner -> do
+                signalBarrier barrier ()
+                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                keys <- ioActionBetweenShakeSession
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                res <- shakeDatabaseProfile shakeDb
+                backlog <- readTVarIO $ dirtyKeys shakeExtras
+                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              -- this log is required by tests
-              logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-        )
-        -- It is crucial to be masked here, otherwise we can get killed
-        -- between spawning the new thread and updating shakeSession.
-        -- See https://github.com/haskell/ghcide/issues/79
-        (\() -> do
-          (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
-    where
-        logErrorAfter :: Seconds -> IO () -> IO ()
-        logErrorAfter seconds action = flip withAsync (const action) $ do
-            sleep seconds
-            logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
+                -- this log is required by tests
+                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+            )
+            -- It is crucial to be masked here, otherwise we can get killed
+            -- between spawning the new thread and updating shakeSession.
+            -- See https://github.com/haskell/ghcide/issues/79
+            (\() -> do
+            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+    waitBarrier barrier
+        where
+            logErrorAfter :: Seconds -> IO () -> IO ()
+            logErrorAfter seconds action = flip withAsync (const action) $ do
+                sleep seconds
+                logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
 -- | Enqueue an action in the existing 'ShakeSession'.
 --   Returns a computation to block until the action is run, propagating exceptions.
