@@ -1225,8 +1225,9 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs)
-                    (A res)
-                    (setValues state key file res (Vector.fromList diags) >> modifyTVar' dirtyKeys (deleteKeySet $ toKey key file))
+                    (A res) $ do
+                        setValues state key file res (Vector.fromList diags)
+                        modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
         return res
   where
     -- Highly unsafe helper to compute the version of a file

@@ -106,7 +106,7 @@ getFileExistsMapUntracked = do
   FileExistsMapVar v <- getIdeGlobalAction
   return v
 
--- | Modify the global store of file exists.
+-- | Modify the global store of file exists and return the keys that need to be mark as dirty
 modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO [Key]
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state

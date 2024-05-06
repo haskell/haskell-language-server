@@ -509,13 +509,13 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return [(targetTarget, Set.fromList found)]
-          hasUpdate <- join $ atomically $ do
+          hasUpdate <- atomically $ do
             known <- readTVar knownTargetsVar
             let known' = flip mapHashed known $ \k ->
                             HM.unionWith (<>) k $ HM.fromList knownTargets
                 hasUpdate = if known /= known' then Just (unhashed known') else Nothing
             writeTVar knownTargetsVar known'
-            return (pure hasUpdate)
+            pure hasUpdate
           for_ hasUpdate $ \x ->
             logWith recorder Debug $ LogKnownFilesUpdated x
           return $ toNoFileKey GetKnownTargets

@@ -18,8 +18,7 @@ import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Exception.Safe                   (SomeException,
                                                            catchAny,
                                                            displayException)
-import           Control.Monad.Extra                      (concatMapM, join,
-                                                           unless, when)
+import           Control.Monad.Extra                      (concatMapM, unless, when)
 import           Control.Monad.IO.Class                   (liftIO)
 import qualified Data.Aeson                               as J
 import           Data.Coerce                              (coerce)
