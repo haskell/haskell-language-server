@@ -106,7 +106,7 @@ import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
-import           Development.IDE.Types.Shake          (WithHieDb, toKey)
+import           Development.IDE.Types.Shake          (WithHieDb, toNoFileKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
