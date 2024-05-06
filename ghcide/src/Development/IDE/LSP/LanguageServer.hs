@@ -34,6 +34,8 @@ import           UnliftIO.Exception
 import qualified Colog.Core                            as Colog
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.Service          (ShakeOpQueue,
+                                                        runWithShake)
 import           Development.IDE.Core.Shake            hiding (Log, Priority)
 import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
@@ -128,7 +130,7 @@ setupLSP ::
      Recorder (WithPriority Log)
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
-  -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+  -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> ShakeOpQueue -> IO IdeState)
   -> MVar ()
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
@@ -186,7 +188,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
 handleInit
     :: Recorder (WithPriority Log)
     -> (FilePath -> IO FilePath)
-    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> ShakeOpQueue -> IO IdeState)
     -> MVar ()
     -> IO ()
     -> (SomeLspId -> IO ())
@@ -228,8 +230,8 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     exceptionInHandler e
                     k $ ResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
-        untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' hieChan' -> do
-            putMVar dbMVar (WithHieDbShield withHieDb',hieChan')
+        untilMVar lifetime $ runWithShake $ \sq -> runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' hieChan' -> do
+            putMVar dbMVar (WithHieDbShield withHieDb',hieChan',sq)
             forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
@@ -239,8 +241,8 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
 
-    (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env root withHieDb hieChan
+    (WithHieDbShield withHieDb,hieChan,sq) <- takeMVar dbMVar
+    ide <- getIdeState env root withHieDb hieChan sq
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 

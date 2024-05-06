@@ -9,6 +9,8 @@
 module Development.IDE.Core.Service(
     getIdeOptions, getIdeOptionsIO,
     IdeState, initialise, shutdown,
+    runWithShake,
+    ShakeOpQueue,
     runAction,
     getDiagnostics,
     ideLogger,
@@ -31,6 +33,10 @@ import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.Server              as LSP
 
+import           Control.Concurrent.Async         (async, withAsync)
+import           Control.Concurrent.STM           (TQueue, atomically,
+                                                   newTQueueIO, readTQueue,
+                                                   writeTBQueue, writeTQueue)
 import           Control.Monad
 import qualified Development.IDE.Core.FileExists  as FileExists
 import qualified Development.IDE.Core.OfInterest  as OfInterest
@@ -66,9 +72,10 @@ initialise :: Recorder (WithPriority Log)
            -> IdeOptions
            -> WithHieDb
            -> IndexQueue
+           -> ShakeOpQueue
            -> Monitoring
            -> IO IdeState
-initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan metrics = do
+initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan sq metrics = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
@@ -84,6 +91,7 @@ initialise recorder defaultConfig plugins mainRule lspEnv debouncer options with
         (optTesting options)
         withHieDb
         hiedbChan
+        sq
         (optShakeOptions options)
         metrics
           $ do
@@ -94,7 +102,7 @@ initialise recorder defaultConfig plugins mainRule lspEnv debouncer options with
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()
-shutdown = shakeShut
+shutdown st = atomically $ writeTQueue (shakeOpQueue $ shakeExtras st) $ shakeShut st
 
 -- This will return as soon as the result of the action is
 -- available.  There might still be other rules running at this point,
@@ -102,3 +110,14 @@ shutdown = shakeShut
 runAction :: String -> IdeState -> Action a -> IO a
 runAction herald ide act =
   join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug act)
+
+
+runWithShake :: (ShakeOpQueue-> IO ()) -> IO ()
+runWithShake f = do
+    q <- newTQueueIO
+    withAsync (runShakeOp q) $ const $ f q
+    where
+        runShakeOp :: ShakeOpQueue -> IO ()
+        runShakeOp q = do
+            join $ atomically $ readTQueue q
+            runShakeOp q

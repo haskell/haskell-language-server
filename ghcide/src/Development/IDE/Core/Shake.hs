@@ -29,6 +29,7 @@ module Development.IDE.Core.Shake(
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
     shakeEnqueue,
+    ShakeOpQueue,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     FastResult(..),
@@ -77,6 +78,7 @@ module Development.IDE.Core.Shake(
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
+import           Control.Concurrent.STM                 (writeTQueue)
 import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -257,6 +259,10 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+-- ShakeOpQueue is used to enqueue Shake operations.
+-- shutdown, restart
+type ShakeOpQueue = TQueue (IO ())
+
 -- Note [Semantic Tokens Cache Location]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- storing semantic tokens cache for each file in shakeExtras might
@@ -329,6 +335,7 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
+    , shakeOpQueue :: ShakeOpQueue
     }
 
 type WithProgressFunc = forall a.
@@ -614,6 +621,7 @@ shakeOpen :: Recorder (WithPriority Log)
           -> IdeTesting
           -> WithHieDb
           -> IndexQueue
+          -> ShakeOpQueue
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
@@ -621,7 +629,7 @@ shakeOpen :: Recorder (WithPriority Log)
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
-  withHieDb indexQueue opts monitoring rules = mdo
+  withHieDb indexQueue shakeOpQueue opts monitoring rules = mdo
 
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
@@ -752,6 +760,7 @@ delayedAction a = do
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
+    atomically $ writeTQueue (shakeOpQueue $ shakeExtras) $
     withMVar'
         shakeSession
         (\runner -> do
