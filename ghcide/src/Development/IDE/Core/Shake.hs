@@ -826,7 +826,7 @@ runWithShake f = do
 -- prepare the restart
 stopShakeSession :: RestartArguments -> IO Seconds
 stopShakeSession RestartArguments{restartIdeState=IdeState{..}, ..} = do
-            withMVar shakeSession
+            withMVarMasked shakeSession
                 (\runner -> do
                     (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
                     keys <- restartActionBetweenShakeSession
