@@ -16,7 +16,8 @@ import           Development.IDE.Test            (diagnostic,
                                                   expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
-                                                  flushMessages, waitForAction)
+                                                  flushMessages, waitForAction,
+                                                  waitForTypecheck)
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -108,7 +109,8 @@ tests = testGroup "diagnostics"
             , "foo :: Int -> String"
             , "foo a = _ a"
             ]
-      _ <- createDoc "Testing.hs" "haskell" content
+      s <- createDoc "Testing.hs" "haskell" content
+    --   waitForTypecheck s
       expectDiagnostics
         [ ( "Testing.hs"
           , [(DiagnosticSeverity_Error, (2, 8), "Found hole: _ :: Int -> String")]
@@ -132,6 +134,7 @@ tests = testGroup "diagnostics"
         deferralTest title binding msg = testSessionWait title $ do
           _ <- createDoc "A.hs" "haskell" $ sourceA binding
           _ <- createDoc "B.hs" "haskell"   sourceB
+          liftIO $ sleep 1
           expectDiagnostics $ expectedDs msg
     in
     [ deferralTest "type error"          "True"    "Couldn't match expected type"
