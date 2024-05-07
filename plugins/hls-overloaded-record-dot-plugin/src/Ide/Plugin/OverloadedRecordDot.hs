@@ -48,7 +48,11 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
                                                        GhcPass,
+#if __GLASGOW_HASKELL__ < 910
                                                        HsExpansion (HsExpanded),
+#else
+                                                       XXExprGhcRn(..),
+#endif
                                                        HsExpr (HsApp, HsVar, OpApp, XExpr),
                                                        LHsExpr, Pass (..),
                                                        appPrec, dollarName,
@@ -246,7 +250,11 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
     where getEnabledExtensions :: TcModuleResult -> [Extension]
           getEnabledExtensions = getExtensions . tmrParsed
           getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
+#if __GLASGOW_HASKELL__ >= 910
+          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_,_)) =
+#else
           getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
+#endif
             collectRecordSelectors valBinds
           rewriteRange :: PositionMapping -> RecordSelectorExpr
                             -> Maybe RecordSelectorExpr
@@ -281,7 +289,11 @@ getRecSels :: LHsExpr (GhcPass 'Renamed) -> ([RecordSelectorExpr], Bool)
 -- branch. We do this here, by explicitly returning occurrences from traversing
 -- the original branch, and returning True, which keeps syb from implicitly
 -- continuing to traverse.
+#if __GLASGOW_HASKELL__ >= 910
+getRecSels (unLoc -> XExpr (ExpandedThingRn a _)) = (collectRecordSelectors a, True)
+#else
 getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
+#endif
 #if __GLASGOW_HASKELL__ >= 903
 -- applied record selection: "selector record" or "selector (record)" or
 -- "selector selector2.record2"

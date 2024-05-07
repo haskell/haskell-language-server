@@ -24,7 +24,7 @@ import qualified Data.Map                                     as M
 import           Data.Time.Clock.POSIX
 import           Data.Typeable
 import           Development.IDE.GHC.Compat                   hiding
-                                                              (HieFileResult)
+                                                              (HieFileResult, assert)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Util

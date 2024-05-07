@@ -56,8 +56,17 @@ addMethodDecls ps mDecls range withSig
     --
     -- See the link for the original definition:
     --   https://hackage.haskell.org/package/ghc-9.2.1/docs/Language-Haskell-Syntax-Extension.html#t:XCClsInstDecl
+    addWhere :: HsDecl GhcPs -> HsDecl GhcPs
     addWhere instd@(InstD xInstD (ClsInstD ext decl@ClsInstDecl{..})) =
         case cid_ext of
+#if MIN_VERSION_ghc(9,9,0)
+            (warnings, anns, key) ->
+                    InstD xInstD (ClsInstD ext decl {
+                    cid_ext = ( warnings
+                              , AddEpAnn AnnWhere (EpaDelta (SameLine 1) []) : anns
+                              , key)
+                    })
+#else
             (EpAnn entry anns comments, key) ->
                     InstD xInstD (ClsInstD ext decl {
                     cid_ext = (EpAnn
@@ -67,9 +76,14 @@ addMethodDecls ps mDecls range withSig
                                 , key)
                     })
             _ -> instd
+#endif
     addWhere decl = decl
 
     newLine (L l e) =
         let dp = deltaPos 1 defaultIndent
+#if MIN_VERSION_ghc(9,9,0)
+        in L (noAnnSrcSpanDP dp <> l) e
+#else
         in L (noAnnSrcSpanDP (getLoc l) dp <> l) e
+#endif
 

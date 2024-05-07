@@ -67,9 +67,17 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Types.SrcLoc                                  (srcSpanToRealSrcSpan)
+#endif
 import           GHC                                               (AddEpAnn (AddEpAnn),
+#if MIN_VERSION_ghc(9,9,0)
+                                                                    HasLoc(..),
+                                                                    EpaLocation'(..),
+#else
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
+#endif
                                                                     AnnsModule (am_main),
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
@@ -253,7 +261,7 @@ isWantedModule wantedModule (Just qual) (L _ ImportDecl{ ideclAs, ideclName
                                                        , ideclHiding = Just (False, _)
 #endif
                                                        }) =
-    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
+    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc <$> ideclAs) == Just qual)
 isWantedModule _ _ _ = False
 
 
@@ -307,7 +315,7 @@ findSigOfBind range bind =
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
-#if MIN_VERSION_ghc(9,3,0)
+#if MIN_VERSION_ghc(9,3,0) && !MIN_VERSION_ghc(9,9,0)
         go (HsLet _ _ binds _ _) = findSigOfBinds range binds
 #else
         go (HsLet _ binds _) = findSigOfBinds range binds
@@ -338,7 +346,11 @@ findInstanceHead df instanceHead decls =
         showSDoc df (ppr hsib_body) == instanceHead
     ]
 
+#if MIN_VERSION_ghc(9,9,0)
+findDeclContainingLoc :: (Foldable t, HasLoc l) => Position -> t (GenLocated l e) -> Maybe (GenLocated l e)
+#else
 findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a) e) -> Maybe (GenLocated (SrcSpanAnn' a) e)
+#endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
 -- Single:
@@ -537,7 +549,7 @@ suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Ra
 suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
   | msg <- unifySpaces _message
   , Just export <- hsmodExports
-  , Just exportRange <- getLocatedRange $ reLoc export
+  , Just exportRange <- getLocatedRange $ export
   , exports <- unLoc export
   , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
                          <|> (,[_range]) <$> matchExportItem msg
@@ -608,16 +620,16 @@ suggestDeleteUnusedBinding
         let maybeIdx = findIndex (\(L _ id) -> isSameName id name) lnames
         in case maybeIdx of
             Nothing -> Nothing
-            Just _ | [lname] <- lnames -> Just (getLoc $ reLoc lname, True)
+            Just _ | [lname] <- lnames -> Just (getLoc lname, True)
             Just idx ->
-              let targetLname = getLoc $ reLoc $ lnames !! idx
+              let targetLname = getLoc $ lnames !! idx
                   startLoc = srcSpanStart targetLname
                   endLoc = srcSpanEnd targetLname
                   startLoc' = if idx == 0
                               then startLoc
-                              else srcSpanEnd . getLoc . reLoc $ lnames !! (idx - 1)
+                              else srcSpanEnd . getLoc $ lnames !! (idx - 1)
                   endLoc' = if idx == 0 && idx < length lnames - 1
-                            then srcSpanStart . getLoc . reLoc $ lnames !! (idx + 1)
+                            then srcSpanStart . getLoc $ lnames !! (idx + 1)
                             else endLoc
               in Just (mkSrcSpan startLoc' endLoc', False)
       findRelatedSigSpan1 _ _ = Nothing
@@ -1613,7 +1625,7 @@ newImportInsertRange ps fileContents
   |  Just ((l, c), col) <- case hsmodImports of
       -- When there is no existing imports, we only cares about the line number, setting column and indent to zero.
       [] -> (\line -> ((line, 0), 0)) <$> findPositionNoImports ps fileContents
-      _  -> findPositionFromImports (map reLoc hsmodImports) last
+      _  -> findPositionFromImports hsmodImports last
   , let insertPos = Position (fromIntegral l) (fromIntegral c)
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
@@ -1663,12 +1675,17 @@ findPositionAfterModuleName ps hsmodName' = do
             -- Find the first 'where'
             whereLocation <- listToMaybe . mapMaybe filterWhere $ am_main annsModule
             epaLocationToLine whereLocation
+#if !MIN_VERSION_ghc(9,9,0)
         EpAnnNotUsed -> Nothing
+#endif
     filterWhere (AddEpAnn AnnWhere loc) = Just loc
     filterWhere _                       = Nothing
 
     epaLocationToLine :: EpaLocation -> Maybe Int
-#if MIN_VERSION_ghc(9,5,0)
+#if MIN_VERSION_ghc(9,9,0)
+    epaLocationToLine (EpaSpan sp)
+      = fmap (srcLocLine . realSrcSpanEnd) $ srcSpanToRealSrcSpan sp
+#elif MIN_VERSION_ghc(9,5,0)
     epaLocationToLine (EpaSpan sp _)
       = Just . srcLocLine . realSrcSpanEnd $ sp
 #else
@@ -1682,12 +1699,23 @@ findPositionAfterModuleName ps hsmodName' = do
     epaLocationToLine (EpaDelta (DifferentLine line _) priorComments) = Just (line + sumCommentsOffset priorComments)
 
     sumCommentsOffset :: [LEpaComment] -> Int
+#if MIN_VERSION_ghc(9,9,0)
+    sumCommentsOffset = sum . fmap (\(L anchor _) -> anchorOpLine anchor)
+#else
     sumCommentsOffset = sum . fmap (\(L anchor _) -> anchorOpLine (anchor_op anchor))
+#endif
 
+#if MIN_VERSION_ghc(9,9,0)
+    anchorOpLine :: EpaLocation' a -> Int
+    anchorOpLine EpaSpan{}                           = 0
+    anchorOpLine (EpaDelta (SameLine _) _)           = 0
+    anchorOpLine (EpaDelta (DifferentLine line _) _) = line
+#else
     anchorOpLine :: AnchorOperation -> Int
     anchorOpLine UnchangedAnchor                      = 0
     anchorOpLine (MovedAnchor (SameLine _))           = 0
     anchorOpLine (MovedAnchor (DifferentLine line _)) = line
+#endif
 
 findPositionFromImports :: HasSrcSpan a => t -> (t -> a) -> Maybe ((Int, Int), Int)
 findPositionFromImports hsField f = case getLoc (f hsField) of
@@ -1936,22 +1964,39 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens . unqualify $ b
+#if MIN_VERSION_ghc(9,9,0)
+    ranges' (L _ (IEThingWith _ thing _  inners _))
+#else
     ranges' (L _ (IEThingWith _ thing _  inners))
+#endif
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
+#if MIN_VERSION_ghc(9,9,0)
+rangesForBinding' b (L (locA -> l) (IEVar _ nm _))
+#else
 rangesForBinding' b (L (locA -> l) (IEVar _ nm))
+#endif
   | L _ (IEPattern _ (L _ b')) <- nm
   , T.unpack (printOutputable b') == b
   = [l]
 rangesForBinding' b (L (locA -> l) x@IEVar{})
   | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | T.unpack (printOutputable x) == b = [l]
-rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | T.unpack (printOutputable x) == b = [l]
+#if MIN_VERSION_ghc(9,9,0)
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x _))
+#else
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x))
+#endif
+  | T.unpack (printOutputable x) == b = [l]
+#if MIN_VERSION_ghc(9,9,0)
+rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners _))
+#else
 rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
+#endif
     | T.unpack (printOutputable thing) == b = [l]
     | otherwise =
         [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b]

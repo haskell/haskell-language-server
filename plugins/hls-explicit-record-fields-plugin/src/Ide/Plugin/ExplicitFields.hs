@@ -35,7 +35,11 @@ import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       (HsConDetails (RecCon),
+#if __GLASGOW_HASKELL__ < 910
                                                    HsExpansion (HsExpanded),
+#else
+                                                   XXExprGhcRn(..),
+#endif
                                                    HsExpr (XExpr),
                                                    HsRecFields (..), LPat,
                                                    Outputable, getLoc,
@@ -176,7 +180,11 @@ collectRecordsRule recorder =
     toRangeAndUnique (uid, recordInfo) = (recordInfoToRange recordInfo, uid)
 
 getRecords :: TcModuleResult -> [RecordInfo]
+#if __GLASGOW_HASKELL__ < 910
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
+#else
+getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_, _)) =
+#endif
   collectRecords valBinds
 
 collectNamesRule :: Rules ()
@@ -187,7 +195,11 @@ collectNamesRule = defineNoDiagnostics mempty $ \CollectNames nfp -> runMaybeT $
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
 getNames :: TcModuleResult -> UniqFM Name [Name]
+#if __GLASGOW_HASKELL__ < 910
 getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
+#else
+getNames (tmrRenamed -> (group,_,_,_,_)) = collectNames group
+#endif
 
 data CollectRecords = CollectRecords
                     deriving (Eq, Show, Generic)
@@ -357,7 +369,11 @@ getRecCons :: LHsExpr (GhcPass 'Renamed) -> ([RecordInfo], Bool)
 -- because there is a possibility that there were be more than one result per
 -- branch
 
+#if __GLASGOW_HASKELL__ >= 910
+getRecCons (unLoc -> XExpr (ExpandedThingRn a _)) = (collectRecords a, True)
+#else
 getRecCons (unLoc -> XExpr (HsExpanded a _)) = (collectRecords a, True)
+#endif
 getRecCons e@(unLoc -> RecordCon _ _ flds)
   | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where

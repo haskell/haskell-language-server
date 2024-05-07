@@ -7,12 +7,12 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-04-30T10:44:19Z
+index-state: 2024-05-15T10:44:19Z
 
 tests: True
 test-show-details: direct
 
-benchmarks: True
+-- benchmarks: True
 
 write-ghc-environment-files: never
 
@@ -40,4 +40,65 @@ constraints:
   -- the flag '-fopen-simd', which blocked the release 2.2.0.0.
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
-  bitvec -simd
+  bitvec -simd,
+
+
+if impl(ghc >= 9.9)
+  benchmarks: False
+  source-repository-package
+    type:git
+    location: https://github.com/alanz/ghc-exactprint.git
+    tag: 68ba2b8135c275737523217a546d7b58b5c5d050
+  source-repository-package
+    type:git
+    location: https://github.com/wz1000/retrie.git
+    tag: 7bf599856f055aefa86a6db10c12dcbc10c7130a
+  constraints: 
+    lens >= 5.3.2,
+    haskell-language-server -stylishHaskell -ormolu -fourmolu -floskell -hlint,
+  allow-newer:
+    aeson:containers,
+    aeson:template-haskell,
+    boring:base,
+    co-log-core:base,
+    constraints-extras:base,
+    constraints-extras:template-haskell,
+    commutative-semigroups:base,
+    dependent-map:containers,
+    entropy:base,
+    entropy:directory,
+    entropy:filepath,
+    entropy:process,
+    free:template-haskell,
+    generically:base,
+    ghc-trace-events:base,
+    haddock-library:base,
+    haddock-library:containers,
+    hie-bios:ghc,
+    hiedb:base,
+    hiedb:ghc,
+    indexed-traversable:base,
+    indexed-traversable:containers,
+    indexed-traversable-instances:base,
+    lens:template-haskell,
+    lsp:containers,
+    lsp:lens,
+    lsp-test:containers,
+    lsp-test:lens,
+    lsp-types:containers,
+    lsp-types:lens,
+    lsp-types:template-haskell,
+    monoid-subclasses:containers,
+    quickcheck-instances:base,
+    quickcheck-instances:containers,
+    semialign:base,
+    semialign:containers,
+    some:base,
+    text-short:base,
+    text-short:template-haskell,
+    tasty-hspec:base,
+    these:base,
+    uuid-types:template-haskell,
+    witherable:containers,
+else
+  benchmarks: True

@@ -361,7 +361,11 @@ extractMinimalImports ::
 extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
   -- extract the original imports and the typechecking environment
   let tcEnv = tmrTypechecked
+#if MIN_VERSION_ghc(9,9,0)
+      (_, imports, _, _, _) = tmrRenamed
+#else
       (_, imports, _, _) = tmrRenamed
+#endif
       ParsedModule {pm_parsed_source = L loc _} = tmrParsed
       emss = exportedModuleStrings tmrParsed
   Just srcSpan <- pure $ realSpan loc

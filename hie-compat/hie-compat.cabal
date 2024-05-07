@@ -24,7 +24,7 @@ source-repository head
 library
   default-language:    GHC2021
   build-depends:
-     base < 4.20, array, bytestring, containers, directory, filepath, transformers
+     base < 4.21, array, bytestring, containers, directory, filepath, transformers
   build-depends: ghc >= 8.10, ghc-boot
   ghc-options: -Wall -Wno-name-shadowing
 

@@ -41,7 +41,7 @@ import           Data.Maybe                      (fromMaybe, listToMaybe,
 import qualified Data.Text                       as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
+import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
@@ -56,7 +56,11 @@ import           GHC.Data.Bag (Bag)
 import           GHC.Exts
 
 
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation (EpAnn(..))
+#else
 import           GHC.Parser.Annotation (SrcSpanAnn'(..))
+#endif
 import qualified GHC.Types.Error as Error
 
 
@@ -273,8 +277,13 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
 -- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
 -- earlier it will just be a plain `SrcSpan`.
 {-# COMPLETE AsSrcSpan #-}
+#if MIN_VERSION_ghc(9,9,0)
+pattern AsSrcSpan :: SrcSpan -> EpAnn ann
+pattern AsSrcSpan locA <- (getLoc -> locA)
+#else
 pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
 pattern AsSrcSpan locA <- SrcSpanAnn {locA}
+#endif
 
 findSubSpansDesc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
 findSubSpansDesc srcSpan =

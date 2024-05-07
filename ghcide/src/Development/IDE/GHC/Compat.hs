@@ -334,7 +334,11 @@ myCoreToStg logger dflags ictxt
 
     return (stg_binds2, denv, cost_centre_info)
 
-
+#if MIN_VERSION_ghc(9,9,0)
+reLocA :: (HasLoc (GenLocated a e), HasAnnotation b)
+      => GenLocated a e -> GenLocated b e
+reLocA = reLoc
+#endif
 
 getDependentMods :: ModIface -> [ModuleName]
 #if MIN_VERSION_ghc(9,3,0)

@@ -349,7 +349,11 @@ getBinds nfp = do
   -- so that we can include adding the required imports in the retrie command
   let rn = tmrRenamed tm
   case rn of
+#if MIN_VERSION_ghc(9,9,0)
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _, _) -> do
+#else
     (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _) -> do
+#endif
       topLevelBinds <- case hs_valds of
         ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
         XValBindsLR (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn) ->
@@ -744,7 +748,11 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
 #if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
+#if MIN_VERSION_ghc(9,9,0)
+      { ideclAnn = GHCGHC.noAnn
+#else
       { ideclAnn = GHCGHC.EpAnnNotUsed
+#endif
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
       }

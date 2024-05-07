@@ -109,13 +109,18 @@ instance NFData ModSummary where
 instance Ord FastString where
     compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)
 
+
+#if MIN_VERSION_ghc(9,9,0)
+instance NFData (EpAnn a) where
+  rnf = rwhnf
+#else
 instance NFData (SrcSpanAnn' a) where
     rnf = rwhnf
+deriving instance Functor SrcSpanAnn'
+#endif
 
 instance Bifunctor GenLocated where
     bimap f g (L l x) = L (f l) (g x)
-
-deriving instance Functor SrcSpanAnn'
 
 instance NFData ParsedModule where
     rnf = rwhnf

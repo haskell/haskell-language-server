@@ -34,6 +34,10 @@ import qualified GHC.Driver.Pipeline.Execute     as Pipeline
 import qualified GHC.SysTools.Cpp                as Pipeline
 #endif
 
+#if MIN_VERSION_ghc(9,11,0)
+import qualified GHC.SysTools.Tasks              as Pipeline
+#endif
+
 addOptP :: String -> DynFlags -> DynFlags
 addOptP f = alterToolSettings $ \s -> s
           { toolSettings_opt_P             = f : toolSettings_opt_P s
@@ -52,7 +56,9 @@ doCpp env input_fn output_fn =
 #if MIN_VERSION_ghc(9,5,0)
     let cpp_opts = Pipeline.CppOpts
                  { cppLinePragmas = True
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+                 , sourceCodePreprocessor = Pipeline.SCPHsCpp
+#elif MIN_VERSION_ghc(9,10,0)
                  , useHsCpp = True
 #else
                  , cppUseCc = False

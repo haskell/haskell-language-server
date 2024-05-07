@@ -16,7 +16,11 @@ import           Development.IDE.GHC.ExactPrint            (genAnchor1,
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
 import           GHC                                       (EpAnn (..),
+#if MIN_VERSION_ghc(9,9,0)
+                                                            EpUniToken(..),
+#else
                                                             SrcSpanAnn' (SrcSpanAnn),
+#endif
                                                             SrcSpanAnnA,
                                                             SrcSpanAnnN,
                                                             emptyComments,
@@ -67,7 +71,11 @@ plugin parsedModule Diagnostic {_message, _range}
 addArgToMatch :: T.Text -> GenLocated l (Match GhcPs body) -> (GenLocated l (Match GhcPs body), Int)
 addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
   let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
+#if MIN_VERSION_ghc(9,9,0)
+      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField (noLocA unqualName)
+#else
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
+#endif
   in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs), Prelude.length pats)
 
 -- Attempt to insert a binding pattern into each match for the given LHsDecl; succeeds only if the function is a FunBind.
@@ -139,7 +147,10 @@ hsTypeFromFunTypeAsList (args, res) =
 addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> (LHsSigType GhcPs)
 addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
     let (args, res) = hsTypeToFunTypeAsList lsigTy
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,9,0)
+        wildCardAnn = EpAnn genAnchor1 (AnnListItem []) emptyComments
+        newArg = (noAnn, noExtField, HsUnrestrictedArrow NoEpUniTok, L wildCardAnn $ HsWildCardTy noExtField)
+#elif MIN_VERSION_ghc(9,4,0)
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem []) emptyComments) generatedSrcSpan
         arrowAnn = TokenLoc (epl 1)
         newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow (L arrowAnn HsNormalTok), L wildCardAnn $ HsWildCardTy noExtField)

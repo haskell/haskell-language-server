@@ -14,16 +14,26 @@ import           Development.IDE
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
+#if MIN_VERSION_ghc(9,9,0)
+                                                          EpaLocation'(..),
+                                                          EpUniToken(..),
+                                                          noAnn,
+#else
                                                           Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
+                                                          EpaLocation (EpaDelta),
+                                                          SrcSpanAnn' (SrcSpanAnn),
+#endif
                                                           DeltaPos (..),
                                                           EpAnn (..),
                                                           EpAnnComments (EpaComments),
-                                                          EpaLocation (EpaDelta),
-                                                          SrcSpanAnn' (SrcSpanAnn),
                                                           spanAsAnchor)
 import           Ide.PluginUtils                         (subRange)
+#if MIN_VERSION_ghc(9,9,0)
+import           Language.Haskell.GHC.ExactPrint.Utils         (showAst)
+#else
 import           Language.Haskell.GHC.ExactPrint         (showAst)
+#endif
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -83,14 +93,18 @@ h98ToGADTConDecl ::
 h98ToGADTConDecl dataName tyVars ctxt = \case
     ConDeclH98{..} ->
         ConDeclGADT
+#if MIN_VERSION_ghc(9,9,0)
+            (NoEpUniTok, con_ext)
+#else
             con_ext
+#endif
 #if MIN_VERSION_ghc(9,5,0)
             (NE.singleton con_name)
 #else
             [con_name]
 #endif
 
-#if MIN_VERSION_ghc(9,5,0)
+#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,9,0)
             (L NoTokenLoc HsNormalTok)
 #endif
             -- Ignore all existential type variable since GADT not needed
@@ -103,9 +117,19 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
     where
         -- Parameters in the data constructor
         renderDetails :: HsConDeclH98Details GP -> HsConDeclGADTDetails GP
+#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (PrefixCon _ args)   = PrefixConGADT noExtField args
+#else
         renderDetails (PrefixCon _ args)   = PrefixConGADT args
+#endif
+#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (InfixCon arg1 arg2) = PrefixConGADT noExtField [arg1, arg2]
+#else
         renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
-#if MIN_VERSION_ghc(9,3,0)
+#endif
+#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (RecCon recs)        = RecConGADT NoEpUniTok recs
+#elif MIN_VERSION_ghc(9,3,0)
         renderDetails (RecCon recs)        = RecConGADT recs noHsUniTok
 #else
         renderDetails (RecCon recs)        = RecConGADT recs
@@ -196,13 +220,25 @@ prettyGADTDecl df decl =
 
         -- Make every data constructor start with a new line and 2 spaces
         adjustCon :: LConDecl GP -> LConDecl GP
+#if MIN_VERSION_ghc(9,9,0)
+        adjustCon (L ann r) =
+            L (EpAnn (go (spanAsAnchor (getLoc ann))) (AnnListItem []) (EpaComments [])) r
+#else
         adjustCon (L (SrcSpanAnn _ loc) r) =
             L (SrcSpanAnn (EpAnn (go (spanAsAnchor loc)) (AnnListItem []) (EpaComments [])) loc) r
+#endif
             where
+#if MIN_VERSION_ghc(9,9,0)
+                go _ = EpaDelta (DifferentLine 1 2) []
+#else
                 go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
+#endif
 
         -- Adjust where annotation to the same line of the type constructor
-        adjustWhere tcdDExt = tcdDExt <&> map
+        adjustWhere tcdDExt = tcdDExt <&>
+#if !MIN_VERSION_ghc(9,9,0)
+            map
+#endif
             (\(AddEpAnn ann l) ->
             if ann == AnnWhere
                 then AddEpAnn AnnWhere (EpaDelta (SameLine 1) [])
@@ -220,7 +256,11 @@ wrapCtxt = id
 emptyCtxt = Nothing
 unWrap = unXRec @GP
 mapX = mapXRec @GP
+#if MIN_VERSION_ghc(9,9,0)
+noUsed = noAnn
+#else
 noUsed = EpAnnNotUsed
+#endif
 
 pattern UserTyVar' :: LIdP pass -> HsTyVarBndr flag pass
 pattern UserTyVar' s <- UserTyVar _ _ s
