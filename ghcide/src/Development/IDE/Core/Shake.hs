@@ -25,9 +25,10 @@ module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
-    IdeRule, IdeResult,
+    IdeRule, IdeResult, restartRecorder,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
-    shakeOpen, shakeShut,
+    shakeOpen, shakeShut, runWithShake,
+    doShakeRestart,
     shakeEnqueue,
     ShakeOpQueue,
     newSession,
@@ -106,10 +107,12 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.List.Extra                        (foldl', partition,
-                                                         takeEnd)
+import           Data.List.Extra                        (foldl', intercalate,
+                                                         partition, takeEnd)
+import qualified Data.List.NonEmpty                     as NE
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
+import           Data.Semigroup                         (Semigroup (sconcat))
 import qualified Data.SortedList                        as SL
 import           Data.String                            (fromString)
 import qualified Data.Text                              as T
@@ -120,6 +123,7 @@ import           Data.Typeable
 import           Data.Unique
 import           Data.Vector                            (Vector)
 import qualified Data.Vector                            as Vector
+import           Debug.Trace                            (traceM)
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
@@ -196,6 +200,7 @@ data Log
   | LogCancelledAction !T.Text
   | LogSessionInitialised
   | LogLookupPersistentKey !T.Text
+  | LogRestartDebounceCount !Int
   | LogShakeGarbageCollection !T.Text !Int !Seconds
   -- * OfInterest Log messages
   | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
@@ -242,6 +247,8 @@ instance Pretty Log where
     LogSetFilesOfInterest ofInterest ->
         "Set files of interst to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
+    LogRestartDebounceCount count ->
+        "Restart debounce count:" <+> pretty count
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -262,7 +269,7 @@ type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
 -- ShakeOpQueue is used to enqueue Shake operations.
 -- shutdown, restart
-type ShakeOpQueue = TQueue (IO ())
+type ShakeOpQueue = TQueue RestartArguments
 
 -- Note [Semantic Tokens Cache Location]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -756,38 +763,118 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+data RestartArguments = RestartArguments
+  { restartVFS                       :: VFSModified
+  , restartReasons                   :: [String]
+  , restartActions                   :: [DelayedAction ()]
+  , restartActionBetweenShakeSession :: IO [Key]
+  -- barrier to wait for the session stopped
+  , restartBarriers                  :: [Barrier ()]
+  , restartRecorder                  :: Recorder (WithPriority Log)
+  , restartIdeState                  :: IdeState
+  }
+
+instance Semigroup RestartArguments where
+    RestartArguments a1 a2 a3 a4 a5 a6 a7 <> RestartArguments b1 b2 b3 b4 b5 b6 _b7 =
+        RestartArguments (a1 <> b1) (a2 <> b2) (a3 <> b3) (a4 <> b4) (a5 <> b5) (a6 <> b6) a7
+
+-- do x until time up and do y
+-- doUntil time out
+doUntil :: IO a -> IO [a]
+doUntil x = do
+    res <- x
+    rest <- doUntil x
+    return (res:rest)
+
+runWithShake :: (ShakeOpQueue-> IO ()) -> IO ()
+runWithShake f = do
+    stopQueue <- newTQueueIO
+    doQueue <- newTQueueIO
+    withAsync (stopShakeLoop stopQueue doQueue) $
+        const $ withAsync (runShakeLoop doQueue) $
+            const $ f stopQueue
+    where
+        -- keep running the stopShakeOp and stop the shake session
+        -- and send the restart arguments to the runShakeLoop
+        stopShakeLoop :: ShakeOpQueue -> ShakeOpQueue -> IO ()
+        stopShakeLoop stopq doq = do
+            arg <- atomically $ readTQueue stopq
+            -- todo print this out
+            _stopTime <- stopShakeSession arg
+            traceM $ "Stopped shake session"
+            atomically $ writeTQueue doq arg
+            stopShakeLoop stopq doq
+        runShakeLoop :: ShakeOpQueue -> IO ()
+        runShakeLoop q = do
+            sleep 0.1
+            x <- atomically (tryPeekTQueue q)
+            when (isJust x) $ do
+                sleep 0.1
+                args <- atomically $ flushTQueue q
+                traceM $ "Restarting shake with " ++ show (length args) ++ " arguments"
+                case NE.nonEmpty args of
+                    Nothing -> return ()
+                    Just x -> do
+                        let count = length x
+                        let arg = sconcat x
+                        let recorder = restartRecorder arg
+                        logWith recorder Info $ LogRestartDebounceCount count
+                        -- traceM $ "Restarting shake with " ++ show count ++ " arguments"
+                        doShakeRestart arg 1
+            runShakeLoop q
+
+-- prepare the restart
+stopShakeSession :: RestartArguments -> IO Seconds
+stopShakeSession RestartArguments{restartIdeState=IdeState{..}, ..} = do
+            withMVar shakeSession
+                (\runner -> do
+                    (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                    keys <- restartActionBetweenShakeSession
+                    atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                    -- signal the caller that we are done stopping and ready to restart
+                    mapM_ (flip signalBarrier ()) restartBarriers
+                    return stopTime
+                )
+        where
+            logErrorAfter :: Seconds -> IO () -> IO ()
+            logErrorAfter seconds action = flip withAsync (const action) $ do
+                sleep seconds
+                logWith restartRecorder Error (LogBuildSessionRestartTakingTooLong seconds)
+
+
+doShakeRestart :: RestartArguments -> Seconds -> IO ()
+doShakeRestart RestartArguments{restartIdeState=IdeState{..}, ..} stopTime = do
+        withMVar' shakeSession
+            (\runner -> do
+                res <- shakeDatabaseProfile shakeDb
+                backlog <- readTVarIO $ dirtyKeys shakeExtras
+                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+                -- this log is required by tests
+                logWith restartRecorder Debug $ LogBuildSessionRestart (intercalate ", " restartReasons) queue backlog stopTime res
+            )
+            -- It is crucial to be masked here, otherwise we can get killed
+            -- between spawning the new thread and updating shakeSession.
+            -- See https://github.com/haskell/ghcide/issues/79
+            (\() -> do
+            (,()) <$> newSession restartRecorder shakeExtras restartVFS shakeDb restartActions (intercalate ", " restartReasons))
+
+
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
     barrier <- newBarrier
-    atomically $ writeTQueue (shakeOpQueue $ shakeExtras) $ do
-        withMVar'
-            shakeSession
-            (\runner -> do
-                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                keys <- ioActionBetweenShakeSession
-                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
-                res <- shakeDatabaseProfile shakeDb
-                backlog <- readTVarIO $ dirtyKeys shakeExtras
-                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
-
-                -- this log is required by tests
-                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-            )
-            -- It is crucial to be masked here, otherwise we can get killed
-            -- between spawning the new thread and updating shakeSession.
-            -- See https://github.com/haskell/ghcide/issues/79
-            (\() -> do
-            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
-        signalBarrier barrier ()
-    waitBarrier barrier
-        where
-            logErrorAfter :: Seconds -> IO () -> IO ()
-            logErrorAfter seconds action = flip withAsync (const action) $ do
-                sleep seconds
-                logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
+    let restartArgs = RestartArguments
+          { restartVFS = vfs
+          , restartReasons = [reason]
+          , restartActions = acts
+          , restartActionBetweenShakeSession = ioActionBetweenShakeSession
+          , restartBarriers = [barrier]
+          , restartRecorder = recorder
+          , restartIdeState = IdeState{..}
+          }
+    atomically $ writeTQueue (shakeOpQueue $ shakeExtras) restartArgs
 
 -- | Enqueue an action in the existing 'ShakeSession'.
 --   Returns a computation to block until the action is run, propagating exceptions.
@@ -812,6 +899,9 @@ shakeEnqueue ShakeExtras{actionQueue, shakeRecorder} act = do
     return (wait' b >>= either throwIO return)
 
 data VFSModified = VFSUnmodified | VFSModified !VFS
+instance Semigroup VFSModified where
+  VFSUnmodified <> x = x
+  x <> _             = x
 
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.

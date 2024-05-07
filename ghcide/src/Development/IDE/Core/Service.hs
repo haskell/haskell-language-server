@@ -35,15 +35,22 @@ import qualified Language.LSP.Server              as LSP
 
 import           Control.Concurrent.Async         (async, withAsync)
 import           Control.Concurrent.STM           (TQueue, atomically,
-                                                   newTQueueIO, readTQueue,
-                                                   writeTBQueue, writeTQueue)
+                                                   flushTQueue, newTQueueIO,
+                                                   readTQueue, writeTBQueue,
+                                                   writeTQueue)
 import           Control.Monad
+import qualified Data.List.NonEmpty               as NE
+import           Data.Semigroup                   (Semigroup (sconcat))
+import qualified Data.Text                        as T
+import           Debug.Trace                      (traceM)
 import qualified Development.IDE.Core.FileExists  as FileExists
 import qualified Development.IDE.Core.OfInterest  as OfInterest
 import           Development.IDE.Core.Shake       hiding (Log)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.Types.Monitoring (Monitoring)
 import           Development.IDE.Types.Shake      (WithHieDb)
+import           Extra                            (sleep)
+import           Ide.Logger                       (Priority (Info), logWith)
 import           Ide.Types                        (IdePlugins)
 import           System.Environment               (lookupEnv)
 
@@ -102,7 +109,7 @@ initialise recorder defaultConfig plugins mainRule lspEnv debouncer options with
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()
-shutdown st = atomically $ writeTQueue (shakeOpQueue $ shakeExtras st) $ shakeShut st
+shutdown st = shakeShut st
 
 -- This will return as soon as the result of the action is
 -- available.  There might still be other rules running at this point,
@@ -112,12 +119,3 @@ runAction herald ide act =
   join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug act)
 
 
-runWithShake :: (ShakeOpQueue-> IO ()) -> IO ()
-runWithShake f = do
-    q <- newTQueueIO
-    withAsync (runShakeOp q) $ const $ f q
-    where
-        runShakeOp :: ShakeOpQueue -> IO ()
-        runShakeOp q = do
-            join $ atomically $ readTQueue q
-            runShakeOp q
