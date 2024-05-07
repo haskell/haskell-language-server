@@ -799,9 +799,9 @@ runWithShake f = do
         runShakeLoop :: ShakeOpQueue -> IO ()
         runShakeLoop q = do
             argHead <- atomically $ readTQueue q
-            sleep 0.1
-            args <- atomically $ flushTQueue q
-            case NE.nonEmpty (argHead:args) of
+            -- sleep 0.1
+            -- args <- atomically $ flushTQueue q
+            case NE.nonEmpty (argHead:[]) of
                 Nothing -> return ()
                 Just xs -> do
                     let count = length xs

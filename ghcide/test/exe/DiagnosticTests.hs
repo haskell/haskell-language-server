@@ -17,6 +17,7 @@ import           Development.IDE.Test            (diagnostic,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   flushMessages, waitForAction,
+                                                  waitForBuildQueue,
                                                   waitForTypecheck)
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
@@ -35,6 +36,8 @@ import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (whenJust)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
+import           Test.Hls                        (waitForKickDone,
+                                                  waitForKickStart)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
@@ -268,6 +271,9 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
+    --   waitForKickStart
+    --   waitForKickDone
+      liftIO $ sleep 1
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
   , testSessionWait "correct reference used with hs-boot" $ do
       let contentB = T.unlines
@@ -482,7 +488,7 @@ tests = testGroup "diagnostics"
     adoc <- createDoc aPath "haskell" aSource
     changeDoc adoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
                     T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
-
+    waitForBuildQueue
     expectDiagnostics
       [ ( "P.hs",
           [ (DiagnosticSeverity_Error, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'"),
