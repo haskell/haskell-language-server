@@ -558,6 +558,7 @@ setValues state key file val diags =
 
 
 -- | Delete the value stored for a given ide build key
+-- and return the key that was deleted.
 deleteValue
   :: Shake.ShakeValue k
   => ShakeExtras
