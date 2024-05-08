@@ -204,7 +204,8 @@ data RunResult value = RunResult
     ,runValue   :: value
         -- ^ The value to return from 'Development.Shake.Rule.apply'.
     ,runHook    :: STM ()
-        -- ^ The hook to run after the rule completes.
+        -- ^ The hook to run at the end of the build in the same transaction
+        -- when the key is marked as clean.
     } deriving Functor
 
 ---------------------------------------------------------------------

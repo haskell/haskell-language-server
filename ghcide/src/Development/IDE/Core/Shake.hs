@@ -757,6 +757,8 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
         (\runner -> do
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
               keys <- ioActionBetweenShakeSession
+              -- it is every important to update the dirty keys after we enter the critical section
+              -- see Note [Housekeeping rule cache and dirty key out side of hls-graph]
               atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
@@ -1226,6 +1228,8 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs)
                     (A res) $ do
+                        -- this hook need to be run in the same transaction as the key is marked clean
+                        -- see Note [Housekeeping rule cache and dirty key out side of hls-graph]
                         setValues state key file res (Vector.fromList diags)
                         modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
         return res
@@ -1250,6 +1254,32 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+
+-- Note [Housekeeping rule cache and dirty key out side of hls-graph]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Hls-graph contains its own internal running state for each key in the shakeDatabase.
+-- Rule result cache and dirty key are in ShakeExtras that is not visible to the hls-graph
+-- Essentially, we need to keep the rule cache and dirty key and hls-graph's internal state
+-- in sync.
+
+-- 1. A dirty key collect in a session should not be clean out in the same session.
+-- Since if we clean out the dirty key in the same session,
+--     1.1. we will lose the chance to dirty it's reverse dependencies. Since it only happened during session restart.
+--     1.2. a key might marked as dirty at the same time it's already being run to a point that it should not be clean,
+--          then invalidly clean it out.
+--          See issue https://github.com/haskell/haskell-language-server/issues/4093 for more details.
+
+-- 2. When a key is marked clean in the hls-graph's internal running
+-- state, the rule cache and dirty key are updated in the same transaction.
+-- otherwise, some situations like the following can happen:
+-- thread 1: hls-graph session run a key
+-- thread 1: defineEarlyCutoff' run the action for the key
+-- thread 1: the action is done, rule cache and dirty key are updated
+-- thread 2: we restart the hls-graph session, thread 1 is killed, the
+--           hls-graph's internal state is not updated.
+-- This is problematic with early cut off because we are having a new rule cache matching the
+-- old hls-graph's internal state, which might case it's reverse dependency to skip the recomputation.
+-- See https://github.com/haskell/haskell-language-server/issues/4194 for more details.
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"
