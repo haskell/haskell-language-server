@@ -1229,7 +1229,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs)
                     (A res) $ do
-                        -- this hook need to be run in the same transaction as the key is marked clean
+                        -- this hook needs to be run in the same transaction as the key is marked clean
                         -- see Note [Housekeeping rule cache and dirty key out side of hls-graph]
                         setValues state key file res (Vector.fromList diags)
                         modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
