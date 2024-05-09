@@ -40,7 +40,7 @@ import           Test.Hls                        (runSessionWithServer',
                                                   runSessionWithServerInTmpDirCont,
                                                   waitForProgressBegin,
                                                   waitForTypecheck)
-import           Test.Hls.FileSystem             (toAbsFp)
+import           Test.Hls.FileSystem             (file, text, toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -203,21 +203,18 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
-  , testWithDummyPluginEmpty' "deeply nested cyclic module dependency" $ \path -> do
-      let contentA = unlines
-            [ "module ModuleA where" , "import ModuleB" ]
-      let contentB = unlines
-            [ "module ModuleB where" , "import ModuleA" ]
-      let contentC = unlines
-            [ "module ModuleC where" , "import ModuleB" ]
-      let contentD = T.unlines
-            [ "module ModuleD where" , "import ModuleC" ]
-          cradle =
-            "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
-      liftIO $ writeFile (path `toAbsFp` "ModuleA.hs") contentA
-      liftIO $ writeFile (path `toAbsFp` "ModuleB.hs") contentB
-      liftIO $ writeFile (path `toAbsFp` "ModuleC.hs") contentC
-      liftIO $ writeFile (path `toAbsFp` "hie.yaml") cradle
+  , let contentA = T.unlines [ "module ModuleA where" , "import ModuleB" ]
+        contentB = T.unlines [ "module ModuleB where" , "import ModuleA" ]
+        contentC = T.unlines [ "module ModuleC where" , "import ModuleB" ]
+        contentD = T.unlines [ "module ModuleD where" , "import ModuleC" ]
+        cradle = "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
+    in testWithDummyPlugin "deeply nested cyclic module dependency"
+        (mkIdeTestFs [
+            file "ModuleA.hs" (text contentA)
+            ,file "ModuleB.hs" (text contentB)
+            ,file "ModuleC.hs" (text contentC)
+            ,file "hie.yaml" (text cradle)
+        ]) $ do
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
         [ ( "ModuleB.hs"
