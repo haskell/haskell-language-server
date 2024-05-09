@@ -240,11 +240,9 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testWithDummyPluginEmpty' "bidirectional module dependency with hs-boot" $ \path -> do
-      let cradle = unlines
-            [ "cradle:"
-            , "  direct: {arguments: [ModuleA, ModuleB]}"
-            ]
+  , testWithDummyPlugin "bidirectional module dependency with hs-boot"
+        (mkIdeTestFs [file "hie.yaml" $ text $ T.unlines ["cradle:", "  direct: {arguments: [ModuleA, ModuleB]}"]])
+        $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import {-# SOURCE #-} ModuleB"
@@ -262,7 +260,6 @@ tests = testGroup "diagnostics"
       let contentAboot = T.unlines
             [ "module ModuleA where"
             ]
-      liftIO $ writeFile (path `toAbsFp` "hie.yaml") cradle
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleB.hs" "haskell" contentB
@@ -428,9 +425,9 @@ tests = testGroup "diagnostics"
             Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
           failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
       Lens.mapMOf_ offenders failure notification
-  , testWithDummyPluginEmpty' "-Werror in cradle is ignored" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir `toAbsFp` "hie.yaml")
-        "cradle: {direct: {arguments: [\"-Wall\", \"-Werror\"]}}"
+  , testWithDummyPlugin "-Werror in cradle is ignored"
+        (mkIdeTestFs [file "hie.yaml" $ text "cradle: {direct: {arguments: [\"-Wall\", \"-Werror\"]}}" ])
+        $ do
       let fooContent = T.unlines
             [ "module Foo where"
             , "foo = ()"
