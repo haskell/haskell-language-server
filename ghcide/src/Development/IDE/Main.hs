@@ -32,7 +32,6 @@ import           Data.List.Extra                          (intercalate,
                                                            partition)
 import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
-import           Debug.Trace
 import           Development.IDE                          (Action,
                                                            Priority (Debug, Error),
                                                            Rules, hDuplicateTo')
@@ -287,7 +286,7 @@ testing recorder plugins =
         defOptions{ optTesting = IdeTesting True }
     lspOptions = argsLspOptions { LSP.optProgressStartDelay = 0, LSP.optProgressUpdateDelay = 0 }
   in
-    trace "creating testing args" $ arguments
+    arguments
       { argsHlsPlugins = hlsPlugins
       , argsIdeOptions = ideOptions
       , argsLspOptions = lspOptions
