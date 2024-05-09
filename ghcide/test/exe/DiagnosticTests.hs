@@ -584,8 +584,6 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
     where
         -- similar to run except it disables kick
         runTestNoKick s = runSessionWithServerInTmpDirCont True dummyPlugin def def def (mkIdeTestFs []) (const s)
-            -- runWithDummyPluginEmpty dir "." "." ["--test-no-kick"] s
-
         typeCheck doc = do
             WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
             liftIO $ assertBool "The file should typecheck" ideResultSuccess

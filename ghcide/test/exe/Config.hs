@@ -1,6 +1,29 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Config where
+module Config(
+    -- * basic config for ghcIde testing
+    mkIdeTestFs
+    , dummyPlugin
+
+    -- * runners for testing with dummy plugin
+    , runWithDummyPlugin
+    , testWithDummyPlugin
+    , testWithDummyPluginEmpty
+    , testWithDummyPlugin'
+    , testWithDummyPluginEmpty'
+    , testWithDummyPluginAndCap'
+    , runWithExtraFiles
+    , testWithExtraFiles
+
+    -- * utilities for testing definition and hover
+    , Expect(..)
+    , pattern R
+    , mkR
+    , checkDefs
+    , mkL
+    , lspTestCaps
+    , lspTestCapsNoFileWatches
+    ) where
 
 import           Control.Lens.Setter         ((.~))
 import           Data.Foldable               (traverse_)
@@ -31,27 +54,17 @@ runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 runWithDummyPlugin' ::  FS.VirtualFileTree -> (FileSystem -> Session a) -> IO a
 runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
 
-runWithDummyPluginAndCap :: ClientCapabilities -> Session () -> IO ()
-runWithDummyPluginAndCap cap = runSessionWithServerAndCapsInTmpDir def dummyPlugin cap (mkIdeTestFs [])
-
 runWithDummyPluginAndCap' :: ClientCapabilities -> (FileSystem -> Session ()) -> IO ()
 runWithDummyPluginAndCap' cap = runSessionWithServerAndCapsInTmpDirCont def dummyPlugin cap (mkIdeTestFs [])
-
-testWithDummyPluginAndCap :: String -> ClientCapabilities -> Session () -> TestTree
-testWithDummyPluginAndCap caseName cap = testCase caseName . runWithDummyPluginAndCap cap
 
 testWithDummyPluginAndCap' :: String -> ClientCapabilities -> (FileSystem -> Session ()) -> TestTree
 testWithDummyPluginAndCap' caseName cap = testCase caseName . runWithDummyPluginAndCap' cap
 
--- testSessionWithCorePlugin ::(TestRunner cont ()) => TestName -> FS.VirtualFileTree -> cont -> TestTree
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
-testWithDummyPlugin caseName vfs = testCase caseName . runWithDummyPlugin vfs
+testWithDummyPlugin caseName vfs = testWithDummyPlugin' caseName vfs . const
 
 testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FileSystem -> Session ()) -> TestTree
 testWithDummyPlugin' caseName vfs = testCase caseName . runWithDummyPlugin' vfs
-
-runWithDummyPluginEmpty :: Session a -> IO a
-runWithDummyPluginEmpty = runWithDummyPlugin $ mkIdeTestFs []
 
 testWithDummyPluginEmpty :: String -> Session () -> TestTree
 testWithDummyPluginEmpty caseName = testWithDummyPlugin caseName $ mkIdeTestFs []
