@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE OverloadedLabels      #-}
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -530,7 +529,7 @@ toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
   removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
-      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= (\x -> x .! #snippetSupport))
+      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= view L.snippetSupport)
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
 toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}

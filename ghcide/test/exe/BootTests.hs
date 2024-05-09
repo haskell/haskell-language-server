@@ -1,5 +1,6 @@
 module BootTests (tests) where
 
+import           Config                          (checkDefs, mkR)
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Control.Monad.IO.Class          (liftIO)

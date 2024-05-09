@@ -29,6 +29,8 @@ library
     Test.Hls
     Test.Hls.Util
     Test.Hls.FileSystem
+    Development.IDE.Test
+    Development.IDE.Test.Diagnostic
 
   hs-source-dirs:   src
   build-depends:
@@ -45,7 +47,7 @@ library
     , hls-plugin-api          == 2.8.0.0
     , lens
     , lsp-test                ^>=0.17
-    , lsp-types               ^>=2.1
+    , lsp-types               ^>=2.2
     , safe-exceptions
     , tasty
     , tasty-expected-failure
@@ -54,7 +56,7 @@ library
     , tasty-rerun
     , temporary
     , text
-    , row-types
+
   ghc-options:      -Wall -Wunused-packages
 
   if flag(pedantic)

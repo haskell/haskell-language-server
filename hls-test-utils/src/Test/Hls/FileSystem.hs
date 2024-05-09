@@ -20,6 +20,7 @@ module Test.Hls.FileSystem
   , directory
   , text
   , ref
+  , copyDir
   -- * Cradle helpers
   , directCradle
   , simpleCabalCradle
@@ -37,6 +38,7 @@ import           Development.IDE             (NormalizedFilePath)
 import           Language.LSP.Protocol.Types (toNormalizedFilePath)
 import           System.Directory
 import           System.FilePath             as FP
+import           System.Process.Extra        (readProcess)
 
 -- ----------------------------------------------------------------------------
 -- Top Level definitions
@@ -64,8 +66,9 @@ data VirtualFileTree =
     } deriving (Eq, Ord, Show)
 
 data FileTree
-  = File FilePath Content
-  | Directory FilePath [FileTree]
+  = File FilePath Content -- ^ Create a file with the given content.
+  | Directory FilePath [FileTree] -- ^ Create a directory with the given files.
+  | CopiedDirectory FilePath -- ^ Copy a directory from the test data dir.
   deriving (Show, Eq, Ord)
 
 data Content
@@ -99,12 +102,21 @@ materialise rootDir' fileTree testDataDir' = do
       rootDir = FP.normalise rootDir'
 
       persist :: FilePath -> FileTree -> IO ()
-      persist fp (File name cts) = case cts of
-        Inline txt -> T.writeFile (fp </> name) txt
-        Ref path -> copyFile (testDataDir </> FP.normalise path) (fp </> takeFileName name)
-      persist fp (Directory name nodes) = do
-        createDirectory (fp </> name)
-        mapM_ (persist (fp </> name)) nodes
+      persist root (File name cts) = case cts of
+        Inline txt -> T.writeFile (root </> name) txt
+        Ref path -> copyFile (testDataDir </> FP.normalise path) (root </> takeFileName name)
+      persist root (Directory name nodes) = do
+        createDirectory (root </> name)
+        mapM_ (persist (root </> name)) nodes
+      persist root (CopiedDirectory name) = do
+        copyDir' root name
+
+      copyDir' :: FilePath -> FilePath -> IO ()
+      copyDir' root dir = do
+        files <- fmap FP.normalise . lines <$> withCurrentDirectory (testDataDir </> dir) (readProcess "git" ["ls-files", "--cached", "--modified", "--others"] "")
+        mapM_ (createDirectoryIfMissing True . ((root </>) . takeDirectory)) files
+        mapM_ (\f -> copyFile (testDataDir </> dir </> f) (root </> f)) files
+        return ()
 
   traverse_ (persist rootDir) fileTree
   pure $ FileSystem rootDir fileTree testDataDir
@@ -115,8 +127,7 @@ materialise rootDir' fileTree testDataDir' = do
 --
 -- File references in 'virtualFileTree' are resolved relative to the @vftOriginalRoot@.
 materialiseVFT :: FilePath -> VirtualFileTree -> IO FileSystem
-materialiseVFT root fs =
-  materialise root (vftTree fs) (vftOriginalRoot fs)
+materialiseVFT root fs = materialise root (vftTree fs) (vftOriginalRoot fs)
 
 -- ----------------------------------------------------------------------------
 -- Test definition helpers
@@ -153,6 +164,11 @@ file fp cts = File fp cts
 -- The filepath is always resolved to the root of the test data dir.
 copy :: FilePath -> FileTree
 copy fp = File fp (Ref fp)
+
+-- | Copy a directory into a test project.
+-- The filepath is always resolved to the root of the test data dir.
+copyDir :: FilePath -> FileTree
+copyDir dir = CopiedDirectory dir
 
 directory :: FilePath -> [FileTree] -> FileTree
 directory name nodes = Directory name nodes

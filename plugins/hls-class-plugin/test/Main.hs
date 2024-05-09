@@ -13,7 +13,6 @@ import           Control.Lens                  (Prism', prism', view, (^.),
 import           Control.Monad                 (void)
 import           Data.Foldable                 (find)
 import           Data.Maybe
-import           Data.Row                      ((.==))
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.Class              as Class
 import qualified Language.LSP.Protocol.Lens    as L
@@ -86,7 +85,7 @@ codeActionTests = testGroup
 
     -- Change the doc to ensure the version is not 0
     changeDoc doc
-        [ TextDocumentContentChangeEvent . InR . (.==) #text $
+        [ TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
             T.unlines ["module Version where", "data A a = A a", "instance Functor A where"]
         ]
     ver2 <- (^. L.version) <$> getVersionedDoc doc
