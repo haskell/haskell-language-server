@@ -5,7 +5,7 @@ on:
     tags:
       - '*'
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 1'
 env:
   CABAL_CACHE_DISABLE: ${{ vars.CABAL_CACHE_DISABLE }}
   CABAL_CACHE_NONFATAL: ${{ vars.CABAL_CACHE_NONFATAL }}
