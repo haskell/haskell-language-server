@@ -9,10 +9,9 @@ module Progress (tests) where
 import           Control.Exception                  (throw)
 import           Control.Lens                       hiding ((.=))
 import           Data.Aeson                         (decode, encode)
-import           Data.Functor                       (void)
 import           Data.List                          (delete)
 import           Data.Maybe                         (fromJust)
-import           Data.Text                          (Text, pack)
+import           Data.Text                          (Text)
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
@@ -51,9 +50,6 @@ tests =
                       expectProgressMessages ["Evaluating"] createdProgressTokens activeProgressTokens
                   _ -> error $ "Unexpected response result: " ++ show response
         ]
-
-formatLspConfig :: Text -> Config
-formatLspConfig provider = def { formattingProvider = provider }
 
 progressCaps :: ClientCapabilities
 progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}
