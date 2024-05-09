@@ -1270,7 +1270,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
 --          See issue https://github.com/haskell/haskell-language-server/issues/4093 for more details.
 
 -- 2. When a key is marked clean in the hls-graph's internal running
--- state, the rule cache and dirty key are updated in the same transaction.
+-- state, the rule cache and dirty keys are updated in the same transaction.
 -- otherwise, some situations like the following can happen:
 -- thread 1: hls-graph session run a key
 -- thread 1: defineEarlyCutoff' run the action for the key
