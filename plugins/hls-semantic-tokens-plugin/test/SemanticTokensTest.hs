@@ -157,9 +157,8 @@ semanticTokensConfigTest =
             var :: String
             var = "variable"
         do
-          recorder <- pluginTestRecorder
           Test.Hls.runSessionWithServerInTmpDir'
-            (semanticTokensPlugin recorder)
+            semanticTokensPlugin
             (mkSemanticConfig funcVar)
             def {ignoreConfigurationRequests = False}
             fullCaps

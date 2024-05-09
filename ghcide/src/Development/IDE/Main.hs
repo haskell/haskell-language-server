@@ -223,13 +223,14 @@ data Arguments = Arguments
     , argsHandleOut             :: IO Handle
     , argsThreads               :: Maybe Natural
     , argsMonitoring            :: IO Monitoring
+    , argsDisableKick           :: Bool -- ^ flag to disable kick used for testing
     }
 
 defaultArguments :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
 defaultArguments recorder plugins = Arguments
         { argsProjectRoot = Nothing
         , argCommand = LSP
-        , argsRules = mainRule (cmapWithPrio LogRules recorder) def >> action kick
+        , argsRules = mainRule (cmapWithPrio LogRules recorder) def
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)) <> plugins
         , argsSessionLoadingOptions = def
@@ -258,6 +259,7 @@ defaultArguments recorder plugins = Arguments
                 putStr " " >> hFlush stdout
                 return newStdout
         , argsMonitoring = OpenTelemetry.monitoring
+        , argsDisableKick = False
         }
 
 
@@ -293,7 +295,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands }
         argsParseConfig = getConfigFromNotification argsHlsPlugins
-        rules = argsRules >> pluginRules plugins
+        rules = argsRules >> (unless argsDisableKick $ action kick)  >> pluginRules plugins
+        -- install the main and ghcide-plugin rules
+        -- install the kick action, which triggers a typecheck on every
+        -- Shake database restart, i.e. on every user edit.
 
     debouncer <- argsDebouncer
     inH <- argsHandleIn

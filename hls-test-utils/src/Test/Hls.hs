@@ -34,6 +34,7 @@ module Test.Hls
     runSessionWithServer',
     runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
+    runSessionWithServerInTmpDirCont,
     runSessionWithServerInTmpDirCont',
     runSessionWithServerAndCapsInTmpDirCont,
     -- * Helpful re-exports
@@ -341,7 +342,8 @@ mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 -- @
 pluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
 pluginTestRecorder = do
-  initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+  initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR",
+        "LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
 
 -- | Generic recorder initialisation for plugins and the HLS server for test-cases.
 --
@@ -376,20 +378,18 @@ runSessionWithServerAndCapsInTmpDir config plugin caps tree act = runSessionWith
 
 runSessionWithServerInTmpDirCont' :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
 runSessionWithServerInTmpDirCont' config plugin tree act = do
-    recorder <- pluginTestRecorder
-    runSessionWithServerInTmpDirCont (plugin recorder) config def fullCaps tree act
+    runSessionWithServerInTmpDirCont False plugin config def fullCaps tree act
 
 runSessionWithServerAndCapsInTmpDirCont :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
 runSessionWithServerAndCapsInTmpDirCont config plugin caps tree act = do
-    recorder <- pluginTestRecorder
-    runSessionWithServerInTmpDirCont (plugin recorder) config def caps tree act
+    runSessionWithServerInTmpDirCont False plugin config def caps tree act
 
 runSessionWithServerInTmpDir' ::
     -- | Plugins to load on the server.
     --
     -- For improved logging, make sure these plugins have been initalised with
     -- the recorder produced by @pluginTestRecorder@.
-    IdePlugins IdeState ->
+    Pretty b => PluginTestDescriptor b ->
     -- | lsp config for the server
     Config ->
     -- | config for the test session
@@ -397,7 +397,7 @@ runSessionWithServerInTmpDir' ::
     ClientCapabilities ->
     VirtualFileTree ->
     Session a -> IO a
-runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont plugins conf sessConf caps tree (const act)
+runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont False plugins conf sessConf caps tree (const act)
 
 -- | Host a server, and run a test session on it.
 --
@@ -421,11 +421,14 @@ runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWi
 --
 -- Note: cwd will be shifted into a temporary directory in @Session a@
 runSessionWithServerInTmpDirCont ::
+    Pretty b =>
+    -- | whether we disable the kick action or not
+    Bool ->
     -- | Plugins to load on the server.
     --
     -- For improved logging, make sure these plugins have been initalised with
     -- the recorder produced by @pluginTestRecorder@.
-    IdePlugins IdeState ->
+    PluginTestDescriptor b ->
     -- | lsp config for the server
     Config ->
     -- | config for the test session
@@ -433,10 +436,9 @@ runSessionWithServerInTmpDirCont ::
     ClientCapabilities ->
     VirtualFileTree ->
     (FileSystem -> Session a) -> IO a
-runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
+runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
     testRoot <- setupTestEnvironment
-    recorder <- initialiseTestRecorder
-        ["LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
+    recorder <- pluginTestRecorder
 
     -- Do not clean up the temporary directory if this variable is set to anything but '0'.
     -- Aids debugging.
@@ -460,17 +462,15 @@ runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock 
         tmpDir <- canonicalizePath tmpDir'
         logWith recorder Info $ LogTestDir tmpDir
         fs <- FS.materialiseVFT tmpDir tree
-        runSessionWithServer' plugins conf sessConf caps tmpDir (act fs)
+        runSessionWithServer' disableKick plugins conf sessConf caps tmpDir (act fs)
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) config def fullCaps fp act
+  runSessionWithServer' False plugin config def fullCaps fp act
 
 runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
 runSessionWithServerAndCaps config plugin caps fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) config def caps fp act
+  runSessionWithServer' False plugin config def caps fp act
 
 
 -- | Setup the test environment for isolated tests.
@@ -607,11 +607,14 @@ lockForTempDirs = unsafePerformIO newLock
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
+  (Pretty b) =>
+  -- | whether we disable the kick action or not
+  Bool ->
   -- | Plugins to load on the server.
   --
   -- For improved logging, make sure these plugins have been initalised with
   -- the recorder produced by @pluginTestRecorder@.
-  IdePlugins IdeState ->
+  PluginTestDescriptor b ->
   -- | lsp config for the server
   Config ->
   -- | config for the test session
@@ -620,7 +623,10 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurrentDirectory $ do
+runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock lock $ keepCurrentDirectory $ do
+    recorder <- pluginTestRecorder
+    let plugins = pluginsDp recorder
+
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
@@ -656,6 +662,7 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
                 , argsDefaultHlsConfig = conf
                 , argsIdeOptions = ideOptions
                 , argsProjectRoot = Just root
+                , argsDisableKick = disableKick
                 }
 
     x <- runSessionWithHandles inW outR sconf' caps root s

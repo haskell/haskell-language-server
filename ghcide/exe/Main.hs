@@ -124,12 +124,7 @@ main = withTelemetryRecorder $ \telemetryRecorder -> do
         , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins arguments <> pluginDescToIdePlugins [lspRecorderPlugin]
 
         , IDEMain.argsRules = do
-            -- install the main and ghcide-plugin rules
             mainRule (cmapWithPrio LogRules recorder) def
-            -- install the kick action, which triggers a typecheck on every
-            -- Shake database restart, i.e. on every user edit.
-            unless argsDisableKick $
-                action kick
 
         , IDEMain.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 

@@ -33,9 +33,12 @@ import           System.IO.Extra                 hiding (withTempDir)
 import           Config
 import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (whenJust)
+import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
-import           Test.Hls                        (waitForProgressBegin,
+import           Test.Hls                        (runSessionWithServer',
+                                                  runSessionWithServerInTmpDirCont,
+                                                  waitForProgressBegin,
                                                   waitForTypecheck)
 import           Test.Hls.FileSystem             (toAbsFp)
 import           Test.Tasty
@@ -554,7 +557,7 @@ cancellationTestGroup name edits sessionDepsOutcome parseOutcome tcOutcome = tes
     ]
 
 cancellationTemplate :: (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Maybe (String, Bool) -> TestTree
-cancellationTemplate (edit, undoEdit) mbKey = testWithDummyPluginEmpty (maybe "-" fst mbKey) $ do
+cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ runTestNoKick $ do
       doc <- createDoc "Foo.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wall #-}"
             , "module Foo where"
@@ -580,7 +583,8 @@ cancellationTemplate (edit, undoEdit) mbKey = testWithDummyPluginEmpty (maybe "-
       expectNoMoreDiagnostics 0.5
     where
         -- similar to run except it disables kick
-        -- runTestNoKick s = runWithDummyPluginEmpty dir "." "." ["--test-no-kick"] s
+        runTestNoKick s = runSessionWithServerInTmpDirCont True dummyPlugin def def def (mkIdeTestFs []) (const s)
+            -- runWithDummyPluginEmpty dir "." "." ["--test-no-kick"] s
 
         typeCheck doc = do
             WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
