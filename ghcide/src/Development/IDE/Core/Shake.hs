@@ -1263,7 +1263,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
 -- Essentially, we need to keep the rule cache and dirty key and hls-graph's internal state
 -- in sync.
 
--- 1. A dirty key collect in a session should not be clean out in the same session.
+-- 1. A dirty key collected in a session should not be removed from dirty keys in the same session.
 -- Since if we clean out the dirty key in the same session,
 --     1.1. we will lose the chance to dirty it's reverse dependencies. Since it only happened during session restart.
 --     1.2. a key might marked as dirty at the same time it's already being run to a point that it should not be clean,
