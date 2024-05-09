@@ -88,7 +88,7 @@ library
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.5.0.0
+    , lsp                          ^>=2.6.0.0
     , lsp-types                    ^>=2.2.0.0
     , mtl
     , opentelemetry                >=0.6.1
