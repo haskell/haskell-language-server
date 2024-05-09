@@ -1256,7 +1256,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
 
--- Note [Housekeeping rule cache and dirty key out side of hls-graph]
+-- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Hls-graph contains its own internal running state for each key in the shakeDatabase.
 -- Rule result cache and dirty key are in ShakeExtras that is not visible to the hls-graph
