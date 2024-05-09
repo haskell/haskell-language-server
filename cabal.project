@@ -45,5 +45,5 @@ constraints:
 source-repository-package
   type:git
   location: https://github.com/haskell/lsp
-  tag: 1b9cc1da253454e102e7fc66038a6ed0b5e9dff1
+  tag: c3deca2970a3f006bb1f72d5d710e8902dff6440
   subdir: lsp

@@ -32,6 +32,7 @@ import           Data.List.Extra                          (intercalate,
                                                            partition)
 import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
+import           Debug.Trace
 import           Development.IDE                          (Action,
                                                            Priority (Debug, Error),
                                                            Rules, hDuplicateTo')
@@ -238,7 +239,15 @@ defaultArguments recorder plugins = Arguments
             { optCheckProject = pure $ checkProject config
             , optCheckParents = pure $ checkParents config
             }
-        , argsLspOptions = def {LSP.optCompletionTriggerCharacters = Just "."}
+        , argsLspOptions = def
+            { LSP.optCompletionTriggerCharacters = Just "."
+            -- Generally people start to notice that something is taking a while at about 1s, so
+            -- that's when we start reporting progress
+            , LSP.optProgressStartDelay = 1_00_000
+            -- Once progress is being reported, it's nice to see that it's moving reasonably quickly,
+            -- but not so fast that it's ugly. This number is a bit made up
+            , LSP.optProgressUpdateDelay = 1_00_000
+            }
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
@@ -266,7 +275,7 @@ defaultArguments recorder plugins = Arguments
 testing :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
 testing recorder plugins =
   let
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } =
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } =
         defaultArguments recorder plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
@@ -276,10 +285,12 @@ testing recorder plugins =
         defOptions = argsIdeOptions config sessionLoader
       in
         defOptions{ optTesting = IdeTesting True }
+    lspOptions = argsLspOptions { LSP.optProgressStartDelay = 0, LSP.optProgressUpdateDelay = 0 }
   in
-    arguments
+    trace "creating testing args" $ arguments
       { argsHlsPlugins = hlsPlugins
       , argsIdeOptions = ideOptions
+      , argsLspOptions = lspOptions
       }
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
