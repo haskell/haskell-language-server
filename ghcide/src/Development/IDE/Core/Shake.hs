@@ -1265,7 +1265,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
 
 -- 1. A dirty key collected in a session should not be removed from dirty keys in the same session.
 -- Since if we clean out the dirty key in the same session,
---     1.1. we will lose the chance to dirty it's reverse dependencies. Since it only happened during session restart.
+--     1.1. we will lose the chance to dirty its reverse dependencies. Since it only happens during session restart.
 --     1.2. a key might be marked as dirty in ShakeExtras while it's being recomputed by hls-graph which could lead to it's premature removal from dirtyKeys.
 --          See issue https://github.com/haskell/haskell-language-server/issues/4093 for more details.
 
