@@ -1259,7 +1259,8 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Hls-graph contains its own internal running state for each key in the shakeDatabase.
--- Rule result cache and dirty key are in ShakeExtras that is not visible to the hls-graph
+-- ShakeExtras contains `state` field (rule result cache) and `dirtyKeys` (keys that became
+-- dirty in between build sessions) that is not visible to the hls-graph
 -- Essentially, we need to keep the rule cache and dirty key and hls-graph's internal state
 -- in sync.
 
