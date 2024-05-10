@@ -636,6 +636,7 @@ runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock l
 
     recorder <- pluginTestRecorder
     let plugins = pluginsDp recorder
+    recorderIde <- pluginTestRecorder
 
     let
         sconf' = sconf { lspConfig = hlsConfigToClientConfig conf }
@@ -643,7 +644,7 @@ runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock l
         hlsPlugins = IdePlugins [Test.blockCommandDescriptor "block-command"] <> plugins
 
         arguments@Arguments{ argsIdeOptions } =
-            testing (cmapWithPrio LogIDEMain recorder) hlsPlugins
+            testing (cmapWithPrio LogIDEMain recorderIde) hlsPlugins
 
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
@@ -653,7 +654,7 @@ runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock l
                     }
 
     server <- async $
-        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder)
+        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
             arguments
                 { argsHandleIn = pure inR
                 , argsHandleOut = pure outW
