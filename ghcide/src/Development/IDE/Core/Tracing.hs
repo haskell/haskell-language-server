@@ -112,7 +112,7 @@ otTracedAction key file mode result act
             ExitCaseSuccess res -> do
                 setTag sp "result" (pack $ result $ runValue res)
                 setTag sp "changed" $ case res of
-                    RunResult x _ _ -> fromString $ show x
+                    RunResult x _ _ _ -> fromString $ show x
           endSpan sp)
         (\sp -> act (liftIO . setTag sp "diagnostics" . encodeUtf8 . showDiagnostics ))
   | otherwise = act (\_ -> return ())

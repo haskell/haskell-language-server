@@ -87,7 +87,7 @@ spec = do
         ruleUnit
         addRule $ \Rule _old _mode -> do
             [()] <- applyWithoutDependency [Rule]
-            return $ RunResult ChangedRecomputeDiff "" True
+            return $ RunResult ChangedRecomputeDiff "" True $ return ()
 
       let theKey = Rule @Bool
       res <- shakeRunDatabase db $
