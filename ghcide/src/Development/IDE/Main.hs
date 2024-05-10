@@ -342,7 +342,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                               }
                       caps = LSP.resClientCapabilities env
                   monitoring <- argsMonitoring
-
                   ide <- initialise
                       (cmapWithPrio LogService recorder)
                       argsDefaultHlsConfig
