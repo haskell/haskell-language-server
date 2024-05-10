@@ -20,6 +20,6 @@ spec = do
                 ruleBool
                 addRule $ \Rule _old _mode -> do
                     True <- apply1 (Rule @Bool)
-                    return $ RunResult ChangedRecomputeDiff "" ()
+                    return $ RunResult ChangedRecomputeDiff "" () (return ())
             let res = shakeRunDatabase db $ pure $ apply1 (Rule @())
             timeout 1 res `shouldThrow` \StackException{} -> True

@@ -57,7 +57,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
-    deleteValue, recordDirtyKeys,
+    deleteValue,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -300,6 +300,7 @@ data ShakeExtras = ShakeExtras
         :: VFSModified
         -> String
         -> [DelayedAction ()]
+        -> IO [Key]
         -> IO ()
 #if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
@@ -557,26 +558,17 @@ setValues state key file val diags =
 
 
 -- | Delete the value stored for a given ide build key
+-- and return the key that was deleted.
 deleteValue
   :: Shake.ShakeValue k
   => ShakeExtras
   -> k
   -> NormalizedFilePath
-  -> STM ()
-deleteValue ShakeExtras{dirtyKeys, state} key file = do
+  -> STM [Key]
+deleteValue ShakeExtras{state} key file = do
     STM.delete (toKey key file) state
-    modifyTVar' dirtyKeys $ insertKeySet (toKey key file)
+    return [toKey key file]
 
-recordDirtyKeys
-  :: Shake.ShakeValue k
-  => ShakeExtras
-  -> k
-  -> [NormalizedFilePath]
-  -> STM (IO ())
-recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
-    modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x (toKey key <$> file)
-    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
-        addEvent (fromString $ unlines $ "dirty " <> show key : map fromNormalizedFilePath file)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
@@ -759,12 +751,16 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts =
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
+shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
     withMVar'
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+              keys <- ioActionBetweenShakeSession
+              -- it is every important to update the dirty keys after we enter the critical section
+              -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
@@ -1198,7 +1194,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Just (v@(Succeeded _ x), diags) -> do
                         ver <- estimateFileVersionUnsafely key (Just x) file
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
-                        return $ Just $ RunResult ChangedNothing old $ A v
+                        return $ Just $ RunResult ChangedNothing old (A v) $ return ()
                     _ -> return Nothing
             _ ->
                 -- assert that a "clean" rule is never a cache miss
@@ -1222,7 +1218,6 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Nothing -> do
                         pure (toShakeValue ShakeStale mbBs, staleV)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult mbBs, Succeeded ver v)
-                liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics (vfsVersion =<< ver) diags
                 let eq = case (bs, fmap decodeShakeValue mbOld) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
@@ -1232,9 +1227,12 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         _                                     -> False
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
-                    (encodeShakeValue bs) $
-                    A res
-        liftIO $ atomicallyNamed "define - dirtyKeys" $ modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
+                    (encodeShakeValue bs)
+                    (A res) $ do
+                        -- this hook needs to be run in the same transaction as the key is marked clean
+                        -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                        setValues state key file res (Vector.fromList diags)
+                        modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
         return res
   where
     -- Highly unsafe helper to compute the version of a file
@@ -1257,6 +1255,32 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+
+-- Note [Housekeeping rule cache and dirty key outside of hls-graph]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Hls-graph contains its own internal running state for each key in the shakeDatabase.
+-- ShakeExtras contains `state` field (rule result cache) and `dirtyKeys` (keys that became
+-- dirty in between build sessions) that is not visible to the hls-graph
+-- Essentially, we need to keep the rule cache and dirty key and hls-graph's internal state
+-- in sync.
+
+-- 1. A dirty key collected in a session should not be removed from dirty keys in the same session.
+-- Since if we clean out the dirty key in the same session,
+--     1.1. we will lose the chance to dirty its reverse dependencies. Since it only happens during session restart.
+--     1.2. a key might be marked as dirty in ShakeExtras while it's being recomputed by hls-graph which could lead to it's premature removal from dirtyKeys.
+--          See issue https://github.com/haskell/haskell-language-server/issues/4093 for more details.
+
+-- 2. When a key is marked clean in the hls-graph's internal running
+-- state, the rule cache and dirty keys are updated in the same transaction.
+-- otherwise, some situations like the following can happen:
+-- thread 1: hls-graph session run a key
+-- thread 1: defineEarlyCutoff' run the action for the key
+-- thread 1: the action is done, rule cache and dirty key are updated
+-- thread 2: we restart the hls-graph session, thread 1 is killed, the
+--           hls-graph's internal state is not updated.
+-- This is problematic with early cut off because we are having a new rule cache matching the
+-- old hls-graph's internal state, which might case it's reverse dependency to skip the recomputation.
+-- See https://github.com/haskell/haskell-language-server/issues/4194 for more details.
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"

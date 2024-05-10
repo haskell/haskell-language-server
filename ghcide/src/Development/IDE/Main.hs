@@ -88,8 +88,10 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
                                                            optTesting)
-import           Development.IDE.Types.Shake              (WithHieDb, toKey)
-import           GHC.Conc                                 (getNumProcessors)
+import           Development.IDE.Types.Shake              (WithHieDb, toKey,
+                                                           toNoFileKey)
+import           GHC.Conc                                 (atomically,
+                                                           getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
 import           HIE.Bios.Cradle                          (findCradle)
@@ -370,9 +372,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     Nothing -> pure ()
                     Just ide -> liftIO $ do
                         let msg = T.pack $ show cfg
-                        logWith recorder Debug $ LogConfigurationChange msg
-                        modifyClientSettings ide (const $ Just cfgObj)
-                        setSomethingModified Shake.VFSUnmodified ide [toKey Rules.GetClientSettings emptyFilePath] "config change"
+                        setSomethingModified Shake.VFSUnmodified ide "config change" $ do
+                            logWith recorder Debug $ LogConfigurationChange msg
+                            modifyClientSettings ide (const $ Just cfgObj)
+                            return [toNoFileKey Rules.GetClientSettings]
 
             runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
             dumpSTMStats

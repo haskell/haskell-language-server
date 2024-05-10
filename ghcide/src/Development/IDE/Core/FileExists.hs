@@ -28,6 +28,7 @@ import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake           (toKey)
 import qualified Focus
 import           Ide.Logger                            (Pretty (pretty),
                                                         Recorder, WithPriority,
@@ -105,12 +106,12 @@ getFileExistsMapUntracked = do
   FileExistsMapVar v <- getIdeGlobalAction
   return v
 
--- | Modify the global store of file exists.
-modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO ()
+-- | Modify the global store of file exists and return the keys that need to be marked as dirty
+modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO [Key]
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   -- Masked to ensure that the previous values are flushed together with the map update
-  join $ mask_ $ atomicallyNamed "modifyFileExists" $ do
+  mask_ $ atomicallyNamed "modifyFileExists" $ do
     forM_ changes $ \(f,c) ->
         case fromChange c of
             Just c' -> STM.focus (Focus.insert c') f var
@@ -119,10 +120,10 @@ modifyFileExists state changes = do
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
             partition ((== FileChangeType_Changed) . snd) changes
-    mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
-    io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
-    io2 <- recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
-    return (io1 <> io2)
+    keys0 <- concat <$> mapM (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+    let keys1 = map (toKey GetFileExists . fst) fileExistChanges
+    let keys2 = map (toKey GetModificationTime . fst) fileModifChanges
+    return (keys0 <> keys1 <> keys2)
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FileChangeType_Created = Just True
