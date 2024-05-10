@@ -54,7 +54,7 @@ import qualified Test.AddArgument
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: IO (PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log)
+refactorPlugin :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
 refactorPlugin = do
   mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
       <> mkPluginTestDescriptor Refactor.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures"
