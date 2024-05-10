@@ -12,7 +12,6 @@ import           Data.Aeson                         (decode, encode)
 import           Data.List                          (delete)
 import           Data.Maybe                         (fromJust)
 import           Data.Text                          (Text)
-import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
 import           Test.Hls
