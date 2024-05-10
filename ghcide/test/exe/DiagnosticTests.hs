@@ -40,7 +40,8 @@ import           Test.Hls                        (runSessionWithServer',
                                                   runSessionWithServerInTmpDirCont,
                                                   waitForProgressBegin,
                                                   waitForTypecheck)
-import           Test.Hls.FileSystem             (file, text, toAbsFp)
+import           Test.Hls.FileSystem             (directCradle, file, text,
+                                                  toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
