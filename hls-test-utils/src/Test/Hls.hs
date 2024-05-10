@@ -325,16 +325,18 @@ mkPluginTestDescriptor'
   -> PluginTestDescriptor b
 mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
--- | Initialise a recorder that can be instructed to write to stderr by
+-- | Initialize a recorder that can be instructed to write to stderr by
 -- setting one of the environment variables:
 -- "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"
+--
+-- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+-- under test.
 
 hlsHelperTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
-hlsHelperTestRecorder = do
-  initializeTestRecorder ["HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
+hlsHelperTestRecorder = initializeTestRecorder ["HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
 
 
--- | Initialise a recorder that can be instructed to write to stderr by
+-- | Initialize a recorder that can be instructed to write to stderr by
 -- setting one of the environment variables:
 --
 -- * HLS_TEST_PLUGIN_LOG_STDERR=1
@@ -357,10 +359,9 @@ hlsHelperTestRecorder = do
 --   HLS_TEST_LOG_STDERR=1 cabal test <test-suite-of-plugin>
 -- @
 hlsPluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
-hlsPluginTestRecorder = do
-  initializeTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+hlsPluginTestRecorder = initializeTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
--- | Generic recorder initialisation for plugins and the HLS server for test-cases.
+-- | Generic recorder initialization for plugins and the HLS server for test-cases.
 --
 -- The created recorder writes to stderr if any of the given environment variables
 -- have been set to a value different to @0@.
