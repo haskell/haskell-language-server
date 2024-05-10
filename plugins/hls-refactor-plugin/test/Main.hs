@@ -27,7 +27,6 @@ import           Development.IDE.Plugin.Completions.Types (extendImportCommandId
 import           Development.IDE.Test
 import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
-import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types              hiding
@@ -48,14 +47,14 @@ import           Text.Regex.TDFA                          ((=~))
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
+import qualified Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
-import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import qualified Test.AddArgument
 
 main :: IO ()
 main = defaultTestRunner tests
 
--- refactorPlugin :: IO (IdePlugins IdeState)
+refactorPlugin :: IO (PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log)
 refactorPlugin = do
   return $ mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
       <> mkPluginTestDescriptor Refactor.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures"
