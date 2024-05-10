@@ -759,7 +759,7 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
               (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
               keys <- ioActionBetweenShakeSession
               -- it is every important to update the dirty keys after we enter the critical section
-              -- see Note [Housekeeping rule cache and dirty key out side of hls-graph]
+              -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
               atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
@@ -1230,7 +1230,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     (encodeShakeValue bs)
                     (A res) $ do
                         -- this hook needs to be run in the same transaction as the key is marked clean
-                        -- see Note [Housekeeping rule cache and dirty key out side of hls-graph]
+                        -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
                         setValues state key file res (Vector.fromList diags)
                         modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
         return res
