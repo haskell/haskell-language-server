@@ -426,7 +426,7 @@ tests = testGroup "diagnostics"
           failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
       Lens.mapMOf_ offenders failure notification
   , testWithDummyPlugin "-Werror in cradle is ignored"
-        (mkIdeTestFs [file "hie.yaml" $ text "cradle: {direct: {arguments: [\"-Wall\", \"-Werror\"]}}" ])
+        (mkIdeTestFs [directCradle ["-Wall", "-Werror"]])
         $ do
       let fooContent = T.unlines
             [ "module Foo where"
