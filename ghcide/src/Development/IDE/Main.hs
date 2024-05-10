@@ -295,7 +295,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands }
         argsParseConfig = getConfigFromNotification argsHlsPlugins
-        rules = argsRules >> (unless argsDisableKick $ action kick)  >> pluginRules plugins
+        rules = do
+            argsRules
+            unless argsDisableKick $ action kick
+            pluginRules plugins
         -- install the main and ghcide-plugin rules
         -- install the kick action, which triggers a typecheck on every
         -- Shake database restart, i.e. on every user edit.
