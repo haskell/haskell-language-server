@@ -90,7 +90,8 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
                                                            optTesting)
-import           Development.IDE.Types.Shake              (WithHieDb, toKey)
+import           Development.IDE.Types.Shake              (WithHieDb, toKey,
+                                                           toNoFileKey)
 import           GHC.Conc                                 (atomically,
                                                            getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
