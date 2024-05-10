@@ -326,8 +326,14 @@ mkPluginTestDescriptor'
 mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
 -- | Initialise a recorder that can be instructed to write to stderr by
--- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR=1" before
--- running the tests.
+-- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR|LSP_TEST_LOG_STDERR
+-- |LSP_TEST_LOG_STDERR|HLS_TEST_LOG_STDERR=1" before running the tests.
+--
+-- Because "LSP_TEST_LOG_STDERR" has been used before,
+-- (thus, backwards compatibility) and "HLS_TEST_HARNESS_STDERR" because it
+-- uses a more descriptive name to be used with "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP".
+-- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+-- under test.
 --
 -- On the cli, use for example:
 --
@@ -385,11 +391,12 @@ runSessionWithServerAndCapsInTmpDirCont config plugin caps tree act = do
     runSessionWithServerInTmpDirCont False plugin config def caps tree act
 
 runSessionWithServerInTmpDir' ::
+    Pretty b =>
     -- | Plugins to load on the server.
     --
     -- For improved logging, make sure these plugins have been initalised with
     -- the recorder produced by @pluginTestRecorder@.
-    Pretty b => PluginTestDescriptor b ->
+    PluginTestDescriptor b ->
     -- | lsp config for the server
     Config ->
     -- | config for the test session
@@ -624,20 +631,11 @@ runSessionWithServer' ::
   Session a ->
   IO a
 runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock lock $ keepCurrentDirectory $ do
-    recorder <- pluginTestRecorder
-    let plugins = pluginsDp recorder
-
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
-    -- Allow three environment variables, because "LSP_TEST_LOG_STDERR" has been used before,
-    -- (thus, backwards compatibility) and "HLS_TEST_SERVER_LOG_STDERR" because it
-    -- uses a more descriptive name.
-    -- It is also in better accordance with 'pluginTestRecorder' which uses "HLS_TEST_PLUGIN_LOG_STDERR".
-    -- At last, "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
-    -- under test.
-    recorder <- initialiseTestRecorder
-      ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+    recorder <- pluginTestRecorder
+    let plugins = pluginsDp recorder
 
     let
         sconf' = sconf { lspConfig = hlsConfigToClientConfig conf }
