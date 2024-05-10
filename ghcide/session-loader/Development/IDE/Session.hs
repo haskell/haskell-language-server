@@ -615,9 +615,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           void $ modifyVar' filesMap $ flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
           -- The VFS doesn't change on cradle edits, re-use the old one.
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
-          invalidateShakeCache
-          -- The VFS doesn't change on cradle edits, re-use the old one.
-          restartShakeSession VFSUnmodified "new component" []
+          keys2 <- invalidateShakeCache
+          restartShakeSession VFSUnmodified "new component" [] $ do
+            keys1 <- extendKnownTargets all_targets
+            return [keys1, keys2]
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
