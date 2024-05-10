@@ -56,7 +56,7 @@ main = defaultTestRunner tests
 
 refactorPlugin :: IO (PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log)
 refactorPlugin = do
-  return $ mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
+  mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
       <> mkPluginTestDescriptor Refactor.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures"
       <> mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings"
       <> mkPluginTestDescriptor Refactor.fillHolePluginDescriptor "ghcide-code-actions-fill-holes"
