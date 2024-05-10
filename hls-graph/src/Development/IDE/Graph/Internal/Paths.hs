@@ -6,7 +6,7 @@ module Development.IDE.Graph.Internal.Paths (readDataFileHTML) where
 #ifndef FILE_EMBED
 import           Control.Exception    (SomeException (SomeException), catch)
 import           Control.Monad        (filterM)
-import           Paths_hls_graph
+import           PathsHlsGraph
 import           System.Directory     (doesFileExist, getCurrentDirectory)
 import           System.Environment   (getExecutablePath)
 import           System.FilePath      (takeDirectory, (</>))
