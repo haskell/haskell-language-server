@@ -23,8 +23,8 @@ import           Control.Exception                            (bracket_, try)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (_1, _3, ix, (%~),
                                                                (<&>), (^.))
-import           Control.Monad                                (guard, void,
-                                                               when)
+import           Control.Monad                                (guard, join,
+                                                               void, when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..),
                                                                runExceptT)
@@ -47,7 +47,8 @@ import           Development.IDE.Core.RuleTypes               (LinkableResult (l
                                                                NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useNoFile_,
+import           Development.IDE.Core.Shake                   (shakeExtras,
+                                                               useNoFile_,
                                                                useWithStale_,
                                                                use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
@@ -91,8 +92,10 @@ import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcS
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
+import           Control.Concurrent.STM.Stats                 (atomically)
 import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Graph                        (ShakeOptions (shakeExtra))
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 import           Ide.Logger                                   (Priority (..),
@@ -211,10 +214,14 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
-              (do queueForEvaluation st nfp
-                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
-              (do unqueueForEvaluation st nfp
-                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
+              (setSomethingModified VFSUnmodified st "Eval" $ do
+                queueForEvaluation st nfp
+                return [toKey IsEvaluating nfp]
+                )
+              (setSomethingModified VFSUnmodified st "Eval" $ do
+                unqueueForEvaluation st nfp
+                return [toKey IsEvaluating nfp]
+                )
               (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId

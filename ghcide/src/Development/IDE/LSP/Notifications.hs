@@ -71,32 +71,32 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          addFileOfInterest ide file Modified{firstOpen=True}
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
-          logWith recorder Debug $ LogOpenedTextDocument _uri
+          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
+            addFileOfInterest ide file Modified{firstOpen=True}
+      logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
-          addFileOfInterest ide file Modified{firstOpen=False}
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
+          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
+            addFileOfInterest ide file Modified{firstOpen=False}
         logWith recorder Debug $ LogModifiedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-            addFileOfInterest ide file OnDisk
-            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file
+            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file $
+                addFileOfInterest ide file OnDisk
         logWith recorder Debug $ LogSavedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
-              deleteFileOfInterest ide file
               let msg = "Closed text document: " <> getUri _uri
-              scheduleGarbageCollection ide
-              setSomethingModified (VFSModified vfs) ide [] $ Text.unpack msg
+              setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
+                scheduleGarbageCollection ide
+                deleteFileOfInterest ide file
               logWith recorder Debug $ LogClosedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWatchedFiles $
@@ -115,9 +115,10 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         unless (null fileEvents') $ do
             let msg = show fileEvents'
             logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
-            modifyFileExists ide fileEvents'
-            resetFileStore ide fileEvents'
-            setSomethingModified (VFSModified vfs) ide [] msg
+            setSomethingModified (VFSModified vfs) ide msg $ do
+                ks1 <- resetFileStore ide fileEvents'
+                ks2 <- modifyFileExists ide fileEvents'
+                return (ks1 <> ks2)
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWorkspaceFolders $
       \ide _ _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
