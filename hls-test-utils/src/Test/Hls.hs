@@ -326,8 +326,12 @@ mkPluginTestDescriptor'
 mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
 -- | Initialise a recorder that can be instructed to write to stderr by
--- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR|LSP_TEST_LOG_STDERR
--- |LSP_TEST_LOG_STDERR|HLS_TEST_LOG_STDERR=1" before running the tests.
+-- setting one of the environment variables:
+--
+-- * HLS_TEST_PLUGIN_LOG_STDERR=1
+-- * HLS_TEST_LOG_STDERR=1
+--
+-- before running the tests.
 --
 -- Because "LSP_TEST_LOG_STDERR" has been used before,
 -- (thus, backwards compatibility) and "HLS_TEST_HARNESS_STDERR" because it
