@@ -370,7 +370,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         setSomethingModified Shake.VFSUnmodified ide "config change" $ do
                             logWith recorder Debug $ LogConfigurationChange msg
                             modifyClientSettings ide (const $ Just cfgObj)
-                            return [toKey Rules.GetClientSettings emptyFilePath]
+                            return [toNoFileKey Rules.GetClientSettings]
 
             runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
             dumpSTMStats
