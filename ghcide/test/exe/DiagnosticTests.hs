@@ -241,7 +241,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
   , testWithDummyPlugin "bidirectional module dependency with hs-boot"
-        (mkIdeTestFs [file "hie.yaml" $ text $ T.unlines ["cradle:", "  direct: {arguments: [ModuleA, ModuleB]}"]])
+        (mkIdeTestFs [directCradle ["ModuleA", "ModuleB"]])
         $ do
       let contentA = T.unlines
             [ "module ModuleA where"
