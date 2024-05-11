@@ -782,14 +782,6 @@ instance Semigroup RestartArguments where
     RestartArguments a1 a2 a3 a4 a5 a6 _a7 <> RestartArguments b1 b2 b3 b4 b5 b6 b7 =
         RestartArguments (a1 <> b1) (a2 <> b2) (a3 <> b3) (a4 <> b4) (a5 <> b5) b6 b7
 
--- do x until time up and do y
--- doUntil time out
-doUntil :: IO a -> IO [a]
-doUntil x = do
-    res <- x
-    rest <- doUntil x
-    return (res:rest)
-
 runWithShake :: (ShakeOpQueue-> IO ()) -> IO ()
 runWithShake f = do
     stopQueue <- newTQueueIO
