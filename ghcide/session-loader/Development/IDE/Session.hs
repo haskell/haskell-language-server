@@ -49,8 +49,8 @@ import qualified Data.Text                            as T
 import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake           hiding (Log, Priority,
-                                                       knownTargets, withHieDb)
+import           Development.IDE.Core.Shake           hiding (Log, knownTargets,
+                                                       withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
@@ -70,7 +70,6 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
-import qualified HIE.Bios.Cradle                      as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
@@ -125,7 +124,6 @@ import qualified Data.Set                             as OS
 import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
-import           GHC.Driver.Make                      (checkHomeUnitsClosed)
 import           GHC.Types.Error                      (errMsgDiagnostic,
                                                        singleMessage)
 import           GHC.Unit.State

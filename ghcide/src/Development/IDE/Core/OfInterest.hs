@@ -24,7 +24,6 @@ import           Control.Monad.IO.Class
 import           Data.HashMap.Strict                      (HashMap)
 import qualified Data.HashMap.Strict                      as HashMap
 import           Data.Proxy
-import qualified Data.Text                                as T
 import           Development.IDE.Graph
 
 import           Control.Concurrent.STM.Stats             (atomically,

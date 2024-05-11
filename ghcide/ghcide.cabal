@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.8.2 || ==9.6.4 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -98,7 +98,6 @@ library
     , prettyprinter-ansi-terminal
     , random
     , regex-tdfa                   >=1.3.1.0
-    , row-types
     , safe-exceptions
     , sorted-list
     , sqlite-simple
@@ -277,20 +276,7 @@ library ghcide-test-utils
     Development.IDE.Test.Runfiles
 
   build-depends:
-      aeson,
-      base > 4.9 && < 5,
-      containers,
-      data-default,
-      directory,
-      extra,
-      filepath,
-      ghcide,
-      lsp-types,
-      hls-plugin-api,
-      lens,
-      lsp-test ^>= 0.17,
-      tasty-hunit >= 0.10,
-      text,
+      base > 4.9 && < 5
 
   default-extensions:
       LambdaCase

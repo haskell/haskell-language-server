@@ -58,7 +58,6 @@ module Development.IDE.Core.Rules(
     ) where
 
 import           Control.Applicative
-import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.STM.Stats                 (atomically)
 import           Control.Concurrent.STM.TVar
 import           Control.Concurrent.Strict
@@ -90,10 +89,8 @@ import           Data.List.Extra                              (nubOrdOn)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
-import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
-import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time                                    (UTCTime (..))
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
@@ -123,7 +120,6 @@ import           Development.IDE.GHC.Compat                   hiding
 import qualified Development.IDE.GHC.Compat                   as Compat hiding
                                                                         (nest,
                                                                          vcat)
-import           Development.IDE.GHC.Compat.Env
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                     hiding

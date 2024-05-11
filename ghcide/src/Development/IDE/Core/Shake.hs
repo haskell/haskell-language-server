@@ -707,7 +707,7 @@ getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
-shakeSessionInit recorder ide@IdeState{..} = do
+shakeSessionInit recorder IdeState{..} = do
     -- Take a snapshot of the VFS - it should be empty as we've received no notifications
     -- till now, but it can't hurt to be in sync with the `lsp` library.
     vfs <- vfsSnapshot (lspEnv shakeExtras)

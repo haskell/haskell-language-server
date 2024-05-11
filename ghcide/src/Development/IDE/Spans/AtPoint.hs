@@ -56,7 +56,6 @@ import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
-import           Development.IDE.GHC.Compat           (getSourceNodeIds)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)

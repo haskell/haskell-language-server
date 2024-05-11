@@ -22,7 +22,6 @@ import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
-import           Data.Row
 import           Prelude                                  hiding (mod)
 
 import           Data.Maybe                               (fromMaybe, isJust,

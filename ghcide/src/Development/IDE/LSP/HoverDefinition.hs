@@ -20,7 +20,7 @@ import           Data.Maybe                     (fromMaybe)
 import           Development.IDE.Core.Actions
 import qualified Development.IDE.Core.Rules     as Shake
 import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
-                                                 ideLogger, runIdeAction)
+                                                 runIdeAction)
 import           Development.IDE.Types.Location
 import           Ide.Logger
 import           Ide.Plugin.Error
