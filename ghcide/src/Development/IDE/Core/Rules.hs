@@ -63,10 +63,10 @@ import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
-import           Control.Monad.Extra                          hiding (msum)
+import           Control.Monad.Extra
 import           Control.Monad.IO.Unlift
-import           Control.Monad.Reader                         hiding (msum)
-import           Control.Monad.State                          hiding (msum)
+import           Control.Monad.Reader
+import           Control.Monad.State
 import           Control.Monad.Trans.Except                   (ExceptT, except,
                                                                runExceptT)
 import           Control.Monad.Trans.Maybe
@@ -76,7 +76,7 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Default                                 (Default, def)
-import           Data.Foldable                                hiding (msum)
+import           Data.Foldable
 import           Data.Hashable
 import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
@@ -391,16 +391,16 @@ rawDependencyInformation fs = do
     go :: NormalizedFilePath -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
-    go f msum = do
+    go f mbModSum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          let al = modSummaryToArtifactsLocation f msum
+          let al = modSummaryToArtifactsLocation f mbModSum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Record this module and its location
-          whenJust msum $ \ms ->
+          whenJust mbModSum $ \ms ->
             modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
                                                                            (ShowableModule $ ms_mod ms)
                                                                            (rawModuleMap rd)})
@@ -547,8 +547,8 @@ getHieAstRuleDefinition f hsc tmr = do
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
           let exports = tcg_exports $ tmrTypechecked tmr
-              msum = tmrModSummary tmr
-          liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
+              modSummary = tmrModSummary tmr
+          liftIO $ writeAndIndexHieFile hsc se modSummary f exports asts source
     _ -> pure []
 
   let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
@@ -1120,7 +1120,6 @@ getLinkableRule recorder =
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
--- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =

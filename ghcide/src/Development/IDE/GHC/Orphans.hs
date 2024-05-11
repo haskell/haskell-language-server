@@ -31,7 +31,6 @@ import           GHC.Types.Unique                  (getKey)
 
 import           Data.Bifunctor                    (Bifunctor (..))
 import           GHC.Parser.Annotation
-import           GHC.Unit.Module.Location          (ModLocation (..))
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
@@ -40,6 +39,7 @@ import           GHC.Types.PkgQual
 
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo
+import           GHC.Unit.Module.Location          (ModLocation (..))
 import           GHC.Unit.Module.WholeCoreBindings
 #endif
 

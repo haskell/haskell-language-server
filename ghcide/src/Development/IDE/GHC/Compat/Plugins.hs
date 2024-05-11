@@ -63,8 +63,7 @@ getPsMessages pst =
 #if MIN_VERSION_ghc(9,3,0)
   uncurry PsMessages $ Lexer.getPsMessages pst
 #else
-                 bimap (fmap pprWarning) (fmap pprError) $
-                 getMessages pst
+  bimap (fmap pprWarning) (fmap pprError) $ getMessages pst
 #endif
 
 applyPluginsParsedResultAction :: HscEnv -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
