@@ -1,8 +1,8 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
@@ -127,7 +127,18 @@ module Development.IDE.GHC.Compat(
 #endif
     ) where
 
-import           Prelude                               hiding (mod)
+import           Compat.HieAst                           (enrichHie)
+import           Compat.HieBin
+import           Compat.HieTypes                         hiding
+                                                         (nodeAnnotations)
+import qualified Compat.HieTypes                         as GHC (nodeAnnotations)
+import           Compat.HieUtils
+import qualified Data.ByteString                         as BS
+import           Data.Coerce                             (coerce)
+import           Data.List                               (foldl')
+import qualified Data.Map                                as Map
+import qualified Data.Set                                as S
+import           Data.String                             (IsString (fromString))
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Iface
@@ -137,90 +148,81 @@ import           Development.IDE.GHC.Compat.Parser
 import           Development.IDE.GHC.Compat.Plugins
 import           Development.IDE.GHC.Compat.Units
 import           Development.IDE.GHC.Compat.Util
-import           GHC                                   hiding (
-                                                        ModLocation,
-                                                        RealSrcSpan, exprType,
-                                                        getLoc, lookupName)
-import           Data.Coerce                           (coerce)
-import           Data.String                           (IsString (fromString))
-import           Compat.HieAst                         (enrichHie)
-import           Compat.HieBin
-import           Compat.HieTypes                       hiding (nodeAnnotations)
-import qualified Compat.HieTypes                       as GHC (nodeAnnotations)
-import           Compat.HieUtils
-import qualified Data.ByteString                       as BS
-import           Data.List                             (foldl')
-import qualified Data.Map                              as Map
-import qualified Data.Set                              as S
+import           GHC                                     hiding (ModLocation,
+                                                          RealSrcSpan, exprType,
+                                                          getLoc, lookupName)
+import           Prelude                                 hiding (mod)
 
-import qualified GHC.Core.Opt.Pipeline                 as GHC
-import           GHC.Core.Tidy                         (tidyExpr)
-import           GHC.CoreToStg.Prep                    (corePrepPgm)
-import qualified GHC.CoreToStg.Prep                    as GHC
-import           GHC.Driver.Hooks                      (hscCompileCoreExprHook)
+import qualified GHC.Core.Opt.Pipeline                   as GHC
+import           GHC.Core.Tidy                           (tidyExpr)
+import           GHC.CoreToStg.Prep                      (corePrepPgm)
+import qualified GHC.CoreToStg.Prep                      as GHC
+import           GHC.Driver.Hooks                        (hscCompileCoreExprHook)
 
-import           GHC.ByteCode.Asm                      (bcoFreeNames)
-import           GHC.Types.Annotations                 (AnnTarget (ModuleTarget),
-                                                        Annotation (..),
-                                                        extendAnnEnvList)
-import           GHC.Types.Unique.DFM                  as UniqDFM
-import           GHC.Types.Unique.DSet                 as UniqDSet
-import           GHC.Types.Unique.Set                  as UniqSet
-import           GHC.Data.FastString
+import           GHC.ByteCode.Asm                        (bcoFreeNames)
 import           GHC.Core
+import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
-import           GHC.Driver.Session                    hiding (ExposePackage)
+import           GHC.Driver.Session                      hiding (ExposePackage)
+import           GHC.Iface.Make                          (mkIfaceExports)
+import           GHC.SysTools.Tasks                      (runPp, runUnlit)
+import           GHC.Types.Annotations                   (AnnTarget (ModuleTarget),
+                                                          Annotation (..),
+                                                          extendAnnEnvList)
+import qualified GHC.Types.Avail                         as Avail
+import           GHC.Types.Unique.DFM                    as UniqDFM
+import           GHC.Types.Unique.DSet                   as UniqDSet
+import           GHC.Types.Unique.Set                    as UniqSet
 import           GHC.Types.Var.Env
-import           GHC.Iface.Make                        (mkIfaceExports)
-import           GHC.SysTools.Tasks                    (runUnlit, runPp)
-import qualified GHC.Types.Avail                       as Avail
 
-import           GHC.Iface.Env
-import           GHC.Types.SrcLoc                      (combineRealSrcSpans)
-import           GHC.Runtime.Context                   (icInteractiveModule)
-import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
-                                                        lookupHpt)
-import           GHC.Driver.Env                        as Env
-import           GHC.Unit.Module.ModIface
 import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
-import           GHC.Linker.Loader                     (loadDecls, loadExpr)
+import           GHC.Driver.Env                          as Env
+import           GHC.Iface.Env
+import           GHC.Linker.Loader                       (loadDecls, loadExpr)
+import           GHC.Runtime.Context                     (icInteractiveModule)
 import           GHC.Stg.Pipeline
 import           GHC.Stg.Syntax
 import           GHC.StgToByteCode
 import           GHC.Types.CostCentre
 import           GHC.Types.IPE
+import           GHC.Types.SrcLoc                        (combineRealSrcSpans)
+import           GHC.Unit.Home.ModInfo                   (HomePackageTable,
+                                                          lookupHpt)
+import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
-import           GHC.Unit.Module.ModSummary
-import           GHC.Runtime.Interpreter
 import           Data.IORef
+import           GHC.Runtime.Interpreter
+import           GHC.Unit.Module.Deps                    (Dependencies (dep_mods),
+                                                          Usage (..))
+import           GHC.Unit.Module.ModSummary
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods), Usage(..))
-import GHC.Driver.Config.Stg.Pipeline
+import           GHC.Driver.Config.Stg.Pipeline
+import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
+                                                          Usage (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,5,0)
-import           GHC.Core.Lint                         (lintInteractiveExpr)
+import           GHC.Core.Lint                           (lintInteractiveExpr)
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
-import           GHC.Core.Lint.Interactive                           (interactiveInScope)
-import           GHC.Driver.Config.Core.Lint.Interactive             (lintInteractiveExpr)
-import           GHC.Driver.Config.Core.Opt.Simplify                 (initSimplifyExprOpts)
-import           GHC.Driver.Config.CoreToStg                         (initCoreToStgOpts)
-import           GHC.Driver.Config.CoreToStg.Prep                    (initCorePrepConfig)
+import           GHC.Core.Lint.Interactive               (interactiveInScope)
+import           GHC.Driver.Config.Core.Lint.Interactive (lintInteractiveExpr)
+import           GHC.Driver.Config.Core.Opt.Simplify     (initSimplifyExprOpts)
+import           GHC.Driver.Config.CoreToStg             (initCoreToStgOpts)
+import           GHC.Driver.Config.CoreToStg.Prep        (initCorePrepConfig)
 #endif
 
 #if MIN_VERSION_ghc(9,7,0)
-import           GHC.Tc.Zonk.TcType                    (tcInitTidyEnv)
+import           GHC.Tc.Zonk.TcType                      (tcInitTidyEnv)
 #endif
 
 #if !MIN_VERSION_ghc(9,7,0)
