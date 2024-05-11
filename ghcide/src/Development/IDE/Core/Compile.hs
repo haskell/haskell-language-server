@@ -482,11 +482,7 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface' <- mkIfaceTc hsc_env_tmp sf details ms
-#if MIN_VERSION_ghc(9,5,0)
-                      Nothing
-#endif
-                      tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms Nothing tcGblEnv
   let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 

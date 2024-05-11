@@ -415,6 +415,7 @@ import           GHC.Builtin.Names            hiding (Unique, printName)
 import           GHC.Builtin.Types
 import           GHC.Builtin.Types.Prim
 import           GHC.Builtin.Utils
+import           GHC.Core                     (CoreProgram)
 import           GHC.Core.Class
 import           GHC.Core.Coercion
 import           GHC.Core.ConLike
@@ -555,10 +556,6 @@ import qualified GHC.Driver.Config.Tidy       as GHC
 import qualified GHC.Data.Strict              as Strict
 import qualified GHC.Unit.Finder as GHC
 import qualified GHC.Driver.Config.Finder as GHC
-#endif
-
-#if MIN_VERSION_ghc(9,5,0)
-import GHC.Core (CoreProgram)
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
@@ -731,15 +728,14 @@ makeSimpleDetails hsc_env =
               hsc_env
 #endif
 
-#if MIN_VERSION_ghc(9,5,0)
 mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> Maybe CoreProgram -> TcGblEnv -> IO ModIface
-mkIfaceTc = GHC.mkIfaceTc
+mkIfaceTc hscEnv shm md _ms _mcp =
+#if MIN_VERSION_ghc(9,5,0)
+  GHC.mkIfaceTc hscEnv shm md _ms _mcp -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
 #elif MIN_VERSION_ghc(9,3,0)
-mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary ->                      TcGblEnv -> IO ModIface
-mkIfaceTc = GHC.mkIfaceTc
+  GHC.mkIfaceTc hscEnv shm md _ms -- ms::ModSummary is only used in GHC >= 9.4
 #else
-mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary ->                      TcGblEnv -> IO ModIface
-mkIfaceTc hsc_env sf details _ms{-::ModSummary is only used in GHC >= 9.4 -} = GHC.mkIfaceTc hsc_env sf details
+  GHC.mkIfaceTc hscEnv shm md
 #endif
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
