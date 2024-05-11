@@ -809,27 +809,12 @@ runWithShake f = do
                     let arg = sconcat xs
                     let recorder = restartRecorder arg
                     logWith recorder Info $ LogRestartDebounceCount count (intercalate ", " (restartReasons arg))
-                    doShakeRestart arg 0
+                    doShakeRestart arg
             runShakeLoop q
 
--- prepare the restart
-stopShakeSession :: RestartArguments -> IO Seconds
-stopShakeSession RestartArguments{restartIdeState=IdeState{..}, ..} = do
-            withMVarMasked shakeSession
-                (\runner -> do
-                    (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                    -- signal the caller that we are done stopping and ready to restart
-                    return stopTime
-                )
-        where
-            logErrorAfter :: Seconds -> IO () -> IO ()
-            logErrorAfter seconds action = flip withAsync (const action) $ do
-                sleep seconds
-                logWith restartRecorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
-
-doShakeRestart :: RestartArguments -> Seconds -> IO ()
-doShakeRestart RestartArguments{restartIdeState=IdeState{..}, ..} stopTime = do
+doShakeRestart :: RestartArguments -> IO ()
+doShakeRestart RestartArguments{restartIdeState=IdeState{..}, ..} = do
         withMVar' shakeSession
             (\runner -> do
                 (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
