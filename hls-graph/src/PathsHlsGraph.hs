@@ -1,6 +1,6 @@
 -- | Fake cabal module for local building
 
-module PathsHlsGraph(getDataDir, version) where
+module Paths_hls_graph(getDataDir, version) where
 
 import           Data.Version.Extra
 

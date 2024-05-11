@@ -65,9 +65,9 @@ library
     Development.IDE.Graph.KeyMap
     Development.IDE.Graph.KeySet
     Development.IDE.Graph.Rule
-    PathsHlsGraph
+    Paths_hls_graph
 
-  autogen-modules:    PathsHlsGraph
+  autogen-modules:    Paths_hls_graph
   hs-source-dirs:     src
   build-depends:
     , aeson
