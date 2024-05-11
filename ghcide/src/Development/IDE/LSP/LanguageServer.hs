@@ -242,6 +242,7 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                 case msg of
                     ReactorNotification act -> handle exceptionInHandler act
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+        -- todo cancel shake session and log here
         logWith recorder Info LogReactorThreadStopped
 
     (WithHieDbShield withHieDb,hieChan,sq) <- takeMVar dbMVar
@@ -271,7 +272,7 @@ shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ 
     liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
-    liftIO $ logWith recorder Debug LogServerShutdownMessage
+    liftIO $ logWith recorder Debug LogServerShutdownDoneMessage
     resp $ Right Null
 
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
