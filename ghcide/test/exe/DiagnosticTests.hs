@@ -218,9 +218,8 @@ tests = testGroup "diagnostics"
         ]) $ do
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
-        [ ( "ModuleB.hs"
-          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
-          )
+        [ ( "ModuleB.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")])
+        , ( "ModuleA.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")])
         ]
   , testWithDummyPluginEmpty "cyclic module dependency with hs-boot" $ do
       let contentA = T.unlines
