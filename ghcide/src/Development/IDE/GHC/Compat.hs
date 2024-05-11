@@ -10,29 +10,14 @@ module Development.IDE.GHC.Compat(
     addIncludePathsQuote,
     getModuleHash,
     setUpTypedHoles,
-    NameCacheUpdater(..),
-#if MIN_VERSION_ghc(9,3,0)
-    nameEnvElts,
-#else
-    upNameCache,
-#endif
     lookupNameCache,
     disableWarningsAsErrors,
     reLoc,
     reLocA,
     renderMessages,
     pattern PFailedWithErrorMessages,
-
-#if !MIN_VERSION_ghc(9,3,0)
-    extendModSummaryNoDeps,
-    emsModSummary,
-#endif
     myCoreToStgExpr,
-
     Usage(..),
-
-    liftZonkM,
-
     FastStringCompat,
     bytesFS,
     mkFastStringByteString,
@@ -46,11 +31,6 @@ module Development.IDE.GHC.Compat(
     nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
-#if !MIN_VERSION_ghc(9,3,0)
-    nonDetOccEnvElts,
-#endif
-    nonDetFoldOccEnv,
-
     isQualifiedImport,
     GhcVersion(..),
     ghcVersion,
@@ -88,9 +68,6 @@ module Development.IDE.GHC.Compat(
     simplifyExpr,
     tidyExpr,
     emptyTidyEnv,
-#if MIN_VERSION_ghc(9,7,0)
-    tcInitTidyEnv,
-#endif
     corePrepExpr,
     corePrepPgm,
     lintInteractiveExpr,
@@ -98,11 +75,6 @@ module Development.IDE.GHC.Compat(
     HomePackageTable,
     lookupHpt,
     loadModulesHome,
-#if MIN_VERSION_ghc(9,3,0)
-    Dependencies(dep_direct_mods),
-#else
-    Dependencies(dep_mods),
-#endif
     bcoFreeNames,
     ModIfaceAnnotation,
     pattern Annotation,
@@ -125,13 +97,38 @@ module Development.IDE.GHC.Compat(
     expectJust,
     extract_cons,
     recDotDot,
+
+#if !MIN_VERSION_ghc(9,3,0)
+    Dependencies(dep_mods),
+    NameCacheUpdater(NCU),
+    extendModSummaryNoDeps,
+    emsModSummary,
+    nonDetNameEnvElts,
+    nonDetOccEnvElts,
+    upNameCache,
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+    Dependencies(dep_direct_mods),
+    NameCacheUpdater,
+#endif
+
 #if MIN_VERSION_ghc(9,5,0)
     XModulePs(..),
+#endif
+
+#if !MIN_VERSION_ghc(9,7,0)
+    liftZonkM,
+    nonDetFoldOccEnv,
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+    tcInitTidyEnv,
 #endif
     ) where
 
 import           Prelude                               hiding (mod)
-import           Development.IDE.GHC.Compat.Core hiding (moduleUnitId)
+import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Iface
 import           Development.IDE.GHC.Compat.Logger
@@ -241,9 +238,9 @@ nonDetOccEnvElts = occEnvElts
 
 type ModIfaceAnnotation = Annotation
 
-#if MIN_VERSION_ghc(9,3,0)
-nameEnvElts :: NameEnv a -> [a]
-nameEnvElts = nonDetNameEnvElts
+#if !MIN_VERSION_ghc(9,3,0)
+nonDetNameEnvElts :: NameEnv a -> [a]
+nonDetNameEnvElts = nameEnvElts
 #endif
 
 myCoreToStgExpr :: Logger -> DynFlags -> InteractiveContext

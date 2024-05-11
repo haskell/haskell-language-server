@@ -124,7 +124,6 @@ import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat             (NameCache,
-                                                         NameCacheUpdater (..),
                                                          initNameCache,
                                                          knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
@@ -177,8 +176,13 @@ import           System.Time.Extra
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.IORef
-import           Development.IDE.GHC.Compat             (mkSplitUniqSupply,
+import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
+                                                         mkSplitUniqSupply,
                                                          upNameCache)
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 #endif
 
 data Log

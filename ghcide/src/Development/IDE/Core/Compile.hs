@@ -1,8 +1,8 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP        #-}
-{-# LANGUAGE GADTs      #-}
+{-# LANGUAGE CPP   #-}
+{-# LANGUAGE GADTs #-}
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
@@ -38,17 +38,14 @@ module Development.IDE.Core.Compile
   , shareUsages
   ) where
 
-import           Prelude                           hiding (mod)
-import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (NFData (..), force,
-                                                    rnf)
+import           Control.DeepSeq                   (NFData (..), force, rnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List, (<.>), pre)
-import           Control.Monad.Except
+import           Control.Lens                      hiding (List, pre, (<.>))
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import qualified Control.Monad.Trans.State.Strict  as S
 import           Data.Aeson                        (toJSON)
@@ -65,8 +62,8 @@ import           Data.IntMap                       (IntMap)
 import           Data.IORef
 import           Data.List.Extra
 import qualified Data.Map.Strict                   as Map
-import           Data.Proxy                        (Proxy(Proxy))
 import           Data.Maybe
+import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
@@ -97,16 +94,17 @@ import           GHC                               (ForeignHValue,
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
 import           HieDb                             hiding (withHieDb)
+import qualified Language.LSP.Protocol.Message     as LSP
+import           Language.LSP.Protocol.Types       (DiagnosticTag (..))
+import qualified Language.LSP.Protocol.Types       as LSP
 import qualified Language.LSP.Server               as LSP
-import           Language.LSP.Protocol.Types                (DiagnosticTag (..))
-import qualified Language.LSP.Protocol.Types                as LSP
-import qualified Language.LSP.Protocol.Message            as LSP
+import           Prelude                           hiding (mod)
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
-import           GHC.Tc.Gen.Splice
 import qualified GHC                               as G
+import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
@@ -115,7 +113,6 @@ import           GHC.Types.TypeEnv
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.Map                          (Map)
-import           GHC                               (GhcException (..))
 import           GHC.Unit.Module.Graph             (ModuleGraph)
 import           Unsafe.Coerce
 #endif
@@ -125,8 +122,8 @@ import qualified Data.Set                          as Set
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
-import           GHC.Driver.Config.CoreToStg.Prep
 import           GHC.Core.Lint.Interactive
+import           GHC.Driver.Config.CoreToStg.Prep
 #endif
 
 #if MIN_VERSION_ghc(9,7,0)

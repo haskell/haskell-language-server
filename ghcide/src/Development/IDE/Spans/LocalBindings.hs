@@ -22,7 +22,7 @@ import           Development.IDE.GHC.Compat     (Name, NameEnv, RealSrcSpan,
                                                  getBindSiteFromContext,
                                                  getScopeFromContext, identInfo,
                                                  identType, isSystemName,
-                                                 nameEnvElts, realSrcSpanEnd,
+                                                 nonDetNameEnvElts, realSrcSpanEnd,
                                                  realSrcSpanStart, unitNameEnv)
 
 import           Development.IDE.GHC.Error
@@ -99,7 +99,7 @@ instance Show Bindings where
 -- 'RealSrcSpan',
 getLocalScope :: Bindings -> RealSrcSpan -> [(Name, Maybe Type)]
 getLocalScope bs rss
-  = nameEnvElts
+  = nonDetNameEnvElts
   $ foldMap snd
   $ IM.dominators (realSrcSpanToInterval rss)
   $ getLocalBindings bs
@@ -109,7 +109,7 @@ getLocalScope bs rss
 -- 'RealSrcSpan',
 getDefiningBindings :: Bindings -> RealSrcSpan -> [(Name, Maybe Type)]
 getDefiningBindings bs rss
-  = nameEnvElts
+  = nonDetNameEnvElts
   $ foldMap snd
   $ IM.dominators (realSrcSpanToInterval rss)
   $ getBindingSites bs
@@ -121,7 +121,7 @@ getDefiningBindings bs rss
 getFuzzyScope :: Bindings -> Position -> Position -> [(Name, Maybe Type)]
 getFuzzyScope bs a b
   = filter (not . isSystemName . fst)
-  $ nameEnvElts
+  $ nonDetNameEnvElts
   $ foldMap snd
   $ IM.intersections (Interval a b)
   $ getLocalBindings bs
@@ -133,7 +133,7 @@ getFuzzyScope bs a b
 -- `PositionMapping`
 getFuzzyDefiningBindings :: Bindings -> Position -> Position -> [(Name, Maybe Type)]
 getFuzzyDefiningBindings bs a b
-  = nameEnvElts
+  = nonDetNameEnvElts
   $ foldMap snd
   $ IM.intersections (Interval a b)
   $ getBindingSites bs
