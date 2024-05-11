@@ -408,9 +408,6 @@ import qualified GHC
 import GHC.LanguageExtensions.Type hiding (Cpp)
 
 import           GHC.Hs.Binds
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import           GHC.Builtin.Names            hiding (Unique, printName)
 import           GHC.Builtin.Types
 import           GHC.Builtin.Types.Prim
@@ -513,9 +510,6 @@ import           GHC.Parser.Lexer             hiding (initParserState, getPsMess
 import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
-#if !MIN_VERSION_ghc(9,7,0)
-import           GHC.Types.Avail              (greNamePrintableName)
-#endif
 import           GHC.Types.Fixity             (LexicalFixity (..), Fixity (..), defaultFixity)
 import           GHC.Types.Meta
 import           GHC.Types.Name.Set
@@ -533,6 +527,8 @@ import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface,
                                                ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 import           Language.Haskell.Syntax hiding (FunDep)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.SourceFile         (SourceModified(..))
@@ -556,6 +552,10 @@ import qualified GHC.Driver.Config.Tidy       as GHC
 import qualified GHC.Data.Strict              as Strict
 import qualified GHC.Unit.Finder as GHC
 import qualified GHC.Driver.Config.Finder as GHC
+#endif
+
+#if !MIN_VERSION_ghc(9,7,0)
+import           GHC.Types.Avail              (greNamePrintableName)
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation

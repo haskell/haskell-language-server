@@ -105,25 +105,18 @@ import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import           GHC.Tc.Gen.Splice
-
-
-
 import qualified GHC                               as G
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC                               (ModuleGraph)
-#endif
-
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.Map                          (Map)
 import           GHC                               (GhcException (..))
+import           GHC.Unit.Module.Graph             (ModuleGraph)
 import           Unsafe.Coerce
 #endif
 

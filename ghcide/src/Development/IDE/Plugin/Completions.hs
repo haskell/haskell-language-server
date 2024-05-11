@@ -56,8 +56,6 @@ import           Development.IDE.Core.Rules               (usePropertyAction)
 
 import qualified Ide.Plugin.Config                        as Config
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import qualified GHC.LanguageExtensions                   as LangExt
 
 data Log = LogShake Shake.Log deriving Show

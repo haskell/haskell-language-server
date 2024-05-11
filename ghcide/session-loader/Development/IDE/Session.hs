@@ -52,15 +52,16 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake           hiding (Log, knownTargets,
                                                        withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
+import           Development.IDE.GHC.Compat.CmdLine
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
                                                        Var, Warning, getOptions)
 import qualified Development.IDE.GHC.Compat.Core      as GHC
 import           Development.IDE.GHC.Compat.Env       hiding (Logger)
 import           Development.IDE.GHC.Compat.Units     (UnitId)
-import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph                (Action)
+import qualified Development.IDE.Session.Implicit     as GhcIde
 import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
@@ -69,6 +70,7 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.Check
+import           GHC.ResponseFile
 import qualified HIE.Bios                             as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
@@ -112,14 +114,12 @@ import           HieDb.Utils
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
 
-import qualified Development.IDE.Session.Implicit     as GhcIde
-
-import           Development.IDE.GHC.Compat.CmdLine
-
-
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc(9,3,0)
 import qualified Data.Set                             as OS
+import qualified Development.IDE.GHC.Compat.Util      as Compat
+import           GHC.Data.Graph.Directed
 
 import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
@@ -128,9 +128,6 @@ import           GHC.Types.Error                      (errMsgDiagnostic,
                                                        singleMessage)
 import           GHC.Unit.State
 #endif
-
-import           GHC.Data.Graph.Directed
-import           GHC.ResponseFile
 
 data Log
   = LogSettingInitialDynFlags

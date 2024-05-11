@@ -140,7 +140,8 @@ import           Development.IDE.GHC.Compat.Parser
 import           Development.IDE.GHC.Compat.Plugins
 import           Development.IDE.GHC.Compat.Units
 import           Development.IDE.GHC.Compat.Util
-import           GHC                                   hiding (ModLocation,
+import           GHC                                   hiding (
+                                                        ModLocation,
                                                         RealSrcSpan, exprType,
                                                         getLoc, lookupName)
 import           Data.Coerce                           (coerce)

@@ -65,12 +65,13 @@ import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
                                                            sdocStyle)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Plugins                              (defaultSDocContext,

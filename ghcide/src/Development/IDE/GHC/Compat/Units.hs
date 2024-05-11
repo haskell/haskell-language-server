@@ -36,7 +36,7 @@ module Development.IDE.GHC.Compat.Units (
     installedModule,
     -- * Module
     toUnitId,
-    Development.IDE.GHC.Compat.Units.moduleUnitId,
+    moduleUnitId,
     moduleUnit,
     -- * ExternalPackageState
     ExternalPackageState(..),
@@ -53,9 +53,10 @@ import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 import           Prelude                               hiding (mod)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
+import qualified GHC.Data.ShortText                    as ST
 import           GHC.Types.Unique.Set
+import           GHC.Unit.External
+import qualified GHC.Unit.Finder                       as GHC
 import qualified GHC.Unit.Info                         as UnitInfo
 import           GHC.Unit.State                        (LookupResult, UnitInfo,
                                                         UnitInfoMap,
@@ -67,22 +68,15 @@ import           GHC.Unit.State                        (LookupResult, UnitInfo,
                                                         unitPackageVersion)
 import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types
-import qualified GHC.Unit.Types                        as Unit
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Data.FastString
-
-#endif
-
-import qualified GHC.Data.ShortText                    as ST
-import           GHC.Unit.External
-import qualified GHC.Unit.Finder                       as GHC
-
-#if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Unit.Env
 import           GHC.Unit.Finder                       hiding
                                                        (findImportedModule)
+import qualified GHC.Unit.Types                        as Unit
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
@@ -210,10 +204,10 @@ defUnitId              = Definite
 installedModule :: unit -> ModuleName -> GenModule unit
 installedModule        = Module
 
-
+#if !MIN_VERSION_ghc(9,3,0)
 moduleUnitId :: Module -> UnitId
-moduleUnitId =
-    Unit.toUnitId . Unit.moduleUnit
+moduleUnitId = Unit.toUnitId . Unit.moduleUnit
+#endif
 
 filterInplaceUnits :: [UnitId] -> [PackageFlag] -> ([UnitId], [PackageFlag])
 filterInplaceUnits us packageFlags =

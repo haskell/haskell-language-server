@@ -24,9 +24,10 @@ import qualified GHC.Data.StringBuffer             as SB
 import           GHC.Types.SrcLoc
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
-import           GHC                               (ModuleGraph)
 import           GHC.Types.Unique                  (getKey)
+import           GHC.Unit.Module.Graph             (ModuleGraph)
 #endif
 
 import           Data.Bifunctor                    (Bifunctor (..))

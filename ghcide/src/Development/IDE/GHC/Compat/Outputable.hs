@@ -53,9 +53,6 @@ module Development.IDE.GHC.Compat.Outputable (
     textDoc,
     ) where
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
@@ -65,19 +62,22 @@ import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
-import           GHC.Utils.Error              hiding (mkWarnMsg)
 import           GHC.Utils.Outputable         as Out
 import           GHC.Utils.Panic
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Parser.Errors
 import qualified GHC.Parser.Errors.Ppr        as Ppr
+import           GHC.Utils.Error              hiding (mkWarnMsg)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
 import           GHC.Driver.Config.Diagnostic
 import           GHC.Parser.Errors.Types
+import           GHC.Utils.Error
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
