@@ -65,15 +65,14 @@ instance NFData Unlinked where
 #if MIN_VERSION_ghc(9,5,0)
   rnf (CoreBindings wcb) = rnf wcb
   rnf (LoadedBCOs us)    = rnf us
-  rnf (BCOs _cbs _ss)      = error "not implemented yet"
 
 instance NFData WholeCoreBindings where
   rnf (WholeCoreBindings bs m ml) = rnf bs `seq` rnf m `seq` rnf ml
 
-#endif
-
 instance NFData ModLocation where
     rnf (ModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
+
+#endif
 
 instance Show PackageFlag where show = unpack . printOutputable
 instance Show InteractiveImport where show = unpack . printOutputable

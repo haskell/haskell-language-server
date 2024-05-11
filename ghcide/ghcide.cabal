@@ -271,7 +271,7 @@ library ghcide-test-utils
   visibility: public
   default-language:   GHC2021
 
-  hs-source-dirs: test/src test/cabal
+  hs-source-dirs: test/cabal
   exposed-modules:
     Development.IDE.Test.Runfiles
 
