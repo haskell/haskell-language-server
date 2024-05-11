@@ -10,7 +10,7 @@ module Development.IDE.GHC.Compat.Outputable (
     printSDocQualifiedUnsafe,
     printWithoutUniques,
     mkPrintUnqualifiedDefault,
-    PrintUnqualified(..),
+    PrintUnqualified,
     defaultUserStyle,
     withPprStyle,
     -- * Parser errors
@@ -60,9 +60,6 @@ import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
 import qualified GHC.Types.Error              as Error
-#if MIN_VERSION_ghc(9,7,0)
-import           GHC.Types.Error              (defaultDiagnosticOpts)
-#endif
 import           GHC.Types.Name.Ppr
 import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
@@ -85,6 +82,10 @@ import           GHC.Parser.Errors.Types
 
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Driver.Errors.Types      (DriverMessage, GhcMessage)
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Types.Error              (defaultDiagnosticOpts)
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)

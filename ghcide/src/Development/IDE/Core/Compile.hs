@@ -1266,7 +1266,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = renderMessages $ getPsMessages pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1301,7 +1301,7 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             psMessages = getPsMessages pst dflags
+             psMessages = getPsMessages pst
          in
            do
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
@@ -1310,7 +1310,7 @@ parseFileContents env customPreprocessor filename ms = do
                   throwE $ diagFromStrings sourceParser DiagnosticSeverity_Error errs
 
                let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
-               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms hpm_annotations parsed psMessages
                let (warns, errors) = renderMessages msgs
 
                -- Just because we got a `POk`, it doesn't mean there

@@ -58,8 +58,8 @@ import qualified GHC.Parser.Lexer                      as Lexer
 type PsMessages = (Bag WarnMsg, Bag ErrMsg)
 #endif
 
-getPsMessages :: PState -> DynFlags -> PsMessages
-getPsMessages pst _dflags = --dfags is only used if GHC < 9.2
+getPsMessages :: PState -> PsMessages
+getPsMessages pst =
 #if MIN_VERSION_ghc(9,3,0)
   uncurry PsMessages $ Lexer.getPsMessages pst
 #else
@@ -67,9 +67,8 @@ getPsMessages pst _dflags = --dfags is only used if GHC < 9.2
                  getMessages pst
 #endif
 
-applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
-applyPluginsParsedResultAction env _dflags ms hpm_annotations parsed msgs = do
-  -- dflags is only used in GHC < 9.2
+applyPluginsParsedResultAction :: HscEnv -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
+applyPluginsParsedResultAction env ms hpm_annotations parsed msgs = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
 #if MIN_VERSION_ghc(9,3,0)

@@ -117,9 +117,6 @@ module Development.IDE.GHC.Compat.Core (
     pattern ConPatIn,
     conPatDetails,
     mapConPatDetail,
-#if MIN_VERSION_ghc(9,5,0)
-    mkVisFunTys,
-#endif
     -- * Specs
     ImpDeclSpec(..),
     ImportSpec(..),
@@ -425,7 +422,6 @@ import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon             as DataCon
 import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
-import           GHC.Types.Unique.FM
 import           GHC.Core.PatSyn
 import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
@@ -480,6 +476,7 @@ import           GHC.Types.SrcLoc             (BufPos, BufSpan,
                                                SrcLoc (UnhelpfulLoc),
                                                SrcSpan (UnhelpfulSpan))
 import qualified GHC.Types.SrcLoc             as SrcLoc
+import           GHC.Types.Unique.FM
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var                (Var (varName), setTyVarUnique,
                                                setVarUnique)
@@ -543,21 +540,25 @@ import qualified GHC.Unit.Finder as GHC
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Utils.Error (mkPlainErrorMsgEnvelope)
+import GHC.Driver.Env as GHCi
 import GHC.Driver.Env.KnotVars
-import GHC.Unit.Module.Graph
 import GHC.Driver.Errors.Types
-import GHC.Types.Unique.Map
 import GHC.Types.Unique
-import GHC.Utils.TmpFs
-import GHC.Utils.Panic
-import GHC.Unit.Finder.Types
+import GHC.Types.Unique.Map
 import GHC.Unit.Env
+import GHC.Unit.Module.Graph
+import GHC.Unit.Finder.Types
+import GHC.Utils.Error (mkPlainErrorMsgEnvelope)
+import GHC.Utils.Panic
+import GHC.Utils.TmpFs
 import qualified GHC.Driver.Config.Tidy       as GHC
 import qualified GHC.Data.Strict              as Strict
-import GHC.Driver.Env as GHCi
 import qualified GHC.Unit.Finder as GHC
 import qualified GHC.Driver.Config.Finder as GHC
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import GHC.Core (CoreProgram)
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
@@ -627,6 +628,7 @@ pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
 pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
+isVisibleFunArg :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Bool
 #if __GLASGOW_HASKELL__ >= 906
 isVisibleFunArg = TypesVar.isVisibleFunArg
 type FunTyFlag = TypesVar.FunTyFlag
@@ -729,12 +731,16 @@ makeSimpleDetails hsc_env =
               hsc_env
 #endif
 
-mkIfaceTc hsc_env sf details _ms tcGblEnv = -- ms is only used in GHC >= 9.4
-  GHC.mkIfaceTc hsc_env sf details
-#if MIN_VERSION_ghc(9,3,0)
-              _ms
+#if MIN_VERSION_ghc(9,5,0)
+mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> Maybe CoreProgram -> TcGblEnv -> IO ModIface
+mkIfaceTc = GHC.mkIfaceTc
+#elif MIN_VERSION_ghc(9,3,0)
+mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary ->                      TcGblEnv -> IO ModIface
+mkIfaceTc = GHC.mkIfaceTc
+#else
+mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary ->                      TcGblEnv -> IO ModIface
+mkIfaceTc hsc_env sf details _ms{-::ModSummary is only used in GHC >= 9.4 -} = GHC.mkIfaceTc hsc_env sf details
 #endif
-              tcGblEnv
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
 mkBootModDetailsTc session = GHC.mkBootModDetailsTc
@@ -756,11 +762,12 @@ initTidyOpts =
   pure
 #endif
 
-driverNoStop =
 #if MIN_VERSION_ghc(9,3,0)
-                                         NoStop
+driverNoStop :: StopPhase
+driverNoStop = NoStop
 #else
-                                         StopLn
+driverNoStop :: Phase
+driverNoStop = StopLn
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -779,15 +786,14 @@ pattern NamedFieldPuns :: Extension
 pattern NamedFieldPuns = RecordPuns
 #endif
 
+groupOrigin :: MatchGroup GhcRn body -> Origin
 #if MIN_VERSION_ghc(9,5,0)
-mkVisFunTys = mkScaledFunctionTys
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = fmap
 groupOrigin = mg_ext
 #else
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = SrcLoc.mapLoc
-groupOrigin :: MatchGroup p body -> Origin
 groupOrigin = mg_origin
 #endif
 

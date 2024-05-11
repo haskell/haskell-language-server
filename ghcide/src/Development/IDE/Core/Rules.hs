@@ -42,7 +42,6 @@ module Development.IDE.Core.Rules(
     getHieAstsRule,
     getBindingsRule,
     needsCompilationRule,
-    computeLinkableTypeForDynFlags,
     generateCoreRule,
     getImportMapRule,
     regenerateHiFile,
@@ -1144,35 +1143,22 @@ needsCompilationRule file = do
         -- that we just threw away, and thus have to recompile all dependencies once
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
         (modsums,needsComps) <- liftA2
             (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
                 (uses NeedsCompilation revdeps)
-        pure $ computeLinkableType ms modsums (map join needsComps)
+        pure $ computeLinkableType modsums (map join needsComps)
   pure (Just $ encodeLinkableType res, Just res)
   where
-    computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
-    computeLinkableType this deps xs
+    computeLinkableType :: [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
+    computeLinkableType deps xs
       | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
-      | Just BCOLinkable    `elem` xs     = Just this_type      -- If any dependent needs bytecode, then we need to be compiled
-      | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
+      | Just BCOLinkable    `elem` xs     = Just BCOLinkable    -- If any dependent needs bytecode, then we need to be compiled
+      | any (maybe False uses_th_qq) deps = Just BCOLinkable    -- If any dependent needs TH, then we need to be compiled
       | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
-      where
-        this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
 
 uses_th_qq :: ModSummary -> Bool
 uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
--- | How should we compile this module?
--- (assuming we do in fact need to compile it).
--- Depends on whether it uses unboxed tuples or sums
-computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
-computeLinkableTypeForDynFlags d
-          = BCOLinkable
-  where -- unboxed_tuples_or_sums is only used in GHC < 9.2
-        _unboxed_tuples_or_sums =
-            xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
