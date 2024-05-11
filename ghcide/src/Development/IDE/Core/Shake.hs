@@ -736,13 +736,13 @@ shakeSessionInit recorder ide@IdeState{..} = do
 
 shakeShut :: IdeState -> IO ()
 shakeShut IdeState{..} = do
-    runner <- tryReadMVar shakeSession
     -- Shake gets unhappy if you try to close when there is a running
     -- request so we first abort that.
-    for_ runner cancelShakeSession
-    void $ shakeDatabaseProfile shakeDb
-    progressStop $ progress shakeExtras
-    stopMonitoring
+    withMVar shakeSession $ \ShakeSession{cancelShakeSession} -> do
+        cancelShakeSession
+        void $ shakeDatabaseProfile shakeDb
+        progressStop $ progress shakeExtras
+        stopMonitoring
 
 
 -- | This is a variant of withMVar where the first argument is run unmasked and if it throws
