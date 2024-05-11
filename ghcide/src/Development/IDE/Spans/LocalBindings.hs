@@ -22,7 +22,8 @@ import           Development.IDE.GHC.Compat     (Name, NameEnv, RealSrcSpan,
                                                  getBindSiteFromContext,
                                                  getScopeFromContext, identInfo,
                                                  identType, isSystemName,
-                                                 nonDetNameEnvElts, realSrcSpanEnd,
+                                                 nonDetNameEnvElts,
+                                                 realSrcSpanEnd,
                                                  realSrcSpanStart, unitNameEnv)
 
 import           Development.IDE.GHC.Error
