@@ -32,6 +32,7 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Concurrent.Extra              (newBarrier)
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service          (ShakeOpQueue,
@@ -53,6 +54,7 @@ data Log
   | LogSession Session.Log
   | LogLspServer LspServerLog
   | LogServerShutdownMessage
+  | LogServerShutdownDoneMessage
   deriving Show
 
 instance Pretty Log where
@@ -77,6 +79,7 @@ instance Pretty Log where
     LogSession msg -> pretty msg
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
+    LogServerShutdownDoneMessage -> "Server shutdown done"
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
@@ -268,6 +271,7 @@ shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ 
     liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
+    liftIO $ logWith recorder Debug LogServerShutdownMessage
     resp $ Right Null
 
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
