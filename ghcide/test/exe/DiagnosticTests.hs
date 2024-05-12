@@ -208,13 +208,13 @@ tests = testGroup "diagnostics"
         contentB = T.unlines [ "module ModuleB where" , "import ModuleA" ]
         contentC = T.unlines [ "module ModuleC where" , "import ModuleB" ]
         contentD = T.unlines [ "module ModuleD where" , "import ModuleC" ]
-        cradle = "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
+        cradle = directCradle ["ModuleA", "ModuleB", "ModuleC", "ModuleD"]
     in testWithDummyPlugin "deeply nested cyclic module dependency"
         (mkIdeTestFs [
             file "ModuleA.hs" (text contentA)
             ,file "ModuleB.hs" (text contentB)
             ,file "ModuleC.hs" (text contentC)
-            ,file "hie.yaml" (text cradle)
+            ,cradle
         ]) $ do
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
