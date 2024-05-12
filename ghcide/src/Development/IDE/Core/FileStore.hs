@@ -21,8 +21,7 @@ module Development.IDE.Core.FileStore(
     Log(..)
     ) where
 
-import           Control.Concurrent.STM.Stats                 (STM, atomically,
-                                                               modifyTVar')
+import           Control.Concurrent.STM.Stats                 (STM, atomically)
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
 import           Control.Monad.Extra
@@ -32,10 +31,8 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
-import           Data.List                                    (foldl')
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
-import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils

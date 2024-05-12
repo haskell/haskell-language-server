@@ -29,7 +29,6 @@ import           Control.Monad
 import           Data.Algorithm.Diff
 import           Data.Bifunctor
 import           Data.List
-import           Data.Row
 import qualified Data.Text                   as T
 import qualified Data.Vector.Unboxed         as V
 import qualified Language.LSP.Protocol.Lens  as L
