@@ -327,7 +327,7 @@ mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
 -- | Initialize a recorder that can be instructed to write to stderr by
 -- setting one of the environment variables:
--- "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"
+-- "HLS_TEST_HARNESS_STDERR=1", "HLS_TEST_LOG_STDERR=1"
 --
 -- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
 -- under test.
