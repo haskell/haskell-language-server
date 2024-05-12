@@ -76,10 +76,11 @@ jobs:
       - name: Configue non-default flags for all components
         run: |
           cabal configure \
-              --constraint "hls-graph +embed-files +stm-stats" \
-              --constraint "ghcide +ekg +executable +test-exe" \
-              --constraint "hls-plugin-api -use-fingertree" \
-              --constraint "all +pedantic"
+              --constraint "haskell-language-server +pedantic" \
+              --constraint "hls-graph +embed-files +pedantic +stm-stats" \
+              --constraint "hls-test-utils +embed-files +pedantic +stm-stats" \
+              --constraint "ghcide +ekg +executable +pedantic +test-exe" \
+              --constraint "hls-plugin-api +pedantic -use-fingertree"
           cat cabal.project.local
 
       - name: Build everything with non-default flags
