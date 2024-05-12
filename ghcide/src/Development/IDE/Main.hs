@@ -34,8 +34,7 @@ import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
                                                            Priority (Debug, Error),
-                                                           Rules, emptyFilePath,
-                                                           hDuplicateTo')
+                                                           Rules, hDuplicateTo')
 import           Development.IDE.Core.Debouncer           (Debouncer,
                                                            newAsyncDebouncer)
 import           Development.IDE.Core.FileStore           (isWatchSupported,
@@ -88,10 +87,9 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
                                                            optTesting)
-import           Development.IDE.Types.Shake              (WithHieDb, toKey,
+import           Development.IDE.Types.Shake              (WithHieDb,
                                                            toNoFileKey)
-import           GHC.Conc                                 (atomically,
-                                                           getNumProcessors)
+import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
 import           HIE.Bios.Cradle                          (findCradle)

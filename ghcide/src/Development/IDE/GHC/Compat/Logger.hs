@@ -13,11 +13,11 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        as Env
 import           Development.IDE.GHC.Compat.Outputable
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Utils.Outputable
 
 import           GHC.Utils.Logger                      as Logger
+import           GHC.Utils.Outputable
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.Error

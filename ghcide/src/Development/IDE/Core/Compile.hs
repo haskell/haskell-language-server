@@ -1,8 +1,8 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP        #-}
-{-# LANGUAGE GADTs      #-}
+{-# LANGUAGE CPP   #-}
+{-# LANGUAGE GADTs #-}
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
@@ -38,17 +38,14 @@ module Development.IDE.Core.Compile
   , shareUsages
   ) where
 
-import           Prelude                           hiding (mod)
-import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (NFData (..), force,
-                                                    rnf)
+import           Control.DeepSeq                   (NFData (..), force, rnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List, (<.>), pre)
-import           Control.Monad.Except
+import           Control.Lens                      hiding (List, pre, (<.>))
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import qualified Control.Monad.Trans.State.Strict  as S
 import           Data.Aeson                        (toJSON)
@@ -65,8 +62,8 @@ import           Data.IntMap                       (IntMap)
 import           Data.IORef
 import           Data.List.Extra
 import qualified Data.Map.Strict                   as Map
-import           Data.Proxy                        (Proxy(Proxy))
 import           Data.Maybe
+import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
@@ -97,33 +94,26 @@ import           GHC                               (ForeignHValue,
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
 import           HieDb                             hiding (withHieDb)
+import qualified Language.LSP.Protocol.Message     as LSP
+import           Language.LSP.Protocol.Types       (DiagnosticTag (..))
+import qualified Language.LSP.Protocol.Types       as LSP
 import qualified Language.LSP.Server               as LSP
-import           Language.LSP.Protocol.Types                (DiagnosticTag (..))
-import qualified Language.LSP.Protocol.Types                as LSP
-import qualified Language.LSP.Protocol.Message            as LSP
+import           Prelude                           hiding (mod)
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Tc.Gen.Splice
-
-
-
 import qualified GHC                               as G
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC                               (ModuleGraph)
-#endif
-
+import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.Map                          (Map)
-import           GHC                               (GhcException (..))
+import           GHC.Unit.Module.Graph             (ModuleGraph)
 import           Unsafe.Coerce
 #endif
 
@@ -132,8 +122,8 @@ import qualified Data.Set                          as Set
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
-import           GHC.Driver.Config.CoreToStg.Prep
 import           GHC.Core.Lint.Interactive
+import           GHC.Driver.Config.CoreToStg.Prep
 #endif
 
 #if MIN_VERSION_ghc(9,7,0)
@@ -482,11 +472,7 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface' <- mkIfaceTc hsc_env_tmp sf details ms
-#if MIN_VERSION_ghc(9,5,0)
-                      Nothing
-#endif
-                      tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms Nothing tcGblEnv
   let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
@@ -1266,7 +1252,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = renderMessages $ getPsMessages pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1301,7 +1287,7 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             psMessages = getPsMessages pst dflags
+             psMessages = getPsMessages pst
          in
            do
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
@@ -1310,7 +1296,7 @@ parseFileContents env customPreprocessor filename ms = do
                   throwE $ diagFromStrings sourceParser DiagnosticSeverity_Error errs
 
                let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
-               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms hpm_annotations parsed psMessages
                let (warns, errors) = renderMessages msgs
 
                -- Just because we got a `POk`, it doesn't mean there

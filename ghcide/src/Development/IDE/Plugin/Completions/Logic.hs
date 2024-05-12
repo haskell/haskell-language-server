@@ -22,7 +22,6 @@ import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
-import           Data.Row
 import           Prelude                                  hiding (mod)
 
 import           Data.Maybe                               (fromMaybe, isJust,
@@ -66,12 +65,13 @@ import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
                                                            sdocStyle)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Plugins                              (defaultSDocContext,

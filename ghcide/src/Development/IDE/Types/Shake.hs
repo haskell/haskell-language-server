@@ -7,7 +7,7 @@ module Development.IDE.Types.Shake
     Value (..),
     ValueWithDiagnostics (..),
     Values,
-    Key (..),
+    Key,
     BadDependency (..),
     ShakeValue(..),
     currentValue,

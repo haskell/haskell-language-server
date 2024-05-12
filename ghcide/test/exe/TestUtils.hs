@@ -1,6 +1,5 @@
 
-{-# LANGUAGE GADTs           #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE GADTs #-}
 
 module TestUtils where
 
@@ -11,16 +10,12 @@ import           Control.Lens                    ((.~))
 import qualified Control.Lens                    as Lens
 import qualified Control.Lens.Extras             as Lens
 import           Control.Monad
-import           Control.Monad.IO.Class          (liftIO)
 import           Data.Foldable
 import           Data.Function                   ((&))
 import           Data.Maybe
-import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
-import           Development.IDE.GHC.Util
 import qualified Development.IDE.Main            as IDE
-import           Development.IDE.Test            (canonicalizeUri,
-                                                  configureCheckProject,
+import           Development.IDE.Test            (configureCheckProject,
                                                   expectNoMoreDiagnostics)
 import           Development.IDE.Test.Runfiles
 import           Development.IDE.Types.Location

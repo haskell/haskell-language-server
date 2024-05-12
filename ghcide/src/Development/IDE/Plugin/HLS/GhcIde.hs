@@ -7,7 +7,7 @@ module Development.IDE.Plugin.HLS.GhcIde
     descriptors
   , Log(..)
   ) where
-import           Control.Monad.IO.Class
+
 import           Development.IDE
 import qualified Development.IDE.LSP.HoverDefinition as Hover
 import qualified Development.IDE.LSP.Notifications   as Notifications

@@ -32,8 +32,7 @@ module Main (main) where
 -- import Test.QuickCheck.Instances ()
 import           Data.Function                ((&))
 import qualified HieDbRetry
-import           Ide.Logger                   (LoggingColumn (DataColumn, PriorityColumn),
-                                               Pretty (pretty),
+import           Ide.Logger                   (Pretty (pretty),
                                                Priority (Debug),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,

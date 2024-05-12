@@ -18,10 +18,9 @@ where
 import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
+import           GHC.Settings
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Settings
 
 #if !MIN_VERSION_ghc(9,3,0)
 import qualified GHC.Driver.Pipeline             as Pipeline

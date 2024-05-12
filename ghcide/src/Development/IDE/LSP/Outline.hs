@@ -9,8 +9,10 @@ module Development.IDE.LSP.Outline
 where
 
 import           Control.Monad.IO.Class
+import           Data.Foldable                  (toList)
 import           Data.Functor
 import           Data.Generics                  hiding (Prefix)
+import           Data.List.NonEmpty             (nonEmpty)
 import           Data.Maybe
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
@@ -28,9 +30,6 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
 import          Language.LSP.Protocol.Message
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           Data.List.NonEmpty             (nonEmpty)
-import           Data.Foldable                  (toList)
 
 #if !MIN_VERSION_ghc(9,3,0)
 import qualified Data.Text                      as T
