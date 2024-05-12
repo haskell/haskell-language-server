@@ -31,7 +31,7 @@ import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
-import           Development.IDE.Core.Shake            hiding (Log, Priority)
+import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Types.Location
 import           Ide.Logger

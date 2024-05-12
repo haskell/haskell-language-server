@@ -12,19 +12,12 @@ import qualified Language.LSP.Protocol.Lens as L
 import           Language.LSP.Test
 import           System.Info.Extra          (isWindows)
 
-import           Control.Lens               ((^.))
-import           Test.Tasty
-import           Test.Tasty.HUnit
--- import           TestUtils
 import           Config
-import           Debug.Trace                (traceM)
-import           Development.IDE            (readFileUtf8)
+import           Control.Lens               ((^.))
 import           Development.IDE.Test       (expectDiagnostics,
                                              standardizeQuotes)
-import           System.Directory           (copyFile)
-import           System.FilePath            ((</>))
 import           Test.Hls
-import           Test.Hls.FileSystem        (copy, copyDir, file, toAbsFp)
+import           Test.Hls.FileSystem        (copyDir)
 import           Text.Regex.TDFA            ((=~))
 
 tests :: TestTree

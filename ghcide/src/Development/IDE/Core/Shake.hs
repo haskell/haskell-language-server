@@ -134,7 +134,6 @@ import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat             (NameCache,
-                                                         NameCacheUpdater (..),
                                                          initNameCache,
                                                          knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
@@ -182,12 +181,18 @@ import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
+
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.IORef
-import           Development.IDE.GHC.Compat             (mkSplitUniqSupply,
+import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
+                                                         mkSplitUniqSupply,
                                                          upNameCache)
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 #endif
 
 data Log
@@ -726,7 +731,7 @@ getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
-shakeSessionInit recorder ide@IdeState{..} = do
+shakeSessionInit recorder IdeState{..} = do
     -- Take a snapshot of the VFS - it should be empty as we've received no notifications
     -- till now, but it can't hurt to be in sync with the `lsp` library.
     vfs <- vfsSnapshot (lspEnv shakeExtras)

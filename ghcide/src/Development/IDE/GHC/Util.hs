@@ -62,9 +62,6 @@ import           GHC.IO.Handle.Types
 import           Ide.PluginUtils                   (unescape)
 import           System.FilePath
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 import           GHC.Data.EnumSet
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer

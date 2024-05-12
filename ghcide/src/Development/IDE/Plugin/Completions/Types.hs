@@ -21,13 +21,10 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
 import           Development.IDE.Spans.Common ()
 import           GHC.Generics                 (Generic)
+import qualified GHC.Types.Name.Occurrence    as Occ
 import           Ide.Plugin.Properties
 import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
 import qualified Language.LSP.Protocol.Types  as J
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import qualified GHC.Types.Name.Occurrence    as Occ
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions

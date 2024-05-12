@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 9.8.2 || ==9.6.4 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
 extra-source-files:
   README.md
   ChangeLog.md
@@ -258,7 +258,6 @@ library hls-cabal-plugin
     , lsp                   ^>=2.5
     , lsp-types             ^>=2.2
     , regex-tdfa            ^>=1.3.1
-    , stm
     , text
     , text-rope
     , transformers
@@ -408,7 +407,6 @@ test-suite hls-call-hierarchy-plugin-tests
     , filepath
     , haskell-language-server:hls-call-hierarchy-plugin
     , hls-test-utils        == 2.8.0.0
-    , ghcide:ghcide-test-utils
     , lens
     , lsp
     , lsp-test
@@ -1688,7 +1686,7 @@ test-suite hls-refactor-plugin-tests
     , parser-combinators
     , data-default
     , extra
-    , ghcide:{ghcide, ghcide-test-utils}
+    , ghcide:ghcide
     , shake
     , hls-plugin-api
     , lsp-test
@@ -1768,7 +1766,6 @@ test-suite hls-semantic-tokens-plugin-tests
     , filepath
     , haskell-language-server:hls-semantic-tokens-plugin
     , hls-test-utils              == 2.8.0.0
-    , ghcide:ghcide-test-utils
     , hls-plugin-api
     , lens
     , lsp
@@ -1833,7 +1830,6 @@ test-suite hls-notes-plugin-tests
     , base
     , directory
     , filepath
-    , ghcide:ghcide-test-utils
     , haskell-language-server:hls-notes-plugin
     , hls-test-utils == 2.8.0.0
   default-extensions: OverloadedStrings
@@ -2003,7 +1999,7 @@ test-suite func-test
     , deepseq
     , extra
     , filepath
-    , ghcide:{ghcide, ghcide-test-utils}
+    , ghcide:ghcide
     , hashable
     , hls-plugin-api
     , hls-test-utils == 2.8.0.0
@@ -2276,8 +2272,7 @@ test-suite ghcide-bench-test
         lsp-test ^>= 0.17,
         tasty,
         tasty-hunit >= 0.10,
-        tasty-rerun,
-        hls-test-utils
+        tasty-rerun
     default-extensions:
         LambdaCase
         OverloadedStrings
