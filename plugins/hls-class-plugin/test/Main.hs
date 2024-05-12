@@ -1,7 +1,10 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+#if __GLASGOW_HASKELL__ >= 908
+{-# OPTIONS_GHC -Wwarn=x-partial #-}
+#endif
 
 module Main
   ( main
