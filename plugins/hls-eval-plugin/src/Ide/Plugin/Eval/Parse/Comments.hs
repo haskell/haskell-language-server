@@ -57,7 +57,7 @@ We build parsers combining the following three kinds of them:
 -}
 
 -- | Line parser
-type LineParser a = forall m. Monad m => ParsecT Void String m a
+type LineParser a = forall m. ParsecT Void String m a
 
 -- | Line comment group parser
 type LineGroupParser = Parsec Void [(Range, RawLineComment)]

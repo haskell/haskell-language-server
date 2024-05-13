@@ -57,7 +57,11 @@ library
     , temporary
     , text
 
-  ghc-options:      -Wall -Wunused-packages -Wno-name-shadowing
+  ghc-options:
+    -Wall
+    -Wunused-packages
+    -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
