@@ -1085,12 +1085,14 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
                         _                 -> False
                     ]
                 ++ [HideOthers restImports | not (null restImports)]
-            ] ++ [ ( renderUniquify mode T.empty symbol True
-              , disambiguateSymbol ps fileContents diag symbol mode
-              ) | local
-                , (m,ms) <- take 1 targetsWithRestImports
-                , let mode = HideOthers (m:ms)
-            ]
+            ] ++ case targetsWithRestImports of
+                    (m,ms):_ | local ->
+                        let mode = HideOthers (m:ms)
+                        in [( renderUniquify mode T.empty symbol True
+                            , disambiguateSymbol ps fileContents diag symbol mode
+                            )]
+                    _ -> []
+
         renderUniquify HideOthers {} modName symbol local =
             "Use " <> (if local then "local definition" else modName) <> " for " <> symbol <> ", hiding other imports"
         renderUniquify (ToQualified _ qual) _ symbol _ =

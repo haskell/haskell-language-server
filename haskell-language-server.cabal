@@ -340,6 +340,8 @@ test-suite hls-class-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
   if !flag(class)
     buildable: False
+  if impl(ghc >= 9.8)
+    ghc-options: -Wwarn=x-partial
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-class-plugin/test
   main-is:          Main.hs
@@ -1183,6 +1185,8 @@ test-suite hls-change-type-signature-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
   if !flag(changeTypeSignature)
     buildable: False
+  if impl(ghc >= 9.8)
+    ghc-options: -Wwarn=x-partial
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/test
   main-is:          Main.hs

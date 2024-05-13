@@ -1,8 +1,3 @@
-{-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 908
-{-# OPTIONS_GHC -Wwarn=x-partial #-}
-#endif
-
 module Main where
 
 import           Control.Monad                  (void)
