@@ -31,6 +31,7 @@ module Test.Hls
     runSessionWithServerAndCaps,
     runSessionWithServerInTmpDir,
     runSessionWithServerAndCapsInTmpDir,
+    runSessionWithServerNoRootLock,
     runSessionWithServer',
     runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
@@ -618,7 +619,7 @@ lockForTempDirs = unsafePerformIO newLock
 
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
-runSessionWithServer' ::
+runSessionWithServerNoRootLock ::
   (Pretty b) =>
   -- | whether we disable the kick action or not
   Bool ->
@@ -632,7 +633,7 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock lock $ keepCurrentDirectory $ do
+runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s =  do
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
@@ -675,6 +676,25 @@ runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock l
             (t, _) <- duration $ cancel server
             putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
     pure x
+
+-- | Host a server, and run a test session on it
+-- Note: cwd will be shifted into @root@ in @Session a@
+runSessionWithServer' ::
+  (Pretty b) =>
+  -- | whether we disable the kick action or not
+  Bool ->
+  -- | Plugin to load on the server.
+  PluginTestDescriptor b ->
+  -- | lsp config for the server
+  Config ->
+  -- | config for the test session
+  SessionConfig ->
+  ClientCapabilities ->
+  FilePath ->
+  Session a ->
+  IO a
+runSessionWithServer' disableKick pluginsDp conf sconf caps root s =
+    withLock lock $ keepCurrentDirectory $ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
