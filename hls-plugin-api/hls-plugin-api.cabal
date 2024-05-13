@@ -34,11 +34,11 @@ source-repository head
 
 common warnings
   ghc-options:
-    -Wall -Wredundant-constraints -Wunused-packages
-    -Wno-name-shadowing -Wno-unticked-promoted-constructors
+    -Wall -Wredundant-constraints -Wunused-packages -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
 
 library
-  import: warnings
+  import:             warnings
   exposed-modules:
     Ide.Logger
     Ide.Plugin.Config
@@ -66,7 +66,7 @@ library
     , filepath
     , ghc
     , hashable
-    , hls-graph             == 2.8.0.0
+    , hls-graph             ==2.8.0.0
     , lens
     , lens-aeson
     , lsp                   ^>=2.5
@@ -97,11 +97,10 @@ library
     build-depends: hw-fingertree
 
   default-language:   GHC2021
-  default-extensions:
-    DataKinds
+  default-extensions: DataKinds
 
 test-suite tests
-  import: warnings
+  import:           warnings
   type:             exitcode-stdio-1.0
   default-language: GHC2021
   hs-source-dirs:   test
@@ -125,7 +124,8 @@ test-suite tests
     , text
 
 benchmark rangemap-benchmark
-  import: warnings
+  import:           warnings
+
   -- Benchmark doesn't make sense if fingertree implementation
   -- is not used.
   if !flag(use-fingertree)

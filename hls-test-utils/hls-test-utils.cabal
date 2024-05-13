@@ -26,25 +26,25 @@ source-repository head
 
 library
   exposed-modules:
-    Test.Hls
-    Test.Hls.Util
-    Test.Hls.FileSystem
     Development.IDE.Test
     Development.IDE.Test.Diagnostic
+    Test.Hls
+    Test.Hls.FileSystem
+    Test.Hls.Util
 
   hs-source-dirs:   src
   build-depends:
     , aeson
     , async
-    , base                    >=4.12 && <5
+    , base                    >=4.12    && <5
     , bytestring
     , containers
     , data-default
     , directory
     , extra
     , filepath
-    , ghcide                  == 2.8.0.0
-    , hls-plugin-api          == 2.8.0.0
+    , ghcide                  ==2.8.0.0
+    , hls-plugin-api          ==2.8.0.0
     , lens
     , lsp-test                ^>=0.17
     , lsp-types               ^>=2.2
@@ -58,9 +58,7 @@ library
     , text
 
   ghc-options:
-    -Wall
-    -Wunused-packages
-    -Wno-name-shadowing
+    -Wall -Wunused-packages -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
