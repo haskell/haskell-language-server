@@ -31,6 +31,7 @@ import           Language.LSP.Protocol.Types       hiding
                                                     mkRange)
 import           Language.LSP.Test
 import           LogType                           (Log (..))
+import           Test.Hls                          (waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils

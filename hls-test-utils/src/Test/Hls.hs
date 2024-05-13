@@ -34,7 +34,9 @@ module Test.Hls
     runSessionWithServer',
     runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
+    runSessionWithServerInTmpDirCont,
     runSessionWithServerInTmpDirCont',
+    runSessionWithServerAndCapsInTmpDirCont,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -42,6 +44,7 @@ module Test.Hls
     waitForProgressDone,
     waitForAllProgressDone,
     waitForBuildQueue,
+    waitForProgressBegin,
     waitForTypecheck,
     waitForAction,
     hlsConfigToClientConfig,
@@ -51,7 +54,7 @@ module Test.Hls
     waitForKickStart,
     -- * Plugin descriptor helper functions for tests
     PluginTestDescriptor,
-    pluginTestRecorder,
+    hlsPluginTestRecorder,
     mkPluginTestDescriptor,
     mkPluginTestDescriptor',
     -- * Re-export logger types
@@ -322,9 +325,28 @@ mkPluginTestDescriptor'
   -> PluginTestDescriptor b
 mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
--- | Initialise a recorder that can be instructed to write to stderr by
--- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR=1" before
--- running the tests.
+-- | Initialize a recorder that can be instructed to write to stderr by
+-- setting one of the environment variables:
+--
+-- * HLS_TEST_HARNESS_STDERR=1
+-- * HLS_TEST_LOG_STDERR=1
+--
+-- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+-- under test.
+hlsHelperTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
+hlsHelperTestRecorder = initializeTestRecorder ["HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
+
+
+-- | Initialize a recorder that can be instructed to write to stderr by
+-- setting one of the environment variables:
+--
+-- * HLS_TEST_PLUGIN_LOG_STDERR=1
+-- * HLS_TEST_LOG_STDERR=1
+--
+-- before running the tests.
+--
+-- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+-- under test.
 --
 -- On the cli, use for example:
 --
@@ -337,11 +359,10 @@ mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 -- @
 --   HLS_TEST_LOG_STDERR=1 cabal test <test-suite-of-plugin>
 -- @
-pluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
-pluginTestRecorder = do
-  initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+hlsPluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
+hlsPluginTestRecorder = initializeTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
--- | Generic recorder initialisation for plugins and the HLS server for test-cases.
+-- | Generic recorder initialization for plugins and the HLS server for test-cases.
 --
 -- The created recorder writes to stderr if any of the given environment variables
 -- have been set to a value different to @0@.
@@ -350,11 +371,11 @@ pluginTestRecorder = do
 --
 -- We have to return the base logger function for HLS server logging initialisation.
 -- See 'runSessionWithServer'' for details.
-initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a))
-initialiseTestRecorder envVars = do
+initializeTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a))
+initializeTestRecorder envVars = do
     docWithPriorityRecorder <- makeDefaultStderrRecorder (Just $ ThreadIdColumn : defaultLoggingColumns)
     -- There are potentially multiple environment variables that enable this logger
-    definedEnvVars <- forM envVars (\var -> fromMaybe "0" <$> lookupEnv var)
+    definedEnvVars <- forM envVars (fmap (fromMaybe "0") . lookupEnv)
     let logStdErr = any (/= "0") definedEnvVars
 
         docWithFilteredPriorityRecorder =
@@ -374,20 +395,16 @@ runSessionWithServerAndCapsInTmpDir config plugin caps tree act = runSessionWith
 
 runSessionWithServerInTmpDirCont' :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
 runSessionWithServerInTmpDirCont' config plugin tree act = do
-    recorder <- pluginTestRecorder
-    runSessionWithServerInTmpDirCont (plugin recorder) config def fullCaps tree act
+    runSessionWithServerInTmpDirCont False plugin config def fullCaps tree act
 
 runSessionWithServerAndCapsInTmpDirCont :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
 runSessionWithServerAndCapsInTmpDirCont config plugin caps tree act = do
-    recorder <- pluginTestRecorder
-    runSessionWithServerInTmpDirCont (plugin recorder) config def caps tree act
+    runSessionWithServerInTmpDirCont False plugin config def caps tree act
 
 runSessionWithServerInTmpDir' ::
+    Pretty b =>
     -- | Plugins to load on the server.
-    --
-    -- For improved logging, make sure these plugins have been initalised with
-    -- the recorder produced by @pluginTestRecorder@.
-    IdePlugins IdeState ->
+    PluginTestDescriptor b ->
     -- | lsp config for the server
     Config ->
     -- | config for the test session
@@ -395,7 +412,7 @@ runSessionWithServerInTmpDir' ::
     ClientCapabilities ->
     VirtualFileTree ->
     Session a -> IO a
-runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont plugins conf sessConf caps tree (const act)
+runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont False plugins conf sessConf caps tree (const act)
 
 -- | Host a server, and run a test session on it.
 --
@@ -419,11 +436,11 @@ runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWi
 --
 -- Note: cwd will be shifted into a temporary directory in @Session a@
 runSessionWithServerInTmpDirCont ::
+    Pretty b =>
+    -- | whether we disable the kick action or not
+    Bool ->
     -- | Plugins to load on the server.
-    --
-    -- For improved logging, make sure these plugins have been initalised with
-    -- the recorder produced by @pluginTestRecorder@.
-    IdePlugins IdeState ->
+    PluginTestDescriptor b ->
     -- | lsp config for the server
     Config ->
     -- | config for the test session
@@ -431,10 +448,9 @@ runSessionWithServerInTmpDirCont ::
     ClientCapabilities ->
     VirtualFileTree ->
     (FileSystem -> Session a) -> IO a
-runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
+runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
     testRoot <- setupTestEnvironment
-    recorder <- initialiseTestRecorder
-        ["LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
+    helperRecorder <- hlsHelperTestRecorder
 
     -- Do not clean up the temporary directory if this variable is set to anything but '0'.
     -- Aids debugging.
@@ -443,32 +459,30 @@ runSessionWithServerInTmpDirCont plugins conf sessConf caps tree act = withLock 
             Just val | val /= "0" -> do
                 (tempDir, _) <- newTempDirWithin testRoot
                 a <- action tempDir
-                logWith recorder Debug LogNoCleanup
+                logWith helperRecorder Debug LogNoCleanup
                 pure a
 
             _ -> do
                 (tempDir, cleanup) <- newTempDirWithin testRoot
                 a <- action tempDir `finally` cleanup
-                logWith recorder Debug LogCleanup
+                logWith helperRecorder Debug LogCleanup
                 pure a
 
     runTestInDir $ \tmpDir' -> do
         -- we canonicalize the path, so that we do not need to do
         -- cannibalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
-        logWith recorder Info $ LogTestDir tmpDir
+        logWith helperRecorder Info $ LogTestDir tmpDir
         fs <- FS.materialiseVFT tmpDir tree
-        runSessionWithServer' plugins conf sessConf caps tmpDir (act fs)
+        runSessionWithServer' disableKick plugins conf sessConf caps tmpDir (act fs)
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) config def fullCaps fp act
+  runSessionWithServer' False plugin config def fullCaps fp act
 
 runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
 runSessionWithServerAndCaps config plugin caps fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) config def caps fp act
+  runSessionWithServer' False plugin config def caps fp act
 
 
 -- | Setup the test environment for isolated tests.
@@ -605,11 +619,11 @@ lockForTempDirs = unsafePerformIO newLock
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
-  -- | Plugins to load on the server.
-  --
-  -- For improved logging, make sure these plugins have been initalised with
-  -- the recorder produced by @pluginTestRecorder@.
-  IdePlugins IdeState ->
+  (Pretty b) =>
+  -- | whether we disable the kick action or not
+  Bool ->
+  -- | Plugin to load on the server.
+  PluginTestDescriptor b ->
   -- | lsp config for the server
   Config ->
   -- | config for the test session
@@ -618,18 +632,13 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurrentDirectory $ do
+runSessionWithServer' disableKick pluginsDp conf sconf caps root s =  withLock lock $ keepCurrentDirectory $ do
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
-    -- Allow three environment variables, because "LSP_TEST_LOG_STDERR" has been used before,
-    -- (thus, backwards compatibility) and "HLS_TEST_SERVER_LOG_STDERR" because it
-    -- uses a more descriptive name.
-    -- It is also in better accordance with 'pluginTestRecorder' which uses "HLS_TEST_PLUGIN_LOG_STDERR".
-    -- At last, "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
-    -- under test.
-    recorder <- initialiseTestRecorder
-      ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+    recorder <- hlsPluginTestRecorder
+    let plugins = pluginsDp recorder
+    recorderIde <- hlsHelperTestRecorder
 
     let
         sconf' = sconf { lspConfig = hlsConfigToClientConfig conf }
@@ -637,7 +646,7 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
         hlsPlugins = IdePlugins [Test.blockCommandDescriptor "block-command"] <> plugins
 
         arguments@Arguments{ argsIdeOptions } =
-            testing (cmapWithPrio LogIDEMain recorder) hlsPlugins
+            testing (cmapWithPrio LogIDEMain recorderIde) hlsPlugins
 
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
@@ -647,13 +656,14 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
                     }
 
     server <- async $
-        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder)
+        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
             arguments
                 { argsHandleIn = pure inR
                 , argsHandleOut = pure outW
                 , argsDefaultHlsConfig = conf
                 , argsIdeOptions = ideOptions
                 , argsProjectRoot = Just root
+                , argsDisableKick = disableKick
                 }
 
     x <- runSessionWithHandles inW outR sconf' caps root s
@@ -665,6 +675,12 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
             (t, _) <- duration $ cancel server
             putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
     pure x
+
+-- | Wait for the next progress begin step
+waitForProgressBegin :: Session ()
+waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressBegin v-> Just ()
+  _ -> Nothing
 
 -- | Wait for the next progress end step
 waitForProgressDone :: Session ()

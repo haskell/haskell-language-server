@@ -68,8 +68,7 @@ genericConfigTests = testGroup "generic plugin config"
         testPluginDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Error, (0,0), "testplugin")])]
 
         runConfigSession subdir session = do
-          recorder <- pluginTestRecorder
-          failIfSessionTimeout $ runSessionWithServer' @() (plugin recorder) def (def {ignoreConfigurationRequests=False}) fullCaps ("test/testdata" </> subdir) session
+          failIfSessionTimeout $ runSessionWithServer' @() False plugin def (def {ignoreConfigurationRequests=False}) fullCaps ("test/testdata" </> subdir) session
 
         testPluginId = "testplugin"
         -- A disabled-by-default plugin that creates diagnostics
