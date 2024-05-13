@@ -36,10 +36,8 @@ import           Control.Monad.Extra             (whenJust)
 import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
-import           Test.Hls                        (runSessionWithServer',
-                                                  runSessionWithServerInTmpDirCont,
-                                                  waitForProgressBegin,
-                                                  waitForTypecheck)
+import           Test.Hls                        (runSessionWithServerInTmpDirCont,
+                                                  waitForProgressBegin)
 import           Test.Hls.FileSystem             (directCradle, file, text,
                                                   toAbsFp)
 import           Test.Tasty
