@@ -94,7 +94,6 @@
     - Main
     - Experiments
     - Development.Benchmark.Rules
-    - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Spans.Documentation

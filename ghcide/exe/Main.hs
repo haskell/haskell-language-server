@@ -6,14 +6,11 @@ module Main(main) where
 
 import           Arguments                                (Arguments (..),
                                                            getArguments)
-import           Control.Monad.Extra                      (unless)
 import           Control.Monad.IO.Class                   (liftIO)
 import           Data.Default                             (def)
 import           Data.Function                            ((&))
 import           Data.Version                             (showVersion)
 import           Development.GitRev                       (gitHash)
-import           Development.IDE                          (action)
-import           Development.IDE.Core.OfInterest          (kick)
 import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
 import           Development.IDE.Core.Tracing             (withTelemetryRecorder)
