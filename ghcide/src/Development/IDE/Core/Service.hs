@@ -117,5 +117,3 @@ shutdown st = shakeShut st
 runAction :: String -> IdeState -> Action a -> IO a
 runAction herald ide act =
   join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug act)
-
-
