@@ -14,6 +14,7 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
+import           Test.Hls                        (waitForProgressDone)
 import           Test.Tasty
 import           TestUtils
 

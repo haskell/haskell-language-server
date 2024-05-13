@@ -30,6 +30,7 @@ import           Network.URI
 import qualified Progress
 import           System.IO.Extra                   hiding (withTempDir)
 import           System.Mem                        (performGC)
+import           Test.Hls                          (waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit

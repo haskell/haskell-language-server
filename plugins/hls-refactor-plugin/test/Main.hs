@@ -27,7 +27,6 @@ import           Development.IDE.Plugin.Completions.Types (extendImportCommandId
 import           Development.IDE.Test
 import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
-import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types              hiding
@@ -48,24 +47,21 @@ import           Text.Regex.TDFA                          ((=~))
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
+import qualified Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
-import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import qualified Test.AddArgument
 
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: IO (IdePlugins IdeState)
+refactorPlugin :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
 refactorPlugin = do
-  exactprintLog <- pluginTestRecorder
-  ghcideLog <- pluginTestRecorder
-  pure $ IdePlugins $
-      [ Refactor.iePluginDescriptor exactprintLog "ghcide-code-actions-imports-exports"
-      , Refactor.typeSigsPluginDescriptor exactprintLog "ghcide-code-actions-type-signatures"
-      , Refactor.bindingsPluginDescriptor exactprintLog "ghcide-code-actions-bindings"
-      , Refactor.fillHolePluginDescriptor exactprintLog "ghcide-code-actions-fill-holes"
-      , Refactor.extendImportPluginDescriptor exactprintLog "ghcide-completions-1"
-      ] ++ GhcIde.descriptors ghcideLog
+  mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
+      <> mkPluginTestDescriptor Refactor.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures"
+      <> mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings"
+      <> mkPluginTestDescriptor Refactor.fillHolePluginDescriptor "ghcide-code-actions-fill-holes"
+      <> mkPluginTestDescriptor Refactor.extendImportPluginDescriptor "ghcide-completions-1"
+
 
 tests :: TestTree
 tests =
@@ -3755,9 +3751,7 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir act = do
-  plugin <- refactorPlugin
-  runSessionWithServer' plugin def def lspTestCaps dir act
+runInDir dir act = runSessionWithServerAndCaps def refactorPlugin lspTestCaps dir act
 
 lspTestCaps :: ClientCapabilities
 lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }

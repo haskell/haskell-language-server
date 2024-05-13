@@ -49,10 +49,10 @@ tests
     ]
 
 testSessionEmpty :: TestName -> Session () -> TestTree
-testSessionEmpty name = testCase name . runWithDummyPlugin (mkIdeTestFs [FS.directCradle ["A.hs"]])
+testSessionEmpty name = testWithDummyPlugin name (mkIdeTestFs [FS.directCradle ["A.hs"]])
 
 testSessionEmptyWithCradle :: TestName -> T.Text -> Session () -> TestTree
-testSessionEmptyWithCradle name cradle = testCase name . runWithDummyPlugin (mkIdeTestFs [file "hie.yaml" (text cradle)])
+testSessionEmptyWithCradle name cradle = testWithDummyPlugin name (mkIdeTestFs [file "hie.yaml" (text cradle)])
 
 testSessionSingleFile :: TestName -> FilePath -> T.Text -> Session () -> TestTree
 testSessionSingleFile testName fp txt session =

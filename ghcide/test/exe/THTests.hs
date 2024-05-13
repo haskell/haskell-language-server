@@ -12,6 +12,8 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import           Test.Hls                    (waitForAllProgressDone,
+                                              waitForProgressBegin)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
