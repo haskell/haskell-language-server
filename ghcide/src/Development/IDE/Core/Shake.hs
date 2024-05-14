@@ -535,6 +535,7 @@ data IdeState = IdeState
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopMonitoring       :: IO ()
+    ,rootDir              :: FilePath
     }
 
 
@@ -623,11 +624,12 @@ shakeOpen :: Recorder (WithPriority Log)
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
+          -> FilePath
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
-  withHieDb indexQueue opts monitoring rules = mdo
+  withHieDb indexQueue opts monitoring rules rootDir = mdo
 
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames

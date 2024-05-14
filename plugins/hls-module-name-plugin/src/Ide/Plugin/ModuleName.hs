@@ -58,7 +58,6 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 import           Language.LSP.VFS                     (virtualFileText)
-import           System.Directory                     (makeAbsolute)
 import           System.FilePath                      (dropExtension, normalise,
                                                        pathSeparator,
                                                        splitDirectories,
@@ -133,6 +132,10 @@ action recorder state uri = do
             in pure [Replace uri (Range (Position 0 0) (Position 0 0)) code code]
       _ -> pure []
 
+toAbsolute :: FilePath -> FilePath -> FilePath
+toAbsolute root path
+    | isAbsolute path = path
+    | otherwise = root </> path
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
@@ -150,7 +153,7 @@ pathModuleNames recorder state normFilePath filePath
       let paths = map (normalise . (<> pure pathSeparator)) srcPaths
       logWith recorder Debug (NormalisedPaths paths)
 
-      mdlPath <- liftIO $ makeAbsolute filePath
+      mdlPath <- liftIO $ (toAbsolute $ rootDir state) filePath
       logWith recorder Debug (AbsoluteFilePath mdlPath)
 
       let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
