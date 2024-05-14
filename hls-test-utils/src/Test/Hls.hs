@@ -619,6 +619,9 @@ lockForTempDirs = unsafePerformIO newLock
 
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
+-- notice this function should only be used in tests that
+-- require to be nested in the same temporary directory
+-- use 'runSessionWithServerInTmpDir' for other cases
 runSessionWithServerNoRootLock ::
   (Pretty b) =>
   -- | whether we disable the kick action or not
