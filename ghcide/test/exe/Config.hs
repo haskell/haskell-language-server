@@ -13,6 +13,7 @@ module Config(
     , testWithDummyPluginEmpty'
     , testWithDummyPluginAndCap'
     , runWithExtraFiles
+    , runInDir
     , testWithExtraFiles
 
     -- * utilities for testing definition and hover
@@ -36,7 +37,7 @@ import           Language.LSP.Protocol.Types (Null (..))
 import           System.FilePath             ((</>))
 import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
-import           Test.Hls.FileSystem         (FileSystem)
+import           Test.Hls.FileSystem         (FileSystem, fsRoot)
 
 testDataDir :: FilePath
 testDataDir = "ghcide" </> "test" </> "data"
@@ -79,6 +80,9 @@ runWithExtraFiles dirName action = do
 
 testWithExtraFiles :: String -> String -> (FileSystem -> Session ()) -> TestTree
 testWithExtraFiles testName dirName action = testCase testName $ runWithExtraFiles dirName action
+
+runInDir :: FileSystem -> Session a -> IO a
+runInDir fs = runSessionWithServerNoRootLock False dummyPlugin def def def (fsRoot fs)
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
