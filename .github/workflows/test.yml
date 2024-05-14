@@ -161,9 +161,9 @@ jobs:
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin-tests || cabal test hls-splice-plugin-tests
 
-      # - if: matrix.test && matrix.ghc != '9.2'
-      #   name: Test hls-stan-plugin
-      #   run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
+      - if: matrix.test && matrix.ghc != '9.2'
+        name: Test hls-stan-plugin
+        run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
 
       - if: matrix.test
         name: Test hls-stylish-haskell-plugin
