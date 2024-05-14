@@ -60,7 +60,8 @@ tests = do
                               pure (InL [])
                           ]
                       }]
-          runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
+          recorder <- hlsPluginTestRecorder
+          testIde recorder (testingLite recorder (plugins recorder)) $ do
               doc <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
@@ -82,7 +83,8 @@ tests = do
                               pure (InR Null)
                           ]
                       }]
-          runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
+          recorder <- hlsPluginTestRecorder
+          testIde recorder (testingLite recorder (plugins recorder)) $ do
               _ <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               let cmd = mkLspCommand (coerce pluginId) commandId "" (Just [A.toJSON (1::Int)])
@@ -108,7 +110,8 @@ tests = do
                               pure (InL [])
                           ]
                       }]
-          runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
+          recorder <- hlsPluginTestRecorder
+          testIde recorder (testingLite recorder (plugins recorder)) $ do
               doc <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
