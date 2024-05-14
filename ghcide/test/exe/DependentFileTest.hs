@@ -36,8 +36,8 @@ tests = testGroup "addDependentFile"
               , "import Language.Haskell.TH.Syntax"
               , "foo :: Int"
               , "foo = 1 + $(do"
-              , "               qAddDependentFile \"dep-file.txt\""
-              , "               f <- qRunIO (readFile \"dep-file.txt\")"
+              , "               qAddDependentFile \"" <> T.pack depFilePath <> "\""
+              , "               f <- qRunIO (readFile \"" <> T.pack depFilePath <> "\")"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
