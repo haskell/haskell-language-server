@@ -115,6 +115,7 @@ import           System.Directory                   (canonicalizePath,
                                                      createDirectoryIfMissing,
                                                      getCurrentDirectory,
                                                      getTemporaryDirectory,
+                                                     makeAbsolute,
                                                      setCurrentDirectory)
 import           System.Environment                 (lookupEnv, setEnv)
 import           System.FilePath
@@ -718,8 +719,9 @@ runSessionWithServer'' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer'' disableKick pluginsDp conf sconf caps root s =
+runSessionWithServer'' disableKick pluginsDp conf sconf caps relativeRoot s =
     withLock lock $ keepCurrentDirectory $ do
+        root <- makeAbsolute relativeRoot
         setCurrentDirectory root
         runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
 
