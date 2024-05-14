@@ -197,7 +197,9 @@ handleInit
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
 handleInit rootDir recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
-    dbLoc <- getHieDbLoc rootDir
+    let rootMaybe = LSP.resRootPath env
+    let root = fromMaybe rootDir rootMaybe
+    dbLoc <- getHieDbLoc root
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
     dbMVar <- newEmptyMVar
@@ -240,7 +242,7 @@ handleInit rootDir recorder getHieDbLoc getIdeState lifetime exitClientMsg clear
         logWith recorder Info LogReactorThreadStopped
 
     (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env rootDir withHieDb hieChan
+    ide <- getIdeState env root withHieDb hieChan
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
