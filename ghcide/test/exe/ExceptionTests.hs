@@ -2,8 +2,9 @@
 module ExceptionTests (tests) where
 
 import           Config
+import           Control.Concurrent.Async          (withAsync)
 import           Control.Exception                 (ArithException (DivideByZero),
-                                                    throwIO)
+                                                    finally, throwIO)
 import           Control.Lens
 import           Control.Monad.Error.Class         (MonadError (throwError))
 import           Control.Monad.IO.Class            (liftIO)
@@ -12,7 +13,10 @@ import           Data.Default                      (Default (..))
 import           Data.Text                         as T
 import           Development.IDE.Core.Shake        (IdeState (..))
 import qualified Development.IDE.LSP.Notifications as Notifications
+import qualified Development.IDE.Main              as IDE
 import           Development.IDE.Plugin.HLS        (toResponseError)
+import           Development.IDE.Plugin.Test       as Test
+import           Development.IDE.Types.Options     (IdeTesting (..), optTesting)
 import           GHC.Base                          (coerce)
 import           Ide.Logger                        (Recorder, WithPriority,
                                                     cmapWithPrio)
@@ -30,10 +34,16 @@ import           Language.LSP.Protocol.Types       hiding
                                                     mkRange)
 import           Language.LSP.Test
 import           LogType                           (Log (..))
-import           Test.Hls                          (runSessionWithServerInTmpDir,
+import           System.Directory                  (getCurrentDirectory,
+                                                    setCurrentDirectory)
+import           System.IO.Extra                   (withTempDir)
+import           System.Process.Extra              (createPipe)
+import           Test.Hls                          (hlsPluginTestRecorder,
+                                                    runSessionWithServerInTmpDir,
                                                     waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           TestUtils                         (getConfigFromEnv)
 
 tests :: TestTree
 tests = do
@@ -116,6 +126,40 @@ tests = do
       ]
    ]
 
+testingLite :: Recorder (WithPriority Log) -> IdePlugins IdeState -> FilePath -> IDE.Arguments
+testingLite recorder plugins fp =
+  let
+    arguments@IDE.Arguments{ argsIdeOptions } =
+        IDE.defaultArguments fp (cmapWithPrio LogIDEMain recorder) plugins
+    hlsPlugins = pluginDescToIdePlugins $
+      idePluginsToPluginDesc plugins
+      ++ [Notifications.descriptor (cmapWithPrio LogNotifications recorder) "ghcide-core"]
+      ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+    ideOptions config sessionLoader =
+      let
+        defOptions = argsIdeOptions config sessionLoader
+      in
+        defOptions{ optTesting = IdeTesting True }
+  in
+    arguments
+      { IDE.argsHlsPlugins = hlsPlugins
+      , IDE.argsIdeOptions = ideOptions
+      }
+
+testIde :: Recorder (WithPriority Log) -> (FilePath -> IDE.Arguments) -> Session () -> IO ()
+testIde recorder arguments session = do
+    config <- getConfigFromEnv
+    cwd <- getCurrentDirectory
+    (hInRead, hInWrite) <- createPipe
+    (hOutRead, hOutWrite) <- createPipe
+    withTempDir $ \dir -> do
+        let server = IDE.defaultMain (cmapWithPrio LogIDEMain recorder) (arguments dir)
+                { IDE.argsHandleIn = pure hInRead
+                , IDE.argsHandleOut = pure hOutWrite
+                }
+        flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
+            runSessionWithHandles hInWrite hOutRead config lspTestCaps dir session
+
 pluginOrderTestCase :: TestName -> PluginError -> PluginError -> TestTree
 pluginOrderTestCase msg err1 err2 =
   testCase msg $ do
@@ -130,7 +174,8 @@ pluginOrderTestCase msg err1 err2 =
                           throwError err2
                       ]
                   }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
-      runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
+      recorder <- hlsPluginTestRecorder
+      testIde recorder (testingLite recorder (plugins recorder)) $ do
           doc <- createDoc "A.hs" "haskell" "module A where"
           waitForProgressDone
           (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
