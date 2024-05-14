@@ -442,8 +442,8 @@ toAbsolute dir file
     | isAbsolute file = file
     | otherwise = dir </> file
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
-loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
-  let toAbsolutePath = toAbsolute dir
+loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
+  let toAbsolutePath = toAbsolute rootDir
   cradle_files <- newIORef []
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
@@ -526,7 +526,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          newTargetDfs <- evalGhcEnv hscEnv $ setOptions cfp opts (hsc_dflags hscEnv) dir
+          newTargetDfs <- evalGhcEnv hscEnv $ setOptions cfp opts (hsc_dflags hscEnv) rootDir
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -593,7 +593,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           -- HscEnv but set the active component accordingly
           hscEnv <- emptyHscEnv ideNc _libDir
           let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv
-          all_target_details <- new_cache old_deps new_deps dir
+          all_target_details <- new_cache old_deps new_deps rootDir
 
           this_dep_info <- getDependencyInfo $ maybeToList hieYaml
           let (all_targets, this_flags_map, this_options)
@@ -637,15 +637,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
-           let lfpLog = makeRelative dir cfp
+           let lfpLog = makeRelative rootDir cfp
            logWith recorder Info $ LogCradlePath lfpLog
 
            when (isNothing hieYaml) $
              logWith recorder Warning $ LogCradleNotFound lfpLog
 
-           cradle <- loadCradle recorder hieYaml dir
+           cradle <- loadCradle recorder hieYaml rootDir
            -- TODO: Why are we repeating the same command we have on line 646?
-           let lfp = makeRelative dir cfp
+           let lfp = makeRelative rootDir cfp
 
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
