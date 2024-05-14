@@ -125,7 +125,8 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
 
 setupLSP ::
      forall config err.
-     Recorder (WithPriority Log)
+     FilePath -- ^ root directory
+  -> Recorder (WithPriority Log)
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
@@ -133,7 +134,7 @@ setupLSP ::
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
          (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
-setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
+setupLSP root recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
   clientMsgChan :: Chan ReactorMessage <- newChan
@@ -176,7 +177,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
 
-  let doInitialize = handleInit recorder getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
+  let doInitialize = handleInit root recorder getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
@@ -184,7 +185,8 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
 
 
 handleInit
-    :: Recorder (WithPriority Log)
+    :: FilePath
+    -> Recorder (WithPriority Log)
     -> (FilePath -> IO FilePath)
     -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
     -> MVar ()
@@ -193,11 +195,9 @@ handleInit
     -> (SomeLspId -> IO ())
     -> Chan ReactorMessage
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+handleInit rootDir recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
-    let root = LSP.resRootPath env
-    dir <- maybe (error "No root directory") pure root
-    dbLoc <- getHieDbLoc dir
+    dbLoc <- getHieDbLoc rootDir
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
     dbMVar <- newEmptyMVar
@@ -240,7 +240,7 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
         logWith recorder Info LogReactorThreadStopped
 
     (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env dir withHieDb hieChan
+    ide <- getIdeState env rootDir withHieDb hieChan
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 

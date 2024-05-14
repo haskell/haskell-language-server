@@ -415,6 +415,33 @@ runSessionWithServerInTmpDir' ::
     Session a -> IO a
 runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont False plugins conf sessConf caps tree (const act)
 
+runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
+runWithLockInTempDir tree act = withLock lockForTempDirs $ do
+    testRoot <- setupTestEnvironment
+    helperRecorder <- hlsHelperTestRecorder
+    -- Do not clean up the temporary directory if this variable is set to anything but '0'.
+    -- Aids debugging.
+    cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
+    let runTestInDir action = case cleanupTempDir of
+            Just val | val /= "0" -> do
+                (tempDir, _) <- newTempDirWithin testRoot
+                a <- action tempDir
+                logWith helperRecorder Debug LogNoCleanup
+                pure a
+
+            _ -> do
+                (tempDir, cleanup) <- newTempDirWithin testRoot
+                a <- action tempDir `finally` cleanup
+                logWith helperRecorder Debug LogCleanup
+                pure a
+    runTestInDir $ \tmpDir' -> do
+        -- we canonicalize the path, so that we do not need to do
+        -- cannibalization during the test when we compare two paths
+        tmpDir <- canonicalizePath tmpDir'
+        logWith helperRecorder Info $ LogTestDir tmpDir
+        fs <- FS.materialiseVFT tmpDir tree
+        act fs
+
 -- | Host a server, and run a test session on it.
 --
 -- Creates a temporary directory, and materializes the VirtualFileTree
@@ -449,33 +476,8 @@ runSessionWithServerInTmpDirCont ::
     ClientCapabilities ->
     VirtualFileTree ->
     (FileSystem -> Session a) -> IO a
-runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
-    testRoot <- setupTestEnvironment
-    helperRecorder <- hlsHelperTestRecorder
-
-    -- Do not clean up the temporary directory if this variable is set to anything but '0'.
-    -- Aids debugging.
-    cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
-    let runTestInDir action = case cleanupTempDir of
-            Just val | val /= "0" -> do
-                (tempDir, _) <- newTempDirWithin testRoot
-                a <- action tempDir
-                logWith helperRecorder Debug LogNoCleanup
-                pure a
-
-            _ -> do
-                (tempDir, cleanup) <- newTempDirWithin testRoot
-                a <- action tempDir `finally` cleanup
-                logWith helperRecorder Debug LogCleanup
-                pure a
-
-    runTestInDir $ \tmpDir' -> do
-        -- we canonicalize the path, so that we do not need to do
-        -- cannibalization during the test when we compare two paths
-        tmpDir <- canonicalizePath tmpDir'
-        logWith helperRecorder Info $ LogTestDir tmpDir
-        fs <- FS.materialiseVFT tmpDir tree
-        runSessionWithServer' disableKick plugins conf sessConf caps tmpDir (act fs)
+runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act =
+    runWithLockInTempDir tree $ \fs -> runSessionWithServer' disableKick plugins conf sessConf caps (fsRoot fs) (act fs)
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act = do
