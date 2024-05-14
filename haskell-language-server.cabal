@@ -44,7 +44,10 @@ common defaults
   default-extensions: ExplicitNamespaces
 
 common test-defaults
-  ghc-options:        -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  if impl(ghc >= 9.8)
+    -- We allow using partial functions in tests
+    ghc-options: -Wno-x-partial
 
 -- Default warnings in HLS
 common warnings
@@ -1676,25 +1679,23 @@ test-suite hls-refactor-plugin-tests
   ghc-options:      -O0
   build-depends:
     , base
+    , data-default
+    , directory
+    , extra
     , filepath
+    , ghcide:ghcide
     , haskell-language-server:hls-refactor-plugin
     , hls-test-utils      == 2.8.0.0
     , lens
-    , lsp-types
-    , text
-    , hls-plugin-api
-    , parser-combinators
-    , data-default
-    , extra
-    , ghcide:ghcide
-    , shake
-    , hls-plugin-api
     , lsp-test
-    , directory
+    , lsp-types
+    , parser-combinators
     , regex-tdfa
-    , tasty-hunit
-    , tasty-expected-failure
+    , shake
     , tasty
+    , tasty-expected-failure
+    , tasty-hunit
+    , text
 
 -----------------------------
 -- semantic tokens plugin
@@ -1763,19 +1764,17 @@ test-suite hls-semantic-tokens-plugin-tests
     , aeson
     , base
     , containers
+    , data-default
     , filepath
+    , ghcide                == 2.8.0.0
     , haskell-language-server:hls-semantic-tokens-plugin
-    , hls-test-utils              == 2.8.0.0
-    , hls-plugin-api
+    , hls-plugin-api        == 2.8.0.0
+    , hls-test-utils        == 2.8.0.0
     , lens
     , lsp
-    , text-rope
     , lsp-test
     , text
-    , data-default
-    , ghcide                == 2.8.0.0
-    , hls-plugin-api        == 2.8.0.0
-    , data-default
+    , text-rope
 
 -----------------------------
 -- notes plugin
