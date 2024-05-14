@@ -112,11 +112,11 @@ main = withTelemetryRecorder $ \telemetryRecorder -> do
 
     let arguments =
           if argsTesting
-          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) hlsPlugins
-          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) hlsPlugins
+          then IDEMain.testing argsCwd (cmapWithPrio LogIDEMain recorder) hlsPlugins
+          else IDEMain.defaultArguments argsCwd (cmapWithPrio LogIDEMain recorder) hlsPlugins
 
     IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
-        { IDEMain.argsProjectRoot = Just argsCwd
+        { IDEMain.argsProjectRoot = argsCwd
         , IDEMain.argCommand = argsCommand
         , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins arguments <> pluginDescToIdePlugins [lspRecorderPlugin]
 

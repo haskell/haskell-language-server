@@ -647,7 +647,7 @@ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s =  d
         hlsPlugins = IdePlugins [Test.blockCommandDescriptor "block-command"] <> plugins
 
         arguments@Arguments{ argsIdeOptions } =
-            testing (cmapWithPrio LogIDEMain recorderIde) hlsPlugins
+            testing root (cmapWithPrio LogIDEMain recorderIde) hlsPlugins
 
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
@@ -663,7 +663,7 @@ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s =  d
                 , argsHandleOut = pure outW
                 , argsDefaultHlsConfig = conf
                 , argsIdeOptions = ideOptions
-                , argsProjectRoot = Just root
+                , argsProjectRoot = root
                 , argsDisableKick = disableKick
                 }
 

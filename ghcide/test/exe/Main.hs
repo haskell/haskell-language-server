@@ -114,5 +114,5 @@ main = do
     , ReferenceTests.tests
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
-    , ExceptionTests.tests recorder
+    , ExceptionTests.tests
     ]

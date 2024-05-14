@@ -632,7 +632,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
-           lfpLog <- flip makeRelative cfp <$> getCurrentDirectory
+           let lfpLog = makeRelative dir cfp
            logWith recorder Info $ LogCradlePath lfpLog
 
            when (isNothing hieYaml) $
@@ -640,7 +640,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
            cradle <- loadCradle recorder hieYaml dir
            -- TODO: Why are we repeating the same command we have on line 646?
-           lfp <- flip makeRelative cfp <$> getCurrentDirectory
+           let lfp = makeRelative dir cfp
 
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)

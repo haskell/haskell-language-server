@@ -1,6 +1,7 @@
 
 module UnitTests (tests) where
 
+import           Config                            (mkIdeTestFs)
 import           Control.Concurrent
 import           Control.Monad.IO.Class            (liftIO)
 import           Data.IORef
@@ -30,7 +31,9 @@ import           Network.URI
 import qualified Progress
 import           System.IO.Extra                   hiding (withTempDir)
 import           System.Mem                        (performGC)
-import           Test.Hls                          (waitForProgressDone)
+import           Test.Hls                          (IdeState, def,
+                                                    runSessionWithServerInTmpDir,
+                                                    waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
@@ -72,7 +75,9 @@ tests recorder = do
              expected `isInfixOf` shown
      , testCase "notification handlers run in priority order" $ do
         orderRef <- newIORef []
-        let plugins = pluginDescToIdePlugins $
+        let
+            plugins ::Recorder (WithPriority Ghcide.Log) -> IdePlugins IdeState
+            plugins recorder = pluginDescToIdePlugins $
                 [ (priorityPluginDescriptor i)
                     { pluginNotificationHandlers = mconcat
                         [ mkPluginNotificationHandler SMethod_TextDocumentDidOpen $ \_ _ _ _ ->
@@ -80,10 +85,11 @@ tests recorder = do
                         ]
                     }
                     | i <- [1..20]
-                ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
+                ] ++ Ghcide.descriptors recorder
             priorityPluginDescriptor i = (defaultPluginDescriptor (fromString $ show i) ""){pluginPriority = i}
 
-        testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) plugins) $ do
+        -- testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) plugins) $ do
+        runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
             _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ reverse <$> readIORef orderRef

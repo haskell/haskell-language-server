@@ -128,7 +128,7 @@ setupLSP ::
      Recorder (WithPriority Log)
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
-  -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+  -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
   -> MVar ()
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
@@ -186,7 +186,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
 handleInit
     :: Recorder (WithPriority Log)
     -> (FilePath -> IO FilePath)
-    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
     -> MVar ()
     -> IO ()
     -> (SomeLspId -> IO ())
@@ -196,7 +196,7 @@ handleInit
 handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     let root = LSP.resRootPath env
-    dir <- maybe getCurrentDirectory return root
+    dir <- maybe (error "No root directory") pure root
     dbLoc <- getHieDbLoc dir
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
@@ -240,7 +240,7 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
         logWith recorder Info LogReactorThreadStopped
 
     (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env root withHieDb hieChan
+    ide <- getIdeState env dir withHieDb hieChan
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
