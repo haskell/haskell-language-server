@@ -341,7 +341,7 @@ testDir :: FilePath
 testDir = "plugins/hls-hlint-plugin/test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
-runHlintSession subdir = failIfSessionTimeout . runSessionWithServerAndCaps def hlintPlugin codeActionNoResolveCaps (testDir </> subdir)
+runHlintSession subdir = failIfSessionTimeout . runSessionWithServer'' False hlintPlugin def def codeActionNoResolveCaps (testDir </> subdir)
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
