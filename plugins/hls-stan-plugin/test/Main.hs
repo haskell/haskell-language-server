@@ -5,7 +5,6 @@ where
 
 import           Control.Lens               ((^.))
 import qualified Data.Text                  as T
-import           Debug.Trace                (traceM)
 import qualified Ide.Plugin.Stan            as Stan
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens as L
@@ -35,7 +34,6 @@ tests =
         runStanSession "" $ do
           doc <- openDoc ("dir" </> "configTest.hs") "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
-          traceM $ show diags
           liftIO $ length diags @?= 0
           return ()
     , testCase "respects LANGUAGE pragmas in the source file" $
