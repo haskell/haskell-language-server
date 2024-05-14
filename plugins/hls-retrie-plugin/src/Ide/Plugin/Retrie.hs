@@ -129,6 +129,7 @@ import           Retrie.SYB                           (everything, extQ,
                                                        listify, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
+import           System.FilePath                      (isAbsolute, (</>))
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
@@ -766,7 +767,7 @@ toAbsolute dir file
 
 getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
 getCPPmodule recorder state session t = do
-    nt <- toNormalizedFilePath' <$> (toAbsolute $ rootDir state) t
+    let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
     let getParsedModule f contents = do
           modSummary <- msrModSummary <$>
             useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
