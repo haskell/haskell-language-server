@@ -2,33 +2,36 @@
 module ExceptionTests (tests) where
 
 import           Config
-import           Control.Exception             (ArithException (DivideByZero),
-                                                throwIO)
+import           Control.Exception                 (ArithException (DivideByZero),
+                                                    throwIO)
 import           Control.Lens
-import           Control.Monad.Error.Class     (MonadError (throwError))
-import           Control.Monad.IO.Class        (liftIO)
-import qualified Data.Aeson                    as A
-import           Data.Default                  (Default (..))
-import           Data.Text                     as T
-import           Development.IDE.Core.Shake    (IdeState (..))
-import           Development.IDE.Plugin.HLS    (toResponseError)
-import           GHC.Base                      (coerce)
-import           Ide.Logger                    (Recorder, WithPriority)
+import           Control.Monad.Error.Class         (MonadError (throwError))
+import           Control.Monad.IO.Class            (liftIO)
+import qualified Data.Aeson                        as A
+import           Data.Default                      (Default (..))
+import           Data.Text                         as T
+import           Development.IDE.Core.Shake        (IdeState (..))
+import qualified Development.IDE.LSP.Notifications as Notifications
+import           Development.IDE.Plugin.HLS        (toResponseError)
+import           GHC.Base                          (coerce)
+import           Ide.Logger                        (Recorder, WithPriority,
+                                                    cmapWithPrio)
 import           Ide.Plugin.Error
-import           Ide.Plugin.HandleRequestTypes (RejectionReason (DisabledGlobally))
-import           Ide.PluginUtils               (pluginDescToIdePlugins)
+import           Ide.Plugin.HandleRequestTypes     (RejectionReason (DisabledGlobally))
+import           Ide.PluginUtils                   (idePluginsToPluginDesc,
+                                                    pluginDescToIdePlugins)
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens    as L
+import qualified Language.LSP.Protocol.Lens        as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (..),
-                                                SemanticTokenRelative (..),
-                                                SemanticTokensEdit (..),
-                                                mkRange)
+import           Language.LSP.Protocol.Types       hiding
+                                                   (SemanticTokenAbsolute (..),
+                                                    SemanticTokenRelative (..),
+                                                    SemanticTokensEdit (..),
+                                                    mkRange)
 import           Language.LSP.Test
-import           LogType                       (Log (..))
-import           Test.Hls                      (runSessionWithServerInTmpDir,
-                                                waitForProgressDone)
+import           LogType                           (Log (..))
+import           Test.Hls                          (runSessionWithServerInTmpDir,
+                                                    waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -118,7 +121,7 @@ pluginOrderTestCase msg err1 err2 =
   testCase msg $ do
       let pluginId = "error-order-test"
           plugins :: Recorder (WithPriority Log) -> IdePlugins IdeState
-          plugins _ = pluginDescToIdePlugins $
+          plugins r = pluginDescToIdePlugins $
               [ (defaultPluginDescriptor pluginId "")
                   { pluginHandlers = mconcat
                       [ mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
@@ -126,7 +129,7 @@ pluginOrderTestCase msg err1 err2 =
                         ,mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
                           throwError err2
                       ]
-                  }]
+                  }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
       runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
           doc <- createDoc "A.hs" "haskell" "module A where"
           waitForProgressDone
