@@ -19,7 +19,7 @@ write-ghc-environment-files: never
 -- Many of our tests only work single-threaded, and the only way to
 -- ensure tasty runs everything purely single-threaded is to pass
 -- this at the top-level
-test-options: -j1
+-- test-options: -j1
 
 -- Make sure dependencies are build with haddock so we get
 -- haddock shown on hover
