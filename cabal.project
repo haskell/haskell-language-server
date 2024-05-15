@@ -41,3 +41,9 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd
+
+if impl (ghc >= 9.9)
+  allow-newer:
+    indexed-traversable:base,
+    assoc:base
+    
