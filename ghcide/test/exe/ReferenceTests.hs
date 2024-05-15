@@ -171,11 +171,11 @@ getReferences' (file, l, c) includeDeclaration = do
 referenceTestSession :: String -> FilePath -> [FilePath] -> (FilePath -> Session ()) -> TestTree
 referenceTestSession name thisDoc docs' f = do
   testWithDummyPlugin' name (mkIdeTestFs [copyDir "references"]) $ \fs -> do
-    let rootDir = toAbsFp fs ""
+    let rootDir = fs </> ""
     -- needed to build whole project indexing
     configureCheckProject True
     -- need to get the real paths through links
-    docs <- mapM (liftIO . canonicalizePath . toAbsFp fs) $ delete thisDoc $ nubOrd docs'
+    docs <- mapM (liftIO . canonicalizePath . (fs </>)) $ delete thisDoc $ nubOrd docs'
     -- Initial Index
     docid <- openDoc thisDoc "haskell"
 

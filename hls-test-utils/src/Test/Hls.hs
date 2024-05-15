@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedLists       #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -31,14 +32,13 @@ module Test.Hls
     runSessionWithServerAndCaps,
     runSessionWithServerInTmpDir,
     runSessionWithServerAndCapsInTmpDir,
-    runSessionWithServerNoRootLock,
-    runSessionWithServer',
-    runSessionWithServer'',
+    runSessionWithServerAndCapsShift,
     runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
     runSessionWithServerInTmpDirCont,
     runSessionWithServerInTmpDirCont',
     runSessionWithServerAndCapsInTmpDirCont,
+    runSessionWithTestConfig,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -64,6 +64,8 @@ module Test.Hls
     WithPriority(..),
     Recorder,
     Priority(..),
+    TestConfig(..),
+    mkTestConfig,
     )
 where
 
@@ -72,7 +74,7 @@ import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
 import           Control.Lens.Extras                (is)
-import           Control.Monad                      (guard, unless, void)
+import           Control.Monad                      (guard, unless, void, when)
 import           Control.Monad.Extra                (forM)
 import           Control.Monad.IO.Class
 import           Data.Aeson                         (Result (Success),
@@ -105,6 +107,8 @@ import           Ide.Logger                         (Pretty (pretty),
                                                      logWith,
                                                      makeDefaultStderrRecorder,
                                                      (<+>))
+import           Ide.PluginUtils                    (idePluginsToPluginDesc,
+                                                     pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import           Language.LSP.Protocol.Message
@@ -396,11 +400,11 @@ runSessionWithServerInTmpDir config plugin tree act = runSessionWithServerInTmpD
 runSessionWithServerAndCapsInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> Session a -> IO a
 runSessionWithServerAndCapsInTmpDir config plugin caps tree act = runSessionWithServerAndCapsInTmpDirCont config plugin caps tree (const act)
 
-runSessionWithServerInTmpDirCont' :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
+runSessionWithServerInTmpDirCont' :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> (FilePath -> Session a) -> IO a
 runSessionWithServerInTmpDirCont' config plugin tree act = do
     runSessionWithServerInTmpDirCont False plugin config def fullCaps tree act
 
-runSessionWithServerAndCapsInTmpDirCont :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> (FileSystem -> Session a) -> IO a
+runSessionWithServerAndCapsInTmpDirCont :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> (FilePath -> Session a) -> IO a
 runSessionWithServerAndCapsInTmpDirCont config plugin caps tree act = do
     runSessionWithServerInTmpDirCont False plugin config def caps tree act
 
@@ -415,7 +419,8 @@ runSessionWithServerInTmpDir' ::
     ClientCapabilities ->
     VirtualFileTree ->
     Session a -> IO a
-runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = runSessionWithServerInTmpDirCont False plugins conf sessConf caps tree (const act)
+runSessionWithServerInTmpDir' plugins conf sessConf caps tree act =
+  runSessionWithServerInTmpDirCont False plugins conf sessConf caps tree (const act)
 
 runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
 runWithLockInTempDir tree act = withLock lockForTempDirs $ do
@@ -477,17 +482,37 @@ runSessionWithServerInTmpDirCont ::
     SessionConfig ->
     ClientCapabilities ->
     VirtualFileTree ->
-    (FileSystem -> Session a) -> IO a
+    (FilePath -> Session a) -> IO a
 runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act =
-    runWithLockInTempDir tree $ \fs -> runSessionWithServer' disableKick plugins conf sessConf caps (fsRoot fs) (act fs)
+  runSessionWithTestConfig (mkTestConfig "" plugins)
+    {testLspConfig=conf, testConfigSession=sessConf, testConfigCaps=caps, testFileTree=Just tree, testDisableKick=disableKick}
+    act
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
-runSessionWithServer config plugin fp act = do
-  runSessionWithServer' False plugin config def fullCaps fp act
+runSessionWithServer config plugin fp act =
+    runSessionWithTestConfig (mkTestConfig fp plugin){testLspConfig=config} (const act)
 
 runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
-runSessionWithServerAndCaps config plugin caps fp act = do
-  runSessionWithServer' False plugin config def caps fp act
+runSessionWithServerAndCaps config plugin caps root act =
+    runSessionWithTestConfig (mkTestConfig root plugin){testConfigCaps=caps, testLspConfig=config} (const act)
+
+runSessionWithServerAndCapsShift :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
+runSessionWithServerAndCapsShift config plugin caps root act =
+    runSessionWithTestConfig (mkTestConfig root plugin){testConfigCaps=caps, testLspConfig=config, testShiftRoot=True} (const act)
+
+mkTestConfig :: FilePath -> PluginTestDescriptor b -> TestConfig b
+mkTestConfig fp pd = TestConfig {
+    testConfigRoot = fp,
+    testFileTree = Nothing,
+    testShiftRoot = False,
+    testDisableKick = False,
+    testDisableDefaultPlugin = False,
+    testPluginDescriptor = pd,
+    testLspConfig = def,
+    testConfigSession = def,
+    testConfigCaps = fullCaps
+}
+
 
 
 -- | Setup the test environment for isolated tests.
@@ -621,60 +646,54 @@ lock = unsafePerformIO newLock
 lockForTempDirs :: Lock
 lockForTempDirs = unsafePerformIO newLock
 
--- | Host a server, and run a test session on it
--- Note: cwd will be shifted into @root@ in @Session a@
--- notice this function should only be used in tests that
--- require to be nested in the same temporary directory
--- use 'runSessionWithServerInTmpDir' for other cases
-runSessionWithServerNoRootLock ::
-  (Pretty b) =>
-  -- | whether we disable the kick action or not
-  Bool ->
-  -- | Plugin to load on the server.
-  PluginTestDescriptor b ->
-  -- | lsp config for the server
-  Config ->
-  -- | config for the test session
-  SessionConfig ->
-  ClientCapabilities ->
-  FilePath ->
-  Session a ->
-  IO a
-runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s =  do
+
+-- -- | Host a server, and run a test session on it
+-- -- Note: cwd will not be shifted into @root@ in @Session a@
+-- runSessionWithServer' ::
+--   (Pretty b) =>
+--   -- | whether we disable the kick action or not
+--   Bool ->
+--   -- | Plugin to load on the server.
+--   PluginTestDescriptor b ->
+--   -- | lsp config for the server
+--   Config ->
+--   -- | config for the test session
+--   SessionConfig ->
+--   ClientCapabilities ->
+--   FilePath ->
+--   Session a ->
+--   IO a
+-- runSessionWithServer' disableKick pluginsDp conf sconf caps root s =
+--     withLock lock $ keepCurrentDirectory $ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
+
+data TestConfig b = TestConfig
+  {
+    testConfigRoot           :: FilePath
+  , testFileTree             :: Maybe VirtualFileTree
+  , testShiftRoot            :: Bool
+  , testDisableKick          :: Bool
+  , testDisableDefaultPlugin :: Bool
+  , testPluginDescriptor     :: PluginTestDescriptor b
+  , testLspConfig            :: Config
+  , testConfigSession        :: SessionConfig
+  , testConfigCaps           :: ClientCapabilities
+  }
+
+runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
+runSessionWithTestConfig TestConfig{..} session =
+    runSessionInVFS testFileTree $ \root -> shiftRoot root $ do
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
     recorder <- hlsPluginTestRecorder
-    let plugins = pluginsDp recorder
+    let plugins = testPluginDescriptor recorder
     recorderIde <- hlsHelperTestRecorder
-
-    let
-        sconf' = sconf { lspConfig = hlsConfigToClientConfig conf }
-
-        hlsPlugins = IdePlugins [Test.blockCommandDescriptor "block-command"] <> plugins
-
-        arguments@Arguments{ argsIdeOptions } =
-            testing root (cmapWithPrio LogIDEMain recorderIde) hlsPlugins
-
-        ideOptions config ghcSession =
-            let defIdeOptions = argsIdeOptions config ghcSession
-            in defIdeOptions
-                    { optTesting = IdeTesting True
-                    , optCheckProject = pure False
-                    }
-
+    let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig }
+        arguments = testingArgs root (cmapWithPrio LogIDEMain recorderIde) plugins
     server <- async $
         IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
-            arguments
-                { argsHandleIn = pure inR
-                , argsHandleOut = pure outW
-                , argsDefaultHlsConfig = conf
-                , argsIdeOptions = ideOptions
-                , argsProjectRoot = root
-                , argsDisableKick = disableKick
-                }
-
-    x <- runSessionWithHandles inW outR sconf' caps root s
+            arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
+    result <- runSessionWithHandles inW outR sconf' testConfigCaps root (session root)
     hClose inW
     timeout 3 (wait server) >>= \case
         Just () -> pure ()
@@ -682,48 +701,61 @@ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s =  d
             putStrLn "Server does not exit in 3s, canceling the async task..."
             (t, _) <- duration $ cancel server
             putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
-    pure x
+    pure result
 
--- | Host a server, and run a test session on it
--- Note: cwd will not be shifted into @root@ in @Session a@
-runSessionWithServer' ::
-  (Pretty b) =>
-  -- | whether we disable the kick action or not
-  Bool ->
-  -- | Plugin to load on the server.
-  PluginTestDescriptor b ->
-  -- | lsp config for the server
-  Config ->
-  -- | config for the test session
-  SessionConfig ->
-  ClientCapabilities ->
-  FilePath ->
-  Session a ->
-  IO a
-runSessionWithServer' disableKick pluginsDp conf sconf caps root s =
-    withLock lock $ keepCurrentDirectory $ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
+    where
+        shiftRoot shiftTarget f  =
+            if testShiftRoot
+                then withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
+                else f
+        runSessionInVFS Nothing act = do
+            root <- makeAbsolute testConfigRoot
+            act root
+        runSessionInVFS (Just vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
+        -- testingArgs :: FilePath -> Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
+        testingArgs prjRoot recorder plugins =
+            let
+                arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments prjRoot recorder plugins
+                argsHlsPlugins' = if testDisableDefaultPlugin then plugins else argsHlsPlugins
+                hlsPlugins = pluginDescToIdePlugins $ idePluginsToPluginDesc argsHlsPlugins'
+                    ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+                ideOptions config sessionLoader = (argsIdeOptions config sessionLoader){
+                    optTesting = IdeTesting True
+                    , optCheckProject = pure False
+                    }
+            in
+                arguments
+                { argsHlsPlugins = hlsPlugins
+                , argsIdeOptions = ideOptions
+                , argsDefaultHlsConfig = testLspConfig
+                , argsProjectRoot = prjRoot
+                , argsDisableKick = testDisableKick
+                }
 
--- | Host a server, and run a test session on it
--- Note: cwd will be shifted into @root@ in @Session a@
-runSessionWithServer'' ::
-  (Pretty b) =>
-  -- | whether we disable the kick action or not
-  Bool ->
-  -- | Plugin to load on the server.
-  PluginTestDescriptor b ->
-  -- | lsp config for the server
-  Config ->
-  -- | config for the test session
-  SessionConfig ->
-  ClientCapabilities ->
-  FilePath ->
-  Session a ->
-  IO a
-runSessionWithServer'' disableKick pluginsDp conf sconf caps relativeRoot s =
-    withLock lock $ keepCurrentDirectory $ do
-        root <- makeAbsolute relativeRoot
-        setCurrentDirectory root
-        runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
+
+
+
+-- -- | Host a server, and run a test session on it
+-- -- Note: cwd will be shifted into @root@ in @Session a@
+-- runSessionWithServer'' ::
+--   (Pretty b) =>
+--   -- | whether we disable the kick action or not
+--   Bool ->
+--   -- | Plugin to load on the server.
+--   PluginTestDescriptor b ->
+--   -- | lsp config for the server
+--   Config ->
+--   -- | config for the test session
+--   SessionConfig ->
+--   ClientCapabilities ->
+--   FilePath ->
+--   Session a ->
+--   IO a
+-- runSessionWithServer'' disableKick pluginsDp conf sconf caps relativeRoot s =
+--     withLock lock $ keepCurrentDirectory $ do
+--         root <- makeAbsolute relativeRoot
+--         setCurrentDirectory root
+--         runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()

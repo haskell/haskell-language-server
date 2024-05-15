@@ -178,11 +178,11 @@ tests = testGroup "diagnostics"
             [ "module ModuleB where"
             , "import ModuleA ()"
             ]
-      _ <- createDoc (tmpDir `toAbsFp` "ModuleB.hs") "haskell" contentB
-      expectDiagnostics [(tmpDir `toAbsFp` "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
+      _ <- createDoc (tmpDir </> "ModuleB.hs") "haskell" contentB
+      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
       let contentA = T.unlines [ "module ModuleA where" ]
-      _ <- createDoc (tmpDir `toAbsFp` "ModuleA.hs") "haskell" contentA
-      expectDiagnostics [(tmpDir `toAbsFp` "ModuleB.hs", [])]
+      _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
+      expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
   , testWithDummyPluginEmpty "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
@@ -452,9 +452,9 @@ tests = testGroup "diagnostics"
           )
         ]
   , testCase "typecheck-all-parents-of-interest" $ runWithExtraFiles "recomp" $ \dir -> do
-    let bPath = dir `toAbsFp` "B.hs"
-        pPath = dir `toAbsFp` "P.hs"
-        aPath = dir `toAbsFp` "A.hs"
+    let bPath = dir </> "B.hs"
+        pPath = dir </> "P.hs"
+        aPath = dir </> "A.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int

@@ -52,37 +52,37 @@ dummyPlugin = mkPluginTestDescriptor (\_ pid -> defaultPluginDescriptor pid "dum
 runWithDummyPlugin ::  FS.VirtualFileTree -> Session a -> IO a
 runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 
-runWithDummyPlugin' ::  FS.VirtualFileTree -> (FileSystem -> Session a) -> IO a
+runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
 runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
 
-runWithDummyPluginAndCap' :: ClientCapabilities -> (FileSystem -> Session ()) -> IO ()
+runWithDummyPluginAndCap' :: ClientCapabilities -> (FilePath -> Session ()) -> IO ()
 runWithDummyPluginAndCap' cap = runSessionWithServerAndCapsInTmpDirCont def dummyPlugin cap (mkIdeTestFs [])
 
-testWithDummyPluginAndCap' :: String -> ClientCapabilities -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPluginAndCap' :: String -> ClientCapabilities -> (FilePath -> Session ()) -> TestTree
 testWithDummyPluginAndCap' caseName cap = testCase caseName . runWithDummyPluginAndCap' cap
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
 testWithDummyPlugin caseName vfs = testWithDummyPlugin' caseName vfs . const
 
-testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FilePath -> Session ()) -> TestTree
 testWithDummyPlugin' caseName vfs = testCase caseName . runWithDummyPlugin' vfs
 
 testWithDummyPluginEmpty :: String -> Session () -> TestTree
 testWithDummyPluginEmpty caseName = testWithDummyPlugin caseName $ mkIdeTestFs []
 
-testWithDummyPluginEmpty' :: String -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPluginEmpty' :: String -> (FilePath -> Session ()) -> TestTree
 testWithDummyPluginEmpty' caseName = testWithDummyPlugin' caseName $ mkIdeTestFs []
 
-runWithExtraFiles :: String -> (FileSystem -> Session a) -> IO a
+runWithExtraFiles :: String -> (FilePath -> Session a) -> IO a
 runWithExtraFiles dirName action = do
     let vfs = mkIdeTestFs [FS.copyDir dirName]
     runWithDummyPlugin' vfs action
 
-testWithExtraFiles :: String -> String -> (FileSystem -> Session ()) -> TestTree
+testWithExtraFiles :: String -> String -> (FilePath -> Session ()) -> TestTree
 testWithExtraFiles testName dirName action = testCase testName $ runWithExtraFiles dirName action
 
-runInDir :: FileSystem -> Session a -> IO a
-runInDir fs = runSessionWithServerNoRootLock False dummyPlugin def def def (fsRoot fs)
+runInDir :: FilePath -> Session a -> IO a
+runInDir fs = runSessionWithServer def dummyPlugin fs
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')

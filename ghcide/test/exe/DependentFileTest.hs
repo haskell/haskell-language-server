@@ -16,6 +16,7 @@ import           Language.LSP.Protocol.Types    hiding
                                                  mkRange)
 import           Language.LSP.Test
 import           System.Directory               (setCurrentDirectory)
+import           System.FilePath                ((</>))
 import           Test.Hls.FileSystem            (FileSystem, toAbsFp)
 import           Test.Tasty
 
@@ -24,11 +25,11 @@ tests = testGroup "addDependentFile"
     [testGroup "file-changed" [testWithDummyPluginEmpty' "test" test]
     ]
     where
-      test :: FileSystem -> Session ()
+      test :: FilePath -> Session ()
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        let depFilePath = toAbsFp dir "dep-file.txt"
+        let depFilePath = dir </> "dep-file.txt"
         liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
