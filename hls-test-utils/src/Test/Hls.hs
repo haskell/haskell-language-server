@@ -26,6 +26,7 @@ module Test.Hls
     goldenWithHaskellDocFormatterInTmpDir,
     goldenWithCabalDocFormatter,
     goldenWithCabalDocFormatterInTmpDir,
+    goldenWithTestConfig,
     def,
     -- * Running HLS for integration tests
     runSessionWithServer,
@@ -208,6 +209,26 @@ goldenWithHaskellAndCaps
 goldenWithHaskellAndCaps config clientCaps plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
   $ runSessionWithServerAndCaps config plugin clientCaps testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
+
+goldenWithTestConfig
+  :: Pretty b
+  => TestConfig b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithTestConfig config title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithTestConfig config $ const
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"

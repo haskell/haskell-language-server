@@ -421,9 +421,12 @@ goldenTest testCaseName goldenFilename point hintText =
           void $ skipManyTill anyMessage $ getDocumentEdit document
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
+
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-  goldenWithHaskellAndCaps def codeActionNoResolveCaps hlintPlugin testName testDir path "expected" "hs"
+    goldenWithTestConfig (mkTestConfig testDir hlintPlugin){testConfigCaps=codeActionNoResolveCaps, testShiftRoot=True}
+        testName testDir path "expected" "hs"
+
 
 ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
