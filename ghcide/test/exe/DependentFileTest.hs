@@ -19,17 +19,19 @@ import           System.Directory               (setCurrentDirectory)
 import           System.FilePath                ((</>))
 import           Test.Hls.FileSystem            (FileSystem, toAbsFp)
 import           Test.Tasty
+import Test.Hls
+
 
 tests :: TestTree
 tests = testGroup "addDependentFile"
-    [testGroup "file-changed" [testWithDummyPluginEmpty' "test" test]
+    [testGroup "file-changed" [testCase "test" $ runSessionWithTestConfig (mkTestConfig "" dummyPlugin) {testShiftRoot=True, testFileTree=Just (mkIdeTestFs [])} test]
     ]
     where
       test :: FilePath -> Session ()
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        let depFilePath = dir </> "dep-file.txt"
+        let depFilePath = "dep-file.txt"
         liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
