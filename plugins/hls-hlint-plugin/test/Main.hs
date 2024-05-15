@@ -447,4 +447,5 @@ goldenResolveTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintResolveTest testName path =
-  goldenWithHaskellAndCaps def codeActionResolveCaps hlintPlugin testName testDir path "expected" "hs"
+    goldenWithTestConfig (mkTestConfig testDir hlintPlugin){testConfigCaps=codeActionResolveCaps, testShiftRoot=True}
+        testName testDir path "expected" "hs"
