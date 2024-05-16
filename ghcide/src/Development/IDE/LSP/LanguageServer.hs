@@ -198,6 +198,9 @@ handleInit
 handleInit rootDir recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     let rootMaybe = LSP.resRootPath env
+    -- only shift if lsp root is different from the rootDir
+    when (rootMaybe /= Just rootDir) $ do
+        setCurrentDirectory rootDir
     let root = fromMaybe rootDir rootMaybe
     dbLoc <- getHieDbLoc root
     let initConfig = parseConfiguration params
