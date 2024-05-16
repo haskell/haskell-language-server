@@ -155,6 +155,7 @@ class ParsePropertyPath (rs :: [PropertyKey]) (r :: NonEmptyList Symbol) where
     useDefault :: KeyNamePath r -> Properties rs -> ToHsType (FindByKeyPath r rs)
     usePropertyByPath :: KeyNamePath r -> Properties rs -> A.Object -> ToHsType (FindByKeyPath r rs)
     usePropertyByPath p ps x = fromRight (useDefault p ps) $ usePropertyByPathEither p ps x
+
 instance (HasProperty s k t r) => ParsePropertyPath r (NE s) where
     usePropertyByPathEither (SingleKey kn) sm x = parseProperty kn (find kn sm) x
     useDefault (SingleKey kn) sm = defaultValue metadata
