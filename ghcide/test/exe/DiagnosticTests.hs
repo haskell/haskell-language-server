@@ -36,12 +36,10 @@ import           Control.Monad.Extra             (whenJust)
 import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
-import           Test.Hls                        (TestConfig (testConfigCaps, testLspConfig, testPluginDescriptor),
-                                                  runSessionWithServerInTmpDirCont,
+import           Test.Hls                        (TestConfig (testConfigCaps, testDisableKick, testFileTree, testPluginDescriptor),
                                                   runSessionWithTestConfig,
                                                   waitForProgressBegin)
-import           Test.Hls.FileSystem             (directCradle, file, text,
-                                                  toAbsFp)
+import           Test.Hls.FileSystem             (directCradle, file, text)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -581,8 +579,13 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
 
       expectNoMoreDiagnostics 0.5
     where
-        -- similar to run except it disables kick
-        runTestNoKick s = runSessionWithServerInTmpDirCont True dummyPlugin def def def (mkIdeTestFs []) (const s)
+        runTestNoKick s =
+            runSessionWithTestConfig def {
+                testPluginDescriptor = dummyPlugin
+                , testFileTree = Right (mkIdeTestFs [])
+                , testDisableKick = True
+                } $ const s
+
         typeCheck doc = do
             WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
             liftIO $ assertBool "The file should typecheck" ideResultSuccess

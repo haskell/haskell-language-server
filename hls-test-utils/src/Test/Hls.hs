@@ -31,8 +31,6 @@ module Test.Hls
     -- * Running HLS for integration tests
     runSessionWithServer,
     runSessionWithServerInTmpDir,
-    -- continuation version that take a FileSystem
-    runSessionWithServerInTmpDirCont,
     runSessionWithTestConfig,
     -- * Helpful re-exports
     PluginDescriptor,
@@ -423,8 +421,9 @@ initializeTestRecorder envVars = do
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
-runSessionWithServerInTmpDir config plugin tree act =
-    runSessionWithServerInTmpDirCont False plugin config def fullCaps tree (const act)
+runSessionWithServerInTmpDir config plugin tree act = runSessionWithTestConfig def
+    {testLspConfig=config, testPluginDescriptor = plugin,  testFileTree=Right tree}
+    (const act)
 
 runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
 runWithLockInTempDir tree act = withLock lockForTempDirs $ do
@@ -453,44 +452,6 @@ runWithLockInTempDir tree act = withLock lockForTempDirs $ do
         fs <- FS.materialiseVFT tmpDir tree
         act fs
 
--- | Host a server, and run a test session on it.
---
--- Creates a temporary directory, and materializes the VirtualFileTree
--- in the temporary directory.
---
--- To debug test cases and verify the file system is correctly set up,
--- you should set the environment variable 'HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1'.
--- Further, we log the temporary directory location on startup. To view
--- the logs, set the environment variable 'HLS_TEST_HARNESS_STDERR=1'.
---
--- Example invocation to debug test cases:
---
--- @
---   HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1 HLS_TEST_HARNESS_STDERR=1 cabal test <plugin-name>
--- @
---
--- Don't forget to use 'TASTY_PATTERN' to debug only a subset of tests.
---
--- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
---
--- Note: cwd will be shifted into a temporary directory in @Session a@
-runSessionWithServerInTmpDirCont ::
-    Pretty b =>
-    -- | whether we disable the kick action or not
-    Bool ->
-    -- | Plugins to load on the server.
-    PluginTestDescriptor b ->
-    -- | lsp config for the server
-    Config ->
-    -- | config for the test session
-    SessionConfig ->
-    ClientCapabilities ->
-    VirtualFileTree ->
-    (FilePath -> Session a) -> IO a
-runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act =
-  runSessionWithTestConfig (mkTestConfig "" plugins)
-    {testLspConfig=conf, testConfigSession=sessConf, testConfigCaps=caps, testFileTree=Right tree, testDisableKick=disableKick}
-    act
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act =
@@ -658,8 +619,26 @@ data TestConfig b = TestConfig
   {
   testFileTree               :: Either FilePath VirtualFileTree
     -- ^ The file tree to use for the test, either a directory or a virtual file tree
+
+    -- if using a virtual file tree,
+    -- Creates a temporary directory, and materializes the VirtualFileTree
+    -- in the temporary directory.
+    --
+    -- To debug test cases and verify the file system is correctly set up,
+    -- you should set the environment variable 'HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1'.
+    -- Further, we log the temporary directory location on startup. To view
+    -- the logs, set the environment variable 'HLS_TEST_HARNESS_STDERR=1'.
+    -- Example invocation to debug test cases:
+    --
+    -- @
+    --   HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1 HLS_TEST_HARNESS_STDERR=1 cabal test <plugin-name>
+    -- @
+    --
+    -- Don't forget to use 'TASTY_PATTERN' to debug only a subset of tests.
+    --
+    -- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
   , testShiftRoot            :: Bool
-    -- ^ Whether to shift the root directory to the test project root
+    -- ^ Whether to shift the current directory to the root of the project
   , testDisableKick          :: Bool
     -- ^ Whether to disable the kick action
   , testDisableDefaultPlugin :: Bool
@@ -674,6 +653,9 @@ data TestConfig b = TestConfig
     -- ^ Client capabilities
   }
 
+
+-- | Host a server, and run a test session on it.
+-- For detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
     runSessionInVFS testFileTree $ \root -> shiftRoot root $ do
