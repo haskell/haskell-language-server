@@ -28,6 +28,7 @@ import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           Ide.PluginUtils                 (toAbsolute)
 import           OpenTelemetry.Eventlog          (withSpan)
 import           System.FilePath
 
@@ -57,10 +58,6 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   let update newUnique = oldHscEnvEq { envUnique = newUnique, hscEnv = newHscEnv }
   update <$> Unique.newUnique
 
-toAbsolute :: FilePath -> FilePath -> FilePath
-toAbsolute root path
-    | isAbsolute path = path
-    | otherwise = root </> path
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: FilePath -> FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEq root cradlePath hscEnv0 deps = do

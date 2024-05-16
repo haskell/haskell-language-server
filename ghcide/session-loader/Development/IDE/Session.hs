@@ -127,6 +127,7 @@ import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                      (errMsgDiagnostic,
                                                        singleMessage)
 import           GHC.Unit.State
+import           Ide.PluginUtils                      (toAbsolute)
 #endif
 
 data Log
@@ -437,10 +438,6 @@ getHieDbLoc dir = do
 loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
 loadSession recorder = loadSessionWithOptions recorder def
 
-toAbsolute :: FilePath -> FilePath -> FilePath
-toAbsolute dir file
-    | isAbsolute file = file
-    | otherwise = dir </> file
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
   let toAbsolutePath = toAbsolute rootDir

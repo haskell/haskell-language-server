@@ -26,6 +26,7 @@ import qualified Data.Aeson                      as A
 import           Data.Default                    (def)
 import           Data.Tuple.Extra
 import           GHC.TypeLits                    (symbolVal)
+import           Ide.PluginUtils                 (toAbsolute)
 import           Ide.Types
 import           System.FilePath                 (isAbsolute, (</>))
 import           Test.Hls                        (FromServerMessage' (..),
@@ -203,11 +204,6 @@ referenceTest name loc includeDeclaration expected =
     docs = map fst3 expected
 
 type SymbolLocation = (FilePath, UInt, UInt)
-
-toAbsolute :: FilePath -> FilePath -> FilePath
-toAbsolute root path
-    | isAbsolute path = path
-    | otherwise = root </> path
 
 expectSameLocations :: (HasCallStack) => FilePath -> [Location] -> [SymbolLocation] -> Assertion
 expectSameLocations rootDir actual expected = do

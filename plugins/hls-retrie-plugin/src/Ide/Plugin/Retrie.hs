@@ -760,11 +760,6 @@ reuseParsedModule state f = do
         (fixities, pm') <- fixFixities state f (fixAnns pm)
         return (fixities, pm')
 
-toAbsolute :: FilePath -> FilePath -> FilePath
-toAbsolute dir file
-    | isAbsolute file = file
-    | otherwise = dir </> file
-
 getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
 getCPPmodule recorder state session t = do
     let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
