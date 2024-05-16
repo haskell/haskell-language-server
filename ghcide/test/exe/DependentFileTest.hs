@@ -21,7 +21,7 @@ tests :: TestTree
 tests = testGroup "addDependentFile"
     [testGroup "file-changed" [testCase "test" $ runSessionWithTestConfig def
         {testShiftRoot=True
-        , testFileTree=Just (mkIdeTestFs [])
+        , testFileTree=Right (mkIdeTestFs [])
         , testPluginDescriptor = dummyPlugin
         } test]
     ]

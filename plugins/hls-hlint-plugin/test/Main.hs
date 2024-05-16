@@ -119,7 +119,7 @@ suggestionsTests =
     , testCase "falls back to pre 3.8 code actions" $
         runSessionWithTestConfig def {
             testConfigCaps = noLiteralCaps,
-            testConfigRoot = testDir,
+            testFileTree = Left testDir,
             testPluginDescriptor = hlintPlugin,
             testShiftRoot = True} $ const $ do
         doc <- openDoc "Base.hs" "haskell"

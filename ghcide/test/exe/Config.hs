@@ -36,7 +36,6 @@ import           Language.LSP.Protocol.Types (Null (..))
 import           System.FilePath             ((</>))
 import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
-import           Test.Hls.FileSystem         (FileSystem, fsRoot)
 
 testDataDir :: FilePath
 testDataDir = "ghcide" </> "test" </> "data"
@@ -52,7 +51,7 @@ runWithDummyPlugin ::  FS.VirtualFileTree -> Session a -> IO a
 runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 
 runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
-runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
+runWithDummyPlugin' fs = runSessionWithTestConfig def { testPluginDescriptor = dummyPlugin, testFileTree = Right fs }
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
 testWithDummyPlugin caseName vfs = testWithDummyPlugin' caseName vfs . const

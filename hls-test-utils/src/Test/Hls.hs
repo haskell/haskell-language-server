@@ -31,12 +31,8 @@ module Test.Hls
     -- * Running HLS for integration tests
     runSessionWithServer,
     runSessionWithServerInTmpDir,
-    runSessionWithServerAndCapsInTmpDir,
-    runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
     runSessionWithServerInTmpDirCont,
-    runSessionWithServerInTmpDirCont',
-    runSessionWithServerAndCapsInTmpDirCont,
     runSessionWithTestConfig,
     -- * Helpful re-exports
     PluginDescriptor,
@@ -73,7 +69,7 @@ import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
 import           Control.Lens.Extras                (is)
-import           Control.Monad                      (guard, unless, void, when)
+import           Control.Monad                      (guard, unless, void)
 import           Control.Monad.Extra                (forM)
 import           Control.Monad.IO.Class
 import           Data.Aeson                         (Result (Success),
@@ -207,7 +203,7 @@ goldenWithHaskellAndCaps
 goldenWithHaskellAndCaps config clientCaps plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
   $ runSessionWithTestConfig def {
-    testConfigRoot = testDataDir,
+    testFileTree = Left testDataDir,
     testConfigCaps = clientCaps,
     testLspConfig = config,
     testPluginDescriptor = plugin
@@ -255,7 +251,13 @@ goldenWithHaskellAndCapsInTmpDir
   -> TestTree
 goldenWithHaskellAndCapsInTmpDir config clientCaps plugin title tree path desc ext act =
   goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
-  $ runSessionWithServerAndCapsInTmpDir config plugin clientCaps tree
+  $
+  runSessionWithTestConfig def {
+    testFileTree = Right tree,
+    testConfigCaps = clientCaps,
+    testLspConfig = config,
+    testPluginDescriptor = plugin
+  } $ const
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -421,32 +423,8 @@ initializeTestRecorder envVars = do
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
-runSessionWithServerInTmpDir config plugin tree act = runSessionWithServerInTmpDirCont' config plugin tree (const act)
-
-runSessionWithServerAndCapsInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> Session a -> IO a
-runSessionWithServerAndCapsInTmpDir config plugin caps tree act = runSessionWithServerAndCapsInTmpDirCont config plugin caps tree (const act)
-
-runSessionWithServerInTmpDirCont' :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> (FilePath -> Session a) -> IO a
-runSessionWithServerInTmpDirCont' config plugin tree act = do
-    runSessionWithServerInTmpDirCont False plugin config def fullCaps tree act
-
-runSessionWithServerAndCapsInTmpDirCont :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> VirtualFileTree -> (FilePath -> Session a) -> IO a
-runSessionWithServerAndCapsInTmpDirCont config plugin caps tree act = do
-    runSessionWithServerInTmpDirCont False plugin config def caps tree act
-
-runSessionWithServerInTmpDir' ::
-    Pretty b =>
-    -- | Plugins to load on the server.
-    PluginTestDescriptor b ->
-    -- | lsp config for the server
-    Config ->
-    -- | config for the test session
-    SessionConfig ->
-    ClientCapabilities ->
-    VirtualFileTree ->
-    Session a -> IO a
-runSessionWithServerInTmpDir' plugins conf sessConf caps tree act =
-  runSessionWithServerInTmpDirCont False plugins conf sessConf caps tree (const act)
+runSessionWithServerInTmpDir config plugin tree act =
+    runSessionWithServerInTmpDirCont False plugin config def fullCaps tree (const act)
 
 runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
 runWithLockInTempDir tree act = withLock lockForTempDirs $ do
@@ -511,7 +489,7 @@ runSessionWithServerInTmpDirCont ::
     (FilePath -> Session a) -> IO a
 runSessionWithServerInTmpDirCont disableKick plugins conf sessConf caps tree act =
   runSessionWithTestConfig (mkTestConfig "" plugins)
-    {testLspConfig=conf, testConfigSession=sessConf, testConfigCaps=caps, testFileTree=Just tree, testDisableKick=disableKick}
+    {testLspConfig=conf, testConfigSession=sessConf, testConfigCaps=caps, testFileTree=Right tree, testDisableKick=disableKick}
     act
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
@@ -520,8 +498,7 @@ runSessionWithServer config plugin fp act =
 
 instance Default (TestConfig b) where
   def = TestConfig {
-    testConfigRoot = "",
-    testFileTree = Nothing,
+    testFileTree = Left "",
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
@@ -534,8 +511,7 @@ instance Default (TestConfig b) where
 
 mkTestConfig :: FilePath -> PluginTestDescriptor b -> TestConfig b
 mkTestConfig fp pd = TestConfig {
-    testConfigRoot = fp,
-    testFileTree = Nothing,
+    testFileTree = Left fp,
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
@@ -680,10 +656,8 @@ lockForTempDirs = unsafePerformIO newLock
 
 data TestConfig b = TestConfig
   {
-    testConfigRoot           :: FilePath
-    -- ^ Root directory of the test project
-  , testFileTree             :: Maybe VirtualFileTree
-    -- ^ Virtual file tree to be used for the test
+  testFileTree               :: Either FilePath VirtualFileTree
+    -- ^ The file tree to use for the test, either a directory or a virtual file tree
   , testShiftRoot            :: Bool
     -- ^ Whether to shift the root directory to the test project root
   , testDisableKick          :: Bool
@@ -729,11 +703,10 @@ runSessionWithTestConfig TestConfig{..} session =
             if testShiftRoot
                 then withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
                 else f
-        runSessionInVFS Nothing act = do
+        runSessionInVFS (Left testConfigRoot) act = do
             root <- makeAbsolute testConfigRoot
             act root
-        runSessionInVFS (Just vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
-        -- testingArgs :: FilePath -> Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
+        runSessionInVFS (Right vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
         testingArgs prjRoot recorder plugins =
             let
                 arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments prjRoot recorder plugins

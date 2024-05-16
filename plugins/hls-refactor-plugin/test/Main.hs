@@ -3753,7 +3753,7 @@ run' s = withTempDir $ \dir -> runInDir dir (s dir)
 runInDir :: FilePath -> Session a -> IO a
 runInDir dir act =
     runSessionWithTestConfig def
-        {testConfigRoot=dir, testPluginDescriptor=refactorPlugin, testConfigCaps=lspTestCaps}
+        {testFileTree=Left dir, testPluginDescriptor=refactorPlugin, testConfigCaps=lspTestCaps}
         $ const act
 
 lspTestCaps :: ClientCapabilities
