@@ -129,7 +129,6 @@ import           Retrie.SYB                           (everything, extQ,
                                                        listify, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
-import           System.FilePath                      (isAbsolute, (</>))
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
