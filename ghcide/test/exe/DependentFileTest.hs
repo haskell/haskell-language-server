@@ -4,7 +4,6 @@
 module DependentFileTest (tests) where
 
 import           Config
-import           Control.Monad.IO.Class         (liftIO)
 import qualified Data.Text                      as T
 import           Development.IDE.Test           (expectDiagnostics)
 import           Development.IDE.Types.Location
@@ -15,20 +14,20 @@ import           Language.LSP.Protocol.Types    hiding
                                                  SemanticTokensEdit (..),
                                                  mkRange)
 import           Language.LSP.Test
-import           System.Directory               (setCurrentDirectory)
-import           System.FilePath                ((</>))
 import           Test.Hls
-import           Test.Hls.FileSystem            (FileSystem, toAbsFp)
-import           Test.Tasty
 
 
 tests :: TestTree
 tests = testGroup "addDependentFile"
-    [testGroup "file-changed" [testCase "test" $ runSessionWithTestConfig (mkTestConfig "" dummyPlugin) {testShiftRoot=True, testFileTree=Just (mkIdeTestFs [])} test]
+    [testGroup "file-changed" [testCase "test" $ runSessionWithTestConfig def
+        {testShiftRoot=True
+        , testFileTree=Just (mkIdeTestFs [])
+        , testPluginDescriptor = dummyPlugin
+        } test]
     ]
     where
       test :: FilePath -> Session ()
-      test dir = do
+      test _ = do
         -- If the file contains B then no type error
         -- otherwise type error
         let depFilePath = "dep-file.txt"
