@@ -83,6 +83,7 @@ import qualified Data.Text.Lazy                     as TL
 import qualified Data.Text.Lazy.Encoding            as TL
 import           Development.IDE                    (IdeState,
                                                      LoggingColumn (ThreadIdColumn))
+import qualified Development.IDE.LSP.Notifications  as Notifications
 import           Development.IDE.Main               hiding (Log)
 import qualified Development.IDE.Main               as IDEMain
 import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
@@ -468,7 +469,8 @@ instance Default (TestConfig b) where
     testPluginDescriptor = mempty,
     testLspConfig = def,
     testConfigSession = def,
-    testConfigCaps = fullCaps
+    testConfigCaps = fullCaps,
+    testCheckProject = False
   }
 
 -- | Setup the test environment for isolated tests.
@@ -630,6 +632,8 @@ data TestConfig b = TestConfig
     -- ^ Whether to disable the kick action
   , testDisableDefaultPlugin :: Bool
     -- ^ Whether to disable the default plugin comes with ghcide
+  , testCheckProject         :: Bool
+    -- ^ Whether to disable the default plugin comes with ghcide
   , testPluginDescriptor     :: PluginTestDescriptor b
     -- ^ Plugin to load on the server.
   , testLspConfig            :: Config
@@ -653,7 +657,7 @@ runSessionWithTestConfig TestConfig{..} session =
     let plugins = testPluginDescriptor recorder
     recorderIde <- hlsHelperTestRecorder
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig }
-        arguments = testingArgs root (cmapWithPrio LogIDEMain recorderIde) plugins
+        arguments = testingArgs root recorderIde plugins
     server <- async $
         IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
             arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
@@ -676,15 +680,17 @@ runSessionWithTestConfig TestConfig{..} session =
             root <- makeAbsolute testConfigRoot
             act root
         runSessionInVFS (Right vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
-        testingArgs prjRoot recorder plugins =
+        testingArgs prjRoot recorderIde plugins =
             let
-                arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments prjRoot recorder plugins
-                argsHlsPlugins' = if testDisableDefaultPlugin then plugins else argsHlsPlugins
+                arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments prjRoot (cmapWithPrio LogIDEMain recorderIde) plugins
+                argsHlsPlugins' = if testDisableDefaultPlugin
+                                then plugins
+                                else argsHlsPlugins
                 hlsPlugins = pluginDescToIdePlugins $ idePluginsToPluginDesc argsHlsPlugins'
                     ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
                 ideOptions config sessionLoader = (argsIdeOptions config sessionLoader){
                     optTesting = IdeTesting True
-                    , optCheckProject = pure False
+                    , optCheckProject = pure testCheckProject
                     }
             in
                 arguments

@@ -29,8 +29,9 @@ import           Language.LSP.Protocol.Types       hiding
 import           Language.LSP.Test
 import           LogType                           (Log (..))
 import           Test.Hls                          (TestConfig (testDisableDefaultPlugin, testPluginDescriptor),
-                                                    hlsPluginTestRecorder,
                                                     runSessionWithTestConfig,
+                                                    testCheckProject,
+                                                    testConfigSession,
                                                     waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -42,17 +43,17 @@ tests = do
       [ testCase "PluginHandlers" $ do
           let pluginId = "plugin-handler-exception"
               plugins :: Recorder (WithPriority Log) -> IdePlugins IdeState
-              plugins _ = pluginDescToIdePlugins $
+              plugins r = pluginDescToIdePlugins $
                   [ (defaultPluginDescriptor pluginId "")
                       { pluginHandlers = mconcat
                           [ mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
                               _ <- liftIO $ throwIO DivideByZero
                               pure (InL [])
                           ]
-                      }]
-          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True} $ const $ do
+                      }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
+          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=False
+          } $ const $ do
               doc <- createDoc "A.hs" "haskell" "module A where"
-              waitForProgressDone
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
               case lens of
                 Left (ResponseError {_code = InR ErrorCodes_InternalError, _message}) ->
@@ -64,15 +65,15 @@ tests = do
           let pluginId = "command-exception"
               commandId = CommandId "exception"
               plugins :: Recorder (WithPriority Log) -> IdePlugins IdeState
-              plugins _ = pluginDescToIdePlugins $
+              plugins r = pluginDescToIdePlugins $
                   [ (defaultPluginDescriptor pluginId "")
                       { pluginCommands =
                           [ PluginCommand commandId "Causes an exception" $ \_ _ (_::Int) -> do
                               _ <- liftIO $ throwIO DivideByZero
                               pure (InR Null)
                           ]
-                      }]
-          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True} $ const $ do
+                      }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
+          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=False, testCheckProject=True} $ const $ do
               _ <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               let cmd = mkLspCommand (coerce pluginId) commandId "" (Just [A.toJSON (1::Int)])
@@ -87,7 +88,7 @@ tests = do
         , testCase "Notification Handlers" $ do
           let pluginId = "notification-exception"
               plugins :: Recorder (WithPriority Log) -> IdePlugins IdeState
-              plugins _ = pluginDescToIdePlugins $
+              plugins r = pluginDescToIdePlugins $
                   [ (defaultPluginDescriptor pluginId "")
                       { pluginNotificationHandlers = mconcat
                           [  mkPluginNotificationHandler SMethod_TextDocumentDidOpen $ \_ _ _ _ ->
@@ -97,8 +98,8 @@ tests = do
                           [ mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
                               pure (InL [])
                           ]
-                      }]
-          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True} $ const $ do
+                        }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
+          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=False, testCheckProject=True} $ const $ do
               doc <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
@@ -130,7 +131,7 @@ pluginOrderTestCase msg err1 err2 =
                           throwError err2
                       ]
                   }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
-      runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True} $ const $ do
+      runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=True} $ const $ do
           doc <- createDoc "A.hs" "haskell" "module A where"
           waitForProgressDone
           (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
