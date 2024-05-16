@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-05-15T10:44:19Z
+index-state: 2024-05-16T08:02:44Z
 
 tests: True
 test-show-details: direct
@@ -53,7 +53,7 @@ if impl(ghc >= 9.9)
     type:git
     location: https://github.com/wz1000/retrie.git
     tag: 7bf599856f055aefa86a6db10c12dcbc10c7130a
-  constraints: 
+  constraints:
     lens >= 5.3.2,
     haskell-language-server -stylishHaskell -ormolu -fourmolu -floskell -hlint,
   allow-newer:
@@ -77,9 +77,6 @@ if impl(ghc >= 9.9)
     hie-bios:ghc,
     hiedb:base,
     hiedb:ghc,
-    indexed-traversable:base,
-    indexed-traversable:containers,
-    indexed-traversable-instances:base,
     lens:template-haskell,
     lsp:containers,
     lsp:lens,
