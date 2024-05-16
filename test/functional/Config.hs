@@ -71,7 +71,7 @@ genericConfigTests = testGroup "generic plugin config"
           failIfSessionTimeout $
             runSessionWithTestConfig def
                 {testConfigSession=def {ignoreConfigurationRequests=False}, testShiftRoot=True
-                , testPluginDescriptor=plugin, testFileTree=Left ("test/testdata" </> subdir)} (const session)
+                , testPluginDescriptor=plugin, testDirLocation=Left ("test/testdata" </> subdir)} (const session)
 
         testPluginId = "testplugin"
         -- A disabled-by-default plugin that creates diagnostics

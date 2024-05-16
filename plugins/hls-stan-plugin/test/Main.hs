@@ -80,6 +80,6 @@ runStanSession subdir =
     testConfigCaps=codeActionNoResolveCaps
     , testShiftRoot=True
     , testPluginDescriptor=stanPlugin
-    , testFileTree=Left (testDir </> subdir)
+    , testDirLocation=Left (testDir </> subdir)
     }
   . const

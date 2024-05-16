@@ -51,7 +51,7 @@ runWithDummyPlugin ::  FS.VirtualFileTree -> Session a -> IO a
 runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 
 runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
-runWithDummyPlugin' fs = runSessionWithTestConfig def { testPluginDescriptor = dummyPlugin, testFileTree = Right fs }
+runWithDummyPlugin' fs = runSessionWithTestConfig def { testPluginDescriptor = dummyPlugin, testDirLocation = Right fs }
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
 testWithDummyPlugin caseName vfs = testWithDummyPlugin' caseName vfs . const

@@ -119,7 +119,7 @@ suggestionsTests =
     , testCase "falls back to pre 3.8 code actions" $
         runSessionWithTestConfig def {
             testConfigCaps = noLiteralCaps,
-            testFileTree = Left testDir,
+            testDirLocation = Left testDir,
             testPluginDescriptor = hlintPlugin,
             testShiftRoot = True} $ const $ do
         doc <- openDoc "Base.hs" "haskell"
@@ -350,7 +350,7 @@ runHlintSession subdir = failIfSessionTimeout .
     runSessionWithTestConfig def
     {testConfigCaps=codeActionNoResolveCaps
     , testShiftRoot=True
-    , testFileTree=Left (testDir </> subdir)
+    , testDirLocation=Left (testDir </> subdir)
     , testPluginDescriptor=hlintPlugin
     }
     . const
@@ -438,7 +438,7 @@ setupGoldenHlintTest testName path =
     {testConfigCaps=codeActionNoResolveCaps
     , testShiftRoot=True
     , testPluginDescriptor=hlintPlugin
-    , testFileTree=Left testDir
+    , testDirLocation=Left testDir
     }
         testName testDir path "expected" "hs"
 
@@ -466,6 +466,6 @@ setupGoldenHlintResolveTest testName path =
     {testConfigCaps=codeActionResolveCaps
     , testShiftRoot=True
     , testPluginDescriptor=hlintPlugin
-    , testFileTree=Left testDir
+    , testDirLocation=Left testDir
     }
         testName testDir path "expected" "hs"

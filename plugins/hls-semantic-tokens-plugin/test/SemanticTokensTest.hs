@@ -142,7 +142,7 @@ semanticTokensConfigTest =
             ignoreConfigurationRequests = False
           }
           , testConfigCaps = fullCaps
-          , testFileTree = Right fs
+          , testDirLocation = Right fs
           , testLspConfig = mkSemanticConfig funcVar
         }
         $ const $ do

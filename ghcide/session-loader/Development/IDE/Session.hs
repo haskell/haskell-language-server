@@ -111,6 +111,7 @@ import           Development.IDE.Types.Shake          (WithHieDb, toNoFileKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
+import           Ide.PluginUtils                      (toAbsolute)
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
 
@@ -127,7 +128,6 @@ import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                      (errMsgDiagnostic,
                                                        singleMessage)
 import           GHC.Unit.State
-import           Ide.PluginUtils                      (toAbsolute)
 #endif
 
 data Log

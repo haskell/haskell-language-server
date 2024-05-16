@@ -200,7 +200,7 @@ goldenWithHaskellAndCaps
 goldenWithHaskellAndCaps config clientCaps plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
   $ runSessionWithTestConfig def {
-    testFileTree = Left testDataDir,
+    testDirLocation = Left testDataDir,
     testConfigCaps = clientCaps,
     testLspConfig = config,
     testPluginDescriptor = plugin
@@ -250,7 +250,7 @@ goldenWithHaskellAndCapsInTmpDir config clientCaps plugin title tree path desc e
   goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
   $
   runSessionWithTestConfig def {
-    testFileTree = Right tree,
+    testDirLocation = Right tree,
     testConfigCaps = clientCaps,
     testLspConfig = config,
     testPluginDescriptor = plugin
@@ -421,7 +421,7 @@ initializeTestRecorder envVars = do
 -- ------------------------------------------------------------
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
 runSessionWithServerInTmpDir config plugin tree act = runSessionWithTestConfig def
-    {testLspConfig=config, testPluginDescriptor = plugin,  testFileTree=Right tree}
+    {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
     (const act)
 
 runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
@@ -451,18 +451,17 @@ runWithLockInTempDir tree act = withLock lockForTempDirs $ do
         fs <- FS.materialiseVFT tmpDir tree
         act fs
 
-
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act =
     runSessionWithTestConfig def {
         testLspConfig=config
         , testPluginDescriptor=plugin
-        , testFileTree = Left fp
+        , testDirLocation = Left fp
         } (const act)
 
 instance Default (TestConfig b) where
   def = TestConfig {
-    testFileTree = Left "",
+    testDirLocation = Left "",
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
@@ -605,7 +604,7 @@ lockForTempDirs = unsafePerformIO newLock
 
 data TestConfig b = TestConfig
   {
-  testFileTree               :: Either FilePath VirtualFileTree
+    testDirLocation          :: Either FilePath VirtualFileTree
     -- ^ The file tree to use for the test, either a directory or a virtual file tree
 
     -- if using a virtual file tree,
@@ -646,7 +645,7 @@ data TestConfig b = TestConfig
 -- For detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
-    runSessionInVFS testFileTree $ \root -> shiftRoot root $ do
+    runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 

@@ -36,7 +36,7 @@ import           Control.Monad.Extra             (whenJust)
 import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
-import           Test.Hls                        (TestConfig (testConfigCaps, testDisableKick, testFileTree, testPluginDescriptor),
+import           Test.Hls                        (TestConfig (testConfigCaps, testDirLocation, testDisableKick, testPluginDescriptor),
                                                   runSessionWithTestConfig,
                                                   waitForProgressBegin)
 import           Test.Hls.FileSystem             (directCradle, file, text)
@@ -582,7 +582,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
         runTestNoKick s =
             runSessionWithTestConfig def {
                 testPluginDescriptor = dummyPlugin
-                , testFileTree = Right (mkIdeTestFs [])
+                , testDirLocation = Right (mkIdeTestFs [])
                 , testDisableKick = True
                 } $ const s
 
