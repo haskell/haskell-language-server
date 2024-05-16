@@ -639,23 +639,18 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
         consultCradle hieYaml cfp = do
            let lfpLog = makeRelative rootDir cfp
            logWith recorder Info $ LogCradlePath lfpLog
-
            when (isNothing hieYaml) $
              logWith recorder Warning $ LogCradleNotFound lfpLog
-
            cradle <- loadCradle recorder hieYaml rootDir
-           -- TODO: Why are we repeating the same command we have on line 646?
-           let lfp = makeRelative rootDir cfp
-
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
 
            -- Display a user friendly progress message here: They probably don't know what a cradle is
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
-                         <> " (for " <> T.pack lfp <> ")"
+                         <> " (for " <> T.pack lfpLog <> ")"
            eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
               withTrace "Load cradle" $ \addTag -> do
-                  addTag "file" lfp
+                  addTag "file" lfpLog
                   old_files <- readIORef cradle_files
                   res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
                   addTag "result" (show res)
