@@ -70,7 +70,6 @@ import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
 import qualified Data.DList                    as DList
-import           Data.Foldable                 (foldl')
 import           Data.GADT.Compare
 import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
@@ -103,6 +102,10 @@ import           Prettyprinter                 as PP
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.Foldable                 (foldl')
+#endif
 -- ---------------------------------------------------------------------
 
 data IdePlugins ideState = IdePlugins_
