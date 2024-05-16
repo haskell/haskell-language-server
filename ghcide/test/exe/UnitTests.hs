@@ -88,7 +88,6 @@ tests recorder = do
                 ] ++ Ghcide.descriptors recorder
             priorityPluginDescriptor i = (defaultPluginDescriptor (fromString $ show i) ""){pluginPriority = i}
 
-        -- testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) plugins) $ do
         runSessionWithServerInTmpDir def plugins (mkIdeTestFs []) $ do
             _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone

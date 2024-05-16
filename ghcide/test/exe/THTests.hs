@@ -1,6 +1,7 @@
 
 module THTests (tests) where
 
+import           Config
 import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util
@@ -16,14 +17,13 @@ import           Test.Hls                    (waitForAllProgressDone,
                                               waitForProgressBegin)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests =
   testGroup
     "TemplateHaskell"
     [ -- Test for https://github.com/haskell/ghcide/pull/212
-      testSessionWait "load" $ do
+      testWithDummyPluginEmpty "load" $ do
         let sourceA =
               T.unlines
                 [ "{-# LANGUAGE PackageImports #-}",
@@ -46,7 +46,7 @@ tests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Error, (6, 29), "Variable not in scope: n")] ) ]
-    , testSessionWait "newtype-closure" $ do
+    , testWithDummyPluginEmpty "newtype-closure" $ do
         let sourceA =
               T.unlines
                 [ "{-# LANGUAGE DeriveDataTypeable #-}"
@@ -70,11 +70,11 @@ tests =
     , thReloadingTest False
     , thLoadingTest
     , thCoreTest
-    , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
+    , thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
-    , ignoreInWindowsBecause "Broken in windows" $ thLinkingTest True
-    , testSessionWait "findsTHIdentifiers" $ do
+    , thLinkingTest True
+    , testWithDummyPluginEmpty "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
                 [ "{-# LANGUAGE TemplateHaskell #-}"
