@@ -11,7 +11,6 @@ module Config(
     , testWithDummyPluginEmpty
     , testWithDummyPlugin'
     , testWithDummyPluginEmpty'
-    , testWithDummyPluginAndCap'
     , runWithExtraFiles
     , runInDir
     , testWithExtraFiles
@@ -54,12 +53,6 @@ runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 
 runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
 runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
-
-runWithDummyPluginAndCap' :: ClientCapabilities -> (FilePath -> Session ()) -> IO ()
-runWithDummyPluginAndCap' cap = runSessionWithServerAndCapsInTmpDirCont def dummyPlugin cap (mkIdeTestFs [])
-
-testWithDummyPluginAndCap' :: String -> ClientCapabilities -> (FilePath -> Session ()) -> TestTree
-testWithDummyPluginAndCap' caseName cap = testCase caseName . runWithDummyPluginAndCap' cap
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
 testWithDummyPlugin caseName vfs = testWithDummyPlugin' caseName vfs . const

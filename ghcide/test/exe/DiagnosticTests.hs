@@ -36,7 +36,9 @@ import           Control.Monad.Extra             (whenJust)
 import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
-import           Test.Hls                        (runSessionWithServerInTmpDirCont,
+import           Test.Hls                        (TestConfig (testConfigCaps, testLspConfig, testPluginDescriptor),
+                                                  runSessionWithServerInTmpDirCont,
+                                                  runSessionWithTestConfig,
                                                   waitForProgressBegin)
 import           Test.Hls.FileSystem             (directCradle, file, text,
                                                   toAbsFp)
@@ -169,7 +171,12 @@ tests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
-  , testWithDummyPluginAndCap' "add missing module (non workspace)" lspTestCapsNoFileWatches $ \tmpDir -> do
+  , testCase "add missing module (non workspace)" $
+    runSessionWithTestConfig def {
+        testPluginDescriptor = dummyPlugin
+        , testConfigCaps = lspTestCapsNoFileWatches
+    }
+    $ \tmpDir -> do
     -- By default lsp-test sends FileWatched notifications for all files, which we don't want
     -- as non workspace modules will not be watched by the LSP server.
     -- To work around this, we tell lsp-test that our client doesn't have the
