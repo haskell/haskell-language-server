@@ -41,7 +41,7 @@ import           Text.Megaparsec.Char                     (alphaNumChar, char,
                                                            eol, hspace,
                                                            letterChar)
 
-#if MIN_VERSION_base(4,20,0)
+#if MIN_VERSION_base(4,19,0)
 import           Data.Functor                             (unzip)
 import           Prelude                                  hiding (unzip)
 #else
