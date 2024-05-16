@@ -713,6 +713,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+        -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
 
         -- add the deps to the Shake graph
