@@ -83,7 +83,7 @@ import           Data.Aeson                         (Result (Success),
                                                      toJSON)
 import qualified Data.Aeson                         as A
 import           Data.ByteString.Lazy               (ByteString)
-import           Data.Default                       (def, Default)
+import           Data.Default                       (Default, def)
 import qualified Data.Map                           as M
 import           Data.Maybe                         (fromMaybe)
 import           Data.Proxy                         (Proxy (Proxy))
@@ -520,11 +520,11 @@ runSessionWithServerAndCaps config plugin caps root act =
 runSessionWithServerAndCapsShift :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
 runSessionWithServerAndCapsShift config plugin caps root act =
     runSessionWithTestConfig (mkTestConfig root plugin){testConfigCaps=caps, testLspConfig=config, testShiftRoot=True} (const act)
-  
+
 instance Default (TestConfig b) where
   def = TestConfig {
     testConfigRoot = "",
-    testFileTree = Nothing,
+    testFileTree = Just (VirtualFileTree [] ""),
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
@@ -533,7 +533,7 @@ instance Default (TestConfig b) where
     testConfigSession = def,
     testConfigCaps = fullCaps
   }
-  
+
 
 mkTestConfig :: FilePath -> PluginTestDescriptor b -> TestConfig b
 mkTestConfig fp pd = TestConfig {
