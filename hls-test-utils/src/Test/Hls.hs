@@ -58,7 +58,6 @@ module Test.Hls
     Recorder,
     Priority(..),
     TestConfig(..),
-    mkTestConfig,
     )
 where
 
@@ -455,7 +454,11 @@ runWithLockInTempDir tree act = withLock lockForTempDirs $ do
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act =
-    runSessionWithTestConfig (mkTestConfig fp plugin){testLspConfig=config} (const act)
+    runSessionWithTestConfig def {
+        testLspConfig=config
+        , testPluginDescriptor=plugin
+        , testFileTree = Left fp
+        } (const act)
 
 instance Default (TestConfig b) where
   def = TestConfig {
@@ -468,21 +471,6 @@ instance Default (TestConfig b) where
     testConfigSession = def,
     testConfigCaps = fullCaps
   }
-
-
-mkTestConfig :: FilePath -> PluginTestDescriptor b -> TestConfig b
-mkTestConfig fp pd = TestConfig {
-    testFileTree = Left fp,
-    testShiftRoot = False,
-    testDisableKick = False,
-    testDisableDefaultPlugin = False,
-    testPluginDescriptor = pd,
-    testLspConfig = def,
-    testConfigSession = def,
-    testConfigCaps = fullCaps
-}
-
-
 
 -- | Setup the test environment for isolated tests.
 --

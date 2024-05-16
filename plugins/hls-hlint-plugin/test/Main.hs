@@ -347,7 +347,12 @@ testDir = "plugins/hls-hlint-plugin/test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir = failIfSessionTimeout .
-    runSessionWithTestConfig (mkTestConfig (testDir </> subdir) hlintPlugin){testConfigCaps=codeActionNoResolveCaps, testShiftRoot=True}
+    runSessionWithTestConfig def
+    {testConfigCaps=codeActionNoResolveCaps
+    , testShiftRoot=True
+    , testFileTree=Left (testDir </> subdir)
+    , testPluginDescriptor=hlintPlugin
+    }
     . const
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
@@ -429,7 +434,12 @@ goldenTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-    goldenWithTestConfig (mkTestConfig testDir hlintPlugin){testConfigCaps=codeActionNoResolveCaps, testShiftRoot=True}
+    goldenWithTestConfig def
+    {testConfigCaps=codeActionNoResolveCaps
+    , testShiftRoot=True
+    , testPluginDescriptor=hlintPlugin
+    , testFileTree=Left testDir
+    }
         testName testDir path "expected" "hs"
 
 
@@ -452,5 +462,10 @@ goldenResolveTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintResolveTest testName path =
-    goldenWithTestConfig (mkTestConfig testDir hlintPlugin){testConfigCaps=codeActionResolveCaps, testShiftRoot=True}
+    goldenWithTestConfig def
+    {testConfigCaps=codeActionResolveCaps
+    , testShiftRoot=True
+    , testPluginDescriptor=hlintPlugin
+    , testFileTree=Left testDir
+    }
         testName testDir path "expected" "hs"
