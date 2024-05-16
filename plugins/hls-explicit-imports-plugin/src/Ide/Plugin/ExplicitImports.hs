@@ -6,6 +6,7 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE ViewPatterns       #-}
+
 module Ide.Plugin.ExplicitImports
   ( descriptor
   , descriptorForModules
@@ -22,6 +23,7 @@ import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
+import           Data.Char                            (isSpace)
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
@@ -44,8 +46,9 @@ import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE,
                                                        handleMaybe)
-import           Ide.Plugin.RangeMap                  (filterByRange)
-import qualified Ide.Plugin.RangeMap                  as RM (RangeMap, fromList)
+import qualified Ide.Plugin.RangeMap                  as RM (RangeMap,
+                                                             filterByRange,
+                                                             fromList)
 import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types
@@ -98,9 +101,11 @@ descriptorForModules recorder modFilter plId =
          -- This plugin provides code lenses
            mkPluginHandler SMethod_TextDocumentCodeLens (lensProvider recorder)
         <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
-          -- This plugin provides code actions
+        -- This plugin provides inlay hints
+        <> mkPluginHandler SMethod_TextDocumentInlayHint (inlayHintProvider recorder)
+        -- <> mkResolveHandler SMethod_InlayHintResolve (inlayHintResolveProvider recorder)
+        -- This plugin provides code actions
         <> codeActionHandlers
-
     }
 
 -- | The actual command handler
@@ -146,12 +151,13 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _range = range
                    , _command = Nothing }
 
+
 lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeLensResolve
 lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid) = do
     nfp <- getNormalizedFilePathE uri
     (ImportActionsResult{forResolve}, _) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
     target <- handleMaybe PluginStaleResolve $ forResolve IM.!? uid
-    let updatedCodeLens = cl & L.command ?~  mkCommand plId target
+    let updatedCodeLens = cl & L.command ?~ mkCommand plId target
     pure updatedCodeLens
   where mkCommand ::  PluginId -> ImportEdit -> Command
         mkCommand pId (ImportEdit{ieResType, ieText}) =
@@ -166,6 +172,35 @@ lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid) = do
 lensResolveProvider _ _ _ _ _ rd = do
    throwError $ PluginInvalidParams (T.pack $ "Unexpected argument for lens resolve handler: " <> show rd)
 
+
+inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
+inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}} = do
+    nfp <- getNormalizedFilePathE _uri
+    (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+    let inlayHints = [ generateInlayHints newRange ie
+                     | (range, int) <- forLens
+                     , Just newRange <- [toCurrentRange pm range]
+                     , Just ie <- [forResolve IM.!? int]]
+    pure $ InL inlayHints
+  where
+    generateInlayHints :: Range -> ImportEdit -> InlayHint
+    generateInlayHints Range {_end} ie =
+      InlayHint { _position = _end
+                , _label = mkLabel ie
+                , _kind = Nothing
+                , _textEdits = Nothing
+                , _tooltip = Nothing
+                , _paddingLeft = Just True
+                , _paddingRight = Nothing
+                , _data_ = Nothing
+                }
+    mkLabel ::  ImportEdit -> T.Text |? [InlayHintLabelPart]
+    mkLabel (ImportEdit{ieResType, ieText}) =
+      let title ExplicitImport = abbreviateImportTitle $ (T.intercalate " " . filter (not . T.null) . T.split isSpace . T.dropWhile (/= '(')) ieText
+          title RefineImport = T.intercalate ", " (T.lines ieText)
+      in InL $ title ieResType
+
+
 -- |For explicit imports: If there are any implicit imports, provide both one
 -- code action per import to make that specific import explicit, and one code
 -- action to turn them all into explicit imports. For refine imports: If there
@@ -176,7 +211,7 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
     nfp <- getNormalizedFilePathE _uri
     (ImportActionsResult{forCodeActions}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
     newRange <- toCurrentRangeE pm range
-    let relevantCodeActions = filterByRange newRange forCodeActions
+    let relevantCodeActions = RM.filterByRange newRange forCodeActions
         allExplicit =
           [InR $ mkCodeAction "Make all imports explicit" (Just $ A.toJSON $ ExplicitAll _uri)
           -- We should only provide this code action if there are any code
@@ -410,7 +445,6 @@ isExplicitImport _                                                = False
 maxColumns :: Int
 maxColumns = 120
 
-
 -- | The title of the command is ideally the minimal explicit import decl, but
 -- we don't want to create a really massive code lens (and the decl can be extremely large!).
 -- So we abbreviate it to fit a max column size, and indicate how many more items are in the list
@@ -462,10 +496,7 @@ filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
     else Nothing
   where importedNames = S.fromList $ map (ieName . unLoc) names
         res = flip Map.filter avails $ \a ->
-                any (`S.member` importedNames)
-                  $ concatMap
-                      getAvailNames
-                      a
+                any (any (`S.member` importedNames) . getAvailNames) a
         allFilteredAvailsNames = S.fromList
           $ concatMap getAvailNames
           $ mconcat

@@ -504,6 +504,12 @@ instance PluginMethod Request Method_WorkspaceSymbol where
   -- Unconditionally enabled, but should it really be?
   handlesRequest _ _ _ _ = HandlesRequest
 
+instance PluginMethod Request Method_TextDocumentInlayHint where
+  handlesRequest _ _ _ _ = HandlesRequest
+
+instance PluginMethod Request Method_InlayHintResolve where
+  handlesRequest _ _ _ _ = HandlesRequest
+
 instance PluginMethod Request Method_TextDocumentCodeLens where
   handlesRequest = pluginEnabledWithFeature plcCodeLensOn
 
@@ -801,6 +807,12 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentInlayHint where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_InlayHintResolve where
   combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]
