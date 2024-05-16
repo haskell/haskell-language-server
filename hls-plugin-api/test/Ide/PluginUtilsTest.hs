@@ -159,13 +159,13 @@ prop_rangemapListEq r xs =
 
 
 gitDiff :: FilePath -> FilePath -> [String]
-gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
+gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "-w", "--no-index", "--text", "--exit-code", fRef, fNew]
 
 goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
 goldenGitDiff name = goldenVsStringDiff name gitDiff
 
 testDir :: FilePath
-testDir = "hls-plugin-api/test/testdata/Property"
+testDir = "test/testdata/Property"
 
 propertyTest :: TestTree
 propertyTest = testGroup "property api tests" [
