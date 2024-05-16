@@ -7,11 +7,15 @@ module Ide.PluginUtilsTest
     ) where
 
 import qualified Data.Aeson                  as A
+import qualified Data.Aeson.Text             as A
 import qualified Data.Aeson.Types            as A
+import           Data.ByteString.Lazy        (ByteString)
 import           Data.Char                   (isPrint)
 import           Data.Function               ((&))
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
+import qualified Data.Text.Lazy              as Tl
+import           Debug.Trace                 (trace, traceM)
 import           Ide.Plugin.Properties       (KeyNamePath (..),
                                               definePropertiesProperty,
                                               defineStringProperty,
@@ -24,6 +28,7 @@ import           Ide.PluginUtils             (extractTextInRange, unescape)
 import           Language.LSP.Protocol.Types (Position (..), Range (Range),
                                               UInt, isSubrangeOf)
 import           Test.Tasty
+import           Test.Tasty.Golden           (goldenVsStringDiff)
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
@@ -153,40 +158,46 @@ prop_rangemapListEq r xs =
       Set.fromList filteredList === Set.fromList filteredRangeMap
 
 
+gitDiff :: FilePath -> FilePath -> [String]
+gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
+
+goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
+goldenGitDiff name = goldenVsStringDiff name gitDiff
+
+testDir :: FilePath
+testDir = "hls-plugin-api/test/testdata/Property"
+
 propertyTest :: TestTree
 propertyTest = testGroup "property api tests" [
-    testCase "property toVSCodeExtensionSchema" $ do
-        let expect = "[(\"top.baz\",Object (fromList [(\"default\",String \"baz\"),(\"markdownDescription\",String \"baz\"),(\"scope\",String \"resource\"),(\"type\",String \"string\")])),(\"top.parent.foo\",Object (fromList [(\"default\",String \"foo\"),(\"markdownDescription\",String \"foo\"),(\"scope\",String \"resource\"),(\"type\",String \"string\")]))]"
-        let result = toVSCodeExtensionSchema "top." nestedPropertiesExample
-        show result @?= expect
+    goldenGitDiff "property toVSCodeExtensionSchema" (testDir <> "/NestedProperty.json") (return $ A.encode $ A.object $ toVSCodeExtensionSchema "top." nestedPropertiesExample)
     , testCase "property toDefaultJSON" $ do
         let expect = "[(\"baz\",String \"baz\"),(\"parent\",Object (fromList [(\"foo\",String \"foo\")]))]"
         let result = toDefaultJSON nestedPropertiesExample
         show result @?= expect
     , testCase "parsePropertyPath single key path" $ do
         let obj = A.object (toDefaultJSON nestedPropertiesExample)
-        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
-                let (Right key1) = usePropertyByPathEither examplePath1 nestedPropertiesExample o
+        let key1 = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let key1 = usePropertyByPathEither examplePath1 nestedPropertiesExample o
                 return key1) obj
-        key1 @?= "baz"
+        key1 @?= Right (Right "baz")
     , testCase "parsePropertyPath two key path" $ do
         let obj = A.object (toDefaultJSON nestedPropertiesExample)
-        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
-                let (Right key1) = usePropertyByPathEither examplePath2 nestedPropertiesExample o
+        let key1 = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let key1 = usePropertyByPathEither examplePath2 nestedPropertiesExample o
                 return key1) obj
-        key1 @?= "foo"
+        key1 @?= Right (Right "foo")
     , testCase "parsePropertyPath two key path default" $ do
         let obj = A.object []
-        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+        let key1 = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
                 let key1 = usePropertyByPath examplePath2 nestedPropertiesExample o
                 return key1) obj
-        key1 @?= "foo"
+        key1 @?= Right "foo"
     , testCase "parsePropertyPath two key path not default" $ do
         let obj = A.object (toDefaultJSON nestedPropertiesExample2)
-        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
-                let (Right key1) = usePropertyByPathEither examplePath2 nestedPropertiesExample o
+        let key1 = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let key1 = usePropertyByPathEither examplePath2 nestedPropertiesExample o
                 return key1) obj
-        key1 @?= "xxx"
+        key1 @?= Right (Right "xxx")
     ]
     where
     nestedPropertiesExample = emptyProperties

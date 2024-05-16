@@ -67,7 +67,7 @@ data PropertyType
   | TObject Type
   | TArray Type
   | TEnum Type
-  | TProperties [PropertyKey]
+  | TProperties [PropertyKey] -- ^ A typed TObject, defined in a recursive manner
 
 type family ToHsType (t :: PropertyType) where
   ToHsType 'TNumber = Double -- in js, there are no distinct types for integers and floating-point values

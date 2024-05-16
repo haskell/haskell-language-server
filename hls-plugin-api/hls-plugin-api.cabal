@@ -112,6 +112,7 @@ test-suite tests
     Ide.TypesTests
 
   build-depends:
+    , bytestring
     , aeson
     , base
     , containers
@@ -120,6 +121,7 @@ test-suite tests
     , lens
     , lsp-types
     , tasty
+    , tasty-golden
     , tasty-hunit
     , tasty-quickcheck
     , tasty-rerun
