@@ -169,11 +169,8 @@ testDir = "test/testdata/Property"
 
 propertyTest :: TestTree
 propertyTest = testGroup "property api tests" [
-    goldenGitDiff "property toVSCodeExtensionSchema" (testDir <> "/NestedProperty.json") (return $ A.encode $ A.object $ toVSCodeExtensionSchema "top." nestedPropertiesExample)
-    , testCase "property toDefaultJSON" $ do
-        let expect = "[(\"baz\",String \"baz\"),(\"parent\",Object (fromList [(\"foo\",String \"foo\")]))]"
-        let result = toDefaultJSON nestedPropertiesExample
-        show result @?= expect
+    goldenGitDiff "property toVSCodeExtensionSchema" (testDir <> "/NestedPropertyVscode.json") (return $ A.encode $ A.object $ toVSCodeExtensionSchema "top." nestedPropertiesExample)
+    , goldenGitDiff "property toDefaultJSON" (testDir <> "/NestedPropertyDefault.json") (return $ A.encode $ A.object $ toDefaultJSON nestedPropertiesExample)
     , testCase "parsePropertyPath single key path" $ do
         let obj = A.object (toDefaultJSON nestedPropertiesExample)
         let key1 = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
