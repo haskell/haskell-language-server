@@ -25,7 +25,7 @@ import           Data.Function                            ((&))
 import           Data.Functor                             ((<&>))
 import           Data.Functor.Identity
 import           Data.List.NonEmpty                       (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty                       as NE
+import qualified Data.List.NonEmpty                       as NE hiding (unzip)
 import           Data.Map.Strict                          (Map)
 import qualified Data.Map.Strict                          as Map
 import qualified Data.Text                                as T
@@ -42,10 +42,9 @@ import           Text.Megaparsec.Char                     (alphaNumChar, char,
                                                            letterChar)
 
 #if MIN_VERSION_base(4,19,0)
-import           Data.Functor                             (unzip)
-import           Prelude                                  hiding (unzip)
+import qualified Data.Functor                             as NE (unzip)
 #else
-import           Data.List.NonEmpty                       (unzip)
+import qualified Data.List.NonEmpty                       as NE (unzip)
 #endif
 
 {-
@@ -415,7 +414,7 @@ nonEmptyLGP =
 exampleLinesGP :: LineGroupParser TestComment
 exampleLinesGP =
     lexemeLine $
-        uncurry AnExample . first convexHullRange . unzip
+        uncurry AnExample . first convexHullRange . NE.unzip
             <$> NE.some exampleLineGP
             <*> resultLinesP
 

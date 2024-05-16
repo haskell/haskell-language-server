@@ -57,7 +57,7 @@ addMethodDecls ps mDecls range withSig
     -- See the link for the original definition:
     --   https://hackage.haskell.org/package/ghc-9.2.1/docs/Language-Haskell-Syntax-Extension.html#t:XCClsInstDecl
     addWhere :: HsDecl GhcPs -> HsDecl GhcPs
-    addWhere instd@(InstD xInstD (ClsInstD ext decl@ClsInstDecl{..})) =
+    addWhere _instd@(InstD xInstD (ClsInstD ext decl@ClsInstDecl{..})) =
         case cid_ext of
 #if MIN_VERSION_ghc(9,9,0)
             (warnings, anns, key) ->
@@ -75,7 +75,7 @@ addMethodDecls ps mDecls range withSig
                                 comments
                                 , key)
                     })
-            _ -> instd
+            _ -> _instd
 #endif
     addWhere decl = decl
 
