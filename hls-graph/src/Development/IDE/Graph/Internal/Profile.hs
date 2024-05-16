@@ -33,7 +33,7 @@ import           System.FilePath
 import           System.IO.Unsafe                        (unsafePerformIO)
 import           System.Time.Extra                       (Seconds)
 
-#if !MIN_VERSION_base(4,19,0)
+#if !MIN_VERSION_base(4,20,0)
 import           Data.List                               (foldl')
 #endif
 
