@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ViewPatterns       #-}
@@ -136,7 +137,13 @@ tests = let
   xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["pack", ":: String -> Text", "Data.Text", "text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
-  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ", "GHC.Num", "base"]]
+  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ", ghcNum, "base"]]
+                           ;  ghcNum =
+#if MIN_VERSION_base(4,20,0)
+                                       "GHC.Internal.Num"
+#else
+                                       "GHC.Num"
+#endif
   dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
   dnbL30 = Position 34 23
   lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
