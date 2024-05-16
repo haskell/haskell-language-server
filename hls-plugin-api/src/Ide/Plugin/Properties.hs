@@ -124,7 +124,7 @@ data SPropertyKey (k :: PropertyKey) where
 data SomePropertyKeyWithMetaData
   = forall k s t.
     (k ~ 'PropertyKey s t) =>
-    SomePropertyKeyWithMetaData (SPropertyKey k) (MetaData t )
+    SomePropertyKeyWithMetaData (SPropertyKey k) (MetaData t)
 
 -- | 'Properties' is a partial implementation of json schema, without supporting union types and validation.
 -- In hls, it defines a set of properties which used in dedicated configuration of a plugin.
