@@ -1,5 +1,6 @@
 module GarbageCollectionTests (tests) where
 
+import           Config                      (testWithDummyPluginEmpty')
 import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
@@ -13,20 +14,19 @@ import           Language.LSP.Test
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 import           Text.Printf                 (printf)
 
 tests :: TestTree
 tests = testGroup "garbage collection"
   [ testGroup "dirty keys"
-        [ testSession' "are collected" $ \dir -> do
+        [ testWithDummyPluginEmpty' "are collected" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             doc <- generateGarbage "A" dir
             closeDoc doc
             garbage <- waitForGC
             liftIO $ assertBool "no garbage was found" $ not $ null garbage
 
-        , testSession' "are deleted from the state" $ \dir -> do
+        , testWithDummyPluginEmpty' "are deleted from the state" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             docA <- generateGarbage "A" dir
             keys0 <- getStoredKeys
@@ -36,7 +36,7 @@ tests = testGroup "garbage collection"
             keys1 <- getStoredKeys
             liftIO $ assertBool "keys were not deleted from the state" (length keys1 < length keys0)
 
-        , testSession' "are not regenerated unless needed" $ \dir -> do
+        , testWithDummyPluginEmpty' "are not regenerated unless needed" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
             docA <- generateGarbage "A" dir
             _docB <- generateGarbage "B" dir
@@ -57,7 +57,7 @@ tests = testGroup "garbage collection"
                     Set.intersection (Set.fromList garbage) (Set.fromList keysB)
             liftIO $ regeneratedKeys @?= mempty
 
-        , testSession' "regenerate successfully" $ \dir -> do
+        , testWithDummyPluginEmpty' "regenerate successfully" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             docA <- generateGarbage "A" dir
             closeDoc docA

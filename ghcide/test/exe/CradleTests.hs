@@ -25,13 +25,14 @@ import           Language.LSP.Test
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
 -- import Test.QuickCheck.Instances ()
+import           Config
 import           Config                          (checkDefs, mkL)
 import           Control.Lens                    ((^.))
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           GHC.TypeLits                    (symbolVal)
+import           Test.Hls                        (ignoreForGhcVersions)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 
 tests :: TestTree
@@ -40,17 +41,17 @@ tests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "multi"   (multiTests "multi")
-    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
+    ,ignoreForGhcVersions [GHC92] "multiple units not supported on 9.2"
        $ testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
-    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
+    ,ignoreForGhcVersions [GHC92] "multiple units not supported on 9.2"
       $ testGroup "multi-unit-rexport" [multiRexportTest]
     ]
 
 loadCradleOnlyonce :: TestTree
 loadCradleOnlyonce = testGroup "load cradle only once"
-    [ testSession' "implicit" implicit
-    , testSession' "direct"   direct
+    [ testWithDummyPluginEmpty' "implicit" implicit
+    , testWithDummyPluginEmpty' "direct"   direct
     ]
     where
         direct dir = do
@@ -70,7 +71,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             liftIO $ length msgs @?= 0
 
 retryFailedCradle :: TestTree
-retryFailedCradle = testSession' "retry failed" $ \dir -> do
+retryFailedCradle = testWithDummyPluginEmpty' "retry failed" $ \dir -> do
   -- The false cradle always fails
   let hieContents = "cradle: {bios: {shell: \"false\"}}"
       hiePath = dir </> "hie.yaml"
@@ -124,7 +125,7 @@ multiTestName :: FilePath -> String -> String
 multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
 
 simpleMultiTest :: FilePath -> TestTree
-simpleMultiTest variant = testCase (multiTestName variant "test") $ withLongTimeout $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -201,7 +202,7 @@ multiRexportTest =
     expectNoMoreDiagnostics 0.5
 
 sessionDepsArePickedUp :: TestTree
-sessionDepsArePickedUp = testSession'
+sessionDepsArePickedUp = testWithDummyPluginEmpty'
   "session-deps-are-picked-up"
   $ \dir -> do
     liftIO $

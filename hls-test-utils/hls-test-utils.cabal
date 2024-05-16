@@ -46,6 +46,7 @@ library
     , ghcide                  == 2.8.0.0
     , hls-plugin-api          == 2.8.0.0
     , lens
+    , lsp
     , lsp-test                ^>=0.17
     , lsp-types               ^>=2.2
     , safe-exceptions

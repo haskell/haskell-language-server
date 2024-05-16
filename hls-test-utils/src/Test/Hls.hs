@@ -5,6 +5,8 @@
 {-# LANGUAGE OverloadedLists       #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -82,7 +84,9 @@ import qualified Data.Text                          as T
 import qualified Data.Text.Lazy                     as TL
 import qualified Data.Text.Lazy.Encoding            as TL
 import           Development.IDE                    (IdeState,
-                                                     LoggingColumn (ThreadIdColumn))
+                                                     LoggingColumn (ThreadIdColumn),
+                                                     defaultLayoutOptions,
+                                                     layoutPretty, renderStrict)
 import qualified Development.IDE.LSP.Notifications  as Notifications
 import           Development.IDE.Main               hiding (Log)
 import qualified Development.IDE.Main               as IDEMain
@@ -100,12 +104,16 @@ import           Ide.Logger                         (Pretty (pretty),
                                                      logWith,
                                                      makeDefaultStderrRecorder,
                                                      (<+>))
+import qualified Ide.Logger                         as Logger
+import           Ide.Plugin.Properties              ((&))
 import           Ide.PluginUtils                    (idePluginsToPluginDesc,
                                                      pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Message      as LSP
 import           Language.LSP.Protocol.Types        hiding (Null)
+import qualified Language.LSP.Server                as LSP
 import           Language.LSP.Test
 import           Prelude                            hiding (log)
 import           System.Directory                   (canonicalizePath,
@@ -407,6 +415,7 @@ hlsPluginTestRecorder = initializeTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "H
 initializeTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a))
 initializeTestRecorder envVars = do
     docWithPriorityRecorder <- makeDefaultStderrRecorder (Just $ ThreadIdColumn : defaultLoggingColumns)
+    -- lspClientLogRecorder
     -- There are potentially multiple environment variables that enable this logger
     definedEnvVars <- forM envVars (fmap (fromMaybe "0") . lookupEnv)
     let logStdErr = any (/= "0") definedEnvVars
@@ -421,7 +430,8 @@ initializeTestRecorder envVars = do
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
-runSessionWithServerInTmpDir config plugin tree act = runSessionWithTestConfig def
+runSessionWithServerInTmpDir config plugin tree act =
+    runSessionWithTestConfig def
     {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
     (const act)
 
@@ -645,6 +655,13 @@ data TestConfig b = TestConfig
   }
 
 
+wrapClientLogger :: Pretty a => Recorder (WithPriority a) ->
+    IO (Recorder (WithPriority a), LSP.LanguageContextEnv Config -> IO ())
+wrapClientLogger logger = do
+    (lspLogRecorder', cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
+    let lspLogRecorder = cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions. pretty) lspLogRecorder'
+    return (lspLogRecorder <> logger, cb1)
+
 -- | Host a server, and run a test session on it.
 -- For detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
@@ -653,9 +670,17 @@ runSessionWithTestConfig TestConfig{..} session =
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
-    recorder <- hlsPluginTestRecorder
-    let plugins = testPluginDescriptor recorder
-    recorderIde <- hlsHelperTestRecorder
+    (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
+    (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
+    -- This plugin just installs a handler for the `initialized` notification, which then
+    -- picks up the LSP environment and feeds it to our recorders
+    let lspRecorderPlugin = pluginDescToIdePlugins [(defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
+              env <- LSP.getLspEnv
+              liftIO $ (cb1 <> cb2) env
+          }]
+
+    let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig }
         arguments = testingArgs root recorderIde plugins
     server <- async $
