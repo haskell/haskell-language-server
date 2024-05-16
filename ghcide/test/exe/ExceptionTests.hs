@@ -73,7 +73,7 @@ tests = do
                               pure (InR Null)
                           ]
                       }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
-          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=False, testCheckProject=True} $ const $ do
+          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=False} $ const $ do
               _ <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               let cmd = mkLspCommand (coerce pluginId) commandId "" (Just [A.toJSON (1::Int)])
@@ -99,7 +99,7 @@ tests = do
                               pure (InL [])
                           ]
                         }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
-          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=False, testCheckProject=True} $ const $ do
+          runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=False} $ const $ do
               doc <- createDoc "A.hs" "haskell" "module A where"
               waitForProgressDone
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
@@ -131,7 +131,7 @@ pluginOrderTestCase msg err1 err2 =
                           throwError err2
                       ]
                   }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
-      runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=True} $ const $ do
+      runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=False} $ const $ do
           doc <- createDoc "A.hs" "haskell" "module A where"
           waitForProgressDone
           (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
