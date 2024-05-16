@@ -173,6 +173,7 @@ tests = testGroup "diagnostics"
     runSessionWithTestConfig def {
         testPluginDescriptor = dummyPlugin
         , testConfigCaps = lspTestCapsNoFileWatches
+        , testDirLocation = Right (mkIdeTestFs [])
     }
     $ \tmpDir -> do
     -- By default lsp-test sends FileWatched notifications for all files, which we don't want

@@ -461,7 +461,7 @@ runSessionWithServer config plugin fp act =
 
 instance Default (TestConfig b) where
   def = TestConfig {
-    testDirLocation = Left "",
+    testDirLocation = Right $ VirtualFileTree [] "",
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
