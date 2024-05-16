@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
+
 -- |
 -- This module provides mappings to convert token type information in the Haskell IDE plugin. It includes functions for:
 --
@@ -13,7 +14,7 @@ module Ide.Plugin.SemanticTokens.Mappings where
 
 import qualified Data.Array                      as A
 import           Data.List.Extra                 (chunksOf, (!?))
-import qualified Data.Map                        as Map
+import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (mapMaybe)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text, unpack)
@@ -28,6 +29,12 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokens (SemanticTokens),
                                                   UInt, absolutizeTokens)
 import           Language.LSP.VFS                hiding (line)
+
+-- * 0. Mapping name to Hs semantic token type.
+
+nameInfixOperator :: Name -> Maybe HsSemanticTokenType
+nameInfixOperator name | isSymOcc (nameOccName name) = Just TOperator
+nameInfixOperator _ = Nothing
 
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
@@ -45,6 +52,8 @@ toLspTokenType conf tk = case tk of
   TTypeFamily      -> stTypeFamily conf
   TRecordField     -> stRecordField conf
   TPatternSynonym  -> stPatternSynonym conf
+  TModule          -> stModule conf
+  TOperator        -> stOperator conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
@@ -60,7 +69,10 @@ lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
 
 -- | tyThingSemantic
 tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
-tyThingSemantic ty = case ty of
+tyThingSemantic ty | (Just hst) <- tyThingSemantic' ty = Just hst <> nameInfixOperator (getName ty)
+tyThingSemantic _ = Nothing
+tyThingSemantic' :: TyThing -> Maybe HsSemanticTokenType
+tyThingSemantic' ty = case ty of
   AnId vid
     | isTyVar vid -> Just TTypeVariable
     | isRecordSelector vid -> Just TRecordField
@@ -114,15 +126,15 @@ recoverFunMaskArray flattened = unflattened
     -- The recursion in 'unflattened' is crucial - it's what gives us sharing
     -- function indicator check.
     unflattened :: A.Array TypeIndex Bool
-    unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
+    unflattened = fmap (go . fmap (unflattened A.!)) flattened
 
-    -- Unfold an 'HieType' whose subterms have already been unfolded
+    -- Unfold an 'HieType' whose sub-terms have already been unfolded
     go :: HieType Bool -> Bool
     go (HTyVarTy _name)              = False
     go (HAppTy _f _x)                = False
     go (HLitTy _lit)                 = False
     go (HForAllTy ((_n, _k), _af) b) = b
-    go (HFunTy _ _ _)                = True
+    go (HFunTy {})                   = True
     go (HQualTy _constraint b)       = b
     go (HCastTy b)                   = b
     go HCoercionTy                   = False

@@ -2,7 +2,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE CPP #-}
 
-
 -- | Types and functions for working with source code locations.
 module Development.IDE.Types.Location
     ( Location(..)
@@ -35,8 +34,6 @@ import           Language.LSP.Protocol.Types  (Location (..), Position (..),
                                                Range (..))
 import qualified Language.LSP.Protocol.Types  as LSP
 import           Text.ParserCombinators.ReadP as ReadP
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 import           GHC.Data.FastString
 import           GHC.Types.SrcLoc             as GHC

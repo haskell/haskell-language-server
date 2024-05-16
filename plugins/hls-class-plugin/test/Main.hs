@@ -1,22 +1,18 @@
 {-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeOperators     #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 module Main
   ( main
   ) where
 
+import           Control.Exception             (catch)
 import           Control.Lens                  (Prism', prism', view, (^.),
                                                 (^..), (^?))
 import           Control.Monad                 (void)
+import           Data.Foldable                 (find)
 import           Data.Maybe
-import           Data.Row                      ((.==))
 import qualified Data.Text                     as T
-import           Development.IDE.Core.Compile  (sourceTypecheck)
 import qualified Ide.Plugin.Class              as Class
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
@@ -47,35 +43,35 @@ codeActionTests = testGroup
       , "Add placeholders for all missing methods"
       , "Add placeholders for all missing methods with signature(s)"
       ]
-  , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $ \(eqAction:_) -> do
-      executeCodeAction eqAction
-  , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:_:neAction:_) -> do
-      executeCodeAction neAction
-  , goldenWithClass "Creates a placeholder for both '==' and '/='" "T1" "all" $ \(_:_:_:_:allMethodsAction:_) -> do
-      executeCodeAction allMethodsAction
-  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $ \(_:_:_:_:_:_:fmapAction:_) -> do
-      executeCodeAction fmapAction
-  , goldenWithClass "Creates a placeholder for multiple methods 1" "T3" "1" $ \(mmAction:_) -> do
-      executeCodeAction mmAction
-  , goldenWithClass "Creates a placeholder for multiple methods 2" "T3" "2" $ \(_:_:mmAction:_) -> do
-      executeCodeAction mmAction
-  , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $ \(_fAction:_) -> do
-      executeCodeAction _fAction
-  , goldenWithClass "Creates a placeholder for '==' with extra lines" "T5" "" $ \(eqAction:_) -> do
-      executeCodeAction eqAction
-  , goldenWithClass "Creates a placeholder for only the unimplemented methods of multiple methods" "T6" "1" $ \(gAction:_) -> do
-      executeCodeAction gAction
-  , goldenWithClass "Creates a placeholder for other two methods" "T6" "2" $ \(_:_:ghAction:_) -> do
-      executeCodeAction ghAction
+  , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $
+      getActionByTitle "Add placeholders for '=='"
+  , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $
+      getActionByTitle "Add placeholders for '/='"
+  , goldenWithClass "Creates a placeholder for both '==' and '/='" "T1" "all" $
+      getActionByTitle "Add placeholders for all missing methods"
+  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $
+      getActionByTitle "Add placeholders for 'fmap'"
+  , goldenWithClass "Creates a placeholder for multiple methods 1" "T3" "1" $
+      getActionByTitle "Add placeholders for 'f','g'"
+  , goldenWithClass "Creates a placeholder for multiple methods 2" "T3" "2" $
+      getActionByTitle "Add placeholders for 'g','h'"
+  , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $
+      getActionByTitle "Add placeholders for '_f'"
+  , goldenWithClass "Creates a placeholder for '==' with extra lines" "T5" "" $
+      getActionByTitle "Add placeholders for '=='"
+  , goldenWithClass "Creates a placeholder for only the unimplemented methods of multiple methods" "T6" "1" $
+      getActionByTitle "Add placeholders for 'g'"
+  , goldenWithClass "Creates a placeholder for other two methods" "T6" "2" $
+      getActionByTitle "Add placeholders for 'g','h'"
   , onlyRunForGhcVersions [GHC92, GHC94] "Only ghc-9.2+ enabled GHC2021 implicitly" $
-      goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $ \(_:eqWithSig:_) -> do
-        executeCodeAction eqWithSig
-  , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $ \(_:eqWithSig:_) -> do
-      executeCodeAction eqWithSig
-  , goldenWithClass "Don't insert pragma if exist" "InsertWithPragma" "" $ \(_:eqWithSig:_) -> do
-      executeCodeAction eqWithSig
-  , goldenWithClass "Only insert pragma once" "InsertPragmaOnce" "" $ \(_:multi:_) -> do
-      executeCodeAction multi
+      goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
+        getActionByTitle "Add placeholders for '==' with signature(s)"
+  , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $
+      getActionByTitle "Add placeholders for '==' with signature(s)"
+  , goldenWithClass "Don't insert pragma if exist" "InsertWithPragma" "" $
+      getActionByTitle "Add placeholders for '==' with signature(s)"
+  , goldenWithClass "Only insert pragma once" "InsertPragmaOnce" "" $
+      getActionByTitle "Add placeholders for 'pure','<*>' with signature(s)"
   , expectCodeActionsAvailable "No code action available when minimal requirements meet" "MinimalDefinitionMeet" []
   , expectCodeActionsAvailable "Add placeholders for all missing methods is unavailable when all methods are required" "AllMethodsRequired"
       [ "Add placeholders for 'f','g'"
@@ -88,7 +84,7 @@ codeActionTests = testGroup
 
     -- Change the doc to ensure the version is not 0
     changeDoc doc
-        [ TextDocumentContentChangeEvent . InR . (.==) #text $
+        [ TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
             T.unlines ["module Version where", "data A a = A a", "instance Functor A where"]
         ]
     ver2 <- (^. L.version) <$> getVersionedDoc doc
@@ -99,9 +95,8 @@ codeActionTests = testGroup
     action <- head . concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     executeCodeAction action
     _ <- waitForDiagnostics
-    -- TODO: uncomment this after lsp-test fixed
-    -- ver3 <- (^.J.version) <$> getVersionedDoc doc
-    -- liftIO $ ver3 @?= Just 3
+    ver3 <- (^. L.version) <$> getVersionedDoc doc
+    liftIO $ ver3 @?= 2
     pure mempty
   ]
 
@@ -122,6 +117,17 @@ codeLensTests = testGroup
             doc <- openDoc "TH.hs" "haskell"
             lens <- getAndResolveCodeLenses doc
             liftIO $ length lens @?= 0
+    , testCase "Do not construct error action!, Ticket3942one" $ do
+        runSessionWithServer def classPlugin testDataDir $ do
+            doc <- openDoc "Ticket3942one.hs" "haskell"
+            _ <- waitForDiagnosticsFrom doc
+            lens <- getAllCodeActions doc
+            -- should switch to `liftIO $ length lens @?= 2, when Ticket3942 is entirely fixed`
+            -- current fix is just to make sure the code does not throw an exception that would mess up
+            -- the client UI.
+            liftIO $ length lens > 0 @?= True
+        `catch` \(e :: SessionException) -> do
+          liftIO $ assertFailure $ "classPluginTestError: "++ show e
     , goldenCodeLens "Apply code lens" "CodeLensSimple" 1
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens "Apply code lens on the same line" "Inline" 0
@@ -152,20 +158,26 @@ goldenCodeLens title path idx =
         executeCommand $ fromJust $ (lens !! idx) ^. L.command
         void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
-goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
-goldenWithClass title path desc act =
+goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session CodeAction) -> TestTree
+goldenWithClass title path desc findAction =
   goldenWithHaskellDoc def classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
-    _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
+    _ <- waitForDiagnosticsFrom doc
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
-    act actions
+    action <- findAction actions
+    executeCodeAction action
     void $ skipManyTill anyMessage (getDocumentEdit doc)
+
+getActionByTitle :: T.Text -> [CodeAction] -> Session CodeAction
+getActionByTitle title actions = case find (\a -> a ^. L.title == title) actions of
+    Just a -> pure a
+    Nothing -> liftIO $ assertFailure $ "Action " <> show title <> " not found in " <> show [a ^. L.title | a <- actions]
 
 expectCodeActionsAvailable :: TestName -> FilePath -> [T.Text] -> TestTree
 expectCodeActionsAvailable title path actionTitles =
   testCase title $ do
     runSessionWithServer def classPlugin testDataDir $ do
       doc <- openDoc (path <.> "hs") "haskell"
-      _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
+      _ <- waitForDiagnosticsFrom doc
       caResults <- getAllCodeActions doc
       liftIO $ map (^? _CACodeAction . L.title) caResults
         @?= expectedActions
@@ -173,4 +185,4 @@ expectCodeActionsAvailable title path actionTitles =
       expectedActions = Just <$> actionTitles
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-class-plugin" </> "test" </> "testdata"

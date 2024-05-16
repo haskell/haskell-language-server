@@ -23,8 +23,7 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
 import           Development.IDE.GHC.Compat.Parser     as Parser
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
+import qualified GHC.Driver.Env                        as Env
 import           GHC.Driver.Plugins                    (Plugin (..),
                                                         PluginWithArgs (..),
                                                         StaticPlugin (..),
@@ -32,17 +31,11 @@ import           GHC.Driver.Plugins                    (Plugin (..),
                                                         withPlugins)
 import qualified GHC.Runtime.Loader                    as Loader
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat.Outputable as Out
-#endif
-
-import qualified GHC.Driver.Env                        as Env
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.Bifunctor                        (bimap)
-#endif
-
-#if !MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat.Outputable as Out
 import           Development.IDE.GHC.Compat.Util       (Bag)
 #endif
 
@@ -53,23 +46,20 @@ import           GHC.Driver.Plugins                    (ParsedResult (..),
 import qualified GHC.Parser.Lexer                      as Lexer
 #endif
 
-
 #if !MIN_VERSION_ghc(9,3,0)
 type PsMessages = (Bag WarnMsg, Bag ErrMsg)
 #endif
 
-getPsMessages :: PState -> DynFlags -> PsMessages
-getPsMessages pst _dflags = --dfags is only used if GHC < 9.2
+getPsMessages :: PState -> PsMessages
+getPsMessages pst =
 #if MIN_VERSION_ghc(9,3,0)
   uncurry PsMessages $ Lexer.getPsMessages pst
 #else
-                 bimap (fmap pprWarning) (fmap pprError) $
-                 getMessages pst
+  bimap (fmap pprWarning) (fmap pprError) $ getMessages pst
 #endif
 
-applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
-applyPluginsParsedResultAction env _dflags ms hpm_annotations parsed msgs = do
-  -- dflags is only used in GHC < 9.2
+applyPluginsParsedResultAction :: HscEnv -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
+applyPluginsParsedResultAction env ms hpm_annotations parsed msgs = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
 #if MIN_VERSION_ghc(9,3,0)

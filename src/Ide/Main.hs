@@ -1,12 +1,10 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE CPP               #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Ide.Main(defaultMain, runLspMode, Log(..)) where
 
@@ -14,18 +12,18 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import           Data.Coerce                   (coerce)
 import           Data.Default
+import           Data.Function                 ((&))
 import           Data.List                     (sortOn)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Text.Lazy.Encoding       (decodeUtf8)
 import qualified Data.Text.Lazy.IO             as LT
 import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
-import           Development.IDE.Core.Tracing  (withTelemetryLogger)
+import           Development.IDE.Core.Tracing  (withTelemetryRecorder)
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import qualified Development.IDE.Types.Options as Ghcide
-import           GHC.Stack                     (emptyCallStack)
 import qualified HIE.Bios.Environment          as HieBios
 import           HIE.Bios.Types                hiding (Log)
 import qualified HIE.Bios.Types                as HieBios
@@ -123,7 +121,7 @@ defaultMain recorder args idePlugins = do
 -- ---------------------------------------------------------------------
 
 runLspMode :: Recorder (WithPriority Log) -> GhcideArguments -> IdePlugins IdeState -> IO ()
-runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
+runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryRecorder $ \telemetryRecorder' -> do
     let log = logWith recorder
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
@@ -132,14 +130,13 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     when (isLSP argsCommand) $ do
         log Info $ LogLspStart ghcideArgs (map pluginId $ ipMap idePlugins)
 
-    -- exists so old-style logging works. intended to be phased out
-    let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack $ LogOther m)
-        args = (if argsTesting then IDEMain.testing else IDEMain.defaultArguments)
-                    (cmapWithPrio LogIDEMain recorder) logger idePlugins
+    let args = (if argsTesting then IDEMain.testing else IDEMain.defaultArguments)
+                    (cmapWithPrio LogIDEMain recorder) idePlugins
 
-    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) args
+    let telemetryRecorder = telemetryRecorder' & cmapWithPrio pretty
+
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain $ recorder <> telemetryRecorder) args
       { IDEMain.argCommand = argsCommand
-      , IDEMain.argsLogger = pure logger <> pure telemetryLogger
       , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , IDEMain.argsIdeOptions = \config sessionLoader ->
         let defOptions = IDEMain.argsIdeOptions args config sessionLoader

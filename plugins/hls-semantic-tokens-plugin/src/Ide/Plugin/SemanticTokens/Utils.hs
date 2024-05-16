@@ -1,17 +1,16 @@
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 
 module Ide.Plugin.SemanticTokens.Utils where
 
-import           Data.ByteString                 (ByteString)
-import           Data.ByteString.Char8           (unpack)
-import qualified Data.Map                        as Map
-import           Development.IDE                 (Position (..), Range (..))
+import           Data.ByteString            (ByteString)
+import           Data.ByteString.Char8      (unpack)
+import qualified Data.Map.Strict            as Map
+import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.SemanticTokens.Types
-import           Prelude                         hiding (span)
+import           Prelude                    hiding (length, span)
 
 deriving instance Show DeclType
 deriving instance Show BindType
@@ -83,14 +82,6 @@ nameTypesString xs = unlines
     | (span, name) <- xs]
 
 
-nameMapString :: NameSemanticMap -> [Name] -> String
-nameMapString nsm  names = unlines
-    [ showSDocUnsafe (ppr name) ++ " " ++ show tokenType
-    | name <- names
-    , let tokenType = lookupNameEnv nsm name
-    ]
-
-
 showSpan :: RealSrcSpan -> String
 showSpan x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
 
@@ -99,3 +90,9 @@ showSpan x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-"
 mkRange :: (Integral a1, Integral a2) => a1 -> a2 -> a2 -> Range
 mkRange startLine startCol len =
     Range (Position (fromIntegral startLine) (fromIntegral startCol)) (Position (fromIntegral startLine) (fromIntegral $ startCol + len))
+
+
+rangeShortStr :: Range -> String
+rangeShortStr (Range (Position startLine startColumn) (Position endLine endColumn)) =
+    show startLine <> ":" <> show startColumn <> "-" <> show endLine <> ":" <> show endColumn
+

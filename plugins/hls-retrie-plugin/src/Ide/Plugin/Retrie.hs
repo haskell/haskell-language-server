@@ -1,24 +1,17 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE StandaloneDeriving    #-}
-{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 {-# OPTIONS -Wno-orphans #-}
-{-# LANGUAGE TupleSections         #-}
 
-module Ide.Plugin.Retrie (descriptor) where
+module Ide.Plugin.Retrie (descriptor, Log) where
 
 import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
@@ -31,61 +24,51 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
 
-import           Control.Monad.Trans.Maybe
-import           Control.Monad.Trans.Writer.Strict
+import           Control.Monad.Trans.Maybe            (MaybeT)
 import           Data.Aeson                           (FromJSON (..),
-                                                       ToJSON (..), Value)
+                                                       ToJSON (..))
 import           Data.Bifunctor                       (second)
 import qualified Data.ByteString                      as BS
-import           Data.Coerce
 import           Data.Data
 import           Data.Either                          (partitionEithers)
-import           Data.Hashable                        (Hashable (hash),
-                                                       unhashed)
-import qualified Data.HashMap.Strict                  as HM
+import           Data.Hashable                        (unhashed)
 import qualified Data.HashSet                         as Set
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, fromJust,
-                                                       listToMaybe)
+import           Data.Maybe                           (catMaybes)
+import           Data.Monoid                          (First (First))
 import           Data.String                          (IsString)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
-import           Data.Typeable                        (Typeable)
-import           Debug.Trace
 import           Development.IDE                      hiding (pluginHandlers)
+import           Development.IDE.Core.Actions         (lookupMod)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras, knownTargetsVar),
-                                                       clientCapabilities,
                                                        getShakeExtras,
                                                        hiedbWriter,
                                                        toKnownFiles, withHieDb)
 import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        GenLocated (L), GhcPs,
-                                                       GhcRn, GhcTc,
+                                                       GhcRn,
                                                        HsBindLR (FunBind),
                                                        HsExpr (HsApp, OpApp),
                                                        HsGroup (..),
                                                        HsValBindsLR (..),
-                                                       HscEnv, IdP,
-                                                       ImportDecl (..), LHsExpr,
-                                                       LRuleDecls, Match,
-                                                       ModIface,
+                                                       HscEnv, ImportDecl (..),
+                                                       LHsExpr, LRuleDecls,
+                                                       Match, ModIface,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                       Name, Outputable,
-                                                       ParsedModule (..),
-                                                       RealSrcLoc,
+                                                       Outputable, ParsedModule,
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
                                                        SourceText (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
-                                                       hm_iface, isQual,
-                                                       isQual_maybe, isVarOcc,
+                                                       isQual, isQual_maybe,
                                                        locA, mi_fixities,
-                                                       moduleName,
                                                        moduleNameString,
                                                        ms_hspp_opts,
                                                        nameModule_maybe,
@@ -96,32 +79,26 @@ import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        pattern NotBoot,
                                                        pattern RealSrcSpan,
                                                        pm_parsed_source,
-                                                       printWithoutUniques,
                                                        rdrNameOcc, rds_rules,
                                                        srcSpanFile, topDir,
                                                        unLoc, unLocA)
 import qualified Development.IDE.GHC.Compat           as GHC
 import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
-import           Development.IDE.GHC.Dump             (showAstDataHtml)
-import           Development.IDE.GHC.ExactPrint       (ExceptStringT (ExceptStringT),
-                                                       GetAnnotatedParsedSource (GetAnnotatedParsedSource),
-                                                       TransformT,
-                                                       graftExprWithM,
-                                                       graftSmallestDeclsWithM,
-                                                       hoistGraft, transformM)
-import qualified GHC                                  (Module, ParsedSource,
-                                                       moduleName, parseModule)
+import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
+                                                       TransformT)
+import           Development.IDE.Spans.AtPoint        (LookupModule,
+                                                       nameToLocation)
+import           Development.IDE.Types.Shake          (WithHieDb)
 import qualified GHC                                  as GHCGHC
 import           GHC.Generics                         (Generic)
-import           GHC.Hs.Dump
-import           Ide.Plugin.Error
+import           Ide.Plugin.Error                     (PluginError (PluginInternalError),
+                                                       getNormalizedFilePathE)
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
-import           Language.LSP.Server                  (LspM,
-                                                       ProgressCancellable (Cancellable),
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable),
                                                        sendNotification,
                                                        sendRequest,
                                                        withIndefiniteProgress)
@@ -130,13 +107,12 @@ import           Retrie                               (Annotated (astA),
                                                        Fixity (Fixity),
                                                        FixityDirection (InfixL),
                                                        Options, Options_ (..),
-                                                       RewriteSpec,
                                                        Verbosity (Loud),
                                                        addImports, apply,
                                                        applyWithUpdate)
 import           Retrie.Context
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
-import           Retrie.ExactPrint                    (Annotated, fix,
+import           Retrie.ExactPrint                    (fix, makeDeltaAst,
                                                        transformA, unsafeMkA)
 import           Retrie.Expr                          (mkLocatedHsVar)
 import           Retrie.Fixity                        (FixityEnv, lookupOp,
@@ -159,39 +135,34 @@ import           System.Directory                     (makeAbsolute)
 import           GHC.Types.PkgQual
 #endif
 
-import           Control.Arrow                        ((&&&))
-import           Control.Exception                    (evaluate)
-import           Data.Monoid                          (First (First))
-import           Development.IDE.Core.Actions         (lookupMod)
-import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Spans.AtPoint        (LookupModule,
-                                                       getNamesAtPoint,
-                                                       nameToLocation)
-import           Development.IDE.Types.Shake          (WithHieDb)
-import           Retrie.ExactPrint                    (makeDeltaAst)
-import           Retrie.GHC                           (ann)
+data Log
+  = LogParsingModule FilePath
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+instance Pretty Log where
+  pretty = \case
+    LogParsingModule fp -> "Parsing module:" <+> pretty fp
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId =
   (defaultPluginDescriptor plId "Provides code actions to inline Haskell definitions")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction provider,
-      pluginCommands = [retrieCommand, retrieInlineThisCommand]
+      pluginCommands = [retrieCommand recorder, retrieInlineThisCommand recorder]
     }
 
-retrieCommandName :: T.Text
-retrieCommandName = "retrieCommand"
+retrieCommandId :: CommandId
+retrieCommandId = "retrieCommand"
 
-retrieInlineThisCommandName :: T.Text
-retrieInlineThisCommandName = "retrieInlineThisCommand"
+retrieInlineThisCommandId :: CommandId
+retrieInlineThisCommandId = "retrieInlineThisCommand"
 
-retrieCommand :: PluginCommand IdeState
-retrieCommand =
-  PluginCommand (coerce retrieCommandName) "run the refactoring" runRetrieCmd
+retrieCommand :: Recorder (WithPriority Log) -> PluginCommand IdeState
+retrieCommand recorder =
+  PluginCommand retrieCommandId "run the refactoring" (runRetrieCmd recorder)
 
-retrieInlineThisCommand :: PluginCommand IdeState
-retrieInlineThisCommand =
-  PluginCommand (coerce retrieInlineThisCommandName) "inline function call"
-     runRetrieInlineThisCmd
+retrieInlineThisCommand :: Recorder (WithPriority Log) -> PluginCommand IdeState
+retrieInlineThisCommand recorder =
+  PluginCommand retrieInlineThisCommandId "inline function call"
+    (runRetrieInlineThisCmd recorder)
 
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
@@ -201,10 +172,11 @@ data RunRetrieParams = RunRetrieParams
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
-runRetrieCmd :: CommandFunction IdeState RunRetrieParams
-runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  withIndefiniteProgress description Cancellable $ do
-    runExceptT $ do
+
+runRetrieCmd :: Recorder (WithPriority Log) ->  CommandFunction IdeState RunRetrieParams
+runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
+  withIndefiniteProgress description token Cancellable $ \_updater -> do
+    _ <- runExceptT $ do
         nfp <- getNormalizedFilePathE uri
         (session, _) <-
             runActionE "Retrie.GhcSessionDeps" state $
@@ -214,6 +186,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} = ExceptT $
         let importRewrites = concatMap (extractImports ms binds) rewrites
         (errors, edits) <- liftIO $
             callRetrie
+                recorder
                 state
                 (hscEnv session)
                 (map Right rewrites <> map Left importRewrites)
@@ -225,7 +198,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} = ExceptT $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
     return $ Right $ InR Null
 
@@ -236,8 +209,8 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-runRetrieInlineThisCmd :: CommandFunction IdeState RunRetrieInlineThisParams
-runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = do
+runRetrieInlineThisCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState RunRetrieInlineThisParams
+runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
     nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
     nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:
@@ -246,23 +219,15 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = do
     --   Run retrie to get a list of changes
     --   Select the change that inlines the identifier in the given position
     --   Apply the edit
-    ast <- runActionE "retrie" state $
-        useE GetAnnotatedParsedSource nfp
     astSrc <- runActionE "retrie" state $
         useE GetAnnotatedParsedSource nfpSource
-    msr <- runActionE "retrie" state $
-        useE GetModSummaryWithoutTimestamps nfp
-    hiFileRes <- runActionE "retrie" state $
-        useE GetModIface nfpSource
-    let fixityEnv = fixityEnvFromModIface (hirModIface hiFileRes)
-        fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
+    let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
     inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
-    let ShakeExtras{..} = shakeExtras state
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
-    (fixityEnv, cpp) <- liftIO $ getCPPmodule state (hscEnv session) $ fromNormalizedFilePath nfp
+    (fixityEnv, cpp) <- liftIO $ getCPPmodule recorder state (hscEnv session) $ fromNormalizedFilePath nfp
     result <- liftIO $ try @_ @SomeException $
         runRetrie fixityEnv (applyWithUpdate myContextUpdater inlineRewrite) cpp
     case result of
@@ -274,7 +239,7 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = do
                 ourReplacement = [ r
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
-            lift $ sendRequest SMethod_WorkspaceApplyEdit
+            _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
             return $ InR Null
 
@@ -352,7 +317,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
 
   retrieCommands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
-      let c = mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
+      let c = mkLspCommand plId retrieCommandId title (Just [toJSON params])
       return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c) Nothing
 
   inlineSuggestions <- liftIO $ runIdeAction "" extras $
@@ -367,33 +332,32 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
 getLocationUri :: Location -> Uri
 getLocationUri Location{_uri} = _uri
 
+getLocationRange :: Location -> Range
 getLocationRange Location{_range} = _range
 
-getBinds :: NormalizedFilePath -> ExceptT PluginError Action (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn])
+getBinds :: NormalizedFilePath -> ExceptT PluginError Action
+  ( ModSummary
+  , [HsBindLR GhcRn GhcRn]
+  , PositionMapping
+  , [LRuleDecls GhcRn]
+  , [TyClGroup GhcRn]
+  )
 getBinds nfp = do
   (tm, posMapping) <- useWithStaleE TypeCheck nfp
   -- we use the typechecked source instead of the parsed source
   -- to be able to extract module names from the Ids,
   -- so that we can include adding the required imports in the retrie command
   let rn = tmrRenamed tm
-      ( HsGroup
-          { hs_valds =
-              XValBindsLR
-                (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn),
-            hs_ruleds,
-            hs_tyclds
-          },
-        _,
-        _,
-        _
-        ) = rn
-
-      topLevelBinds =
-        [ decl
-          | (_, bagBinds) <- binds,
-            L _ decl <- bagToList bagBinds
-        ]
-  return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+  case rn of
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _) -> do
+      topLevelBinds <- case hs_valds of
+        ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
+        XValBindsLR (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn) ->
+          pure [ decl
+               | (_, bagBinds) <- binds
+               , L _ decl <- bagToList bagBinds
+               ]
+      return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
 suggestBindRewrites ::
   Uri ->
@@ -417,8 +381,15 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
 suggestBindRewrites _ _ _ _ = []
 
   -- find all the identifiers in the AST for which have source definitions
-suggestBindInlines :: PluginId -> Uri -> [HsBindLR GhcRn GhcRn] -> Range -> WithHieDb -> _ -> IdeAction [Command]
-suggestBindInlines plId uri binds range hie lookupMod = do
+suggestBindInlines ::
+    PluginId
+    -> Uri
+    -> [HsBindLR GhcRn GhcRn]
+    -> Range
+    -> WithHieDb
+    -> (FilePath -> GHCGHC.ModuleName -> GHCGHC.Unit -> Bool -> MaybeT IdeAction Uri)
+    -> IdeAction [Command]
+suggestBindInlines plId _uri binds range hie lookupMod = do
     identifiers <- definedIdentifiers
     return $ map (\(name, siteLoc, srcLoc) ->
         let
@@ -429,7 +400,7 @@ suggestBindInlines plId uri binds range hie lookupMod = do
                 , inlineFromThisLocation = srcLoc
                 , inlineThisDefinition= printedName
                 }
-        in mkLspCommand plId (coerce retrieInlineThisCommandName) title (Just [toJSON params])
+        in mkLspCommand plId retrieInlineThisCommandId title (Just [toJSON params])
         )
         (Set.toList identifiers)
     where
@@ -437,7 +408,11 @@ suggestBindInlines plId uri binds range hie lookupMod = do
         -- we search for candidates to inline in RHSs only, skipping LHSs
         everything (<>) (pure mempty `mkQ` getGRHSIdentifierDetails hie lookupMod) binds
 
-      getGRHSIdentifierDetails :: WithHieDb -> _ -> GRHSs GhcRn (LHsExpr GhcRn) -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
+      getGRHSIdentifierDetails ::
+        WithHieDb
+        -> (FilePath -> GHCGHC.ModuleName -> GHCGHC.Unit -> Bool -> MaybeT IdeAction Uri)
+        -> GRHSs GhcRn (LHsExpr GhcRn)
+        -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
       getGRHSIdentifierDetails a b it@GRHSs{} =
         -- we only select candidates for which we have source code
         everything (<>) (pure mempty `mkQ` getDefinedIdentifierDetailsViaHieDb a b) it
@@ -458,7 +433,6 @@ describeRestriction restrictToOriginatingFile =
         if restrictToOriginatingFile then " in current file" else ""
 
 suggestTypeRewrites ::
-  (Outputable (IdP GhcRn)) =>
   Uri ->
   GHC.Module ->
   TyClDecl GhcRn ->
@@ -540,13 +514,14 @@ instance Show CallRetrieError where
 instance Exception CallRetrieError
 
 callRetrie ::
+  Recorder (WithPriority Log) ->
   IdeState ->
   HscEnv ->
   [Either ImportSpec RewriteSpec] ->
   NormalizedFilePath ->
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie state session rewrites origin restrictToOriginatingFile = do
+callRetrie recorder state session rewrites origin restrictToOriginatingFile = do
   knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
   let
       -- TODO cover all workspaceFolders
@@ -574,9 +549,9 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
   targets <- getTargetFiles retrieOptions (getGroundTerms retrie)
 
   results <- forM targets $ \t -> runExceptT $ do
-    (fixityEnv, cpp) <- ExceptT $ try $ getCPPmodule state session t
+    (fixityEnv, cpp) <- ExceptT $ try $ getCPPmodule recorder state session t
     -- TODO add the imports to the resulting edits
-    (_user, ast, change@(Change _replacements _imports)) <-
+    (_user, _ast, change@(Change _replacements _imports)) <-
       lift $ runRetrie fixityEnv retrie cpp
     return $ asTextEdits change
 
@@ -637,8 +612,12 @@ parseSpecs state origin originParsedModule originFixities specs = do
     originFixities
     specs
 
+constructfromFunMatches ::
+  Annotated [GHCGHC.LocatedA (ImportDecl GhcPs)]
+  -> GHCGHC.LocatedN GHCGHC.RdrName
+  -> GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
+  -> TransformT IO [Rewrite Universe]
 constructfromFunMatches imps fun_id fun_matches = do
-    let fName = occNameFS (GHC.occName (unLoc fun_id))
     fe <- mkLocatedHsVar fun_id
     rewrites <- concat <$>
         forM (unLoc $ GHC.mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
@@ -647,24 +626,31 @@ constructfromFunMatches imps fun_id fun_matches = do
     assert (not $ null urewrites) $
         return urewrites
 
-showQuery = ppRewrite
+-- showQuery :: Rewrite Universe -> String
+-- showQuery = ppRewrite
+--
 -- showQuery :: Rewrite (LHsExpr GhcPs) -> String
 -- showQuery q = unlines
 --     [ "template: " <> show (hash (printOutputable . showAstData NoBlankSrcSpan . astA . tTemplate . fst . qResult $ q))
 --     , "quantifiers: " <> show (hash (T.pack (show(Ext.toList $ qQuantifiers q))))
 --     , "matcher: " <> show (hash (printOutputable . showAstData NoBlankSrcSpan . astA . qPattern $ q))
 --     ]
+--
+-- s :: Data a => a -> String
+-- s = T.unpack . printOutputable . showAstData NoBlankSrcSpan
+--         NoBlankEpAnnotations
 
-s :: Data a => a -> String
-s = T.unpack . printOutputable . showAstData NoBlankSrcSpan
-        NoBlankEpAnnotations
+constructInlineFromIdentifer :: Data a => Annotated (GenLocated l a) -> GHCGHC.RealSrcSpan -> IO [Rewrite Universe]
 constructInlineFromIdentifer originParsedModule originSpan = do
     -- traceM $ s $ astA originParsedModule
     fmap astA $ transformA originParsedModule $ \(L _ m) -> do
         let ast = everything (<>) (First Nothing `mkQ` matcher) m
-            matcher :: HsBindLR GhcPs GhcPs -> First _
+            matcher :: HsBindLR GhcPs GhcPs
+                -> First ( GHCGHC.LocatedN GHCGHC.RdrName
+                         , GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
+                         )
             matcher FunBind{fun_id, fun_matches}
-                --  | trace (show (GHC.getLocA fun_id) <> ": " <> s fun_id) False = undefined
+                -- trace (show (GHC.getLocA fun_id) <> ": " <> s fun_id) False = undefined
                 | RealSrcSpan sp _ <- GHC.getLocA fun_id
                 , sp == originSpan =
                 First $ Just (fun_id, fun_matches)
@@ -674,7 +660,7 @@ constructInlineFromIdentifer originParsedModule originSpan = do
                 ->
                 let imports = mempty in
                 constructfromFunMatches imports fun_id fun_matches
-            _ -> return $ error "cound not find source code to inline"
+            _ -> return $ error "could not find source code to inline"
 
 asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
 asEditMap = Map.fromListWith (++) . map (second pure)
@@ -724,7 +710,9 @@ deriving instance ToJSON RewriteSpec
 
 newtype IE name
   = IEVar name
-  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
 
 data ImportSpec = AddImport
   { ideclNameString    :: String,
@@ -741,16 +729,20 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclSource' = if ideclSource then IsBoot else NotBoot
     toMod = noLocA . GHC.mkModuleName
     ideclName = toMod ideclNameString
+    ideclSafe = False
+    ideclImplicit = False
+    ideclSourceSrc = NoSourceText
+    ideclAs = toMod <$> ideclAsString
+    ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
+
 #if MIN_VERSION_ghc(9,3,0)
     ideclPkgQual = NoRawPkgQual
 #else
     ideclPkgQual = Nothing
 #endif
-    ideclSafe = False
-    ideclImplicit = False
-    ideclHiding = Nothing
-    ideclSourceSrc = NoSourceText
+
 #if MIN_VERSION_ghc(9,5,0)
+    ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
       { ideclAnn = GHCGHC.EpAnnNotUsed
       , ideclSourceText = ideclSourceSrc
@@ -758,15 +750,18 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
       }
 #else
     ideclExt = GHCGHC.EpAnnNotUsed
+    ideclHiding = Nothing
 #endif
-    ideclAs = toMod <$> ideclAsString
-    ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 
+
+reuseParsedModule :: IdeState -> NormalizedFilePath -> IO (FixityEnv, Annotated GHCGHC.ParsedSource)
 reuseParsedModule state f = do
         pm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule f
         (fixities, pm') <- fixFixities state f (fixAnns pm)
         return (fixities, pm')
-getCPPmodule state session t = do
+
+getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
+getCPPmodule recorder state session t = do
     nt <- toNormalizedFilePath' <$> makeAbsolute t
     let getParsedModule f contents = do
           modSummary <- msrModSummary <$>
@@ -776,7 +771,7 @@ getCPPmodule state session t = do
                   { ms_hspp_buf =
                       Just (stringToStringBuffer contents)
                   }
-          logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
+          logWith recorder Info $ LogParsingModule t
           parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
               `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
           (fixities, parsed) <- fixFixities state f (fixAnns parsed)

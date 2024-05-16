@@ -1,7 +1,5 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE CPP        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports -Wno-orphans #-}
 
 -- |GHC API utilities
@@ -28,9 +26,10 @@ import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.Plugin.Eval.Util            (gStrictTry)
 
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC                             (setUnitDynFlags, setTopSessionDynFlags)
-import           GHC.Driver.Session              (getDynFlags)
+import           GHC                             (setTopSessionDynFlags,
+                                                  setUnitDynFlags)
 import           GHC.Driver.Env
+import           GHC.Driver.Session              (getDynFlags)
 #endif
 
 {- $setup

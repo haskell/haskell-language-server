@@ -27,4 +27,4 @@ goldenWithFloskell :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifie
 goldenWithFloskell title path desc = goldenWithHaskellDocFormatter def floskellPlugin "floskell" def title testDataDir path desc "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-floskell-plugin" </> "test" </> "testdata"

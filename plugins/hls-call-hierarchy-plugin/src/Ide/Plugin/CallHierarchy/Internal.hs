@@ -1,12 +1,7 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE Rank2Types          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Ide.Plugin.CallHierarchy.Internal (
   prepareCallHierarchy
@@ -170,10 +165,6 @@ mkSymbol = \case
 -------------- Incoming calls and outgoing calls ---------------------
 ----------------------------------------------------------------------
 
-#if !MIN_VERSION_aeson(1,5,2)
-deriving instance Ord Value
-#endif
-
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState Method_CallHierarchyIncomingCalls
 incomingCalls state _pluginId param = do
@@ -248,8 +239,8 @@ mkCallHierarchyCall mk v@Vertex{..} = do
                     []     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
-queryCalls :: (Show a)
-    => CallHierarchyItem
+queryCalls ::
+    CallHierarchyItem
     -> (HieDb -> Symbol -> IO [Vertex])
     -> (Vertex -> Action (Maybe a))
     -> ([a] -> [a])

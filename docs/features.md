@@ -81,6 +81,12 @@ Known limitations:
 
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
+## Jump to note definition
+
+Provided by: `hls-notes-plugin`
+
+Jump to the definition of a [GHC-style note](https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/coding-style#2-using-notes).
+
 ## Find references
 
 Provided by: `ghcide`
@@ -138,7 +144,7 @@ Provided by: `hls-call-hierarchy-plugin`
 
 Shows ingoing and outgoing calls for a function.
 
-![Call Hierarchy in VSCode](https://github.com/haskell/haskell-language-server/raw/2857eeece0398e1cd4b2ffb6069b05c4d2308b39/plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
+![Call Hierarchy in VSCode](../plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
 
 ## Highlight references
 
@@ -199,7 +205,7 @@ Rewrites imported names to be qualified.
 
 ![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
 
-For usage see the ![readme](../plugins/hls-qualify-imported-names-plugin/README.md).
+For usage see the [readme](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-qualify-imported-names-plugin/README.md).
 
 ### Add missing class methods
 
@@ -264,7 +270,7 @@ Known Limitations:
 
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)
 
-![Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
+[Link to Docs](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-change-type-signature-plugin/README.md)
 
 ### Add argument to function
 
@@ -284,7 +290,7 @@ Convert a datatype to GADT syntax.
 
 ![GADT Demo](../plugins/hls-gadt-plugin/gadt.gif)
 
-![Link to Docs](../plugins/hls-gadt-plugin/README.md)
+[Link to Docs](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-gadt-plugin/README.md)
 
 ### Expand record wildcard
 
@@ -318,7 +324,7 @@ Provided by: `hls-eval-plugin`
 
 Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
-![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
+![Eval Demo](../plugins/hls-eval-plugin/demo.gif)
 
 Known limitations:
 
@@ -385,9 +391,7 @@ Known limitations:
 
 Provided by: `hls-semantic-tokens-plugin`
 
-Provides semantic tokens for each token to support semantic highlighting.
-
-![Semantic Tokens Demo](https://private-user-images.githubusercontent.com/14073857/290981908-9619fae2-cb92-4d4e-b8f8-6507851ba9f3.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MDQ4MjgwODYsIm5iZiI6MTcwNDgyNzc4NiwicGF0aCI6Ii8xNDA3Mzg1Ny8yOTA5ODE5MDgtOTYxOWZhZTItY2I5Mi00ZDRlLWI4ZjgtNjUwNzg1MWJhOWYzLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDAxMDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwMTA5VDE5MTYyNlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTBjOTUxNTM0ZDcyNmFmZjEyN2JlNzkwNWNjZjA4NTAzNDVkMzdlNmMxNDNiMzgxNGMzMTQ1NDRiMzUxZjM5OWQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.n-CL6e2R0TWHpmzVo1i60QEDczTEJ-8zvQWxjaBsnks)
+Provides semantic tokens for each token in the source code to support semantic highlighting.
 
 ## Rewrite to overloaded record syntax
 

@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PolyKinds         #-}
 
 module Development.IDE.Plugin.HLS
     (
@@ -178,7 +177,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
 
     -- The parameters to the HLS command are always the first element
     execCmd :: IdeState -> ExecuteCommandParams -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
-    execCmd ide (ExecuteCommandParams _ cmdId args) = do
+    execCmd ide (ExecuteCommandParams mtoken cmdId args) = do
       let cmdParams :: A.Value
           cmdParams = case args of
             Just ((x:_)) -> x
@@ -202,15 +201,15 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
             A.Error _str -> return $ Right $ InR Null
 
         -- Just an ordinary HIE command
-        Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
+        Just (plugin, cmd) -> runPluginCommand ide plugin cmd mtoken cmdParams
 
         -- Couldn't parse the command identifier
         _ -> do
             logWith recorder Warning LogInvalidCommandIdentifier
             return $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Invalid command identifier" Nothing
 
-    runPluginCommand :: IdeState -> PluginId -> CommandId -> A.Value -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
-    runPluginCommand ide p com arg =
+    runPluginCommand :: IdeState -> PluginId -> CommandId -> Maybe ProgressToken -> A.Value -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
+    runPluginCommand ide p com mtoken arg =
       case Map.lookup p pluginMap  of
         Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (pluginDoesntExist p)
         Just xs -> case List.find ((com ==) . commandId) xs of
@@ -218,7 +217,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a -> do
-              res <- runExceptT (f ide a) `catchAny` -- See Note [Exception handling in plugins]
+              res <- runExceptT (f ide mtoken a) `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> pure $ Left $ PluginInternalError (exceptionInPlugin p SMethod_WorkspaceExecuteCommand e))
               case res of
                 (Left (PluginRequestRefused r)) ->
@@ -360,6 +359,7 @@ instance Monoid IdeNotificationHandlers where
   mempty = IdeNotificationHandlers mempty
 
 {- Note [Exception handling in plugins]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Plugins run in LspM, and so have access to IO. This means they are likely to
 throw exceptions, even if only by accident or through calling libraries that
 throw exceptions. Ultimately, we're running a bunch of less-trusted IO code,

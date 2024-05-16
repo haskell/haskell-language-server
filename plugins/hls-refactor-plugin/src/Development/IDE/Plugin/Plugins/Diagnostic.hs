@@ -44,7 +44,10 @@ matchVariableNotInScope message
   | otherwise = Nothing
   where
     matchVariableNotInScopeTyped message
-      | Just [name, typ] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)" =
+      | Just [name, typ0] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
+      , -- When some name in scope is similar to not-in-scope variable, the type is followed by
+        -- "Suggested fix: Perhaps use ..."
+        typ:_ <- T.splitOn " Suggested fix:" typ0 =
           Just (name, typ)
       | otherwise = Nothing
     matchVariableNotInScopeUntyped message

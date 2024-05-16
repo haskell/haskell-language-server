@@ -1,8 +1,6 @@
 {-# LANGUAGE MultiWayIf        #-}
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Main
   ( main
@@ -16,7 +14,6 @@ import           Data.Aeson.Types           (Pair, Result (Success))
 import           Data.List                  (isInfixOf)
 import           Data.List.Extra            (nubOrdOn)
 import qualified Data.Map                   as Map
-import           Data.Row
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (Config)
 import qualified Ide.Plugin.Config          as Plugin
@@ -74,47 +71,39 @@ tests =
   , testCase "Semantic and Lexical errors are reported" $ do
       evalInFile "T8.hs" "-- >>> noFunctionWithThisName" "-- Variable not in scope: noFunctionWithThisName"
       evalInFile "T8.hs" "-- >>> res = \"a\" + \"bc\"" $
-        if
-           | ghcVersion >= GHC96 -> "-- No instance for `Num String' arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
-           | ghcVersion >= GHC92 -> "-- No instance for (Num String) arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
-           | ghcVersion == GHC90 -> "-- No instance for (Num String) arising from a use of ‘+’"
-           | otherwise -> "-- No instance for (Num [Char]) arising from a use of ‘+’"
+        if ghcVersion >= GHC96 then
+          "-- No instance for `Num String' arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
+        else
+          "-- No instance for (Num String) arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
+
       evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
-  , goldenWithEval' "Evaluate a type with :kind!" "T10" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
-  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (
-        if ghcVersion >= GHC94 then "ghc94.expected"
-        else if ghcVersion >= GHC92 then "ghc92.expected"
-        else "expected"
-      )
-  , goldenWithEval' "Shows a kind with :kind" "T12" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
-  , goldenWithEval' "Reports an error for an incorrect type with :kind" "T13" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval "Evaluate a type with :kind!" "T10" "hs"
+  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs"
+        (if ghcVersion >= GHC94 then "ghc94.expected" else "expected")
+  , goldenWithEval "Shows a kind with :kind" "T12" "hs"
+  , goldenWithEval "Reports an error for an incorrect type with :kind" "T13" "hs"
   , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
   , knownBrokenForGhcVersions [GHC92, GHC94, GHC96, GHC98] "type +v does not work anymore with 9.2" $ goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
+  , goldenWithEval "Doesn't break in module containing main function" "T4139" "hs"
   , goldenWithEval "Returns defaulted type for :type +d, admitting multiple whitespaces around arguments" "T16" "hs"
-  , goldenWithEval' ":type reports an error when given with unknown +x option" "T17" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval ":type reports an error when given with unknown +x option" "T17" "hs"
   , goldenWithEval "Reports an error when given with unknown command" "T18" "hs"
   , goldenWithEval "Returns defaulted type for :type +d reflecting the default declaration specified in the >>> prompt" "T19" "hs"
   , expectFailBecause "known issue - see a note in P.R. #361" $
-      goldenWithEval' ":type +d reflects the `default' declaration of the module" "T20" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+      goldenWithEval ":type +d reflects the `default' declaration of the module" "T20" "hs"
   , testCase ":type handles a multilined result properly" $
       evalInFile "T21.hs" "-- >>> :type fun" $ T.unlines [
         "-- fun",
-        if
-           | ghcVersion >= GHC92 -> "--   :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1)."
-           | ghcVersion == GHC90 -> "--   :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
-           | otherwise -> "--   :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
+        "--   :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
         "--      Proxy k2 -> Proxy n -> Proxy a -> ()"
       ]
   , goldenWithEval ":t behaves exactly the same as :type" "T22" "hs"
   , testCase ":type does \"dovetails\" for short identifiers" $
       evalInFile "T23.hs" "-- >>> :type f" $ T.unlines [
-        if
-          | ghcVersion >= GHC92 -> "-- f :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1)."
-          | ghcVersion == GHC90 -> "-- f :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
-          | otherwise -> "-- f :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
+        "-- f :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
         "--      Proxy k2 -> Proxy n -> Proxy a -> ()"
       ]
@@ -122,6 +111,7 @@ tests =
   , goldenWithEval ":kind treats a multilined result properly" "T25" "hs"
   , goldenWithEvalAndFs "local imports" (FS.directProjectMulti ["T26.hs", "Util.hs"]) "T26" "hs"
   , goldenWithEval "Preserves one empty comment line after prompt" "T27" "hs"
+  , goldenWithEval "Evaluate comment after multiline function definition" "T28" "hs"
   , goldenWithEval "Multi line comments" "TMulti" "hs"
   , goldenWithEval "Multi line comments, with the last test line ends without newline" "TEndingMulti" "hs"
   , goldenWithEval "Evaluate expressions in Plain comments in both single line and multi line format" "TPlainComment" "hs"
@@ -131,21 +121,18 @@ tests =
   , goldenWithEvalAndFs "Transitive local dependency"  (FS.directProjectMulti ["TTransitive.hs", "TLocalImport.hs", "Util.hs"]) "TTransitive" "hs"
   -- , goldenWithEval "Local Modules can be imported in a test" "TLocalImportInTest" "hs"
   , goldenWithEval "Setting language option TupleSections" "TLanguageOptionsTupleSections" "hs"
-  , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC92 then "ghc98.expected" else if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected")
   , testCase ":set -fprint-explicit-foralls works" $ do
       evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
-      evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id"
-        (if ghcVersion >= GHC92
-           then "-- id :: forall a. a -> a"
-           else "-- id :: forall {a}. a -> a")
+      evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id" "-- id :: forall a. a -> a"
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
-  , goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
-        if ghcVersion >= GHC96 then
+  , knownBrokenInEnv [HostOS Windows] "The output has path separators in it, which on Windows look different. Just skip it there" $ goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
+        if ghcVersion >= GHC98 then
+          "ghc98.expected"
+        else if ghcVersion >= GHC96 then
           "ghc96.expected"
-        else if ghcVersion >= GHC94 && hostOS == Windows then
-          "windows-ghc94.expected"
         else if ghcVersion >= GHC94 then
           "ghc94.expected"
         else
@@ -286,7 +273,7 @@ codeLensTestOutput codeLens = do
   testOutput =<< sectionTests
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-eval-plugin" </> "test" </> "testdata"
 
 changeConfig :: [Pair] -> Config
 changeConfig conf =
@@ -314,7 +301,7 @@ evalInFile fp e expected = runSessionWithServerInTmpDir def evalPlugin (mkFs $ F
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
   let withEval = origin <> e
-  changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ withEval]
+  changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ withEval]
   executeLensesBackwards doc
   result <- fmap T.strip . T.stripPrefix withEval <$> documentContents doc
   liftIO $ result @?= Just (T.strip expected)

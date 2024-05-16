@@ -1,8 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 module Main
   ( main
@@ -10,7 +7,6 @@ module Main
 
 import           Control.Monad           (void)
 import           Data.List               (find)
-import           Data.Row
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.IO            as T
@@ -95,9 +91,10 @@ goldenTestWithEdit fp expect tc line col =
      waitForAllProgressDone
      alt <- liftIO $ T.readFile (fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
-     changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== theRange
-                                                        .+ #rangeLength .== Nothing
-                                                        .+ #text .== alt]
+     changeDoc doc [TextDocumentContentChangeEvent $ InL
+        TextDocumentContentChangePartial {_range = theRange, _rangeLength = Nothing, _text = alt}
+        ]
+
      void waitForDiagnostics
      -- wait for the entire build to finish
      void waitForBuildQueue
@@ -109,7 +106,7 @@ goldenTestWithEdit fp expect tc line col =
        _ -> liftIO $ assertFailure "No CodeAction detected"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-splice-plugin" </> "test" </> "testdata"
 
 pointRange :: Int -> Int -> Range
 pointRange (subtract 1 -> fromIntegral -> line) (subtract 1 -> fromIntegral -> col) =

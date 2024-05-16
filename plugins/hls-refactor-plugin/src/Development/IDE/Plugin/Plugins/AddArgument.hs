@@ -1,10 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 
-#if MIN_VERSION_ghc(9,4,0)
-import           Development.IDE.GHC.ExactPrint            (epl)
-import           GHC.Parser.Annotation                     (TokenLocation (..))
-#endif
 import           Control.Monad                             (join)
 import           Control.Monad.Trans.Class                 (lift)
 import           Data.Bifunctor                            (Bifunctor (..))
@@ -23,18 +19,26 @@ import           GHC                                       (EpAnn (..),
                                                             SrcSpanAnn' (SrcSpanAnn),
                                                             SrcSpanAnnA,
                                                             SrcSpanAnnN,
-                                                            TrailingAnn (..),
                                                             emptyComments,
                                                             noAnn)
-import           GHC.Hs                                    (IsUnicodeSyntax (..))
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
 import           Ide.PluginUtils                           (makeDiffTextEdit)
 import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
-import           Language.Haskell.GHC.ExactPrint.Transform (d1)
 import           Language.LSP.Protocol.Types
+
+#if !MIN_VERSION_ghc(9,4,0)
+import           GHC                                       (TrailingAnn (..))
+import           GHC.Hs                                    (IsUnicodeSyntax (..))
+import           Language.Haskell.GHC.ExactPrint.Transform (d1)
+#endif
+
+#if MIN_VERSION_ghc(9,4,0)
+import           Development.IDE.GHC.ExactPrint            (epl)
+import           GHC.Parser.Annotation                     (TokenLocation (..))
+#endif
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type

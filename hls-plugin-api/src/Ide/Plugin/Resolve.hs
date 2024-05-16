@@ -1,11 +1,6 @@
-{-# LANGUAGE DeriveGeneric            #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE NamedFieldPuns           #-}
-{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE RankNTypes               #-}
-{-# LANGUAGE ScopedTypeVariables      #-}
 {-| This module currently includes helper functions to provide fallback support
 to code actions that use resolve in HLS. The difference between the two
 functions for code actions that don't support resolve is that
@@ -26,11 +21,10 @@ import           Control.Lens                  (_Just, (&), (.~), (?~), (^.),
                                                 (^?))
 import           Control.Monad.Error.Class     (MonadError (throwError))
 import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.Except    (ExceptT (..), runExceptT)
+import           Control.Monad.Trans.Except    (ExceptT (..))
 
 import qualified Data.Aeson                    as A
 import           Data.Maybe                    (catMaybes)
-import           Data.Row                      ((.!))
 import qualified Data.Text                     as T
 import           GHC.Generics                  (Generic)
 import           Ide.Logger
@@ -39,11 +33,8 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server           (LspT,
-                                                ProgressCancellable (Cancellable),
-                                                getClientCapabilities,
-                                                sendRequest,
-                                                withIndefiniteProgress)
+import           Language.LSP.Server           (LspT, getClientCapabilities,
+                                                sendRequest)
 
 data Log
     = DoesNotSupportResolve T.Text
@@ -144,25 +135,24 @@ mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMeth
           codeAction & L.data_ .~  (A.toJSON .WithURI uri <$> data_)
           where data_ = codeAction ^? L.data_ . _Just
         executeResolveCmd :: ResolveFunction ideState a 'Method_CodeActionResolve -> CommandFunction ideState CodeAction
-        executeResolveCmd resolveProvider ideState ca@CodeAction{_data_=Just value} = do
-          ExceptT $ withIndefiniteProgress "Applying edits for code action..." Cancellable $ runExceptT $ do
-            case A.fromJSON value of
-              A.Error err -> throwError $ parseError (Just value) (T.pack err)
-              A.Success (WithURI uri innerValue) -> do
-                case A.fromJSON innerValue of
-                  A.Error err -> throwError $ parseError (Just value) (T.pack err)
-                  A.Success innerValueDecoded -> do
-                    resolveResult <- resolveProvider ideState plId ca uri innerValueDecoded
-                    case resolveResult of
-                      ca2@CodeAction {_edit = Just wedits } | diffCodeActions ca ca2 == ["edit"] -> do
-                          _ <- ExceptT $ Right <$> sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) handleWEditCallback
-                          pure $ InR Null
-                      ca2@CodeAction {_edit = Just _ }  ->
-                        throwError $ internalError $
-                            "The resolve provider unexpectedly returned a code action with the following differing fields: "
-                            <> (T.pack $ show $  diffCodeActions ca ca2)
-                      _ -> throwError $ internalError "The resolve provider unexpectedly returned a result with no data field"
-        executeResolveCmd _ _ CodeAction{_data_= value} = throwError $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
+        executeResolveCmd resolveProvider ideState _token ca@CodeAction{_data_=Just value} = do
+          case A.fromJSON value of
+            A.Error err -> throwError $ parseError (Just value) (T.pack err)
+            A.Success (WithURI uri innerValue) -> do
+              case A.fromJSON innerValue of
+                A.Error err -> throwError $ parseError (Just value) (T.pack err)
+                A.Success innerValueDecoded -> do
+                  resolveResult <- resolveProvider ideState plId ca uri innerValueDecoded
+                  case resolveResult of
+                    ca2@CodeAction {_edit = Just wedits } | diffCodeActions ca ca2 == ["edit"] -> do
+                        _ <- ExceptT $ Right <$> sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) handleWEditCallback
+                        pure $ InR Null
+                    ca2@CodeAction {_edit = Just _ }  ->
+                      throwError $ internalError $
+                          "The resolve provider unexpectedly returned a code action with the following differing fields: "
+                          <> (T.pack $ show $  diffCodeActions ca ca2)
+                    _ -> throwError $ internalError "The resolve provider unexpectedly returned a result with no data field"
+        executeResolveCmd _ _ _ CodeAction{_data_= value} = throwError $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
         handleWEditCallback (Left err ) = do
             logWith recorder Warning (ApplyWorkspaceEditFailed err)
             pure ()
@@ -198,7 +188,7 @@ supportsCodeActionResolve :: ClientCapabilities -> Bool
 supportsCodeActionResolve caps =
     caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
     && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
-        Just row -> "edit" `elem` row .! #properties
+        Just ClientCodeActionResolveOptions{_properties} -> "edit" `elem` _properties
         _        -> False
 
 internalError :: T.Text -> PluginError
@@ -211,6 +201,7 @@ parseError :: Maybe A.Value -> T.Text -> PluginError
 parseError value errMsg = PluginInternalError ("Ide.Plugin.Resolve: Error parsing value:"<> (T.pack $ show value) <> " Error: "<> errMsg)
 
 {- Note [Code action resolve fallback to commands]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   To make supporting code action resolve easy for plugins, we want to let them
   provide one implementation that can be used both when clients support
   resolve, and when they don't.

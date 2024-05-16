@@ -1,23 +1,19 @@
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Ide.TypesTests
     ( tests
     ) where
-import           Control.Lens                  (preview, (?~), (^?))
-import           Control.Monad                 ((>=>))
+import           Control.Lens                  ((?~), (^?))
 import           Data.Default                  (Default (def))
 import           Data.Function                 ((&))
-import           Data.List.NonEmpty            (NonEmpty ((:|)), nonEmpty)
+import           Data.List.NonEmpty            (NonEmpty ((:|)))
 import           Data.Maybe                    (isJust)
 import qualified Data.Text                     as Text
-import           Ide.Types                     (Config (Config),
-                                                PluginRequestMethod (combineResponses))
+import           Ide.Types                     (PluginRequestMethod (combineResponses))
 import qualified Language.LSP.Protocol.Lens    as L
-import           Language.LSP.Protocol.Message (Method (Method_TextDocumentDefinition),
+import           Language.LSP.Protocol.Message (MessageParams, MessageResult,
                                                 SMethod (..))
 import           Language.LSP.Protocol.Types   (ClientCapabilities,
                                                 Definition (Definition),
@@ -29,18 +25,17 @@ import           Language.LSP.Protocol.Types   (ClientCapabilities,
                                                 Null (Null),
                                                 Position (Position),
                                                 Range (Range),
-                                                TextDocumentClientCapabilities (TextDocumentClientCapabilities, _definition),
+                                                TextDocumentClientCapabilities,
                                                 TextDocumentIdentifier (TextDocumentIdentifier),
                                                 TypeDefinitionClientCapabilities (TypeDefinitionClientCapabilities, _dynamicRegistration, _linkSupport),
                                                 TypeDefinitionParams (..),
-                                                Uri (Uri), _L, _R,
+                                                Uri (Uri), _L, _R, _definition,
                                                 _typeDefinition, filePathToUri,
                                                 type (|?) (..))
 import           Test.Tasty                    (TestTree, testGroup)
-import           Test.Tasty.HUnit              (assertBool, testCase, (@=?))
+import           Test.Tasty.HUnit              (testCase, (@=?))
 import           Test.Tasty.QuickCheck         (ASCIIString (ASCIIString),
                                                 Arbitrary (arbitrary), Gen,
-                                                NonEmptyList (NonEmpty),
                                                 arbitraryBoundedEnum, cover,
                                                 listOf1, oneof, testProperty,
                                                 (===))
@@ -63,6 +58,11 @@ combineResponsesTextDocumentTypeDefinitionTests :: TestTree
 combineResponsesTextDocumentTypeDefinitionTests = testGroup "TextDocumentTypeDefinition" $
     defAndTypeDefSharedTests SMethod_TextDocumentTypeDefinition typeDefinitionParams
 
+defAndTypeDefSharedTests ::
+    ( MessageResult m  ~ (Definition |? ([DefinitionLink] |? Null))
+    , PluginRequestMethod m
+    )
+    => SMethod m -> MessageParams m -> [TestTree]
 defAndTypeDefSharedTests message params =
     [ testCase "merges all single location responses into one response with all locations (without upgrading to links)" $ do
         let pluginResponses :: NonEmpty (Definition |? ([DefinitionLink] |? Null))
@@ -177,7 +177,11 @@ defAndTypeDefSharedTests message params =
             (isJust (result ^? _L) || isJust (result ^? _R >>= (^? _R))) === True
     ]
 
-(range1, range2, range3) = (Range (Position 3 0) $ Position 3 5, Range (Position 5 7) $ Position 5 13, Range (Position 24 30) $ Position 24 40)
+
+range1, range2, range3 :: Range
+range1 = Range (Position 3 0) $ Position 3 5
+range2 = Range (Position 5 7) $ Position 5 13
+range3 = Range (Position 24 30) $ Position 24 40
 
 supportsLinkInAllDefinitionCaps :: ClientCapabilities
 supportsLinkInAllDefinitionCaps = def & L.textDocument ?~ textDocumentCaps

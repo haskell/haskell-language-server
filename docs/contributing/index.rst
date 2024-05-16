@@ -6,4 +6,3 @@ Contributing
 
    contributing
    plugin-tutorial
-   releases

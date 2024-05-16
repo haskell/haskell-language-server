@@ -2,11 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-{-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wwarn -fno-warn-type-defaults #-}
 
 {- | Keep the module name in sync with its file path.
 
@@ -27,7 +25,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (toJSON)
 import           Data.Char                            (isLower, isUpper)
 import           Data.List                            (intercalate, minimumBy,
-                                                       stripPrefix, uncons)
+                                                       stripPrefix)
 import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (mapMaybe)
@@ -90,7 +88,7 @@ codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdenti
 
 -- | (Quasi) Idempotent command execution: recalculate action to execute on command request
 command :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
-command recorder state uri = do
+command recorder state _ uri = do
   actMaybe <- action recorder state uri
   forM_ actMaybe $ \Replace{..} ->
     let
@@ -133,14 +131,14 @@ action recorder state uri = do
         | emptyModule ->
             let code = "module " <> bestName <> " where\n"
             in pure [Replace uri (Range (Position 0 0) (Position 0 0)) code code]
-      _ -> pure $ []
+      _ -> pure []
 
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
 pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
 pathModuleNames recorder state normFilePath filePath
-  | isLower . head $ takeFileName filePath = return ["Main"]
+  | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
       (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
       srcPaths <- liftIO $ evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
@@ -158,12 +156,16 @@ pathModuleNames recorder state normFilePath filePath
       let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
       pure (map moduleNameFrom suffixes)
   where
+    firstLetter :: (Char -> Bool) -> FilePath -> Bool
+    firstLetter _ []       = False
+    firstLetter pred (c:_) = pred c
+
     moduleNameFrom =
       T.pack
         . intercalate "."
         -- Do not suggest names whose components start from a lower-case char,
         -- they are guaranteed to be malformed.
-        . filter (maybe False (isUpper . fst) . uncons)
+        . filter (firstLetter isUpper)
         . splitDirectories
         . dropExtension
 

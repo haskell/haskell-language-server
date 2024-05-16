@@ -1,26 +1,18 @@
-{-# LANGUAGE CPP              #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE LambdaCase       #-}
-{-# LANGUAGE PatternSynonyms  #-}
-{-# LANGUAGE RankNTypes       #-}
-{-# LANGUAGE RecordWildCards  #-}
-{-# LANGUAGE TupleSections    #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE GADTs           #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Ide.Plugin.GHC where
 
 import           Data.Functor                            ((<&>))
 import           Data.List.Extra                         (stripInfix)
-import qualified Data.List.NonEmpty                      as NE
 import qualified Data.Text                               as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import           Ide.PluginUtils                         (subRange)
-import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
-
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
@@ -30,10 +22,14 @@ import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           EpaLocation (EpaDelta),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           spanAsAnchor)
+import           Ide.PluginUtils                         (subRange)
+import           Language.Haskell.GHC.ExactPrint         (showAst)
+import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
+
 #if MIN_VERSION_ghc(9,5,0)
+import qualified Data.List.NonEmpty                      as NE
 import           GHC.Parser.Annotation                   (TokenLocation (..))
 #endif
-import           Language.Haskell.GHC.ExactPrint         (showAst)
 
 type GP = GhcPass Parsed
 
@@ -229,4 +225,4 @@ noUsed = EpAnnNotUsed
 pattern UserTyVar' :: LIdP pass -> HsTyVarBndr flag pass
 pattern UserTyVar' s <- UserTyVar _ _ s
 
-implicitTyVars = (wrapXRec @GP mkHsOuterImplicit)
+implicitTyVars = wrapXRec @GP mkHsOuterImplicit

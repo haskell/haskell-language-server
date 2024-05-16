@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# HLINT ignore "Unused LANGUAGE pragma" #-}
 
 -- | Parser compatibility module.
 module Development.IDE.GHC.Compat.Parser (
@@ -28,9 +27,6 @@ module Development.IDE.GHC.Compat.Parser (
 
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Util
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import qualified GHC.Parser.Annotation           as Anno
 import qualified GHC.Parser.Lexer                as Lexer
 import           GHC.Types.SrcLoc                (PsSpan (..))
@@ -43,6 +39,8 @@ import           GHC                             (EpaCommentTok (..),
                                                   pm_parsed_source)
 import qualified GHC
 import           GHC.Hs                          (hpm_module, hpm_src_files)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import qualified GHC.Driver.Config               as Config

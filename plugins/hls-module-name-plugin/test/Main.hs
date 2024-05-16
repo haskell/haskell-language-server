@@ -55,7 +55,6 @@ tests =
         let edit = TextEdit (mkRange 1 0 1 0) "f ="
         _ <- applyEdit doc edit
         newLens <- getCodeLenses doc
-        txt <- documentContents doc
         liftIO $ newLens @?= oldLens
         closeDoc doc
   ]
@@ -64,4 +63,4 @@ goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Sessi
 goldenWithModuleName title path = goldenWithHaskellDoc def moduleNamePlugin title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-module-name-plugin" </> "test" </> "testdata"

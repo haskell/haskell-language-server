@@ -1,6 +1,3 @@
-
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE ExistentialQuantification #-}
 module Development.IDE.Graph.Database(
     ShakeDatabase,
     ShakeValue,
@@ -19,6 +16,7 @@ import           Data.Maybe
 import           Development.IDE.Graph.Classes           ()
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Database
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Profile  (writeProfile)
 import           Development.IDE.Graph.Internal.Rules

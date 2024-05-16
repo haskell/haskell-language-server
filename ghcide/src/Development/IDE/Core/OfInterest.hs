@@ -1,8 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Utilities and state for the files of interest - those which are currently
 --   open in the editor. The rule is 'IsFileOfInterest'
@@ -25,7 +24,6 @@ import           Control.Monad.IO.Class
 import           Data.HashMap.Strict                      (HashMap)
 import qualified Data.HashMap.Strict                      as HashMap
 import           Data.Proxy
-import qualified Data.Text                                as T
 import           Development.IDE.Graph
 
 import           Control.Concurrent.STM.Stats             (atomically,
@@ -41,12 +39,14 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options            (IdeTesting (..))
+import           Development.IDE.Types.Shake              (toKey)
 import           GHC.TypeLits                             (KnownSymbol)
 import           Ide.Logger                               (Pretty (pretty),
+                                                           Priority (..),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio,
-                                                           logDebug)
+                                                           logWith)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
 
@@ -103,24 +103,26 @@ getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
     liftIO $ readVar var
 
-addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO ()
+addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
     (prev, files) <- modifyVar var $ \dict -> do
         let (prev, new) = HashMap.alterF (, Just v) f dict
         pure (new, (prev, new))
-    when (prev /= Just v) $ do
-        join $ atomically $ recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-        logDebug (ideLogger state) $
-            "Set files of interest to: " <> T.pack (show files)
+    if prev /= Just v
+    then do
+        logWith (ideLogger state) Debug $
+            LogSetFilesOfInterest (HashMap.toList files)
+        return [toKey IsFileOfInterest f]
+    else return []
 
-deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
+deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO [Key]
 deleteFileOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.delete f
-    join $ atomically $ recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
-
+    logWith (ideLogger state) Debug $
+        LogSetFilesOfInterest (HashMap.toList files)
+    return [toKey IsFileOfInterest f]
 scheduleGarbageCollection :: IdeState -> IO ()
 scheduleGarbageCollection state = do
     GarbageCollectVar var <- getIdeGlobalState state

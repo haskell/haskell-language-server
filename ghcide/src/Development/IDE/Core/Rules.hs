@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 -- | A Shake implementation of the compiler service, built
@@ -12,11 +11,8 @@
 module Development.IDE.Core.Rules(
     -- * Types
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
-    Priority(..), GhcSessionIO(..), GetClientSettings(..),
+    GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
-    priorityTypeCheck,
-    priorityGenerateCore,
-    priorityFilesOfInterest,
     runAction,
     toIdeResult,
     defineNoFile,
@@ -47,7 +43,6 @@ module Development.IDE.Core.Rules(
     getHieAstsRule,
     getBindingsRule,
     needsCompilationRule,
-    computeLinkableTypeForDynFlags,
     generateCoreRule,
     getImportMapRule,
     regenerateHiFile,
@@ -62,16 +57,17 @@ module Development.IDE.Core.Rules(
     DisplayTHWarning(..),
     ) where
 
-import           Prelude                                      hiding (mod)
 import           Control.Applicative
-import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.STM.Stats                 (atomically)
+import           Control.Concurrent.STM.TVar
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Exception.Safe
 import           Control.Exception                            (evaluate)
-import           Control.Monad.Extra                          hiding (msum)
-import           Control.Monad.Reader                         hiding (msum)
-import           Control.Monad.State                          hiding (msum)
+import           Control.Exception.Safe
+import           Control.Monad.Extra
+import           Control.Monad.IO.Unlift
+import           Control.Monad.Reader
+import           Control.Monad.State
 import           Control.Monad.Trans.Except                   (ExceptT, except,
                                                                runExceptT)
 import           Control.Monad.Trans.Maybe
@@ -80,44 +76,50 @@ import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
-import           Data.Foldable                                hiding (msum)
+import           Data.Default                                 (Default, def)
+import           Data.Foldable
+import           Data.Hashable
 import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
-import           Data.Hashable
-import           Data.IORef
-import           Control.Concurrent.STM.TVar
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
+import           Data.IORef
 import           Data.List
 import           Data.List.Extra                              (nubOrdOn)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
-import qualified Data.Text.Utf16.Rope                         as Rope
-import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
+import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileExists hiding (LogShake, Log)
+import           Development.IDE.Core.FileExists              hiding (Log,
+                                                               LogShake)
 import           Development.IDE.Core.FileStore               (getFileContents,
                                                                getModTime)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest hiding (LogShake, Log)
+import           Development.IDE.Core.OfInterest              hiding (Log,
+                                                               LogShake)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service hiding (LogShake, Log)
-import           Development.IDE.Core.Shake hiding (Log)
-import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.Core.Service                 hiding (Log,
+                                                               LogShake)
+import           Development.IDE.Core.Shake                   hiding (Log)
+import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat                   hiding
-                                                              (vcat, nest, parseModule,
-                                                               TargetId(..),
-                                                               loadInterface,
+                                                              (TargetId (..),
                                                                Var,
-                                                               (<+>), settings)
-import qualified Development.IDE.GHC.Compat                   as Compat hiding (vcat, nest)
+                                                               loadInterface,
+                                                               nest,
+                                                               parseModule,
+                                                               settings, vcat,
+                                                               (<+>))
+import qualified Development.IDE.GHC.Compat                   as Compat hiding
+                                                                        (nest,
+                                                                         vcat)
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                     hiding
@@ -132,15 +134,18 @@ import           Development.IDE.Types.Diagnostics            as Diag
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import qualified Development.IDE.Types.Shake                  as Shake
 import qualified GHC.LanguageExtensions                       as LangExt
+import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
+import           Ide.Logger                                   (Pretty (pretty),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               cmapWithPrio,
+                                                               logWith, nest,
+                                                               vcat, (<+>))
+import qualified Ide.Logger                                   as Logger
 import           Ide.Plugin.Config
-import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Protocol.Types                  (ShowMessageParams (ShowMessageParams), MessageType (MessageType_Info))
-import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
-import           Language.LSP.VFS
-import           System.Directory                             (makeAbsolute, doesFileExist)
-import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
                                                                KeyNamePath,
@@ -152,28 +157,28 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                )
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
-import Control.Concurrent.STM.Stats (atomically)
-import Language.LSP.Server (LspT)
-import System.Info.Extra (isWindows)
-import HIE.Bios.Ghc.Gap (hostIsDynamic)
-import Ide.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
-import qualified Development.IDE.Core.Shake as Shake
-import qualified Ide.Logger as Logger
-import qualified Development.IDE.Types.Shake as Shake
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
-import Control.Monad.IO.Unlift
+import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
+import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
+                                                               ShowMessageParams (ShowMessageParams))
+import           Language.LSP.Server                          (LspT)
+import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.VFS
+import           Prelude                                      hiding (mod)
+import           System.Directory                             (doesFileExist,
+                                                               makeAbsolute)
+import           System.Info.Extra                            (isWindows)
 
 
-import GHC.Fingerprint
+import           GHC.Fingerprint
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
-import GHC (mgModSummaries)
+import           GHC                                          (mgModSummaries)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import qualified Data.IntMap as IM
+import qualified Data.IntMap                                  as IM
 #endif
 
 
@@ -242,15 +247,6 @@ getParsedModuleWithComments = use GetParsedModuleWithComments
 -- Rules
 -- These typically go from key to value and are oracles.
 
-priorityTypeCheck :: Priority
-priorityTypeCheck = Priority 0
-
-priorityGenerateCore :: Priority
-priorityGenerateCore = Priority (-1)
-
-priorityFilesOfInterest :: Priority
-priorityFilesOfInterest = Priority (-2)
-
 -- | WARNING:
 -- We currently parse the module both with and without Opt_Haddock, and
 -- return the one with Haddocks if it -- succeeds. However, this may not work
@@ -272,40 +268,7 @@ getParsedModuleRule recorder =
 
     -- We still parse with Haddocks whether Opt_Haddock is True or False to collect information
     -- but we no longer need to parse with and without Haddocks separately for above GHC90.
-    res@(_,pmod) <- if Compat.ghcVersion >= Compat.GHC90 then
-      liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
-    else do
-        let dflags    = ms_hspp_opts ms
-            mainParse = getParsedModuleDefinition hsc opt file ms
-
-        -- Parse again (if necessary) to capture Haddock parse errors
-        if gopt Opt_Haddock dflags
-            then
-                liftIO $ (fmap.fmap.fmap) reset_ms mainParse
-            else do
-                let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
-
-                -- parse twice, with and without Haddocks, concurrently
-                -- we cannot ignore Haddock parse errors because files of
-                -- non-interest are always parsed with Haddocks
-                -- If we can parse Haddocks, might as well use them
-                ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
-
-                -- Merge haddock and regular diagnostics so we can always report haddock
-                -- parse errors
-                let diagsM = mergeParseErrorsHaddock diags diagsh
-                case resh of
-                  Just _
-                    | HaddockParse <- optHaddockParse opt
-                    -> pure (diagsM, resh)
-                  -- If we fail to parse haddocks, report the haddock diagnostics as well and
-                  -- return the non-haddock parse.
-                  -- This seems to be the correct behaviour because the Haddock flag is added
-                  -- by us and not the user, so our IDE shouldn't stop working because of it.
-                  _ -> pure (diagsM, res)
-    -- Add dependencies on included files
-    _ <- uses GetModificationTime $ map toNormalizedFilePath' (maybe [] pm_extra_src_files pmod)
-    pure res
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
 withOptHaddock :: ModSummary -> ModSummary
 withOptHaddock = withOption Opt_Haddock
@@ -315,18 +278,6 @@ withOption opt ms = ms{ms_hspp_opts= gopt_set (ms_hspp_opts ms) opt}
 
 withoutOption :: GeneralFlag -> ModSummary -> ModSummary
 withoutOption opt ms = ms{ms_hspp_opts= gopt_unset (ms_hspp_opts ms) opt}
-
--- | Given some normal parse errors (first) and some from Haddock (second), merge them.
---   Ignore Haddock errors that are in both. Demote Haddock-only errors to warnings.
-mergeParseErrorsHaddock :: [FileDiagnostic] -> [FileDiagnostic] -> [FileDiagnostic]
-mergeParseErrorsHaddock normal haddock = normal ++
-    [ (a,b,c{_severity = Just DiagnosticSeverity_Warning, _message = fixMessage $ _message c})
-    | (a,b,c) <- haddock, Diag._range c `Set.notMember` locations]
-  where
-    locations = Set.fromList $ map (Diag._range . thd3) normal
-
-    fixMessage x | "parse error " `T.isPrefixOf` x = "Haddock " <> x
-                 | otherwise = "Haddock: " <> x
 
 -- | This rule provides a ParsedModule preserving all annotations,
 -- including keywords, punctuation and comments.
@@ -445,16 +396,16 @@ rawDependencyInformation fs = do
     go :: NormalizedFilePath -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
-    go f msum = do
+    go f mbModSum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          let al = modSummaryToArtifactsLocation f msum
+          let al = modSummaryToArtifactsLocation f mbModSum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Record this module and its location
-          whenJust msum $ \ms ->
+          whenJust mbModSum $ \ms ->
             modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
                                                                            (ShowableModule $ ms_mod ms)
                                                                            (rawModuleMap rd)})
@@ -581,7 +532,7 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
   vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
     Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
-    Just vf -> pure (Rope.toText $ _file_text vf, Just $ _lsp_version vf)
+    Just vf -> pure (virtualFileText vf, Just $ virtualFileVersion vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
@@ -601,8 +552,8 @@ getHieAstRuleDefinition f hsc tmr = do
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
           let exports = tcg_exports $ tmrTypechecked tmr
-              msum = tmrModSummary tmr
-          liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
+              modSummary = tmrModSummary tmr
+          liftIO $ writeAndIndexHieFile hsc se modSummary f exports asts source
     _ -> pure []
 
   let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
@@ -719,7 +670,6 @@ typeCheckRuleDefinition
     -> ParsedModule
     -> Action (IdeResult TcModuleResult)
 typeCheckRuleDefinition hsc pm = do
-  setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   unlift <- askUnliftIO
@@ -751,9 +701,20 @@ loadGhcSession recorder ghcSessionDepsConfig = do
     defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GhcSessionIO -> do
         alwaysRerun
         opts <- getIdeOptions
+        config <- getClientConfigAction
         res <- optGhcSession opts
 
-        let fingerprint = LBS.toStrict $ B.encode $ hash (sessionVersion res)
+        let fingerprint = LBS.toStrict $ LBS.concat
+                [ B.encode (hash (sessionVersion res))
+                -- When the session version changes, reload all session
+                -- hsc env sessions
+                , B.encode (show (sessionLoading config))
+                -- The loading config affects session loading.
+                -- Invalidate all build nodes.
+                -- Changing the session loading config will increment
+                -- the 'sessionVersion', thus we don't generate the same fingerprint
+                -- twice by accident.
+                ]
         return (fingerprint, res)
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
@@ -786,6 +747,7 @@ instance Default GhcSessionDepsConfig where
     }
 
 -- | Note [GhcSessionDeps]
+--   ~~~~~~~~~~~~~~~~~~~~~
 -- For a file 'Foo', GhcSessionDeps "Foo.hs" results in an HscEnv which includes
 -- 1. HomeModInfo's (in the HUG/HPT) for all modules in the transitive closure of "Foo", **NOT** including "Foo" itself.
 -- 2. ModSummary's (in the ModuleGraph) for all modules in the transitive closure of "Foo", including "Foo" itself.
@@ -856,7 +818,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
-            _ -> Nothing
+            _                                    -> Nothing
           recompInfo = RecompilationInfo
             { source_version = ver
             , old_value = m_old
@@ -972,7 +934,6 @@ generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts
 generateCore runSimplifier file = do
     packageState <- hscEnv <$> use_ GhcSessionDeps file
     tm <- use_ TypeCheck file
-    setPriority priorityGenerateCore
     liftIO $ compileModule runSimplifier packageState (tmrModSummary tm) (tmrTypechecked tm)
 
 generateCoreRule :: Recorder (WithPriority Log) -> Rules ()
@@ -1029,22 +990,14 @@ regenerateHiFile sess f ms compNeeded = do
 
     -- Embed haddocks in the interface file
     (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
-    (diags', mb_pm') <-
-        -- We no longer need to parse again if GHC version is above 9.0. https://github.com/haskell/haskell-language-server/issues/1892
-        if Compat.ghcVersion >= Compat.GHC90 || isJust mb_pm then do
-            return (diags, mb_pm)
-        else do
-            -- if parsing fails, try parsing again with Haddock turned off
-            (diagsNoHaddock, mb_pm') <- liftIO $ getParsedModuleDefinition hsc opt f ms
-            return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm')
-    case mb_pm' of
-        Nothing -> return (diags', Nothing)
+    case mb_pm of
+        Nothing -> return (diags, Nothing)
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags'', mtmr) <- typeCheckRuleDefinition hsc pm
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
             case mtmr of
-              Nothing -> pure (diags'', Nothing)
+              Nothing -> pure (diags', Nothing)
               Just tmr -> do
 
                 let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
@@ -1052,7 +1005,7 @@ regenerateHiFile sess f ms compNeeded = do
                 se <- getShakeExtras
 
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags''', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
+                (diags'', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -1076,7 +1029,7 @@ regenerateHiFile sess f ms compNeeded = do
                     pure (hiDiags <> gDiags <> concat wDiags)
                   Nothing -> pure []
 
-                return (diags' <> diags'' <> diags''' <> hiDiags, res)
+                return (diags <> diags' <> diags'' <> hiDiags, res)
 
 
 -- | HscEnv should have deps included already
@@ -1132,16 +1085,16 @@ getLinkableRule recorder =
     HiFileResult{hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
     let obj_file  = ml_obj_file (ms_location ms)
         core_file = ml_core_file (ms_location ms)
-    -- Can't use `GetModificationTime` rule because the core file was possibly written in this
-    -- very session, so the results aren't reliable
-    core_t <- liftIO $ getModTime core_file
     case hirCoreFp of
-      Nothing -> error "called GetLinkable for a file without a linkable"
+      Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
       Just (bin_core, fileHash) -> do
         session <- use_ GhcSessionDeps f
         linkableType <- getLinkableType f >>= \case
-          Nothing -> error "called GetLinkable for a file which doesn't need compilation"
+          Nothing -> error $ "called GetLinkable for a file which doesn't need compilation: " ++ show f
           Just t -> pure t
+        -- Can't use `GetModificationTime` rule because the core file was possibly written in this
+        -- very session, so the results aren't reliable
+        core_t <- liftIO $ getModTime core_file
         (warns, hmi) <- case linkableType of
           -- Bytecode needs to be regenerated from the core file
           BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (posixSecondsToUTCTime core_t)
@@ -1182,7 +1135,6 @@ getLinkableRule recorder =
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
--- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =
@@ -1205,35 +1157,22 @@ needsCompilationRule file = do
         -- that we just threw away, and thus have to recompile all dependencies once
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
         (modsums,needsComps) <- liftA2
             (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
                 (uses NeedsCompilation revdeps)
-        pure $ computeLinkableType ms modsums (map join needsComps)
+        pure $ computeLinkableType modsums (map join needsComps)
   pure (Just $ encodeLinkableType res, Just res)
   where
-    computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
-    computeLinkableType this deps xs
+    computeLinkableType :: [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
+    computeLinkableType deps xs
       | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
-      | Just BCOLinkable    `elem` xs     = Just this_type      -- If any dependent needs bytecode, then we need to be compiled
-      | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
+      | Just BCOLinkable    `elem` xs     = Just BCOLinkable    -- If any dependent needs bytecode, then we need to be compiled
+      | any (maybe False uses_th_qq) deps = Just BCOLinkable    -- If any dependent needs TH, then we need to be compiled
       | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
-      where
-        this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
 
 uses_th_qq :: ModSummary -> Bool
 uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
--- | How should we compile this module?
--- (assuming we do in fact need to compile it).
--- Depends on whether it uses unboxed tuples or sums
-computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
-computeLinkableTypeForDynFlags d
-          = BCOLinkable
-  where -- unboxed_tuples_or_sums is only used in GHC < 9.2
-        _unboxed_tuples_or_sums =
-            xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
@@ -1249,9 +1188,9 @@ data RulesConfig = RulesConfig
       -- Disabling this drastically decreases sharing and is likely to
       -- increase memory usage if you have multiple files open
       -- Disabling this also disables checking for import cycles
-      fullModuleGraph :: Bool
+      fullModuleGraph        :: Bool
     -- | Disable TH for improved performance in large codebases
-    , enableTemplateHaskell :: Bool
+    , enableTemplateHaskell  :: Bool
     -- | Warning to show when TH is not supported by the current HLS binary
     , templateHaskellWarning :: LspT Config IO ()
     }
@@ -1286,7 +1225,7 @@ mainRule recorder RulesConfig{..} = do
     reportImportCyclesRule recorder
     typeCheckRule recorder
     getDocMapRule recorder
-    loadGhcSession recorder def{fullModuleGraph}
+    loadGhcSession recorder GhcSessionDepsConfig{fullModuleGraph}
     getModIfaceFromDiskRule recorder
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder

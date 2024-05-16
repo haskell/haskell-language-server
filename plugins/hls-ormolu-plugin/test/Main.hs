@@ -5,8 +5,8 @@ module Main
   ) where
 
 import           Data.Aeson
+import qualified Data.Aeson.KeyMap           as KM
 import           Data.Functor
-import qualified Data.Text                   as T
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Ormolu           as Ormolu
 import           Language.LSP.Protocol.Types
@@ -34,9 +34,10 @@ tests = testGroup "ormolu" $
       ]
 
 goldenWithOrmolu :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithOrmolu cli title path desc = goldenWithHaskellDocFormatter def ormoluPlugin "ormolu" def title testDataDir path desc "hs"
+goldenWithOrmolu cli title path desc =
+  goldenWithHaskellDocFormatter def ormoluPlugin "ormolu" conf title testDataDir path desc "hs"
  where
-  conf = def{plcConfig = (\(Object obj) -> obj) $ object ["external" .= cli]}
+  conf = def{plcConfig = KM.fromList ["external" .= cli]}
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-ormolu-plugin" </> "test" </> "testdata"

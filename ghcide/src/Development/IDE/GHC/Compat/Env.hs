@@ -32,7 +32,7 @@ module Development.IDE.GHC.Compat.Env (
     Home.mkHomeModule,
     -- * Provide backwards Compatible
     -- types and helper functions.
-    Logger(..),
+    Logger,
     UnitEnv,
     hscSetUnitEnv,
     hscSetFlags,
@@ -63,8 +63,6 @@ module Development.IDE.GHC.Compat.Env (
 
 import           GHC                 (setInteractiveDynFlags)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import           GHC.Driver.Backend  as Backend
 import qualified GHC.Driver.Env      as Env
 import           GHC.Driver.Hooks    (Hooks)
@@ -78,9 +76,11 @@ import           GHC.Unit.Types      (UnitId)
 import           GHC.Utils.Logger
 import           GHC.Utils.TmpFs
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env      (HscEnv, hsc_EPS)
 import qualified Data.Set            as S
+import           GHC.Driver.Env      (HscEnv, hsc_EPS)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)

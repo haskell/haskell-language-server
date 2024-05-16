@@ -1,13 +1,8 @@
 {-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
       codeActionResolveCaps
@@ -54,22 +49,21 @@ where
 
 import           Control.Applicative.Combinators (skipManyTill, (<|>))
 import           Control.Exception               (catch, throwIO)
-import           Control.Lens                    ((&), (?~), (^.), _Just, (.~))
+import           Control.Lens                    (_Just, (&), (.~), (?~), (^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
 import           Data.Bool                       (bool)
 import           Data.Default
-import           Data.Row
-import           Data.Proxy
 import           Data.List.Extra                 (find)
+import           Data.Proxy
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
-import qualified Language.LSP.Test               as Test
-import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import qualified Language.LSP.Protocol.Lens         as L
+import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Test               as Test
 import           System.Directory
 import           System.FilePath
 import           System.Info.Extra               (isMac, isWindows)
@@ -93,11 +87,11 @@ codeActionSupportCaps = def & L.textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = def { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
-    literalSupport = #codeActionKind .==  (#valueSet .== [])
+    literalSupport = ClientCodeActionLiteralOptions (ClientCodeActionKindOptions [])
 
 codeActionResolveCaps :: ClientCapabilities
 codeActionResolveCaps = Test.fullCaps
-                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (#properties .== ["edit"])
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ ClientCodeActionResolveOptions {_properties= ["edit"]}
                           & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 codeActionNoResolveCaps :: ClientCapabilities
@@ -304,7 +298,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
     handleDiagnostic testId = do
         diagsNot <- Test.message SMethod_TextDocumentPublishDiagnostics
         let fileUri = diagsNot ^. L.params . L.uri
-            ( diags) = diagsNot ^. L.params . L.diagnostics
+            diags = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
         if fileUri == document ^. L.uri && not (null res)
             then return res else handleMessages testId

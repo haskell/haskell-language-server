@@ -1,5 +1,5 @@
 module TInstanceClassMethodUse where
 
 
-go  =   (==)
+go  =  show
 

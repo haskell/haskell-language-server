@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Cabal.Completion.Completions (contextToCompleter, getContext, getCabalPrefixInfo) where
 
@@ -11,16 +10,17 @@ import qualified Data.List                                     as List
 import           Data.Map                                      (Map)
 import qualified Data.Map                                      as Map
 import qualified Data.Text                                     as T
-import           Data.Text.Utf16.Rope                          (Rope)
-import qualified Data.Text.Utf16.Rope                          as Rope
+import qualified Data.Text.Utf16.Lines                         as Rope (Position (..))
+import           Data.Text.Utf16.Rope.Mixed                    (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Development.IDE                               as D
+import qualified Development.IDE.Plugin.Completions.Types      as Ghcide
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Snippet
 import           Ide.Plugin.Cabal.Completion.Completer.Types   (Completer)
 import           Ide.Plugin.Cabal.Completion.Data
 import           Ide.Plugin.Cabal.Completion.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
-import qualified Language.LSP.VFS                              as VFS
 import qualified System.FilePath                               as FP
 import           System.FilePath                               (takeBaseName)
 
@@ -97,23 +97,23 @@ getContext recorder prefInfo ls =
 --  Checks whether a suffix needs to be completed
 --  and calculates the range in the document
 --  where the completion action should be applied.
-getCabalPrefixInfo :: FilePath -> VFS.PosPrefixInfo -> CabalPrefixInfo
+getCabalPrefixInfo :: FilePath -> Ghcide.PosPrefixInfo -> CabalPrefixInfo
 getCabalPrefixInfo fp prefixInfo =
   CabalPrefixInfo
     { completionPrefix = completionPrefix',
       isStringNotation = mkIsStringNotation separator afterCursorText,
-      completionCursorPosition = VFS.cursorPos prefixInfo,
+      completionCursorPosition = Ghcide.cursorPos prefixInfo,
       completionRange = Range completionStart completionEnd,
       completionWorkingDir = FP.takeDirectory fp,
       completionFileName = T.pack $ takeBaseName fp
     }
   where
-    completionEnd = VFS.cursorPos prefixInfo
+    completionEnd = Ghcide.cursorPos prefixInfo
     completionStart =
       Position
         (_line completionEnd)
         (_character completionEnd - (fromIntegral $ T.length completionPrefix'))
-    (beforeCursorText, afterCursorText) = T.splitAt cursorColumn $ VFS.fullLine prefixInfo
+    (beforeCursorText, afterCursorText) = T.splitAt cursorColumn $ Ghcide.fullLine prefixInfo
     completionPrefix' = T.takeWhileEnd (not . (`elem` stopConditionChars)) beforeCursorText
     separator =
       -- if there is an opening apostrophe before the cursor in the line somewhere,
@@ -121,7 +121,7 @@ getCabalPrefixInfo fp prefixInfo =
       if odd $ T.count "\"" beforeCursorText
         then '\"'
         else ' '
-    cursorColumn = fromIntegral $ VFS.cursorPos prefixInfo ^. JL.character
+    cursorColumn = fromIntegral $ Ghcide.cursorPos prefixInfo ^. JL.character
     stopConditionChars = separator : [',', ':']
 
     -- \| Takes the character occurring exactly before,
@@ -208,7 +208,7 @@ splitAtPosition pos ls = do
   split <- splitFile
   pure $ reverse $ Rope.lines $ fst split
   where
-    splitFile = Rope.splitAtPosition ropePos ls
+    splitFile = Rope.utf16SplitAtPosition ropePos ls
     ropePos =
       Rope.Position
         { Rope.posLine = fromIntegral $ pos ^. JL.line,

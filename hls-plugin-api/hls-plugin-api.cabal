@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-plugin-api
-version:       2.6.0.0
+version:       2.8.0.0
 synopsis:      Haskell Language Server API for plugin communication
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -32,7 +32,13 @@ source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server
 
+common warnings
+  ghc-options:
+    -Wall -Wredundant-constraints -Wunused-packages
+    -Wno-name-shadowing -Wno-unticked-promoted-constructors
+
 library
+  import: warnings
   exposed-modules:
     Ide.Logger
     Ide.Plugin.Config
@@ -60,17 +66,16 @@ library
     , filepath
     , ghc
     , hashable
-    , hls-graph             == 2.6.0.0
+    , hls-graph             == 2.8.0.0
     , lens
     , lens-aeson
-    , lsp                   ^>=2.3
+    , lsp                   ^>=2.5
     , megaparsec            >=9.0
     , mtl
     , opentelemetry         >=0.4
     , optparse-applicative
     , prettyprinter
     , regex-tdfa            >=1.3.1.0
-    , row-types
     , stm
     , text
     , time
@@ -84,10 +89,6 @@ library
   else
     build-depends: unix
 
-  ghc-options:
-    -Wall -Wredundant-constraints -Wno-name-shadowing
-    -Wno-unticked-promoted-constructors -Wunused-packages
-
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -95,15 +96,14 @@ library
     cpp-options:   -DUSE_FINGERTREE
     build-depends: hw-fingertree
 
-  default-language:   Haskell2010
+  default-language:   GHC2021
   default-extensions:
     DataKinds
-    KindSignatures
-    TypeOperators
 
 test-suite tests
+  import: warnings
   type:             exitcode-stdio-1.0
-  default-language: Haskell2010
+  default-language: GHC2021
   hs-source-dirs:   test
   main-is:          Main.hs
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
@@ -126,16 +126,17 @@ test-suite tests
     , text
 
 benchmark rangemap-benchmark
+  import: warnings
   -- Benchmark doesn't make sense if fingertree implementation
   -- is not used.
   if !flag(use-fingertree)
     buildable: False
 
   type:             exitcode-stdio-1.0
-  default-language: Haskell2010
+  default-language: GHC2021
   hs-source-dirs:   bench
   main-is:          Main.hs
-  ghc-options:      -threaded -Wall
+  ghc-options:      -threaded
   build-depends:
     , base
     , criterion

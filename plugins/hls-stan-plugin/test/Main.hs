@@ -4,11 +4,7 @@ module Main
 where
 
 import           Control.Lens               ((^.))
-import           Control.Monad              (void)
-import           Data.List                  (find)
-import           Data.Text                  (Text)
 import qualified Data.Text                  as T
-import qualified Data.Text.IO               as T
 import qualified Ide.Plugin.Stan            as Stan
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens as L
@@ -36,14 +32,30 @@ tests =
           return ()
     , testCase "ignores diagnostics from .stan.toml" $
         runStanSession "" $ do
-          doc <- openDoc "dir/configTest.hs" "haskell"
+          doc <- openDoc ("dir" </> "configTest.hs") "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
           liftIO $ length diags @?= 0
+          return ()
+    , testCase "respects LANGUAGE pragmas in the source file" $
+        runStanSession "" $ do
+          doc <- openDoc ("extensions-language-pragma" </> "LanguagePragmaTest.hs") "haskell"
+          diags <- waitForDiagnosticsFromSource doc "stan"
+          -- We must include at least one valid diagnostic in our test file to avoid
+          -- the false-positive case where Stan finds no analyses to perform due to a
+          -- bad mapping, which would also lead to zero diagnostics being returned.
+          liftIO $ length diags @?= 1
+          return ()
+    , testCase "respects language extensions defined in the .cabal file" $
+        runStanSession "" $ do
+          doc <- openDoc ("extensions-cabal-file" </> "CabalFileTest.hs") "haskell"
+          diags <- waitForDiagnosticsFromSource doc "stan"
+          -- We need at least one valid diagnostic here too, for the same reason as above.
+          liftIO $ length diags @?= 1
           return ()
     ]
 
 testDir :: FilePath
-testDir = "test/testdata"
+testDir = "plugins" </> "hls-stan-plugin" </> "test" </> "testdata"
 
 stanPlugin :: PluginTestDescriptor Stan.Log
 stanPlugin = mkPluginTestDescriptor enabledStanDescriptor "stan"

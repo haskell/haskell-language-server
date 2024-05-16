@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.CodeRange.ASTPreProcess
     ( preProcessAST
@@ -175,7 +174,7 @@ isIdentADef outerSpan (span, detail) =
     && isDef
   where
     isDef :: Bool
-    isDef = any isContextInfoDef . toList . identInfo $ detail
+    isDef = any isContextInfoDef $ identInfo detail
 
     -- Determines if the 'ContextInfo' represents a variable/function definition
     isContextInfoDef :: ContextInfo -> Bool

@@ -17,6 +17,7 @@
 module Ide.Plugin.Properties
   ( PropertyType (..),
     ToHsType,
+    NotElem,
     MetaData (..),
     PropertyKey (..),
     SPropertyKey (..),
@@ -127,7 +128,7 @@ data SomePropertyKeyWithMetaData
     SomePropertyKeyWithMetaData (SPropertyKey k) (MetaData t)
 
 -- | 'Properties' is a partial implementation of json schema, without supporting union types and validation.
--- In hls, it defines a set of properties which used in dedicated configuration of a plugin.
+-- In hls, it defines a set of properties used in dedicated configuration of a plugin.
 -- A property is an immediate child of the json object in each plugin's "config" section.
 -- It was designed to be compatible with vscode's settings UI.
 -- Use 'emptyProperties' and 'useProperty' to create and consume 'Properties'.

@@ -1,5 +1,4 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 -- | GHC Utils and Datastructures re-exports.
 --
 -- Mainly handles module hierarchy re-organisation of GHC
@@ -67,13 +66,10 @@ module Development.IDE.GHC.Compat.Util (
     atEnd,
     ) where
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import           Control.Exception.Safe  (MonadCatch, catch, try)
 import           GHC.Data.Bag
 import           GHC.Data.BooleanFormula
 import           GHC.Data.EnumSet
-
 import           GHC.Data.FastString
 import           GHC.Data.Maybe
 import           GHC.Data.Pair
@@ -84,6 +80,8 @@ import           GHC.Utils.Fingerprint
 import           GHC.Utils.Outputable    (pprHsString)
 import           GHC.Utils.Panic         hiding (try)
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Utils.Misc
 #endif
@@ -91,4 +89,3 @@ import           GHC.Utils.Misc
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Data.Bool
 #endif
-

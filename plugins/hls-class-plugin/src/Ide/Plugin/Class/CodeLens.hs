@@ -1,5 +1,4 @@
 {-# LANGUAGE GADTs           #-}
-{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE ViewPatterns    #-}
 module Ide.Plugin.Class.CodeLens where
@@ -69,7 +68,7 @@ codeLensResolve state plId cl uri uniqueID = do
 -- Finally the command actually generates and applies the workspace edit for the
 -- specified unique id.
 codeLensCommandHandler :: PluginId -> CommandFunction IdeState InstanceBindLensCommand
-codeLensCommandHandler plId state InstanceBindLensCommand{commandUri, commandEdit} = do
+codeLensCommandHandler plId state _ InstanceBindLensCommand{commandUri, commandEdit} = do
     nfp <-  getNormalizedFilePathE commandUri
     (InstanceBindLensResult (InstanceBindLens{lensEnabledExtensions}), _)
         <- runActionE "classplugin.GetInstanceBindLens" state

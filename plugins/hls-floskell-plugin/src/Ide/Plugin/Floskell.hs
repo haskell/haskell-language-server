@@ -8,9 +8,9 @@ module Ide.Plugin.Floskell
 
 import           Control.Monad.Except        (throwError)
 import           Control.Monad.IO.Class
+import           Data.List                   (find)
 import qualified Data.Text                   as T
 import qualified Data.Text.Lazy              as TL
-import qualified Data.Text.Lazy.Encoding     as TL
 import           Development.IDE             hiding (pluginHandlers)
 import           Floskell
 import           Ide.Plugin.Error
@@ -33,7 +33,7 @@ descriptor plId = (defaultPluginDescriptor plId desc)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingHandler IdeState
-provider _ideState typ contents fp _ = do
+provider _ideState _token typ contents fp _ = do
     let file = fromNormalizedFilePath fp
     config <- liftIO $ findConfigOrDefault file
     let (range, selectedContents) = case typ of
@@ -54,7 +54,8 @@ findConfigOrDefault file = do
   case mbConf of
     Just confFile -> readAppConfig confFile
     Nothing ->
-      let gibiansky = head (filter (\s -> styleName s == "gibiansky") styles)
-      in pure $ defaultAppConfig { appStyle = gibiansky }
+      pure $ case find (\s -> styleName s == "gibiansky") styles of
+        Just gibiansky -> defaultAppConfig { appStyle = gibiansky }
+        Nothing        -> defaultAppConfig
 
 -- ---------------------------------------------------------------------

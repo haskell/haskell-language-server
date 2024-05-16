@@ -5,7 +5,7 @@ on:
     tags:
       - '*'
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 1'
 env:
   CABAL_CACHE_DISABLE: ${{ vars.CABAL_CACHE_DISABLE }}
   CABAL_CACHE_NONFATAL: ${{ vars.CABAL_CACHE_NONFATAL }}
@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.4", "9.4.8", "9.2.8"]
+        ghc: ["9.8.2", "9.6.5", "9.4.8", "9.2.8"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -136,7 +136,7 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
-          - ghc: 9.6.4
+          - ghc: 9.6.5
             platform:
               { image: "rockylinux:8"
               , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
@@ -145,7 +145,7 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
-          - ghc: 9.8.1
+          - ghc: 9.8.2
             platform:
               { image: "rockylinux:8"
               , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
@@ -198,7 +198,7 @@ jobs:
     ## The environments can be seen in https://github.com/haskell/haskell-language-server/settings/environments
     ## assuming you have the proper permissions.
     environment: CI
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [self-hosted, Linux, ARM64, maerwald]
     env:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -213,7 +213,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.8.1", "9.6.4", "9.4.8", "9.2.8" ]
+        ghc: ["9.8.2", "9.6.5", "9.4.8", "9.2.8" ]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -273,7 +273,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.4", "9.4.8", "9.2.8"]
+        ghc: ["9.8.2", "9.6.5", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -318,7 +318,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.4", "9.4.8", "9.2.8"]
+        ghc: ["9.8.2", "9.6.5", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -363,7 +363,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.4", "9.4.8", "9.2.8"]
+        ghc: ["9.8.2", "9.6.5", "9.4.8", "9.2.8"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -398,7 +398,7 @@ jobs:
 
   bindist-linux:
     name: Tar linux bindists (linux)
-    runs-on: [self-hosted, linux-space]
+    runs-on: [self-hosted, linux-space, maerwald]
     needs: ["build-linux"]
     env:
       TARBALL_EXT: tar.xz
@@ -516,7 +516,7 @@ jobs:
 
   bindist-arm:
     name: Tar linux bindists (arm)
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [self-hosted, Linux, ARM64, maerwald]
     needs: ["build-arm"]
     env:
       TARBALL_EXT: tar.xz
@@ -793,7 +793,7 @@ jobs:
 
   test-arm:
     name: Test ARM binary
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [self-hosted, Linux, ARM64, maerwald]
     needs: ["bindist-arm"]
     env:
       TARBALL_EXT: tar.xz
@@ -1013,7 +1013,7 @@ jobs:
         shell: bash
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |

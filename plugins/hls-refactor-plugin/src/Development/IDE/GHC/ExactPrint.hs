@@ -1,5 +1,6 @@
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs        #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
@@ -29,6 +30,7 @@ module Development.IDE.GHC.ExactPrint
       removeComma,
       -- * Helper function
       eqSrcSpan,
+      eqSrcSpanA,
       epl,
       epAnn,
       removeTrailingComma,
@@ -43,7 +45,7 @@ module Development.IDE.GHC.ExactPrint
 where
 
 import           Control.Applicative                     (Alternative)
-import           Control.Arrow                           (right, (***))
+import           Control.Arrow                           ((***))
 import           Control.DeepSeq
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
@@ -56,14 +58,11 @@ import           Data.Bool                               (bool)
 import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
-import           Data.Foldable                           (Foldable (fold))
 import           Data.Functor.Classes
 import           Data.Functor.Contravariant
 import           Data.Monoid                             (All (All), getAll)
 import qualified Data.Text                               as T
-import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake              hiding (Log)
 import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
@@ -72,14 +71,13 @@ import           Development.IDE.GHC.Compat              hiding (parseImport,
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.Location
-import           Ide.Logger            (Pretty (pretty),
-                                                          Recorder,
-                                                          WithPriority,
-                                                          cmapWithPrio)
 import           Generics.SYB
 import           Generics.SYB.GHC
 import qualified GHC.Generics                            as GHC
+import           Ide.Logger                              (Pretty (pretty),
+                                                          Recorder,
+                                                          WithPriority,
+                                                          cmapWithPrio)
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Protocol.Types
@@ -100,16 +98,19 @@ import           GHC                                     (EpAnn (..),
                                                           emptyComments,
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
-                                                          DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta),
                                                           deltaPos)
 #endif
 
-import Data.List (partition)
-import GHC (Anchor(..), realSrcSpan, AnchorOperation, DeltaPos(..), SrcSpanAnnN)
-import GHC.Types.SrcLoc (generatedSrcSpan)
-import Control.Lens ((&), _last)
-import Control.Lens.Operators ((%~))
+import           Control.Lens                            (_last, (&))
+import           Control.Lens.Operators                  ((%~))
+import           Data.List                               (partition)
+import           GHC                                     (Anchor (..),
+                                                          AnchorOperation,
+                                                          DeltaPos (..),
+                                                          SrcSpanAnnN,
+                                                          realSrcSpan)
+import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 
 setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
 setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
@@ -259,7 +260,7 @@ needsParensSpace _               = mempty
 -}
 graft' ::
     forall ast a l.
-    (Data a, Typeable l, ASTElement l ast) =>
+    (Data a, ASTElement l ast) =>
     -- | Do we need to insert a space before this grafting? In do blocks, the
     -- answer is no, or we will break layout. But in function applications,
     -- the answer is yes, or the function call won't get its argument. Yikes!
@@ -349,7 +350,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
 
 graftWithM ::
     forall ast m a l.
-    (Fail.MonadFail m, Data a, Typeable l, ASTElement l ast) =>
+    (Fail.MonadFail m, Data a, ASTElement l ast) =>
     SrcSpan ->
     (LocatedAn l ast -> TransformT m (Maybe (LocatedAn l ast))) ->
     Graft m a
@@ -435,7 +436,7 @@ modifySmallestDeclWithM validSpan f a = do
         TransformT (lift $ validSpan $ locA src) >>= \case
             True -> do
               (decs', r) <- f ldecl
-              pure $ (DL.fromList decs' <> DL.fromList rest, Just r)
+              pure (DL.fromList decs' <> DL.fromList rest, Just r)
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
@@ -477,7 +478,7 @@ modifySigWithM ::
   TransformT m a
 modifySigWithM queryId f a = do
   let modifyMatchingSigD :: [LHsDecl GhcPs] -> TransformT m (DL.DList (LHsDecl GhcPs))
-      modifyMatchingSigD [] = pure (DL.empty)
+      modifyMatchingSigD [] = pure DL.empty
       modifyMatchingSigD (ldecl@(L annSigD (SigD xsig (TypeSig xTypeSig ids (HsWC xHsWc lHsSig)))) : rest)
         | queryId `elem` (unLoc <$> ids) = do
             let newSig = f lHsSig
@@ -547,7 +548,7 @@ modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
 modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- lift $ foldM combineResults def rs
-  pure $ (MG xMg (L locMatches matches') originMg, r')
+  pure (MG xMg (L locMatches matches') originMg, r')
 #endif
 
 graftSmallestDeclsWithM ::
@@ -644,7 +645,7 @@ instance ASTElement NameAnn RdrName where
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
-annotate :: (ASTElement l ast, Outputable l)
+annotate :: ASTElement l ast
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
@@ -691,7 +692,7 @@ eqSrcSpan l r = leftmost_smallest l r == EQ
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
-eqSrcSpanA :: SrcAnn la -> SrcAnn b -> Bool
+eqSrcSpanA :: SrcAnn a -> SrcAnn b -> Bool
 eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
 
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
@@ -716,7 +717,7 @@ modifyAnns x f = first ((fmap.fmap) f) x
 removeComma :: SrcSpanAnnA -> SrcSpanAnnA
 removeComma it@(SrcSpanAnn EpAnnNotUsed _) = it
 removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
-  = (SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l)
+  = SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l
   where
       isCommaAnn AddCommaAnn{} = True
       isCommaAnn _             = False

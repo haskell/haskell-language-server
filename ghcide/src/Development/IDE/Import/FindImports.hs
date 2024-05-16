@@ -238,8 +238,8 @@ notFoundErr env modName reason =
              }
         LookupUnusable unusable ->
           let unusables' = map get_unusable unusable
-#if MIN_VERSION_ghc(9,6,4) && !MIN_VERSION_ghc(9,8,1)
-              get_unusable (m, ModUnusable r) = r
+#if MIN_VERSION_ghc(9,6,4) && (!MIN_VERSION_ghc(9,8,1) || MIN_VERSION_ghc(9,8,2))
+              get_unusable (_m, ModUnusable r) = r
 #else
               get_unusable (m, ModUnusable r) = (moduleUnit m, r)
 #endif

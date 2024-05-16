@@ -21,8 +21,7 @@ module Development.IDE.Core.FileStore(
     Log(..)
     ) where
 
-import           Control.Concurrent.STM.Stats                 (STM, atomically,
-                                                               modifyTVar')
+import           Control.Concurrent.STM.Stats                 (STM, atomically)
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
 import           Control.Monad.Extra
@@ -32,10 +31,8 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
-import           Data.List                                    (foldl')
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
-import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
@@ -49,6 +46,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake                  (toKey)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Logger                                   (Pretty (pretty),
                                                                Priority (Info),
@@ -148,24 +146,24 @@ isInterface :: NormalizedFilePath -> Bool
 isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM ()
+resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO ()
+resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
     -- FOI filtering is done by the caller (LSP Notification handler)
-    forM_ changes $ \(nfp, c) -> do
-        case c of
-            LSP.FileChangeType_Changed
-            --  already checked elsewhere |  not $ HM.member nfp fois
-              -> atomically $
-               deleteValue (shakeExtras ideState) GetModificationTime nfp
-            _ -> pure ()
+    fmap concat <$>
+        forM changes $ \(nfp, c) -> do
+            case c of
+                LSP.FileChangeType_Changed
+                    --  already checked elsewhere |  not $ HM.member nfp fois
+                    -> atomically $ deleteValue (shakeExtras ideState) GetModificationTime nfp
+                _ -> pure []
 
 
 modificationTime :: FileVersion -> Maybe UTCTime
@@ -183,7 +181,7 @@ getFileContentsImpl file = do
     time <- use_ GetModificationTime file
     res <- do
         mbVirtual <- getVirtualFile file
-        pure $ Rope.toText . _file_text <$> mbVirtual
+        pure $ virtualFileText <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.
@@ -215,16 +213,18 @@ setFileModified :: Recorder (WithPriority Log)
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
                 -> NormalizedFilePath
+                -> IO [Key]
                 -> IO ()
-setFileModified recorder vfs state saved nfp = do
+setFileModified recorder vfs state saved nfp actionBefore = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
     doCheckParents <- optCheckParents ideOptions
     let checkParents = case doCheckParents of
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") []
+    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+        keys<-actionBefore
+        return (toKey GetModificationTime nfp:keys)
     when checkParents $
       typecheckParents recorder state nfp
 
@@ -244,14 +244,11 @@ typecheckParentsAction recorder nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: VFSModified -> IdeState -> [Key] -> String -> IO ()
-setSomethingModified vfs state keys reason = do
+setSomethingModified :: VFSModified -> IdeState -> String -> IO [Key] -> IO ()
+setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
-    atomically $ do
-        writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
-        modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
-            foldl' (flip insertKeySet) x keys
-    void $ restartShakeSession (shakeExtras state) vfs reason []
+    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+    void $ restartShakeSession (shakeExtras state) vfs reason [] actionBetweenSession
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do

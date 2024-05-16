@@ -1,11 +1,7 @@
-{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TemplateHaskell    #-}
-{-# LANGUAGE TupleSections      #-}
 
 module Ide.Plugin.Eval.Parse.Comments where
 
@@ -61,7 +57,7 @@ We build parsers combining the following three kinds of them:
 -}
 
 -- | Line parser
-type LineParser a = forall m. Monad m => ParsecT Void String m a
+type LineParser a = forall m. ParsecT Void String m a
 
 -- | Line comment group parser
 type LineGroupParser = Parsec Void [(Range, RawLineComment)]
@@ -126,7 +122,7 @@ commentsToSections isLHS Comments {..} =
                      in case parseMaybe lineGroupP $ NE.toList lcs of
                             Nothing -> mempty
                             Just (mls, rs) ->
-                                ( maybe mempty (uncurry Map.singleton) ((theRan,) <$> mls)
+                                ( maybe mempty (Map.singleton theRan) mls
                                 , -- orders setup sections in ascending order
                                   if null rs
                                     then mempty
@@ -305,7 +301,7 @@ blockProp = do
     AProp ran prop <$> resultBlockP
 
 withRange ::
-    (TraversableStream s, Stream s, Monad m, Ord v, Traversable t) =>
+    (TraversableStream s, Ord v, Traversable t) =>
     ParsecT v s m (t (a, Position)) ->
     ParsecT v s m (Range, t a)
 withRange p = do
@@ -493,7 +489,7 @@ consume style =
         Line     -> (,) <$> takeRest <*> getPosition
         Block {} -> manyTill_ anySingle (getPosition <* eob)
 
-getPosition :: (Monad m, Ord v, TraversableStream s) => ParsecT v s m Position
+getPosition :: (Ord v, TraversableStream s) => ParsecT v s m Position
 getPosition = sourcePosToPosition <$> getSourcePos
 
 -- | Parses example test line.

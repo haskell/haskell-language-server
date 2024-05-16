@@ -1,0 +1,9 @@
+cabal-version: 3.0
+name: cabal-file-test
+version: 0.0.0.0
+
+library
+  exposed-modules: CabalFileTest
+  hs-source-dirs: extensions-cabal-file
+  -- Specifically, we're testing that Stan respects the following extension definition:
+  default-extensions: StrictData

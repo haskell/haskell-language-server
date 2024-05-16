@@ -13,7 +13,7 @@ import           GHC.Plugins                           hiding (AnnLet)
 import           Prelude                               hiding ((<>))
 
 -- | Show a GHC syntax tree in HTML.
-showAstDataHtml :: (Data a, ExactPrint a, Outputable a) => a -> SDoc
+showAstDataHtml :: (Data a, ExactPrint a) => a -> SDoc
 showAstDataHtml a0 = html $
     header $$
     body (tag' [("id",text (show @String "myUL"))] "ul" $ vcat
@@ -42,7 +42,7 @@ showAstDataHtml a0 = html $
     pre = tag "pre"
     showAstDataHtml' :: Data a => a -> SDoc
     showAstDataHtml' =
-      (generic
+      generic
               `ext1Q` list
               `extQ` string `extQ` fastString `extQ` srcSpan `extQ` realSrcSpan
               `extQ` annotation
@@ -73,7 +73,6 @@ showAstDataHtml a0 = html $
               `extQ` srcSpanAnnP
               `extQ` srcSpanAnnC
               `extQ` srcSpanAnnN
-              )
 
       where generic :: Data a => a -> SDoc
             generic t = nested (text $ showConstr (toConstr t))
@@ -157,15 +156,15 @@ showAstDataHtml a0 = html $
 
             srcSpan :: SrcSpan -> SDoc
             srcSpan ss = char ' ' <>
-                             (hang (ppr ss) 1
+                             hang (ppr ss) 1
                                    -- TODO: show annotations here
-                                   (text ""))
+                                   (text "")
 
             realSrcSpan :: RealSrcSpan -> SDoc
             realSrcSpan ss = braces $ char ' ' <>
-                             (hang (ppr ss) 1
+                             hang (ppr ss) 1
                                    -- TODO: show annotations here
-                                   (text ""))
+                                   (text "")
 
             addEpAnn :: AddEpAnn -> SDoc
             addEpAnn (AddEpAnn a s) = text "AddEpAnn" <+> ppr a <+> epaAnchor s
@@ -202,7 +201,7 @@ showAstDataHtml a0 = html $
 
             located :: (Data a, Data b) => GenLocated a b -> SDoc
             located (L ss a)
-              = nested "L" $ (li (showAstDataHtml' ss) $$ li (showAstDataHtml' a))
+              = nested "L" (li (showAstDataHtml' ss) $$ li (showAstDataHtml' a))
 
             -- -------------------------
 
@@ -244,9 +243,8 @@ showAstDataHtml a0 = html $
             annotationEpaLocation :: EpAnn EpaLocation -> SDoc
             annotationEpaLocation = annotation' (text "EpAnn EpaLocation")
 
-            annotation' :: forall a .(Data a, Typeable a)
-                       => SDoc -> EpAnn a -> SDoc
-            annotation' tag anns = nested (text $ showConstr (toConstr anns))
+            annotation' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
+            annotation' _tag anns = nested (text $ showConstr (toConstr anns))
               (vcat (map li $ gmapQ showAstDataHtml' anns))
 
             -- -------------------------
@@ -266,16 +264,16 @@ showAstDataHtml a0 = html $
             srcSpanAnnN :: SrcSpanAnn' (EpAnn NameAnn) -> SDoc
             srcSpanAnnN = locatedAnn'' (text "SrcSpanAnnN")
 
-            locatedAnn'' :: forall a. (Typeable a, Data a)
+            locatedAnn'' :: forall a. Data a
               => SDoc -> SrcSpanAnn' a -> SDoc
             locatedAnn'' tag ss =
               case cast ss of
                 Just ((SrcSpanAnn ann s) :: SrcSpanAnn' a) ->
-                      nested "SrcSpanAnn" $ (
+                      nested "SrcSpanAnn" (
                                  li(showAstDataHtml' ann)
                               $$ li(srcSpan s))
                 Nothing -> text "locatedAnn:unmatched" <+> tag
-                           <+> (text (showConstr (toConstr ss)))
+                           <+> text (showConstr (toConstr ss))
 
 
 normalize_newlines :: String -> String

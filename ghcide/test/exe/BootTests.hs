@@ -1,5 +1,7 @@
 module BootTests (tests) where
 
+import           Config                          (checkDefs, mkR, runInDir,
+                                                  runWithExtraFiles)
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Control.Monad.IO.Class          (liftIO)
@@ -14,16 +16,15 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
-import           System.FilePath
+import           Test.Hls.FileSystem             (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 
 tests :: TestTree
 tests = testGroup "boot"
   [ testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
-        let cPath = dir </> "C.hs"
+        let cPath = dir `toAbsFp` "C.hs"
         cSource <- liftIO $ readFileUtf8 cPath
         -- Dirty the cache
         liftIO $ runInDir dir $ do
@@ -50,6 +51,6 @@ tests = testGroup "boot"
         let floc = mkR 9 0 9 1
         checkDefs locs (pure [floc])
   , testCase "graph with boot modules" $ runWithExtraFiles "boot2" $ \dir -> do
-      _ <- openDoc (dir </> "A.hs") "haskell"
+      _ <- openDoc (dir `toAbsFp` "A.hs") "haskell"
       expectNoMoreDiagnostics 2
   ]

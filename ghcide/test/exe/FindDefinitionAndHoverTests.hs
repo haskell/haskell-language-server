@@ -1,58 +1,42 @@
-
-{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 module FindDefinitionAndHoverTests (tests) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class         (liftIO)
 import           Data.Foldable
 import           Data.Maybe
-import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
-import           Development.IDE.GHC.Util
-import           Development.IDE.Test           (expectDiagnostics,
-                                                 standardizeQuotes)
-import           Development.IDE.Types.Location
-import qualified Language.LSP.Protocol.Lens     as L
-import           Language.LSP.Protocol.Types    hiding
-                                                (SemanticTokenAbsolute (..),
-                                                 SemanticTokenRelative (..),
-                                                 SemanticTokensEdit (..),
-                                                 mkRange)
+import qualified Data.Text                  as T
+import qualified Language.LSP.Protocol.Lens as L
 import           Language.LSP.Test
-import           System.FilePath
-import           System.Info.Extra              (isWindows)
+import           System.Info.Extra          (isWindows)
 
-import           Control.Lens                   ((^.))
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           TestUtils
-import           Text.Regex.TDFA                ((=~))
+import           Config
+import           Control.Lens               ((^.))
+import           Development.IDE.Test       (expectDiagnostics,
+                                             standardizeQuotes)
+import           Test.Hls
+import           Test.Hls.FileSystem        (copyDir)
+import           Text.Regex.TDFA            ((=~))
 
 tests :: TestTree
 tests = let
-
   tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> String -> Session [Expect] -> String -> TestTree
-  tst (get, check) pos sfp targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
-
-    -- Dirty the cache to check that definitions work even in the presence of iface files
-    liftIO $ runInDir dir $ do
-      let fooPath = dir </> "Foo.hs"
-      fooSource <- liftIO $ readFileUtf8 fooPath
-      fooDoc <- createDoc fooPath "haskell" fooSource
-      _ <- getHover fooDoc $ Position 4 3
-      closeDoc fooDoc
-
-    doc <- openTestDataDoc (dir </> sfp)
-    waitForProgressDone
-    found <- get doc pos
-    check found targetRange
+  tst (get, check) pos sfp targetRange title =
+    testWithDummyPlugin title (mkIdeTestFs [copyDir "hover"]) $ do
+        doc <- openDoc sfp "haskell"
+        waitForProgressDone
+        _x <- waitForTypecheck doc
+        found <- get doc pos
+        check found targetRange
 
 
 
-  checkHover :: Maybe Hover -> Session [Expect] -> Session ()
+  checkHover :: (HasCallStack) => Maybe Hover -> Session [Expect] -> Session ()
   checkHover hover expectations = traverse_ check =<< expectations where
 
+    check :: (HasCallStack) => Expect -> Session ()
     check expected =
       case hover of
         Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
@@ -102,27 +86,32 @@ tests = let
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
     , testGroup "hover"      $ mapMaybe snd tests
-    , checkFileCompiles sourceFilePath $
+    , testGroup "hover compile" [checkFileCompiles sourceFilePath $
         expectDiagnostics
           [ ( "GotoHover.hs", [(DiagnosticSeverity_Error, (62, 7), "Found hole: _")])
           , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _")])
-          ]
+          ]]
     , testGroup "type-definition" typeDefinitionTests
     , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
                         , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
 
-  recordDotSyntaxTests
-    | ghcVersion >= GHC92 =
-        [ tst (getHover, checkHover) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
-        , tst (getHover, checkHover) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
-        , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
-        ]
-    | otherwise = []
+  recordDotSyntaxTests =
+    [ tst (getHover, checkHover) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
+    , tst (getHover, checkHover) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
+    , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
+    ]
 
+  test :: (HasCallStack) => (TestTree -> a) -> (TestTree -> b) -> Position -> [Expect] -> String -> (a, b)
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
+  testM :: (HasCallStack) => (TestTree -> a)
+    -> (TestTree -> b)
+    -> Position
+    -> Session [Expect]
+    -> String
+    -> (a, b)
   testM runDef runHover look expect title =
     ( runDef   $ tst def   look sourceFilePath expect title
     , runHover $ tst hover look sourceFilePath expect title ) where
@@ -157,8 +146,8 @@ tests = let
   spaceL37 = Position 41  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
   docL41 = Position 45  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
                            ;  constr = [ExpectHoverText ["Monad m"]]
-  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type -> Type -> Type\n" else ":: * -> * -> *\n"]]
-  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type\n" else ":: *\n"]]
+  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [":: Type -> Type -> Type\n"]]
+  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [":: Type\n"]]
   tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["7518"]]
   chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
@@ -177,12 +166,8 @@ tests = let
   in
   mkFindTests
   --      def    hover  look       expect
-  [
-    if ghcVersion >= GHC90 then
-        -- It suggests either going to the constructor or to the field
-        test  broken yes    fffL4      fff           "field in record definition"
-    else
-        test  yes    yes    fffL4      fff           "field in record definition"
+  [ -- It suggests either going to the constructor or to the field
+    test  broken yes    fffL4      fff           "field in record definition"
   , test  yes    yes    fffL8      fff           "field in record construction    #1102"
   , test  yes    yes    fffL14     fff           "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
   , test  yes    yes    aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
@@ -215,25 +200,19 @@ tests = let
   , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
   , test  no     broken lstL43     litL          "literal List in hover info      #1016"
   , test  yes    yes    cmtL68     lackOfdEq     "no Core symbols                 #3280"
-  , if ghcVersion >= GHC90 then
-        test  no     yes    docL41     constr        "type constraint in hover info   #1012"
-    else
-        test  no     broken docL41     constr        "type constraint in hover info   #1012"
+  , test  no     yes    docL41     constr        "type constraint in hover info   #1012"
   , test  no     yes    outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     yes    holeL65    hleInfo2      "hole with variable"
   , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
-  , if | isWindows ->
+  , if isWindows then
         -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
         testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
-       | otherwise ->
+    else
         testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if | ghcVersion == GHC90 && isWindows ->
-        test  no     broken    thLocL57   thLoc         "TH Splice Hover"
-       | otherwise ->
-        test  no     yes       thLocL57   thLoc         "TH Splice Hover"
+  , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   , test yes yes import310 pkgTxt "show package name and its version"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
@@ -242,8 +221,11 @@ tests = let
         no = const Nothing -- don't run this test at all
         --skip = const Nothing -- unreliable, don't run
 
+xfail :: TestTree -> String -> TestTree
+xfail = flip expectFailBecause
+
 checkFileCompiles :: FilePath -> Session () -> TestTree
 checkFileCompiles fp diag =
-  testSessionWithExtraFiles "hover" ("Does " ++ fp ++ " compile") $ \dir -> do
-    void (openTestDataDoc (dir </> fp))
+   testWithDummyPlugin ("hover: Does " ++ fp ++ " compile") (mkIdeTestFs [copyDir "hover"]) $ do
+    _ <- openDoc fp "haskell"
     diag

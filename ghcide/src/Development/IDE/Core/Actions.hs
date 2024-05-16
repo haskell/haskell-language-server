@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Core.Actions
 ( getAtPoint

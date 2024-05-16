@@ -1,7 +1,5 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TupleSections     #-}
 
 module Main (main) where
 
@@ -527,7 +525,7 @@ mkCallHierarchyOutgoingCall :: (CallHierarchyItem, Range) -> CallHierarchyOutgoi
 mkCallHierarchyOutgoingCall (item, range) = CallHierarchyOutgoingCall item [range]
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-call-hierarchy-plugin" </> "test" </> "testdata"
 
 mkPrepareCallHierarchyParam :: TextDocumentIdentifier -> Int -> Int -> CallHierarchyPrepareParams
 mkPrepareCallHierarchyParam doc x y = CallHierarchyPrepareParams doc (Position (fromIntegral x) (fromIntegral y)) Nothing

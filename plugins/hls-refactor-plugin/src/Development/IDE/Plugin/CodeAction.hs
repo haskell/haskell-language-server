@@ -40,7 +40,6 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
-import qualified Data.Text.Utf16.Rope                              as Rope
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -68,14 +67,6 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC.Exts                                          (fromList)
-import qualified GHC.LanguageExtensions                            as Lang
-import           Ide.Logger                                        hiding
-                                                                   (group)
-import qualified Text.Regex.Applicative                            as RE
-#if MIN_VERSION_ghc(9,4,0)
-import           GHC.Parser.Annotation                             (TokenLocation (..))
-#endif
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -83,16 +74,18 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
-                                                                    LEpaComment,
-                                                                    hsmodAnn)
-import           Ide.PluginUtils                                   (extractTextInRange,
+                                                                    LEpaComment)
+import qualified GHC.LanguageExtensions                            as Lang
+import           Ide.Logger                                        hiding
+                                                                   (group)
+import           Ide.PluginUtils                                   (extendToFullLines,
+                                                                    extractTextInRange,
                                                                     subRange)
 import           Ide.Types
 import           Language.LSP.Protocol.Message                     (Method (..),
                                                                     SMethod (..))
 import           Language.LSP.Protocol.Types                       (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
-                                                                    CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionKind_QuickFix),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
@@ -107,26 +100,26 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.VFS                                  (VirtualFile,
-                                                                    _file_text)
+import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
+import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
 -------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics= xs}) = do
+codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do
-    let text = Rope.toText . (_file_text :: VirtualFile -> Rope.Rope) <$> contents
+    let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    diag <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
+    allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
-      actions = caRemoveRedundantImports parsedModule text diag xs uri
-               <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ InL $ actions
+      actions = caRemoveRedundantImports parsedModule text allDiags range uri
+               <> caRemoveInvalidExports parsedModule text allDiags range uri
+    pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
 
@@ -192,21 +185,21 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit@ExtendImport {..} = ExceptT $ do
+extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList
-        srcSpan = rangeToSrcSpan nfp _range
-    LSP.sendNotification SMethod_WindowShowMessage $
-      ShowMessageParams MessageType_Info $
-        "Import "
-          <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
-          <> "’ from "
-          <> importName
-          <> " (at "
-          <> printOutputable srcSpan
-          <> ")"
-    void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+    whenJust (listToMaybe =<< listToMaybe . M.elems =<< _changes) $ \TextEdit {_range} -> do
+      let srcSpan = rangeToSrcSpan nfp _range
+      LSP.sendNotification SMethod_WindowShowMessage $
+        ShowMessageParams MessageType_Info $
+          "Import "
+            <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
+            <> "’ from "
+            <> importName
+            <> " (at "
+            <> printOutputable srcSpan
+            <> ")"
+      void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right $ InR Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
@@ -229,8 +222,7 @@ extendImportHandler' ideState ExtendImport {..}
       case existingImport of
         Just imp -> do
             fmap (nfp,) $ liftEither $
-              rewriteToWEdit df doc
-                $
+              rewriteToWEdit df doc $
                   extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
 
         Nothing -> do
@@ -241,7 +233,7 @@ extendImportHandler' ideState ExtendImport {..}
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
             t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
-            return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc, [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+            return (nfp, WorkspaceEdit {_changes=Just (M.singleton doc [t]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
 
@@ -393,7 +385,6 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
   (L _ ImportDecl {..}) -> modName == moduleNameString (unLoc ideclName)
-  _                     -> error "impossible"
 
 isTheSameLine :: SrcSpan -> SrcSpan -> Bool
 isTheSameLine s1 s2
@@ -445,19 +436,26 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
 
+diagInRange :: Diagnostic -> Range -> Bool
+diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
+  where
+    -- Ensures the range captures full lines. Makes it easier to trigger the correct
+    -- "remove redundant" code actions from anywhere on the offending line.
+    extendedRange = extendToFullLines r
 
 -- Note [Removing imports is preferred]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- It's good to prefer the remove imports code action because an unused import
 -- is likely to be removed and less likely the warning will be disabled.
 -- Therefore actions to remove a single or all redundant imports should be
 -- preferred, so that the client can prioritize them higher.
-caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
-caRemoveRedundantImports m contents digs ctxDigs uri
+caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveRedundantImports m contents allDiags contextRange uri
   | Just pm <- m,
-    r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) digs,
+    r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) allDiags,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
-    ctxEdits <- [ x | x@(d, _) <- r, d `elem` ctxDigs],
+    ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
     not $ null ctxEdits,
     caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
@@ -481,18 +479,18 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
-caRemoveInvalidExports m contents digs ctxDigs uri
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveInvalidExports m contents allDiags contextRange uri
   | Just pm <- m,
     Just txt <- contents,
     txt' <- indexedByPosition $ T.unpack txt,
-    r <- mapMaybe (groupDiag pm) digs,
+    r <- mapMaybe (groupDiag pm) allDiags,
     r' <- map (\(t,d,rs) -> (t,d,extend txt' rs)) r,
     caRemoveCtx <- mapMaybe removeSingle r',
     allRanges <- nubOrd $ [ range | (_,_,ranges) <- r, range <- ranges],
     allRanges' <- extend txt' allRanges,
     Just caRemoveAll <- removeAll allRanges',
-    ctxEdits <- [ x | x@(_, d, _) <- r, d `elem` ctxDigs],
+    ctxEdits <- [ x | x@(_, d, _) <- r, d `diagInRange` contextRange],
     not $ null ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
@@ -610,7 +608,7 @@ suggestDeleteUnusedBinding
         let maybeIdx = findIndex (\(L _ id) -> isSameName id name) lnames
         in case maybeIdx of
             Nothing -> Nothing
-            Just _ | length lnames == 1 -> Just (getLoc $ reLoc $ head lnames, True)
+            Just _ | [lname] <- lnames -> Just (getLoc $ reLoc lname, True)
             Just idx ->
               let targetLname = getLoc $ reLoc $ lnames !! idx
                   startLoc = srcSpanStart targetLname
@@ -641,7 +639,6 @@ suggestDeleteUnusedBinding
         case grhssLocalBinds of
           (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
           _                                     -> []
-      findRelatedSpanForMatch _ _ _ = []
 
       findRelatedSpanForHsBind
         :: PositionIndexedString
@@ -939,9 +936,9 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
 #if MIN_VERSION_ghc(9,7,0)
-      "Add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\(at (.*)\\)."
+      "Add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\(at (.*)\\)\\."
 #else
-      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\)."
+      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\)\\."
 #endif
     = suggestions hsmodImports binding mod srcspan
     | Just (binding, mod_srcspan) <-
@@ -1054,7 +1051,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
         parensed =
             "(" `T.isPrefixOf` T.strip (textInRange _range txt)
         -- > removeAllDuplicates [1, 1, 2, 3, 2] = [3]
-        removeAllDuplicates = map head . filter ((==1) <$> length) . group . sort
+        removeAllDuplicates = map NE.head . filter ((==1) . length) . NE.group . sort
         hasDuplicate xs = length xs /= length (S.fromList xs)
         suggestions symbol mods local
           | hasDuplicate mods = case mapM toModuleTarget (removeAllDuplicates mods) of
@@ -1088,11 +1085,14 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
                         _                 -> False
                     ]
                 ++ [HideOthers restImports | not (null restImports)]
-            ] ++ [ ( renderUniquify mode T.empty symbol True
-              , disambiguateSymbol ps fileContents diag symbol mode
-              ) | local, not (null targetsWithRestImports)
-                , let mode = HideOthers (uncurry (:) (head targetsWithRestImports))
-            ]
+            ] ++ case targetsWithRestImports of
+                    (m,ms):_ | local ->
+                        let mode = HideOthers (m:ms)
+                        in [( renderUniquify mode T.empty symbol True
+                            , disambiguateSymbol ps fileContents diag symbol mode
+                            )]
+                    _ -> []
+
         renderUniquify HideOthers {} modName symbol local =
             "Use " <> (if local then "local definition" else modName) <> " for " <> symbol <> ", hiding other imports"
         renderUniquify (ToQualified _ qual) _ symbol _ =
@@ -1127,8 +1127,6 @@ targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
 targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
     unLoc ideclName
-targetModuleName (ExistingImp _) =
-    error "Cannot happen!"
 
 disambiguateSymbol ::
     Annotated ParsedSource ->
@@ -1294,7 +1292,7 @@ suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _rang
   | otherwise = []
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
-findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
+findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " >>= listToMaybe
 
 -- | Suggests a constraint for a type signature with any number of existing constraints.
 suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
@@ -1382,7 +1380,8 @@ removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagno
         & take 2
         & mapMaybe ((`matchRegexUnifySpaces` "Redundant constraints?: (.+)") . T.strip)
         & listToMaybe
-        <&> (head >>> parseConstraints)
+        >>= listToMaybe
+        <&> parseConstraints
 
       formatConstraints :: [T.Text] -> T.Text
       formatConstraints [] = ""
@@ -1542,7 +1541,8 @@ constructNewImportSuggestions
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules qis = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
-  , identInfo <- maybe [] Set.toList $ (lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)) <> (lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name)) -- look up the modified unknown name in the export map
+  , identInfo <- maybe [] Set.toList $ lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)
+                                    <> lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name) -- look up the modified unknown name in the export map
   , canUseIdent thingMissing identInfo                                              -- check if the identifier information retrieved can be used
   , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules                 -- check if the module of the identifier is allowed
   , suggestion <- renderNewImport identInfo                                         -- creates a list of import suggestions for the retrieved identifier information
@@ -1661,7 +1661,7 @@ findPositionAfterModuleName ps hsmodName' = do
 #endif
         EpAnn _ annsModule _ -> do
             -- Find the first 'where'
-            whereLocation <- fmap NE.head .  NE.nonEmpty . mapMaybe filterWhere .  am_main $ annsModule
+            whereLocation <- listToMaybe . mapMaybe filterWhere $ am_main annsModule
             epaLocationToLine whereLocation
         EpAnnNotUsed -> Nothing
     filterWhere (AddEpAnn AnnWhere loc) = Just loc
@@ -1976,15 +1976,18 @@ regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
     _          -> Nothing
 
 -- | Process a list of (module_name, filename:src_span) values
--- | Eg. [(Data.Map, app/ModuleB.hs:2:1-18), (Data.HashMap.Strict, app/ModuleB.hs:3:1-29)]
+--
+-- Eg. [(Data.Map, app/ModuleB.hs:2:1-18), (Data.HashMap.Strict, app/ModuleB.hs:3:1-29)]
 regExImports :: T.Text -> Maybe [(T.Text, T.Text)]
 regExImports msg
     | Just mods' <- allMatchRegex msg "‘([^’]*)’"
     , Just srcspans' <- allMatchRegex msg
+    -- This regex has to be able to deal both with single-line srcpans like "(/path/to/File.hs:2:1-18)"
+    -- as well as multi-line srcspans like "(/path/to/File.hs:(3,1)-(5,2))"
 #if MIN_VERSION_ghc(9,7,0)
-                          "\\(at ([^)]*)\\)"
+                          "\\(at ([^:]+:[^ ]+)\\)"
 #else
-                          "\\(([^)]*)\\)"
+                          "\\(([^:]+:[^ ]+)\\)"
 #endif
     , mods <- [mod | [_,mod] <- mods']
     , srcspans <- [srcspan | [_,srcspan] <- srcspans']

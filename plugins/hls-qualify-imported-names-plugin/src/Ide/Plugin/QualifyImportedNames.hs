@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiWayIf        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -9,17 +8,16 @@ module Ide.Plugin.QualifyImportedNames (descriptor) where
 
 import           Control.Lens                     ((^.))
 import           Control.Monad                    (foldM)
-import           Control.Monad.IO.Class           (MonadIO (liftIO))
 import           Control.Monad.Trans.State.Strict (State)
 import qualified Control.Monad.Trans.State.Strict as State
 import           Data.DList                       (DList)
 import qualified Data.DList                       as DList
 import           Data.Foldable                    (Foldable (foldl'), find)
-import qualified Data.HashMap.Strict              as HashMap
 import           Data.List                        (sortOn)
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import           Data.Maybe                       (fromMaybe, isJust, mapMaybe)
+import qualified Data.Set                         as Set
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import           Development.IDE                  (spanContainsRange)
@@ -29,8 +27,7 @@ import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileConte
                                                    HieAstResult (HAR, refMap),
                                                    TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
                                                    TypeCheck (TypeCheck))
-import           Development.IDE.Core.Service     (runAction)
-import           Development.IDE.Core.Shake       (IdeState, use)
+import           Development.IDE.Core.Shake       (IdeState)
 import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    GenLocated (..), GhcPs,
                                                    GlobalRdrElt, GlobalRdrEnv,
@@ -40,9 +37,8 @@ import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
                                                    ImportSpec (ImpSpec),
                                                    LImportDecl, ModuleName,
-                                                   Name, NameEnv, OccName,
-                                                   ParsedModule, RefMap, Span,
-                                                   SrcSpan,
+                                                   Name, NameEnv, ParsedModule,
+                                                   RefMap, Span, SrcSpan,
                                                    TcGblEnv (tcg_rdr_env),
                                                    emptyUFM, globalRdrEnvElts,
                                                    gre_imp, gre_name, locA,
@@ -56,14 +52,11 @@ import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    srcSpanEndLine,
                                                    srcSpanStartCol,
                                                    srcSpanStartLine, unitUFM)
-import           Development.IDE.GHC.Error        (isInsideSrcSpan)
-import           Development.IDE.Types.Location   (NormalizedFilePath,
-                                                   Position (Position),
-                                                   Range (Range), Uri,
-                                                   toNormalizedUri)
+import           Development.IDE.Types.Location   (Position (Position),
+                                                   Range (Range), Uri)
 import           Ide.Plugin.Error                 (PluginError (PluginRuleFailed),
                                                    getNormalizedFilePathE,
-                                                   handleMaybe, handleMaybeM)
+                                                   handleMaybe)
 import           Ide.Types                        (PluginDescriptor (pluginHandlers),
                                                    PluginId,
                                                    PluginMethodHandler,
@@ -75,11 +68,9 @@ import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCo
 import           Language.LSP.Protocol.Types      (CodeAction (CodeAction, _command, _data_, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title),
                                                    CodeActionKind (CodeActionKind_QuickFix),
                                                    CodeActionParams (CodeActionParams),
-                                                   TextDocumentIdentifier (TextDocumentIdentifier),
                                                    TextEdit (TextEdit),
                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                   type (|?) (InL, InR),
-                                                   uriToNormalizedFilePath)
+                                                   type (|?) (InL, InR))
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}
@@ -120,7 +111,7 @@ data ImportedBy = ImportedBy {
 }
 
 isRangeWithinImportedBy :: Range -> ImportedBy -> Bool
-isRangeWithinImportedBy range (ImportedBy _ srcSpan) = fromMaybe False $ spanContainsRange srcSpan range
+isRangeWithinImportedBy range ImportedBy{importedBySrcSpan} = fromMaybe False $ spanContainsRange importedBySrcSpan range
 
 globalRdrEnvToNameToImportedByMap :: GlobalRdrEnv -> NameEnv [ImportedBy]
 globalRdrEnvToNameToImportedByMap =
@@ -174,11 +165,8 @@ refMapToUsedIdentifiers = DList.toList . Map.foldlWithKey' folder DList.empty
     getUsedIdentifier identifier span IdentifierDetails {..}
       | Just identifierSpan <- realSrcSpanToIdentifierSpan span
       , Right name <- identifier
-      , Use `elem` identInfo = Just $ UsedIdentifier name identifierSpan
+      , Use `Set.member` identInfo = Just $ UsedIdentifier name identifierSpan
       | otherwise = Nothing
-
-occNameToText :: OccName -> Text
-occNameToText = Text.pack . occNameString
 
 updateColOffset :: Int -> Int -> Int -> Int
 updateColOffset row lineOffset colOffset
@@ -191,13 +179,13 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
       State.evalState (makeStateComputation sortedUsedIdentifiers) (Text.lines sourceText, 0, 0)
   where
     folder :: [TextEdit] -> UsedIdentifier -> State ([Text], Int, Int) [TextEdit]
-    folder prevTextEdits (UsedIdentifier identifierName identifierSpan)
-      | Just importedBys <- lookupNameEnv nameToImportedByMap identifierName
-      , Just (ImportedBy alias _) <- find (isRangeWithinImportedBy range) importedBys
-      , let IdentifierSpan row startCol endCol = identifierSpan
-      , let identifierRange = identifierSpanToRange identifierSpan
-      , let aliasText = Text.pack $ moduleNameString alias
-      , let identifierText = Text.pack $ occNameString $ nameOccName identifierName
+    folder prevTextEdits UsedIdentifier{usedIdentifierName, usedIdentifierSpan}
+      | Just importedBys <- lookupNameEnv nameToImportedByMap usedIdentifierName
+      , Just ImportedBy{importedByAlias} <- find (isRangeWithinImportedBy range) importedBys
+      , let IdentifierSpan row startCol _ = usedIdentifierSpan
+      , let identifierRange = identifierSpanToRange usedIdentifierSpan
+      , let aliasText = Text.pack $ moduleNameString importedByAlias
+      , let identifierText = Text.pack $ occNameString $ nameOccName usedIdentifierName
       , let qualifiedIdentifierText = aliasText <> "." <> identifierText = do
           (sourceTextLines, lineOffset, updateColOffset row lineOffset -> colOffset) <- State.get
           let lines = List.drop (row - lineOffset) sourceTextLines
@@ -228,7 +216,7 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
 -- 3. For each used name in refMap check whether the name comes from an import
 --    at the origin of the code action.
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range context) = do
+codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId range _) = do
   normalizedFilePath <- getNormalizedFilePathE (documentId ^. L.uri)
   TcModuleResult { tmrParsed, tmrTypechecked } <- runActionE "QualifyImportedNames.TypeCheck" ideState $ useE TypeCheck normalizedFilePath
   if isJust (findLImportDeclAt range tmrParsed)

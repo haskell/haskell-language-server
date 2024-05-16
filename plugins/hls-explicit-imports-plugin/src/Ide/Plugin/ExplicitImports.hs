@@ -1,14 +1,11 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE DeriveAnyClass            #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE RecordWildCards           #-}
-{-# LANGUAGE TypeFamilies              #-}
-{-# LANGUAGE ViewPatterns              #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE ViewPatterns       #-}
 module Ide.Plugin.ExplicitImports
   ( descriptor
   , descriptorForModules
@@ -108,7 +105,7 @@ descriptorForModules recorder modFilter plId =
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
-runImportCommand recorder ideState eird@(ResolveOne _ _) = do
+runImportCommand recorder ideState _ eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
@@ -116,7 +113,7 @@ runImportCommand recorder ideState eird@(ResolveOne _ _) = do
           logWith recorder Error (LogWAEResponseError re)
           pure ()
         logErrors (Right _) = pure ()
-runImportCommand _ _ rd = do
+runImportCommand _ _ _ rd = do
   throwError $ PluginInvalidParams (T.pack $ "Unexpected argument for command handler:" <> show rd)
 
 
@@ -235,7 +232,7 @@ resolveWTextEdit ideState (RefineAll uri) = do
   pure $ mkWorkspaceEdit uri edits pm
 mkWorkspaceEdit :: Uri -> [ImportEdit] -> PositionMapping -> WorkspaceEdit
 mkWorkspaceEdit uri edits pm =
-      WorkspaceEdit {_changes = Just $ Map.fromList [(uri, mapMaybe toWEdit edits)]
+      WorkspaceEdit {_changes = Just $ Map.singleton uri  (mapMaybe toWEdit edits)
                     , _documentChanges = Nothing
                     , _changeAnnotations = Nothing}
   where toWEdit ImportEdit{ieRange, ieText} =

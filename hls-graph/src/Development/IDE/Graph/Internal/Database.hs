@@ -2,14 +2,10 @@
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -37,6 +33,7 @@ import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
 import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
@@ -136,26 +133,41 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                 waitAll
                 pure results
 
+isDirty :: Foldable t => Result -> t (a, Result) -> Bool
+isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
+
+-- | Refresh dependencies for a key and compute the key:
+-- The refresh the deps linearly(last computed order of the deps for the key).
+-- If any of the deps is dirty in the process, we jump to the actual computation of the key
+-- and shortcut the refreshing of the rest of the deps.
+-- * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
+--   This assumes that the implementation will be a lookup
+-- * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
+refreshDeps :: KeySet -> Database -> Stack -> Key -> Result -> [KeySet] -> AIO Result
+refreshDeps visited db stack key result = \case
+    -- no more deps to refresh
+    [] -> liftIO $ compute db stack key RunDependenciesSame (Just result)
+    (dep:deps) -> do
+        let newVisited = dep <> visited
+        res <- builder db stack (toListKeySet (dep `differenceKeySet` visited))
+        case res of
+            Left res ->  if isDirty result res
+                -- restart the computation if any of the deps are dirty
+                then liftIO $ compute db stack key RunDependenciesChanged (Just result)
+                -- else kick the rest of the deps
+                else refreshDeps newVisited db stack key result deps
+            Right iores -> do
+                res <- liftIO iores
+                if isDirty result res
+                    then liftIO $ compute db stack key RunDependenciesChanged (Just result)
+                    else refreshDeps newVisited db stack key result deps
+
 -- | Refresh a key:
---     * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
---       This assumes that the implementation will be a lookup
---     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
 refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
-    (Right stack, Just me@Result{resultDeps = ResultDeps (toListKeySet -> deps)}) -> do
-        res <- builder db stack deps
-        let isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
-        case res of
-            Left res ->
-                if isDirty res
-                    then asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
-                    else pure $ compute db stack key RunDependenciesSame result
-            Right iores -> asyncWithCleanUp $ liftIO $ do
-                res <- iores
-                let mode = if isDirty res then RunDependenciesChanged else RunDependenciesSame
-                compute db stack key mode result
+    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> asyncWithCleanUp $ refreshDeps mempty db stack key me (reverse deps)
     (Right stack, _) ->
         asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
 
@@ -176,7 +188,7 @@ compute db@Database{..} stack key mode result = do
         previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
     case getResultDepsDefault mempty actualDeps of
-        deps | not(nullKeySet deps)
+        deps | not (nullKeySet deps)
             && runChanged /= ChangedNothing
                     -> do
             -- IMPORTANT: record the reverse deps **before** marking the key Clean.
@@ -188,7 +200,9 @@ compute db@Database{..} stack key mode result = do
                     (getResultDepsDefault mempty previousDeps)
                     deps
         _ -> pure ()
-    atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
+    atomicallyNamed "compute and run hook" $ do
+        runHook
+        SMap.focus (updateStatus $ Clean res) key databaseValues
     pure res
 
 updateStatus :: Monad m => Status -> Focus.Focus KeyDetails m ()

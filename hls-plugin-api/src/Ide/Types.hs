@@ -1,27 +1,18 @@
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DefaultSignatures          #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MonadComprehensions        #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE PatternSynonyms            #-}
-{-# LANGUAGE PolyKinds                  #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE BlockArguments        #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE CUSKs                 #-}
+{-# LANGUAGE DefaultSignatures     #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MonadComprehensions   #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ViewPatterns          #-}
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
 , defaultPluginPriority
@@ -31,7 +22,7 @@ module Ide.Types
 , IdeNotification(..)
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
-, Config(..), PluginConfig(..), CheckParents(..)
+, Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
@@ -74,6 +65,7 @@ import           Control.Monad.Error.Class     (MonadError (throwError))
 import           Control.Monad.Trans.Class     (MonadTrans (lift))
 import           Control.Monad.Trans.Except    (ExceptT, runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
+import qualified Data.Aeson.Types              as A
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
@@ -179,6 +171,7 @@ data Config =
     , formattingProvider      :: !T.Text
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
+    , sessionLoading          :: !SessionLoadingPreferenceConfig
     , plugins                 :: !(Map.Map PluginId PluginConfig)
     } deriving (Show,Eq)
 
@@ -187,7 +180,9 @@ instance ToJSON Config where
     object [ "checkParents"                .= checkParents
            , "checkProject"                .= checkProject
            , "formattingProvider"          .= formattingProvider
+           , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
+           , "sessionLoading"              .= sessionLoading
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
 
@@ -198,9 +193,11 @@ instance Default Config where
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
-    , cabalFormattingProvider     = "cabal-fmt"
+    , cabalFormattingProvider     = "cabal-gild"
+    -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
+    , sessionLoading              = PreferSingleComponentLoading
     , plugins                     = mempty
     }
 
@@ -212,6 +209,39 @@ data CheckParents
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+
+data SessionLoadingPreferenceConfig
+    = PreferSingleComponentLoading
+    -- ^ Always load only a singleComponent when a new component
+    -- is discovered.
+    | PreferMultiComponentLoading
+    -- ^ Always prefer loading multiple components in the cradle
+    -- at once. This might not be always possible, if the tool doesn't
+    -- support multiple components loading.
+    --
+    -- The cradle can decide how to handle these situations, and whether
+    -- to honour the preference at all.
+  deriving stock (Eq, Ord, Show, Generic)
+
+instance Pretty SessionLoadingPreferenceConfig where
+    pretty PreferSingleComponentLoading = "Prefer Single Component Loading"
+    pretty PreferMultiComponentLoading  = "Prefer Multiple Components Loading"
+
+instance ToJSON SessionLoadingPreferenceConfig where
+    toJSON PreferSingleComponentLoading =
+        String "singleComponent"
+    toJSON PreferMultiComponentLoading =
+        String "multipleComponents"
+
+instance FromJSON SessionLoadingPreferenceConfig where
+    parseJSON (String val) = case val of
+        "singleComponent"    -> pure PreferSingleComponentLoading
+        "multipleComponents" -> pure PreferMultiComponentLoading
+        _ -> A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.parseFail $ "Expected one of \"singleComponent\" or \"multipleComponents\" but got " <> T.unpack val )
+    parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.typeMismatch "String" o)
 
 -- | A PluginConfig is a generic configuration for a given HLS plugin.  It
 -- provides a "big switch" to turn it on or off as a whole, as well as small
@@ -484,6 +514,9 @@ instance PluginMethod Request Method_CodeLensResolve where
 instance PluginMethod Request Method_TextDocumentRename where
   handlesRequest = pluginEnabledWithFeature plcRenameOn
 
+instance PluginMethod Request Method_TextDocumentPrepareRename where
+  handlesRequest = pluginEnabledWithFeature plcRenameOn
+
 instance PluginMethod Request Method_TextDocumentHover where
   handlesRequest = pluginEnabledWithFeature plcHoverOn
 
@@ -518,6 +551,9 @@ instance PluginMethod Request Method_TextDocumentRangeFormatting where
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
+  handlesRequest = pluginEnabledWithFeature plcSemanticTokensOn
+
+instance PluginMethod Request Method_TextDocumentSemanticTokensFullDelta where
   handlesRequest = pluginEnabledWithFeature plcSemanticTokensOn
 
 instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
@@ -605,7 +641,7 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method ClientToServer 
 ---
 instance PluginRequestMethod Method_TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
-      InL $ fmap compat $ filter wasRequested $ concat $ mapMaybe nullToMaybe $ toList resps
+      InL $ fmap compat $ concatMap (filter wasRequested) $ mapMaybe nullToMaybe $ toList resps
     where
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
       compat x@(InL _) = x
@@ -662,6 +698,10 @@ instance PluginRequestMethod Method_CodeLensResolve where
     combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
+
+instance PluginRequestMethod Method_TextDocumentPrepareRename where
+    -- TODO more intelligent combining?
+    combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentHover where
   combineResponses _ _ _ _ (mapMaybe nullToMaybe . toList -> hs :: [Hover]) =
@@ -758,6 +798,9 @@ instance PluginRequestMethod (Method_CustomMethod m) where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
   combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]
@@ -989,6 +1032,7 @@ data PluginCommand ideState = forall a. (FromJSON a) =>
 
 type CommandFunction ideState a
   = ideState
+  -> Maybe ProgressToken
   -> a
   -> ExceptT PluginError (LspM Config) (Value |? Null)
 
@@ -1077,6 +1121,7 @@ type FormattingMethod m =
 
 type FormattingHandler a
   =  a
+  -> Maybe ProgressToken
   -> FormattingType
   -> T.Text
   -> NormalizedFilePath
@@ -1093,11 +1138,11 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
         mf <- lift $ getVirtualFile $ toNormalizedUri uri
         case mf of
           Just vf -> do
-            let typ = case m of
-                  SMethod_TextDocumentFormatting -> FormatText
-                  SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. L.range)
+            let (typ, mtoken) = case m of
+                  SMethod_TextDocumentFormatting -> (FormatText, params ^. L.workDoneToken)
+                  SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. L.range), params ^. L.workDoneToken)
                   _ -> Prelude.error "mkFormattingHandlers: impossible"
-            f ide typ (virtualFileText vf) nfp opts
+            f ide mtoken typ (virtualFileText vf) nfp opts
           Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
       | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
@@ -1183,6 +1228,7 @@ installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
 {- Note [Resolve in PluginHandlers]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   Resolve methods have a few guarantees that need to be made by HLS,
   specifically they need to only be called once, as neither their errors nor
   their responses can be easily combined. Whereas commands, which similarly have

@@ -1,12 +1,9 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE TypeOperators     #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -69,7 +66,7 @@ properties =
             False
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefiniteProgress title Cancellable $ runExceptT $ do
+provider recorder plId ideState token typ contents fp fo = ExceptT $ withIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)

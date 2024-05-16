@@ -4,39 +4,10 @@ packages:
          ./shake-bench
          ./hls-graph
          ./ghcide
-         ./ghcide-bench
-         ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
-         ./plugins/hls-cabal-plugin
-         ./plugins/hls-cabal-fmt-plugin
-         ./plugins/hls-stylish-haskell-plugin
-         ./plugins/hls-fourmolu-plugin
-         ./plugins/hls-class-plugin
-         ./plugins/hls-eval-plugin
-         ./plugins/hls-explicit-imports-plugin
-         ./plugins/hls-hlint-plugin
-         ./plugins/hls-rename-plugin
-         ./plugins/hls-retrie-plugin
-         ./plugins/hls-splice-plugin
-         ./plugins/hls-floskell-plugin
-         ./plugins/hls-pragmas-plugin
-         ./plugins/hls-module-name-plugin
-         ./plugins/hls-ormolu-plugin
-         ./plugins/hls-call-hierarchy-plugin
-         ./plugins/hls-alternate-number-format-plugin
-         ./plugins/hls-qualify-imported-names-plugin
-         ./plugins/hls-code-range-plugin
-         ./plugins/hls-change-type-signature-plugin
-         ./plugins/hls-stan-plugin
-         ./plugins/hls-gadt-plugin
-         ./plugins/hls-explicit-fixity-plugin
-         ./plugins/hls-explicit-record-fields-plugin
-         ./plugins/hls-refactor-plugin
-         ./plugins/hls-overloaded-record-dot-plugin
-         ./plugins/hls-semantic-tokens-plugin
 
-index-state: 2024-01-19T00:00:00Z
+index-state: 2024-04-30T10:44:19Z
 
 tests: True
 test-show-details: direct
@@ -44,6 +15,11 @@ test-show-details: direct
 benchmarks: True
 
 write-ghc-environment-files: never
+
+-- Many of our tests only work single-threaded, and the only way to
+-- ensure tasty runs everything purely single-threaded is to pass
+-- this at the top-level
+test-options: -j1
 
 -- Make sure dependencies are build with haddock so we get
 -- haddock shown on hover
@@ -65,34 +41,3 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd
-
--- This is benign and won't affect our ability to release to Hackage,
--- because we only depend on `ekg-json` when a non-default flag
--- is turned on.
--- DELETE MARKER FOR CI
--- centos7 has an old version of git which cabal doesn't
--- support. We delete these lines in gitlab ci to workaround
--- this issue, as this is not necessary to build our binaries.
-source-repository-package
-  type:git
-  location: https://github.com/pepeiborra/ekg-json
-  tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
--- END DELETE
-
-if impl(ghc >= 9.1)
-  -- ekg packagess are old and unmaintained, but we
-  -- don't rely on them for the mainline build, so
-  -- this is okay
-  allow-newer:
-    ekg-json:base,
-    ekg-wai:time,
-    ekg-core:ghc-prim
-
-if impl(ghc >= 9.7)
-  -- ekg packagess are old and unmaintained, but we
-  -- don't rely on them for the mainline build, so
-  -- this is okay
-  allow-newer:
-    ekg-core:text,
-    -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
-    primitive-unlifted:bytestring,

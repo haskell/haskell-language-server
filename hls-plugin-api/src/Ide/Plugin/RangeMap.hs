@@ -1,9 +1,5 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveFoldable             #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 -- | A map that allows fast \"in-range\" filtering. 'RangeMap' is meant
 -- to be constructed once and cached as part of a Shake rule. If
@@ -19,14 +15,15 @@ module Ide.Plugin.RangeMap
     filterByRange,
   ) where
 
+import           Development.IDE.Graph.Classes            (NFData)
+#ifdef USE_FINGERTREE
 import           Data.Bifunctor                           (first)
 import           Data.Foldable                            (foldl')
-import           Development.IDE.Graph.Classes            (NFData)
-import           Language.LSP.Protocol.Types              (Position,
-                                                           Range (Range),
-                                                           isSubrangeOf)
-#ifdef USE_FINGERTREE
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
+import           Language.LSP.Protocol.Types              (Position,
+                                                           Range (Range))
+#else
+import           Language.LSP.Protocol.Types              (Range, isSubrangeOf)
 #endif
 
 -- | A map from code ranges to values.

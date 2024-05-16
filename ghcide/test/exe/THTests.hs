@@ -1,10 +1,7 @@
 
-{-# LANGUAGE OverloadedLabels #-}
-
 module THTests (tests) where
 
 import           Control.Monad.IO.Class      (liftIO)
-import           Data.Row
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Test        (expectCurrentDiagnostics,
@@ -15,6 +12,8 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import           Test.Hls                    (waitForAllProgressDone,
+                                              waitForProgressBegin)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
@@ -138,19 +137,19 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     cdoc <- createDoc cPath "haskell" cSource
 
-    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
     -- generate an artificial warning to avoid timing out if the TH change does not propagate
-    changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource <> "\nfoo=()"]
+    changeDoc cdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ cSource <> "\nfoo=()"]
 
     -- Check that the change propagates to C
     expectDiagnostics
         [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
         ,("THC.hs", [(DiagnosticSeverity_Warning, (6,0), "Top-level binding")])
-        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level bindin")])
+        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level bindin")])
         ]
 
     closeDoc adoc
@@ -173,18 +172,18 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     adoc <- createDoc aPath "haskell" aSource
     bdoc <- createDoc bPath "haskell" bSource
 
-    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
 
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
-    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ bSource']
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
     waitForProgressBegin
     waitForAllProgressDone
 
-    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")]
+    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")]
 
     closeDoc adoc
     closeDoc bdoc

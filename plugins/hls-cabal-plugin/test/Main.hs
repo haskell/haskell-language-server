@@ -1,8 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns           #-}
-{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE TypeOperators            #-}
 
 module Main (
     main,
@@ -14,7 +11,6 @@ import           Control.Lens                    ((^.))
 import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
-import           Data.Row
 import qualified Data.Text                       as T
 import qualified Data.Text                       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
@@ -119,13 +115,11 @@ pluginTests =
                     changeDoc
                         cabalDoc
                         [ TextDocumentContentChangeEvent $
-                            InL $
-                                #range
-                                    .== theRange
-                                    .+ #rangeLength
-                                    .== Nothing
-                                    .+ #text
-                                    .== "MIT3"
+                            InL TextDocumentContentChangePartial
+                                { _range = theRange
+                                , _rangeLength = Nothing
+                                , _text = "MIT3"
+                                }
                         ]
                     cabalDiags <- waitForDiagnosticsFrom cabalDoc
                     unknownLicenseDiag <- liftIO $ inspectDiagnostic cabalDiags ["Unknown SPDX license identifier: 'MIT3'"]

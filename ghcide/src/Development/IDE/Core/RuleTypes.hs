@@ -2,7 +2,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -42,6 +41,8 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
+import           Ide.Logger                                   (Pretty (..),
+                                                               viaShow)
 import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
 
@@ -341,6 +342,9 @@ data FileOfInterestStatus
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus
 
+instance Pretty FileOfInterestStatus where
+    pretty = viaShow
+
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable IsFileOfInterestResult
@@ -513,6 +517,7 @@ makeLensesWith
     ''Splices
 
 {- Note [Client configuration in Rules]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The LSP client configuration is stored by `lsp` for us, and is accesible in
 handlers through the LspT monad.
 

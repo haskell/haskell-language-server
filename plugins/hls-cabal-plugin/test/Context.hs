@@ -6,7 +6,7 @@ module Context where
 
 import           Control.Monad.Trans.Maybe                   (runMaybeT)
 import qualified Data.Text                                   as T
-import qualified Data.Text.Utf16.Rope                        as Rope
+import qualified Data.Text.Utf16.Rope.Mixed                  as Rope
 import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completions

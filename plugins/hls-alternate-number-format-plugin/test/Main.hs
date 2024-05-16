@@ -1,6 +1,4 @@
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TypeOperators  #-}
-{-# LANGUAGE ViewPatterns   #-}
+{-# LANGUAGE ViewPatterns #-}
 module Main ( main ) where
 
 import           Data.Either                      (rights)
@@ -70,7 +68,7 @@ findAlternateNumberActions = pure . filter isAlternateNumberCodeAction . rights 
 -- most helpers derived from explicit-imports-plugin Main Test file
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-alternate-number-format-plugin" </> "test" </> "testdata"
 
 goldenAlternateFormat :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenAlternateFormat fp = goldenWithHaskellDoc def alternateNumberFormatPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"

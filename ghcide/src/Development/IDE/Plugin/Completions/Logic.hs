@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE OverloadedLabels      #-}
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -23,7 +22,6 @@ import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
-import           Data.Row
 import           Prelude                                  hiding (mod)
 
 import           Data.Maybe                               (fromMaybe, isJust,
@@ -62,17 +60,18 @@ import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
-import qualified Data.Text.Utf16.Rope                     as Rope
+import qualified Data.Text.Utf16.Rope.Mixed               as Rope
 import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
                                                            sdocStyle)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Plugins                              (defaultSDocContext,
@@ -530,7 +529,7 @@ toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
   removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
-      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= (\x -> x .! #snippetSupport))
+      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= view L.snippetSupport)
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
 toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}
@@ -904,7 +903,7 @@ getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
             lastMaybe = headMaybe . reverse
 
         -- grab the entire line the cursor is at
-        curLine <- headMaybe $ T.lines $ Rope.toText
+        curLine <- headMaybe $ Rope.lines
                              $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
         let beforePos = T.take (fromIntegral c) curLine
         -- the word getting typed, after previous space and before cursor

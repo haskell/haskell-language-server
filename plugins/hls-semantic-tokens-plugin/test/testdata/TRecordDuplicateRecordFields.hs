@@ -2,4 +2,4 @@
 
 module TRecordDuplicateRecordFields where
 
-data Foo = Foo { boo :: !String } 
+data Foo = Foo { boo :: !String }

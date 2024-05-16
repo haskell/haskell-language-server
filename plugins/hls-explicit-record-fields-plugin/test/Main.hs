@@ -1,7 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeOperators         #-}
 
 module Main ( main ) where
 
@@ -69,4 +67,4 @@ isExplicitFieldsCodeAction CodeAction {_title} =
   "Expand record wildcard" `T.isPrefixOf` _title
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-explicit-record-fields-plugin" </> "test" </> "testdata"

@@ -2,11 +2,6 @@
 # Unix
 [[check]]
 type = "Exclude"
-id = "STAN-0206"
-scope = "all"
-
-[[check]]
-type = "Exclude"
 id = "STAN-0103"
 file = "dir/configTest.hs"
 
@@ -16,11 +11,6 @@ id = "STAN-0212"
 directory = "dir/"
 
 # Windows
-[[check]]
-type = "Exclude"
-id = "STAN-0206"
-scope = "all"
-
 [[check]]
 type = "Exclude"
 id = "STAN-0103"

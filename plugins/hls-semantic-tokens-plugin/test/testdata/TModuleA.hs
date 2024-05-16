@@ -1,3 +1,5 @@
 module TModuleA where
 
-data Game = Game Int
+data Game = Game {a𐐀b :: Int}
+
+

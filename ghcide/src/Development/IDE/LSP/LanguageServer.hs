@@ -1,12 +1,8 @@
       -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE DuplicateRecordFields     #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE PolyKinds                 #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE StarIsType                #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
@@ -38,7 +34,7 @@ import           UnliftIO.Exception
 import qualified Colog.Core                            as Colog
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Shake            hiding (Log, Priority)
+import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb)
@@ -46,7 +42,6 @@ import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
-import           System.IO.Unsafe                      (unsafeInterleaveIO)
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
@@ -55,6 +50,7 @@ data Log
   | LogCancelledRequest !SomeLspId
   | LogSession Session.Log
   | LogLspServer LspServerLog
+  | LogServerShutdownMessage
   deriving Show
 
 instance Pretty Log where
@@ -78,6 +74,7 @@ instance Pretty Log where
       "Cancelled request" <+> viaShow requestId
     LogSession msg -> pretty msg
     LogLspServer msg -> pretty msg
+    LogServerShutdownMessage -> "Received shutdown message"
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
@@ -159,7 +156,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
           -- We want to avoid that the list of cancelled requests
           -- keeps growing if we receive cancellations for requests
           -- that do not exist or have already been processed.
-          when (reqId `elem` queued) $
+          when (reqId `Set.member` queued) $
               modifyTVar cancelledRequests (Set.insert reqId)
   let clearReqId reqId = atomically $ do
           modifyTVar pendingRequests (Set.delete reqId)
@@ -174,7 +171,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
         [ userHandlers
         , cancelHandler cancelRequest
         , exitHandler exit
-        , shutdownHandler stopReactorLoop
+        , shutdownHandler recorder stopReactorLoop
         ]
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
@@ -201,18 +198,10 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
     let root = LSP.resRootPath env
     dir <- maybe getCurrentDirectory return root
     dbLoc <- getHieDbLoc dir
-
-    -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
-    -- to 'getIdeState', so we use this dirty trick
-    dbMVar <- newEmptyMVar
-    ~(WithHieDbShield withHieDb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
-
-    ide <- getIdeState env root withHieDb hieChan
-
     let initConfig = parseConfiguration params
-
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
-    registerIdeConfiguration (shakeExtras ide) initConfig
+    dbMVar <- newEmptyMVar
+
 
     let handleServerException (Left e) = do
             logWith recorder Error $ LogReactorThreadException e
@@ -249,6 +238,10 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     ReactorNotification act -> handle exceptionInHandler act
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
+
+    (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
+    ide <- getIdeState env root withHieDb hieChan
+    registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
 
@@ -265,10 +258,10 @@ cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \T
         toLspId (InL x) = IdInt x
         toLspId (InR y) = IdString y
 
-shutdownHandler :: IO () -> LSP.Handlers (ServerM c)
-shutdownHandler stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
+shutdownHandler :: Recorder (WithPriority Log) -> IO () -> LSP.Handlers (ServerM c)
+shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
     (_, ide) <- ask
-    liftIO $ logDebug (ideLogger ide) "Received shutdown message"
+    liftIO $ logWith recorder Debug LogServerShutdownMessage
     -- stop the reactor to free up the hiedb connection
     liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable

@@ -124,7 +124,9 @@ completionTests =
   , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") (0, 4, 0, 32, 0, 4)
   , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") (0, 4, 0, 33, 0, 4)
   , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just InsertTextFormat_Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") (0, 4, 0, 34, 0, 4)
-  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing (0, 0, 0, 0, 0, 24)
+  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "-Wno-redundant-constraints" Nothing Nothing Nothing (0, 0, 0, 0, 0, 24)
+  , completionTest "completes ghc options pragma values with multiple dashes" "Completion.hs" "{-# OPTIONS_GHC -fmax-worker-ar #-}\n" "-fmax-worker-args" Nothing Nothing Nothing (0, 0, 0, 0, 0, 31)
+  , completionTest "completes multiple ghc options within single pragma" "Completion.hs" "{-# OPTIONS_GHC -ddump-simpl -ddump-spl #-}\n" "-ddump-splices" Nothing Nothing Nothing (0, 0, 0, 0, 0, 39)
   , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing (0, 24, 0, 31, 0, 24)
   , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing (0, 4, 0, 34, 0, 24)
   , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing (0, 13, 0, 31, 0, 16)
@@ -214,4 +216,4 @@ goldenWithPragmas :: PluginTestDescriptor () -> TestName -> FilePath -> (TextDoc
 goldenWithPragmas descriptor title path = goldenWithHaskellDoc def descriptor title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-pragmas-plugin" </> "test" </> "testdata"

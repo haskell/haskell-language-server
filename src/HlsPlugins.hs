@@ -1,6 +1,5 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 module HlsPlugins where
 
 import           Ide.Logger                        (Pretty (pretty), Recorder,
@@ -94,6 +93,10 @@ import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 import qualified Ide.Plugin.OverloadedRecordDot    as OverloadedRecordDot
 #endif
 
+#if hls_notes
+import qualified Ide.Plugin.Notes                  as Notes
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -106,6 +109,10 @@ import qualified Ide.Plugin.Fourmolu               as Fourmolu
 
 #if hls_cabalfmt
 import qualified Ide.Plugin.CabalFmt               as CabalFmt
+#endif
+
+#if hls_cabalgild
+import qualified Ide.Plugin.CabalGild              as CabalGild
 #endif
 
 #if hls_ormolu
@@ -158,21 +165,26 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_cabalfmt
-      -- this pId needs to be kept in sync with the hardcoded
-      -- cabalFormattingProvider in the Default Config
       let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
+#if hls_cabalgild
+      -- this pId needs to be kept in sync with the hardcoded
+      -- cabalFormattingProvider in the Default Config
+      let pId = "cabal-gild" in CabalGild.descriptor (pluginRecorder pId) pId:
+#endif
 #if hls_ormolu
+      -- this pId needs to be kept in sync with the hardcoded
+      -- haskellFormattingProvider in the Default Config
       let pId = "ormolu" in Ormolu.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_stylishHaskell
-      StylishHaskell.descriptor "stylish-haskell" :
+      let pId = "stylish-haskell" in StylishHaskell.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_retrie
-      Retrie.descriptor "retrie" :
+      let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
@@ -231,6 +243,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_overloaded_record_dot
       let pId = "overloaded-record-dot" in OverloadedRecordDot.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_notes
+      let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
 

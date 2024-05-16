@@ -50,7 +50,6 @@ env:
   cabalBuild: "v2-build --keep-going"
 
 jobs:
-
   pre_job:
     runs-on: ubuntu-latest
     outputs:
@@ -90,13 +89,17 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        exclude:
+          # We disable this this combo in test.yml due to long path issues, so we also need to disable it here
+          - os: windows-latest
+            ghc: "9.2"
     steps:
       - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-build
         with:
           ghc: ${{ matrix.ghc }}
-          os:  ${{ runner.os }}
+          os: ${{ runner.os }}
 
       # Download sources for feeding build sources cache
       # Fetching from github cache is faster than doing it from hackage

@@ -42,7 +42,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
-addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
+addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
     caps <- lift getClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
@@ -159,7 +159,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                 $ listToMaybe
                 $ mapMaybe listToMaybe
                 $ pointCommand hf instancePosition
-                    ( (Map.keys . Map.filter isClassNodeIdentifier . getNodeIds)
+                    ( (Map.keys . Map.filterWithKey isClassNodeIdentifier . getNodeIds)
                         <=< nodeChildren
                     )
 
@@ -198,8 +198,10 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                         _ -> fail "Ide.Plugin.Class.findClassFromIdentifier"
         findClassFromIdentifier _ (Left _) = throwError (PluginInternalError "Ide.Plugin.Class.findClassIdentifier")
 
-isClassNodeIdentifier :: IdentifierDetails a -> Bool
-isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` identInfo ident
+-- see https://hackage.haskell.org/package/ghc-9.8.1/docs/src/GHC.Types.Name.Occurrence.html#mkClassDataConOcc
+isClassNodeIdentifier :: Identifier -> IdentifierDetails a -> Bool
+isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occName i = (isNothing . identType) ident && Use `Set.member` identInfo ident
+isClassNodeIdentifier _ _ = False
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"

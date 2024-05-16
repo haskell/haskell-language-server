@@ -12,7 +12,7 @@ import           Test.Hls
 data CabalFmtFound = Found | NotFound
 
 isTestIsolated :: Bool
-#if isolateTests
+#if hls_isolate_cabalfmt_tests
 isTestIsolated = True
 #else
 isTestIsolated = False
@@ -21,7 +21,7 @@ isTestIsolated = False
 isCabalFmtFound :: IO CabalFmtFound
 isCabalFmtFound = case isTestIsolated of
   True -> pure Found
-  False-> do
+  False -> do
     cabalFmt <- findExecutable "cabal-fmt"
     pure $ maybe NotFound (const Found) cabalFmt
 
@@ -51,10 +51,10 @@ cabalFmtGolden :: CabalFmtFound -> TestName -> FilePath -> FilePath -> (TextDocu
 cabalFmtGolden NotFound title _ _ _ =
   testCase title $
     assertFailure $  "Couldn't find cabal-fmt on PATH or this is not an isolated run. "
-                  <> "Use cabal flag 'isolateTests' to make it isolated or install cabal-fmt locally."
+                  <> "Use cabal flag 'isolateCabalFmtTests' to make it isolated or install cabal-fmt locally."
 cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter def cabalFmtPlugin "cabal-fmt" conf title testDataDir path desc "cabal" act
   where
     conf = def
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-cabal-fmt-plugin" </> "test" </> "testdata"

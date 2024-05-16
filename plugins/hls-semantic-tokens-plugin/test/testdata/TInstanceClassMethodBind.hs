@@ -2,5 +2,5 @@ module TInstanceClassMethodBind where
 
 
 data Foo = Foo Int
-instance Eq Foo where
-    (==) = undefined
+instance Show Foo where
+    show = undefined

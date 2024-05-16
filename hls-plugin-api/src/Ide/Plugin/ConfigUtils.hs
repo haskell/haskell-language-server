@@ -94,6 +94,7 @@ pluginsToDefaultConfig IdePlugins {..} =
           SMethod_TextDocumentCompletion           -> ["completionOn" A..= plcCompletionOn]
           SMethod_TextDocumentPrepareCallHierarchy -> ["callHierarchyOn" A..= plcCallHierarchyOn]
           SMethod_TextDocumentSemanticTokensFull   -> ["semanticTokensOn" A..= plcSemanticTokensOn]
+          SMethod_TextDocumentSemanticTokensFullDelta -> ["semanticTokensOn" A..= plcSemanticTokensOn]
           _                                 -> []
 
 -- | Generates json schema used in haskell vscode extension
@@ -125,6 +126,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
           SMethod_TextDocumentCompletion           -> [toKey' "completionOn" A..= schemaEntry "completions" plcCompletionOn]
           SMethod_TextDocumentPrepareCallHierarchy -> [toKey' "callHierarchyOn" A..= schemaEntry "call hierarchy" plcCallHierarchyOn]
           SMethod_TextDocumentSemanticTokensFull   -> [toKey' "semanticTokensOn" A..= schemaEntry "semantic tokens" plcSemanticTokensOn]
+          SMethod_TextDocumentSemanticTokensFullDelta   -> [toKey' "semanticTokensOn" A..= schemaEntry "semantic tokens" plcSemanticTokensOn]
           _                                        -> []
         schemaEntry desc defaultVal =
           A.object

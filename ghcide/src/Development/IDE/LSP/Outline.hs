@@ -2,7 +2,6 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
 
 module Development.IDE.LSP.Outline
   ( moduleOutline
@@ -10,8 +9,10 @@ module Development.IDE.LSP.Outline
 where
 
 import           Control.Monad.IO.Class
+import           Data.Foldable                  (toList)
 import           Data.Functor
 import           Data.Generics                  hiding (Prefix)
+import           Data.List.NonEmpty             (nonEmpty)
 import           Data.Maybe
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
@@ -29,9 +30,6 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
 import          Language.LSP.Protocol.Message
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           Data.List.NonEmpty             (nonEmpty)
-import           Data.Foldable                  (toList)
 
 #if !MIN_VERSION_ghc(9,3,0)
 import qualified Data.Text                      as T
@@ -191,12 +189,10 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
     { _name   = case x of
                   ForeignImport{} -> name
                   ForeignExport{} -> name
-                  XForeignDecl{}  -> "?"
     , _kind   = SymbolKind_Object
     , _detail = case x of
                   ForeignImport{} -> Just "import"
                   ForeignExport{} -> Just "export"
-                  XForeignDecl{}  -> Nothing
     }
   where name = printOutputable $ unLoc $ fd_name x
 

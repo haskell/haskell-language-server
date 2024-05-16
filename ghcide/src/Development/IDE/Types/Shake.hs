@@ -1,15 +1,13 @@
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE PatternSynonyms           #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE PatternSynonyms    #-}
+{-# LANGUAGE TypeFamilies       #-}
 module Development.IDE.Types.Shake
   ( Q (..),
     A (..),
     Value (..),
     ValueWithDiagnostics (..),
     Values,
-    Key (..),
+    Key,
     BadDependency (..),
     ShakeValue(..),
     currentValue,
@@ -26,7 +24,8 @@ import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes       (FileVersion)
-import           Development.IDE.Graph                (Key (..), RuleResult, newKey)
+import           Development.IDE.Graph                (Key, RuleResult, newKey,
+                                                       pattern Key)
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location

@@ -4,10 +4,8 @@ The Haskell tooling dream is near, we need your help!
 
 ## How to contact the haskell ide team
 
-- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
-- Follow the [Haskell IDE team twitter account](https://twitter.com/IdeHaskell) for updates and help.
-- Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server. You can join the server via [this invitation](https://discord.gg/9spEdTNGrD).
-- Join the [haskell-tooling channel](https://matrix.to/#/#haskell-tooling:matrix.org) in [matrix](https://matrix.org/).
+- Join the [haskell-language-server channel](https://matrix.to/#/#haskell-language-server:matrix.org) in [matrix](https://matrix.org/) (primary communication channel).
+- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/) (secondary communication channel - all messages in this IRC channel are automatically bridged to the Matrix channel).
 - Visit [the project GitHub repo](https://github.com/haskell/haskell-language-server) to view the source code, or open issues or pull requests.
 
 ## Building
@@ -200,17 +198,6 @@ See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 ## Measuring, benchmarking and tracing
 
-### Metrics
-
-When ghcide is built with the `ekg` flag, HLS opens a metrics server on port 8999 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
-
-- `ghcide.values_count` - count of build results in the store
-- `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)
-- `ghcide.build_count` - build count. A key is GC'ed if it is dirty and older than 100 builds
-- `ghcide.dirty_keys_count` - non transitive count of dirty build keys
-- `ghcide.indexing_pending_count` - count of items in the indexing queue
-- `ghcide.exports_map_count` - count of identifiers in the exports map.
-
 ### Benchmarks
 
 If you are touching performance sensitive code, take the time to run a differential
@@ -221,7 +208,7 @@ Run the benchmarks with `cabal bench`.
 
 It should take around 25 minutes and the results will be stored in the `bench-results` folder. To interpret the results, see the comments in the `bench/Main.hs` module.
 
-More details in [bench/README](../../bench/README.md)
+More details in [bench/README](https://github.com/haskell/haskell-language-server/blob/master/bench/README.md)
 
 ### Tracing
 
@@ -233,7 +220,7 @@ Adding support for new editors is fairly easy if the editor already has good sup
 In that case, there will likely be an editor-specific support system for this (like `lsp-mode` for Emacs).
 This will typically provide instructions for how to support new languages.
 
-In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server) and
+In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](../configuration.md#configuring-haskell-language-server) and
 for them to configure how the server is started.
 
 ## Building the docs

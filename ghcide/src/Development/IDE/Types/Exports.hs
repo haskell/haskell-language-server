@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE RankNTypes         #-}
 module Development.IDE.Types.Exports
 (
     IdentInfo(..),
@@ -208,7 +207,7 @@ identInfoToKeyVal identInfo =
 
 buildModuleExportMap:: [(ModuleName, HashSet IdentInfo)] -> ModuleNameEnv (HashSet IdentInfo)
 buildModuleExportMap exportsMap = do
-  let lst = concatMap (Set.toList. snd) exportsMap
+  let lst = concatMap (Set.toList . snd) exportsMap
   let lstThree = map identInfoToKeyVal lst
   sortAndGroup lstThree
 
@@ -224,4 +223,4 @@ extractModuleExports modIFace = do
   (modName, functionSet)
 
 sortAndGroup :: [(ModuleName, IdentInfo)] -> ModuleNameEnv (HashSet IdentInfo)
-sortAndGroup assocs = listToUFM_C (<>) [(k, Set.fromList [v]) | (k, v) <- assocs]
+sortAndGroup assocs = listToUFM_C (<>) [(k, Set.singleton v) | (k, v) <- assocs]

@@ -70,15 +70,12 @@ data ChangeSignature = ChangeSignature {
                          , diagnostic  :: Diagnostic
                          }
 
--- | Constraint needed to trackdown OccNames in signatures
-type SigName = (HasOccName (IdP GhcPs))
-
 -- | Create a CodeAction from a Diagnostic
-generateAction :: SigName => PluginId -> Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
+generateAction :: PluginId -> Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
 generateAction plId uri decls diag = changeSigToCodeAction plId uri <$> diagnosticToChangeSig decls diag
 
 -- | Convert a diagnostic into a ChangeSignature and add the proper SrcSpan
-diagnosticToChangeSig :: SigName => [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
+diagnosticToChangeSig :: [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
 diagnosticToChangeSig decls diagnostic = do
     -- regex match on the GHC Error Message
     (expectedType, actualType, declName) <- matchingDiagnostic diagnostic
@@ -107,7 +104,7 @@ errorMessageRegexes = [ -- be sure to add new Error Messages Regexes at the bott
 
 -- | Given a String with the name of a declaration, GHC's "Expected Type", find the declaration that matches
 -- both the name given and the Expected Type, and return the type signature location
-findSigLocOfStringDecl :: SigName => [LHsDecl GhcPs] -> ExpectedSig -> String -> Maybe RealSrcSpan
+findSigLocOfStringDecl :: [LHsDecl GhcPs] -> ExpectedSig -> String -> Maybe RealSrcSpan
 findSigLocOfStringDecl decls expectedType declName = something (const Nothing `extQ` findSig `extQ` findLocalSig) decls
     where
         -- search for Top Level Signatures

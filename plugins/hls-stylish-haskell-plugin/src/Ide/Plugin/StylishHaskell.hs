@@ -1,9 +1,11 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.StylishHaskell
   ( descriptor
   , provider
+  , Log
   )
 where
 
@@ -11,7 +13,8 @@ import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
-import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE                  hiding (getExtensions,
+                                                   pluginHandlers)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat       (ModSummary (ms_hspp_opts),
                                                    extensionFlags)
@@ -25,9 +28,17 @@ import           Language.LSP.Protocol.Types      as LSP
 import           System.Directory
 import           System.FilePath
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId desc)
-  { pluginHandlers = mkFormattingHandlers provider
+data Log
+  = LogLanguageExtensionFromDynFlags
+
+instance Pretty Log where
+  pretty = \case
+    LogLanguageExtensionFromDynFlags -> "stylish-haskell uses the language extensions from DynFlags"
+
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId desc)
+  { pluginHandlers = mkFormattingHandlers (provider recorder)
   }
   where
     desc = "Provides formatting of Haskell files via stylish-haskell. Built with stylish-haskell-" <> VERSION_stylish_haskell
@@ -35,8 +46,8 @@ descriptor plId = (defaultPluginDescriptor plId desc)
 -- | Formatter provider of stylish-haskell.
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
-provider :: FormattingHandler IdeState
-provider ide typ contents fp _opts = do
+provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
+provider recorder ide _token typ contents fp _opts = do
   (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary fp
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file
@@ -52,7 +63,7 @@ provider ide typ contents fp _opts = do
     getMergedConfig dyn config
       | null (configLanguageExtensions config)
       = do
-          logInfo (ideLogger ide) "stylish-haskell uses the language extensions from DynFlags"
+          logWith recorder Info LogLanguageExtensionFromDynFlags
           pure
             $ config
               { configLanguageExtensions = getExtensions dyn }

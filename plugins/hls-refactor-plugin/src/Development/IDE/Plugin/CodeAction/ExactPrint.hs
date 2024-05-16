@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs        #-}
+{-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Plugin.CodeAction.ExactPrint (
   Rewrite (..),
   rewriteToEdit,
@@ -17,35 +17,40 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
 
 import           Control.Monad
 import           Control.Monad.Trans
-import           Data.Char                       (isAlphaNum)
-import           Data.Data                       (Data)
-import           Data.Generics                   (listify)
-import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      hiding (Annotation)
+import           Data.Char                              (isAlphaNum)
+import           Data.Data                              (Data)
+import           Data.Generics                          (listify)
+import qualified Data.Text                              as T
+import           Development.IDE.GHC.Compat             hiding (Annotation)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util
 import           Development.IDE.Spans.Common
-import           GHC.Exts                        (IsList (fromList))
-import           GHC.Stack                       (HasCallStack)
+import           GHC.Exts                               (IsList (fromList))
+import           GHC.Stack                              (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.LSP.Protocol.Types
 
 import           Development.IDE.Plugin.CodeAction.Util
 
 -- GHC version specific imports. For any supported GHC version, make sure there is no warning in imports.
-import           Control.Lens   (_head, _last, over)
-import           Data.Bifunctor (first)
-import           Data.Default   (Default (..))
-import           Data.Maybe     (fromJust, fromMaybe, mapMaybe)
-import           GHC            (AddEpAnn (..), AnnContext (..), AnnList (..),
-                                 AnnParen (..), DeltaPos (SameLine), EpAnn (..),
-                                 EpaLocation (EpaDelta),
-                                 IsUnicodeSyntax (NormalSyntax),
-                                 NameAdornment (NameParens),
-                                 TrailingAnn (AddCommaAnn), addAnns, ann,
-                                 emptyComments, noSrcSpanA, reAnnL)
-import Language.Haskell.GHC.ExactPrint.ExactPrint      (makeDeltaAst, showAst)
+import           Control.Lens                           (_head, _last, over)
+import           Data.Bifunctor                         (first)
+import           Data.Default                           (Default (..))
+import           Data.Maybe                             (fromMaybe,
+                                                         mapMaybe)
+import           GHC                                    (AddEpAnn (..),
+                                                         AnnContext (..),
+                                                         AnnList (..),
+                                                         AnnParen (..),
+                                                         DeltaPos (SameLine),
+                                                         EpAnn (..),
+                                                         EpaLocation (EpaDelta),
+                                                         IsUnicodeSyntax (NormalSyntax),
+                                                         NameAdornment (NameParens),
+                                                         TrailingAnn (AddCommaAnn),
+                                                         addAnns, ann,
+                                                         emptyComments, reAnnL)
 
 
 ------------------------------------------------------------------------------
@@ -77,15 +82,13 @@ rewriteToEdit :: HasCallStack =>
   Either String [TextEdit]
 rewriteToEdit dflags
               (Rewrite dst f) = do
-  (ast, anns , _) <- runTransformT
-                          $ do
+  (ast, _ , _) <- runTransformT $ do
     ast <- f dflags
     pure $ traceAst "REWRITE_result" $ resetEntryDP ast
-  let editMap =
-        [ TextEdit (fromJust $ srcSpanToRange dst) $
-            T.pack $ exactPrint ast
-        ]
-  pure editMap
+  let edits = case srcSpanToRange dst of
+        Just range -> [ TextEdit range $ T.pack $ exactPrint ast ]
+        Nothing -> []
+  pure edits
 
 -- | Convert a 'Rewrite' into a 'WorkspaceEdit'
 rewriteToWEdit :: DynFlags
@@ -204,10 +207,6 @@ lastMaybe :: [a] -> Maybe a
 lastMaybe []    = Nothing
 lastMaybe other = Just $ last other
 
-liftMaybe :: String -> Maybe a -> TransformT (Either String) a
-liftMaybe _ (Just x) = return x
-liftMaybe s _        = TransformT $ lift $ Left s
-
 ------------------------------------------------------------------------------
 extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
 extendImport mparent identifier lDecl@(L l _) =
@@ -238,7 +237,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
 #else
   | Just (hide, L l' lies) <- ideclHiding
 #endif
-    , hasSibling <- not $ null lies = do
+  = do
     src <- uniqueSrcSpanT
     top <- uniqueSrcSpanT
     let rdr = reLocA $ L src $ mkRdrUnqual $ mkVarOcc thing
@@ -307,7 +306,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
  where
   go _hide _l' _pre ((L _ll' (IEThingAll _ (L _ ie))) : _xs)
     | parent == unIEWrappedName ie = TransformT $ lift . Left $ child <> " already included in " <> parent <> " imports"
-  go hide l' pre (lAbs@(L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
+  go hide l' pre ((L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
     -- ThingAbs ie => ThingWith ie child
     | parent == unIEWrappedName ie = do
       srcChild <- uniqueSrcSpanT
@@ -342,15 +341,14 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
             thing = IEThingWith newl twIE (IEWildcard 2) []
 #if MIN_VERSION_ghc(9,7,0)
-            newl = fmap (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+            newl = fmap (\ann -> ann ++ [AddEpAnn AnnDotdot d0]) <$> l'''
 #else
-            newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+            newl = (\ann -> ann ++ [AddEpAnn AnnDotdot d0]) <$> l'''
 #endif
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
-    | parent == unIEWrappedName ie
-    , hasSibling <- not $ null lies' =
-      do
+    | parent == unIEWrappedName ie = do
+        let hasSibling = not $ null lies'
         srcChild <- uniqueSrcSpanT
         let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
         childRdr <- pure $ setEntryDP childRdr $ SameLine $ if hasSibling then 1 else 0
@@ -375,8 +373,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
             fixLast = if hasSibling then first addComma else id
         return $ L l it'
   go hide l' pre (x : xs) = go hide l' (x : pre) xs
-  go hide l' pre []
-    | hasSibling <- not $ null pre = do
+  go hide l' pre [] = do
       -- [] => ThingWith parent [child]
       l'' <- uniqueSrcSpanT
       srcParent <- uniqueSrcSpanT
@@ -384,12 +381,12 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       parentRdr <- liftParseAST df parent
       let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
           isParentOperator = hasParen parent
-      let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr'
+      let parentLIE = reLocA $ L srcParent $ if isParentOperator then IEType (epl 0) parentRdr'
                                                else IEName
 #if MIN_VERSION_ghc(9,5,0)
                                                       noExtField
 #endif
-                                                      parentRdr')
+                                                      parentRdr'
           parentRdr' = modifyAnns parentRdr $ \case
               it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1, nann_close = epl 0}
               other -> other
@@ -435,7 +432,7 @@ addCommaInImportList lies x =
             _ -> Nothing
         pure $ any isTrailingAnnComma (lann_trailing lastItemAnn)
 
-    hasSibling = not . null $ lies
+    hasSibling = not $ null lies
 
     -- Setup the new item. It should have a preceding whitespace if it has siblings, and a trailing comma if the
     -- preceding item already has one.
@@ -475,8 +472,6 @@ hideSymbol symbol lidecl@(L loc ImportDecl{..}) =
     Just (True, hides) -> Rewrite (locA loc) $ extendHiding symbol lidecl (Just hides)
     Just (False, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl imports
 #endif
-hideSymbol _ (L _ (XImportDecl _)) =
-  error "cannot happen"
 
 extendHiding ::
   String ->
@@ -529,7 +524,7 @@ deleteFromImport ::
   XRec GhcPs [LIE GhcPs] ->
   DynFlags ->
   TransformT (Either String) (LImportDecl GhcPs)
-deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
+deleteFromImport (T.pack -> symbol) (L l idecl) (L lieLoc lies) _ = do
   let edited = L lieLoc deletedLies
       lidecl' =
         L l $

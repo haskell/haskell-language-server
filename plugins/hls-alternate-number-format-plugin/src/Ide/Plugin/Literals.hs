@@ -1,9 +1,5 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE ViewPatterns #-}
 module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)
@@ -13,14 +9,14 @@ module Ide.Plugin.Literals (
 
 import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
-import qualified Data.Text                     as T
 #if __GLASGOW_HASKELL__ >= 908
 import qualified Data.Text.Encoding            as T
+#else
+import qualified Data.Text                     as T
 #endif
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.Graph.Classes (NFData (rnf))
-import           Generics.SYB                  (Data, Typeable, everything,
-                                                extQ)
+import           Generics.SYB                  (Data, everything, extQ)
 import qualified GHC.Generics                  as GHC
 
 -- data type to capture what type of literal we are dealing with
@@ -53,7 +49,7 @@ getSrcSpan = \case
     FracLiteral ss _ _ -> unLit ss
 
 -- | Find all literals in a Parsed Source File
-collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
+collectLiterals :: Data ast => ast -> [Literal]
 collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLiteral `extQ` getPattern))
 
 

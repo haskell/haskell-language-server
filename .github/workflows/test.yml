@@ -74,13 +74,23 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-        # Mark which GHC versions on which platforms we want to test.
-        include:
-           # Test all supported versions, but only on ubuntu and windows
-           - os: ubuntu-latest
-             test: true
-           - os: windows-latest
-             test: true
+        test:
+          - true
+          - false
+        exclude:
+          # Don't do anything for windows on 9.2, it has particularly bad long-path issues
+          - os: windows-latest
+            ghc: "9.2"
+          # Exclude the test configuration on macos, it's sufficiently similar to other OSs
+          # that it mostly just burns CI time. Buiding is still useful since it catches
+          # solver issues.
+          - os: macOS-latest
+            test: true
+          # Exclude the build-only configurations for windows and ubuntu
+          - os: windows-latest
+            test: false
+          - os: ubuntu-latest
+            test: false
 
     steps:
       - uses: actions/checkout@v3
@@ -91,159 +101,158 @@ jobs:
           os:  ${{ runner.os }}
 
       - name: Build
-        run: cabal build
+        run: cabal build all
 
       - name: Set test options
-        # run the tests without parallelism, otherwise tasty will attempt to run
-        # all functional test cases simultaneously which causes way too many hls
-        # instances to be spun up for the poor github actions runner to handle
+        # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
+        # to include 'new' in the filters, since many of our test suites are in the
+        # same package.
         run: |
-          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
-
-      - name: Cache test log between attempts of the same run
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-test-log
-        with:
-          path: "**/.tasty-rerun-log*"
-          key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
+          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new"
 
       - if: matrix.test
         name: Test hls-graph
-        run: cabal test hls-graph --test-options="$TEST_OPTS"
+        run: cabal test hls-graph
 
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
         # run the tests without parallelism to avoid running out of memory
-        run: cabal test ghcide --test-options="$TEST_OPTS" || cabal test ghcide --test-options="$TEST_OPTS"
+        run: cabal test ghcide-tests || cabal test ghcide-tests
 
       - if: matrix.test
         name: Test hls-plugin-api
-        run: cabal test hls-plugin-api --test-options="$TEST_OPTS" || cabal test hls-plugin-api --test-options="$TEST_OPTS"
+        run: cabal test hls-plugin-api || cabal test hls-plugin-api
 
       - if: matrix.test
         name: Test func-test suite
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
-        run: cabal test func-test --test-options="$TEST_OPTS" || cabal test func-test --test-options="$TEST_OPTS"
+        run: cabal test func-test || cabal test func-test
 
       - if: matrix.test
         name: Test wrapper-test suite
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
-        run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
+        run: cabal test wrapper-test
 
       - if: matrix.test
         name: Test hls-refactor-plugin
-        run: cabal test hls-refactor-plugin --test-options="$TEST_OPTS" || cabal test hls-refactor-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-refactor-plugin-tests || cabal test hls-refactor-plugin-tests
 
-      - if: matrix.test && matrix.ghc != '9.6' && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-floskell-plugin
-        run: cabal test hls-floskell-plugin --test-options="$TEST_OPTS" || cabal test hls-floskell-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-floskell-plugin-tests || cabal test hls-floskell-plugin-tests
 
       - if: matrix.test
         name: Test hls-class-plugin
-        run: cabal test hls-class-plugin --test-options="$TEST_OPTS" || cabal test hls-class-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-class-plugin-tests || cabal test hls-class-plugin-tests
 
       - if: matrix.test
         name: Test hls-pragmas-plugin
-        run: cabal test hls-pragmas-plugin --test-options="$TEST_OPTS" || cabal test hls-pragmas-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-pragmas-plugin-tests || cabal test hls-pragmas-plugin-tests
 
       - if: matrix.test
         name: Test hls-eval-plugin
-        run: cabal test hls-eval-plugin --test-options="$TEST_OPTS" || cabal test hls-eval-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-eval-plugin-tests || cabal test hls-eval-plugin-tests
 
       - if: matrix.test
         name: Test hls-splice-plugin
-        run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || cabal test hls-splice-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-splice-plugin-tests || cabal test hls-splice-plugin-tests
 
       - if: matrix.test && matrix.ghc != '9.2'
         name: Test hls-stan-plugin
-        run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-stan-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-stylish-haskell-plugin
-        run: cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-stylish-haskell-plugin-tests || cabal test hls-stylish-haskell-plugin-tests
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-ormolu-plugin
-        run: cabal test hls-ormolu-plugin --test-options="$TEST_OPTS" || cabal test hls-ormolu-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-ormolu-plugin-tests || cabal test hls-ormolu-plugin-tests
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-fourmolu-plugin
-        run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-fourmolu-plugin-tests || cabal test hls-fourmolu-plugin-tests
 
       - if: matrix.test
         name: Test hls-explicit-imports-plugin test suite
-        run: cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-explicit-imports-plugin-tests || cabal test hls-explicit-imports-plugin-tests
 
       - if: matrix.test
         name: Test hls-call-hierarchy-plugin test suite
-        run: cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-call-hierarchy-plugin-tests || cabal test hls-call-hierarchy-plugin-tests
 
       - if: matrix.test && matrix.os != 'windows-latest'
         name: Test hls-rename-plugin test suite
-        run: cabal test hls-rename-plugin --test-options="$TEST_OPTS" || cabal test hls-rename-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-rename-plugin-tests || cabal test hls-rename-plugin-tests
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-hlint-plugin test suite
-        run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-hlint-plugin-tests || cabal test hls-hlint-plugin-tests
 
       - if: matrix.test
         name: Test hls-module-name-plugin test suite
-        run: cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || cabal test hls-module-name-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-module-name-plugin-tests || cabal test hls-module-name-plugin-tests
 
       - if: matrix.test
         name: Test hls-alternate-number-format-plugin test suite
-        run: cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-alternate-number-format-plugin-tests || cabal test hls-alternate-number-format-plugin-tests
 
       - if: matrix.test
         name: Test hls-qualify-imported-names-plugin test suite
-        run: cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-qualify-imported-names-plugin-tests || cabal test hls-qualify-imported-names-plugin-tests
 
       - if: matrix.test
         name: Test hls-code-range-plugin test suite
-        run: cabal test hls-code-range-plugin --test-options="$TEST_OPTS" || cabal test hls-code-range-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-code-range-plugin-tests || cabal test hls-code-range-plugin-tests
 
       - if: matrix.test
         name: Test hls-change-type-signature test suite
-        run: cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS" || cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-change-type-signature-plugin-tests || cabal test hls-change-type-signature-plugin-tests
 
       - if: matrix.test
         name: Test hls-gadt-plugin test suit
-        run: cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || cabal test hls-gadt-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-gadt-plugin-tests || cabal test hls-gadt-plugin-tests
 
       - if: matrix.test
         name: Test hls-explicit-fixity-plugin test suite
-        run: cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-explicit-fixity-plugin-tests || cabal test hls-explicit-fixity-plugin-tests
 
       - if: matrix.test
         name: Test hls-explicit-record-fields-plugin test suite
-        run: cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-explicit-record-fields-plugin-tests || cabal test hls-explicit-record-fields-plugin-tests
 
       ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
       - if: matrix.test && matrix.ghc == '9.2'
         name: Test hls-cabal-fmt-plugin test suite
-        run: cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS"
+        run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests
+
+      - if: matrix.test
+        name: Test hls-cabal-gild-plugin test suite
+        run: cabal test hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests || cabal test hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests
 
       - if: matrix.test
         name: Test hls-cabal-plugin test suite
-        run: cabal test hls-cabal-plugin --test-options="$TEST_OPTS" || cabal test hls-cabal-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-cabal-plugin-tests || cabal test hls-cabal-plugin-tests
 
       - if: matrix.test
         name: Test hls-retrie-plugin test suite
-        run: cabal test hls-retrie-plugin --test-options="$TEST_OPTS" || cabal test hls-retrie-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-retrie-plugin-tests || cabal test hls-retrie-plugin-tests
 
       - if: matrix.test
         name: Test hls-overloaded-record-dot-plugin test suite
-        run: cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-overloaded-record-dot-plugin-tests || cabal test hls-overloaded-record-dot-plugin-tests
 
       - if: matrix.test
         name: Test hls-semantic-tokens-plugin test suite
-        run: cabal test hls-semantic-tokens-plugin --test-options="$TEST_OPTS" || cabal test hls-semantic-tokens-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-semantic-tokens-plugin-tests || cabal test hls-semantic-tokens-plugin-tests
 
+      - if: matrix.test
+        name: Test hls-notes-plugin test suite
+        run: cabal test hls-notes-plugin-tests || cabal test hls-notes-plugin-tests
 
   test_post_job:
     if: always()

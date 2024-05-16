@@ -1,33 +1,38 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PartialTypeSignatures    #-}
-{-# LANGUAGE TypeOperators            #-}
 
 module Main (main) where
 
-import           Control.Concurrent                (threadDelay)
 import           Control.Monad                     (void)
-import           Data.Aeson
 import qualified Data.Map                          as M
 import           Data.Text                         (Text)
-import qualified Development.IDE.GHC.ExactPrint
+import qualified Development.IDE.GHC.ExactPrint    as ExactPrint
 import qualified Development.IDE.Plugin.CodeAction as Refactor
+import           Ide.Logger
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Retrie                 as Retrie
-import           Ide.Types                         (IdePlugins (IdePlugins))
 import           System.FilePath
 import           Test.Hls
-import           Test.Hls                          (PluginTestDescriptor)
+
+data LogWrap
+    = RetrieLog Retrie.Log
+    | ExactPrintLog ExactPrint.Log
+
+instance Pretty LogWrap where
+    pretty = \case
+        RetrieLog msg -> pretty msg
+        ExactPrintLog msg -> pretty msg
 
 main :: IO ()
 main = defaultTestRunner tests
 
-retriePlugin :: PluginTestDescriptor a
-retriePlugin = mkPluginTestDescriptor' Retrie.descriptor "retrie"
+retriePlugin :: PluginTestDescriptor LogWrap
+retriePlugin =  mkPluginTestDescriptor (Retrie.descriptor . cmapWithPrio RetrieLog) "retrie"
 
-refactorPlugin :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
-refactorPlugin = mkPluginTestDescriptor Refactor.iePluginDescriptor "refactor"
+refactorPlugin :: PluginTestDescriptor LogWrap
+refactorPlugin = mkPluginTestDescriptor (Refactor.iePluginDescriptor  . cmapWithPrio ExactPrintLog) "refactor"
 
 tests :: TestTree
 tests = testGroup "Retrie"
@@ -55,24 +60,24 @@ inlineThisTests = testGroup "Inline this"
         ]
     ]
 
-
+testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
 testProvider title file line row expected = testCase title $ runWithRetrie $ do
     adoc <- openDoc (file <.> "hs") "haskell"
-    waitForTypecheck adoc
+    _ <- waitForTypecheck adoc
     let position = Position line row
     codeActions <- getCodeActions adoc $ Range position position
     liftIO $ map codeActionTitle codeActions @?= map Just expected
 
 testCommand :: TestName -> FilePath -> UInt -> UInt -> TestTree
 testCommand title file row col = goldenWithRetrie title file $ \adoc -> do
-    waitForTypecheck adoc
+    _ <- waitForTypecheck adoc
     let p = Position row col
     codeActions <- getCodeActions adoc $ Range p p
     case codeActions of
         [InR ca] -> do
             executeCodeAction ca
             void $ skipManyTill anyMessage $ getDocumentEdit adoc
-        [] -> error "No code actions found"
+        cas -> liftIO . assertFailure $ "One code action expected, got " <> show (length cas)
 
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle (InR CodeAction {_title}) = Just _title
@@ -80,15 +85,15 @@ codeActionTitle _                         = Nothing
 
 goldenWithRetrie :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRetrie title path act =
-    goldenWithHaskellDoc (def { plugins = M.fromList [("retrie", def)] }) testPlugins title testDataDir path "expected" "hs" act
+    goldenWithHaskellDoc (def { plugins = M.singleton "retrie" def }) testPlugins title testDataDir path "expected" "hs" act
 
 runWithRetrie :: Session a -> IO a
 runWithRetrie = runSessionWithServer def testPlugins testDataDir
 
-testPlugins :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
+testPlugins :: PluginTestDescriptor LogWrap
 testPlugins =
     retriePlugin <>
     refactorPlugin  -- needed for the GetAnnotatedParsedSource rule
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-retrie-plugin" </> "test" </> "testdata"

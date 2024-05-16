@@ -2,68 +2,47 @@
 {-# LANGUAGE PatternSynonyms #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
-import           Compat.HieTypes                (HieASTs, HieFile (..))
-import           Control.DeepSeq                (NFData)
-import           Control.Monad                  (void, when)
-import           Control.Monad.IO.Class         (liftIO)
-import           Control.Monad.Trans.Maybe      (MaybeT (MaybeT), runMaybeT)
-import           Data.Default
-import           Data.Foldable                  (toList)
-import           Data.Hashable                  (Hashable)
-import qualified Data.HashMap.Strict            as HM
-import           Data.HashSet                   (HashSet)
-import qualified Data.HashSet                   as HS
-import qualified Data.Map                       as Map
-import           Data.Maybe                     (fromJust, mapMaybe,
-                                                 maybeToList)
-import           Data.String                    (IsString (fromString))
-import qualified Data.Text                      as T
+import           Compat.HieTypes             (HieFile (..))
+import           Control.DeepSeq             (NFData)
+import           Control.Monad               (void)
+import           Control.Monad.IO.Class      (liftIO)
+import           Data.Foldable               (toList)
+import           Data.Hashable               (Hashable)
+import qualified Data.HashMap.Strict         as HM
+import           Data.Maybe                  (mapMaybe)
+import qualified Data.Text                   as T
 import           Development.IDE
-import           Development.IDE.Core.Rules     (getHieFile,
-                                                 getSourceFileSource)
-import           Development.IDE.Core.RuleTypes (HieAstResult (..))
-import qualified Development.IDE.Core.Shake     as Shake
-import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
-                                                 HieFile (hie_hs_file),
-                                                 RealSrcSpan (..), mkHieFile',
-                                                 mkRealSrcLoc, mkRealSrcSpan,
-                                                 runHsc, srcSpanEndCol,
-                                                 srcSpanEndLine,
-                                                 srcSpanStartCol,
-                                                 srcSpanStartLine, tcg_exports)
-import           Development.IDE.GHC.Error      (realSrcSpanToRange)
-import           GHC.Generics                   (Generic)
-import           Ide.Plugin.Config              (PluginConfig (..))
-import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId, configHasDiagnostics,
-                                                 configInitialGenericConfig,
-                                                 defaultConfigDescriptor,
-                                                 defaultPluginDescriptor)
-import qualified Language.LSP.Protocol.Types    as LSP
-import           Stan                           (createCabalExtensionsMap,
-                                                 getStanConfig)
-import           Stan.Analysis                  (Analysis (..), runAnalysis)
-import           Stan.Category                  (Category (..))
-import           Stan.Cli                       (StanArgs (..))
-import           Stan.Config                    (Config, ConfigP (..),
-                                                 applyConfig, defaultConfig)
-import           Stan.Config.Pretty             (ConfigAction, configToTriples,
-                                                 prettyConfigAction,
-                                                 prettyConfigCli)
-import           Stan.Core.Id                   (Id (..))
-import           Stan.EnvVars                   (EnvVars (..), envVarsToText)
-import           Stan.Inspection                (Inspection (..))
-import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
-import           Stan.Observation               (Observation (..))
-import           Stan.Report.Settings           (OutputSettings (..),
-                                                 ToggleSolution (..),
-                                                 Verbosity (..))
-import           Stan.Toml                      (usedTomlFiles)
-import           System.Directory               (makeRelativeToCurrentDirectory)
-import           Trial                          (Fatality, Trial (..), fiasco,
-                                                 pattern FiascoL,
-                                                 pattern ResultL, prettyTrial,
-                                                 prettyTrialWith)
+import           Development.IDE.Core.Rules  (getHieFile)
+import qualified Development.IDE.Core.Shake  as Shake
+import           GHC.Generics                (Generic)
+import           Ide.Plugin.Config           (PluginConfig (..))
+import           Ide.Types                   (PluginDescriptor (..), PluginId,
+                                              configHasDiagnostics,
+                                              configInitialGenericConfig,
+                                              defaultConfigDescriptor,
+                                              defaultPluginDescriptor)
+import qualified Language.LSP.Protocol.Types as LSP
+import           Stan                        (createCabalExtensionsMap,
+                                              getStanConfig)
+import           Stan.Analysis               (Analysis (..), runAnalysis)
+import           Stan.Category               (Category (..))
+import           Stan.Cli                    (StanArgs (..))
+import           Stan.Config                 (Config, ConfigP (..), applyConfig)
+import           Stan.Config.Pretty          (prettyConfigCli)
+import           Stan.Core.Id                (Id (..))
+import           Stan.EnvVars                (EnvVars (..), envVarsToText)
+import           Stan.Inspection             (Inspection (..))
+import           Stan.Inspection.All         (inspectionsIds, inspectionsMap)
+import           Stan.Observation            (Observation (..))
+import           Stan.Report.Settings        (OutputSettings (..),
+                                              ToggleSolution (..),
+                                              Verbosity (..))
+import           Stan.Toml                   (usedTomlFiles)
+import           System.Directory            (makeRelativeToCurrentDirectory)
+import           Trial                       (Fatality, Trial (..), fiasco,
+                                              pattern FiascoL, pattern ResultL,
+                                              prettyTrial, prettyTrialWith)
+
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = rules recorder plId
@@ -100,9 +79,6 @@ stripModifiers = go ""
       case T.findIndex (== 'm') txt of
         Nothing    -> txt
         Just index -> T.drop (index + 1) txt
-
-renderId :: Id a -> T.Text
-renderId (Id t) = "Id = " <> t
 
 instance Pretty Log where
   pretty = \case
@@ -157,31 +133,31 @@ rules recorder plId = do
                           }
 
               (configTrial, useDefConfig, env) <- liftIO $ getStanConfig stanArgs isLoud
-              seTomlFiles <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
-              logWith recorder Debug (LogDebugStanConfigResult seTomlFiles configTrial)
+              tomlsUsedByStan <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
+              logWith recorder Debug (LogDebugStanConfigResult tomlsUsedByStan configTrial)
 
               -- If envVar is set to 'False', stan will ignore all local and global .stan.toml files
               logWith recorder Debug (LogDebugStanEnvVars env)
-              seTomlFiles <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
 
-              (cabalExtensionsMap, checksMap, confIgnored) <- case configTrial of
+              -- Note that Stan works in terms of relative paths, but the HIE come in as absolute. Without
+              -- making its path relative, the file name(s) won't line up with the associated Map keys.
+              relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath file
+              let hieRelative = hie{hie_hs_file=relativeHsFilePath}
+
+              (checksMap, ignoredObservations) <- case configTrial of
                   FiascoL es -> do
                       logWith recorder Development.IDE.Warning (LogWarnConf es)
-                      pure (Map.empty,
-                            HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)],
-                            [])
-                  ResultL warnings stanConfig -> do
-                      let currentHSAbs = fromNormalizedFilePath file -- hie_hs_file hie
-                      currentHSRel <- liftIO $ makeRelativeToCurrentDirectory currentHSAbs
-                      cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hie]
+                      -- If we can't read the config file, default to using all inspections:
+                      let allInspections = HM.singleton relativeHsFilePath inspectionsIds
+                      pure (allInspections, [])
+                  ResultL _warnings stanConfig -> do
+                      -- HashMap of *relative* file paths to info about enabled checks for those file paths.
+                      let checksMap = applyConfig [relativeHsFilePath] stanConfig
+                      pure (checksMap, configIgnored stanConfig)
 
-                      -- Files (keys) in checksMap need to have an absolute path for the analysis, but applyConfig needs to receive relative
-                      -- filepaths to apply the config, because the toml config has relative paths. Stan itself seems to work only in terms of relative paths.
-                      let checksMap = HM.mapKeys (const currentHSAbs) $ applyConfig [currentHSRel] stanConfig
-
-                      let analysis = runAnalysis cabalExtensionsMap checksMap (configIgnored stanConfig) [hie]
-                      pure (cabalExtensionsMap, checksMap, configIgnored stanConfig)
-              let analysis = runAnalysis cabalExtensionsMap checksMap confIgnored [hie]
+              -- A Map from *relative* file paths (just one, in this case) to language extension info:
+              cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
+              let analysis = runAnalysis cabalExtensionsMap checksMap ignoredObservations [hieRelative]
               return (analysisToDiagnostics file analysis, Just ())
       else return ([], Nothing)
 

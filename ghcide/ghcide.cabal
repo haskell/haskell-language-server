@@ -1,8 +1,8 @@
-cabal-version:      3.0
+cabal-version:      3.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.6.0.0
+version:            2.8.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.0.2 || ==9.2.5
+tested-with:        GHC ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -28,13 +28,6 @@ source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server.git
 
-flag ekg
-  description:
-    Enable EKG monitoring of the build graph and other metrics on port 8999
-
-  default:     False
-  manual:      True
-
 flag pedantic
   description: Enable -Werror
   default:     False
@@ -42,17 +35,22 @@ flag pedantic
 
 common warnings
   ghc-options:
-    -Wall -Wincomplete-uni-patterns -Wunused-packages
+    -Werror=incomplete-patterns
+    -Wall
+    -Wincomplete-uni-patterns
+    -Wunused-packages
+    -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
     -fno-ignore-asserts
 
 library
-  default-language:   Haskell2010
+  import: warnings
+  default-language:   GHC2021
   build-depends:
     , aeson
     , array
     , async
-    , base                         >=4        && <5
+    , base                         >=4.16     && <5
     , base16-bytestring            >=0.1.1    && <1.1
     , binary
     , bytestring
@@ -73,7 +71,7 @@ library
     , filepath
     , fingertree
     , focus                        >=1.0.3.2
-    , ghc                          >=9.0
+    , ghc                          >=9.2
     , ghc-boot
     , ghc-boot-th
     , ghc-check                    >=0.5.0.8
@@ -82,16 +80,16 @@ library
     , Glob
     , haddock-library              >=1.8      && <1.12
     , hashable
-    , hie-bios                     ==0.13.1
+    , hie-bios                     ^>=0.14.0
     , hie-compat                   ^>=0.3.0.0
-    , hiedb                        ^>= 0.5.0.1
-    , hls-graph                    == 2.6.0.0
-    , hls-plugin-api               == 2.6.0.0
+    , hiedb                        ^>= 0.6.0.0
+    , hls-graph                    == 2.8.0.0
+    , hls-plugin-api               == 2.8.0.0
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.3.0.0
-    , lsp-types                    ^>=2.1.0.0
+    , lsp                          ^>=2.5.0.0
+    , lsp-types                    ^>=2.2.0.0
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
@@ -100,7 +98,6 @@ library
     , prettyprinter-ansi-terminal
     , random
     , regex-tdfa                   >=1.3.1.0
-    , row-types
     , safe-exceptions
     , sorted-list
     , sqlite-simple
@@ -123,24 +120,11 @@ library
     build-depends: unix
 
   default-extensions:
-    BangPatterns
     DataKinds
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveTraversable
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
-    KindSignatures
+    ExplicitNamespaces
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
-    TypeOperators
     ViewPatterns
 
   hs-source-dirs:     src session-loader
@@ -188,11 +172,11 @@ library
     Development.IDE.LSP.Server
     Development.IDE.Main
     Development.IDE.Main.HeapStats
-    Development.IDE.Monitoring.EKG
     Development.IDE.Monitoring.OpenTelemetry
     Development.IDE.Plugin
     Development.IDE.Plugin.Completions
     Development.IDE.Plugin.Completions.Types
+    Development.IDE.Plugin.Completions.Logic
     Development.IDE.Plugin.HLS
     Development.IDE.Plugin.HLS.GhcIde
     Development.IDE.Plugin.Test
@@ -220,28 +204,12 @@ library
     Development.IDE.Core.FileExists
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
-    Development.IDE.Plugin.Completions.Logic
     Development.IDE.Session.VersionCheck
     Development.IDE.Types.Action
 
   if flag(pedantic)
-    -- We eventually want to build with Werror fully, but we haven't
-    -- finished purging the warnings, so some are set to not be errors
-    -- for now
     ghc-options:
-      -Werror -Wwarn=unused-packages -Wwarn=unrecognised-pragmas
-      -Wwarn=dodgy-imports -Wwarn=missing-signatures
-      -Wwarn=duplicate-exports -Wwarn=dodgy-exports
-      -Wwarn=incomplete-patterns -Wwarn=overlapping-patterns
-      -Wwarn=incomplete-record-updates
-      -Wwarn=ambiguous-fields
-
-  if flag(ekg)
-    build-depends:
-      , ekg-core
-      , ekg-wai
-
-    cpp-options:   -DMONITORING_EKG
+      -Werror
 
 flag test-exe
   description: Build the ghcide-test-preprocessor executable
@@ -249,9 +217,8 @@ flag test-exe
 
 executable ghcide-test-preprocessor
   import: warnings
-  default-language: Haskell2010
+  default-language:   GHC2021
   hs-source-dirs:   test/preprocessor
-  ghc-options:      -Wno-name-shadowing
   main-is:          Main.hs
   build-depends:    base >=4 && <5
 
@@ -264,9 +231,9 @@ flag executable
 
 executable ghcide
   import: warnings
-  default-language:   Haskell2010
+  default-language:   GHC2021
   hs-source-dirs:     exe
-  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T" -Wno-name-shadowing
+  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T"
 
 
   -- allow user RTS overrides
@@ -275,7 +242,7 @@ executable ghcide
   -- Enable collection of heap statistics
   main-is:            Main.hs
   build-depends:
-    , base                  >=4 && <5
+    , base                  >=4.16 && <5
     , data-default
     , extra
     , ghcide
@@ -291,146 +258,28 @@ executable ghcide
 
   autogen-modules:    Paths_ghcide
   default-extensions:
-    BangPatterns
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
     ViewPatterns
 
   if !flag(executable)
     buildable: False
 
-  if flag(ekg)
-    build-depends:
-      , ekg-core
-      , ekg-wai
-
-    cpp-options:   -DMONITORING_EKG
-
-test-suite ghcide-tests
+library ghcide-test-utils
   import: warnings
-  type:               exitcode-stdio-1.0
-  default-language:   Haskell2010
-  build-tool-depends:
-    , ghcide:ghcide
-    , ghcide:ghcide-test-preprocessor
-    , implicit-hie:gen-hie
+  visibility: public
+  default-language:   GHC2021
+
+  hs-source-dirs: test/cabal
+  exposed-modules:
+    Development.IDE.Test.Runfiles
 
   build-depends:
-    , aeson
-    , async
-    , base
-    , containers
-    , data-default
-    , directory
-    , enummapset
-    , extra
-    , filepath
-    , fuzzy
-  --------------------------------------------------------------
-  -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
-  -- which require depending on ghc. So the tests need to depend
-  -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
-  -- better solution can be found, but this is a quick solution
-  -- which works for now.
-  --------------------------------------------------------------
-    , ghc
-    , ghcide
-    , hls-plugin-api
-    , lens
-    , list-t
-    , lsp
-    , lsp-test                ^>=0.16.0.0
-    , lsp-types
-    , monoid-subclasses
-    , mtl
-    , network-uri
-    , QuickCheck
-    , random
-    , regex-tdfa              ^>=1.3.1
-    , row-types
-    , shake
-    , sqlite-simple
-    , stm
-    , stm-containers
-    , tasty
-    , tasty-expected-failure
-    , tasty-hunit             >=0.10
-    , tasty-quickcheck
-    , tasty-rerun
-    , text
-    , text-rope
-    , unordered-containers
+      base > 4.9 && < 5
 
-  if impl(ghc <9.3)
-    build-depends: ghc-typelits-knownnat
-
-  hs-source-dirs:     test/cabal test/exe test/src
-  ghc-options:        -threaded -O0 -Wno-name-shadowing
-
-  main-is:            Main.hs
-  other-modules:
-    AsyncTests
-    BootTests
-    ClientSettingsTests
-    CodeLensTests
-    CompletionTests
-    CPPTests
-    CradleTests
-    DependentFileTest
-    Development.IDE.Test
-    Development.IDE.Test.Diagnostic
-    Development.IDE.Test.Runfiles
-    DiagnosticTests
-    ExceptionTests
-    FindDefinitionAndHoverTests
-    FuzzySearch
-    GarbageCollectionTests
-    HaddockTests
-    HieDbRetry
-    HighlightTests
-    IfaceTests
-    InitializeResponseTests
-    LogType
-    NonLspCommandLine
-    OpenCloseTest
-    OutlineTests
-    PluginParsedResultTests
-    PluginSimpleTests
-    PositionMappingTests
-    PreprocessorTests
-    Progress
-    ReferenceTests
-    RootUriTests
-    SafeTests
-    SymlinkTests
-    TestUtils
-    THTests
-    UnitTests
-    WatchedFileTests
-
-  -- Tests that have been pulled out of the main file
   default-extensions:
-    BangPatterns
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
-    LambdaCase
-    NamedFieldPuns
-    OverloadedStrings
-    RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
-    ViewPatterns
+      LambdaCase
+      OverloadedStrings
+      RecordWildCards
+      ViewPatterns

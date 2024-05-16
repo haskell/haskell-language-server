@@ -27,7 +27,7 @@ debugAST :: Bool
 debugAST = unsafePerformIO (getEnvDefault "GHCIDE_DEBUG_AST" "0") == "1"
 
 -- | Prints an 'Outputable' value to stderr and to an HTML file for further inspection
-traceAst :: (Data a, ExactPrint a, Outputable a, HasCallStack) => String -> a -> a
+traceAst :: (Data a, ExactPrint a, HasCallStack) => String -> a -> a
 traceAst lbl x
   | debugAST = trace doTrace x
   | otherwise = x

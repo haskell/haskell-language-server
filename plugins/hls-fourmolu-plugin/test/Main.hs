@@ -39,4 +39,4 @@ goldenWithFourmolu cli title path desc = goldenWithHaskellDocFormatter def fourm
   conf = def{plcConfig = KM.fromList ["external" .= cli]}
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-fourmolu-plugin" </> "test" </> "testdata"

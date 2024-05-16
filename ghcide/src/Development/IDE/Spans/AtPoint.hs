@@ -1,10 +1,8 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP   #-}
+{-# LANGUAGE GADTs #-}
 
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
@@ -97,10 +95,10 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
           adjustedLocs = HM.foldr go [] asts
           go (HAR _ _ rf tr _, goMapping) xs = refs ++ typerefs ++ xs
             where
-              refs = mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation . fst)
-                   $ concat $ mapMaybe (\n -> M.lookup (Right n) rf) names
-              typerefs = mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation)
-                   $ concat $ mapMaybe (`M.lookup` tr) names
+              refs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation . fst))
+                               (mapMaybe (\n -> M.lookup (Right n) rf) names)
+              typerefs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation))
+                                   (mapMaybe (`M.lookup` tr) names)
         in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
@@ -169,7 +167,7 @@ documentHighlight hf rf pos = pure highlights
   where
     -- We don't want to show document highlights for evidence variables, which are supposed to be invisible
     notEvidence = not . any isEvidenceContext . identInfo
-    ns = concat $ pointCommand hf pos (rights . M.keys . M.filter notEvidence . getNodeIds)
+    ns = concat $ pointCommand hf pos (rights . M.keys . M.filter notEvidence . getSourceNodeIds)
     highlights = do
       n <- ns
       ref <- fromMaybe [] (M.lookup (Right n) rf)
@@ -441,10 +439,10 @@ defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
 pointCommand hf pos k =
-    catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+    M.elems $ flip M.mapMaybeWithKey (getAsts hf) $ \fs ast ->
       -- Since GHC 9.2:
       -- getAsts :: Map HiePath (HieAst a)
-      -- type HiePath = LexialFastString
+      -- type HiePath = LexicalFastString
       --
       -- but before:
       -- getAsts :: Map HiePath (HieAst a)

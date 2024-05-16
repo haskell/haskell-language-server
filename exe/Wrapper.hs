@@ -1,12 +1,8 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE ExplicitNamespaces         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
 module Main where
@@ -45,11 +41,8 @@ import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as T
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
 import qualified Development.IDE.Main               as Main
-import           GHC.Stack.Types                    (emptyCallStack)
-import           Ide.Logger                         (Doc, Logger (Logger),
-                                                     Pretty (pretty),
-                                                     Recorder (logger_),
-                                                     WithPriority (WithPriority),
+import           Ide.Logger                         (Doc, Pretty (pretty),
+                                                     Recorder, WithPriority,
                                                      cmapWithPrio,
                                                      makeDefaultStderrRecorder)
 import           Ide.Plugin.Config                  (Config)
@@ -103,8 +96,10 @@ main = do
             Left err -> do
               T.hPutStrLn stderr (prettyError err NoShorten)
               case args of
-                Ghcide _ -> launchErrorLSP recorder (prettyError err Shorten)
-                _        -> pure ()
+                Ghcide (GhcideArguments { argsCommand = Main.LSP }) ->
+                    launchErrorLSP recorder (prettyError err Shorten)
+
+                _ -> exitFailure
 
 launchHaskellLanguageServer :: Recorder (WithPriority (Doc ())) -> Arguments -> IO (Either WrapperSetupError ())
 launchHaskellLanguageServer recorder parsedArgs = do
@@ -274,9 +269,7 @@ newtype ErrorLSPM c a = ErrorLSPM { unErrorLSPM :: (LspM c) a }
 -- to shut down the LSP.
 launchErrorLSP :: Recorder (WithPriority (Doc ())) -> T.Text -> IO ()
 launchErrorLSP recorder errorMsg = do
-  let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack (pretty m))
-
-  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) logger (IdePlugins [])
+  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) (IdePlugins [])
 
   inH <- Main.argsHandleIn defaultArguments
 

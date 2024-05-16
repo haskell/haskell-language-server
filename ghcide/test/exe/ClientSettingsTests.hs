@@ -14,6 +14,7 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
+import           Test.Hls                        (waitForProgressDone)
 import           Test.Tasty
 import           TestUtils
 
@@ -21,7 +22,6 @@ tests :: TestTree
 tests = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             setIgnoringLogNotifications False
-            void $ skipManyTill anyMessage $ message SMethod_ClientRegisterCapability
             void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             setConfigSection "haskell" $ toJSON (def :: Config)

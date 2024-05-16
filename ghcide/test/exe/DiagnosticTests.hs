@@ -1,6 +1,5 @@
 
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs #-}
 
 module DiagnosticTests (tests) where
 
@@ -9,7 +8,6 @@ import qualified Control.Lens                    as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class          (liftIO)
 import           Data.List.Extra
-import           Data.Row
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import           Development.IDE.GHC.Util
@@ -31,46 +29,57 @@ import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
--- import Test.QuickCheck.Instances ()
+
+import           Config
 import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (whenJust)
+import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
+import           Test.Hls                        (runSessionWithServerInTmpDirCont,
+                                                  waitForProgressBegin)
+import           Test.Hls.FileSystem             (directCradle, file, text,
+                                                  toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "diagnostics"
-  [ testSessionWait "fix syntax error" $ do
+  [ testWithDummyPluginEmpty "fix syntax error" $ do
       let content = T.unlines [ "module Testing wher" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 15) (Position 0 19)
-                                                       .+ #rangeLength .== Nothing
-                                                       .+ #text .== "where"
+      let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 15) (Position 0 19)
+              , _rangeLength = Nothing
+              , _text = "where"
+              }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [])]
-  , testSessionWait "introduce syntax error" $ do
+  , testWithDummyPluginEmpty "introduce syntax error" $ do
       let content = T.unlines [ "module Testing where" ]
       doc <- createDoc "Testing.hs" "haskell" content
       void $ skipManyTill anyMessage (message SMethod_WindowWorkDoneProgressCreate)
       waitForProgressBegin
-      let change = TextDocumentContentChangeEvent$ InL $ #range .== Range (Position 0 15) (Position 0 18)
-                                                      .+ #rangeLength .== Nothing
-                                                      .+ #text .== "wher"
+      let change = TextDocumentContentChangeEvent$ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 15) (Position 0 18)
+              , _rangeLength = Nothing
+              , _text = "wher"
+              }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
-  , testSessionWait "update syntax error" $ do
+  , testWithDummyPluginEmpty "update syntax error" $ do
       let content = T.unlines [ "module Testing(missing) where" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'")])]
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 15) (Position 0 16)
-                                                       .+ #rangeLength .== Nothing
-                                                       .+ #text .== "l"
+      let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 15) (Position 0 16)
+              , _rangeLength = Nothing
+              , _text = "l"
+              }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'")])]
-  , testSessionWait "variable not in scope" $ do
+  , testWithDummyPluginEmpty "variable not in scope" $ do
       let content = T.unlines
             [ "module Testing where"
             , "foo :: Int -> Int -> Int"
@@ -86,7 +95,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-  , testSessionWait "type error" $ do
+  , testWithDummyPluginEmpty "type error" $ do
       let content = T.unlines
             [ "module Testing where"
             , "foo :: Int -> String -> Int"
@@ -98,7 +107,7 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'")]
           )
         ]
-  , testSessionWait "typed hole" $ do
+  , testWithDummyPluginEmpty "typed hole" $ do
       let content = T.unlines
             [ "module Testing where"
             , "foo :: Int -> String"
@@ -125,7 +134,7 @@ tests = testGroup "diagnostics"
         expectedDs aMessage =
           [ ("A.hs", [(DiagnosticSeverity_Error, (2,4), aMessage)])
           , ("B.hs", [(DiagnosticSeverity_Error, (3,4), bMessage)])]
-        deferralTest title binding msg = testSessionWait title $ do
+        deferralTest title binding msg = testWithDummyPluginEmpty title $ do
           _ <- createDoc "A.hs" "haskell" $ sourceA binding
           _ <- createDoc "B.hs" "haskell"   sourceB
           expectDiagnostics $ expectedDs msg
@@ -135,7 +144,7 @@ tests = testGroup "diagnostics"
     , deferralTest "out of scope var"    "unbound" "Variable not in scope"
     ]
 
-  , testSessionWait "remove required module" $ do
+  , testWithDummyPluginEmpty "remove required module" $ do
       let contentA = T.unlines [ "module ModuleA where" ]
       docA <- createDoc "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
@@ -143,12 +152,14 @@ tests = testGroup "diagnostics"
             , "import ModuleA"
             ]
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 0) (Position 0 20)
-                                                       .+ #rangeLength .== Nothing
-                                                       .+ #text .== ""
+      let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 0 0) (Position 0 20)
+              , _rangeLength = Nothing
+              , _text = ""
+              }
       changeDoc docA [change]
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module")])]
-  , testSessionWait "add missing module" $ do
+  , testWithDummyPluginEmpty "add missing module" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
@@ -158,22 +169,21 @@ tests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
-  , testCase "add missing module (non workspace)" $
+  , testWithDummyPluginAndCap' "add missing module (non workspace)" lspTestCapsNoFileWatches $ \tmpDir -> do
     -- By default lsp-test sends FileWatched notifications for all files, which we don't want
     -- as non workspace modules will not be watched by the LSP server.
     -- To work around this, we tell lsp-test that our client doesn't have the
     -- FileWatched capability, which is enough to disable the notifications
-    withTempDir $ \tmpDir -> runInDir'' lspTestCapsNoFileWatches tmpDir "." "." [] $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
             ]
-      _ <- createDoc (tmpDir </> "ModuleB.hs") "haskell" contentB
-      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
+      _ <- createDoc (tmpDir `toAbsFp` "ModuleB.hs") "haskell" contentB
+      expectDiagnostics [(tmpDir `toAbsFp` "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
       let contentA = T.unlines [ "module ModuleA where" ]
-      _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
-      expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
-  , testSessionWait "cyclic module dependency" $ do
+      _ <- createDoc (tmpDir `toAbsFp` "ModuleA.hs") "haskell" contentA
+      expectDiagnostics [(tmpDir `toAbsFp` "ModuleB.hs", [])]
+  , testWithDummyPluginEmpty "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import ModuleB"
@@ -192,28 +202,24 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
-  , testSession' "deeply nested cyclic module dependency" $ \path -> do
-      let contentA = unlines
-            [ "module ModuleA where" , "import ModuleB" ]
-      let contentB = unlines
-            [ "module ModuleB where" , "import ModuleA" ]
-      let contentC = unlines
-            [ "module ModuleC where" , "import ModuleB" ]
-      let contentD = T.unlines
-            [ "module ModuleD where" , "import ModuleC" ]
-          cradle =
-            "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
-      liftIO $ writeFile (path </> "ModuleA.hs") contentA
-      liftIO $ writeFile (path </> "ModuleB.hs") contentB
-      liftIO $ writeFile (path </> "ModuleC.hs") contentC
-      liftIO $ writeFile (path </> "hie.yaml") cradle
+  , let contentA = T.unlines [ "module ModuleA where" , "import ModuleB" ]
+        contentB = T.unlines [ "module ModuleB where" , "import ModuleA" ]
+        contentC = T.unlines [ "module ModuleC where" , "import ModuleB" ]
+        contentD = T.unlines [ "module ModuleD where" , "import ModuleC" ]
+        cradle = directCradle ["ModuleA", "ModuleB", "ModuleC", "ModuleD"]
+    in testWithDummyPlugin "deeply nested cyclic module dependency"
+        (mkIdeTestFs [
+            file "ModuleA.hs" (text contentA)
+            ,file "ModuleB.hs" (text contentB)
+            ,file "ModuleC.hs" (text contentC)
+            ,cradle
+        ]) $ do
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
-        [ ( "ModuleB.hs"
-          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
-          )
+        [ ( "ModuleB.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")])
+        , ( "ModuleA.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")])
         ]
-  , testSessionWait "cyclic module dependency with hs-boot" $ do
+  , testWithDummyPluginEmpty "cyclic module dependency with hs-boot" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import {-# SOURCE #-} ModuleB"
@@ -232,11 +238,9 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSession' "bidirectional module dependency with hs-boot" $ \path -> do
-      let cradle = unlines
-            [ "cradle:"
-            , "  direct: {arguments: [ModuleA, ModuleB]}"
-            ]
+  , testWithDummyPlugin "bidirectional module dependency with hs-boot"
+        (mkIdeTestFs [directCradle ["ModuleA", "ModuleB"]])
+        $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import {-# SOURCE #-} ModuleB"
@@ -254,13 +258,12 @@ tests = testGroup "diagnostics"
       let contentAboot = T.unlines
             [ "module ModuleA where"
             ]
-      liftIO $ writeFile (path </> "hie.yaml") cradle
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSessionWait "correct reference used with hs-boot" $ do
+  , testWithDummyPluginEmpty "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import {-# SOURCE #-} ModuleA()"
@@ -286,7 +289,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
       expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSessionWait "redundant import" $ do
+  , testWithDummyPluginEmpty "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
@@ -300,7 +303,7 @@ tests = testGroup "diagnostics"
           , [(DiagnosticSeverity_Warning, (2, 0), "The import of 'ModuleA' is redundant", Just DiagnosticTag_Unnecessary)]
           )
         ]
-  , testSessionWait "redundant import even without warning" $ do
+  , testWithDummyPluginEmpty "redundant import even without warning" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wno-unused-imports -Wmissing-signatures #-}"
@@ -312,7 +315,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
-  , testSessionWait "package imports" $ do
+  , testWithDummyPluginEmpty "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
             , "x :: Integer"
@@ -350,7 +353,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-  , testSessionWait "unqualified warnings" $ do
+  , testWithDummyPluginEmpty "unqualified warnings" $ do
       let fooContent = T.unlines
             [ "{-# OPTIONS_GHC -Wredundant-constraints #-}"
             , "module Foo where"
@@ -368,7 +371,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-    , testSessionWait "lower-case drive" $ do
+    , testWithDummyPluginEmpty "lower-case drive" $ do
           let aContent = T.unlines
                 [ "module A.A where"
                 , "import A.B ()"
@@ -397,27 +400,11 @@ tests = testGroup "diagnostics"
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
           liftIO $ fileUri @?= uriB
-          let msg :: T.Text = (head diags) ^. L.message
+          let msg :: T.Text = head diags ^. L.message
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)
           closeDoc a
-  , testSessionWait "haddock parse error" $ do
-      let fooContent = T.unlines
-            [ "module Foo where"
-            , "foo :: Int"
-            , "foo = 1 {-|-}"
-            ]
-      _ <- createDoc "Foo.hs" "haskell" fooContent
-      if ghcVersion >= GHC90 then
-          -- Haddock parse errors are ignored on ghc-9.0
-            pure ()
-      else
-        expectDiagnostics
-            [ ( "Foo.hs"
-              , [(DiagnosticSeverity_Warning, (2, 8), "Haddock parse error on input")]
-              )
-            ]
-  , testSessionWait "strip file path" $ do
+  , testWithDummyPluginEmpty "strip file path" $ do
       let
           name = "Testing"
           content = T.unlines
@@ -436,9 +423,9 @@ tests = testGroup "diagnostics"
             Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
           failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
       Lens.mapMOf_ offenders failure notification
-  , testSession' "-Werror in cradle is ignored" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml")
-        "cradle: {direct: {arguments: [\"-Wall\", \"-Werror\"]}}"
+  , testWithDummyPlugin "-Werror in cradle is ignored"
+        (mkIdeTestFs [directCradle ["-Wall", "-Werror"]])
+        $ do
       let fooContent = T.unlines
             [ "module Foo where"
             , "foo = ()"
@@ -450,7 +437,7 @@ tests = testGroup "diagnostics"
             ]
           )
         ]
-  , testSessionWait "-Werror in pragma is ignored" $ do
+  , testWithDummyPluginEmpty "-Werror in pragma is ignored" $ do
       let fooContent = T.unlines
             [ "{-# OPTIONS_GHC -Wall -Werror #-}"
             , "module Foo() where"
@@ -465,9 +452,9 @@ tests = testGroup "diagnostics"
           )
         ]
   , testCase "typecheck-all-parents-of-interest" $ runWithExtraFiles "recomp" $ \dir -> do
-    let bPath = dir </> "B.hs"
-        pPath = dir </> "P.hs"
-        aPath = dir </> "A.hs"
+    let bPath = dir `toAbsFp` "B.hs"
+        pPath = dir `toAbsFp` "P.hs"
+        aPath = dir `toAbsFp` "A.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
@@ -479,7 +466,7 @@ tests = testGroup "diagnostics"
       [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
 
     -- Change y from Int to B which introduces a type error in A (imported from P)
-    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
                     T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     expectDiagnostics
       [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
@@ -487,7 +474,7 @@ tests = testGroup "diagnostics"
 
     -- Open A and edit to fix the type error
     adoc <- createDoc aPath "haskell" aSource
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $
+    changeDoc adoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
                     T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
 
     expectDiagnostics
@@ -500,15 +487,15 @@ tests = testGroup "diagnostics"
       ]
     expectNoMoreDiagnostics 1
 
-  , testSessionWait "deduplicate missing module diagnostics" $  do
+  , testWithDummyPluginEmpty "deduplicate missing module diagnostics" $  do
       let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
       doc <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
 
-      changeDoc doc [TextDocumentContentChangeEvent  . InR . (.==) #text $ "module Foo() where" ]
+      changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ "module Foo() where" ]
       expectDiagnostics []
 
-      changeDoc doc [TextDocumentContentChangeEvent  . InR . (.==) #text $ T.unlines
+      changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ T.unlines
             [ "module Foo() where" , "import MissingModule" ] ]
       expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
 
@@ -520,12 +507,18 @@ tests = testGroup "diagnostics"
   ]
   where
       editPair x y = let p = Position x y ; p' = Position x (y+2) in
-        (TextDocumentContentChangeEvent $ InL $ #range .== Range p p
-                                             .+ #rangeLength .== Nothing
-                                             .+ #text .== "fd"
-        ,TextDocumentContentChangeEvent $ InL $ #range .== Range p p'
-                                             .+ #rangeLength .== Nothing
-                                             .+ #text .== "")
+        (TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range p p
+              , _rangeLength = Nothing
+              , _text = "fd"
+              }
+
+        ,TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range p p'
+              , _rangeLength = Nothing
+              , _text = ""
+              }
+        )
       editHeader = editPair 0 0
       editImport = editPair 2 10
       editBody   = editPair 3 10
@@ -582,8 +575,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
       expectNoMoreDiagnostics 0.5
     where
         -- similar to run except it disables kick
-        runTestNoKick s = withTempDir $ \dir -> runInDir' dir "." "." ["--test-no-kick"] s
-
+        runTestNoKick s = runSessionWithServerInTmpDirCont True dummyPlugin def def def (mkIdeTestFs []) (const s)
         typeCheck doc = do
             WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
             liftIO $ assertBool "The file should typecheck" ideResultSuccess
