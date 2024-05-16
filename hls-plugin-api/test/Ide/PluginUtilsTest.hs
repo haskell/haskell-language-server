@@ -201,7 +201,7 @@ propertyTest = testGroup "property api tests" [
     ]
     where
     nestedPropertiesExample = emptyProperties
-        & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "foo")
+        & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "foo" & defineStringProperty #boo "boo" "boo")
         & defineStringProperty #baz "baz" "baz"
 
     nestedPropertiesExample2 = emptyProperties
