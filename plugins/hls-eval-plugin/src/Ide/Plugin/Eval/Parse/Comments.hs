@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -39,6 +40,13 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char                     (alphaNumChar, char,
                                                            eol, hspace,
                                                            letterChar)
+
+#if MIN_VERSION_base(4,20,0)
+import           Data.Functor                             (unzip)
+import           Prelude                                  hiding (unzip)
+#else
+import           Data.List.NonEmpty                       (unzip)
+#endif
 
 {-
 We build parsers combining the following three kinds of them:
@@ -407,7 +415,7 @@ nonEmptyLGP =
 exampleLinesGP :: LineGroupParser TestComment
 exampleLinesGP =
     lexemeLine $
-        uncurry AnExample . first convexHullRange . NE.unzip
+        uncurry AnExample . first convexHullRange . unzip
             <$> NE.some exampleLineGP
             <*> resultLinesP
 
