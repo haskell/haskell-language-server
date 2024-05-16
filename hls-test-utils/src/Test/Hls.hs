@@ -30,10 +30,8 @@ module Test.Hls
     def,
     -- * Running HLS for integration tests
     runSessionWithServer,
-    runSessionWithServerAndCaps,
     runSessionWithServerInTmpDir,
     runSessionWithServerAndCapsInTmpDir,
-    runSessionWithServerAndCapsShift,
     runSessionWithServerInTmpDir',
     -- continuation version that take a FileSystem
     runSessionWithServerInTmpDirCont,
@@ -208,7 +206,14 @@ goldenWithHaskellAndCaps
   -> TestTree
 goldenWithHaskellAndCaps config clientCaps plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServerAndCaps config plugin clientCaps testDataDir
+  $ runSessionWithTestConfig def {
+    testConfigRoot = testDataDir,
+    testConfigCaps = clientCaps,
+    testLspConfig = config,
+    testPluginDescriptor = plugin
+  }
+  $ const
+--   runSessionWithServerAndCaps config plugin clientCaps testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -513,18 +518,10 @@ runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath
 runSessionWithServer config plugin fp act =
     runSessionWithTestConfig (mkTestConfig fp plugin){testLspConfig=config} (const act)
 
-runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
-runSessionWithServerAndCaps config plugin caps root act =
-    runSessionWithTestConfig (mkTestConfig root plugin){testConfigCaps=caps, testLspConfig=config} (const act)
-
-runSessionWithServerAndCapsShift :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
-runSessionWithServerAndCapsShift config plugin caps root act =
-    runSessionWithTestConfig (mkTestConfig root plugin){testConfigCaps=caps, testLspConfig=config, testShiftRoot=True} (const act)
-
 instance Default (TestConfig b) where
   def = TestConfig {
     testConfigRoot = "",
-    testFileTree = Just (VirtualFileTree [] ""),
+    testFileTree = Nothing,
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
@@ -681,37 +678,26 @@ lock = unsafePerformIO newLock
 lockForTempDirs :: Lock
 lockForTempDirs = unsafePerformIO newLock
 
-
--- -- | Host a server, and run a test session on it
--- -- Note: cwd will not be shifted into @root@ in @Session a@
--- runSessionWithServer' ::
---   (Pretty b) =>
---   -- | whether we disable the kick action or not
---   Bool ->
---   -- | Plugin to load on the server.
---   PluginTestDescriptor b ->
---   -- | lsp config for the server
---   Config ->
---   -- | config for the test session
---   SessionConfig ->
---   ClientCapabilities ->
---   FilePath ->
---   Session a ->
---   IO a
--- runSessionWithServer' disableKick pluginsDp conf sconf caps root s =
---     withLock lock $ keepCurrentDirectory $ runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
-
 data TestConfig b = TestConfig
   {
     testConfigRoot           :: FilePath
+    -- ^ Root directory of the test project
   , testFileTree             :: Maybe VirtualFileTree
+    -- ^ Virtual file tree to be used for the test
   , testShiftRoot            :: Bool
+    -- ^ Whether to shift the root directory to the test project root
   , testDisableKick          :: Bool
+    -- ^ Whether to disable the kick action
   , testDisableDefaultPlugin :: Bool
+    -- ^ Whether to disable the default plugin comes with ghcide
   , testPluginDescriptor     :: PluginTestDescriptor b
+    -- ^ Plugin to load on the server.
   , testLspConfig            :: Config
+    -- ^ lsp config for the server
   , testConfigSession        :: SessionConfig
+    -- ^ config for the test session
   , testConfigCaps           :: ClientCapabilities
+    -- ^ Client capabilities
   }
 
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
@@ -766,31 +752,6 @@ runSessionWithTestConfig TestConfig{..} session =
                 , argsProjectRoot = prjRoot
                 , argsDisableKick = testDisableKick
                 }
-
-
-
-
--- -- | Host a server, and run a test session on it
--- -- Note: cwd will be shifted into @root@ in @Session a@
--- runSessionWithServer'' ::
---   (Pretty b) =>
---   -- | whether we disable the kick action or not
---   Bool ->
---   -- | Plugin to load on the server.
---   PluginTestDescriptor b ->
---   -- | lsp config for the server
---   Config ->
---   -- | config for the test session
---   SessionConfig ->
---   ClientCapabilities ->
---   FilePath ->
---   Session a ->
---   IO a
--- runSessionWithServer'' disableKick pluginsDp conf sconf caps relativeRoot s =
---     withLock lock $ keepCurrentDirectory $ do
---         root <- makeAbsolute relativeRoot
---         setCurrentDirectory root
---         runSessionWithServerNoRootLock disableKick pluginsDp conf sconf caps root s
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()

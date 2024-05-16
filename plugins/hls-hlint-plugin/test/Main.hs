@@ -116,7 +116,12 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCapsShift def hlintPlugin noLiteralCaps testDir $ do
+    , testCase "falls back to pre 3.8 code actions" $
+        runSessionWithTestConfig def {
+            testConfigCaps = noLiteralCaps,
+            testConfigRoot = testDir,
+            testPluginDescriptor = hlintPlugin,
+            testShiftRoot = True} $ const $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "hlint"

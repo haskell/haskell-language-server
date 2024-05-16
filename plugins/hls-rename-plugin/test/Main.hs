@@ -146,4 +146,8 @@ expectRenameError doc pos newName = do
 
 runRenameSession :: FilePath -> Session a -> IO a
 runRenameSession subdir = failIfSessionTimeout
-  . runSessionWithServerAndCaps def renamePlugin codeActionNoResolveCaps (testDataDir </> subdir)
+  .  runSessionWithTestConfig def
+  {testConfigRoot=testDataDir </> subdir,
+  testPluginDescriptor=renamePlugin,
+  testConfigCaps=codeActionNoResolveCaps}
+  . const
