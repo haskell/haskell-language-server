@@ -17,9 +17,9 @@ import           Language.LSP.Protocol.Types    hiding
 import           Language.LSP.Test
 import           System.Directory               (setCurrentDirectory)
 import           System.FilePath                ((</>))
+import           Test.Hls
 import           Test.Hls.FileSystem            (FileSystem, toAbsFp)
 import           Test.Tasty
-import Test.Hls
 
 
 tests :: TestTree
