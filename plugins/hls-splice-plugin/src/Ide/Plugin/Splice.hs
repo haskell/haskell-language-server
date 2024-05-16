@@ -5,73 +5,74 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MagicHash             #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE PatternSynonyms       #-}
 
 module Ide.Plugin.Splice
     ( descriptor,
     )
 where
 
-import           Control.Applicative             (Alternative ((<|>)))
-import           Control.Arrow                   ( Arrow(first) )
-import           Control.Exception              ( SomeException )
-import qualified Control.Foldl                   as L
-import           Control.Lens                    (Identity (..), ix, view, (%~),
-                                                  (<&>), (^.))
-import           Control.Monad                   ( guard, unless, forM )
-import           Control.Monad.Error.Class       ( MonadError(throwError) )
-import           Control.Monad.Extra             (eitherM)
-import qualified Control.Monad.Fail              as Fail
-import           Control.Monad.IO.Unlift         ( MonadIO(..), askRunInIO )
-import           Control.Monad.Trans.Class       ( MonadTrans(lift) )
-import           Control.Monad.Trans.Except      ( ExceptT(..), runExceptT )
+import           Control.Applicative                       (Alternative ((<|>)))
+import           Control.Arrow                             (Arrow (first))
+import           Control.Exception                         (SomeException)
+import qualified Control.Foldl                             as L
+import           Control.Lens                              (Identity (..), ix,
+                                                            view, (%~), (<&>),
+                                                            (^.))
+import           Control.Monad                             (forM, guard, unless)
+import           Control.Monad.Error.Class                 (MonadError (throwError))
+import           Control.Monad.Extra                       (eitherM)
+import qualified Control.Monad.Fail                        as Fail
+import           Control.Monad.IO.Unlift                   (MonadIO (..),
+                                                            askRunInIO)
+import           Control.Monad.Trans.Class                 (MonadTrans (lift))
+import           Control.Monad.Trans.Except                (ExceptT (..),
+                                                            runExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                      hiding (Null)
-import qualified Data.Bifunctor                  as B (first)
-import           Data.Foldable                   (Foldable (foldl'))
+import           Data.Aeson                                hiding (Null)
+import qualified Data.Bifunctor                            as B (first)
 import           Data.Function
 import           Data.Generics
-import qualified Data.Kind                       as Kinds
-import           Data.List                       (sortOn)
-import           Data.Maybe                      (fromMaybe, listToMaybe,
-                                                  mapMaybe)
-import qualified Data.Text                       as T
+import qualified Data.Kind                                 as Kinds
+import           Data.List                                 (sortOn)
+import           Data.Maybe                                (fromMaybe,
+                                                            listToMaybe,
+                                                            mapMaybe)
+import qualified Data.Text                                 as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.GHC.Compat      as Compat
+import           Development.IDE.GHC.Compat                as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import qualified Development.IDE.GHC.Compat.Util as Util
+import qualified Development.IDE.GHC.Compat.Util           as Util
 import           Development.IDE.GHC.ExactPrint
-import           Language.Haskell.GHC.ExactPrint.Transform (TransformT(TransformT))
-
-#if MIN_VERSION_ghc(9,4,1)
-
-import           GHC.Data.Bag (Bag)
-
-#endif
-
 import           GHC.Exts
-
-
-#if MIN_VERSION_ghc(9,9,0)
-import           GHC.Parser.Annotation (EpAnn(..))
-#else
-import           GHC.Parser.Annotation (SrcSpanAnn'(..))
-#endif
-import qualified GHC.Types.Error as Error
-
-
+import qualified GHC.Types.Error                           as Error
+import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
-import           Language.LSP.Server
-import           Language.LSP.Protocol.Types
+import           Language.Haskell.GHC.ExactPrint           (uniqueSrcSpanT)
+import           Language.Haskell.GHC.ExactPrint.Transform (TransformT (TransformT))
+import qualified Language.LSP.Protocol.Lens                as J
 import           Language.LSP.Protocol.Message
-import qualified Language.LSP.Protocol.Lens         as J
-import Ide.Plugin.Error (PluginError(PluginInternalError))
+import           Language.LSP.Protocol.Types
+import           Language.LSP.Server
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.Foldable                             (Foldable (foldl'))
+#endif
+
+#if MIN_VERSION_ghc(9,4,1)
+import           GHC.Data.Bag                              (Bag)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                     (EpAnn (..))
+#else
+import           GHC.Parser.Annotation                     (SrcSpanAnn' (..))
+#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -227,10 +228,10 @@ setupDynFlagsForGHCiLike env dflags = do
         platform = targetPlatform dflags3
         dflags3a = setWays hostFullWays dflags3
         dflags3b =
-            foldl gopt_set dflags3a $
+            foldl' gopt_set dflags3a $
                 concatMap (wayGeneralFlags platform) hostFullWays
         dflags3c =
-            foldl gopt_unset dflags3b $
+            foldl' gopt_unset dflags3b $
                 concatMap (wayUnsetGeneralFlags platform) hostFullWays
         dflags4 =
             dflags3c
@@ -249,7 +250,7 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
             let minStart =
                     case L.fold (L.premap (view J.range) L.minimum) eds of
                         Nothing -> error "impossible"
-                        Just v -> v
+                        Just v  -> v
             in adjustLine minStart <$> eds
 
         adjustATextEdits :: Traversable f => f (TextEdit |? AnnotatedTextEdit) -> f (TextEdit |? AnnotatedTextEdit)
@@ -314,7 +315,7 @@ instance HasSplice AnnListItem HsExpr where
 #if MIN_VERSION_ghc(9,5,0)
     type SpliceOf HsExpr = HsSpliceCompat
     matchSplice _ (HsUntypedSplice _ spl) = Just (UntypedSplice spl)
-    matchSplice _ (HsTypedSplice _ spl) = Just (TypedSplice spl)
+    matchSplice _ (HsTypedSplice _ spl)   = Just (TypedSplice spl)
 #else
     type SpliceOf HsExpr = HsSplice
     matchSplice _ (HsSpliceE _ spl) = Just spl
@@ -403,7 +404,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                                             (fst <$> expandSplice astP spl)
                                                     )
                                         Just <$> case eExpr of
-                                            Left x -> pure $ L _spn x
+                                            Left x  -> pure $ L _spn x
                                             Right y -> unRenamedE dflags y
                                     _ -> pure Nothing
             let (warns, errs) =
@@ -515,12 +516,12 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
                         | spanIsRelevant l ->
                             case expr of
 #if MIN_VERSION_ghc(9,5,0)
-                                HsTypedSplice{} -> Here (spLoc, Expr)
+                                HsTypedSplice{}   -> Here (spLoc, Expr)
                                 HsUntypedSplice{} -> Here (spLoc, Expr)
 #else
-                                HsSpliceE {} -> Here (spLoc, Expr)
+                                HsSpliceE {}      -> Here (spLoc, Expr)
 #endif
-                                _            -> Continue
+                                _                 -> Continue
                     _ -> Stop
                 )
                 `extQ` \case
