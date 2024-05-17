@@ -53,8 +53,6 @@ if impl(ghc >= 9.9)
     lens >= 5.3.2,
     haskell-language-server -stylishHaskell -ormolu -fourmolu -floskell -hlint,
   allow-newer:
-    aeson:containers,
-    aeson:template-haskell,
     boring:base,
     co-log-core:base,
     constraints-extras:base,
@@ -66,7 +64,6 @@ if impl(ghc >= 9.9)
     entropy:filepath,
     entropy:process,
     free:template-haskell,
-    generically:base,
     ghc-trace-events:base,
     haddock-library:base,
     haddock-library:containers,
@@ -84,13 +81,6 @@ if impl(ghc >= 9.9)
     monoid-subclasses:containers,
     quickcheck-instances:base,
     quickcheck-instances:containers,
-    semialign:base,
-    semialign:containers,
-    some:base,
-    text-short:base,
-    text-short:template-haskell,
-    tasty-hspec:base,
-    these:base,
     uuid-types:template-haskell,
 else
   benchmarks: True
