@@ -16,16 +16,10 @@ import           Development.IDE.GHC.ExactPrint            (genAnchor1,
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
 import           GHC                                       (EpAnn (..),
-#if MIN_VERSION_ghc(9,9,0)
-                                                            EpUniToken(..),
-#else
-                                                            SrcSpanAnn' (SrcSpanAnn),
-#endif
                                                             SrcSpanAnnA,
                                                             SrcSpanAnnN,
                                                             emptyComments,
                                                             noAnn)
-import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
 import           Ide.PluginUtils                           (makeDiffTextEdit)
 import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
@@ -33,15 +27,26 @@ import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             runTransformT)
 import           Language.LSP.Protocol.Types
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,4,0)
 import           GHC                                       (TrailingAnn (..))
 import           GHC.Hs                                    (IsUnicodeSyntax (..))
 import           Language.Haskell.GHC.ExactPrint.Transform (d1)
 #endif
 
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,4,0) && !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.ExactPrint            (epl)
 import           GHC.Parser.Annotation                     (TokenLocation (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC                                       (SrcSpanAnn' (SrcSpanAnn))
+import           GHC.Types.SrcLoc                          (generatedSrcSpan)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC                                       (EpUniToken (..))
 #endif
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
@@ -167,4 +172,3 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
         insertArg n (a:as) = a : insertArg (n - 1) as
         lsigTy' = hsTypeFromFunTypeAsList (insertArg loc args, res)
     in L annHsSig (HsSig xHsSig tyVarBndrs lsigTy')
-

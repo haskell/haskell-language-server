@@ -31,33 +31,33 @@ import           GHC.Stack                              (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.LSP.Protocol.Types
 
-import           Development.IDE.Plugin.CodeAction.Util
-
--- GHC version specific imports. For any supported GHC version, make sure there is no warning in imports.
 import           Control.Lens                           (_head, _last, over)
 import           Data.Bifunctor                         (first)
-import           Data.Default                           (Default (..))
-import           Data.Maybe                             (fromMaybe,
-                                                         mapMaybe)
+import           Data.Maybe                             (fromMaybe, mapMaybe)
+import           Development.IDE.Plugin.CodeAction.Util
 import           GHC                                    (AddEpAnn (..),
                                                          AnnContext (..),
                                                          AnnList (..),
                                                          AnnParen (..),
                                                          DeltaPos (SameLine),
                                                          EpAnn (..),
-#if !MIN_VERSION_ghc(9,9,0)
-                                                         EpaLocation(EpaDelta),
-                                                         ann,
-#else
-                                                         EpaLocation'(..),
-                                                         NoAnn(..),
-#endif
                                                          IsUnicodeSyntax (NormalSyntax),
                                                          NameAdornment (NameParens),
                                                          TrailingAnn (AddCommaAnn),
-                                                         addAnns,
                                                          emptyComments, reAnnL)
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           Data.Default                           (Default (..))
+import           GHC                                    (EpaLocation (EpaDelta),
+                                                         addAnns, ann)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC                                    (EpaLocation' (..),
+                                                         NoAnn (..))
+#endif
 
 ------------------------------------------------------------------------------
 
@@ -482,11 +482,12 @@ addCommaInImportList lies x =
         L lastItemSrcAnn _ <- lastMaybe lies
 #if MIN_VERSION_ghc(9,9,0)
         lastItemAnn <- case lastItemSrcAnn of
+            EpAnn _ lastItemAnn _ -> pure lastItemAnn
 #else
         lastItemAnn <- case ann lastItemSrcAnn of
-#endif
             EpAnn _ lastItemAnn _ -> pure lastItemAnn
             _ -> Nothing
+#endif
         pure $ any isTrailingAnnComma (lann_trailing lastItemAnn)
 
     hasSibling = not $ null lies
@@ -539,10 +540,10 @@ extendHiding ::
 extendHiding symbol (L l idecls) mlies df = do
   L l' lies <- case mlies of
     Nothing -> do
-        src <- uniqueSrcSpanT
 #if MIN_VERSION_ghc(9,9,0)
         let ann = noAnnSrcSpanDP0
 #else
+        src <- uniqueSrcSpanT
         let ann = noAnnSrcSpanDP0 src
 #endif
 #if MIN_VERSION_ghc(9,9,0)

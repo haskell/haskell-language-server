@@ -271,8 +271,7 @@ showAstDataHtml a0 = html $
             srcSpanAnnN :: EpAnn NameAnn -> SDoc
             srcSpanAnnN = locatedAnn'' (text "SrcSpanAnnN")
 
-            locatedAnn'' :: forall a. (Typeable a, Data a)
-              => SDoc -> EpAnn a -> SDoc
+            locatedAnn'' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
             locatedAnn'' tag ss = parens $
               case cast ss of
                 Just (ann :: EpAnn a) ->

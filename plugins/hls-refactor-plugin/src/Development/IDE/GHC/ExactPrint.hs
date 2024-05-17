@@ -54,7 +54,6 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
-import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
 import           Data.Functor.Classes
@@ -84,46 +83,49 @@ import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseExpr,
                                                           parsePattern,
                                                           parseType)
-#if MIN_VERSION_ghc(9,9,0)
-import           GHC.Plugins                             (showSDoc)
-import           GHC.Utils.Outputable                    (Outputable (ppr))
-#else
-import           GHC                                     (EpAnn (..),
+
+
+import           Control.Lens                            (_last, (&))
+import           Control.Lens.Operators                  ((%~))
+import           Data.List                               (partition)
+import           GHC                                     (DeltaPos (..),
+                                                          SrcSpanAnnN)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           Data.Default                            (Default)
+import           GHC                                     (Anchor (..),
+                                                          AnchorOperation,
+                                                          EpAnn (..),
                                                           NameAdornment (NameParens),
                                                           NameAnn (..),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           SrcSpanAnnA,
                                                           TrailingAnn (AddCommaAnn),
                                                           emptyComments,
+                                                          realSrcSpan,
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           EpaLocation (EpaDelta),
                                                           deltaPos)
+import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 #endif
 
-import           Control.Lens                            (_last, (&))
-import           Control.Lens.Operators                  ((%~))
-import           Data.List                               (partition)
-import           GHC                                     (Anchor (..),
 #if MIN_VERSION_ghc(9,9,0)
-                                                          EpAnn(..),
-                                                          EpaLocation(..),
-                                                          AnnContext(..),
+import           GHC                                     (Anchor,
+                                                          AnnContext (..),
+                                                          EpAnn (..),
+                                                          EpaLocation,
+                                                          EpaLocation' (..),
+                                                          NameAdornment (..),
+                                                          NameAnn (..),
                                                           SrcSpanAnnA,
-                                                          NameAnn(..),
-                                                          TrailingAnn(..),
+                                                          TrailingAnn (..),
                                                           deltaPos,
-                                                          EpaLocation'(..),
-                                                          spanAsAnchor,
                                                           emptyComments,
-                                                          NameAdornment(..),
-#else
-                                                          AnchorOperation,
+                                                          spanAsAnchor)
 #endif
-                                                          DeltaPos (..),
-                                                          SrcSpanAnnN,
-                                                          realSrcSpan)
-import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 
 setPrecedingLines ::
 #if !MIN_VERSION_ghc(9,9,0)
@@ -474,8 +476,8 @@ setAnchor anc (EpAnn _ nameAnn comments) =
 #else
 setAnchor anc (SrcSpanAnn (EpAnn _ nameAnn comments) span) =
   SrcSpanAnn (EpAnn anc nameAnn comments) span
-#endif
 setAnchor _ spanAnnN = spanAnnN
+#endif
 
 removeTrailingAnns :: SrcSpanAnnN -> SrcSpanAnnN
 #if MIN_VERSION_ghc(9,9,0)
@@ -486,8 +488,8 @@ removeTrailingAnns (EpAnn anc nameAnn comments) =
 removeTrailingAnns (SrcSpanAnn (EpAnn anc nameAnn comments) span) =
   let nameAnnSansTrailings = nameAnn {nann_trailing = []}
   in SrcSpanAnn (EpAnn anc nameAnnSansTrailings comments) span
-#endif
 removeTrailingAnns spanAnnN = spanAnnN
+#endif
 
 -- | Modify the type signature for the given IdP. This function handles splitting a multi-sig
 -- SigD into multiple SigD if the type signature is changed.

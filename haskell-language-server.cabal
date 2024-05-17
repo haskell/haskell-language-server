@@ -1662,11 +1662,12 @@ library hls-refactor-plugin
     , deepseq
     , mtl
     , lens
-    , data-default
     , time
     -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
     , regex-applicative
     , parser-combinators
+  if impl(ghc < 9.10)
+    build-depends: data-default
 
 test-suite hls-refactor-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings

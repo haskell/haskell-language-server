@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.CodeAction
@@ -67,21 +68,10 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-#if MIN_VERSION_ghc(9,9,0)
-import           GHC.Types.SrcLoc                                  (srcSpanToRealSrcSpan)
-#endif
 import           GHC                                               (AddEpAnn (AddEpAnn),
-#if MIN_VERSION_ghc(9,9,0)
-                                                                    HasLoc(..),
-                                                                    EpaLocation'(..),
-#else
-                                                                    Anchor (anchor_op),
-                                                                    AnchorOperation (..),
-#endif
                                                                     AnnsModule (am_main),
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
-                                                                    EpaLocation (..),
                                                                     LEpaComment)
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.Logger                                        hiding
@@ -112,6 +102,22 @@ import           Language.LSP.VFS                                  (virtualFileT
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC                                               (Anchor (anchor_op),
+                                                                    AnchorOperation (..),
+                                                                    EpaLocation (..))
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC                                               (EpaLocation,
+                                                                    EpaLocation' (..),
+                                                                    HasLoc (..))
+import           GHC.Types.SrcLoc                                  (srcSpanToRealSrcSpan)
+#endif
+
 
 -------------------------------------------------------------------------------------------------
 
