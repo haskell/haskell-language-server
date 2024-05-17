@@ -7,6 +7,7 @@ import           Config
 import           Control.Monad.IO.Class      (liftIO)
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
+import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
@@ -55,11 +56,11 @@ tests =
         [ docSymbolD "A a" "type family" SymbolKind_Function (R 1 0 1 15),
           docSymbol "A ()" SymbolKind_Interface (R 2 0 2 23)
         ],
-      testSymbolsA "data family" ["{-# language TypeFamilies #-}", "data family A"] [docSymbolD "A" "data family" SymbolKind_Function (R 1 0 1 11)],
+      testSymbolsA "data family" ["{-# language TypeFamilies #-}", "data family A"] [docSymbolD "A" "data family" SymbolKind_Function (R 1 0 1 (if ghcVersion >= GHC910 then 13 else 11))],
       testSymbolsA
         "data family instance "
         ["{-# language TypeFamilies #-}", "data family A a", "data instance A () = A ()"]
-        [ docSymbolD "A a" "data family" SymbolKind_Function (R 1 0 1 11),
+        [ docSymbolD "A a" "data family" SymbolKind_Function (R 1 0 1 (if ghcVersion >= GHC910 then 15 else 11)),
           docSymbol "A ()" SymbolKind_Interface (R 2 0 2 25)
         ],
       testSymbolsA "constant" ["a = ()"] [docSymbol "a" SymbolKind_Function (R 0 0 0 6)],
