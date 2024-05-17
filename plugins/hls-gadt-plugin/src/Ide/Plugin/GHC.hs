@@ -14,32 +14,38 @@ import           Development.IDE
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
-#if MIN_VERSION_ghc(9,9,0)
-                                                          EpaLocation'(..),
-                                                          EpUniToken(..),
-                                                          noAnn,
-#else
-                                                          Anchor (Anchor),
-                                                          AnchorOperation (MovedAnchor),
-                                                          EpaLocation (EpaDelta),
-                                                          SrcSpanAnn' (SrcSpanAnn),
-#endif
                                                           DeltaPos (..),
                                                           EpAnn (..),
                                                           EpAnnComments (EpaComments),
                                                           spanAsAnchor)
 import           Ide.PluginUtils                         (subRange)
-#if MIN_VERSION_ghc(9,9,0)
-import           Language.Haskell.GHC.ExactPrint.Utils         (showAst)
-#else
-import           Language.Haskell.GHC.ExactPrint         (showAst)
-#endif
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,5,0)
 import qualified Data.List.NonEmpty                      as NE
+#endif
+
+#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                   (TokenLocation (..))
 #endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                   (Anchor (Anchor),
+                                                          AnchorOperation (MovedAnchor),
+                                                          EpaLocation (EpaDelta),
+                                                          SrcSpanAnn' (SrcSpanAnn))
+import           Language.Haskell.GHC.ExactPrint         (showAst)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                   (EpUniToken (..),
+                                                          EpaLocation' (..),
+                                                          noAnn)
+import           Language.Haskell.GHC.ExactPrint.Utils   (showAst)
+#endif
+
 
 type GP = GhcPass Parsed
 
@@ -229,7 +235,7 @@ prettyGADTDecl df decl =
 #endif
             where
 #if MIN_VERSION_ghc(9,9,0)
-                go _ = EpaDelta (DifferentLine 1 2) []
+                go _            = EpaDelta (DifferentLine 1 2) []
 #else
                 go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
 #endif
