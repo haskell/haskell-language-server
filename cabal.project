@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-05-17T10:42:08Z
+index-state: 2024-05-17T11:58:03Z
 
 tests: True
 test-show-details: direct
@@ -69,14 +69,6 @@ if impl(ghc >= 9.9)
     hie-bios:ghc,
     hiedb:base,
     hiedb:ghc,
-    lens:template-haskell,
-    lsp:containers,
-    lsp:lens,
-    lsp-test:containers,
-    lsp-test:lens,
-    lsp-types:containers,
-    lsp-types:lens,
-    lsp-types:template-haskell,
     monoid-subclasses:containers,
     quickcheck-instances:base,
     quickcheck-instances:containers,
