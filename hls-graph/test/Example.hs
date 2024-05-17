@@ -20,6 +20,12 @@ instance Typeable a => Show (Rule a) where
 
 type instance RuleResult (Rule a) = a
 
+ruleStep :: Rules ()
+ruleStep = addRule $ \(Rule :: Rule ()) _old mode -> do
+    case mode of
+        RunDependenciesChanged -> return $ RunResult ChangedRecomputeSame "" () (return ())
+        RunDependenciesSame -> return $ RunResult ChangedNothing "" () (return ())
+
 ruleUnit :: Rules ()
 ruleUnit = addRule $ \(Rule :: Rule ()) _old _mode -> do
     return $ RunResult ChangedRecomputeDiff "" () (return ())

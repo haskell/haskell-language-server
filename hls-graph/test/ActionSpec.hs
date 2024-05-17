@@ -8,7 +8,8 @@ import           Control.Concurrent.STM
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabase)
-import           Development.IDE.Graph.Internal.Database (build, incDatabase)
+import           Development.IDE.Graph.Internal.Database (build, compute,
+                                                          incDatabase)
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
@@ -18,6 +19,28 @@ import           Test.Hspec
 
 spec :: Spec
 spec = do
+  describe "compute" $ do
+    it "build step and changed step updated correctly" $ do
+      (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $ do
+        ruleStep
+
+      let k = newKey $ Rule @()
+      -- ChangedRecomputeSame
+      r1@Result{resultChanged=rc1, resultBuilt=rb1} <- compute theDb emptyStack k RunDependenciesChanged Nothing
+      incDatabase theDb Nothing
+      -- ChangedRecomputeSame
+      r2@Result{resultChanged=rc2, resultBuilt=rb2} <- compute theDb emptyStack k RunDependenciesChanged (Just r1)
+      incDatabase theDb Nothing
+      -- changed Nothing
+      Result{resultChanged=rc3, resultBuilt=rb3} <- compute theDb emptyStack k RunDependenciesSame (Just r2)
+      rc1 `shouldBe` Step 0
+      rc2 `shouldBe` Step 0
+      rc3 `shouldBe` Step 0
+
+      rb1 `shouldBe` Step 0
+      rb2 `shouldBe` Step 1
+      rb3 `shouldBe` Step 1
+
   describe "apply1" $ do
     it "computes a rule with no dependencies" $ do
       db <- shakeNewDatabase shakeOptions $ do

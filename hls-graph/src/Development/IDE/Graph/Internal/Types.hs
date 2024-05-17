@@ -84,7 +84,7 @@ getDatabase = Action $ asks actionDatabase
 data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 newtype Step = Step Int
-    deriving newtype (Eq,Ord,Hashable)
+    deriving newtype (Eq,Ord,Hashable,Show)
 
 ---------------------------------------------------------------------
 -- Keys
