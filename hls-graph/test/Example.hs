@@ -68,3 +68,7 @@ ruleSubBranch :: C.MVar Int -> Rules ()
 ruleSubBranch mv = addRule $ \SubBranchRule _old _mode -> do
     r <- liftIO $ C.modifyMVar mv $ \x -> return (x+1, x)
     return $ RunResult ChangedRecomputeDiff "" r (return ())
+
+data CountRule = CountRule
+    deriving (Eq, Generic, Hashable, NFData, Show, Typeable)
+type instance RuleResult CountRule = Int
