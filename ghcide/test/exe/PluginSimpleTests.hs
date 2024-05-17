@@ -36,7 +36,7 @@ tests =
 
   -- Error: cabal: Failed to build ghc-typelits-natnormalise-0.7.7 (which is
   -- required by plugin-1.0.0). See the build log above for details.
-  ignoreFor (BrokenForGHC [GHC96, GHC98]) "fragile, frequently times out" $
+  ignoreFor (BrokenForGHC [GHC96, GHC98, GHC910]) "fragile, frequently times out" $
   ignoreFor (BrokenSpecific Windows [GHC94]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
