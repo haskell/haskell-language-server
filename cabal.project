@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-05-17T11:58:03Z
+index-state: 2024-05-18T02:15:01Z
 
 tests: True
 test-show-details: direct
@@ -63,7 +63,6 @@ if impl(ghc >= 9.9)
     entropy:filepath,
     entropy:process,
     free:template-haskell,
-    ghc-trace-events:base,
     haddock-library:base,
     haddock-library:containers,
     hie-bios:ghc,
