@@ -41,14 +41,11 @@ source-repository head
 
 common warnings
   ghc-options:
-    -Wall
-    -Wredundant-constraints
-    -Wunused-packages
-    -Wno-name-shadowing
+    -Wall -Wredundant-constraints -Wunused-packages -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
 
 library
-  import: warnings
+  import:             warnings
   exposed-modules:
     Control.Concurrent.STM.Stats
     Development.IDE.Graph
@@ -56,8 +53,8 @@ library
     Development.IDE.Graph.Database
     Development.IDE.Graph.Internal.Action
     Development.IDE.Graph.Internal.Database
-    Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Key
+    Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Paths
     Development.IDE.Graph.Internal.Profile
     Development.IDE.Graph.Internal.Rules
@@ -98,9 +95,9 @@ library
     build-depends:
       , file-embed        >=0.0.11
       , template-haskell
+
   else
-    build-depends:
-      directory
+    build-depends: directory
 
   if flag(stm-stats)
     cpp-options: -DSTM_STATS
@@ -109,11 +106,10 @@ library
     ghc-options: -Werror
 
   default-language:   GHC2021
-  default-extensions:
-    DataKinds
+  default-extensions: DataKinds
 
 test-suite tests
-  import: warnings
+  import:             warnings
   type:               exitcode-stdio-1.0
   default-language:   GHC2021
   hs-source-dirs:     test
@@ -125,9 +121,7 @@ test-suite tests
     RulesSpec
     Spec
 
-  ghc-options:
-    -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
-
+  ghc-options:        -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
   build-depends:
     , base
     , extra
