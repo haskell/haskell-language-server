@@ -207,7 +207,7 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
 #endif
         annCtxt = AnnContext (Just (NormalSyntax, epl 1)) [epl 0 | needsParens] [epl 0 | needsParens]
         needsParens = hsTypeNeedsParens sigPrec $ unLoc constraint
-    ast <- pure $ setEntryDP ast (SameLine 1)
+    ast <- pure $ setEntryDP (makeDeltaAst ast) (SameLine 1)
 
     return $ reLocA $ L lTop $ HsQualTy noExtField context ast
 
