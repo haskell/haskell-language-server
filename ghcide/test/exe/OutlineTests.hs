@@ -7,7 +7,7 @@ import           Config
 import           Control.Monad.IO.Class      (liftIO)
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
-import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
+import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
