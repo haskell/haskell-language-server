@@ -126,17 +126,17 @@ tests = let
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
-  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in ", "GHC.Types", "ghc-prim"]]
+  xtcL5  = Position  9 11  ;  xtc    = [ExpectHoverText ["Int", "Defined in ", "GHC.Types", "ghc-prim"]]
   tcL6   = Position 10 11  ;  tcData = [mkR   7  0    9 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:8:1"]]
   vvL16  = Position 20 12  ;  vv     = [mkR  20  4   20  6]
   opL16  = Position 20 15  ;  op     = [mkR  21  2   21  4]
   opL18  = Position 22 22  ;  opp    = [mkR  22 13   22 17]
   aL18   = Position 22 20  ;  apmp   = [mkR  22 10   22 11]
   b'L19  = Position 23 13  ;  bp     = [mkR  23  6   23  7]
-  xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["pack", ":: String -> Text", "Data.Text", "text"]]
+  xvL20  = Position 24  8  ;  xvMsg  = [ExpectHoverText ["pack", ":: String -> Text", "Data.Text", "text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
-  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ", "GHC.Num", "base"]]
+  eclL15 = Position 19  8  ;  ecls   = [ExpectHoverText ["Num", "Defined in ", "GHC.Num", "base"]]
   dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
   dnbL30 = Position 34 23
   lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
@@ -174,8 +174,8 @@ tests = let
   , test  yes    yes    dcL7       tcDC          "data constructor record         #1029"
   , test  yes    yes    dcL12      tcDC          "data constructor plain"                -- https://github.com/haskell/ghcide/pull/121
   , test  yes    yes    tcL6       tcData        "type constructor                #1028" -- https://github.com/haskell/ghcide/pull/147
-  , test  broken yes    xtcL5      xtc           "type constructor external   #717,1028"
-  , test  broken yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    xtcL5      xtc           "type constructor external   #717,1028"
+  , test  yes    yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    vvL16      vv            "plain parameter"                       -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    aL18       apmp          "pattern match name"                    -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    opL16      op            "top-level operator               #713" -- https://github.com/haskell/ghcide/pull/120
@@ -183,7 +183,7 @@ tests = let
   , test  yes    yes    b'L19      bp            "name in backticks"                     -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    clL23      cls           "class in instance declaration   #1027"
   , test  yes    yes    clL25      cls           "class in signature              #1027" -- https://github.com/haskell/ghcide/pull/147
-  , test  broken yes    eclL15     ecls          "external class in signature #717,1027"
+  , test  yes    yes    eclL15     ecls          "external class in signature #717,1027"
   , test  yes    yes    dnbL29     dnb           "do-notation   bind              #1073"
   , test  yes    yes    dnbL30     dnb           "do-notation lookup"
   , test  yes    yes    lcbL33     lcb           "listcomp   bind                 #1073"
