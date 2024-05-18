@@ -1,41 +1,44 @@
 cabal-version: 2.4
-name:          hls-plugin-api
-version:       2.8.0.0
-synopsis:      Haskell Language Server API for plugin communication
+name: hls-plugin-api
+version: 2.8.0.0
+synopsis: Haskell Language Server API for plugin communication
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
-homepage:      https://github.com/haskell/haskell-language-server#readme
-bug-reports:   https://github.com/haskell/haskell-language-server/issues
-license:       Apache-2.0
-license-file:  LICENSE
-author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
-copyright:     The Haskell IDE Team
-category:      Development
-build-type:    Simple
+homepage: https://github.com/haskell/haskell-language-server#readme
+bug-reports: https://github.com/haskell/haskell-language-server/issues
+license: Apache-2.0
+license-file: LICENSE
+author: The Haskell IDE Team
+maintainer: alan.zimm@gmail.com
+copyright: The Haskell IDE Team
+category: Development
+build-type: Simple
 
 flag pedantic
   description: Enable -Werror
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 -- This flag can be used to avoid the dependency on hw-fingertree.
 -- We can set this temporarily if we have problems building hw-fingertree
 -- for a new version of GHC.
 flag use-fingertree
   description: Use fingertree implementation of RangeMap
-  default:     True
-  manual:      False
+  default: True
+  manual: False
 
 source-repository head
-  type:     git
+  type: git
   location: https://github.com/haskell/haskell-language-server
 
 common warnings
   ghc-options:
-    -Wall -Wredundant-constraints -Wunused-packages
-    -Wno-name-shadowing -Wno-unticked-promoted-constructors
+    -Wall
+    -Wredundant-constraints
+    -Wunused-packages
+    -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
 
 library
   import: warnings
@@ -51,41 +54,40 @@ library
     Ide.PluginUtils
     Ide.Types
 
-  hs-source-dirs:     src
+  hs-source-dirs: src
   build-depends:
-    , aeson
-    , base                  >=4.12    && <5
-    , co-log-core
-    , containers
-    , data-default
-    , dependent-map
-    , dependent-sum         >=0.7
-    , Diff                  ^>=0.4.0
-    , dlist
-    , extra
-    , filepath
-    , ghc
-    , hashable
-    , hls-graph             == 2.8.0.0
-    , lens
-    , lens-aeson
-    , lsp                   ^>=2.5
-    , megaparsec            >=9.0
-    , mtl
-    , opentelemetry         >=0.4
-    , optparse-applicative
-    , prettyprinter
-    , regex-tdfa            >=1.3.1.0
-    , stm
-    , text
-    , time
-    , transformers
-    , unliftio
-    , unordered-containers
+    Diff ^>=0.4.0,
+    aeson,
+    base >=4.12 && <5,
+    co-log-core,
+    containers,
+    data-default,
+    dependent-map,
+    dependent-sum >=0.7,
+    dlist,
+    extra,
+    filepath,
+    ghc,
+    hashable,
+    hls-graph ==2.8.0.0,
+    lens,
+    lens-aeson,
+    lsp ^>=2.5,
+    megaparsec >=9.0,
+    mtl,
+    opentelemetry >=0.4,
+    optparse-applicative,
+    prettyprinter,
+    regex-tdfa >=1.3.1.0,
+    stm,
+    text,
+    time,
+    transformers,
+    unliftio,
+    unordered-containers,
 
   if os(windows)
     build-depends: Win32
-
   else
     build-depends: unix
 
@@ -93,54 +95,57 @@ library
     ghc-options: -Werror
 
   if flag(use-fingertree)
-    cpp-options:   -DUSE_FINGERTREE
+    cpp-options: -DUSE_FINGERTREE
     build-depends: hw-fingertree
-
-  default-language:   GHC2021
+  default-language: GHC2021
   default-extensions:
     DataKinds
 
 test-suite tests
   import: warnings
-  type:             exitcode-stdio-1.0
+  type: exitcode-stdio-1.0
   default-language: GHC2021
-  hs-source-dirs:   test
-  main-is:          Main.hs
-  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs: test
+  main-is: Main.hs
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
   other-modules:
     Ide.PluginUtilsTest
     Ide.TypesTests
 
   build-depends:
-    , base
-    , containers
-    , data-default
-    , hls-plugin-api
-    , lens
-    , lsp-types
-    , tasty
-    , tasty-hunit
-    , tasty-quickcheck
-    , tasty-rerun
-    , text
+    base,
+    containers,
+    data-default,
+    hls-plugin-api,
+    lens,
+    lsp-types,
+    tasty,
+    tasty-hunit,
+    tasty-quickcheck,
+    tasty-rerun,
+    text,
 
 benchmark rangemap-benchmark
   import: warnings
+
   -- Benchmark doesn't make sense if fingertree implementation
   -- is not used.
   if !flag(use-fingertree)
     buildable: False
-
-  type:             exitcode-stdio-1.0
+  type: exitcode-stdio-1.0
   default-language: GHC2021
-  hs-source-dirs:   bench
-  main-is:          Main.hs
-  ghc-options:      -threaded
+  hs-source-dirs: bench
+  main-is: Main.hs
+  ghc-options: -threaded
   build-depends:
-    , base
-    , criterion
-    , deepseq
-    , hls-plugin-api
-    , lsp-types
-    , random
-    , random-fu
+    base,
+    criterion,
+    deepseq,
+    hls-plugin-api,
+    lsp-types,
+    random,
+    random-fu,

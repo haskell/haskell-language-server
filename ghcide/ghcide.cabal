@@ -1,20 +1,20 @@
-cabal-version:      3.4
-build-type:         Simple
-category:           Development
-name:               ghcide
-version:            2.8.0.0
-license:            Apache-2.0
-license-file:       LICENSE
-author:             Digital Asset and Ghcide contributors
-maintainer:         Ghcide contributors
-copyright:          Digital Asset and Ghcide contributors 2018-2020
-synopsis:           The core of an IDE
-description:        A library for building Haskell IDE's on top of the GHC API.
+cabal-version: 3.4
+build-type: Simple
+category: Development
+name: ghcide
+version: 2.8.0.0
+license: Apache-2.0
+license-file: LICENSE
+author: Digital Asset and Ghcide contributors
+maintainer: Ghcide contributors
+copyright: Digital Asset and Ghcide contributors 2018-2020
+synopsis: The core of an IDE
+description: A library for building Haskell IDE's on top of the GHC API.
 homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
-bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
+bug-reports: https://github.com/haskell/haskell-language-server/issues
+tested-with: ghc ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -25,13 +25,13 @@ extra-source-files:
   test/data/**/*.yaml
 
 source-repository head
-  type:     git
+  type: git
   location: https://github.com/haskell/haskell-language-server.git
 
 flag pedantic
   description: Enable -Werror
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 common warnings
   ghc-options:
@@ -45,77 +45,76 @@ common warnings
 
 library
   import: warnings
-  default-language:   GHC2021
+  default-language: GHC2021
   build-depends:
-    , aeson
-    , array
-    , async
-    , base                         >=4.16     && <5
-    , base16-bytestring            >=0.1.1    && <1.1
-    , binary
-    , bytestring
-    , case-insensitive
-    , co-log-core
-    , containers
-    , cryptohash-sha1              >=0.11.100 && <0.12
-    , data-default
-    , deepseq
-    , dependent-map
-    , dependent-sum
-    , Diff                         ^>=0.4.0
-    , directory
-    , dlist
-    , enummapset
-    , exceptions
-    , extra                        >=1.7.14
-    , filepath
-    , fingertree
-    , focus                        >=1.0.3.2
-    , ghc                          >=9.2
-    , ghc-boot
-    , ghc-boot-th
-    , ghc-check                    >=0.5.0.8
-    , ghc-paths
-    , ghc-trace-events
-    , Glob
-    , haddock-library              >=1.8      && <1.12
-    , hashable
-    , hie-bios                     ^>=0.14.0
-    , hie-compat                   ^>=0.3.0.0
-    , hiedb                        ^>= 0.6.0.0
-    , hls-graph                    == 2.8.0.0
-    , hls-plugin-api               == 2.8.0.0
-    , implicit-hie                 >= 0.1.4.0 && < 0.1.5
-    , lens
-    , list-t
-    , lsp                          ^>=2.5.0.0
-    , lsp-types                    ^>=2.2.0.0
-    , mtl
-    , opentelemetry                >=0.6.1
-    , optparse-applicative
-    , parallel
-    , prettyprinter                >=1.7
-    , prettyprinter-ansi-terminal
-    , random
-    , regex-tdfa                   >=1.3.1.0
-    , safe-exceptions
-    , sorted-list
-    , sqlite-simple
-    , stm
-    , stm-containers
-    , syb
-    , text
-    , text-rope
-    , time
-    , transformers
-    , unliftio                     >=0.2.6
-    , unliftio-core
-    , unordered-containers         >=0.2.10.0
-    , vector
+    Diff ^>=0.4.0,
+    Glob,
+    aeson,
+    array,
+    async,
+    base >=4.16 && <5,
+    base16-bytestring >=0.1.1 && <1.1,
+    binary,
+    bytestring,
+    case-insensitive,
+    co-log-core,
+    containers,
+    cryptohash-sha1 >=0.11.100 && <0.12,
+    data-default,
+    deepseq,
+    dependent-map,
+    dependent-sum,
+    directory,
+    dlist,
+    enummapset,
+    exceptions,
+    extra >=1.7.14,
+    filepath,
+    fingertree,
+    focus >=1.0.3.2,
+    ghc >=9.2,
+    ghc-boot,
+    ghc-boot-th,
+    ghc-check >=0.5.0.8,
+    ghc-paths,
+    ghc-trace-events,
+    haddock-library >=1.8 && <1.12,
+    hashable,
+    hie-bios ^>=0.14.0,
+    hie-compat ^>=0.3.0.0,
+    hiedb ^>=0.6.0.0,
+    hls-graph ==2.8.0.0,
+    hls-plugin-api ==2.8.0.0,
+    implicit-hie >=0.1.4.0 && <0.1.5,
+    lens,
+    list-t,
+    lsp ^>=2.5.0.0,
+    lsp-types ^>=2.2.0.0,
+    mtl,
+    opentelemetry >=0.6.1,
+    optparse-applicative,
+    parallel,
+    prettyprinter >=1.7,
+    prettyprinter-ansi-terminal,
+    random,
+    regex-tdfa >=1.3.1.0,
+    safe-exceptions,
+    sorted-list,
+    sqlite-simple,
+    stm,
+    stm-containers,
+    syb,
+    text,
+    text-rope,
+    time,
+    transformers,
+    unliftio >=0.2.6,
+    unliftio-core,
+    unordered-containers >=0.2.10.0,
+    vector,
 
   if os(windows)
     build-depends: Win32
-
   else
     build-depends: unix
 
@@ -127,7 +126,10 @@ library
     RecordWildCards
     ViewPatterns
 
-  hs-source-dirs:     src session-loader
+  hs-source-dirs:
+    src
+    session-loader
+
   exposed-modules:
     Control.Concurrent.Strict
     Development.IDE
@@ -142,15 +144,15 @@ library
     Development.IDE.Core.PositionMapping
     Development.IDE.Core.Preprocessor
     Development.IDE.Core.ProgressReporting
-    Development.IDE.Core.Rules
     Development.IDE.Core.RuleTypes
+    Development.IDE.Core.Rules
     Development.IDE.Core.Service
     Development.IDE.Core.Shake
     Development.IDE.Core.Tracing
     Development.IDE.Core.UseStale
     Development.IDE.GHC.Compat
-    Development.IDE.GHC.Compat.Core
     Development.IDE.GHC.Compat.CmdLine
+    Development.IDE.GHC.Compat.Core
     Development.IDE.GHC.Compat.Env
     Development.IDE.GHC.Compat.Iface
     Development.IDE.GHC.Compat.Logger
@@ -175,8 +177,8 @@ library
     Development.IDE.Monitoring.OpenTelemetry
     Development.IDE.Plugin
     Development.IDE.Plugin.Completions
-    Development.IDE.Plugin.Completions.Types
     Development.IDE.Plugin.Completions.Logic
+    Development.IDE.Plugin.Completions.Types
     Development.IDE.Plugin.HLS
     Development.IDE.Plugin.HLS.GhcIde
     Development.IDE.Plugin.Test
@@ -213,50 +215,52 @@ library
 
 flag test-exe
   description: Build the ghcide-test-preprocessor executable
-  default:     True
+  default: True
 
 executable ghcide-test-preprocessor
   import: warnings
-  default-language:   GHC2021
-  hs-source-dirs:   test/preprocessor
-  main-is:          Main.hs
-  build-depends:    base >=4 && <5
+  default-language: GHC2021
+  hs-source-dirs: test/preprocessor
+  main-is: Main.hs
+  build-depends: base >=4 && <5
 
   if !flag(test-exe)
     buildable: False
 
 flag executable
   description: Build the ghcide executable
-  default:     True
+  default: True
 
 executable ghcide
   import: warnings
-  default-language:   GHC2021
-  hs-source-dirs:     exe
-  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T"
-
+  default-language: GHC2021
+  hs-source-dirs: exe
+  ghc-options:
+    -threaded
+    -rtsopts
+    "-with-rtsopts=-I0 -A128M -T"
 
   -- allow user RTS overrides
   -- disable idle GC
   -- increase nursery size
   -- Enable collection of heap statistics
-  main-is:            Main.hs
+  main-is: Main.hs
   build-depends:
-    , base                  >=4.16 && <5
-    , data-default
-    , extra
-    , ghcide
-    , gitrev
-    , hls-plugin-api
-    , lsp
-    , lsp-types
-    , optparse-applicative
+    base >=4.16 && <5,
+    data-default,
+    extra,
+    ghcide,
+    gitrev,
+    hls-plugin-api,
+    lsp,
+    lsp-types,
+    optparse-applicative,
 
   other-modules:
     Arguments
     Paths_ghcide
 
-  autogen-modules:    Paths_ghcide
+  autogen-modules: Paths_ghcide
   default-extensions:
     LambdaCase
     OverloadedStrings
@@ -269,17 +273,16 @@ executable ghcide
 library ghcide-test-utils
   import: warnings
   visibility: public
-  default-language:   GHC2021
-
+  default-language: GHC2021
   hs-source-dirs: test/cabal
   exposed-modules:
     Development.IDE.Test.Runfiles
 
   build-depends:
-      base > 4.9 && < 5
+    base >4.9 && <5
 
   default-extensions:
-      LambdaCase
-      OverloadedStrings
-      RecordWildCards
-      ViewPatterns
+    LambdaCase
+    OverloadedStrings
+    RecordWildCards
+    ViewPatterns

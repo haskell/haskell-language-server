@@ -1,61 +1,61 @@
 cabal-version: 2.4
-name:          hls-test-utils
-version:       2.8.0.0
-synopsis:      Utilities used in the tests of Haskell Language Server
+name: hls-test-utils
+version: 2.8.0.0
+synopsis: Utilities used in the tests of Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
-homepage:      https://github.com/haskell/haskell-language-server#readme
-bug-reports:   https://github.com/haskell/haskell-language-server/issues
-license:       Apache-2.0
-license-file:  LICENSE
-author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
-copyright:     The Haskell IDE Team
-category:      Development
-build-type:    Simple
+homepage: https://github.com/haskell/haskell-language-server#readme
+bug-reports: https://github.com/haskell/haskell-language-server/issues
+license: Apache-2.0
+license-file: LICENSE
+author: The Haskell IDE Team
+maintainer: alan.zimm@gmail.com
+copyright: The Haskell IDE Team
+category: Development
+build-type: Simple
 
 flag pedantic
   description: Enable -Werror
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 source-repository head
-  type:     git
+  type: git
   location: https://github.com/haskell/haskell-language-server
 
 library
   exposed-modules:
-    Test.Hls
-    Test.Hls.Util
-    Test.Hls.FileSystem
     Development.IDE.Test
     Development.IDE.Test.Diagnostic
+    Test.Hls
+    Test.Hls.FileSystem
+    Test.Hls.Util
 
-  hs-source-dirs:   src
+  hs-source-dirs: src
   build-depends:
-    , aeson
-    , async
-    , base                    >=4.12 && <5
-    , bytestring
-    , containers
-    , data-default
-    , directory
-    , extra
-    , filepath
-    , ghcide                  == 2.8.0.0
-    , hls-plugin-api          == 2.8.0.0
-    , lens
-    , lsp-test                ^>=0.17
-    , lsp-types               ^>=2.2
-    , safe-exceptions
-    , tasty
-    , tasty-expected-failure
-    , tasty-golden
-    , tasty-hunit
-    , tasty-rerun
-    , temporary
-    , text
+    aeson,
+    async,
+    base >=4.12 && <5,
+    bytestring,
+    containers,
+    data-default,
+    directory,
+    extra,
+    filepath,
+    ghcide ==2.8.0.0,
+    hls-plugin-api ==2.8.0.0,
+    lens,
+    lsp-test ^>=0.17,
+    lsp-types ^>=2.2,
+    safe-exceptions,
+    tasty,
+    tasty-expected-failure,
+    tasty-golden,
+    tasty-hunit,
+    tasty-rerun,
+    temporary,
+    text,
 
   ghc-options:
     -Wall
@@ -65,5 +65,4 @@ library
 
   if flag(pedantic)
     ghc-options: -Werror
-
   default-language: GHC2021

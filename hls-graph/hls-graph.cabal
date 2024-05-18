@@ -1,19 +1,19 @@
-cabal-version:      2.4
-name:               hls-graph
-version:            2.8.0.0
-synopsis:           Haskell Language Server internal graph API
+cabal-version: 2.4
+name: hls-graph
+version: 2.8.0.0
+synopsis: Haskell Language Server internal graph API
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/hls-graph#readme>
 
-homepage:           https://github.com/haskell/haskell-language-server#readme
-bug-reports:        https://github.com/haskell/haskell-language-server/issues
-license:            Apache-2.0
-license-file:       LICENSE
-author:             The Haskell IDE Team
-maintainer:         The Haskell IDE Team
-copyright:          The Haskell IDE Team
-category:           Development
-build-type:         Simple
+homepage: https://github.com/haskell/haskell-language-server#readme
+bug-reports: https://github.com/haskell/haskell-language-server/issues
+license: Apache-2.0
+license-file: LICENSE
+author: The Haskell IDE Team
+maintainer: The Haskell IDE Team
+copyright: The Haskell IDE Team
+category: Development
+build-type: Simple
 data-files:
   html/profile.html
   html/shake.js
@@ -22,21 +22,21 @@ extra-source-files: README.md
 
 flag pedantic
   description: Enable -Werror
-  default:     False
-  manual:      True
+  default: False
+  manual: True
 
 flag embed-files
-  default:     False
-  manual:      True
+  default: False
+  manual: True
   description: Embed data files into the shake library
 
 flag stm-stats
-  default:     False
-  manual:      True
+  default: False
+  manual: True
   description: Collect STM transaction stats
 
 source-repository head
-  type:     git
+  type: git
   location: https://github.com/haskell/haskell-language-server
 
 common warnings
@@ -56,8 +56,8 @@ library
     Development.IDE.Graph.Database
     Development.IDE.Graph.Internal.Action
     Development.IDE.Graph.Internal.Database
-    Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Key
+    Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Paths
     Development.IDE.Graph.Internal.Profile
     Development.IDE.Graph.Internal.Rules
@@ -67,37 +67,37 @@ library
     Development.IDE.Graph.Rule
     Paths_hls_graph
 
-  autogen-modules:    Paths_hls_graph
-  hs-source-dirs:     src
+  autogen-modules: Paths_hls_graph
+  hs-source-dirs: src
   build-depends:
-    , aeson
-    , async                 >=2.0
-    , base                  >=4.12    && <5
-    , bytestring
-    , containers
-    , deepseq
-    , exceptions
-    , extra
-    , filepath
-    , focus                 >=1.0.3.2
-    , hashable
-    , js-dgtable
-    , js-flot
-    , js-jquery
-    , list-t
-    , stm
-    , stm-containers
-    , text
-    , time
-    , transformers
-    , unliftio
-    , unordered-containers
+    aeson,
+    async >=2.0,
+    base >=4.12 && <5,
+    bytestring,
+    containers,
+    deepseq,
+    exceptions,
+    extra,
+    filepath,
+    focus >=1.0.3.2,
+    hashable,
+    js-dgtable,
+    js-flot,
+    js-jquery,
+    list-t,
+    stm,
+    stm-containers,
+    text,
+    time,
+    transformers,
+    unliftio,
+    unordered-containers,
 
   if flag(embed-files)
-    cpp-options:   -DFILE_EMBED
+    cpp-options: -DFILE_EMBED
     build-depends:
-      , file-embed        >=0.0.11
-      , template-haskell
+      file-embed >=0.0.11,
+      template-haskell,
   else
     build-depends:
       directory
@@ -107,17 +107,16 @@ library
 
   if flag(pedantic)
     ghc-options: -Werror
-
-  default-language:   GHC2021
+  default-language: GHC2021
   default-extensions:
     DataKinds
 
 test-suite tests
   import: warnings
-  type:               exitcode-stdio-1.0
-  default-language:   GHC2021
-  hs-source-dirs:     test
-  main-is:            Main.hs
+  type: exitcode-stdio-1.0
+  default-language: GHC2021
+  hs-source-dirs: test
+  main-is: Main.hs
   other-modules:
     ActionSpec
     DatabaseSpec
@@ -126,17 +125,20 @@ test-suite tests
     Spec
 
   ghc-options:
-    -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+    -fno-ignore-asserts
 
   build-depends:
-    , base
-    , extra
-    , hls-graph
-    , hspec
-    , stm
-    , stm-containers
-    , tasty
-    , tasty-hspec
-    , tasty-rerun
+    base,
+    extra,
+    hls-graph,
+    hspec,
+    stm,
+    stm-containers,
+    tasty,
+    tasty-hspec,
+    tasty-rerun,
 
   build-tool-depends: hspec-discover:hspec-discover
