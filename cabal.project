@@ -61,7 +61,6 @@ if impl(ghc >= 9.9)
     entropy:directory,
     entropy:filepath,
     entropy:process,
-    free:template-haskell,
     haddock-library:base,
     haddock-library:containers,
     hie-bios:ghc,
