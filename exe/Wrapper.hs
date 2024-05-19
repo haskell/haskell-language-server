@@ -270,7 +270,7 @@ newtype ErrorLSPM c a = ErrorLSPM { unErrorLSPM :: (LspM c) a }
 launchErrorLSP :: Recorder (WithPriority (Doc ())) -> T.Text -> IO ()
 launchErrorLSP recorder errorMsg = do
   cwd <- getCurrentDirectory
-  let defaultArguments = Main.defaultArguments cwd (cmapWithPrio pretty recorder) (IdePlugins [])
+  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) cwd (IdePlugins [])
 
   inH <- Main.argsHandleIn defaultArguments
 

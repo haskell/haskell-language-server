@@ -226,8 +226,8 @@ data Arguments = Arguments
     , argsDisableKick           :: Bool -- ^ flag to disable kick used for testing
     }
 
-defaultArguments :: FilePath -> Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
-defaultArguments fp recorder plugins = Arguments
+defaultArguments :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
+defaultArguments recorder fp plugins = Arguments
         { argsProjectRoot = fp
         , argCommand = LSP
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def
@@ -263,11 +263,11 @@ defaultArguments fp recorder plugins = Arguments
         }
 
 
-testing :: FilePath -> Recorder (WithPriority Log) -> IdePlugins IdeState -> Arguments
-testing fp recorder plugins =
+testing :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
+testing recorder fp plugins =
   let
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions } =
-        defaultArguments fp recorder plugins
+        defaultArguments recorder fp plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
@@ -357,7 +357,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   putMVar ideStateVar ide
                   pure ide
 
-            let setup = setupLSP argsProjectRoot (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsGetHieDbLoc (pluginHandlers plugins) getIdeState
                 -- See Note [Client configuration in Rules]
                 onConfigChange cfg = do
                   -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
