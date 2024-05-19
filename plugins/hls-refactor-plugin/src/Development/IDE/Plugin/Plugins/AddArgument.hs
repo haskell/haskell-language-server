@@ -7,8 +7,7 @@ import           Data.Bifunctor                            (Bifunctor (..))
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint,
-                                                            makeDeltaAst)
+import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint)
 import           Development.IDE.GHC.Error                 (spanContainsRange)
 import           Development.IDE.GHC.ExactPrint            (genAnchor1,
                                                             modifyMgMatchesT',
@@ -120,7 +119,7 @@ appendFinalPatToMatches name = \case
 addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either PluginError [(T.Text, [TextEdit])]
 addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
     (newSource, _, _) <- runTransformT $ do
-      (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl (makeDeltaAst moduleSrc)
+      (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl moduleSrc
       case matchedDeclNameMay of
           Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
           Nothing -> pure moduleSrc'
