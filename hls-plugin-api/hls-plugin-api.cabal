@@ -69,7 +69,7 @@ library
     , hls-graph             == 2.8.0.0
     , lens
     , lens-aeson
-    , lsp                   ^>=2.5
+    , lsp                   ^>=2.6
     , megaparsec            >=9.0
     , mtl
     , opentelemetry         >=0.4

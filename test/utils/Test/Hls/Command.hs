@@ -22,10 +22,10 @@ hlsExeCommand = unsafePerformIO $ do
   pure testExe
 
 hlsLspCommand :: String
-hlsLspCommand = hlsExeCommand ++ " --lsp -d -j4"
+hlsLspCommand = hlsExeCommand ++ " --lsp --test -d -j4"
 
 hlsWrapperLspCommand :: String
-hlsWrapperLspCommand = hlsWrapperExeCommand ++ " --lsp -d -j4"
+hlsWrapperLspCommand = hlsWrapperExeCommand ++ " --lsp --test -d -j4"
 
 hlsWrapperExeCommand :: String
 {-# NOINLINE hlsWrapperExeCommand #-}
