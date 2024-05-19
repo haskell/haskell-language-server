@@ -134,7 +134,7 @@ setupLSP ::
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
          (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
-setupLSP recorder root getHieDbLoc userHandlers getIdeState clientMsgVar = do
+setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar = do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
   clientMsgChan :: Chan ReactorMessage <- newChan
@@ -177,7 +177,7 @@ setupLSP recorder root getHieDbLoc userHandlers getIdeState clientMsgVar = do
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
 
-  let doInitialize = handleInit recorder root getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
+  let doInitialize = handleInit recorder defaultRoot getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
@@ -195,13 +195,13 @@ handleInit
     -> (SomeLspId -> IO ())
     -> Chan ReactorMessage
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-handleInit recorder rootDir getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     let rootMaybe = LSP.resRootPath env
     -- only shift if lsp root is different from the rootDir
-    when (rootMaybe /= Just rootDir) $ do
-        setCurrentDirectory rootDir
-    let root = fromMaybe rootDir rootMaybe
+    root <- case rootMaybe of
+        Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
+        _ -> pure defaultRoot
     dbLoc <- getHieDbLoc root
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
