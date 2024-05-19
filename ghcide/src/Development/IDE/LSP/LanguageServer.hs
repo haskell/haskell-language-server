@@ -197,9 +197,8 @@ handleInit
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
 handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
-    let rootMaybe = LSP.resRootPath env
     -- only shift if lsp root is different from the rootDir
-    root <- case rootMaybe of
+    root <- case LSP.resRootPath env of
         Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
         _ -> pure defaultRoot
     dbLoc <- getHieDbLoc root
