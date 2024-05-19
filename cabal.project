@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-05-19T03:57:21Z
+index-state: 2024-05-19T11:52:03Z
 
 tests: True
 test-show-details: direct
@@ -63,7 +63,6 @@ if impl(ghc >= 9.9)
     entropy:process,
     haddock-library:base,
     haddock-library:containers,
-    hie-bios:ghc,
     hiedb:base,
     hiedb:ghc,
     quickcheck-instances:base,
