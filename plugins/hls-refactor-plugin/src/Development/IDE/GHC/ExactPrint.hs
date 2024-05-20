@@ -537,10 +537,11 @@ modifySigWithM queryId f a = do
                       otherSig = case otherIds of
                         [] -> []
 #if MIN_VERSION_ghc(9,9,0)
-                        (L epAnn id1:ids) -> [
+                        (L epAnn id1:ids) ->
 #else
-                        (L (SrcSpanAnn epAnn span) id1:ids) -> [
+                        (L (SrcSpanAnn epAnn span) id1:ids) ->
 #endif
+                          [
                           let epAnn' = case epAnn of
                                 EpAnn _ nameAnn commentsId1 -> EpAnn genAnchor0 nameAnn commentsId1
 #if MIN_VERSION_ghc(9,9,0)
@@ -551,7 +552,7 @@ modifySigWithM queryId f a = do
 #endif
                               ids'' = ids' & _last %~ first removeTrailingAnns
                             in L annSigD (SigD xsig (TypeSig xTypeSig ids'' (HsWC xHsWc lHsSig)))
-                            ]
+                          ]
                   in pure $ DL.fromList otherSig <> DL.singleton matchedIdSig <> DL.fromList rest
                 _ -> error "multiple ids matched"
       modifyMatchingSigD (ldecl : rest) = (DL.singleton ldecl <>) <$> modifyMatchingSigD rest

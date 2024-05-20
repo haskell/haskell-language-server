@@ -7,8 +7,7 @@ import           Data.Bifunctor                            (Bifunctor (..))
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint,
-                                                            makeDeltaAst)
+import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint)
 import           Development.IDE.GHC.Error                 (spanContainsRange)
 import           Development.IDE.GHC.ExactPrint            (genAnchor1,
                                                             modifyMgMatchesT',
@@ -41,6 +40,7 @@ import           GHC.Parser.Annotation                     (TokenLocation (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat.ExactPrint     (makeDeltaAst)
 import           GHC                                       (SrcSpanAnn' (SrcSpanAnn))
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
@@ -120,7 +120,12 @@ appendFinalPatToMatches name = \case
 addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either PluginError [(T.Text, [TextEdit])]
 addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
     (newSource, _, _) <- runTransformT $ do
-      (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl (makeDeltaAst moduleSrc)
+      (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl
+#if MIN_VERSION_ghc(9,9,0)
+        moduleSrc
+#else
+        (makeDeltaAst moduleSrc)
+#endif
       case matchedDeclNameMay of
           Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
           Nothing -> pure moduleSrc'
