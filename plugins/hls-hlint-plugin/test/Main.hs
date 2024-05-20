@@ -241,13 +241,10 @@ suggestionsTests =
     , testCase "[#1279] hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
 
-        waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         expectNoMoreDiagnostics 3 doc "hlint"
     , testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
         doc <- openDoc "StrictData.hs" "haskell"
-
-        waitForAllProgressDone
 
         expectNoMoreDiagnostics 3 doc "hlint"
     ]

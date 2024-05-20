@@ -87,8 +87,8 @@ goldenTestWithEdit fp expect tc line col =
          { _start = Position 0 0
          , _end = Position (fromIntegral $ length lns + 1) 1
          }
-     waitForAllProgressDone -- cradle
-     waitForAllProgressDone
+     void waitForDiagnostics
+     void waitForBuildQueue
      alt <- liftIO $ T.readFile (testDataDir </> fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
      changeDoc doc [TextDocumentContentChangeEvent $ InL

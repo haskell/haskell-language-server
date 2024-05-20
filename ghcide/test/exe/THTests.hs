@@ -180,8 +180,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
-    waitForProgressBegin
-    waitForAllProgressDone
+    waitForDiagnostics
 
     expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")]
 
