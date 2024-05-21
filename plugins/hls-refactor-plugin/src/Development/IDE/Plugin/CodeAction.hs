@@ -236,7 +236,12 @@ extendImportHandler' ideState ExtendImport {..}
         Just imp -> do
             fmap (nfp,) $ liftEither $
               rewriteToWEdit df doc $
-                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
+                  extendImport (T.unpack <$> thingParent) (T.unpack newThing)
+#if MIN_VERSION_ghc(9,9,0)
+                    imp
+#else
+                    (makeDeltaAst imp)
+#endif
 
         Nothing -> do
             let qns = (,) <$> importQual <*> Just (qualifiedImportStyle df)
