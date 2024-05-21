@@ -626,7 +626,7 @@ shakeOpen :: Recorder (WithPriority Log)
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
-  ideTesting@(IdeTesting testing)
+  ideTesting
   withHieDb indexQueue opts monitoring rules = mdo
 
 #if MIN_VERSION_ghc(9,3,0)
@@ -660,10 +660,9 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
             atomically $ modifyTVar' exportsMap (<> em)
             logWith recorder Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
-        progress <- do
-            let (before, after) = if testing then (0,0.1) else (0.1,0.1)
+        progress <-
             if reportProgress
-                then delayedProgressReporting before after lspEnv optProgressStyle
+                then progressReporting lspEnv optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 

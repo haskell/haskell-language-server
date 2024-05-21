@@ -2,7 +2,7 @@ module Development.IDE.Core.ProgressReporting
   ( ProgressEvent(..)
   , ProgressReporting(..)
   , noProgressReporting
-  , delayedProgressReporting
+  , progressReporting
   -- utilities, reexported for use in Core.Shake
   , mRunLspT
   , mRunLspTCallback
@@ -12,31 +12,28 @@ module Development.IDE.Core.ProgressReporting
   )
    where
 
-import           Control.Concurrent.Async
-import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
-                                                 modifyTVar', newTVarIO,
-                                                 readTVarIO)
-import           Control.Concurrent.Strict
+import           Control.Concurrent.STM.Stats   (TVar, atomically,
+                                                 atomicallyNamed, modifyTVar',
+                                                 newTVarIO, readTVar, retry)
+import           Control.Concurrent.Strict      (modifyVar_, newVar,
+                                                 threadDelay)
 import           Control.Monad.Extra            hiding (loop)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
-import           Data.Aeson                     (ToJSON (toJSON))
-import           Data.Foldable                  (for_)
 import           Data.Functor                   (($>))
 import qualified Data.Text                      as T
-import           Data.Unique
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Graph          hiding (ShakeValue)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
-import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types    as LSP
+import           Language.LSP.Server            (ProgressAmount (..),
+                                                 ProgressCancellable (..),
+                                                 withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
-import           System.Time.Extra
-import           UnliftIO.Exception             (bracket_)
+import           UnliftIO                       (Async, async, cancel)
 
 data ProgressEvent
     = KickStarted
@@ -64,14 +61,14 @@ data State
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: IO (Async ()) -> Transition -> State -> IO State
-updateState _      _                    Stopped     = pure Stopped
-updateState start (Event KickStarted)   NotStarted  = Running <$> start
-updateState start (Event KickStarted)   (Running a) = cancel a >> Running <$> start
-updateState _     (Event KickCompleted) (Running a) = cancel a $> NotStarted
-updateState _     (Event KickCompleted) st          = pure st
-updateState _     StopProgress          (Running a) = cancel a $> Stopped
-updateState _     StopProgress          st          = pure st
+updateState :: IO () -> Transition -> State -> IO State
+updateState _      _                    Stopped       = pure Stopped
+updateState start (Event KickStarted)   NotStarted    = Running <$> async start
+updateState start (Event KickStarted)   (Running job) = cancel job >> Running <$> async start
+updateState _     (Event KickCompleted) (Running job) = cancel job $> NotStarted
+updateState _     (Event KickCompleted) st            = pure st
+updateState _     StopProgress          (Running job) = cancel job $> Stopped
+updateState _     StopProgress          st            = pure st
 
 -- | Data structure to track progress across the project
 data InProgressState = InProgressState
@@ -93,7 +90,7 @@ recordProgress InProgressState{..} file shift = do
             (Just 0, 0) -> pure ()
             (Just 0, _) -> modifyTVar' doneVar pred
             (Just _, 0) -> modifyTVar' doneVar (+1)
-            (Just _, _) -> pure()
+            (Just _, _) -> pure ()
   where
     alterPrevAndNew = do
         prev <- Focus.lookup
@@ -102,91 +99,38 @@ recordProgress InProgressState{..} file shift = do
         return (prev, new)
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
--- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
---   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
---   before the end of the grace period).
-delayedProgressReporting
-  :: Seconds  -- ^ Grace period before starting
-  -> Seconds  -- ^ sampling delay
-  -> Maybe (LSP.LanguageContextEnv c)
+progressReporting
+  :: Maybe (LSP.LanguageContextEnv c)
   -> ProgressReportingStyle
   -> IO ProgressReporting
-delayedProgressReporting _before _after Nothing _optProgressStyle = noProgressReporting
-delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
+progressReporting Nothing _optProgressStyle = noProgressReporting
+progressReporting (Just lspEnv) optProgressStyle = do
     inProgressState <- newInProgress
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
-        progressStop   =  updateStateVar StopProgress
-        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgress inProgressState)
-
+        progressStop  = updateStateVar StopProgress
+        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgressNew inProgressState)
         inProgress = updateStateForFile inProgressState
     return ProgressReporting{..}
     where
-        lspShakeProgress InProgressState{..} = do
-            -- first sleep a bit, so we only show progress messages if it's going to take
-            -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-            liftIO $ sleep before
-            u <- ProgressToken . InR . T.pack . show . hashUnique <$> liftIO newUnique
-
-            b <- liftIO newBarrier
-            void $ LSP.runLspT lspEnv $ LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
-                LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-            liftIO $ async $ do
-                ready <- waitBarrier b
-                LSP.runLspT lspEnv $ for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
+        lspShakeProgressNew :: InProgressState -> IO ()
+        lspShakeProgressNew InProgressState{..} =
+            LSP.runLspT lspEnv $ withProgress "Processing" Nothing NotCancellable $ \update -> loop update 0
             where
-                start token = LSP.sendNotification SMethod_Progress $
-                    LSP.ProgressParams
-                        { _token = token
-                        , _value = toJSON $ WorkDoneProgressBegin
-                          { _kind = AString @"begin"
-                          ,  _title = "Processing"
-                          , _cancellable = Nothing
-                          , _message = Nothing
-                          , _percentage = Nothing
-                          }
-                        }
-                stop token = LSP.sendNotification SMethod_Progress
-                    LSP.ProgressParams
-                        { _token = token
-                        , _value = toJSON $ WorkDoneProgressEnd
-                          { _kind = AString @"end"
-                           , _message = Nothing
-                          }
-                        }
-                loop _ _ | optProgressStyle == NoProgress =
-                    forever $ liftIO $ threadDelay maxBound
-                loop token prevPct = do
-                    done <- liftIO $ readTVarIO doneVar
-                    todo <- liftIO $ readTVarIO todoVar
-                    liftIO $ sleep after
-                    if todo == 0 then loop token 0 else do
-                        let
-                            nextFrac :: Double
-                            nextFrac = fromIntegral done / fromIntegral todo
+                loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
+                loop update prevPct = do
+                    (todo, done, nextPct) <- liftIO $ atomically $ do
+                        todo <- readTVar todoVar
+                        done <- readTVar doneVar
+                        let nextFrac :: Double
+                            nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
                             nextPct :: UInt
                             nextPct = floor $ 100 * nextFrac
-                        when (nextPct /= prevPct) $
-                          LSP.sendNotification SMethod_Progress $
-                          LSP.ProgressParams
-                              { _token = token
-                              , _value = case optProgressStyle of
-                                  Explicit -> toJSON $ WorkDoneProgressReport
-                                    { _kind = AString @"report"
-                                    , _cancellable = Nothing
-                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
-                                    , _percentage = Nothing
-                                    }
-                                  Percentage -> toJSON $ WorkDoneProgressReport
-                                    { _kind = AString @"report"
-                                    , _cancellable = Nothing
-                                    , _message = Nothing
-                                    , _percentage = Just nextPct
-                                    }
-                                  NoProgress -> error "unreachable"
-                              }
-                        loop token nextPct
+                        when (nextPct == prevPct) retry
+                        pure (todo, done, nextPct)
 
+                    _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+                    loop update nextPct
         updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
