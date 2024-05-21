@@ -1232,7 +1232,11 @@ suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+#if MIN_VERSION_ghc(9,9,0)
+suggestConstraint df parsedModule diag@Diagnostic {..}
+#else
 suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
+#endif
   | Just missingConstraint <- findMissingConstraint _message
   = let codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedModule
@@ -1355,7 +1359,11 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
 
 -- | Suggests the removal of a redundant constraint for a type signature.
 removeRedundantConstraints :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+#if MIN_VERSION_ghc(9,9,0)
+removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
+#else
 removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagnostic{..}
+#endif
 -- • Redundant constraint: Eq a
 -- • In the type signature for:
 --      foo :: forall a. Eq a => a -> a
