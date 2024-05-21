@@ -707,7 +707,7 @@ runSessionWithTestConfig TestConfig{..} session =
         runSessionInVFS (Right vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
         testingArgs prjRoot recorderIde plugins =
             let
-                arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
+                arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
                 argsHlsPlugins' = if testDisableDefaultPlugin
                                 then plugins
                                 else argsHlsPlugins
@@ -721,6 +721,7 @@ runSessionWithTestConfig TestConfig{..} session =
                 arguments
                 { argsHlsPlugins = hlsPlugins
                 , argsIdeOptions = ideOptions
+                , argsLspOptions = argsLspOptions { LSP.optProgressStartDelay = 0, LSP.optProgressUpdateDelay = 0 }
                 , argsDefaultHlsConfig = testLspConfig
                 , argsProjectRoot = prjRoot
                 , argsDisableKick = testDisableKick
