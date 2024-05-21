@@ -118,7 +118,6 @@ import           GHC                                               (EpaLocation,
 import           GHC.Types.SrcLoc                                  (srcSpanToRealSrcSpan)
 #endif
 
-
 -------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
@@ -1651,23 +1650,26 @@ findPositionNoImports ps fileContents =
 findPositionAfterModuleName :: Annotated ParsedSource
                             -> LocatedA ModuleName
                             -> Maybe Int
-findPositionAfterModuleName ps hsmodName' = do
+findPositionAfterModuleName ps _hsmodName' = do
     -- Note that 'where' keyword and comments are not part of the AST. They belongs to
     -- the exact-print information. To locate it, we need to find the previous AST node,
     -- calculate the gap between it and 'where', then add them up to produce the absolute
     -- position of 'where'.
 
     lineOffset <- whereKeywordLineOffset -- Calculate the gap before 'where' keyword.
+#if MIN_VERSION_ghc(9,9,0)
+    pure lineOffset
+#else
+    -- The last AST node before 'where' keyword. Might be module name or export list.
+    let prevSrcSpan = maybe (getLoc _hsmodName') getLoc hsmodExports
     case prevSrcSpan of
         UnhelpfulSpan _ -> Nothing
         (RealSrcSpan prevSrcSpan' _) ->
             -- add them up produce the absolute location of 'where' keyword
             Just $ srcLocLine (realSrcSpanEnd prevSrcSpan') + lineOffset
+#endif
   where
     L _ HsModule {..} = astA ps
-
-    -- The last AST node before 'where' keyword. Might be module name or export list.
-    prevSrcSpan = maybe (getLoc hsmodName') getLoc hsmodExports
 
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
     -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.

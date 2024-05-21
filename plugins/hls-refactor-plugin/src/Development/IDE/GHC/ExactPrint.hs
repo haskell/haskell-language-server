@@ -161,7 +161,13 @@ getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) 
   return ([], fmap annotateParsedSource pm)
 
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
+annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA
+#if MIN_VERSION_ghc(9,9,0)
+    ps
+#else
+    (makeDeltaAst ps)
+#endif
+    0
 
 ------------------------------------------------------------------------------
 
