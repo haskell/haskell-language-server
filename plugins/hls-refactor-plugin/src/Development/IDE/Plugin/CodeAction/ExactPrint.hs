@@ -523,7 +523,7 @@ hideSymbol symbol lidecl@(L loc ImportDecl{..}) =
   case ideclImportList of
     Nothing -> Rewrite (locA loc) $ extendHiding symbol lidecl Nothing
     Just (EverythingBut, hides) -> Rewrite (locA loc) $ extendHiding symbol lidecl (Just hides)
-    Just (Exactly, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl imports
+    Just (Exactly, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl $ setEntryDP (makeDeltaAst imports) (SameLine 1)
 #else
   case ideclHiding of
     Nothing -> Rewrite (locA loc) $ extendHiding symbol lidecl Nothing
@@ -599,11 +599,10 @@ deleteFromImport (T.pack -> symbol) (L l idecl) (L lieLoc lies) _ = do
         L l $
           idecl
 #if MIN_VERSION_ghc(9,5,0)
-            { ideclImportList = Just (Exactly, edited)
+            { ideclImportList = Just (Exactly, edited) }
 #else
-            { ideclHiding = Just (False, edited)
+            { ideclHiding = Just (False, edited) }
 #endif
-            }
   pure lidecl'
  where
   deletedLies =
