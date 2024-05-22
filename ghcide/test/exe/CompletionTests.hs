@@ -33,6 +33,7 @@ import           Test.Hls.FileSystem            (file, text)
 import           Test.Hls.Util                  (knownBrokenOnWindows)
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           TestUtils
 
 
 tests :: TestTree
@@ -217,7 +218,7 @@ localCompletionTests = [
 
 nonLocalCompletionTests :: [TestTree]
 nonLocalCompletionTests =
-  [ brokenForWinGhc $ completionTest
+  [ brokenForWinOldGhc $ completionTest
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
@@ -276,6 +277,7 @@ nonLocalCompletionTests =
   ]
   where
     brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
+    brokenForWinOldGhc = knownBrokenFor (BrokenSpecific Windows [GHC92 .. GHC98]) "Windows (GHC <= 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
@@ -352,7 +354,7 @@ packageCompletionTests =
               , "'GHC.Exts"
               ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
 
-  , testSessionEmpty "Map" $ do
+  , testSessionEmptyWithCradle "Map" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, containers, A]}}" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
