@@ -62,6 +62,8 @@ testSessionSingleFile testName fp txt session =
 
 completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
 completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
+    liftIO $ hSetEncoding stdout utf8
+    liftIO $ hSetEncoding stderr utf8
     docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
     compls <- getAndResolveCompletions docId pos
