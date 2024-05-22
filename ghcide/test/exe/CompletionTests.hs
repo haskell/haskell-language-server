@@ -30,7 +30,7 @@ import           Language.LSP.Test
 import           Test.Hls                       (waitForTypecheck)
 import qualified Test.Hls.FileSystem            as FS
 import           Test.Hls.FileSystem            (file, text)
-import           Test.Hls.Util                  (knownBrokenOnWindows)
+import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -276,6 +276,7 @@ nonLocalCompletionTests =
   ]
   where
     brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
+    brokenForWinOldGhc = knownBrokenInSpecificEnv (HostOS Windows : map GhcVer [GHC92..GHC98]) "Windows (GHC <= 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
