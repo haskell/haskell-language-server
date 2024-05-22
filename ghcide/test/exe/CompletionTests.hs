@@ -34,6 +34,7 @@ import           Test.Hls.Util                  (knownBrokenOnWindows)
 import           TestUtils
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import System.IO
 
 
 tests :: TestTree
@@ -218,7 +219,7 @@ localCompletionTests = [
 
 nonLocalCompletionTests :: [TestTree]
 nonLocalCompletionTests =
-  [ brokenForWinGhc $ completionTest
+  [ brokenForWinOldGhc $ completionTest
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
@@ -355,6 +356,8 @@ packageCompletionTests =
               ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
 
   , testSessionEmpty "Map" $ do
+        liftIO $ hSetEncoding stdout utf8
+        liftIO $ hSetEncoding stderr utf8
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
