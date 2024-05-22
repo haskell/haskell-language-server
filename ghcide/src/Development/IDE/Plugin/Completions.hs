@@ -224,7 +224,8 @@ getCompletionsConfig pId =
   CompletionsConfig
     <$> usePropertyAction #snippetsOn pId properties
     <*> usePropertyAction #autoExtendOn pId properties
-    <*> (Config.maxCompletions <$> getClientConfigAction)
+    <*> pure 1000000
+    -- <*> (Config.maxCompletions <$> getClientConfigAction)
 
 {- COMPLETION SORTING
    We return an ordered set of completions (local -> nonlocal -> global).
