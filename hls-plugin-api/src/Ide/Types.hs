@@ -752,7 +752,7 @@ instance PluginRequestMethod Method_CompletionItemResolve where
 instance PluginRequestMethod Method_TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
-        limit = maxCompletions conf
+        limit = 10000 -- maxCompletions conf
         combine :: [[CompletionItem] |? (CompletionList |? Null)] -> ([CompletionItem] |? (CompletionList |? Null))
         combine cs = go True mempty cs
 
