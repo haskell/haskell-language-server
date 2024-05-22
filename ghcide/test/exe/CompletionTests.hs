@@ -357,7 +357,7 @@ packageCompletionTests =
               , "'GHC.Exts"
               ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
 
-  , testSessionEmpty "Map" $ do
+  , testSessionEmptyWithCradle "Map" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, containers, A]}}" $ do
         liftIO $ hSetEncoding stdout utf8
         liftIO $ hSetEncoding stderr utf8
         doc <- createDoc "A.hs" "haskell" $ T.unlines
