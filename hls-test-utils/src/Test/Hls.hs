@@ -122,7 +122,7 @@ import           System.Directory                   (canonicalizePath,
                                                      getTemporaryDirectory,
                                                      makeAbsolute,
                                                      setCurrentDirectory)
-import           System.Environment                 (lookupEnv, setEnv)
+import           System.Environment                 (getEnv, lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                    (newTempDirWithin)
 import           System.IO.Unsafe                   (unsafePerformIO)
@@ -663,7 +663,9 @@ wrapClientLogger logger = do
     return (lspLogRecorder <> logger, cb1)
 
 -- | Host a server, and run a test session on it.
--- For detail of the test configuration, see 'TestConfig'
+-- For setting custom timeout, set the environment variable 'LSP_TIMEOUT'
+-- * LSP_TIMEOUT=10 cabal test
+-- For more detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
     runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
@@ -681,7 +683,8 @@ runSessionWithTestConfig TestConfig{..} session =
           }]
 
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
-    let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig }
+    timeoutOverride <- read <$> getEnv "LSP_TIMEOUT"
+    let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = timeoutOverride}
         arguments = testingArgs root recorderIde plugins
     server <- async $
         IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
