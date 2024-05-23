@@ -181,11 +181,10 @@ collectRecordsRule recorder =
 
 getRecords :: TcModuleResult -> [RecordInfo]
 #if __GLASGOW_HASKELL__ < 910
-getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
+getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) = collectRecords valBinds
 #else
-getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_, _)) =
+getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_, _)) = collectRecords valBinds
 #endif
-  collectRecords valBinds
 
 collectNamesRule :: Rules ()
 collectNamesRule = defineNoDiagnostics mempty $ \CollectNames nfp -> runMaybeT $ do
@@ -196,7 +195,7 @@ collectNamesRule = defineNoDiagnostics mempty $ \CollectNames nfp -> runMaybeT $
 -- in the variable usage analysis.
 getNames :: TcModuleResult -> UniqFM Name [Name]
 #if __GLASGOW_HASKELL__ < 910
-getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
+getNames (tmrRenamed -> (group,_,_,_))   = collectNames group
 #else
 getNames (tmrRenamed -> (group,_,_,_,_)) = collectNames group
 #endif

@@ -13,9 +13,7 @@ import           Development.IDE.GHC.ExactPrint            (modifyMgMatchesT',
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
 import           GHC.Parser.Annotation                     (SrcSpanAnnA,
-                                                            SrcSpanAnnN,
-
-                                                            noAnn)
+                                                            SrcSpanAnnN, noAnn)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
 import           Ide.PluginUtils                           (makeDiffTextEdit)
 import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
@@ -40,7 +38,9 @@ import           GHC.Parser.Annotation                     (TokenLocation (..))
 #if !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.Compat.ExactPrint     (makeDeltaAst)
 import           Development.IDE.GHC.ExactPrint            (genAnchor1)
-import           GHC.Parser.Annotation                     (EpAnn (..), SrcSpanAnn' (..), emptyComments)
+import           GHC.Parser.Annotation                     (EpAnn (..),
+                                                            SrcSpanAnn' (..),
+                                                            emptyComments)
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
 

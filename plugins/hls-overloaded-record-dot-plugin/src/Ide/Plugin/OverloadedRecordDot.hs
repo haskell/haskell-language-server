@@ -251,11 +251,10 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
           getEnabledExtensions = getExtensions . tmrParsed
           getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
 #if __GLASGOW_HASKELL__ >= 910
-          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_,_)) =
+          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_,_)) = collectRecordSelectors valBinds
 #else
-          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
+          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) = collectRecordSelectors valBinds
 #endif
-            collectRecordSelectors valBinds
           rewriteRange :: PositionMapping -> RecordSelectorExpr
                             -> Maybe RecordSelectorExpr
           rewriteRange pm recSel =

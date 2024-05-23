@@ -748,10 +748,11 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
 #if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
+      { ideclAnn =
 #if MIN_VERSION_ghc(9,9,0)
-      { ideclAnn = GHCGHC.noAnn
+        GHCGHC.noAnn
 #else
-      { ideclAnn = GHCGHC.EpAnnNotUsed
+        GHCGHC.EpAnnNotUsed
 #endif
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
