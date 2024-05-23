@@ -448,8 +448,8 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
 -- For example, if you would like to move a where-clause-defined variable to the same
 -- level as its parent HsDecl, you could use this function.
 --
--- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`. If
--- not declaration matched, then `Nothing` is returned.
+-- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`.
+-- If no declaration matched, then `Nothing` is returned.
 modifySmallestDeclWithM ::
   forall a m r.
   (HasDecls a, Monad m) =>
@@ -462,7 +462,7 @@ modifySmallestDeclWithM validSpan f a = do
       modifyMatchingDecl (ldecl@(L src _) : rest) =
         TransformT (lift $ validSpan $ locA src) >>= \case
             True -> do
-              (decs', r) <- f ldecl
+              (decs', r) <- f (makeDeltaAst ldecl)
               pure (DL.fromList decs' <> DL.fromList rest, Just r)
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a

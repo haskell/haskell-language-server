@@ -77,11 +77,9 @@ class ResetEntryDP ann where
     resetEntryDP :: GenLocated ann ast -> GenLocated ann ast
 #if MIN_VERSION_ghc(9,9,0)
 instance {-# OVERLAPPING #-} NoAnn an => ResetEntryDP (EpAnn an) where
-    -- resetEntryDP = flip setEntryDP (SameLine 0)
     resetEntryDP (L srcAnn x) = setEntryDP (L srcAnn{anns=noAnn} x) (SameLine 0)
 #else
 instance {-# OVERLAPPING #-} Default an => ResetEntryDP (SrcAnn an) where
-    -- resetEntryDP = flip setEntryDP (SameLine 0)
     resetEntryDP (L srcAnn x) = setEntryDP (L srcAnn{ann=EpAnnNotUsed} x) (SameLine 0)
 #endif
 instance {-# OVERLAPPABLE #-} ResetEntryDP fallback where
