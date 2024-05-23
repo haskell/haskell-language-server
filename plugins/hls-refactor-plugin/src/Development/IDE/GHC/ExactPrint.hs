@@ -514,7 +514,7 @@ removeTrailingAnns spanAnnN = spanAnnN
 -- + foo :: Bool
 modifySigWithM ::
   forall a m.
-  (HasDecls a, Monad m) =>
+  (HasDecls a, Monad m, ExactPrint a) =>
   IdP GhcPs ->
   (LHsSigType GhcPs -> LHsSigType GhcPs) ->
   a ->
@@ -562,7 +562,7 @@ modifySigWithM queryId f a = do
                   in pure $ DL.fromList otherSig <> DL.singleton matchedIdSig <> DL.fromList rest
                 _ -> error "multiple ids matched"
       modifyMatchingSigD (ldecl : rest) = (DL.singleton ldecl <>) <$> modifyMatchingSigD rest
-  modifyDeclsT (fmap DL.toList . modifyMatchingSigD) a
+  modifyDeclsT (fmap DL.toList . modifyMatchingSigD) $ makeDeltaAst a
 
 genAnchor0 :: Anchor
 genAnchor0 = generatedAnchor m0

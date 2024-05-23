@@ -7,21 +7,19 @@ import           Data.Bifunctor                            (Bifunctor (..))
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint)
 import           Development.IDE.GHC.Error                 (spanContainsRange)
-import           Development.IDE.GHC.ExactPrint            (genAnchor1,
-                                                            modifyMgMatchesT',
+import           Development.IDE.GHC.ExactPrint            (modifyMgMatchesT',
                                                             modifySigWithM,
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
-import           GHC                                       (EpAnn (..),
-                                                            SrcSpanAnnA,
+import           GHC.Parser.Annotation                     (SrcSpanAnnA,
                                                             SrcSpanAnnN,
-                                                            emptyComments,
+
                                                             noAnn)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
 import           Ide.PluginUtils                           (makeDiffTextEdit)
 import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
+                                                            exactPrint,
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
 import           Language.LSP.Protocol.Types
@@ -29,9 +27,9 @@ import           Language.LSP.Protocol.Types
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,4,0)
-import           GHC                                       (TrailingAnn (..))
-import           GHC.Hs                                    (IsUnicodeSyntax (..))
-import           Language.Haskell.GHC.ExactPrint.Transform (d1)
+import           GHC.Parser.Annotation                     (IsUnicodeSyntax (..),
+                                                            TrailingAnn (..))
+import           Language.Haskell.GHC.ExactPrint           (d1)
 #endif
 
 #if MIN_VERSION_ghc(9,4,0) && !MIN_VERSION_ghc(9,9,0)
@@ -41,12 +39,15 @@ import           GHC.Parser.Annotation                     (TokenLocation (..))
 
 #if !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.Compat.ExactPrint     (makeDeltaAst)
-import           GHC                                       (SrcSpanAnn' (SrcSpanAnn))
+import           Development.IDE.GHC.ExactPrint            (genAnchor1)
+import           GHC.Parser.Annotation                     (EpAnn (..), SrcSpanAnn' (..), emptyComments)
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
-import           GHC                                       (EpUniToken (..))
+import           GHC                                       (EpUniToken (..),
+                                                            IsUnicodeSyntax (NormalSyntax))
+import           Language.Haskell.GHC.ExactPrint           (d1)
 #endif
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
@@ -154,19 +155,34 @@ hsTypeFromFunTypeAsList (args, res) =
 --   0 `foo :: ()` => foo :: _ -> ()
 --   2 `foo :: FunctionTySyn` => foo :: FunctionTySyn
 --   1 `foo :: () -> () -> Int` => foo :: () -> _ -> () -> Int
-addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> (LHsSigType GhcPs)
+addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> LHsSigType GhcPs
 addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
     let (args, res) = hsTypeToFunTypeAsList lsigTy
 #if MIN_VERSION_ghc(9,9,0)
-        wildCardAnn = EpAnn genAnchor1 (AnnListItem []) emptyComments
-        newArg = (noAnn, noExtField, HsUnrestrictedArrow NoEpUniTok, L wildCardAnn $ HsWildCardTy noExtField)
+        wildCardAnn = noAnnSrcSpanDP1
+        newArg =
+          ( noAnn
+          , noExtField
+          , HsUnrestrictedArrow (EpUniTok d1 NormalSyntax)
+          , L wildCardAnn $ HsWildCardTy noExtField
+          )
 #elif MIN_VERSION_ghc(9,4,0)
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem []) emptyComments) generatedSrcSpan
         arrowAnn = TokenLoc (epl 1)
-        newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow (L arrowAnn HsNormalTok), L wildCardAnn $ HsWildCardTy noExtField)
+        newArg =
+          ( SrcSpanAnn mempty generatedSrcSpan
+          , noAnn
+          , HsUnrestrictedArrow (L arrowAnn HsNormalTok)
+          , L wildCardAnn $ HsWildCardTy noExtField
+          )
 #else
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem [AddRarrowAnn d1]) emptyComments) generatedSrcSpan
-        newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow NormalSyntax, L wildCardAnn $ HsWildCardTy noExtField)
+        newArg =
+          ( SrcSpanAnn mempty generatedSrcSpan
+          , noAnn
+          , HsUnrestrictedArrow NormalSyntax
+          , L wildCardAnn $ HsWildCardTy noExtField
+          )
 #endif
         -- NOTE if the location that the argument wants to be placed at is not one more than the number of arguments
         --      in the signature, then we return the original type signature.

@@ -48,7 +48,7 @@ if impl(ghc >= 9.9)
   source-repository-package
     type:git
     location: https://github.com/wz1000/retrie.git
-    tag: 7bf599856f055aefa86a6db10c12dcbc10c7130a
+    tag: 2f089092a563b06eccf196751782f1d70000d589
   constraints:
     lens >= 5.3.2,
     haskell-language-server -stylishHaskell -ormolu -fourmolu -floskell -hlint,
