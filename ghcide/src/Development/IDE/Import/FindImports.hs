@@ -131,13 +131,17 @@ locateModule
     -> m (Either [FileDiagnostic] Import)
 locateModule env comp_info exts targetFor modName mbPkgName isSource = do
   case mbPkgName of
-    -- "this" means that we should only look in the current package
 #if MIN_VERSION_ghc(9,3,0)
-    ThisPkg _ -> do
+    -- 'ThisPkg' just means some home module, not the current unit
+    ThisPkg uid
+      | Just (dirs, reexports) <- lookup uid import_paths
+          -> lookupLocal uid dirs reexports
+      | otherwise -> return $ Left $ notFoundErr env modName $ LookupNotFound []
 #else
+    -- "this" means that we should only look in the current package
     Just "this" -> do
-#endif
       lookupLocal (homeUnitId_ dflags) (importPaths dflags) S.empty
+#endif
     -- if a package name is given we only go look for a package
 #if MIN_VERSION_ghc(9,3,0)
     OtherPkg uid
