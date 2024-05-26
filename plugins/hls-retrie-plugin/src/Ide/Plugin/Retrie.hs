@@ -761,6 +761,7 @@ reuseParsedModule state f = do
 
 getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
 getCPPmodule recorder state session t = do
+    -- TODO is it safe to drop this makeAbsolute?
     let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
     let getParsedModule f contents = do
           modSummary <- msrModSummary <$>
