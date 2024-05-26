@@ -437,7 +437,7 @@ setupGoldenHlintTest testName path =
     , testPluginDescriptor=hlintPlugin
     , testDirLocation=Left testDir
     }
-        testName testDir path "expected" "hs"
+    testName testDir path "expected" "hs"
 
 
 ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
@@ -465,4 +465,4 @@ setupGoldenHlintResolveTest testName path =
     , testPluginDescriptor=hlintPlugin
     , testDirLocation=Left testDir
     }
-        testName testDir path "expected" "hs"
+    testName testDir path "expected" "hs"
