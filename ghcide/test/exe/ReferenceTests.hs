@@ -28,7 +28,7 @@ import           Data.Tuple.Extra
 import           GHC.TypeLits                    (symbolVal)
 import           Ide.PluginUtils                 (toAbsolute)
 import           Ide.Types
-import           System.FilePath                 (isAbsolute, (</>))
+import           System.FilePath                 ((</>))
 import           Test.Hls                        (FromServerMessage' (..),
                                                   SMethod (..),
                                                   TCustomMessage (..),

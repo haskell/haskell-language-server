@@ -52,7 +52,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           System.FilePath             (isAbsolute, (</>))
+import           System.FilePath             ((</>))
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Char        as P
 import qualified Text.Megaparsec.Char.Lexer  as P
