@@ -440,7 +440,7 @@ loadSession recorder = loadSessionWithOptions recorder def
 
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
-  let toAbsolutePath = toAbsolute rootDir
+  let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef []
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
