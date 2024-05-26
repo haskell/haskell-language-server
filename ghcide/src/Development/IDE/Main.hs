@@ -242,7 +242,7 @@ defaultArguments recorder fp plugins = Arguments
             { LSP.optCompletionTriggerCharacters = Just "."
             -- Generally people start to notice that something is taking a while at about 1s, so
             -- that's when we start reporting progress
-            , LSP.optProgressStartDelay = 1_00_000
+            , LSP.optProgressStartDelay = 1_000_000
             -- Once progress is being reported, it's nice to see that it's moving reasonably quickly,
             -- but not so fast that it's ugly. This number is a bit made up
             , LSP.optProgressUpdateDelay = 1_00_000
