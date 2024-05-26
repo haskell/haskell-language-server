@@ -470,6 +470,7 @@ runSessionWithServer config plugin fp act =
         , testDirLocation = Left fp
         } (const act)
 
+
 instance Default (TestConfig b) where
   def = TestConfig {
     testDirLocation = Right $ VirtualFileTree [] "",
@@ -642,7 +643,7 @@ data TestConfig b = TestConfig
   , testDisableDefaultPlugin :: Bool
     -- ^ Whether to disable the default plugin comes with ghcide
   , testCheckProject         :: Bool
-    -- ^ Whether to disable the default plugin comes with ghcide
+    -- ^ Whether to typecheck check the project after the session is loaded
   , testPluginDescriptor     :: PluginTestDescriptor b
     -- ^ Plugin to load on the server.
   , testLspConfig            :: Config

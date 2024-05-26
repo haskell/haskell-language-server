@@ -527,6 +527,19 @@ newtype ShakeSession = ShakeSession
     -- ^ Closes the Shake session
   }
 
+-- Note [Root Directory]
+-- ~~~~~~~~~~~~~~~~~~~~~
+-- The root directory is the directory we assume relative paths are relative to.
+-- We might be setting it from LSP workspace root > command line > from the current directory.
+--
+-- Using it instead of `getCurrentDirectory` allows us to avoid issues if we
+-- `setCurrentDirectory` somewhere else in the code.
+-- It also helps with testing in parallel, where we can keep the root directory
+-- and the current directory separate.
+--
+-- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
+-- This is already deprecated and we can drop it in the future.
+
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
@@ -535,6 +548,7 @@ data IdeState = IdeState
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopMonitoring       :: IO ()
+    -- see Note [Root Directory]
     ,rootDir              :: FilePath
     }
 

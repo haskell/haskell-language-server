@@ -323,6 +323,4 @@ escapedTextParser = concat <$> P.many (outsideStringLiteral P.<|> stringLiteral)
 -- ---------------------------------------------------------------------
 
 toAbsolute :: FilePath -> FilePath -> FilePath
-toAbsolute dir file
-    | isAbsolute file = file
-    | otherwise = dir </> file
+toAbsolute = (</>)

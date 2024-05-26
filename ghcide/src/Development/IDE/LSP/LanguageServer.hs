@@ -127,7 +127,7 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
 setupLSP ::
      forall config err.
      Recorder (WithPriority Log)
-  -> FilePath -- ^ root directory
+  -> FilePath -- ^ root directory, see Note [Root Directory]
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
@@ -187,7 +187,7 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
 
 handleInit
     :: Recorder (WithPriority Log)
-    -> FilePath
+    -> FilePath -- ^ root directory, see Note [Root Directory]
     -> (FilePath -> IO FilePath)
     -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
     -> MVar ()
@@ -199,6 +199,7 @@ handleInit
 handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     -- only shift if lsp root is different from the rootDir
+    -- see Note [Root Directory]
     root <- case LSP.resRootPath env of
         Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
         _ -> pure defaultRoot

@@ -151,6 +151,9 @@ pathModuleNames recorder state normFilePath filePath
       let paths = map (normalise . (<> pure pathSeparator)) srcPaths
       logWith recorder Debug (NormalisedPaths paths)
 
+      -- TODO, this can be avoid if the filePath is already absolute,
+      -- we can avoid the toAbsolute call in the future.
+      -- see Note [Root Directory]
       let mdlPath = (toAbsolute $ rootDir state) filePath
       logWith recorder Debug (AbsoluteFilePath mdlPath)
 
