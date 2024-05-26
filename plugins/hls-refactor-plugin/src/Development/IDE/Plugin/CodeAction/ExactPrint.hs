@@ -131,10 +131,12 @@ removeConstraint ::
 removeConstraint toRemove = go . traceAst "REMOVE_CONSTRAINT_input"
   where
     go :: LHsType GhcPs -> Rewrite
-#if !MIN_VERSION_ghc(9,4,0)
-    go (L l it@HsQualTy{hst_ctxt = Just (L l' ctxt), hst_body}) = Rewrite (locA l) $ \_ -> do
-#else
+#if MIN_VERSION_ghc(9,9,0)
+    go lHsType@(makeDeltaAst -> L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite (locA lHsType) $ \_ -> do
+#elif MIN_VERSION_ghc(9,4,0)
     go (L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite (locA l) $ \_ -> do
+#else
+    go (L l it@HsQualTy{hst_ctxt = Just (L l' ctxt), hst_body}) = Rewrite (locA l) $ \_ -> do
 #endif
       let ctxt' = filter (not . toRemove) ctxt
           removeStuff = (toRemove <$> headMaybe ctxt) == Just True
