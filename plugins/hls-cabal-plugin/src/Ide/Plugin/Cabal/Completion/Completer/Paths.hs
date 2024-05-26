@@ -1,6 +1,7 @@
 module Ide.Plugin.Cabal.Completion.Completer.Paths where
 
 import qualified Data.List                         as List
+import           Data.List.Extra                   (dropPrefix)
 import qualified Data.Text                         as T
 import           Distribution.PackageDescription   (Benchmark (..),
                                                     BuildInfo (..),
@@ -15,8 +16,6 @@ import           Distribution.Utils.Path           (getSymbolicPath)
 import           Ide.Plugin.Cabal.Completion.Types
 import qualified System.FilePath                   as FP
 import qualified System.FilePath.Posix             as Posix
-import Data.List.Extra (dropPrefix)
-import Data.List (isPrefixOf)
 
 
 {- | Information used to query and build path completions.
@@ -62,7 +61,7 @@ data PathCompletionInfo = PathCompletionInfo
   "./dir1/dir2" -> ("./dir1/","dir2")
 -}
 splitFileNameNoTrailingSlash :: FilePath -> (String, String)
-splitFileNameNoTrailingSlash prefix = rmTrailingSlash ("./" `isPrefixOf` prefix) (Posix.splitFileName prefix)
+splitFileNameNoTrailingSlash prefix = rmTrailingSlash ("./" `List.isPrefixOf` prefix) (Posix.splitFileName prefix)
   where rmTrailingSlash hadTrailingSlash (queryDirectory', pathSegment')
                     | hadTrailingSlash = (queryDirectory', pathSegment')
                     | otherwise        = ("./" `dropPrefix` queryDirectory', pathSegment')
