@@ -165,15 +165,15 @@ directoryCompleterTests :: TestTree
 directoryCompleterTests =
   testGroup
     "Directory Completer Tests"
-    [ testCase "Current Directory" $ do
+    [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeDirectory "" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["dir1/", "dir2/"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeDirectory "./" filePathComplTestDir
         completions @?== ["./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete directory path written" $ do
         completions <- completeDirectory "di" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["dir1/", "dir2/"],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeDirectory "te" filePathComplTestDir
         completions @?== [],
