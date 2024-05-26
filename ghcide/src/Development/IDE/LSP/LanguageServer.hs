@@ -10,6 +10,10 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     , setupLSP
     , Log(..)
+    , ThreadQueue
+    , sessionRestartThread
+    , sessionLoaderThread
+    , runWithDb
     ) where
 
 import           Control.Concurrent.STM
@@ -21,7 +25,8 @@ import           Data.Maybe
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
 import           Development.IDE.LSP.Server
-import           Development.IDE.Session               (runWithDb)
+import           Development.IDE.Session               (WithHieDbShield (..),
+                                                        dbThreadRun)
 import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -33,9 +38,13 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Monad.Cont                    (ContT (ContT),
+                                                        evalContT)
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
+import           Development.IDE.Core.Thread           (ThreadRun (..),
+                                                        runInThread)
 import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb)
@@ -77,8 +86,6 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
--- used to smuggle RankNType WithHieDb through dbMVar
-newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config a m. (Show config)
@@ -129,7 +136,7 @@ setupLSP ::
      Recorder (WithPriority Log)
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
-  -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+  -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
   -> MVar ()
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
@@ -187,7 +194,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
 handleInit
     :: Recorder (WithPriority Log)
     -> (FilePath -> IO FilePath)
-    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
     -> MVar ()
     -> IO ()
     -> (SomeLspId -> IO ())
@@ -240,11 +247,31 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
 
-    (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
+    (WithHieDbShield withHieDb, hieChan) <- takeMVar dbMVar
     ide <- getIdeState env root withHieDb hieChan
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
+
+runWithDb :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
+runWithDb recorder dbLoc f = evalContT $ do
+            (_, sessionRestartTQueue) <- ContT $ runInThread sessionRestartThread ()
+            (_, sessionLoaderTQueue) <- ContT $ runInThread sessionLoaderThread ()
+            (WithHieDbShield hiedb, hieChan) <- ContT $ runInThread dbThreadRun (recorder, dbLoc)
+            liftIO $ f hiedb (ThreadQueue hieChan sessionRestartTQueue sessionLoaderTQueue)
+
+
+sessionRestartThread :: ThreadRun () () () (IO ())
+sessionRestartThread = ThreadRun {
+    tRunner = \_ _ run -> run,
+    tCreateResource = \_ f -> do f () ()
+}
+
+sessionLoaderThread :: ThreadRun () () () (IO ())
+sessionLoaderThread = ThreadRun {
+    tRunner = \_ _ run -> run,
+    tCreateResource = \_ f -> do f () ()
+}
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   Rethrows any exceptions.

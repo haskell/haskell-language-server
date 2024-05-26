@@ -60,7 +60,7 @@ import           Development.IDE.Core.Shake               (IdeState (shakeExtras
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Graph                    (action)
 import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
-                                                           setupLSP)
+                                                           runWithDb, setupLSP)
 import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
 import           Development.IDE.Main.HeapStats           (withHeapStats)
 import qualified Development.IDE.Main.HeapStats           as HeapStats
@@ -74,7 +74,6 @@ import           Development.IDE.Session                  (SessionLoadingOptions
                                                            getHieDbLoc,
                                                            loadSessionWithOptions,
                                                            retryOnSqliteBusy,
-                                                           runWithDb,
                                                            setInitialDynFlags)
 import qualified Development.IDE.Session                  as Session
 import           Development.IDE.Types.Location           (NormalizedUri,
@@ -326,7 +325,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
             ideStateVar <- newEmptyMVar
-            let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState
+            let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
                 getIdeState env rootPath withHieDb hieChan = do
                   traverse_ IO.setCurrentDirectory rootPath
                   t <- ioT

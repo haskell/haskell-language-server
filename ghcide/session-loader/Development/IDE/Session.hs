@@ -11,10 +11,12 @@ module Development.IDE.Session
   ,loadSessionWithOptions
   ,setInitialDynFlags
   ,getHieDbLoc
-  ,runWithDb
+--   ,runWithDb
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
+  ,dbThreadRun
+  ,WithHieDbShield(..)
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -121,6 +123,9 @@ import qualified Data.Set                             as OS
 import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           GHC.Data.Graph.Directed
 
+import           Control.Monad.Cont                   (ContT (ContT), evalContT)
+import           Development.IDE.Core.Thread          (ThreadRun (..),
+                                                       runInThread)
 import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
@@ -370,48 +375,37 @@ makeWithHieDbRetryable :: RandomGen g => Recorder (WithPriority Log) -> g -> Hie
 makeWithHieDbRetryable recorder rng hieDb f =
   retryOnSqliteBusy recorder rng (f hieDb)
 
--- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
--- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
--- by a worker thread using a dedicated database connection.
--- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: Recorder (WithPriority Log) -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
-runWithDb recorder fp k = do
-  -- use non-deterministic seed because maybe multiple HLS start at same time
-  -- and send bursts of requests
-  rng <- Random.newStdGen
-  -- Delete the database if it has an incompatible schema version
-  retryOnSqliteBusy
-    recorder
-    rng
-    (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
-
-  withHieDb fp $ \writedb -> do
-    -- the type signature is necessary to avoid concretizing the tyvar
-    -- e.g. `withWriteDbRetryable initConn` without type signature will
-    -- instantiate tyvar `a` to `()`
-    let withWriteDbRetryable :: WithHieDb
-        withWriteDbRetryable = makeWithHieDbRetryable recorder rng writedb
-    withWriteDbRetryable initConn
-
-    chan <- newTQueueIO
-
-    withAsync (writerThread withWriteDbRetryable chan) $ \_ -> do
-      withHieDb fp (\readDb -> k (makeWithHieDbRetryable recorder rng readDb) chan)
-  where
-    writerThread :: WithHieDb -> IndexQueue -> IO ()
-    writerThread withHieDbRetryable chan = do
-      -- Clear the index of any files that might have been deleted since the last run
-      _ <- withHieDbRetryable deleteMissingRealFiles
-      _ <- withHieDbRetryable garbageCollectTypeNames
-      forever $ do
-        l <- atomically $ readTQueue chan
-        -- TODO: probably should let exceptions be caught/logged/handled by top level handler
-        l withHieDbRetryable
+dbThreadRun ::
+        ThreadRun
+            (Recorder (WithPriority Log), FilePath)
+            WithHieDbShield
+            WithHieDbShield
+            (((HieDb -> IO a) -> IO a) -> IO ())
+dbThreadRun = ThreadRun {
+    tRunner = \(recorder, _fp) (WithHieDbShield withWriter) l ->  l withWriter
           `Safe.catch` \e@SQLError{} -> do
             logWith recorder Error $ LogHieDbWriterThreadSQLiteError e
           `Safe.catchAny` \f -> do
             logWith recorder Error $ LogHieDbWriterThreadException f
-
+    ,
+    tCreateResource = \(recorder, fp) f -> do
+        rng <- Random.newStdGen
+        retryOnSqliteBusy
+            recorder
+            rng
+            (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
+        evalContT $ do
+            writedb <- ContT $ withHieDb fp
+            readDb <- ContT $ withHieDb fp
+            let withWriteDbRetryable :: WithHieDb
+                withWriteDbRetryable = makeWithHieDbRetryable recorder rng writedb
+            liftIO $ withWriteDbRetryable initConn
+            liftIO $ f (WithHieDbShield withWriteDbRetryable) (WithHieDbShield (makeWithHieDbRetryable recorder rng readDb))
+}
+-- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
+-- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
+-- by a worker thread using a dedicated database connection.
+-- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
@@ -436,6 +430,9 @@ getHieDbLoc dir = do
 -- HscEnv which is updated as new components are discovered.
 loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
 loadSession recorder = loadSessionWithOptions recorder def
+
+-- used to smuggle RankNType WithHieDb through dbMVar
+newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do

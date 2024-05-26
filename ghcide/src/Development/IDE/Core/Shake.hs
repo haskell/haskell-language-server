@@ -73,6 +73,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeysOlderThan,
     Log(..),
     VFSModified(..), getClientConfigAction,
+    ThreadQueue(..)
     ) where
 
 import           Control.Concurrent.Async
@@ -182,6 +183,9 @@ import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
+import           Control.Concurrent.STM                 (atomically,
+                                                         writeTQueue)
+import           Development.IDE.Core.Thread
 import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 #endif
 
@@ -262,6 +266,12 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+data ThreadQueue = ThreadQueue {
+    tIndexQueue     :: IndexQueue
+    , tRestartQueue :: TQueue (IO ())
+    , tLoaderQueue  :: TQueue (IO ())
+}
+
 -- Note [Semantic Tokens Cache Location]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- storing semantic tokens cache for each file in shakeExtras might
@@ -334,6 +344,10 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
+    , restartQueue :: TQueue (IO ())
+      -- ^ Queue of restart actions to be run.
+    , loaderQueue :: TQueue (IO ())
+      -- ^ Queue of loader actions to be run.
     }
 
 type WithProgressFunc = forall a.
@@ -619,7 +633,7 @@ shakeOpen :: Recorder (WithPriority Log)
           -> IdeReportProgress
           -> IdeTesting
           -> WithHieDb
-          -> IndexQueue
+          -> ThreadQueue
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
@@ -627,7 +641,10 @@ shakeOpen :: Recorder (WithPriority Log)
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
-  withHieDb indexQueue opts monitoring rules = mdo
+  withHieDb threadQueue opts monitoring rules = mdo
+    let indexQueue = tIndexQueue threadQueue
+        restartQueue = tRestartQueue threadQueue
+        loaderQueue = tLoaderQueue threadQueue
 
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
@@ -752,31 +769,37 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
-    withMVar'
-        shakeSession
-        (\runner -> do
-              (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-              keys <- ioActionBetweenShakeSession
-              -- it is every important to update the dirty keys after we enter the critical section
-              -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
-              res <- shakeDatabaseProfile shakeDb
-              backlog <- readTVarIO $ dirtyKeys shakeExtras
-              queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
+    b <- newBarrier
+    atomically $ writeTQueue (restartQueue shakeExtras) $ do
+        withMVar'
+            shakeSession
+            (\runner -> do
+                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                keys <- ioActionBetweenShakeSession
+                -- it is every important to update the dirty keys after we enter the critical section
+                -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                res <- shakeDatabaseProfile shakeDb
+                backlog <- readTVarIO $ dirtyKeys shakeExtras
+                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              -- this log is required by tests
-              logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-        )
-        -- It is crucial to be masked here, otherwise we can get killed
-        -- between spawning the new thread and updating shakeSession.
-        -- See https://github.com/haskell/ghcide/issues/79
-        (\() -> do
-          (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+                -- this log is required by tests
+                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+            )
+            -- It is crucial to be masked here, otherwise we can get killed
+            -- between spawning the new thread and updating shakeSession.
+            -- See https://github.com/haskell/ghcide/issues/79
+            (\() -> do
+            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+        -- fill barrier to signal that the restart is done
+        signalBarrier b ()
+    waitBarrier b
     where
         logErrorAfter :: Seconds -> IO () -> IO ()
         logErrorAfter seconds action = flip withAsync (const action) $ do
