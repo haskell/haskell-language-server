@@ -529,12 +529,13 @@ newtype ShakeSession = ShakeSession
 
 -- Note [Root Directory]
 -- ~~~~~~~~~~~~~~~~~~~~~
--- The root directory is the directory we assume relative paths are relative to.
+-- We are keep tracking of the root directory explicitly, which is the directory where the project is located.
 -- We might be setting it from LSP workspace root > command line > from the current directory.
 --
--- Using it instead of `getCurrentDirectory` allows us to avoid issues if we
--- `setCurrentDirectory` somewhere else in the code.
--- It also helps with testing in parallel, where we can keep the root directory
+-- It helps to remove most usage for getCurrentDirectory(After DefaultMain of GhcIde is called),
+-- Using it instead of `getCurrentDirectory` allows us to avoid issues if we `setCurrentDirectory`
+-- somewhere else in the code.
+-- And in turn, it is helps with testing in parallel, where we can keep the root directory
 -- and the current directory separate.
 --
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
