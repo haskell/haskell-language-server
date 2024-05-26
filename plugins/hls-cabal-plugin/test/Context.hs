@@ -31,12 +31,12 @@ pathCompletionInfoFromCompletionContextTests :: TestTree
 pathCompletionInfoFromCompletionContextTests =
     testGroup
         "Completion Info to Completion Context Tests"
-        [ testCase "Current Directory" $ do
+        [ testCase "Current Directory - no leading ./ by default" $ do
             let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "" testDataDir
-            queryDirectory complInfo @?= "./"
+            queryDirectory complInfo @?= ""
         , testCase "Current Directory - partly written next" $ do
             let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "di" testDataDir
-            queryDirectory complInfo @?= "./"
+            queryDirectory complInfo @?= ""
             pathSegment complInfo @?= "di"
         , testCase "Current Directory - alternative writing" $ do
             let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "./" testDataDir
