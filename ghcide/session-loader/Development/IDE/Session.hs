@@ -108,6 +108,7 @@ import           Data.HashMap.Strict                  (HashMap)
 import           Data.HashSet                         (HashSet)
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
+import           Development.IDE.Core.Thread          (ThreadRun (..))
 import           Development.IDE.Core.Tracing         (withTrace)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
 import           Development.IDE.Types.Shake          (WithHieDb, toNoFileKey)
@@ -124,8 +125,6 @@ import qualified Data.Set                             as OS
 import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           GHC.Data.Graph.Directed
 
-import           Development.IDE.Core.Thread          (ThreadRun (..),
-                                                       runInThread)
 import           GHC.Data.Bag
 import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
