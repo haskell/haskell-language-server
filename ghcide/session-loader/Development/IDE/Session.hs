@@ -7,7 +7,7 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
-  ,loadSession
+--   ,loadSession
   ,loadSessionWithOptions
   ,setInitialDynFlags
   ,getHieDbLoc
@@ -428,14 +428,14 @@ getHieDbLoc dir = do
 -- This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
-loadSession recorder = loadSessionWithOptions recorder def
+-- loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
+-- loadSession recorder = loadSessionWithOptions recorder def
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
-loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions recorder SessionLoadingOptions{..} dir que = do
   cradle_files <- newIORef []
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
@@ -458,9 +458,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
       -- e.g. see https://github.com/haskell/ghcide/issues/126
       res' <- traverse makeAbsolute res
       return $ normalise <$> res'
-
-  dummyAs <- async $ return (error "Uninitialised")
-  runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
     clientConfig <- getClientConfigAction
@@ -739,12 +736,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
-      opts <- join $ mask_ $ modifyVar runningCradle $ \as -> do
-        -- If the cradle is not finished, then wait for it to finish.
-        void $ wait as
-        asyncRes <- async $ getOptions file
-        return (asyncRes, wait asyncRes)
-      pure opts
+      resultBarrier <- liftIO newBarrier
+      atomically $ writeTQueue que $ do
+        res <- getOptions file
+        liftIO $ signalBarrier resultBarrier res
+      waitBarrier resultBarrier
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
