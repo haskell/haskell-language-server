@@ -618,7 +618,6 @@ data TestConfig b = TestConfig
   {
     testDirLocation          :: Either FilePath VirtualFileTree
     -- ^ The file tree to use for the test, either a directory or a virtual file tree
-
     -- if using a virtual file tree,
     -- Creates a temporary directory, and materializes the VirtualFileTree
     -- in the temporary directory.
