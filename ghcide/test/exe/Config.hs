@@ -63,7 +63,7 @@ runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
 runWithDummyPlugin' fs = runSessionWithTestConfig def {
     testPluginDescriptor = dummyPlugin
     , testDirLocation = Right fs
-    ,  testConfigCaps = lspTestCaps
+    , testConfigCaps = lspTestCaps
     , testShiftRoot = True
     }
 
@@ -95,11 +95,14 @@ testSession' name = testCase name . run'
 
 run :: Session a -> IO a
 run = runSessionWithTestConfig def
-    {testDirLocation=Right (mkIdeTestFs []), testPluginDescriptor=dummyPlugin}
+    { testDirLocation = Right (mkIdeTestFs [])
+    , testPluginDescriptor = dummyPlugin }
     . const
 
 run' :: (FilePath -> Session a) -> IO a
-run' = runSessionWithTestConfig def {testDirLocation=Right (mkIdeTestFs []), testPluginDescriptor=dummyPlugin}
+run' = runSessionWithTestConfig def
+    { testDirLocation = Right (mkIdeTestFs [])
+    , testPluginDescriptor = dummyPlugin }
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')

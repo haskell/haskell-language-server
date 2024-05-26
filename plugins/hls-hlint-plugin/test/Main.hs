@@ -118,10 +118,10 @@ suggestionsTests =
 
     , testCase "falls back to pre 3.8 code actions" $
         runSessionWithTestConfig def {
-            testConfigCaps = noLiteralCaps,
-            testDirLocation = Left testDir,
-            testPluginDescriptor = hlintPlugin,
-            testShiftRoot = True} $ const $ do
+            testConfigCaps = noLiteralCaps
+            , testDirLocation = Left testDir
+            , testPluginDescriptor = hlintPlugin
+            , testShiftRoot = True} $ const $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "hlint"
