@@ -344,8 +344,8 @@ testDir = "plugins/hls-hlint-plugin/test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir = failIfSessionTimeout .
-    runSessionWithTestConfig def
-    {testConfigCaps=codeActionNoResolveCaps
+    runSessionWithTestConfig def {
+    testConfigCaps=codeActionNoResolveCaps
     , testShiftRoot=True
     , testDirLocation=Left (testDir </> subdir)
     , testPluginDescriptor=hlintPlugin
@@ -431,8 +431,8 @@ goldenTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-    goldenWithTestConfig def
-    {testConfigCaps=codeActionNoResolveCaps
+    goldenWithTestConfig def {
+    testConfigCaps=codeActionNoResolveCaps
     , testShiftRoot=True
     , testPluginDescriptor=hlintPlugin
     , testDirLocation=Left testDir
@@ -459,8 +459,8 @@ goldenResolveTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintResolveTest testName path =
-    goldenWithTestConfig def
-    {testConfigCaps=codeActionResolveCaps
+    goldenWithTestConfig def {
+    testConfigCaps=codeActionResolveCaps
     , testShiftRoot=True
     , testPluginDescriptor=hlintPlugin
     , testDirLocation=Left testDir
