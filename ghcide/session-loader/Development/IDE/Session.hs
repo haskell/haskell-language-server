@@ -101,6 +101,7 @@ import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
 import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
 import           Control.Exception                    (evaluate)
+import           Control.Monad.Cont                   (ContT (ContT), runContT)
 import           Control.Monad.IO.Unlift              (MonadUnliftIO)
 import           Data.Foldable                        (for_)
 import           Data.HashMap.Strict                  (HashMap)
@@ -123,7 +124,6 @@ import qualified Data.Set                             as OS
 import qualified Development.IDE.GHC.Compat.Util      as Compat
 import           GHC.Data.Graph.Directed
 
-import           Control.Monad.Cont                   (ContT (ContT), evalContT)
 import           Development.IDE.Core.Thread          (ThreadRun (..),
                                                        runInThread)
 import           GHC.Data.Bag
@@ -394,7 +394,7 @@ dbThreadRun = ThreadRun {
             recorder
             rng
             (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
-        evalContT $ do
+        flip runContT return $ do
             writedb <- ContT $ withHieDb fp
             readDb <- ContT $ withHieDb fp
             let withWriteDbRetryable :: WithHieDb

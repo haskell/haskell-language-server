@@ -38,8 +38,7 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
-import           Control.Monad.Cont                    (ContT (ContT),
-                                                        evalContT)
+import           Control.Monad.Cont                    (ContT (ContT, runContT))
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
@@ -254,7 +253,7 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
 
 
 runWithDb :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
-runWithDb recorder dbLoc f = evalContT $ do
+runWithDb recorder dbLoc f = flip runContT return $ do
             (_, sessionRestartTQueue) <- ContT $ runInThread sessionRestartThread ()
             (_, sessionLoaderTQueue) <- ContT $ runInThread sessionLoaderThread ()
             (WithHieDbShield hiedb, hieChan) <- ContT $ runInThread dbThreadRun (recorder, dbLoc)
