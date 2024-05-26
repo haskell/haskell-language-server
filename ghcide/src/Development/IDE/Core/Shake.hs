@@ -535,7 +535,7 @@ newtype ShakeSession = ShakeSession
 -- It helps to remove most usage for getCurrentDirectory(After DefaultMain of GhcIde is called),
 -- Using it instead of `getCurrentDirectory` allows us to avoid issues if we `setCurrentDirectory`
 -- somewhere else in the code.
--- And in turn, it is helps with testing in parallel, where we can keep the root directory
+-- And in turn, it helps with testing in parallel, where we can keep the root directory
 -- and the current directory separate.
 --
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
