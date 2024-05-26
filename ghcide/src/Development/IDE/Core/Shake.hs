@@ -539,6 +539,7 @@ newtype ShakeSession = ShakeSession
 --
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
 -- This is already deprecated and we can drop it in the future.
+--
 
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.

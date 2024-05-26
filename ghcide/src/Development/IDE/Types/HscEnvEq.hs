@@ -65,8 +65,7 @@ newHscEnvEq root cradlePath hscEnv0 deps = do
         hscEnv = removeImportPaths hscEnv0
 
     -- Make Absolute since targets are also absolute
-    importPathsCanon <-
-      map (toAbsolute root) $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
+    let importPathsCanon = toAbsolute root . relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 
