@@ -122,7 +122,7 @@ import           System.Directory                   (canonicalizePath,
                                                      getTemporaryDirectory,
                                                      makeAbsolute,
                                                      setCurrentDirectory)
-import           System.Environment                 (getEnv, lookupEnv, setEnv)
+import           System.Environment                 (lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                    (newTempDirWithin)
 import           System.IO.Unsafe                   (unsafePerformIO)
@@ -683,8 +683,8 @@ runSessionWithTestConfig TestConfig{..} session =
           }]
 
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
-    timeoutOverride <- read <$> getEnv "LSP_TIMEOUT"
-    let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = timeoutOverride}
+    timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
+    let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
         arguments = testingArgs root recorderIde plugins
     server <- async $
         IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
