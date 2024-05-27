@@ -172,7 +172,7 @@ getReferences' (file, l, c) includeDeclaration = do
 referenceTestSession :: String -> FilePath -> [FilePath] -> (FilePath -> Session ()) -> TestTree
 referenceTestSession name thisDoc docs' f = do
   testWithDummyPlugin' name (mkIdeTestFs [copyDir "references"]) $ \fs -> do
-    let rootDir = fs </> ""
+    let rootDir = addTrailingPathSeparator fs
     -- needed to build whole project indexing
     configureCheckProject True
     -- need to get the real paths through links
