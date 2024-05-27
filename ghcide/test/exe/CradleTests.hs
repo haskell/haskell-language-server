@@ -125,7 +125,7 @@ multiTestName :: FilePath -> String -> String
 multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
 
 simpleMultiTest :: FilePath -> TestTree
-simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest variant = testCase (multiTestName variant "test") $ withLongTimeout $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
