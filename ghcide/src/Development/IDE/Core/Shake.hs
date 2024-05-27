@@ -532,7 +532,7 @@ newtype ShakeSession = ShakeSession
 -- We keep track of the root directory explicitly, which is the directory of the project root.
 -- We might be setting it via these options with decreasing priority:
 --
--- 1. from LSP workspace root
+-- 1. from LSP workspace root, `resRootPath` in `LanguageContextEnv`.
 -- 2. command line (--cwd)
 -- 3. default to the current directory.
 --
@@ -650,6 +650,8 @@ shakeOpen :: Recorder (WithPriority Log)
           -> Monitoring
           -> Rules ()
           -> FilePath
+          -- ^ Root directory, this one might be picking up from `LanguageContextEnv`'s `resRootPath`
+          -- , see Note [Root Directory]
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)

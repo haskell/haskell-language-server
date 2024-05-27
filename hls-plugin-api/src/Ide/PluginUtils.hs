@@ -322,5 +322,9 @@ escapedTextParser = concat <$> P.many (outsideStringLiteral P.<|> stringLiteral)
 
 -- ---------------------------------------------------------------------
 
+-- | toAbsolute
+-- use `toAbsolute` to state our intention that we are actually make a path absolute
+-- the first argument should be the root directory
+-- the second argument should be the relative path
 toAbsolute :: FilePath -> FilePath -> FilePath
 toAbsolute = (</>)
