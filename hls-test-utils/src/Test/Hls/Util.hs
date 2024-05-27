@@ -29,14 +29,12 @@ module Test.Hls.Util
     , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
-    , expectSameLocations
     , failIfSessionTimeout
     , getCompletionByLabel
     , noLiteralCaps
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
-    , SymbolLocation
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
@@ -313,23 +311,6 @@ failIfSessionTimeout action = action `catch` errorHandler
     where errorHandler :: Test.SessionException -> IO a
           errorHandler e@(Test.Timeout _) = assertFailure $ show e
           errorHandler e                  = throwIO e
-
--- | To locate a symbol, we provide a path to the file from the HLS root
--- directory, the line number, and the column number. (0 indexed.)
-type SymbolLocation = (FilePath, UInt, UInt)
-
-expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
-actual `expectSameLocations` expected = do
-    let actual' =
-            Set.map (\location -> (location ^. L.uri
-                                   , location ^. L.range . L.start . L.line
-                                   , location ^. L.range . L.start . L.character))
-            $ Set.fromList actual
-    expected' <- Set.fromList <$>
-        (forM expected $ \(file, l, c) -> do
-                              fp <- canonicalizePath file
-                              return (filePathToUri fp, l, c))
-    actual' @?= expected'
 
 -- ---------------------------------------------------------------------
 getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem

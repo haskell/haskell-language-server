@@ -195,18 +195,3 @@ copyTestDataFiles dir prefix = do
 withLongTimeout :: IO a -> IO a
 withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIMEOUT")
 
-testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
-testIde recorder arguments session = do
-    config <- getConfigFromEnv
-    cwd <- getCurrentDirectory
-    (hInRead, hInWrite) <- createPipe
-    (hOutRead, hOutWrite) <- createPipe
-
-    let server = IDE.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
-            { IDE.argsHandleIn = pure hInRead
-            , IDE.argsHandleOut = pure hOutWrite
-            }
-
-    withTempDir $ \dir -> do
-        flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
-            runSessionWithHandles hInWrite hOutRead config lspTestCaps dir session

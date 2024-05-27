@@ -9,14 +9,14 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
+import           Config
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests =
   testGroup "cpp"
-    [ ignoreInWindowsBecause "Throw a lsp session time out in windows for ghc-8.8 and is broken for other versions" $ testCase "cpp-error" $ do
+    [ testCase "cpp-error" $ do
         let content =
               T.unlines
                 [ "{-# LANGUAGE CPP #-}",
@@ -32,7 +32,7 @@ tests =
                       let _ = e :: HUnitFailure
                       run $ expectError content (2, 1)
                   )
-    , testSessionWait "cpp-ghcide" $ do
+    , testWithDummyPluginEmpty "cpp-ghcide" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
           ["{-# LANGUAGE CPP #-}"
           ,"main ="
