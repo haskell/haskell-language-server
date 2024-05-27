@@ -546,7 +546,7 @@ newtype ShakeSession = ShakeSession
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
 -- The root dir is deprecated, that means we should cleanup dependency on the project root(Or $CWD) thing gradually,
 -- so multi-workspaces can actually be supported when we use absolute path everywhere(might also need some high level design).
--- That might not be possible unless we have everything adapt to it, like 'hlint' and 'evaluation of template haskell'.
+-- That might not be possible unless we have everything adapted to it, like 'hlint' and 'evaluation of template haskell'.
 -- But we should still be working towards the goal.
 --
 -- We can drop it in the future once:
