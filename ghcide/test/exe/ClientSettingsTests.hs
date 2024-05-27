@@ -1,8 +1,8 @@
 {-# LANGUAGE GADTs #-}
 module ClientSettingsTests (tests) where
 
-import           Config
-import           Config                          (lspTestCaps, testWithConfig)
+import           Config                          (lspTestCaps, testWithConfig,
+                                                  testWithDummyPluginEmpty)
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Data.Aeson                      (toJSON)
