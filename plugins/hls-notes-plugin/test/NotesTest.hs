@@ -1,7 +1,6 @@
 module Main (main) where
 
 import           Ide.Plugin.Notes (Log, descriptor)
-import           System.Directory (canonicalizePath)
 import           System.FilePath  ((</>))
 import           Test.Hls
 
@@ -14,43 +13,48 @@ main = defaultTestRunner $
     [ gotoNoteTests
     ]
 
+runSessionWithServer' :: FilePath -> (FilePath -> Session a) -> IO a
+runSessionWithServer' fp act =
+    runSessionWithTestConfig def
+        { testLspConfig = def
+        , testPluginDescriptor = plugin
+        , testDirLocation = Left fp
+        } act
+
 gotoNoteTests :: TestTree
 gotoNoteTests = testGroup "Goto Note Definition"
-    [ testCase "single_file" $ runSessionWithServer def plugin testDataDir $ do
+    [
+      testCase "single_file" $ runSessionWithServer' testDataDir $ \dir -> do
         doc <- openDoc "NoteDef.hs" "haskell"
         waitForKickDone
         defs <- getDefinitions doc (Position 3 41)
-        liftIO $ do
-          fp <- canonicalizePath "NoteDef.hs"
-          defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 8 9) (Position 8 9))]))
-    , testCase "liberal_format" $ runSessionWithServer def plugin testDataDir $ do
+        let fp = dir </> "NoteDef.hs"
+        liftIO $ defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 8 9) (Position 8 9))]))
+    , testCase "liberal_format" $ runSessionWithServer' testDataDir $ \dir -> do
         doc <- openDoc "NoteDef.hs" "haskell"
         waitForKickDone
         defs <- getDefinitions doc (Position 5 64)
-        liftIO $ do
-          fp <- canonicalizePath "NoteDef.hs"
-          defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 18 11) (Position 18 11))]))
+        let fp = dir </> "NoteDef.hs"
+        liftIO $ defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 18 11) (Position 18 11))]))
 
-    , testCase "invalid_note" $ runSessionWithServer def plugin testDataDir $ do
+    , testCase "invalid_note" $ runSessionWithServer' testDataDir $ const $ do
         doc <- openDoc "NoteDef.hs" "haskell"
         waitForKickDone
         defs <- getDefinitions doc (Position 6 54)
-        liftIO $ do
-            defs @?= InL (Definition (InR []))
+        liftIO $ defs @?= InL (Definition (InR []))
 
-    , testCase "no_note" $ runSessionWithServer def plugin testDataDir $ do
+    , testCase "no_note" $ runSessionWithServer' testDataDir $ const $ do
         doc <- openDoc "NoteDef.hs" "haskell"
         waitForKickDone
         defs <- getDefinitions doc (Position 1 0)
         liftIO $ defs @?= InL (Definition (InR []))
 
-    , testCase "unopened_file" $ runSessionWithServer def plugin testDataDir $ do
+    , testCase "unopened_file" $ runSessionWithServer' testDataDir $ \dir -> do
         doc <- openDoc "Other.hs" "haskell"
         waitForKickDone
         defs <- getDefinitions doc (Position 5 20)
-        liftIO $ do
-          fp <- canonicalizePath "NoteDef.hs"
-          defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 12 6) (Position 12 6))]))
+        let fp = dir </> "NoteDef.hs"
+        liftIO $ defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 12 6) (Position 12 6))]))
     ]
 
 testDataDir :: FilePath

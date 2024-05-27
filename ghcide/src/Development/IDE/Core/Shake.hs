@@ -22,7 +22,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeSessionInit, shakeExtras, shakeDb,
+    IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,
@@ -527,6 +527,33 @@ newtype ShakeSession = ShakeSession
     -- ^ Closes the Shake session
   }
 
+-- Note [Root Directory]
+-- ~~~~~~~~~~~~~~~~~~~~~
+-- We keep track of the root directory explicitly, which is the directory of the project root.
+-- We might be setting it via these options with decreasing priority:
+--
+-- 1. from LSP workspace root, `resRootPath` in `LanguageContextEnv`.
+-- 2. command line (--cwd)
+-- 3. default to the current directory.
+--
+-- Using `getCurrentDirectory` makes it more difficult to run the tests, as we spawn one thread of HLS per test case.
+-- If we modify the global Variable CWD, via `setCurrentDirectory`, all other test threads are suddenly affected,
+-- forcing us to run all integration tests sequentially.
+--
+-- Also, there might be a race condition if we depend on the current directory, as some plugin might change it.
+-- e.g. stylish's `loadConfig`. https://github.com/haskell/haskell-language-server/issues/4234
+--
+-- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
+-- The root dir is deprecated, that means we should cleanup dependency on the project root(Or $CWD) thing gradually,
+-- so multi-workspaces can actually be supported when we use absolute path everywhere(might also need some high level design).
+-- That might not be possible unless we have everything adapted to it, like 'hlint' and 'evaluation of template haskell'.
+-- But we should still be working towards the goal.
+--
+-- We can drop it in the future once:
+-- 1. We can get rid all the usages of root directory in the codebase.
+-- 2. LSP version we support actually removes the root directory from the protocol.
+--
+
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
@@ -535,6 +562,8 @@ data IdeState = IdeState
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopMonitoring       :: IO ()
+    -- | See Note [Root Directory]
+    ,rootDir              :: FilePath
     }
 
 
@@ -623,11 +652,14 @@ shakeOpen :: Recorder (WithPriority Log)
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
+          -> FilePath
+          -- ^ Root directory, this one might be picking up from `LanguageContextEnv`'s `resRootPath`
+          -- , see Note [Root Directory]
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting
-  withHieDb indexQueue opts monitoring rules = mdo
+  withHieDb indexQueue opts monitoring rules rootDir = mdo
 
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames

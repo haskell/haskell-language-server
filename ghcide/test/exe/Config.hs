@@ -11,33 +11,37 @@ module Config(
     , testWithDummyPluginEmpty
     , testWithDummyPlugin'
     , testWithDummyPluginEmpty'
-    , testWithDummyPluginAndCap'
+    , testWithConfig
+    , testWithExtraFiles
     , runWithExtraFiles
     , runInDir
-    , testWithExtraFiles
+    , run
 
-    -- * utilities for testing definition and hover
+    -- * utilities for testing
     , Expect(..)
     , pattern R
     , mkR
     , checkDefs
     , mkL
+    , withLongTimeout
     , lspTestCaps
     , lspTestCapsNoFileWatches
     ) where
 
+import           Control.Exception           (bracket_)
 import           Control.Lens.Setter         ((.~))
 import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
 import qualified Data.Text                   as T
+import           Development.IDE             (Pretty)
 import           Development.IDE.Test        (canonicalizeUri)
 import           Ide.Types                   (defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Null (..))
+import           System.Environment.Blank    (setEnv, unsetEnv)
 import           System.FilePath             ((</>))
 import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
-import           Test.Hls.FileSystem         (FileSystem, fsRoot)
 
 testDataDir :: FilePath
 testDataDir = "ghcide" </> "test" </> "data"
@@ -52,37 +56,53 @@ dummyPlugin = mkPluginTestDescriptor (\_ pid -> defaultPluginDescriptor pid "dum
 runWithDummyPlugin ::  FS.VirtualFileTree -> Session a -> IO a
 runWithDummyPlugin = runSessionWithServerInTmpDir def dummyPlugin
 
-runWithDummyPlugin' ::  FS.VirtualFileTree -> (FileSystem -> Session a) -> IO a
-runWithDummyPlugin' = runSessionWithServerInTmpDirCont' def dummyPlugin
+testWithConfig :: String -> TestConfig () -> Session () -> TestTree
+testWithConfig name conf s = testCase name $ runSessionWithTestConfig conf $ const s
 
-runWithDummyPluginAndCap' :: ClientCapabilities -> (FileSystem -> Session ()) -> IO ()
-runWithDummyPluginAndCap' cap = runSessionWithServerAndCapsInTmpDirCont def dummyPlugin cap (mkIdeTestFs [])
-
-testWithDummyPluginAndCap' :: String -> ClientCapabilities -> (FileSystem -> Session ()) -> TestTree
-testWithDummyPluginAndCap' caseName cap = testCase caseName . runWithDummyPluginAndCap' cap
+runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
+runWithDummyPlugin' fs = runSessionWithTestConfig def
+    { testPluginDescriptor = dummyPlugin
+    , testDirLocation = Right fs
+    , testConfigCaps = lspTestCaps
+    , testShiftRoot = True
+    }
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
 testWithDummyPlugin caseName vfs = testWithDummyPlugin' caseName vfs . const
 
-testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPlugin' :: String -> FS.VirtualFileTree -> (FilePath -> Session ()) -> TestTree
 testWithDummyPlugin' caseName vfs = testCase caseName . runWithDummyPlugin' vfs
 
 testWithDummyPluginEmpty :: String -> Session () -> TestTree
 testWithDummyPluginEmpty caseName = testWithDummyPlugin caseName $ mkIdeTestFs []
 
-testWithDummyPluginEmpty' :: String -> (FileSystem -> Session ()) -> TestTree
+testWithDummyPluginEmpty' :: String -> (FilePath -> Session ()) -> TestTree
 testWithDummyPluginEmpty' caseName = testWithDummyPlugin' caseName $ mkIdeTestFs []
 
-runWithExtraFiles :: String -> (FileSystem -> Session a) -> IO a
+runWithExtraFiles :: String -> (FilePath -> Session a) -> IO a
 runWithExtraFiles dirName action = do
     let vfs = mkIdeTestFs [FS.copyDir dirName]
     runWithDummyPlugin' vfs action
 
-testWithExtraFiles :: String -> String -> (FileSystem -> Session ()) -> TestTree
+testWithExtraFiles :: String -> String -> (FilePath -> Session ()) -> TestTree
 testWithExtraFiles testName dirName action = testCase testName $ runWithExtraFiles dirName action
 
-runInDir :: FileSystem -> Session a -> IO a
-runInDir fs = runSessionWithServerNoRootLock False dummyPlugin def def def (fsRoot fs)
+runInDir :: FilePath -> Session a -> IO a
+runInDir fs = runSessionWithServer def dummyPlugin fs
+
+testSession' :: TestName -> (FilePath -> Session ()) -> TestTree
+testSession' name = testCase name . run'
+
+run :: Session a -> IO a
+run = runSessionWithTestConfig def
+    { testDirLocation = Right (mkIdeTestFs [])
+    , testPluginDescriptor = dummyPlugin }
+    . const
+
+run' :: (FilePath -> Session a) -> IO a
+run' = runSessionWithTestConfig def
+    { testDirLocation = Right (mkIdeTestFs [])
+    , testPluginDescriptor = dummyPlugin }
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
@@ -146,3 +166,6 @@ lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) N
 
 lspTestCapsNoFileWatches :: ClientCapabilities
 lspTestCapsNoFileWatches = lspTestCaps & L.workspace . traverse . L.didChangeWatchedFiles .~ Nothing
+
+withLongTimeout :: IO a -> IO a
+withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIMEOUT")

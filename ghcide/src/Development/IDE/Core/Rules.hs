@@ -164,8 +164,7 @@ import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           Prelude                                      hiding (mod)
-import           System.Directory                             (doesFileExist,
-                                                               makeAbsolute)
+import           System.Directory                             (doesFileExist)
 import           System.Info.Extra                            (isWindows)
 
 
@@ -719,13 +718,13 @@ loadGhcSession recorder ghcSessionDepsConfig = do
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+        -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
 
         -- add the deps to the Shake graph
         let addDependency fp = do
                 -- VSCode uses absolute paths in its filewatch notifications
-                afp <- liftIO $ makeAbsolute fp
-                let nfp = toNormalizedFilePath' afp
+                let nfp = toNormalizedFilePath' fp
                 itExists <- getFileExists nfp
                 when itExists $ void $ do
                   use_ GetModificationTime nfp
@@ -853,7 +852,7 @@ getModIfaceFromDiskAndIndexRule recorder =
       hie_loc = Compat.ml_hie_file $ ms_location ms
   fileHash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
-  hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
+  let hie_loc' = HieDb.hieModuleHieFile <$> mrow
   case mrow of
     Just row
       | fileHash == HieDb.modInfoHash (HieDb.hieModInfo row)

@@ -26,7 +26,10 @@ import qualified Data.Aeson                      as A
 import           Data.Default                    (def)
 import           Data.Tuple.Extra
 import           GHC.TypeLits                    (symbolVal)
+import           Ide.PluginUtils                 (toAbsolute)
 import           Ide.Types
+import           System.FilePath                 (addTrailingPathSeparator,
+                                                  (</>))
 import           Test.Hls                        (FromServerMessage' (..),
                                                   SMethod (..),
                                                   TCustomMessage (..),
@@ -167,13 +170,14 @@ getReferences' (file, l, c) includeDeclaration = do
 
 
 
-referenceTestSession :: String -> FilePath -> [FilePath] -> Session () -> TestTree
+referenceTestSession :: String -> FilePath -> [FilePath] -> (FilePath -> Session ()) -> TestTree
 referenceTestSession name thisDoc docs' f = do
   testWithDummyPlugin' name (mkIdeTestFs [copyDir "references"]) $ \fs -> do
+    let rootDir = addTrailingPathSeparator fs
     -- needed to build whole project indexing
     configureCheckProject True
     -- need to get the real paths through links
-    docs <- mapM (liftIO . canonicalizePath . toAbsFp fs) $ delete thisDoc $ nubOrd docs'
+    docs <- mapM (liftIO . canonicalizePath . (fs </>)) $ delete thisDoc $ nubOrd docs'
     -- Initial Index
     docid <- openDoc thisDoc "haskell"
 
@@ -187,23 +191,23 @@ referenceTestSession name thisDoc docs' f = do
             doc <- skipManyTill anyMessage $ referenceReady (`elem` docs)
             loop (delete doc docs)
     loop docs
-    f
+    f rootDir
     closeDoc docid
 
 -- | Given a location, lookup the symbol and all references to it. Make sure
 -- they are the ones we expect.
 referenceTest :: (HasCallStack) => String -> SymbolLocation -> IncludeDeclaration -> [SymbolLocation] -> TestTree
 referenceTest name loc includeDeclaration expected =
-    referenceTestSession name (fst3 loc) docs $ do
+    referenceTestSession name (fst3 loc) docs $ \rootDir -> do
         actual <- getReferences' loc includeDeclaration
-        liftIO $ actual `expectSameLocations` expected
+        liftIO $ expectSameLocations rootDir actual expected
   where
     docs = map fst3 expected
 
 type SymbolLocation = (FilePath, UInt, UInt)
 
-expectSameLocations :: (HasCallStack) => [Location] -> [SymbolLocation] -> Assertion
-expectSameLocations actual expected = do
+expectSameLocations :: (HasCallStack) => FilePath -> [Location] -> [SymbolLocation] -> Assertion
+expectSameLocations rootDir actual expected = do
     let actual' =
             Set.map (\location -> (location ^. L.uri
                                    , location ^. L.range . L.start . L.line . Lens.to fromIntegral
@@ -211,7 +215,7 @@ expectSameLocations actual expected = do
             $ Set.fromList actual
     expected' <- Set.fromList <$>
         (forM expected $ \(file, l, c) -> do
-                              fp <- canonicalizePath file
+                              fp <- canonicalizePath $ toAbsolute rootDir file
                               return (filePathToUri fp, l, c))
     actual' @?= expected'
 
