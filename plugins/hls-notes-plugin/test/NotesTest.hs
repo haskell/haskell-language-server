@@ -15,9 +15,9 @@ main = defaultTestRunner $
 
 runSessionWithServer' :: FilePath -> (FilePath -> Session a) -> IO a
 runSessionWithServer' fp act =
-    runSessionWithTestConfig def {
-        testLspConfig=def
-        , testPluginDescriptor=plugin
+    runSessionWithTestConfig def
+        { testLspConfig = def
+        , testPluginDescriptor = plugin
         , testDirLocation = Left fp
         } act
 
