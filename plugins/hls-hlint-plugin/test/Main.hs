@@ -117,8 +117,8 @@ suggestionsTests =
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
     , testCase "falls back to pre 3.8 code actions" $
-        runSessionWithTestConfig def {
-            testConfigCaps = noLiteralCaps
+        runSessionWithTestConfig def
+            { testConfigCaps = noLiteralCaps
             , testDirLocation = Left testDir
             , testPluginDescriptor = hlintPlugin
             , testShiftRoot = True} $ const $ do
