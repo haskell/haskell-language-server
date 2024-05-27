@@ -4,17 +4,15 @@ module Ide.Plugin.Cabal.Completion.Completions (contextToCompleter, getContext, 
 
 import           Control.Lens                                  ((^.))
 import           Control.Monad.IO.Class                        (MonadIO)
-import           Control.Monad.Trans.Maybe
-import           Data.Foldable                                 (asum)
-import qualified Data.List                                     as List
-import           Data.Map                                      (Map)
+import           Data.List.NonEmpty                            (NonEmpty)
+import qualified Data.List.NonEmpty                            as NE
 import qualified Data.Map                                      as Map
 import qualified Data.Text                                     as T
-import qualified Data.Text.Utf16.Lines                         as Rope (Position (..))
-import           Data.Text.Utf16.Rope.Mixed                    (Rope)
-import qualified Data.Text.Utf16.Rope.Mixed                    as Rope
+import qualified Data.Text.Encoding                            as T
 import           Development.IDE                               as D
 import qualified Development.IDE.Plugin.Completions.Types      as Ghcide
+import qualified Distribution.Fields                           as Syntax
+import qualified Distribution.Parsec.Position                  as Syntax
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Snippet
 import           Ide.Plugin.Cabal.Completion.Completer.Types   (Completer)
@@ -64,32 +62,13 @@ contextToCompleter (Stanza s _, KeyWord kw) =
 --  Can return Nothing if an error occurs.
 --
 --  TODO: first line can only have cabal-version: keyword
-getContext :: (MonadIO m) => Recorder (WithPriority Log) -> CabalPrefixInfo -> Rope -> MaybeT m Context
-getContext recorder prefInfo ls =
-  case prevLinesM of
-    Just prevLines -> do
-      let lvlContext =
-            if completionIndentation prefInfo == 0
-              then TopLevel
-              else currentLevel prevLines
-      case lvlContext of
-        TopLevel -> do
-          kwContext <- MaybeT . pure $ getKeyWordContext prefInfo prevLines (cabalVersionKeyword <> cabalKeywords)
-          pure (TopLevel, kwContext)
-        Stanza s n ->
-          case Map.lookup s stanzaKeywordMap of
-            Nothing -> do
-              pure (Stanza s n, None)
-            Just m -> do
-              kwContext <- MaybeT . pure $ getKeyWordContext prefInfo prevLines m
-              pure (Stanza s n, kwContext)
-    Nothing -> do
-      logWith recorder Warning $ LogFileSplitError pos
-      -- basically returns nothing
-      fail "Abort computation"
+getContext :: (MonadIO m) => Recorder (WithPriority Log) -> CabalPrefixInfo -> [Syntax.Field Syntax.Position] -> m Context
+getContext recorder prefInfo fields = do
+    let ctx = findCursorContext cursor (NE.singleton (0, TopLevel)) (completionPrefix prefInfo) fields
+    logWith recorder Debug $ LogCompletionContext ctx
+    pure ctx
   where
-    pos = completionCursorPosition prefInfo
-    prevLinesM = splitAtPosition pos ls
+    cursor = lspPositionToCabalPosition (completionCursorPosition prefInfo)
 
 -- | Takes information about the current file's file path,
 --  and the cursor position in the file; and builds a CabalPrefixInfo
@@ -144,84 +123,111 @@ getCabalPrefixInfo fp prefixInfo =
 -- Implementation Details
 -- ----------------------------------------------------------------
 
--- | Takes prefix info about the previously written text,
---  a list of lines (representing a file) and a map of
---  keywords and returns a keyword context if the
---  previously written keyword matches one in the map.
+findCursorContext ::
+  Syntax.Position ->
+  -- ^ The cursor position we look for in the fields
+  NonEmpty (Int, StanzaContext) ->
+  -- ^ A stack of current stanza contexts and their starting line numbers
+  T.Text ->
+  -- ^ The cursor's prefix text
+  [Syntax.Field Syntax.Position] ->
+  -- ^ The fields to traverse
+  Context
+findCursorContext cursor parentHistory prefixText fields =
+  case findFieldSection cursor fields of
+    Nothing -> (snd $ NE.head parentHistory, None)
+    -- We found the most likely section. Now, are we starting a new section or are we completing an existing one?
+    Just field@(Syntax.Field _ _) -> classifyFieldContext parentHistory cursor field
+    Just section@(Syntax.Section _ args sectionFields)
+      | inSameLineAsSectionName section -> (stanzaCtx, None) -- TODO: test whether keyword in same line is parsed correctly
+      | otherwise ->
+          findCursorContext cursor
+            (NE.cons (Syntax.positionCol (getAnnotation section) + 1, Stanza (getFieldName section) (getOptionalSectionName args)) parentHistory)
+            prefixText sectionFields
+    where
+        inSameLineAsSectionName section = Syntax.positionRow (getAnnotation section) == Syntax.positionRow cursor
+        stanzaCtx = snd $ NE.head parentHistory
+
+-- | Finds the cursor's context, where the cursor is already found to be in a specific field
 --
---  From a cursor position, we traverse the cabal file upwards to
---  find the latest written keyword if there is any.
---  Values may be written on subsequent lines,
---  in order to allow for this we take the indentation of the current
---  word to be completed into account to find the correct keyword context.
-getKeyWordContext :: CabalPrefixInfo -> [T.Text] -> Map KeyWordName a -> Maybe FieldContext
-getKeyWordContext prefInfo ls keywords = do
-  case lastNonEmptyLineM of
-    Nothing -> Just None
-    Just lastLine' -> do
-      let (whiteSpaces, lastLine) = T.span (== ' ') lastLine'
-      let keywordIndentation = T.length whiteSpaces
-      let cursorIndentation = completionIndentation prefInfo
-      -- in order to be in a keyword context the cursor needs
-      -- to be indented more than the keyword
-      if cursorIndentation > keywordIndentation
-        then -- if the last thing written was a keyword without a value
-        case List.find (`T.isPrefixOf` lastLine) (Map.keys keywords) of
-          Nothing -> Just None
-          Just kw -> Just $ KeyWord kw
-        else Just None
+-- Due to the way the field context is recognised for incomplete cabal files,
+-- an incomplete keyword is also recognised as a field, therefore we need to determine
+-- the specific context as we could still be in a stanza context in this case.
+classifyFieldContext :: NonEmpty (Int, StanzaContext) -> Syntax.Position -> Syntax.Field Syntax.Position -> Context
+classifyFieldContext ctx cursor field
+  -- the cursor is not indented enough to be within the field
+  -- but still indented enough to be within the stanza
+  | cursorColumn <= fieldColumn && minIndent <= cursorColumn = (stanzaCtx, None)
+  -- the cursor is not in the current stanza's context as it is not indented enough
+  | cursorColumn < minIndent = findStanzaForColumn cursorColumn ctx
+  | cursorIsInFieldName = (stanzaCtx, None)
+  | cursorIsBeforeFieldName = (stanzaCtx, None)
+  | otherwise = (stanzaCtx, KeyWord (getFieldName field <> ":"))
   where
-    lastNonEmptyLineM :: Maybe T.Text
-    lastNonEmptyLineM = do
-      (curLine, rest) <- List.uncons ls
-      -- represents the current line while disregarding the
-      -- currently written text we want to complete
-      let cur = stripPartiallyWritten curLine
-      List.find (not . T.null . T.stripEnd) $
-        cur : rest
+    (minIndent, stanzaCtx) = NE.head ctx
 
--- | Traverse the given lines (starting before current cursor position
---  up to the start of the file) to find the nearest stanza declaration,
---  if none is found we are in the top level context.
+    cursorIsInFieldName = inSameLineAsFieldName &&
+      fieldColumn <= cursorColumn &&
+      cursorColumn <= fieldColumn + T.length (getFieldName field)
+
+    cursorIsBeforeFieldName = inSameLineAsFieldName &&
+      cursorColumn < fieldColumn
+
+    inSameLineAsFieldName = Syntax.positionRow (getAnnotation field) == Syntax.positionRow cursor
+
+    cursorColumn = Syntax.positionCol cursor
+    fieldColumn = Syntax.positionCol (getAnnotation field)
+
+-- ----------------------------------------------------------------
+-- Cabal-syntax utilities I don't really want to write myself
+-- ----------------------------------------------------------------
+
+-- | Determine the context of a cursor position within a stack of stanza contexts
 --
---  TODO: this could be merged with getKeyWordContext in order to increase
---  performance by reducing the number of times we have to traverse the cabal file.
-currentLevel :: [T.Text] -> StanzaContext
-currentLevel [] = TopLevel
-currentLevel (cur : xs)
-  | Just (s, n) <- stanza = Stanza s n
-  | otherwise = currentLevel xs
-  where
-    stanza = asum $ map checkStanza (Map.keys stanzaKeywordMap)
-    checkStanza :: StanzaType -> Maybe (StanzaType, Maybe StanzaName)
-    checkStanza t =
-      case T.stripPrefix t (T.strip cur) of
-        Just n
-          | T.null n -> Just (t, Nothing)
-          | otherwise -> Just (t, Just $ T.strip n)
-        Nothing -> Nothing
+-- If the cursor is indented more than one of the stanzas in the stack
+-- the respective stanza is returned if this is never the case, the toplevel stanza
+-- in the stack is returned.
+findStanzaForColumn :: Int -> NonEmpty (Int, StanzaContext) -> (StanzaContext, FieldContext)
+findStanzaForColumn col ctx = case NE.uncons ctx of
+    ((_, stanza), Nothing) -> (stanza, None)
+    ((indentation, stanza), Just res)
+        | col < indentation -> findStanzaForColumn col res
+        | otherwise -> (stanza, None)
 
--- | Get all lines before the given cursor position in the given file
---  and reverse their order to traverse backwards starting from the given position.
-splitAtPosition :: Position -> Rope -> Maybe [T.Text]
-splitAtPosition pos ls = do
-  split <- splitFile
-  pure $ reverse $ Rope.lines $ fst split
-  where
-    splitFile = Rope.utf16SplitAtPosition ropePos ls
-    ropePos =
-      Rope.Position
-        { Rope.posLine = fromIntegral $ pos ^. JL.line,
-          Rope.posColumn = fromIntegral $ pos ^. JL.character
-        }
+-- | Determine the field the cursor is currently a part of.
+--
+-- The result is said field and its starting position
+-- or Nothing if the passed list of fields is empty.
 
--- | Takes a line of text and removes the last partially
--- written word to be completed.
-stripPartiallyWritten :: T.Text -> T.Text
-stripPartiallyWritten = T.dropWhileEnd (\y -> (y /= ' ') && (y /= ':'))
-
--- | Calculates how many spaces the currently completed item is indented.
-completionIndentation :: CabalPrefixInfo -> Int
-completionIndentation prefInfo = fromIntegral (pos ^. JL.character) - (T.length $ completionPrefix prefInfo)
+-- This only looks at the row of the cursor and not at the cursor's
+-- position within the row.
+--
+-- TODO: we do not handle braces correctly. Add more tests!
+findFieldSection :: Syntax.Position -> [Syntax.Field Syntax.Position] -> Maybe (Syntax.Field Syntax.Position)
+findFieldSection _cursor [] = Nothing
+findFieldSection _cursor [x] =
+  -- Last field. We decide later, whether we are starting
+  -- a new section.
+  Just x
+findFieldSection cursor (x:y:ys)
+    | Syntax.positionRow (getAnnotation x) <= cursorLine && cursorLine < Syntax.positionRow (getAnnotation y)
+    = Just x
+    | otherwise = findFieldSection cursor (y:ys)
   where
-    pos = completionCursorPosition prefInfo
+    cursorLine = Syntax.positionRow cursor
+
+type FieldName = T.Text
+
+getAnnotation :: Syntax.Field ann -> ann
+getAnnotation (Syntax.Field (Syntax.Name ann _) _)     = ann
+getAnnotation (Syntax.Section (Syntax.Name ann _) _ _) = ann
+
+getFieldName :: Syntax.Field ann -> FieldName
+getFieldName (Syntax.Field (Syntax.Name _ fn) _)     = T.decodeUtf8 fn
+getFieldName (Syntax.Section (Syntax.Name _ fn) _ _) = T.decodeUtf8 fn
+
+getOptionalSectionName :: [Syntax.SectionArg ann] -> Maybe T.Text
+getOptionalSectionName [] = Nothing
+getOptionalSectionName (x:xs) = case x of
+    Syntax.SecArgName _ name -> Just (T.decodeUtf8 name)
+    _                        -> getOptionalSectionName xs

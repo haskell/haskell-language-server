@@ -9,6 +9,7 @@ import qualified Data.ByteString                                as ByteString
 import           Data.Maybe                                     (mapMaybe)
 import qualified Data.Text                                      as T
 import qualified Development.IDE.Plugin.Completions.Types       as Ghcide
+import           Distribution.PackageDescription                (GenericPackageDescription)
 import           Distribution.PackageDescription.Parsec         (parseGenericPackageDescriptionMaybe)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
@@ -17,7 +18,6 @@ import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo (..),
                                                                  StanzaName)
-import           Ide.Plugin.Cabal.Parse                         (GenericPackageDescription)
 import qualified Language.LSP.Protocol.Lens                     as L
 import           System.FilePath
 import           Test.Hls
