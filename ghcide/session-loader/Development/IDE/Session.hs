@@ -811,7 +811,7 @@ fromTargetId :: [FilePath]          -- ^ import paths
              -> TargetId
              -> IdeResult HscEnvEq
              -> DependencyInfo
-             -> FilePath
+             -> FilePath -- ^ root dir -- see Note [Root Directory]
              -> IO [TargetDetails]
 -- For a target module we consider all the import paths
 fromTargetId is exts (GHC.TargetModule modName) env dep dir = do
