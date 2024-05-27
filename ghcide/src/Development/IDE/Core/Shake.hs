@@ -532,14 +532,14 @@ newtype ShakeSession = ShakeSession
 -- We are keep tracking of the root directory explicitly, which is the directory where the project is located.
 -- We might be setting it from LSP workspace root > command line > from the current directory.
 --
--- It helps to remove most usage for getCurrentDirectory(After DefaultMain of GhcIde is called),
+-- It helps to remove most usage for `getCurrentDirectory`(After DefaultMain of GhcIde is called),
 -- Using it instead of `getCurrentDirectory` allows us to avoid issues if we `setCurrentDirectory`
 -- somewhere else in the code.
 -- And in turn, it helps with testing in parallel, where we can keep the root directory
 -- and the current directory separate.
 --
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
--- This is already deprecated and we can drop it in the future.
+-- This is already deprecated and we can drop it in the future when the time comes.
 --
 
 -- | A Shake database plus persistent store. Can be thought of as storing
