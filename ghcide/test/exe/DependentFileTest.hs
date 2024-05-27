@@ -20,8 +20,8 @@ import           Test.Hls
 tests :: TestTree
 tests = testGroup "addDependentFile"
     [testGroup "file-changed" [testCase "test" $ runSessionWithTestConfig def
-        {testShiftRoot=True
-        , testDirLocation=Right (mkIdeTestFs [])
+        { testShiftRoot = True
+        , testDirLocation = Right (mkIdeTestFs [])
         , testPluginDescriptor = dummyPlugin
         } test]
     ]
