@@ -536,7 +536,7 @@ newtype ShakeSession = ShakeSession
 -- 2. command line (--cwd)
 -- 3. default to the current directory.
 --
--- use `getCurrentDirectory` makes it more difficult to run the tests, as we spawn one thread of HLS per test case.
+-- Using `getCurrentDirectory` makes it more difficult to run the tests, as we spawn one thread of HLS per test case.
 -- If we modify the global Variable CWD, via `setCurrentDirectory`, all other test threads are suddenly affected,
 -- forcing us to run all integration tests sequentially.
 --
