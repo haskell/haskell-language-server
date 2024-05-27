@@ -344,12 +344,12 @@ testDir = "plugins/hls-hlint-plugin/test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir = failIfSessionTimeout .
-    runSessionWithTestConfig def {
-    testConfigCaps=codeActionNoResolveCaps
-    , testShiftRoot=True
-    , testDirLocation=Left (testDir </> subdir)
-    , testPluginDescriptor=hlintPlugin
-    }
+    runSessionWithTestConfig def
+      { testConfigCaps = codeActionNoResolveCaps
+      , testShiftRoot = True
+      , testDirLocation = Left (testDir </> subdir)
+      , testPluginDescriptor = hlintPlugin
+      }
     . const
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
