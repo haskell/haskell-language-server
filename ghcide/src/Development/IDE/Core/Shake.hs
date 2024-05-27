@@ -546,7 +546,7 @@ newtype ShakeSession = ShakeSession
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
 -- The root dir is deprecated, but we still need this now,
 -- since a lot of places in the codebase still rely on it.
--- We can drop it in the future when the condition meets:
+-- We can drop it in the future once:
 -- 1. We can get rid all the usages of root directory in the codebase.
 -- 2. LSP version we support actually removes the root directory from the protocol.
 --
