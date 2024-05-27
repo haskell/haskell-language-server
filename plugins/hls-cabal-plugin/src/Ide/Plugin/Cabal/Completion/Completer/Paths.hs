@@ -51,14 +51,20 @@ data PathCompletionInfo = PathCompletionInfo
   if wasn't present in the original path.
 
   Fix for the issue #3774
-   
-  Examples of path splitting:
-  ""            -> ("", "") instead of ("./","")
-  "./"          -> ("./", "")
-  "dir"         -> ("", "dir") instead of ("./","dir")
-  "./dir"       -> ("./", "dir")
-  "dir1/dir2"   -> ("dir1/","dir2")
-  "./dir1/dir2" -> ("./dir1/","dir2")
+  Examples:
+
+  >>> splitFileNameNoTrailingSlash ""
+  ("", "")
+  >>> splitFileNameNoTrailingSlash "./"
+  ("./", "")
+  >>> splitFileNameNoTrailingSlash "dir"
+  ("", "dir")
+  >>> splitFileNameNoTrailingSlash "./dir"
+  ("./", "dir")
+  >>> splitFileNameNoTrailingSlash "dir1/dir2"
+  ("dir1/","dir2")
+  >>> splitFileNameNoTrailingSlash "./dir1/dir2"
+  ("./dir1/","dir2")
 -}
 splitFileNameNoTrailingSlash :: FilePath -> (String, String)
 splitFileNameNoTrailingSlash prefix = rmTrailingSlash ("./" `List.isPrefixOf` prefix) (Posix.splitFileName prefix)
@@ -85,7 +91,7 @@ pathCompletionInfoFromCabalPrefixInfo srcDir prefInfo =
     }
   where
     prefix = T.unpack $ completionPrefix prefInfo
-    (queryDirectory', pathSegment') = splitFileNameNoTrailingSlash prefix             
+    (queryDirectory', pathSegment') = splitFileNameNoTrailingSlash prefix
 
 -- | Extracts the source directories of the library stanza.
 sourceDirsExtractionLibrary :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
