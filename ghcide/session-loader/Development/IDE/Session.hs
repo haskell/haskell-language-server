@@ -744,7 +744,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
         void $ wait as
         asyncRes <- async $ getOptions file
         return (asyncRes, wait asyncRes)
-      pure $ (fmap . fmap) toAbsolutePath opts
+      pure opts
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
