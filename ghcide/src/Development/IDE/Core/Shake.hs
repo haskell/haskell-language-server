@@ -530,7 +530,11 @@ newtype ShakeSession = ShakeSession
 -- Note [Root Directory]
 -- ~~~~~~~~~~~~~~~~~~~~~
 -- We keep track of the root directory explicitly, which is the directory of the project root.
--- We might be setting it from LSP workspace root > command line > from the current directory.
+-- We might be setting it via these options with decreasing priority:
+--
+-- 1. from LSP workspace root 
+-- 2. command line (--cwd) 
+-- 3. default to the current directory.
 --
 -- It helps to remove most usage for `getCurrentDirectory`(After DefaultMain of GhcIde is called),
 -- Using it instead of `getCurrentDirectory` allows us to avoid issues if we `setCurrentDirectory`
