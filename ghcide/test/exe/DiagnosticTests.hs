@@ -581,8 +581,8 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
       expectNoMoreDiagnostics 0.5
     where
         runTestNoKick s =
-            runSessionWithTestConfig def {
-                testPluginDescriptor = dummyPlugin
+            runSessionWithTestConfig def
+                { testPluginDescriptor = dummyPlugin
                 , testDirLocation = Right (mkIdeTestFs [])
                 , testDisableKick = True
                 } $ const s
