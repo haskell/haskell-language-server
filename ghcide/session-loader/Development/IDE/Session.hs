@@ -11,7 +11,7 @@ module Development.IDE.Session
   ,loadSessionWithOptions
   ,setInitialDynFlags
   ,getHieDbLoc
---   ,runWithDb
+--   ,runWithWorkerThreads
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
@@ -377,6 +377,8 @@ makeWithHieDbRetryable recorder rng hieDb f =
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
+--
+-- see Note [Serializing runs in separate thread]
 dbThread ::
         ThreadRun
             (Recorder (WithPriority Log), FilePath)
@@ -734,6 +736,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir que = do
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
+      -- see Note [Serializing runs in separate thread]
       resultBarrier <- liftIO newBarrier
       atomically $ writeTQueue que $ do
         res <- getOptions file

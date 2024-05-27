@@ -13,7 +13,7 @@ module Development.IDE.LSP.LanguageServer
     , ThreadQueue
     , sessionRestartThread
     , sessionLoaderThread
-    , runWithDb
+    , runWithWorkerThreads
     ) where
 
 import           Control.Concurrent.STM
@@ -235,8 +235,8 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     exceptionInHandler e
                     k $ ResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
-        untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' hieChan' -> do
-            putMVar dbMVar (WithHieDbShield withHieDb',hieChan')
+        untilMVar lifetime $ runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
+            putMVar dbMVar (WithHieDbShield withHieDb',threadQueue')
             forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
@@ -246,18 +246,21 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
 
-    (WithHieDbShield withHieDb, hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env root withHieDb hieChan
+    (WithHieDbShield withHieDb, threadQueue) <- takeMVar dbMVar
+    ide <- getIdeState env root withHieDb threadQueue
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
 
-runWithDb :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
-runWithDb recorder dbLoc f = evalContT $ do
+-- | runWithWorkerThreads
+-- create several threads to run the session, db and session loader
+-- see Note [Serializing runs in separate thread]
+runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
+runWithWorkerThreads recorder dbLoc f = evalContT $ do
             (_, sessionRestartTQueue) <- runInThread sessionRestartThread ()
             (_, sessionLoaderTQueue) <- runInThread sessionLoaderThread ()
-            (WithHieDbShield hiedb, hieChan) <- runInThread dbThread (recorder, dbLoc)
-            liftIO $ f hiedb (ThreadQueue hieChan sessionRestartTQueue sessionLoaderTQueue)
+            (WithHieDbShield hiedb, threadQueue) <- runInThread dbThread (recorder, dbLoc)
+            liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 
 sessionRestartThread :: ThreadRun () () () (IO ())

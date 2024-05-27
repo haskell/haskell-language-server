@@ -642,6 +642,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
   withHieDb threadQueue opts monitoring rules = mdo
+    -- see Note [Serializing runs in separate thread]
     let indexQueue = tIndexQueue threadQueue
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
