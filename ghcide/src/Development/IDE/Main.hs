@@ -274,7 +274,7 @@ defaultArguments recorder fp plugins = Arguments
 testing :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
 testing recorder fp plugins =
   let
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions  } =
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } =
         defaultArguments recorder fp plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
