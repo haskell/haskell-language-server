@@ -544,8 +544,11 @@ newtype ShakeSession = ShakeSession
 -- e.g. stylish's `loadConfig`. https://github.com/haskell/haskell-language-server/issues/4234
 --
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
--- The root dir is deprecated, but we still need this now,
--- since a lot of places in the codebase still rely on it.
+-- The root dir is deprecated, that means we should cleanup dependency on the project root(Or $CWD) thing gradually,
+-- so multi-workspaces can actually be supported when we use absolute path everywhere(might also need some high level design).
+-- That might not be possible unless we have everything adapt to it, like 'hlint' and 'evaluation of template haskell'.
+-- But we should still be working towards the goal.
+--
 -- We can drop it in the future once:
 -- 1. We can get rid all the usages of root directory in the codebase.
 -- 2. LSP version we support actually removes the root directory from the protocol.
