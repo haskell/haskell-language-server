@@ -39,7 +39,7 @@ import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
-import           Control.Monad.Trans.Cont              (ContT (evalContT))
+import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Thread           (ThreadRun (..),

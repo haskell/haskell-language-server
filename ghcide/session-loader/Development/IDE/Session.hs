@@ -23,7 +23,6 @@ module Development.IDE.Session
 -- the real GHC library and the types are incompatible. Furthermore, when
 -- building with ghc-lib we need to make this Haskell agnostic, so no hie-bios!
 
-import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe               as Safe
 import           Control.Monad
@@ -381,8 +380,8 @@ makeWithHieDbRetryable recorder rng hieDb f =
 dbThread ::
         ThreadRun
             (Recorder (WithPriority Log), FilePath)
-            WithHieDbShield
-            WithHieDbShield
+            WithHieDbShield -- ^ writer resource
+            WithHieDbShield -- ^ reader resource
             (((HieDb -> IO a) -> IO a) -> IO ())
 dbThread = ThreadRun {
     tWorker = \(recorder, _fp) (WithHieDbShield withWriter) l ->  l withWriter
