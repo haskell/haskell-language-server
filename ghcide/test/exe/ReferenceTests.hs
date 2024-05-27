@@ -28,7 +28,8 @@ import           Data.Tuple.Extra
 import           GHC.TypeLits                    (symbolVal)
 import           Ide.PluginUtils                 (toAbsolute)
 import           Ide.Types
-import           System.FilePath                 ((</>))
+import           System.FilePath                 (addTrailingPathSeparator,
+                                                  (</>))
 import           Test.Hls                        (FromServerMessage' (..),
                                                   SMethod (..),
                                                   TCustomMessage (..),
