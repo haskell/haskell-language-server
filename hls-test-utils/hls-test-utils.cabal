@@ -49,6 +49,7 @@ library
     , lsp
     , lsp-test                ^>=0.17
     , lsp-types               ^>=2.2
+    , neat-interpolation
     , safe-exceptions
     , tasty
     , tasty-expected-failure
@@ -57,6 +58,7 @@ library
     , tasty-rerun
     , temporary
     , text
+    , text-rope
 
   ghc-options:
     -Wall
