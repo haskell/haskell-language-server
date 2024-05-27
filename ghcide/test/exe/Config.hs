@@ -60,8 +60,8 @@ testWithConfig :: String -> TestConfig () -> Session () -> TestTree
 testWithConfig name conf s = testCase name $ runSessionWithTestConfig conf $ const s
 
 runWithDummyPlugin' ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
-runWithDummyPlugin' fs = runSessionWithTestConfig def {
-    testPluginDescriptor = dummyPlugin
+runWithDummyPlugin' fs = runSessionWithTestConfig def
+    { testPluginDescriptor = dummyPlugin
     , testDirLocation = Right fs
     , testConfigCaps = lspTestCaps
     , testShiftRoot = True
