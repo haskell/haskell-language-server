@@ -554,7 +554,7 @@ data IdeState = IdeState
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopMonitoring       :: IO ()
-    -- see Note [Root Directory]
+    -- | See Note [Root Directory]
     ,rootDir              :: FilePath
     }
 
