@@ -131,7 +131,7 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryRec
         log Info $ LogLspStart ghcideArgs (map pluginId $ ipMap idePlugins)
 
     let args = (if argsTesting then IDEMain.testing else IDEMain.defaultArguments)
-                    (cmapWithPrio LogIDEMain recorder) idePlugins
+                    (cmapWithPrio LogIDEMain recorder) dir idePlugins
 
     let telemetryRecorder = telemetryRecorder' & cmapWithPrio pretty
 

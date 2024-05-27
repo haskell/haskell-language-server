@@ -75,4 +75,11 @@ stanPlugin = mkPluginTestDescriptor enabledStanDescriptor "stan"
 
 runStanSession :: FilePath -> Session a -> IO a
 runStanSession subdir =
-  failIfSessionTimeout . runSessionWithServer def stanPlugin (testDir </> subdir)
+  failIfSessionTimeout
+  . runSessionWithTestConfig def{
+    testConfigCaps=codeActionNoResolveCaps
+    , testShiftRoot=True
+    , testPluginDescriptor=stanPlugin
+    , testDirLocation=Left (testDir </> subdir)
+    }
+  . const
