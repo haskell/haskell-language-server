@@ -286,6 +286,7 @@ test-suite hls-cabal-plugin-tests
     , base
     , bytestring
     , Cabal-syntax          >= 3.7
+    , extra
     , filepath
     , ghcide
     , haskell-language-server:hls-cabal-plugin

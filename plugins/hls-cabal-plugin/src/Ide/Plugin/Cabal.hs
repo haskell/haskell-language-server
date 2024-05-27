@@ -38,9 +38,9 @@ import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSe
                                                               ParseCabalFile (..))
 import qualified Ide.Plugin.Cabal.Completion.Types           as Types
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
+import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                    ()
-import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
@@ -385,6 +385,7 @@ computeCompletionsAt recorder ide prefInfo fp fields = do
               -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
               mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath fp
               pure $ fmap fst mGPD
+            , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections $ toNormalizedFilePath fp
             , cabalPrefixInfo = prefInfo
             , stanzaName =
             case fst ctx of

@@ -1,0 +1,37 @@
+cabal-version: 3.0
+name: FieldSuggestions
+version: 0.1.0
+license:            BSD-3-Clause
+
+build-type: Simple
+
+extra-doc-files:
+    ChangeLog
+
+-- Default warnings in HLS
+common warnings
+  -- Common sections are currently not supported. So, ignore!
+  ghc-options: -Wall
+               -Wredundant-constraints
+               -Wunused-packages
+               -Wno-name-shadowing
+               -Wno-unticked-promoted-constructors
+
+source-repository head
+  type:     git
+  location: fake
+
+library
+    default-language: Haskell2010
+    -- Import isn't supported right now.
+    import: warnings
+    build-depends: base
+
+executable my-exe
+    main-is: Main.hs
+
+test-suite Test
+    type: exitcode-stdio-1.0
+    main-is: Test.hs
+    hs-source-dirs:
+
