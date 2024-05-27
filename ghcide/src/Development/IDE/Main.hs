@@ -227,8 +227,8 @@ data Arguments = Arguments
     }
 
 defaultArguments :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
-defaultArguments recorder fp plugins = Arguments
-        { argsProjectRoot = fp
+defaultArguments recorder projectRoot plugins = Arguments
+        { argsProjectRoot = projectRoot -- ^ see Note [Root Directory]
         , argCommand = LSP
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def
         , argsGhcidePlugin = mempty
@@ -272,10 +272,10 @@ defaultArguments recorder fp plugins = Arguments
 
 
 testing :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
-testing recorder fp plugins =
+testing recorder projectRoot plugins =
   let
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } =
-        defaultArguments recorder fp plugins
+        defaultArguments recorder projectRoot plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
