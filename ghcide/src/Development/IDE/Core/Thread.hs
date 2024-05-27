@@ -8,7 +8,7 @@ import           Control.Monad            (forever)
 import           Control.Monad.Cont       (ContT (ContT))
 
 -- Note [Serializing runs in separate thread]
--- ~~~~~~~~~~~~~~~~~~~~~~
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- In a lof cases we want to have a separate thread that will serialize the runs of the actions.
 -- Like the db writes, session loading in session loader, shake session restarts.
 --
