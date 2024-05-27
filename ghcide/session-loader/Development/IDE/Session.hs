@@ -811,7 +811,7 @@ fromTargetId :: [FilePath]          -- ^ import paths
              -> TargetId
              -> IdeResult HscEnvEq
              -> DependencyInfo
-             -> FilePath -- ^ root dir -- see Note [Root Directory]
+             -> FilePath -- ^ root dir, see Note [Root Directory]
              -> IO [TargetDetails]
 -- For a target module we consider all the import paths
 fromTargetId is exts (GHC.TargetModule modName) env dep dir = do
@@ -913,7 +913,7 @@ newComponentCache
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
-         -> FilePath           -- ^ root dir -- see Note [Root Directory]
+         -> FilePath           -- ^ root dir, see Note [Root Directory]
          -> IO [ [TargetDetails] ]
 newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
@@ -1170,8 +1170,13 @@ addUnit unit_str = liftEwM $ do
   putCmdLineState (unit_str : units)
 
 -- | Throws if package flags are unsatisfiable
-setOptions :: GhcMonad m => NormalizedFilePath -> ComponentOptions -> DynFlags -> FilePath -> m (NonEmpty (DynFlags, [GHC.Target]))
-setOptions cfp (ComponentOptions theOpts compRoot _) dflags dir = do
+setOptions :: GhcMonad m
+    => NormalizedFilePath
+    -> ComponentOptions
+    -> DynFlags
+    -> FilePath -- ^ root dir, see Note [Root Directory]
+    -> m (NonEmpty (DynFlags, [GHC.Target]))
+setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
     ((theOpts',_errs,_warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
     case NE.nonEmpty units of
       Just us -> initMulti us
@@ -1194,7 +1199,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags dir = do
         --
         -- If we don't end up with a target for the current file in the end, then
         -- we will report it as an error for that file
-        let abs_fp = toAbsolute dir (fromNormalizedFilePath cfp)
+        let abs_fp = toAbsolute rootDir (fromNormalizedFilePath cfp)
         let special_target = Compat.mkSimpleTarget df abs_fp
         pure $ (df, special_target : targets) :| []
     where
