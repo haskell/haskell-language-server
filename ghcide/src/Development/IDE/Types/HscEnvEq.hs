@@ -28,8 +28,8 @@ import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           Ide.PluginUtils                 (toAbsolute)
 import           OpenTelemetry.Eventlog          (withSpan)
-import           System.Directory                (makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -59,14 +59,13 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq cradlePath hscEnv0 deps = do
+newHscEnvEq :: FilePath -> FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEq root cradlePath hscEnv0 deps = do
     let relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
 
     -- Make Absolute since targets are also absolute
-    importPathsCanon <-
-      mapM makeAbsolute $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
+    let importPathsCanon = toAbsolute root . relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 

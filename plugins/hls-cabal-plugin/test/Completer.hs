@@ -55,8 +55,8 @@ basicCompleterTests =
         doc <- openDoc "main-is.cabal" "cabal"
         compls <- getCompletions doc (Position 10 12)
         let complTexts = getTextEditTexts compls
-        liftIO $ assertBool "suggests f2" $ "./f2.hs" `elem` complTexts
-        liftIO $ assertBool "does not suggest" $ "./Content.hs" `notElem` complTexts
+        liftIO $ assertBool "suggests f2" $ "f2.hs" `elem` complTexts
+        liftIO $ assertBool "does not suggest" $ "Content.hs" `notElem` complTexts
     ]
     where
       getTextEditTexts :: [CompletionItem] -> [T.Text]
@@ -66,21 +66,21 @@ fileCompleterTests :: TestTree
 fileCompleterTests =
   testGroup
     "File Completer Tests"
-    [ testCase "Current Directory" $ do
+    [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeFilePath "" filePathComplTestDir
-        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
+        completions @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeFilePath "./" filePathComplTestDir
         completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
       testCase "Current Directory - hidden file start" $ do
         completions <- completeFilePath "." filePathComplTestDir
-        completions @?== ["./Content.hs", "./.hidden", "./textfile.txt", "./main-is.cabal"],
+        completions @?== ["Content.hs", ".hidden", "textfile.txt", "main-is.cabal"],
       testCase "Current Directory - incomplete directory path written" $ do
         completions <- completeFilePath "di" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["dir1/", "dir2/"],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeFilePath "te" filePathComplTestDir
-        completions @?== ["./Content.hs", "./textfile.txt"],
+        completions @?== ["Content.hs", "textfile.txt"],
       testCase "Subdirectory" $ do
         completions <- completeFilePath "dir1/" filePathComplTestDir
         completions @?== ["dir1/f1.txt", "dir1/f2.hs"],
@@ -165,15 +165,15 @@ directoryCompleterTests :: TestTree
 directoryCompleterTests =
   testGroup
     "Directory Completer Tests"
-    [ testCase "Current Directory" $ do
+    [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeDirectory "" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["dir1/", "dir2/"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeDirectory "./" filePathComplTestDir
         completions @?== ["./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete directory path written" $ do
         completions <- completeDirectory "di" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["dir1/", "dir2/"],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeDirectory "te" filePathComplTestDir
         completions @?== [],

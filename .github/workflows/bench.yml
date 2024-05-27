@@ -126,7 +126,7 @@ jobs:
         example: ['cabal', 'lsp-types']
 
     steps:
-    - uses: haskell-actions/setup@v2.7.2
+    - uses: haskell-actions/setup@v2.7.3
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
