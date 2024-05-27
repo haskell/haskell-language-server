@@ -26,7 +26,7 @@ import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
 import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (WithHieDbShield (..),
-                                                        dbThreadRun)
+                                                        dbThread)
 import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -254,23 +254,17 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
 
 runWithDb :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
 runWithDb recorder dbLoc f = flip runContT return $ do
-            (_, sessionRestartTQueue) <- ContT $ runInThread sessionRestartThread ()
-            (_, sessionLoaderTQueue) <- ContT $ runInThread sessionLoaderThread ()
-            (WithHieDbShield hiedb, hieChan) <- ContT $ runInThread dbThreadRun (recorder, dbLoc)
+            (_, sessionRestartTQueue) <- runInThread sessionRestartThread ()
+            (_, sessionLoaderTQueue) <- runInThread sessionLoaderThread ()
+            (WithHieDbShield hiedb, hieChan) <- runInThread dbThread (recorder, dbLoc)
             liftIO $ f hiedb (ThreadQueue hieChan sessionRestartTQueue sessionLoaderTQueue)
 
 
 sessionRestartThread :: ThreadRun () () () (IO ())
-sessionRestartThread = ThreadRun {
-    tRunner = \_ _ run -> run,
-    tCreateResource = \_ f -> do f () ()
-}
+sessionRestartThread = ThreadRun { tWorker = \_ _ run -> run, tRunWithResource = \_ f -> do f () () }
 
 sessionLoaderThread :: ThreadRun () () () (IO ())
-sessionLoaderThread = ThreadRun {
-    tRunner = \_ _ run -> run,
-    tCreateResource = \_ f -> do f () ()
-}
+sessionLoaderThread = ThreadRun { tWorker = \_ _ run -> run, tRunWithResource = \_ f -> do f () () }
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   Rethrows any exceptions.

@@ -15,7 +15,7 @@ module Development.IDE.Session
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
-  ,dbThreadRun
+  ,dbThread
   ,WithHieDbShield(..)
   ) where
 
@@ -374,37 +374,37 @@ makeWithHieDbRetryable :: RandomGen g => Recorder (WithPriority Log) -> g -> Hie
 makeWithHieDbRetryable recorder rng hieDb f =
   retryOnSqliteBusy recorder rng (f hieDb)
 
-dbThreadRun ::
+-- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
+-- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
+-- by a worker thread using a dedicated database connection.
+-- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
+dbThread ::
         ThreadRun
             (Recorder (WithPriority Log), FilePath)
             WithHieDbShield
             WithHieDbShield
             (((HieDb -> IO a) -> IO a) -> IO ())
-dbThreadRun = ThreadRun {
-    tRunner = \(recorder, _fp) (WithHieDbShield withWriter) l ->  l withWriter
+dbThread = ThreadRun {
+    tWorker = \(recorder, _fp) (WithHieDbShield withWriter) l ->  l withWriter
           `Safe.catch` \e@SQLError{} -> do
             logWith recorder Error $ LogHieDbWriterThreadSQLiteError e
           `Safe.catchAny` \f -> do
             logWith recorder Error $ LogHieDbWriterThreadException f
     ,
-    tCreateResource = \(recorder, fp) f -> do
+    tRunWithResource = \(recorder, fp) f -> do
         rng <- Random.newStdGen
         retryOnSqliteBusy
             recorder
             rng
             (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
         flip runContT return $ do
-            writedb <- ContT $ withHieDb fp
+            writeDb <- ContT $ withHieDb fp
             readDb <- ContT $ withHieDb fp
             let withWriteDbRetryable :: WithHieDb
-                withWriteDbRetryable = makeWithHieDbRetryable recorder rng writedb
+                withWriteDbRetryable = makeWithHieDbRetryable recorder rng writeDb
             liftIO $ withWriteDbRetryable initConn
             liftIO $ f (WithHieDbShield withWriteDbRetryable) (WithHieDbShield (makeWithHieDbRetryable recorder rng readDb))
 }
--- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
--- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
--- by a worker thread using a dedicated database connection.
--- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
