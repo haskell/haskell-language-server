@@ -4,6 +4,7 @@ module Ide.Plugin.Cabal.Diagnostics
 ( errorDiagnostic
 , warningDiagnostic
 , positionFromCabalPosition
+, fatalParseErrorDiagnostic
   -- * Re-exports
 , FileDiagnostic
 , Diagnostic(..)
@@ -14,7 +15,7 @@ import qualified Data.Text                   as T
 import           Development.IDE             (FileDiagnostic,
                                               ShowDiagnostic (ShowDiag))
 import           Distribution.Fields         (showPError, showPWarning)
-import qualified Ide.Plugin.Cabal.Parse      as Lib
+import qualified Distribution.Parsec         as Syntax
 import           Ide.PluginUtils             (extendNextLine)
 import           Language.LSP.Protocol.Types (Diagnostic (..),
                                               DiagnosticSeverity (..),
@@ -23,16 +24,21 @@ import           Language.LSP.Protocol.Types (Diagnostic (..),
                                               Range (Range),
                                               fromNormalizedFilePath)
 
+-- | Produce a diagnostic for a fatal Cabal parser error.
+fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic
+fatalParseErrorDiagnostic fp msg =
+  mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine Syntax.zeroPos) msg
+
 -- | Produce a diagnostic from a Cabal parser error
-errorDiagnostic :: NormalizedFilePath -> Lib.PError -> FileDiagnostic
-errorDiagnostic fp err@(Lib.PError pos _) =
+errorDiagnostic :: NormalizedFilePath -> Syntax.PError -> FileDiagnostic
+errorDiagnostic fp err@(Syntax.PError pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPError (fromNormalizedFilePath fp) err
 
 -- | Produce a diagnostic from a Cabal parser warning
-warningDiagnostic :: NormalizedFilePath -> Lib.PWarning -> FileDiagnostic
-warningDiagnostic fp warning@(Lib.PWarning _ pos _) =
+warningDiagnostic :: NormalizedFilePath -> Syntax.PWarning -> FileDiagnostic
+warningDiagnostic fp warning@(Syntax.PWarning _ pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Warning (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPWarning (fromNormalizedFilePath fp) warning
@@ -41,7 +47,7 @@ warningDiagnostic fp warning@(Lib.PWarning _ pos _) =
 -- only a single source code 'Lib.Position'.
 -- We define the range to be _from_ this position
 -- _to_ the first column of the next line.
-toBeginningOfNextLine :: Lib.Position -> Range
+toBeginningOfNextLine :: Syntax.Position -> Range
 toBeginningOfNextLine cabalPos = extendNextLine $ Range pos pos
    where
     pos = positionFromCabalPosition cabalPos
@@ -53,8 +59,8 @@ toBeginningOfNextLine cabalPos = extendNextLine $ Range pos pos
 --
 -- >>> positionFromCabalPosition $ Lib.Position 1 1
 -- Position 0 0
-positionFromCabalPosition :: Lib.Position -> Position
-positionFromCabalPosition (Lib.Position line column) = Position (fromIntegral line') (fromIntegral col')
+positionFromCabalPosition :: Syntax.Position -> Position
+positionFromCabalPosition (Syntax.Position line column) = Position (fromIntegral line') (fromIntegral col')
   where
     -- LSP is zero-based, Cabal is one-based
     line' = line-1
