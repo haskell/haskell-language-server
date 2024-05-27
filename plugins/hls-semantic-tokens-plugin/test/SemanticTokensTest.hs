@@ -144,7 +144,7 @@ semanticTokensConfigTest =
           , testConfigCaps = fullCaps
           , testDirLocation = Right fs
           , testLspConfig = mkSemanticConfig funcVar
-        }
+          }
         $ const $ do
             -- modifySemantic funcVar
             void waitForBuildQueue
