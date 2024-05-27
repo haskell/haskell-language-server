@@ -1,4 +1,7 @@
-module Development.IDE.Core.Thread where
+module Development.IDE.Core.Thread
+    ( ThreadRun(..), runInThread)
+ where
+
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
 import           Control.Monad            (forever)
