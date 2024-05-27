@@ -327,7 +327,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 
             ideStateVar <- newEmptyMVar
             let getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
-                getIdeState env rootPath withHieDb hieChan = do
+                getIdeState env rootPath withHieDb threadQueue = do
                   t <- ioT
                   logWith recorder Info $ LogLspStartDuration t
                   -- We want to set the global DynFlags right now, so that we can use

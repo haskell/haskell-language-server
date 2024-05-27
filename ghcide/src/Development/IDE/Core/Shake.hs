@@ -183,8 +183,6 @@ import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import           Control.Concurrent.STM                 (atomically,
-                                                         writeTQueue)
 import           Development.IDE.Core.Thread
 import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 #endif
