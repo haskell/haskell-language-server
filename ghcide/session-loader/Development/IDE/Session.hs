@@ -101,8 +101,8 @@ import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
 import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
 import           Control.Exception                    (evaluate)
-import           Control.Monad.Cont                   (ContT (ContT), runContT)
 import           Control.Monad.IO.Unlift              (MonadUnliftIO)
+import           Control.Monad.Trans.Cont             (ContT (ContT), evalContT)
 import           Data.Foldable                        (for_)
 import           Data.HashMap.Strict                  (HashMap)
 import           Data.HashSet                         (HashSet)
@@ -397,7 +397,7 @@ dbThread = ThreadRun {
             recorder
             rng
             (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
-        flip runContT return $ do
+        evalContT $ do
             writeDb <- ContT $ withHieDb fp
             readDb <- ContT $ withHieDb fp
             let withWriteDbRetryable :: WithHieDb
