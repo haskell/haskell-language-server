@@ -138,7 +138,7 @@ semanticTokensConfigTest =
             var = "variable"
         Test.Hls.runSessionWithTestConfig def
           { testPluginDescriptor = semanticTokensPlugin
-          , testConfigSession = def 
+          , testConfigSession = def
             { ignoreConfigurationRequests = False
             }
           , testConfigCaps = fullCaps
