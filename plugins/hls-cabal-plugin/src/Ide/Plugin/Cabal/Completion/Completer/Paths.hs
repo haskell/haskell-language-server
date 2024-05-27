@@ -1,6 +1,7 @@
 module Ide.Plugin.Cabal.Completion.Completer.Paths where
 
 import qualified Data.List                         as List
+import           Data.List.Extra                   (dropPrefix)
 import qualified Data.Text                         as T
 import           Distribution.PackageDescription   (Benchmark (..),
                                                     BuildInfo (..),
@@ -45,6 +46,32 @@ data PathCompletionInfo = PathCompletionInfo
   }
   deriving (Eq, Show)
 
+
+{- | Posix.splitFileName modification, that drops trailing ./ if
+  if wasn't present in the original path.
+
+  Fix for the issue #3774
+  Examples:
+
+  >>> splitFileNameNoTrailingSlash ""
+  ("", "")
+  >>> splitFileNameNoTrailingSlash "./"
+  ("./", "")
+  >>> splitFileNameNoTrailingSlash "dir"
+  ("", "dir")
+  >>> splitFileNameNoTrailingSlash "./dir"
+  ("./", "dir")
+  >>> splitFileNameNoTrailingSlash "dir1/dir2"
+  ("dir1/","dir2")
+  >>> splitFileNameNoTrailingSlash "./dir1/dir2"
+  ("./dir1/","dir2")
+-}
+splitFileNameNoTrailingSlash :: FilePath -> (String, String)
+splitFileNameNoTrailingSlash prefix = rmTrailingSlash ("./" `List.isPrefixOf` prefix) (Posix.splitFileName prefix)
+  where rmTrailingSlash hadTrailingSlash (queryDirectory', pathSegment')
+                    | hadTrailingSlash = (queryDirectory', pathSegment')
+                    | otherwise        = ("./" `dropPrefix` queryDirectory', pathSegment')
+
 {- | Takes an optional source subdirectory and a prefix info
   and creates a path completion info accordingly.
 
@@ -64,7 +91,7 @@ pathCompletionInfoFromCabalPrefixInfo srcDir prefInfo =
     }
   where
     prefix = T.unpack $ completionPrefix prefInfo
-    (queryDirectory', pathSegment') = Posix.splitFileName prefix
+    (queryDirectory', pathSegment') = splitFileNameNoTrailingSlash prefix
 
 -- | Extracts the source directories of the library stanza.
 sourceDirsExtractionLibrary :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
