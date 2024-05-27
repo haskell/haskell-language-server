@@ -642,12 +642,13 @@ data TestConfig b = TestConfig
   , testShiftRoot            :: Bool
     -- ^ Whether to shift the current directory to the root of the project
   , testClientRoot           :: Maybe FilePath
-    -- ^ The root of (the client or LSP context), if Nothing the root is the same as the testDirLocation
+    -- ^ Specify the root of (the client or LSP context),
+    -- if Nothing it is the same as the testDirLocation
     -- if Just, it is subdirectory of the testDirLocation
   , testServerRoot           :: Maybe FilePath
-    -- ^ The root of the server, in exe, it can be specify in command line --cwd,
+    -- ^ Specify root of the server, in exe, it can be specify in command line --cwd,
     -- or just the server start directory
-    -- if Nothing the root is the same as the testDirLocation
+    -- if Nothing it is the same as the testDirLocation
     -- if Just, it is subdirectory of the testDirLocation
   , testDisableKick          :: Bool
     -- ^ Whether to disable the kick action
