@@ -431,11 +431,11 @@ goldenTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-    goldenWithTestConfig def {
-    testConfigCaps=codeActionNoResolveCaps
-    , testShiftRoot=True
-    , testPluginDescriptor=hlintPlugin
-    , testDirLocation=Left testDir
+    goldenWithTestConfig def
+    { testConfigCaps = codeActionNoResolveCaps
+    , testShiftRoot = True
+    , testPluginDescriptor = hlintPlugin
+    , testDirLocation = Left testDir
     }
     testName testDir path "expected" "hs"
 
