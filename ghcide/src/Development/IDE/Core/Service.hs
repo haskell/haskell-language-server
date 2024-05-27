@@ -67,7 +67,7 @@ initialise :: Recorder (WithPriority Log)
            -> WithHieDb
            -> IndexQueue
            -> Monitoring
-           -> FilePath
+           -> FilePath -- ^ Root directory see Note [Root Directory]
            -> IO IdeState
 initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan metrics rootDir = do
     shakeProfiling <- do
