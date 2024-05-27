@@ -25,8 +25,7 @@ import           Data.Maybe
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
 import           Development.IDE.LSP.Server
-import           Development.IDE.Session               (WithHieDbShield (..),
-                                                        dbThread)
+import           Development.IDE.Session               (dbThread)
 import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -46,7 +45,8 @@ import           Development.IDE.Core.Thread           (ThreadRun (..),
                                                         runInThread)
 import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
-import           Development.IDE.Types.Shake           (WithHieDb)
+import           Development.IDE.Types.Shake           (WithHieDb,
+                                                        WithHieDbShield (..))
 import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,

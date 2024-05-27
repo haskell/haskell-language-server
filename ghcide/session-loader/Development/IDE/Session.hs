@@ -14,7 +14,6 @@ module Development.IDE.Session
   ,retryOnException
   ,Log(..)
   ,dbThread
-  ,WithHieDbShield(..)
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -108,7 +107,9 @@ import           Database.SQLite.Simple
 import           Development.IDE.Core.Thread          (ThreadRun (..))
 import           Development.IDE.Core.Tracing         (withTrace)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
-import           Development.IDE.Types.Shake          (WithHieDb, toNoFileKey)
+import           Development.IDE.Types.Shake          (WithHieDb,
+                                                       WithHieDbShield (..),
+                                                       toNoFileKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -426,11 +427,6 @@ getHieDbLoc dir = do
 -- This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
--- loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
--- loadSession recorder = loadSessionWithOptions recorder def
-
--- used to smuggle RankNType WithHieDb through dbMVar
-newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} dir que = do
