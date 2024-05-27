@@ -529,7 +529,7 @@ newtype ShakeSession = ShakeSession
 
 -- Note [Root Directory]
 -- ~~~~~~~~~~~~~~~~~~~~~
--- We are keep tracking of the root directory explicitly, which is the directory where the project is located.
+-- We keep track of the root directory explicitly, which is the directory of the project root.
 -- We might be setting it from LSP workspace root > command line > from the current directory.
 --
 -- It helps to remove most usage for `getCurrentDirectory`(After DefaultMain of GhcIde is called),
