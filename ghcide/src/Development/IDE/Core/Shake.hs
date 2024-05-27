@@ -532,18 +532,23 @@ newtype ShakeSession = ShakeSession
 -- We keep track of the root directory explicitly, which is the directory of the project root.
 -- We might be setting it via these options with decreasing priority:
 --
--- 1. from LSP workspace root 
--- 2. command line (--cwd) 
+-- 1. from LSP workspace root
+-- 2. command line (--cwd)
 -- 3. default to the current directory.
 --
--- It helps to remove most usage for `getCurrentDirectory`(After DefaultMain of GhcIde is called),
--- Using it instead of `getCurrentDirectory` allows us to avoid issues if we `setCurrentDirectory`
--- somewhere else in the code.
--- And in turn, it helps with testing in parallel, where we can keep the root directory
--- and the current directory separate.
+-- use `getCurrentDirectory` makes it more difficult to run the tests, as we spawn one thread of HLS per test case.
+-- If we modify the global Variable CWD, via `setCurrentDirectory`, all other test threads are suddenly affected,
+-- forcing us to run all integration tests sequentially.
+--
+-- Also, there might be a race condition if we depend on the current directory, as some plugin might change it.
+-- e.g. stylish's `loadConfig`. https://github.com/haskell/haskell-language-server/issues/4234
 --
 -- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
--- This is already deprecated and we can drop it in the future when the time comes.
+-- The root dir is deprecated, but we still need this now,
+-- since a lot of places in the codebase still rely on it.
+-- We can drop it in the future when the condition meets:
+-- 1. We can get rid all the usages of root directory in the codebase.
+-- 2. LSP version we support actually removes the root directory from the protocol.
 --
 
 -- | A Shake database plus persistent store. Can be thought of as storing
