@@ -775,9 +775,8 @@ delayedAction a = do
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
-    b <- newBarrier
-    atomically $ writeTQueue (restartQueue shakeExtras) $ do
+shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
+    void $ blockRunInThread (restartQueue shakeExtras) $ do
         withMVar'
             shakeSession
             (\runner -> do
@@ -798,9 +797,6 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
             -- See https://github.com/haskell/ghcide/issues/79
             (\() -> do
             (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
-        -- fill barrier to signal that the restart is done
-        signalBarrier b ()
-    waitBarrier b
     where
         logErrorAfter :: Seconds -> IO () -> IO ()
         logErrorAfter seconds action = flip withAsync (const action) $ do

@@ -42,7 +42,7 @@ import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Thread           (ThreadRun (..),
-                                                        runInThread)
+                                                        runWithThread)
 import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb,
@@ -257,9 +257,9 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
 -- see Note [Serializing runs in separate thread]
 runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
 runWithWorkerThreads recorder dbLoc f = evalContT $ do
-            (_, sessionRestartTQueue) <- runInThread sessionRestartThread ()
-            (_, sessionLoaderTQueue) <- runInThread sessionLoaderThread ()
-            (WithHieDbShield hiedb, threadQueue) <- runInThread dbThread (recorder, dbLoc)
+            (_, sessionRestartTQueue) <- runWithThread sessionRestartThread ()
+            (_, sessionLoaderTQueue) <- runWithThread sessionLoaderThread ()
+            (WithHieDbShield hiedb, threadQueue) <- runWithThread dbThread (recorder, dbLoc)
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 

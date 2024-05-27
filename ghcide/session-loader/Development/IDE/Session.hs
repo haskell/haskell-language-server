@@ -104,7 +104,8 @@ import           Data.HashMap.Strict                  (HashMap)
 import           Data.HashSet                         (HashSet)
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
-import           Development.IDE.Core.Thread          (ThreadRun (..))
+import           Development.IDE.Core.Thread          (ThreadRun (..),
+                                                       blockRunInThread)
 import           Development.IDE.Core.Tracing         (withTrace)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
 import           Development.IDE.Types.Shake          (WithHieDb,
@@ -731,11 +732,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir que = do
 
     returnWithVersion $ \file -> do
       -- see Note [Serializing runs in separate thread]
-      resultBarrier <- liftIO newBarrier
-      atomically $ writeTQueue que $ do
-        res <- getOptions file
-        liftIO $ signalBarrier resultBarrier res
-      waitBarrier resultBarrier
+      blockRunInThread que $ getOptions file
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the

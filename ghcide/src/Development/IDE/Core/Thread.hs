@@ -1,11 +1,13 @@
 module Development.IDE.Core.Thread
-    ( ThreadRun(..), runInThread)
+    ( ThreadRun(..), runWithThread, blockRunInThread)
  where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
-import           Control.Monad            (forever)
-import           Control.Monad.Cont       (ContT (ContT))
+import           Control.Concurrent.Strict (newBarrier, signalBarrier,
+                                            waitBarrier)
+import           Control.Monad             (forever)
+import           Control.Monad.Cont        (ContT (ContT))
 
 -- Note [Serializing runs in separate thread]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,8 +22,8 @@ import           Control.Monad.Cont       (ContT (ContT))
 -- * `tRunWithResource`: is used to create the resources needed to perform the long running action.
 -- * `tWorker`: is the action we want to run in separate thread serially.
 --
--- runInThread will create a worker thread to run along with the main thread.
--- runInThread provides `resource` created by `tRunWithResource` and a `TQueue` to send the actions to run.
+-- runWithThread will create a worker thread to run along with the main thread.
+-- runWithThread provides `resource` created by `tRunWithResource` and a `TQueue` to send the actions to run.
 -- The worker thread will serialize the runs of the actions from the TQueue.
 
 
@@ -37,12 +39,12 @@ data ThreadRun input workerResource resource arg = ThreadRun {
             -> IO ()
 }
 
--- | runInThread
+-- | runWithThread
 -- Run a long running action with a additional running thread
 -- The additional thread will serialize runs of the actions from the TQueue.
 -- Return ContT to run the action
-runInThread :: ThreadRun input workerResource resource arg -> input -> ContT () IO (resource, TQueue arg)
-runInThread ThreadRun{..} ip = ContT $ \f -> do
+runWithThread :: ThreadRun input workerResource resource arg -> input -> ContT () IO (resource, TQueue arg)
+runWithThread ThreadRun{..} ip = ContT $ \f -> do
     tRunWithResource ip $ \w r -> do
         q <- newTQueueIO
         withAsync (writerThread w q) $ \_ -> f (r, q)
@@ -51,3 +53,15 @@ runInThread ThreadRun{..} ip = ContT $ \f -> do
             forever $ do
                 l <- atomically $ readTQueue q
                 tWorker ip r l
+
+
+-- | blockRunInThread run and wait for the result
+-- Take an action from TQueue, run it and
+-- use barrier to wait for the result
+blockRunInThread :: TQueue (IO ()) -> IO result -> IO result
+blockRunInThread q act = do
+    barrier <- newBarrier
+    atomically $ writeTQueue q $ do
+        res <- act
+        signalBarrier barrier res
+    waitBarrier barrier
