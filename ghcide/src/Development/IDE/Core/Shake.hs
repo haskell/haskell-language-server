@@ -123,6 +123,7 @@ import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Thread
 import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          initNameCache,
@@ -183,7 +184,6 @@ import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.Core.Thread
 import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 #endif
 
