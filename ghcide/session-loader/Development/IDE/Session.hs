@@ -913,7 +913,7 @@ newComponentCache
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
-         -> FilePath           -- ^ root dir
+         -> FilePath           -- ^ root dir -- see Note [Root Directory]
          -> IO [ [TargetDetails] ]
 newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
