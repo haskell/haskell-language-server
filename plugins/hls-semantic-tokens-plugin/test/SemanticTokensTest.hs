@@ -136,8 +136,8 @@ semanticTokensConfigTest =
         let funcVar = KV.fromList ["functionToken" .= var]
             var :: String
             var = "variable"
-        Test.Hls.runSessionWithTestConfig def {
-          testPluginDescriptor = semanticTokensPlugin
+        Test.Hls.runSessionWithTestConfig def
+          { testPluginDescriptor = semanticTokensPlugin
           , testConfigSession = def {
             ignoreConfigurationRequests = False
           }
