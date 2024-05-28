@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-05-21T16:36:52Z
+index-state: 2024-05-28T03:01:07Z
 
 tests: True
 test-show-details: direct
@@ -53,8 +53,6 @@ if impl(ghc >= 9.9)
     lens >= 5.3.2,
     haskell-language-server -stylishHaskell -ormolu -fourmolu -floskell -hlint,
   allow-newer:
-    constraints-extras:base,
-    constraints-extras:template-haskell,
     dependent-map:containers,
     entropy:base,
     entropy:directory,
