@@ -74,11 +74,11 @@ plugin parsedModule Diagnostic {_message, _range}
 -- returning how many patterns there were in this match prior to the transformation:
 --      addArgToMatch "foo" `bar arg1 arg2 = ...`
 --   => (`bar arg1 arg2 foo = ...`, 2)
-addArgToMatch :: T.Text -> GenLocated l (Match GhcPs body) -> (GenLocated l (Match GhcPs body), Int)
+addArgToMatch :: T.Text -> GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))) -> (GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))), Int)
 addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
   let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
 #if MIN_VERSION_ghc(9,9,0)
-      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField (noLocA unqualName)
+      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
 #else
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
 #endif
