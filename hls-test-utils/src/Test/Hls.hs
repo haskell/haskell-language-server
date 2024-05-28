@@ -87,7 +87,6 @@ import           Development.IDE                    (IdeState,
                                                      LoggingColumn (ThreadIdColumn),
                                                      defaultLayoutOptions,
                                                      layoutPretty, renderStrict)
-import qualified Development.IDE.LSP.Notifications  as Notifications
 import           Development.IDE.Main               hiding (Log)
 import qualified Development.IDE.Main               as IDEMain
 import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
@@ -105,7 +104,6 @@ import           Ide.Logger                         (Pretty (pretty),
                                                      makeDefaultStderrRecorder,
                                                      (<+>))
 import qualified Ide.Logger                         as Logger
-import           Ide.Plugin.Properties              ((&))
 import           Ide.PluginUtils                    (idePluginsToPluginDesc,
                                                      pluginDescToIdePlugins)
 import           Ide.Types

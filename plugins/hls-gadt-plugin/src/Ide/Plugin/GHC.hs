@@ -16,9 +16,9 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           DeltaPos (..),
                                                           EpAnn (..),
-                                                          EpAnnComments (EpaComments),
-                                                          spanAsAnchor)
+                                                          EpAnnComments (EpaComments))
 import           Ide.PluginUtils                         (subRange)
+import           Language.Haskell.GHC.ExactPrint         (d1)
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -34,8 +34,8 @@ import           GHC.Parser.Annotation                   (TokenLocation (..))
 #if !MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                   (Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
-                                                          EpaLocation (EpaDelta),
-                                                          SrcSpanAnn' (SrcSpanAnn))
+                                                          SrcSpanAnn' (SrcSpanAnn),
+                                                          spanAsAnchor)
 import           Language.Haskell.GHC.ExactPrint         (showAst)
 #endif
 
@@ -227,17 +227,13 @@ prettyGADTDecl df decl =
         -- Make every data constructor start with a new line and 2 spaces
         adjustCon :: LConDecl GP -> LConDecl GP
 #if MIN_VERSION_ghc(9,9,0)
-        adjustCon (L ann r) =
-            L (EpAnn (go (spanAsAnchor (getLoc ann))) (AnnListItem []) (EpaComments [])) r
+        adjustCon (L _ r) =
+            let delta = EpaDelta (DifferentLine 1 3) []
+            in L (EpAnn delta (AnnListItem []) (EpaComments [])) r
 #else
         adjustCon (L (SrcSpanAnn _ loc) r) =
-            L (SrcSpanAnn (EpAnn (go (spanAsAnchor loc)) (AnnListItem []) (EpaComments [])) loc) r
-#endif
-            where
-#if MIN_VERSION_ghc(9,9,0)
-                go _            = EpaDelta (DifferentLine 1 2) []
-#else
-                go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
+            let go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
+            in L (SrcSpanAnn (EpAnn (go (spanAsAnchor loc)) (AnnListItem []) (EpaComments [])) loc) r
 #endif
 
         -- Adjust where annotation to the same line of the type constructor
@@ -247,7 +243,7 @@ prettyGADTDecl df decl =
 #endif
             (\(AddEpAnn ann l) ->
             if ann == AnnWhere
-                then AddEpAnn AnnWhere (EpaDelta (SameLine 1) [])
+                then AddEpAnn AnnWhere d1
                 else AddEpAnn ann l
             )
 
