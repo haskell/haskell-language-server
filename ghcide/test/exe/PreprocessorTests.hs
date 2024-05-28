@@ -8,11 +8,11 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
+import           Config
 import           Test.Tasty
-import           TestUtils
 
 tests :: TestTree
-tests = testSessionWait "preprocessor" $ do
+tests = testWithDummyPluginEmpty "preprocessor" $ do
   let content =
         T.unlines
           [ "{-# OPTIONS_GHC -F -pgmF=ghcide-test-preprocessor #-}"
