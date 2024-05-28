@@ -462,7 +462,7 @@ modifySmallestDeclWithM validSpan f a = do
       modifyMatchingDecl (ldecl@(L src _) : rest) =
         TransformT (lift $ validSpan $ locA src) >>= \case
             True -> do
-              (decs', r) <- f (makeDeltaAst ldecl)
+              (decs', r) <- f ldecl
               pure (DL.fromList decs' <> DL.fromList rest, Just r)
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
@@ -607,7 +607,7 @@ modifyMgMatchesT' ::
 modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- TransformT $ lift $ foldM combineResults def rs
-  pure $ (MG xMg (L locMatches matches'), r')
+  pure (MG xMg (L locMatches matches'), r')
 #else
 modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
