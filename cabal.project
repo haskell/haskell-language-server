@@ -66,5 +66,8 @@ if impl(ghc >= 9.9)
     haddock-library:containers,
     hiedb:base,
     hiedb:ghc,
+    quickcheck-instances:base,
+    quickcheck-instances:containers,
+    uuid-types:template-haskell,
 else
   benchmarks: True
