@@ -49,10 +49,8 @@ addMethodDecls ps mDecls range withSig
     go inserting = do
         allDecls <- hsDecls ps
         case break (inRange range . getLoc) allDecls of
-            (before, L l inst : after) ->
-                replaceDecls ps (before ++ L l (addWhere inst):(map newLine inserting ++ after))
-            (before, []) ->
-                replaceDecls ps before
+            (before, L l inst : after) -> replaceDecls ps (before ++ L l (addWhere inst):(map newLine inserting ++ after))
+            (before, []) -> replaceDecls ps before
 
     -- Add `where` keyword for `instance X where` if `where` is missing.
     --
