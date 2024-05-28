@@ -18,7 +18,6 @@ import           Language.LSP.Test
 import           Test.Hls                        (testConfigCaps,
                                                   waitForProgressDone)
 import           Test.Tasty
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "client settings handling"

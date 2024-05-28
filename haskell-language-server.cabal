@@ -637,7 +637,6 @@ library hls-retrie-plugin
     , base                  >=4.12    && <5
     , bytestring
     , containers
-    , directory
     , extra
     , ghc
     , ghcide                == 2.8.0.0
@@ -654,7 +653,6 @@ library hls-retrie-plugin
     , text
     , transformers
     , unordered-containers
-    , filepath
 
   default-extensions:
     DataKinds
@@ -844,7 +842,6 @@ library hls-module-name-plugin
     , aeson
     , base                  >=4.12 && <5
     , containers
-    , directory
     , filepath
     , ghcide                == 2.8.0.0
     , hls-plugin-api        == 2.8.0.0
@@ -1829,7 +1826,6 @@ test-suite hls-notes-plugin-tests
   main-is:          NotesTest.hs
   build-depends:
     , base
-    , directory
     , filepath
     , haskell-language-server:hls-notes-plugin
     , hls-test-utils == 2.8.0.0
@@ -2099,7 +2095,6 @@ test-suite ghcide-tests
 
   build-depends:
     , aeson
-    , async
     , base
     , containers
     , data-default
@@ -2196,7 +2191,6 @@ executable ghcide-bench
         bytestring,
         containers,
         data-default,
-        directory,
         extra,
         filepath,
         hls-plugin-api,

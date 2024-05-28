@@ -2,19 +2,15 @@
 
 module TestUtils where
 
-import           Control.Concurrent.Async
-import           Control.Exception              (bracket_, finally)
+import           Control.Exception              (bracket_)
 import           Data.Foldable
 import           Data.Maybe
 import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
-import qualified Development.IDE.Main           as IDE
 import           Development.IDE.Test           (configureCheckProject,
                                                  expectNoMoreDiagnostics)
 import           Development.IDE.Test.Runfiles
 import           Development.IDE.Types.Location
 import           Development.Shake              (getDirectoryFilesIO)
-import           Ide.Logger                     (Recorder, WithPriority,
-                                                 cmapWithPrio)
 import           Language.LSP.Protocol.Types    hiding
                                                 (SemanticTokenAbsolute (..),
                                                  SemanticTokenRelative (..),
@@ -26,13 +22,11 @@ import           System.Environment.Blank       (getEnv, setEnv, unsetEnv)
 import           System.FilePath
 import           System.Info.Extra              (isMac, isWindows)
 import qualified System.IO.Extra
-import           System.Process.Extra           (createPipe)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 
 import           Config                         (lspTestCaps)
-import           LogType
 
 
 run :: Session a -> IO a

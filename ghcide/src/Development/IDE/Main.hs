@@ -24,7 +24,6 @@ import           Control.Monad.IO.Class                   (liftIO)
 import qualified Data.Aeson                               as J
 import           Data.Coerce                              (coerce)
 import           Data.Default                             (Default (def))
-import           Data.Foldable                            (traverse_)
 import           Data.Hashable                            (hashed)
 import qualified Data.HashMap.Strict                      as HashMap
 import           Data.List.Extra                          (intercalate,

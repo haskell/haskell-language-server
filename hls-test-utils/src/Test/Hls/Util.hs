@@ -55,7 +55,6 @@ import           Data.Bool                       (bool)
 import           Data.Default
 import           Data.List.Extra                 (find)
 import           Data.Proxy
-import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Protocol.Lens      as L
@@ -71,8 +70,7 @@ import           System.Time.Extra               (Seconds, sleep)
 import           Test.Tasty                      (TestTree)
 import           Test.Tasty.ExpectedFailure      (expectFailBecause,
                                                   ignoreTestBecause)
-import           Test.Tasty.HUnit                (Assertion, assertFailure,
-                                                  (@?=))
+import           Test.Tasty.HUnit                (assertFailure)
 
 noLiteralCaps :: ClientCapabilities
 noLiteralCaps = def & L.textDocument ?~ textDocumentCaps
