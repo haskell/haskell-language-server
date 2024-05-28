@@ -51,7 +51,12 @@ if impl(ghc >= 9.9)
     tag: 2f089092a563b06eccf196751782f1d70000d589
   constraints:
     lens >= 5.3.2,
-    haskell-language-server -stylishHaskell -ormolu -fourmolu -floskell -hlint,
+    -- See
+    -- https://github.com/haskell/stylish-haskell/issues/479
+    -- https://github.com/fourmolu/fourmolu/issues/412
+    -- https://github.com/ennocramer/floskell/issues/81
+    -- https://github.com/ndmitchell/hlint/pull/1594
+    haskell-language-server -stylishHaskell -fourmolu -floskell -hlint,
   allow-newer:
     entropy:base,
     entropy:directory,
