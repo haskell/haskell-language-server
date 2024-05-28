@@ -45,10 +45,12 @@ import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
-import           GHC                                       (EpUniToken (..),
+import           GHC                                       (DeltaPos (..),
+                                                            EpUniToken (..),
                                                             IsUnicodeSyntax (NormalSyntax))
-import           Language.Haskell.GHC.ExactPrint           (d1)
+import           Language.Haskell.GHC.ExactPrint           (d1, setEntryDP)
 #endif
+
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
@@ -79,10 +81,15 @@ addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
   let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
 #if MIN_VERSION_ghc(9,9,0)
       newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
+      -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
+      -- the newly added pattern and the rest
+      indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
+      indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
 #else
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
+      indentRhs = id
 #endif
-  in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs), Prelude.length pats)
+  in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
 
 -- Attempt to insert a binding pattern into each match for the given LHsDecl; succeeds only if the function is a FunBind.
 -- Also return:
