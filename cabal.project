@@ -66,6 +66,7 @@ if impl(ghc >= 9.9)
     haddock-library:containers,
     hiedb:base,
     hiedb:ghc,
+    -- These can be removed when we get a new lsp release
     quickcheck-instances:base,
     quickcheck-instances:containers,
     uuid-types:template-haskell,
