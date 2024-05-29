@@ -270,13 +270,19 @@ showGraph g = unlines $ map showNode $ IntMap.toList g
         showNode (k, Right ModuleImports{moduleImports}) =
           show k ++ " -> " ++ show (map fst moduleImports)
 
+
+showResult :: FilePathIdMap NodeResult -> String
+showResult g = unlines $ map showNode $ IntMap.toList g
+  where showNode (k, ErrorNode errs)   = show k ++ " -> Error: " ++ show errs
+        showNode (k, SuccessNode imps) = show k ++ " -> Success: " ++ show imps
+
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
 -- 1. Mark each node that is part of an import cycle as an error node.
 -- 2. Mark each node that has a parse error as an error node.
 -- 3. Mark each node whose immediate children could not be located as an error.
 -- 4. Recursively propagate errors to parents if they are not already error nodes.
 buildResultGraph :: FilePathIdMap (Either ModuleParseError ModuleImports) -> FilePathIdMap NodeResult
-buildResultGraph g = trace (showGraph g) propagatedErrors
+buildResultGraph g = trace (showGraph g) $ trace (showResult propagatedErrors) propagatedErrors
     where
         sccs = stronglyConnComp (graphEdges g)
         (_, cycles) = partitionSCC sccs

@@ -179,34 +179,49 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
             dflags = ms_hspp_opts modSummary
         initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
+        traceM $ "[TRACE] typecheckModule done"
         case initialized of
-          Left errs -> return (errs, Nothing)
+          Left errs -> do
+            traceM $ "[TRACE] typecheckModule fail with" ++ show errs
+            return (errs, Nothing)
           Right (modSummary', hscEnv) -> do
-            (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
+            traceM $ "[TRACE] typecheckModule initialized success"
+            (warnings, etcm) <- trace "withWarnings" $ withWarnings sourceTypecheck $ \tweak ->
                 let
-                  session = tweak (hscSetFlags dflags hscEnv)
+                  session = trace "hscSetFlags" $ tweak (hscSetFlags dflags hscEnv)
                    -- TODO: maybe settings ms_hspp_opts is unnecessary?
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
                   catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
-                    tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+                    tcRnModule session tc_helpers $ trace "demoteIfDefer" $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+            traceM $ "[TRACE] typecheckModule done with warnings: " ++ show warnings
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
                 deferredError = any fst diags
             case etcm of
-              Left errs -> return (map snd diags ++ errs, Nothing)
-              Right tcm -> return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
+              Left errs -> do
+                traceM $ "[TRACE] typecheckModule fail with" ++ show errs
+                return (map snd diags ++ errs, Nothing)
+              Right tcm -> do
+                traceM $ "[TRACE] typecheckModule success"
+                return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
 -- | Install hooks to capture the splices as well as the runtime module dependencies
 captureSplicesAndDeps :: TypecheckHelpers -> HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, ModuleEnv BS.ByteString)
 captureSplicesAndDeps TypecheckHelpers{..} env k = do
+  traceM $ "captureSplicesAndDeps begin"
   splice_ref <- newIORef mempty
   dep_ref <- newIORef emptyModuleEnv
-  res <- k (hscSetHooks (addSpliceHook splice_ref . addLinkableDepHook dep_ref $ hsc_hooks env) env)
+  traceM $ "hscSetHooks begin"
+  x <- evaluate $ (hscSetHooks (addSpliceHook splice_ref . addLinkableDepHook dep_ref $ hsc_hooks env) env)
+  traceM $ "captureSplicesAndDeps run k begin"
+  res <- k x
+  traceM $ "hscSetHooks done"
   splices <- readIORef splice_ref
   needed_mods <- readIORef dep_ref
+  traceM $ "captureSplicesAndDeps done"
   return (res, splices, needed_mods)
   where
     addLinkableDepHook :: IORef (ModuleEnv BS.ByteString) -> Hooks -> Hooks
@@ -408,12 +423,14 @@ tcRnModule hsc_env tc_helpers pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
 
+  traceM $ "tcRnModule: " ++ show (ms_location ms)
   ((tc_gbl_env', mrn_info), splices, mod_env)
       <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hscEnvTmp ->
-             do  hscTypecheckRename hscEnvTmp ms $
+             do  trace "hscTypecheckRename" $ hscTypecheckRename hscEnvTmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
+  traceM $ "tcRnModule done: " ++ show (ms_location ms)
   let rn_info = case mrn_info of
         Just x  -> x
         Nothing -> error "no renamed info tcRnModule"

@@ -178,6 +178,7 @@ import           GHC                                          (mgModSummaries)
 
 #if MIN_VERSION_ghc(9,3,0)
 import qualified Data.IntMap                                  as IM
+import Debug.Trace (traceM)
 #endif
 
 
@@ -616,6 +617,7 @@ typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck fi
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
     foi <- use_ IsFileOfInterest file
+    traceM $ "[TRACE] Typechecking " ++ show file
     -- We should only call the typecheck rule for files of interest.
     -- Keeping typechecked modules in memory for other files is
     -- very expensive.
@@ -675,6 +677,7 @@ typeCheckRuleDefinition hsc pm = do
   let dets = TypecheckHelpers
            { getLinkables = unliftIO unlift . uses_ GetLinkable
            }
+  traceM $ "[TRACE] typeCheckRuleDefinition done"
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
   where

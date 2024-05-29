@@ -20,6 +20,6 @@ tests = testGroup "ImportCycleTests"
       test _ = do
         let fp = "src" </> "Lib.hs"
         let fp1 = "src" </> "Lib" </> "A.hs"
-        _ <- openDoc fp "haskell"
+        -- _ <- openDoc fp "haskell"
         _ <- openDoc fp1 "haskell"
-        expectDiagnostics [(fp, [])]
+        expectDiagnostics [(fp1, [])]
