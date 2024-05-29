@@ -18,6 +18,7 @@ jobs:
   pre_job:
     runs-on: ubuntu-latest
     outputs:
+      if: contains(github.event.pull_request.labels.*.name, 'performance')
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
