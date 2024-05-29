@@ -85,7 +85,8 @@ tests =
   , goldenWithEval "Shows a kind with :kind" "T12" "hs"
   , goldenWithEval "Reports an error for an incorrect type with :kind" "T13" "hs"
   , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
-  , knownBrokenForGhcVersions [GHC92, GHC94, GHC96, GHC98] "type +v does not work anymore with 9.2" $ goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
+  , knownBrokenForGhcVersions [GHC92, GHC94, GHC96, GHC98, GHC910] "type +v does not work anymore with 9.2" $
+      goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
   , goldenWithEval "Doesn't break in module containing main function" "T4139" "hs"
   , goldenWithEval "Returns defaulted type for :type +d, admitting multiple whitespaces around arguments" "T16" "hs"
   , goldenWithEval ":type reports an error when given with unknown +x option" "T17" "hs"
@@ -128,16 +129,14 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
-  , knownBrokenInEnv [HostOS Windows] "The output has path separators in it, which on Windows look different. Just skip it there" $ goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
-        if ghcVersion >= GHC98 then
-          "ghc98.expected"
-        else if ghcVersion >= GHC96 then
-          "ghc96.expected"
-        else if ghcVersion >= GHC94 then
-          "ghc94.expected"
-        else
-          "expected"
-      )
+  , knownBrokenInEnv [HostOS Windows] "The output has path separators in it, which on Windows look different. Just skip it there" $
+      goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" $
+        case ghcVersion of
+          GHC910 -> "ghc910.expected"
+          GHC98 -> "ghc98.expected"
+          GHC96 -> "ghc96.expected"
+          GHC94 -> "ghc94.expected"
+          GHC92 -> "ghc92.expected"
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
