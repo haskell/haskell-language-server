@@ -5,15 +5,15 @@ import qualified Data.Text            as T
 import           Development.IDE.Test (expectNoMoreDiagnostics)
 import           Language.LSP.Test
 
+import           Config
 import           Test.Tasty
-import           TestUtils
 
 tests :: TestTree
 tests =
   testGroup
     "SafeHaskell"
     [ -- Test for https://github.com/haskell/ghcide/issues/424
-      testSessionWait "load" $ do
+      testWithDummyPluginEmpty "load" $ do
         let sourceA =
               T.unlines
                 ["{-# LANGUAGE Trustworthy #-}"
