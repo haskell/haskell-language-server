@@ -1,6 +1,6 @@
 cabal-version:       3.0
 
-name:                hls-multihome-modname
+name:                importCycle
 version:             0.1.0.0
 homepage:            https://github.com/konn/hls-multihome-modname#readme
 license:             BSD-3-Clause
