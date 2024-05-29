@@ -99,7 +99,7 @@ main = do
     , THTests.tests
     , SymlinkTests.tests
     , SafeTests.tests
-    , UnitTests.tests recorder
+    , UnitTests.tests
     , HaddockTests.tests
     , PositionMappingTests.tests
     , WatchedFileTests.tests
