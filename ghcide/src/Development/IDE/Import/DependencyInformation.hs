@@ -55,6 +55,7 @@ import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 
+import           Debug.Trace                        (trace)
 import           Development.IDE.GHC.Compat
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -263,6 +264,11 @@ processDependencyInformation RawDependencyInformation{..} rawBootMap mg =
             in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
         reverseModuleMap = mkModuleEnv $ map (\(i,sm) -> (showableModule sm, FilePathId i)) $ IntMap.toList rawModuleMap
 
+showGraph :: FilePathIdMap (Either ModuleParseError ModuleImports) -> String
+showGraph g = unlines $ map showNode $ IntMap.toList g
+  where showNode (k, Left _) = show k ++ " -> ParseError"
+        showNode (k, Right ModuleImports{moduleImports}) =
+          show k ++ " -> " ++ show (map fst moduleImports)
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
 -- 1. Mark each node that is part of an import cycle as an error node.
@@ -270,7 +276,7 @@ processDependencyInformation RawDependencyInformation{..} rawBootMap mg =
 -- 3. Mark each node whose immediate children could not be located as an error.
 -- 4. Recursively propagate errors to parents if they are not already error nodes.
 buildResultGraph :: FilePathIdMap (Either ModuleParseError ModuleImports) -> FilePathIdMap NodeResult
-buildResultGraph g = propagatedErrors
+buildResultGraph g = trace (showGraph g) propagatedErrors
     where
         sccs = stronglyConnComp (graphEdges g)
         (_, cycles) = partitionSCC sccs

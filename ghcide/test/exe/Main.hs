@@ -71,6 +71,7 @@ import           SymlinkTests
 import           THTests
 import           UnitTests
 import           WatchedFileTests
+import           ImportCycleTests
 
 main :: IO ()
 main = do
@@ -115,4 +116,5 @@ main = do
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
     , ExceptionTests.tests
+    , ImportCycleTests.tests
     ]

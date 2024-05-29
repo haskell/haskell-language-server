@@ -1,0 +1,19 @@
+cabal-version:       3.0
+
+name:                hls-multihome-modname
+version:             0.1.0.0
+homepage:            https://github.com/konn/hls-multihome-modname#readme
+license:             BSD-3-Clause
+license-file:        LICENSE
+author:              Hiromi ISHII
+maintainer:          konn.jinro_at_gmail.com
+copyright:           2024 (c) Hiromi ISHII
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+                     CHANGELOG.md
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Lib, Lib.A
+  build-depends:       base >= 4.7 && < 5

@@ -65,6 +65,7 @@ runWithDummyPlugin' fs = runSessionWithTestConfig def
     , testDirLocation = Right fs
     , testConfigCaps = lspTestCaps
     , testShiftRoot = True
+    , testCheckProject = True
     }
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree
