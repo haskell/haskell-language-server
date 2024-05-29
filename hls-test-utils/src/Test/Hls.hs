@@ -472,6 +472,8 @@ runSessionWithServer config plugin fp act =
 instance Default (TestConfig b) where
   def = TestConfig {
     testDirLocation = Right $ VirtualFileTree [] "",
+    testClientRoot = Nothing,
+    testServerRoot = Nothing,
     testShiftRoot = False,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
@@ -616,6 +618,7 @@ lockForTempDirs = unsafePerformIO newLock
 data TestConfig b = TestConfig
   {
     testDirLocation          :: Either FilePath VirtualFileTree
+    -- ^ Client capabilities
     -- ^ The file tree to use for the test, either a directory or a virtual file tree
     -- if using a virtual file tree,
     -- Creates a temporary directory, and materializes the VirtualFileTree
@@ -636,6 +639,15 @@ data TestConfig b = TestConfig
     -- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
   , testShiftRoot            :: Bool
     -- ^ Whether to shift the current directory to the root of the project
+  , testClientRoot           :: Maybe FilePath
+    -- ^ Specify the root of (the client or LSP context),
+    -- if Nothing it is the same as the testDirLocation
+    -- if Just, it is subdirectory of the testDirLocation
+  , testServerRoot           :: Maybe FilePath
+    -- ^ Specify root of the server, in exe, it can be specify in command line --cwd,
+    -- or just the server start directory
+    -- if Nothing it is the same as the testDirLocation
+    -- if Just, it is subdirectory of the testDirLocation
   , testDisableKick          :: Bool
     -- ^ Whether to disable the kick action
   , testDisableDefaultPlugin :: Bool
@@ -669,6 +681,8 @@ runSessionWithTestConfig TestConfig{..} session =
     runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
+    let serverRoot = fromMaybe root testServerRoot
+    let clientRoot = fromMaybe root testClientRoot
 
     (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
     (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
@@ -683,11 +697,11 @@ runSessionWithTestConfig TestConfig{..} session =
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-        arguments = testingArgs root recorderIde plugins
+        arguments = testingArgs serverRoot recorderIde plugins
     server <- async $
         IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
             arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
-    result <- runSessionWithHandles inW outR sconf' testConfigCaps root (session root)
+    result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
     hClose inW
     timeout 3 (wait server) >>= \case
         Just () -> pure ()

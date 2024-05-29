@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs #-}
 module ClientSettingsTests (tests) where
 
-import           Config                          (lspTestCaps, testWithConfig)
+import           Config                          (lspTestCaps, testWithConfig,
+                                                  testWithDummyPluginEmpty)
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Data.Aeson                      (toJSON)
@@ -21,7 +22,7 @@ import           Test.Tasty
 
 tests :: TestTree
 tests = testGroup "client settings handling"
-    [ testWithConfig "ghcide restarts shake session on config changes" def {testConfigCaps = lspTestCaps} $ do
+    [ testWithDummyPluginEmpty "ghcide restarts shake session on config changes" $ do
             setIgnoringLogNotifications False
             void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone

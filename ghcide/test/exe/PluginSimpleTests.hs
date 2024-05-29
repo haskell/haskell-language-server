@@ -1,17 +1,15 @@
 
 module PluginSimpleTests (tests) where
 
+import           Config
 import           Control.Monad.IO.Class      (liftIO)
-import           Development.IDE.GHC.Compat  (GhcVersion (..))
 import           Development.IDE.Test        (expectDiagnostics)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
--- import Test.QuickCheck.Instances ()
 import           Test.Tasty
-import           TestUtils
 
 tests :: TestTree
 tests =
@@ -36,9 +34,7 @@ tests =
 
   -- Error: cabal: Failed to build ghc-typelits-natnormalise-0.7.7 (which is
   -- required by plugin-1.0.0). See the build log above for details.
-  ignoreFor (BrokenForGHC [GHC96, GHC98, GHC910]) "fragile, frequently times out" $
-  ignoreFor (BrokenSpecific Windows [GHC94]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
-  testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
+  testWithExtraFiles "simple plugin"  "plugin-knownnat" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
       "cradle: {cabal: [{path: '.', component: 'lib:plugin'}]}"
