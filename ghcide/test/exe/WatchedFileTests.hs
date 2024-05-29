@@ -3,6 +3,7 @@
 
 module WatchedFileTests (tests) where
 
+import           Config                          (testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
@@ -19,12 +20,11 @@ import           System.Directory
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "watched files"
   [ testGroup "Subscriptions"
-    [ testSession' "workspace files" $ \sessionDir -> do
+    [ testWithDummyPluginEmpty' "workspace files" $ \sessionDir -> do
         liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
         _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
         setIgnoringRegistrationRequests False
@@ -33,7 +33,7 @@ tests = testGroup "watched files"
         -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
         liftIO $ length watchedFileRegs @?= 2
 
-    , testSession' "non workspace file" $ \sessionDir -> do
+    , testWithDummyPluginEmpty' "non workspace file" $ \sessionDir -> do
         tmpDir <- liftIO getTemporaryDirectory
         let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
         liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
@@ -48,7 +48,7 @@ tests = testGroup "watched files"
     ]
   , testGroup "Changes"
     [
-      testSession' "workspace files" $ \sessionDir -> do
+      testWithDummyPluginEmpty' "workspace files" $ \sessionDir -> do
         liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
         liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
           ["module B where"
