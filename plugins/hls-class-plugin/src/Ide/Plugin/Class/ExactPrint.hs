@@ -5,17 +5,20 @@
 module Ide.Plugin.Class.ExactPrint where
 
 import           Control.Monad.Trans.Maybe
+import           Data.Either.Extra                       (eitherToMaybe)
+import           Data.Functor.Identity                   (Identity)
 import qualified Data.Text                               as T
 import           Development.IDE.GHC.Compat
+import           GHC.Parser.Annotation
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
-
-import           Data.Either.Extra                       (eitherToMaybe)
-import           Data.Functor.Identity                   (Identity)
-import           GHC.Parser.Annotation
 import           Language.LSP.Protocol.Types             (Range)
+
+#if MIN_VERSION_ghc(9,9,0)
+import           Control.Lens                            (_head, over)
+#endif
 
 makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -> MaybeT m (T.Text, T.Text)
 makeEditText pm df AddMinimalMethodsParams{..} = do
@@ -49,8 +52,16 @@ addMethodDecls ps mDecls range withSig
     go inserting = do
         allDecls <- hsDecls ps
         case break (inRange range . getLoc) allDecls of
-            (before, L l inst : after) -> replaceDecls ps (before ++ L l (addWhere inst):(map newLine inserting ++ after))
-            (before, []) -> replaceDecls ps before
+            (before, L l inst : after) ->
+                let resetFollowing =
+#if MIN_VERSION_ghc(9,9,0)
+                        over _head (\followingDecl -> setEntryDP followingDecl (DifferentLine 2 0))
+#else
+                        id
+#endif
+                in replaceDecls ps (before ++ L l (addWhere inst):(map newLine inserting ++ resetFollowing after))
+            (before, []) ->
+                replaceDecls ps before
 
     -- Add `where` keyword for `instance X where` if `where` is missing.
     --
@@ -91,7 +102,7 @@ addMethodDecls ps mDecls range withSig
 
 #if MIN_VERSION_ghc(9,9,0)
     newLine (L _ e) =
-        let dp = deltaPos 1 (defaultIndent + 1) {- TODO why is this +1 needed? -}
+        let dp = deltaPos 1 (defaultIndent + 1) -- +1 necessary after harmonization of exactprint deltas in ghc 9.10
         in L (noAnnSrcSpanDP dp) e
 #else
     newLine (L l e) =
