@@ -125,7 +125,7 @@ multiTestName :: FilePath -> String -> String
 multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
 
 simpleMultiTest :: FilePath -> TestTree
-simpleMultiTest variant = testCase (multiTestName variant "test") $ withLongTimeout $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -134,6 +134,7 @@ simpleMultiTest variant = testCase (multiTestName variant "test") $ withLongTime
     liftIO $ assertBool "A should typecheck" ideResultSuccess
     WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
     liftIO $ assertBool "B should typecheck" ideResultSuccess
+    skipManyTill anyMessage $ isReferenceReady bPath
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
