@@ -53,11 +53,28 @@ addMethodDecls ps mDecls range withSig
         allDecls <- hsDecls ps
         case break (inRange range . getLoc) allDecls of
             (before, L l inst : after) ->
-                let resetFollowing =
 #if MIN_VERSION_ghc(9,9,0)
-                        over _head (\followingDecl -> setEntryDP followingDecl (DifferentLine 2 0))
+                let instSpan = realSrcSpan $ locA l
+                    instRow = srcSpanEndLine instSpan
+                    instCol = srcSpanStartCol instSpan
+                    methodEpAnn = noAnnSrcSpanDP $ deltaPos 1 (instCol + defaultIndent)
+                    -- Put each TyCl method/type signature on separate line, indented by 2 spaces relative to instance decl
+                    newLine (L _ e) = L methodEpAnn e
+
+                    -- Set DeltaPos for following declarations so they don't move undesirably
+                    resetFollowing =
+                        over _head (\followingDecl ->
+                            let followingDeclRow = srcSpanStartLine $ realSrcSpan $ locA followingDecl
+                                delta = DifferentLine (followingDeclRow - instRow) instCol
+                            in setEntryDP followingDecl delta)
 #else
-                        id
+                let instSpan = realSrcSpan $ getLoc l
+                    instCol = srcSpanStartCol instSpan
+                    newLine (L l e) =
+                        let dp = deltaPos 1 (instCol + defaultIndent - 1)
+                        in L (noAnnSrcSpanDP (getLoc l) dp <> l) e
+
+                    resetFollowing = id
 #endif
                 in replaceDecls ps (before ++ L l (addWhere inst):(map newLine inserting ++ resetFollowing after))
             (before, []) ->
@@ -98,14 +115,3 @@ addMethodDecls ps mDecls range withSig
             _ -> instd
 #endif
     addWhere decl = decl
-
-
-#if MIN_VERSION_ghc(9,9,0)
-    newLine (L _ e) =
-        let dp = deltaPos 1 (defaultIndent + 1) -- +1 necessary after harmonization of exactprint deltas in ghc 9.10
-        in L (noAnnSrcSpanDP dp) e
-#else
-    newLine (L l e) =
-        let dp = deltaPos 1 defaultIndent
-        in L (noAnnSrcSpanDP (getLoc l) dp <> l) e
-#endif

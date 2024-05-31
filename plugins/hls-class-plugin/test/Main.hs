@@ -63,6 +63,8 @@ codeActionTests = testGroup
       getActionByTitle "Add placeholders for 'g'"
   , goldenWithClass "Creates a placeholder for other two methods" "T6" "2" $
       getActionByTitle "Add placeholders for 'g','h'"
+  , goldenWithClass "Creates a placeholder when all top-level decls are indented" "T7" "" $
+      getActionByTitle "Add placeholders for 'g','h','i'"
   ,goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
       getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $
