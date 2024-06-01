@@ -10,9 +10,9 @@ import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 
+import           Config
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 -- | Tests for projects that use symbolic links one way or another
 tests :: TestTree
