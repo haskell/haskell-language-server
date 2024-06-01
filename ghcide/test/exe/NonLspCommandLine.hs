@@ -8,7 +8,13 @@ import           System.Process.Extra          (CreateProcess (cwd), proc,
                                                 readCreateProcessWithExitCode)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
+import System.FilePath ((</>), takeDirectory)
+import Data.Foldable (for_)
+import System.Directory (createDirectoryIfMissing, copyFile)
+import Development.Shake (getDirectoryFilesIO)
+import qualified System.IO.Extra
+import System.Directory.Extra (canonicalizePath)
+import Control.Monad ((>=>))
 
 
 -- A test to ensure that the command line ghcide workflow stays working
@@ -25,3 +31,18 @@ tests = testGroup "ghcide command line"
 
         ec @?= ExitSuccess
   ]
+
+-- | Version of 'System.IO.Extra.withTempDir' that canonicalizes the path
+-- Which we need to do on macOS since the $TMPDIR can be in @/private/var@ or
+-- @/var@
+withTempDir :: (FilePath -> IO a) -> IO a
+withTempDir f = System.IO.Extra.withTempDir $ canonicalizePath >=> f
+
+
+copyTestDataFiles :: FilePath -> FilePath -> IO ()
+copyTestDataFiles dir prefix = do
+  -- Copy all the test data files to the temporary workspace
+  testDataFiles <- getDirectoryFilesIO ("ghcide/test/data" </> prefix) ["//*"]
+  for_ testDataFiles $ \f -> do
+    createDirectoryIfMissing True $ dir </> takeDirectory f
+    copyFile ("ghcide/test/data" </> prefix </> f) (dir </> f)
