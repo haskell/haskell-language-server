@@ -42,37 +42,48 @@ module Test.Hls.Util
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
     , withCanonicalTempDir
+    -- * Extract positions from input file.
+    , extractCursorPositions
+    , mkParameterisedLabel
+    , trimming
   )
 where
 
-import           Control.Applicative.Combinators (skipManyTill, (<|>))
-import           Control.Exception               (catch, throwIO)
-import           Control.Lens                    (_Just, (&), (.~), (?~), (^.))
+import           Control.Applicative.Combinators          (skipManyTill, (<|>))
+import           Control.Exception                        (catch, throwIO)
+import           Control.Lens                             (_Just, (&), (.~),
+                                                           (?~), (^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
-import qualified Data.Aeson                      as A
-import           Data.Bool                       (bool)
+import qualified Data.Aeson                               as A
+import           Data.Bool                                (bool)
 import           Data.Default
-import           Data.List.Extra                 (find)
+import           Data.List.Extra                          (find)
 import           Data.Proxy
-import qualified Data.Set                        as Set
-import qualified Data.Text                       as T
-import           Development.IDE                 (GhcVersion (..), ghcVersion)
-import qualified Language.LSP.Protocol.Lens      as L
+import qualified Data.Text                                as T
+import           Development.IDE                          (GhcVersion (..),
+                                                           ghcVersion)
+import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Test               as Test
+import qualified Language.LSP.Test                        as Test
 import           System.Directory
 import           System.FilePath
-import           System.Info.Extra               (isMac, isWindows)
+import           System.Info.Extra                        (isMac, isWindows)
 import qualified System.IO.Extra
 import           System.IO.Temp
-import           System.Time.Extra               (Seconds, sleep)
-import           Test.Tasty                      (TestTree)
-import           Test.Tasty.ExpectedFailure      (expectFailBecause,
-                                                  ignoreTestBecause)
-import           Test.Tasty.HUnit                (Assertion, assertFailure,
-                                                  (@?=))
+import           System.Time.Extra                        (Seconds, sleep)
+import           Test.Tasty                               (TestTree)
+import           Test.Tasty.ExpectedFailure               (expectFailBecause,
+                                                           ignoreTestBecause)
+import           Test.Tasty.HUnit                         (assertFailure)
+
+import qualified Data.List                                as List
+import qualified Data.Text.Internal.Search                as T
+import qualified Data.Text.Utf16.Rope.Mixed               as Rope
+import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
+import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
+import           NeatInterpolation                        (trimming)
 
 noLiteralCaps :: ClientCapabilities
 noLiteralCaps = def & L.textDocument ?~ textDocumentCaps
@@ -327,3 +338,119 @@ withCanonicalTempDir :: (FilePath -> IO a) -> IO a
 withCanonicalTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   dir' <- canonicalizePath dir
   f dir'
+
+-- ----------------------------------------------------------------------------
+-- Extract Position data from the source file itself.
+-- ----------------------------------------------------------------------------
+
+-- | Pretty labelling for tests that use the parameterised test helpers.
+mkParameterisedLabel :: PosPrefixInfo -> String
+mkParameterisedLabel posPrefixInfo = unlines
+    [ "Full Line:       \"" <> T.unpack (fullLine posPrefixInfo) <> "\""
+    , "Cursor Column:   \"" <> replicate (fromIntegral $ cursorPos posPrefixInfo ^. L.character) ' ' ++ "^" <> "\""
+    , "Prefix Text:     \"" <> T.unpack (prefixText posPrefixInfo) <> "\""
+    ]
+
+-- | Given a in-memory representation of a file, where a user can specify the
+-- current cursor position using a '^' in the next line.
+--
+-- This function allows to generate multiple tests for a single input file, without
+-- the hassle of calculating by hand where there cursor is supposed to be.
+--
+-- Example (line number has been added for readability):
+--
+-- @
+--   0: foo = 2
+--   1:  ^
+--   2: bar =
+--   3:      ^
+-- @
+--
+-- This example input file contains two cursor positions (y, x), at
+--
+-- * (1, 1), and
+-- * (3, 5).
+--
+-- 'extractCursorPositions' will search for '^' characters, and determine there are
+-- two cursor positions in the text.
+-- First, it will normalise the text to:
+--
+-- @
+--   0: foo = 2
+--   1: bar =
+-- @
+--
+-- stripping away the '^' characters. Then, the actual cursor positions are:
+--
+-- * (0, 1) and
+-- * (2, 5).
+--
+extractCursorPositions :: T.Text -> (T.Text, [PosPrefixInfo])
+extractCursorPositions t =
+    let
+        textLines = T.lines t
+        foldState = List.foldl' go emptyFoldState textLines
+        finalText = foldStateToText foldState
+        reconstructCompletionPrefix pos = getCompletionPrefixFromRope pos (Rope.fromText finalText)
+        cursorPositions = reverse . fmap reconstructCompletionPrefix $ foldStatePositions foldState
+    in
+        (finalText, cursorPositions)
+
+    where
+        go foldState l = case T.indices "^" l of
+            [] -> addTextLine foldState l
+            xs -> List.foldl' addTextCursor foldState xs
+
+-- | 'FoldState' is an implementation detail used to parse some file contents,
+-- extracting the cursor positions identified by '^' and producing a cleaned
+-- representation of the file contents.
+data FoldState = FoldState
+    { foldStateRows      :: !Int
+    -- ^ The row index of the cleaned file contents.
+    --
+    -- For example, the file contents
+    --
+    -- @
+    --   0: foo
+    --   1: ^
+    --   2: bar
+    -- @
+    -- will report that 'bar' is actually occurring in line '1', as '^' is
+    -- a cursor position.
+    -- Lines containing cursor positions are removed.
+    , foldStatePositions :: ![Position]
+    -- ^ List of cursors positions found in the file contents.
+    --
+    -- List is stored in reverse for efficient 'cons'ing
+    , foldStateFinalText :: ![T.Text]
+    -- ^ Final file contents with all lines containing cursor positions removed.
+    --
+    -- List is stored in reverse for efficient 'cons'ing
+    }
+
+emptyFoldState :: FoldState
+emptyFoldState = FoldState
+    { foldStateRows = 0
+    , foldStatePositions = []
+    , foldStateFinalText = []
+    }
+
+-- | Produce the final file contents, without any lines containing cursor positions.
+foldStateToText :: FoldState -> T.Text
+foldStateToText state = T.unlines $ reverse $ foldStateFinalText state
+
+-- | We found a '^' at some location! Add it to the list of known cursor positions.
+--
+-- If the row index is '0', we throw an error, as there can't be a cursor position above the first line.
+addTextCursor :: FoldState -> Int -> FoldState
+addTextCursor state col
+    | foldStateRows state <= 0 = error $ "addTextCursor: Invalid '^' found at: " <> show (col, foldStateRows state)
+    | otherwise = state
+        { foldStatePositions = Position (fromIntegral (foldStateRows state) - 1) (fromIntegral col) : foldStatePositions state
+        }
+
+addTextLine :: FoldState -> T.Text -> FoldState
+addTextLine state l = state
+    { foldStateFinalText = l : foldStateFinalText state
+    , foldStateRows = foldStateRows state + 1
+    }
