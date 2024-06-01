@@ -34,6 +34,8 @@ module Test.Hls
     runSessionWithServer,
     runSessionWithServerInTmpDir,
     runSessionWithTestConfig,
+    -- * Running parameterised tests for a set of test configurations
+    parameterisedCursorTest,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -64,72 +66,76 @@ module Test.Hls
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Async           (async, cancel, wait)
+import           Control.Concurrent.Async                 (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
-import           Control.Lens.Extras                (is)
-import           Control.Monad                      (guard, unless, void)
-import           Control.Monad.Extra                (forM)
+import           Control.Lens.Extras                      (is)
+import           Control.Monad                            (guard, unless, void)
+import           Control.Monad.Extra                      (forM)
 import           Control.Monad.IO.Class
-import           Data.Aeson                         (Result (Success),
-                                                     Value (Null), fromJSON,
-                                                     toJSON)
-import qualified Data.Aeson                         as A
-import           Data.ByteString.Lazy               (ByteString)
-import           Data.Default                       (Default, def)
-import qualified Data.Map                           as M
-import           Data.Maybe                         (fromMaybe)
-import           Data.Proxy                         (Proxy (Proxy))
-import qualified Data.Text                          as T
-import qualified Data.Text.Lazy                     as TL
-import qualified Data.Text.Lazy.Encoding            as TL
-import           Development.IDE                    (IdeState,
-                                                     LoggingColumn (ThreadIdColumn),
-                                                     defaultLayoutOptions,
-                                                     layoutPretty, renderStrict)
-import           Development.IDE.Main               hiding (Log)
-import qualified Development.IDE.Main               as IDEMain
-import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
-                                                     WaitForIdeRuleResult (ideResultSuccess))
-import qualified Development.IDE.Plugin.Test        as Test
+import           Data.Aeson                               (Result (Success),
+                                                           Value (Null),
+                                                           fromJSON, toJSON)
+import qualified Data.Aeson                               as A
+import           Data.ByteString.Lazy                     (ByteString)
+import           Data.Default                             (Default, def)
+import qualified Data.Map                                 as M
+import           Data.Maybe                               (fromMaybe)
+import           Data.Proxy                               (Proxy (Proxy))
+import qualified Data.Text                                as T
+import qualified Data.Text.Lazy                           as TL
+import qualified Data.Text.Lazy.Encoding                  as TL
+import           Development.IDE                          (IdeState,
+                                                           LoggingColumn (ThreadIdColumn),
+                                                           defaultLayoutOptions,
+                                                           layoutPretty,
+                                                           renderStrict)
+import           Development.IDE.Main                     hiding (Log)
+import qualified Development.IDE.Main                     as IDEMain
+import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo)
+import           Development.IDE.Plugin.Test              (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
+                                                           WaitForIdeRuleResult (ideResultSuccess))
+import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.TypeLits
-import           Ide.Logger                         (Pretty (pretty),
-                                                     Priority (..), Recorder,
-                                                     WithPriority (WithPriority, priority),
-                                                     cfilter, cmapWithPrio,
-                                                     defaultLoggingColumns,
-                                                     logWith,
-                                                     makeDefaultStderrRecorder,
-                                                     (<+>))
-import qualified Ide.Logger                         as Logger
-import           Ide.PluginUtils                    (idePluginsToPluginDesc,
-                                                     pluginDescToIdePlugins)
+import           Ide.Logger                               (Pretty (pretty),
+                                                           Priority (..),
+                                                           Recorder,
+                                                           WithPriority (WithPriority, priority),
+                                                           cfilter,
+                                                           cmapWithPrio,
+                                                           defaultLoggingColumns,
+                                                           logWith,
+                                                           makeDefaultStderrRecorder,
+                                                           (<+>))
+import qualified Ide.Logger                               as Logger
+import           Ide.PluginUtils                          (idePluginsToPluginDesc,
+                                                           pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import           Language.LSP.Protocol.Message
-import qualified Language.LSP.Protocol.Message      as LSP
-import           Language.LSP.Protocol.Types        hiding (Null)
-import qualified Language.LSP.Server                as LSP
+import qualified Language.LSP.Protocol.Message            as LSP
+import           Language.LSP.Protocol.Types              hiding (Null)
+import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
-import           Prelude                            hiding (log)
-import           System.Directory                   (canonicalizePath,
-                                                     createDirectoryIfMissing,
-                                                     getCurrentDirectory,
-                                                     getTemporaryDirectory,
-                                                     makeAbsolute,
-                                                     setCurrentDirectory)
-import           System.Environment                 (lookupEnv, setEnv)
+import           Prelude                                  hiding (log)
+import           System.Directory                         (canonicalizePath,
+                                                           createDirectoryIfMissing,
+                                                           getCurrentDirectory,
+                                                           getTemporaryDirectory,
+                                                           makeAbsolute,
+                                                           setCurrentDirectory)
+import           System.Environment                       (lookupEnv, setEnv)
 import           System.FilePath
-import           System.IO.Extra                    (newTempDirWithin)
-import           System.IO.Unsafe                   (unsafePerformIO)
-import           System.Process.Extra               (createPipe)
+import           System.IO.Extra                          (newTempDirWithin)
+import           System.IO.Unsafe                         (unsafePerformIO)
+import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
-import qualified Test.Hls.FileSystem                as FS
+import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
 import           Test.Hls.Util
-import           Test.Tasty                         hiding (Timeout)
+import           Test.Tasty                               hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
@@ -326,6 +332,56 @@ goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
     act doc
     documentContents doc
 
+-- | A parameterised test is similar to a normal test case but allows to run
+-- the same test case multiple times with different inputs.
+-- A 'parameterisedCursorTest' allows to define a test case based on an input file
+-- that specifies one or many cursor positions via the identification value '^'.
+--
+-- For example:
+--
+-- @
+--  parameterisedCursorTest "Cursor Test" [trimming|
+--       foo = 2
+--        ^
+--       bar = 3
+--       baz = foo + bar
+--         ^
+--       |]
+--       ["foo", "baz"]
+--       (\input cursor -> findFunctionNameUnderCursor input cursor)
+-- @
+--
+-- Assuming a fitting implementation for 'findFunctionNameUnderCursor'.
+--
+-- This test definition will run the test case 'findFunctionNameUnderCursor' for
+-- each cursor position, each in its own isolated 'testCase'.
+-- Cursor positions are identified via the character '^', which points to the
+-- above line as the actual cursor position.
+-- Lines containing '^' characters, are removed from the final text, that is
+-- passed to the testing function.
+--
+-- TODO: Many Haskell and Cabal source may contain '^' characters for good reasons.
+-- We likely need a way to change the character for certain test cases in the future.
+--
+-- The quasi quoter 'trimming' is very helpful to define such tests, as it additionally
+-- allows to interpolate haskell values and functions. We reexport this quasi quoter
+-- for easier usage.
+parameterisedCursorTest :: (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
+parameterisedCursorTest title content expectations act
+  | lenPrefs /= lenExpected = error $ "parameterisedCursorTest: Expected " <> show lenExpected <> " cursors but found: " <> show lenPrefs
+  | otherwise = testGroup title $
+      map singleTest testCaseSpec
+  where
+    lenPrefs = length prefInfos
+    lenExpected = length expectations
+    (cleanText, prefInfos) = extractCursorPositions content
+
+    testCaseSpec = zip [1 ::Int ..] (zip expectations prefInfos)
+
+    singleTest (n, (expected, info)) = testCase (title <> " " <> show n) $ do
+      actual <- act cleanText info
+      assertEqual (mkParameterisedLabel info) expected actual
+
 -- ------------------------------------------------------------
 -- Helper function for initialising plugins under test
 -- ------------------------------------------------------------
@@ -427,6 +483,7 @@ initializeTestRecorder envVars = do
 -- ------------------------------------------------------------
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
+
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
 runSessionWithServerInTmpDir config plugin tree act =
     runSessionWithTestConfig def

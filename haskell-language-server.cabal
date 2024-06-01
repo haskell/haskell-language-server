@@ -241,6 +241,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Parse
 
 
@@ -262,7 +263,6 @@ library hls-cabal-plugin
     , lsp-types             ^>=2.2
     , regex-tdfa            ^>=1.3.1
     , text
-    , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
@@ -290,8 +290,6 @@ test-suite hls-cabal-plugin-tests
     , lens
     , lsp-types
     , text
-    , text-rope
-    , transformers
 
 -----------------------------
 -- class plugin
