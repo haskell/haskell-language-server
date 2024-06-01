@@ -186,8 +186,7 @@ compute db@Database{..} stack key mode result = do
     deps <- readIORef deps
     let lastChanged = maybe curStep resultChanged result
     let lastBuild = maybe curStep resultBuilt result
-    -- changed time would be slower
-    -- build time would be faster
+    -- changed time is always older than or equal to build time
     let (changed, built) =  case runChanged of
             -- some thing changed
             ChangedRecomputeDiff -> (curStep, curStep)

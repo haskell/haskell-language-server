@@ -23,7 +23,7 @@ import           Test.Hspec
 
 spec :: Spec
 spec = do
-  describe "apply1" $ it "Buggy dirty mechanism in hls-graph #4237" $ do
+  describe "apply1" $ it "Test build update, Buggy dirty mechanism in hls-graph #4237" $ do
     let ruleStep1 :: MVar Int -> Rules ()
         ruleStep1 m = addRule $ \CountRule _old mode -> do
             -- depends on ruleSubBranch, it always changed if dirty
