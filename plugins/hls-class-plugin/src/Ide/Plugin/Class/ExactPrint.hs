@@ -53,10 +53,11 @@ addMethodDecls ps mDecls range withSig
         allDecls <- hsDecls ps
         case break (inRange range . getLoc) allDecls of
             (before, L l inst : after) ->
-#if MIN_VERSION_ghc(9,9,0)
-                let instSpan = realSrcSpan $ locA l
-                    instRow = srcSpanEndLine instSpan
+                let
+                    instSpan = realSrcSpan $ getLoc l
                     instCol = srcSpanStartCol instSpan
+#if MIN_VERSION_ghc(9,9,0)
+                    instRow = srcSpanEndLine instSpan
                     methodEpAnn = noAnnSrcSpanDP $ deltaPos 1 (instCol + defaultIndent)
                     -- Put each TyCl method/type signature on separate line, indented by 2 spaces relative to instance decl
                     newLine (L _ e) = L methodEpAnn e
@@ -64,12 +65,10 @@ addMethodDecls ps mDecls range withSig
                     -- Set DeltaPos for following declarations so they don't move undesirably
                     resetFollowing =
                         over _head (\followingDecl ->
-                            let followingDeclRow = srcSpanStartLine $ realSrcSpan $ locA followingDecl
+                            let followingDeclRow = srcSpanStartLine $ realSrcSpan $ getLoc followingDecl
                                 delta = DifferentLine (followingDeclRow - instRow) instCol
                             in setEntryDP followingDecl delta)
 #else
-                let instSpan = realSrcSpan $ getLoc l
-                    instCol = srcSpanStartCol instSpan
                     newLine (L l e) =
                         let dp = deltaPos 1 (instCol + defaultIndent - 1)
                         in L (noAnnSrcSpanDP (getLoc l) dp <> l) e

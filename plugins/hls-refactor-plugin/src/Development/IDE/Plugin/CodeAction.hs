@@ -1232,15 +1232,17 @@ suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
-#if MIN_VERSION_ghc(9,9,0)
-suggestConstraint df parsedModule diag@Diagnostic {..}
-#else
-suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
-#endif
+suggestConstraint df ps diag@Diagnostic {..}
   | Just missingConstraint <- findMissingConstraint _message
-  = let codeAction = if _message =~ ("the type signature for:" :: String)
-                        then suggestFunctionConstraint df parsedModule
-                        else suggestInstanceConstraint df parsedModule
+  = let
+#if MIN_VERSION_ghc(9,9,0)
+        parsedSource = ps
+#else
+        parsedSource = makeDeltaAst ps
+#endif
+        codeAction = if _message =~ ("the type signature for:" :: String)
+                        then suggestFunctionConstraint df parsedSource
+                        else suggestInstanceConstraint df parsedSource
      in codeAction diag missingConstraint
   | otherwise = []
     where
@@ -1984,7 +1986,7 @@ smallerRangesForBindingExport lies b =
     concatMap (mapMaybe srcSpanToRange . ranges') lies
   where
     unqualify = snd . breakOnEnd "."
-    b' = wrapOperatorInParens . unqualify $ b
+    b' = wrapOperatorInParens $ unqualify b
 #if MIN_VERSION_ghc(9,9,0)
     ranges' (L _ (IEThingWith _ thing _  inners _))
 #else
