@@ -50,13 +50,11 @@ import           GHC                                    (AddEpAnn (..),
 
 #if !MIN_VERSION_ghc(9,9,0)
 import           Data.Default                           (Default (..))
-import           GHC                                    (EpaLocation (EpaDelta),
-                                                         addAnns, ann)
+import           GHC                                    (addAnns, ann)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
-import           GHC                                    (EpaLocation' (..),
-                                                         NoAnn (..))
+import           GHC                                    (NoAnn (..))
 #endif
 
 ------------------------------------------------------------------------------
@@ -349,11 +347,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
                                              childRdr
           x :: LIE GhcPs = L ll' $ IEThingWith
 #if MIN_VERSION_ghc(9,9,0)
-                                     (Nothing, [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP noAnn])
+                                     (Nothing, [AddEpAnn AnnOpenP d1, AddEpAnn AnnCloseP noAnn])
 #elif MIN_VERSION_ghc(9,7,0)
-                                     (Nothing, addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments)
+                                     (Nothing, addAnns mempty [AddEpAnn AnnOpenP d1, AddEpAnn AnnCloseP def] emptyComments)
 #else
-                                     (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments)
+                                     (addAnns mempty [AddEpAnn AnnOpenP d1, AddEpAnn AnnCloseP def] emptyComments)
 #endif
                                      absIE NoIEWildcard [childLIE]
 #if MIN_VERSION_ghc(9,9,0)
