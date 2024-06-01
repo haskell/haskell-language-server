@@ -11,6 +11,7 @@ module Development.IDE.Plugin.Completions.Logic (
 , getCompletions
 , fromIdentInfo
 , getCompletionPrefix
+, getCompletionPrefixFromRope
 ) where
 
 import           Control.Applicative
@@ -897,7 +898,10 @@ mergeListsBy cmp all_lists = merge_lists all_lists
 
 -- |From the given cursor position, gets the prefix module or record for autocompletion
 getCompletionPrefix :: Position -> VFS.VirtualFile -> PosPrefixInfo
-getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
+getCompletionPrefix pos (VFS.VirtualFile _ _ ropetext) = getCompletionPrefixFromRope pos ropetext
+
+getCompletionPrefixFromRope :: Position -> Rope.Rope -> PosPrefixInfo
+getCompletionPrefixFromRope pos@(Position l c) ropetext =
       fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
         let headMaybe = listToMaybe
             lastMaybe = headMaybe . reverse
