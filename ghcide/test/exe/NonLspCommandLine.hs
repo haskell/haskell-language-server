@@ -1,20 +1,21 @@
 
 module NonLspCommandLine (tests) where
 
+import           Control.Monad                 ((>=>))
+import           Data.Foldable                 (for_)
 import           Development.IDE.Test.Runfiles
+import           Development.Shake             (getDirectoryFilesIO)
+import           System.Directory              (copyFile,
+                                                createDirectoryIfMissing)
+import           System.Directory.Extra        (canonicalizePath)
 import           System.Environment.Blank      (setEnv)
 import           System.Exit                   (ExitCode (ExitSuccess))
+import           System.FilePath               (takeDirectory, (</>))
+import qualified System.IO.Extra
 import           System.Process.Extra          (CreateProcess (cwd), proc,
                                                 readCreateProcessWithExitCode)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import System.FilePath ((</>), takeDirectory)
-import Data.Foldable (for_)
-import System.Directory (createDirectoryIfMissing, copyFile)
-import Development.Shake (getDirectoryFilesIO)
-import qualified System.IO.Extra
-import System.Directory.Extra (canonicalizePath)
-import Control.Monad ((>=>))
 
 
 -- A test to ensure that the command line ghcide workflow stays working
