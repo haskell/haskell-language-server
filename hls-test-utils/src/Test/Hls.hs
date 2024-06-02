@@ -121,7 +121,6 @@ import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
 import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
-                                                           createDirectoryIfMissing,
                                                            getCurrentDirectory,
                                                            getTemporaryDirectory,
                                                            makeAbsolute,
@@ -130,6 +129,7 @@ import           System.Environment                       (lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                          (newTempDirWithin)
 import           System.IO.Unsafe                         (unsafePerformIO)
+import           System.IO.Temp                           (createTempDirectory)
 import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
@@ -556,9 +556,8 @@ setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
   tmpDirRoot <- getTemporaryDirectory
   let testRoot = tmpDirRoot </> "hls-test-root"
-      testCacheDir = testRoot </> ".cache"
-  createDirectoryIfMissing True testCacheDir
-  setEnv "XDG_CACHE_HOME" testCacheDir
+  tempCacheDir <- createTempDirectory testRoot ".cache"
+  setEnv "XDG_CACHE_HOME" tempCacheDir
   pure testRoot
 
 goldenWithHaskellDocFormatter
