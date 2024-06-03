@@ -1,18 +1,17 @@
 
 module NonLspCommandLine (tests) where
 
-import           Control.Monad                 ((>=>))
-import           Data.Foldable                 (for_)
-import           Development.Shake             (getDirectoryFilesIO)
-import           System.Directory              (copyFile,
-                                                createDirectoryIfMissing)
-import           System.Directory.Extra        (canonicalizePath)
-import           System.Environment.Blank      (setEnv)
-import           System.Exit                   (ExitCode (ExitSuccess))
-import           System.FilePath               (takeDirectory, (</>))
+import           Control.Monad            ((>=>))
+import           Data.Foldable            (for_)
+import           Development.Shake        (getDirectoryFilesIO)
+import           System.Directory         (copyFile, createDirectoryIfMissing)
+import           System.Directory.Extra   (canonicalizePath)
+import           System.Environment.Blank (setEnv)
+import           System.Exit              (ExitCode (ExitSuccess))
+import           System.FilePath          (takeDirectory, (</>))
 import qualified System.IO.Extra
-import           System.Process.Extra          (CreateProcess (cwd), proc,
-                                                readCreateProcessWithExitCode)
+import           System.Process.Extra     (CreateProcess (cwd), proc,
+                                           readCreateProcessWithExitCode)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
