@@ -265,21 +265,3 @@ executable ghcide
 
   if !flag(executable)
     buildable: False
-
-library ghcide-test-utils
-  import: warnings
-  visibility: public
-  default-language:   GHC2021
-
-  hs-source-dirs: test/cabal
-  exposed-modules:
-    Development.IDE.Test.Runfiles
-
-  build-depends:
-      base > 4.9 && < 5
-
-  default-extensions:
-      LambdaCase
-      OverloadedStrings
-      RecordWildCards
-      ViewPatterns
