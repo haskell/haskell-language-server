@@ -2175,7 +2175,6 @@ test-suite ghcide-tests
     RootUriTests
     SafeTests
     SymlinkTests
-    TestUtils
     THTests
     UnitTests
     WatchedFileTests
