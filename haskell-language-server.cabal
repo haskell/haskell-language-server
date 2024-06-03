@@ -2236,6 +2236,7 @@ library ghcide-bench-lib
         directory,
         extra,
         filepath,
+        ghcide:{ghcide},
         hashable,
         lens,
         lsp-test,
