@@ -128,8 +128,8 @@ import           System.Directory                         (canonicalizePath,
 import           System.Environment                       (lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                          (newTempDirWithin)
-import           System.IO.Unsafe                         (unsafePerformIO)
 import           System.IO.Temp                           (createTempDirectory)
+import           System.IO.Unsafe                         (unsafePerformIO)
 import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
