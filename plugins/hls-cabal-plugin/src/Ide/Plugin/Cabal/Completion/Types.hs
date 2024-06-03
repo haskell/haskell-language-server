@@ -4,13 +4,17 @@
 
 module Ide.Plugin.Cabal.Completion.Types where
 
-import           Control.DeepSeq        (NFData)
+import           Control.DeepSeq                 (NFData)
+import           Control.Lens                    ((^.))
 import           Data.Hashable
-import qualified Data.Text              as T
+import qualified Data.Text                       as T
 import           Data.Typeable
-import           Development.IDE        as D
+import           Development.IDE                 as D
+import qualified Distribution.Fields             as Syntax
+import qualified Distribution.PackageDescription as PD
+import qualified Distribution.Parsec.Position    as Syntax
 import           GHC.Generics
-import qualified Ide.Plugin.Cabal.Parse as Parse
+import qualified Language.LSP.Protocol.Lens      as JL
 
 data Log
   = LogFileSplitError Position
@@ -21,6 +25,7 @@ data Log
   | LogFilePathCompleterIOError FilePath IOError
   | LogUseWithStaleFastNoResult
   | LogMapLookUpOfKnownKeyFailed T.Text
+  | LogCompletionContext Context
   deriving (Show)
 
 instance Pretty Log where
@@ -34,15 +39,25 @@ instance Pretty Log where
       "When trying to complete the file path:" <+> pretty fp <+> "the following unexpected IO error occurred" <+> viaShow ioErr
     LogUseWithStaleFastNoResult -> "Package description couldn't be read"
     LogMapLookUpOfKnownKeyFailed key -> "Lookup of key in map failed even though it should exist" <+> pretty key
+    LogCompletionContext ctx -> "Completion context is:" <+> pretty ctx
 
-type instance RuleResult GetCabalDiagnostics = Parse.GenericPackageDescription
+type instance RuleResult ParseCabalFile = PD.GenericPackageDescription
 
-data GetCabalDiagnostics = GetCabalDiagnostics
+data ParseCabalFile = ParseCabalFile
   deriving (Eq, Show, Typeable, Generic)
 
-instance Hashable GetCabalDiagnostics
+instance Hashable ParseCabalFile
 
-instance NFData GetCabalDiagnostics
+instance NFData ParseCabalFile
+
+type instance RuleResult ParseCabalFields = [Syntax.Field Syntax.Position]
+
+data ParseCabalFields = ParseCabalFields
+  deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable ParseCabalFields
+
+instance NFData ParseCabalFields
 
 -- | The context a cursor can be in within a cabal file.
 --
@@ -61,8 +76,12 @@ data StanzaContext
     -- Stanzas have their own fields which differ from top-level fields.
     -- Each stanza must be named, such as 'executable exe',
     -- except for the main library.
-    Stanza StanzaType (Maybe StanzaName)
+    Stanza !StanzaType !(Maybe StanzaName)
   deriving (Eq, Show, Read)
+
+instance Pretty StanzaContext where
+    pretty TopLevel      = "TopLevel"
+    pretty (Stanza t ms) = "Stanza" <+> pretty t <+> (maybe mempty pretty ms)
 
 -- | Keyword context in a cabal file.
 --
@@ -71,11 +90,15 @@ data FieldContext
   = -- | Key word context, where a keyword
     -- occurs right before the current word
     -- to be completed
-    KeyWord KeyWordName
+    KeyWord !KeyWordName
   | -- | Keyword context where no keyword occurs
     -- right before the current word to be completed
     None
   deriving (Eq, Show, Read)
+
+instance Pretty FieldContext where
+    pretty (KeyWord kw) = "KeyWord" <+> pretty kw
+    pretty None         = "No Keyword"
 
 type KeyWordName = T.Text
 
@@ -139,3 +162,12 @@ applyStringNotation (Just LeftSide) compl = compl <> "\""
 applyStringNotation Nothing compl
   | Just _ <- T.find (== ' ') compl = "\"" <> compl <> "\""
   | otherwise = compl
+
+-- | Convert an LSP 'Position' to a 'Syntax.Position'.
+--
+-- Cabal Positions start their indexing at 1 while LSP starts at 0.
+-- This helper makes sure, the translation is done properly.
+lspPositionToCabalPosition :: Position -> Syntax.Position
+lspPositionToCabalPosition pos = Syntax.Position
+  (fromIntegral (pos ^. JL.line) + 1)
+  (fromIntegral (pos ^. JL.character) + 1)

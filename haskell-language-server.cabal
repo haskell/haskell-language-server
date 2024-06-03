@@ -241,6 +241,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Parse
 
 
@@ -2108,7 +2109,6 @@ test-suite ghcide-tests
     , filepath
     , fuzzy
     , ghcide
-    , ghcide:ghcide-test-utils
     , hls-plugin-api
     , lens
     , list-t
@@ -2174,7 +2174,6 @@ test-suite ghcide-tests
     RootUriTests
     SafeTests
     SymlinkTests
-    TestUtils
     THTests
     UnitTests
     WatchedFileTests
@@ -2237,7 +2236,7 @@ library ghcide-bench-lib
         directory,
         extra,
         filepath,
-        ghcide:{ghcide, ghcide-test-utils},
+        ghcide:{ghcide},
         hashable,
         lens,
         lsp-test,

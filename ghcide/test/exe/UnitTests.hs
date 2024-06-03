@@ -10,13 +10,11 @@ import           Data.List.Extra
 import           Data.String                       (IsString (fromString))
 import qualified Data.Text                         as T
 import           Development.IDE.Core.FileStore    (getModTime)
-import qualified Development.IDE.Main              as IDE
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import           Development.IDE.Types.Location
 import qualified FuzzySearch
-import           Ide.Logger                        (Recorder, WithPriority,
-                                                    cmapWithPrio)
+import           Ide.Logger                        (Recorder, WithPriority)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
@@ -26,7 +24,6 @@ import           Language.LSP.Protocol.Types       hiding
                                                     SemanticTokensEdit (..),
                                                     mkRange)
 import           Language.LSP.Test
-import           LogType                           (Log (..))
 import           Network.URI
 import qualified Progress
 import           System.IO.Extra                   hiding (withTempDir)
@@ -37,11 +34,10 @@ import           Test.Hls                          (IdeState, def,
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
-import           TestUtils
 import           Text.Printf                       (printf)
 
-tests :: Recorder (WithPriority Log) -> TestTree
-tests recorder = do
+tests :: TestTree
+tests = do
   testGroup "Unit"
      [ testCase "empty file path does NOT work with the empty String literal" $
          uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just "."
