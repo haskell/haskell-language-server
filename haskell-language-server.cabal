@@ -2109,7 +2109,6 @@ test-suite ghcide-tests
     , filepath
     , fuzzy
     , ghcide
-    , ghcide:ghcide-test-utils
     , hls-plugin-api
     , lens
     , list-t
@@ -2237,7 +2236,7 @@ library ghcide-bench-lib
         directory,
         extra,
         filepath,
-        ghcide:{ghcide, ghcide-test-utils},
+        ghcide:{ghcide},
         hashable,
         lens,
         lsp-test,
