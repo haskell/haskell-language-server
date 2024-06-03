@@ -3,7 +3,6 @@ module NonLspCommandLine (tests) where
 
 import           Control.Monad                 ((>=>))
 import           Data.Foldable                 (for_)
-import           Development.IDE.Test.Runfiles
 import           Development.Shake             (getDirectoryFilesIO)
 import           System.Directory              (copyFile,
                                                 createDirectoryIfMissing)
@@ -33,6 +32,9 @@ tests = testGroup "ghcide command line"
         ec @?= ExitSuccess
   ]
 
+
+locateGhcideExecutable :: IO FilePath
+locateGhcideExecutable = pure "ghcide"
 -- | Version of 'System.IO.Extra.withTempDir' that canonicalizes the path
 -- Which we need to do on macOS since the $TMPDIR can be in @/private/var@ or
 -- @/var@
