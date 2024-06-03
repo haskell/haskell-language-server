@@ -141,7 +141,7 @@ data CodeActionArgs = CodeActionArgs
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
-    caaAnnSource    :: IO (Maybe (Annotated ParsedSource)),
+    caaAnnSource    :: IO (Maybe ParsedSource),
     caaTmr          :: IO (Maybe TcModuleResult),
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
@@ -254,11 +254,8 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
-instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
+instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
-
-instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
-  toCodeAction = toCodeAction2 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr

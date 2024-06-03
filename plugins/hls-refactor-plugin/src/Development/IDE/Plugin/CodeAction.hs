@@ -372,7 +372,7 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: Annotated ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
 suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | Just [identifier, modName, s] <-
       matchRegexUnifySpaces
@@ -390,7 +390,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
     result <> [hideAll]
   | otherwise = []
   where
-    L _ HsModule {hsmodImports} = astA ps
+    L _ HsModule {hsmodImports} = ps
 
     suggests identifier modName s
       | Just tcM <- mTcM,
@@ -1037,7 +1037,7 @@ isPreludeImplicit = xopt Lang.ImplicitPrelude
 suggestImportDisambiguation ::
     DynFlags ->
     Maybe T.Text ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     T.Text ->
     Diagnostic ->
     [(T.Text, [Either TextEdit Rewrite])]
@@ -1053,7 +1053,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
         suggestions ambiguous modules (isJust local)
     | otherwise = []
     where
-        L _ HsModule {hsmodImports} = astA ps
+        L _ HsModule {hsmodImports} = ps
 
         locDic =
             fmap (NE.fromList . DL.toList) $
@@ -1151,7 +1151,7 @@ targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
     unLoc ideclName
 
 disambiguateSymbol ::
-    Annotated ParsedSource ->
+    ParsedSource ->
     T.Text ->
     Diagnostic ->
     T.Text ->
@@ -1211,7 +1211,7 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
     in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
 
-suggestAddRecordFieldImport :: ExportsMap -> DynFlags -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestAddRecordFieldImport :: ExportsMap -> DynFlags -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
 suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
   | Just fieldName <- findMissingField _message
   , Just (range, indent) <- newImportInsertRange ps fileContents
@@ -1430,7 +1430,7 @@ removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagno
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1444,7 +1444,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
   where
     suggest identInfo
       | importStyle <- NE.toList $ importStyles identInfo,
-        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc . astA $ ps) (T.unpack moduleText) =
+        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc $ ps) (T.unpack moduleText) =
         case mImportDecl of
           -- extend
           Just decl ->
@@ -1467,7 +1467,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             | otherwise -> []
         where moduleText = moduleNameText identInfo
 
-suggestNewImport :: DynFlags -> ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestNewImport :: DynFlags -> ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
 suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
@@ -1509,7 +1509,7 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
     qualify q (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (q <> "." <> d)
     qualify q (NotInScopeThing d) = NotInScopeThing (q <> "." <> d)
 
-    L _ HsModule {..} = astA ps
+    L _ HsModule {..} = ps
 suggestNewImport _ _ _ _ _ = []
 
 {- |
@@ -1626,7 +1626,7 @@ simpleCompareImportSuggestion (ImportSuggestion s1 _ i1) (ImportSuggestion s2 _ 
 newtype NewImport = NewImport {unNewImport :: T.Text}
   deriving (Show, Eq, Ord)
 
-newImportToEdit :: NewImport -> Annotated ParsedSource -> T.Text -> Maybe (T.Text, TextEdit)
+newImportToEdit :: NewImport -> ParsedSource -> T.Text -> Maybe (T.Text, TextEdit)
 newImportToEdit (unNewImport -> imp) ps fileContents
   | Just (range, indent) <- newImportInsertRange ps fileContents
   = Just (imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
@@ -1640,7 +1640,7 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 -- * If the file has neither existing imports nor a module declaration,
 -- the import will be inserted at line zero if there are no pragmas,
 -- * otherwise inserted one line after the last file-header pragma
-newImportInsertRange :: Annotated ParsedSource -> T.Text -> Maybe (Range, Int)
+newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange ps fileContents
   |  Just ((l, c), col) <- case hsmodImports of
       -- When there is no existing imports, we only cares about the line number, setting column and indent to zero.
@@ -1650,19 +1650,19 @@ newImportInsertRange ps fileContents
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
   where
-    L _ HsModule {..} = astA ps
+    L _ HsModule {..} = ps
 
 -- | Find the position for a new import when there isn't an existing one.
 -- * If there is a module declaration, a new import should be inserted under the module declaration (including exports list)
 -- * Otherwise, a new import should be inserted after any file-header pragma.
-findPositionNoImports :: Annotated ParsedSource -> T.Text -> Maybe Int
+findPositionNoImports :: ParsedSource -> T.Text -> Maybe Int
 findPositionNoImports ps fileContents =
     maybe (Just (findNextPragmaPosition fileContents)) (findPositionAfterModuleName ps) hsmodName
   where
-    L _ HsModule {..} = astA ps
+    L _ HsModule {..} = ps
 
 -- | find line number right after module ... where
-findPositionAfterModuleName :: Annotated ParsedSource
+findPositionAfterModuleName :: ParsedSource
                             -> LocatedA ModuleName
                             -> Maybe Int
 findPositionAfterModuleName ps _hsmodName' = do
@@ -1684,7 +1684,7 @@ findPositionAfterModuleName ps _hsmodName' = do
             Just $ srcLocLine (realSrcSpanEnd prevSrcSpan') + lineOffset
 #endif
   where
-    L _ HsModule {..} = astA ps
+    L _ HsModule {..} = ps
 
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
     -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.

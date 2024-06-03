@@ -79,11 +79,6 @@ import           Ide.Logger                              (Pretty (pretty),
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Protocol.Types
-import           Retrie.ExactPrint                       hiding (parseDecl,
-                                                          parseExpr,
-                                                          parsePattern,
-                                                          parseType)
-
 
 import           Control.Lens                            (_last, (&))
 import           Control.Lens.Operators                  ((%~))
@@ -141,33 +136,29 @@ instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
 
-instance Show (Annotated ParsedSource) where
-  show _ = "<Annotated ParsedSource>"
-
-instance NFData (Annotated ParsedSource) where
-  rnf = rwhnf
-
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
-type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
+type instance RuleResult GetAnnotatedParsedSource = ParsedSource
 
+instance Show (HsModule GhcPs) where
+  show _ = "<HsModule GhcPs>"
+ 
 -- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Recorder (WithPriority Log) -> Rules ()
 getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) $ \GetAnnotatedParsedSource nfp -> do
   pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 
-annotateParsedSource :: ParsedModule -> Annotated ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA
+annotateParsedSource :: ParsedModule -> ParsedSource
+annotateParsedSource (ParsedModule _ ps _ _) =
 #if MIN_VERSION_ghc(9,9,0)
     ps
 #else
     (makeDeltaAst ps)
 #endif
-    0
 
 ------------------------------------------------------------------------------
 
@@ -220,7 +211,7 @@ transform ::
     ClientCapabilities ->
     VersionedTextDocumentIdentifier ->
     Graft (Either String) ParsedSource ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     Either String WorkspaceEdit
 transform dflags ccs verTxtDocId f a = do
     let src = printA a
@@ -237,7 +228,7 @@ transformM ::
     ClientCapabilities ->
     VersionedTextDocumentIdentifier ->
     Graft (ExceptStringT m) ParsedSource ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     m (Either String WorkspaceEdit)
 transformM dflags ccs verTextDocId f a = runExceptT $
     runExceptString $ do

@@ -1651,7 +1651,6 @@ library hls-refactor-plugin
     , containers
     , ghc-exactprint < 1 || >= 1.4
     , extra
-    , retrie
     , syb
     , hls-graph
     , dlist
