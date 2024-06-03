@@ -222,7 +222,7 @@ runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
         useE GetAnnotatedParsedSource nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
-    inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
+    inlineRewrite <- liftIO $ constructInlineFromIdentifer (unsafeMkA astSrc 0) fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp

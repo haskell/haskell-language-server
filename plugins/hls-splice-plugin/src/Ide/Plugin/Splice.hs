@@ -212,7 +212,7 @@ setupHscEnv
     :: IdeState
     -> NormalizedFilePath
     -> ParsedModule
-    -> ExceptT PluginError IO (Annotated ParsedSource, HscEnv, DynFlags)
+    -> ExceptT PluginError IO (ParsedSource, HscEnv, DynFlags)
 setupHscEnv ideState fp pm = do
     hscEnvEq <- runActionE "expandTHSplice.fallback.ghcSessionDeps" ideState $
                     useE GhcSessionDeps fp
@@ -366,7 +366,7 @@ manualCalcEdit ::
     ClientCapabilities ->
     ReportEditor ->
     Range ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     HscEnv ->
     TcGblEnv ->
     RealSrcSpan ->
