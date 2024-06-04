@@ -84,7 +84,7 @@ getDatabase = Action $ asks actionDatabase
 data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 newtype Step = Step Int
-    deriving newtype (Eq,Ord,Hashable)
+    deriving newtype (Eq,Ord,Hashable,Show)
 
 ---------------------------------------------------------------------
 -- Keys
@@ -187,7 +187,6 @@ instance NFData RunMode where rnf x = x `seq` ()
 -- | How the output of a rule has changed.
 data RunChanged
     = ChangedNothing -- ^ Nothing has changed.
-    | ChangedStore -- ^ The stored value has changed, but in a way that should be considered identical (used rarely).
     | ChangedRecomputeSame -- ^ I recomputed the value and it was the same.
     | ChangedRecomputeDiff -- ^ I recomputed the value and it was different.
       deriving (Eq,Show,Generic)
