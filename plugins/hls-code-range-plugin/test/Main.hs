@@ -43,7 +43,7 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
         let res = resp ^. result
         pure $ fmap (showSelectionRangesForTest . absorbNull) res
     case res of
-        Left (ResponseError (InL LSPErrorCodes_RequestFailed) _ _) -> pure ""
+        Left (TResponseError (InL LSPErrorCodes_RequestFailed) _ _) -> pure ""
         Left err     -> assertFailure (show err)
         Right golden -> pure golden
   where
