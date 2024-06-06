@@ -77,7 +77,7 @@ formatLspConfig :: Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
 
 progressCaps :: ClientCapabilities
-progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}
+progressCaps = fullLatestClientCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}
 
 data ProgressMessage
   = ProgressCreate WorkDoneProgressCreateParams
@@ -165,8 +165,8 @@ updateExpectProgressStateAndRecurseWith f progressMessage expectedTitles created
 expectedIn :: (Foldable t, Eq a, Show a) => a -> t a -> Assertion
 expectedIn a as = a `elem` as @? "Unexpected " ++ show a
 
-getMessageResult :: TResponseMessage m -> MessageResult m
+getMessageResult :: Show (ErrorData m) => TResponseMessage m -> MessageResult m
 getMessageResult rsp =
   case rsp ^. L.result of
-    Right x -> x
-    Left err -> throw $ UnexpectedResponseError (SomeLspId $ fromJust $ rsp ^. L.id) err
+    Right x  -> x
+    Left err -> throw $ UnexpectedResponseError (fromJust $ rsp ^. L.id) err

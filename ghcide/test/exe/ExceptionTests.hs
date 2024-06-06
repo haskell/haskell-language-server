@@ -56,7 +56,7 @@ tests = do
               doc <- createDoc "A.hs" "haskell" "module A where"
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
               case lens of
-                Left (ResponseError {_code = InR ErrorCodes_InternalError, _message}) ->
+                Left (TResponseError {_code = InR ErrorCodes_InternalError, _message}) ->
                     liftIO $ assertBool "We caught an error, but it wasn't ours!"
                           (T.isInfixOf "divide by zero" _message && T.isInfixOf (coerce pluginId) _message)
                 _ -> liftIO $ assertFailure $ show lens
@@ -80,7 +80,7 @@ tests = do
                   execParams = ExecuteCommandParams Nothing (cmd ^. L.command) (cmd ^. L.arguments)
               (view L.result -> res) <- request SMethod_WorkspaceExecuteCommand execParams
               case res of
-                Left (ResponseError {_code = InR ErrorCodes_InternalError, _message}) ->
+                Left (TResponseError {_code = InR ErrorCodes_InternalError, _message}) ->
                   liftIO $ assertBool "We caught an error, but it wasn't ours!"
                           (T.isInfixOf "divide by zero" _message && T.isInfixOf (coerce pluginId) _message)
                 _ -> liftIO $ assertFailure $ show res

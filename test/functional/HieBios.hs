@@ -11,7 +11,7 @@ import           Test.Hls.Command
 tests :: TestTree
 tests = testGroup "hie-bios"
   [ testCase "loads main-is module" $ do
-    runSession hlsLspCommand fullCaps "test/testdata/hieBiosMainIs" $ do
+    runSession hlsLspCommand fullLatestClientCaps "test/testdata/hieBiosMainIs" $ do
       _ <- openDoc "Main.hs" "haskell"
       (diag:_) <- waitForDiagnostics
       liftIO $ "Top-level binding with no type signature:" `T.isInfixOf` (diag ^. L.message)

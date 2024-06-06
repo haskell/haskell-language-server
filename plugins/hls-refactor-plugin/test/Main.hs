@@ -3759,7 +3759,7 @@ runInDir dir act =
         $ const act
 
 lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+lspTestCaps = fullLatestClientCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
