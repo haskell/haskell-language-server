@@ -46,9 +46,12 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
-import           Language.LSP.Protocol.Types       (isSubrangeOf)
+import           Language.LSP.Protocol.Types       (CodeDescription (..),
+                                                    isSubrangeOf,
+                                                    type (|?) (..))
 import           Language.LSP.VFS                  (CodePointPosition (CodePointPosition),
                                                     CodePointRange (CodePointRange))
+import           Text.Regex.TDFA                   ((=~))
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -58,12 +61,25 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFileP
     , _severity = Just sev
     , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
     , _message  = msg
+    --, _code     = fmap InR mcode
     , _code     = Nothing
     , _relatedInformation = Nothing
     , _tags     = Nothing
+    --, _codeDescription = mcodeDescription
     , _codeDescription = Nothing
     , _data_   = Nothing
     }
+  where
+   _before, _match, _after :: T.Text
+   matches :: [T.Text]
+   (_before, _match, _after, matches) = msg =~ ("\\[GHC-([0-9]+)\\]" :: T.Text)
+   mcode = case matches of
+     [c] -> Just c
+     _   -> Nothing
+   mcodeDescription = case mcode of
+     Just code -> Just $ CodeDescription $ Uri $ "https://errors.haskell.org/messages/GHC-" <> code
+     Nothing -> Nothing
+
 
 -- | Produce a GHC-style error from a source span and a message.
 diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope DecoratedSDoc -> [FileDiagnostic]

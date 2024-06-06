@@ -21,7 +21,8 @@ import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
 import           Development.IDE.Types.Location
 import           Language.LSP.Diagnostics
-import           Language.LSP.Protocol.Types    as LSP (Diagnostic (..),
+import           Language.LSP.Protocol.Types    as LSP (CodeDescription (..),
+                                                        Diagnostic (..),
                                                         DiagnosticSeverity (..))
 import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
@@ -107,13 +108,19 @@ prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
 prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
-    vcat
+    vcat $
         [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fp)
         , slabel_ "Hidden:  " $ if sh == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
-        , slabel_ "Message: "
+        ]
+        ++
+        (case _code of { Just c -> [ slabel_ "Code:" $ pretty $ show c ]; Nothing -> []; })
+        ++
+        (case _codeDescription of { Just (CodeDescription uri) -> [ slabel_ "Code link:" $ pretty $ show uri ]; Nothing -> []; })
+        ++
+        [ slabel_ "Message: "
             $ case sev of
               LSP.DiagnosticSeverity_Error       -> annotate $ color Red
               LSP.DiagnosticSeverity_Warning     -> annotate $ color Yellow

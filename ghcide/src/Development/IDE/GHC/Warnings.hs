@@ -33,7 +33,7 @@ withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> LogActionCompat
       newAction dynFlags logFlags wr _ loc prUnqual msg = do
-        let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags wr logFlags loc prUnqual msg
+        let wr_d = map ((wr,)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags wr logFlags loc prUnqual msg
         modifyVar_ warnings $ return . (wr_d:)
       newLogger env = pushLogHook (const (logActionCompat (newAction (hsc_dflags env)))) (hsc_logger env)
   res <- action $ \env -> putLogHook (newLogger env) env
@@ -42,24 +42,6 @@ withWarnings diagSource action = do
   where
     third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
     third3 f (a, b, c) = (a, b, f c)
-
-#if MIN_VERSION_ghc(9,3,0)
-attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
-attachReason Nothing d = d
-attachReason (Just wr) d = d{_code = InR <$> showReason wr}
- where
-  showReason = \case
-    WarningWithFlag flag -> showFlag flag
-    _                    -> Nothing
-#else
-attachReason :: WarnReason -> Diagnostic -> Diagnostic
-attachReason wr d = d{_code = InR <$> showReason wr}
- where
-  showReason = \case
-    NoReason       -> Nothing
-    Reason flag    -> showFlag flag
-    ErrReason flag -> showFlag =<< flag
-#endif
 
 showFlag :: WarningFlag -> Maybe T.Text
 showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags
