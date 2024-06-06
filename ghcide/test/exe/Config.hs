@@ -153,7 +153,7 @@ defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_t
 defToLocation (InR (InR Null)) = []
 
 lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+lspTestCaps = fullLatestClientCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 lspTestCapsNoFileWatches :: ClientCapabilities
 lspTestCapsNoFileWatches = lspTestCaps & L.workspace . traverse . L.didChangeWatchedFiles .~ Nothing

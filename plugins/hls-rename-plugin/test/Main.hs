@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE OverloadedStrings        #-}
 
@@ -69,7 +70,7 @@ tests = testGroup "Rename"
     , goldenWithRename "Type variable" "TypeVariable" $ \doc ->
         rename doc (Position 0 13) "b"
     , goldenWithRename "Rename within comment" "Comment" $ \doc -> do
-        let expectedError = ResponseError
+        let expectedError = TResponseError
                 (InR ErrorCodes_InvalidParams)
                 "rename: Invalid Params: No symbol to rename at given position"
                 Nothing
@@ -119,7 +120,7 @@ goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
        renamePlugin title testDataDir path "expected" "hs" act
 
-renameExpectError :: ResponseError -> TextDocumentIdentifier -> Position -> Text -> Session ()
+renameExpectError :: (TResponseError Method_TextDocumentRename) -> TextDocumentIdentifier -> Position -> Text -> Session ()
 renameExpectError expectedError doc pos newName = do
   let params = RenameParams Nothing doc pos newName
   rsp <- request SMethod_TextDocumentRename params
@@ -135,7 +136,7 @@ expectRenameError ::
   TextDocumentIdentifier ->
   Position ->
   String ->
-  Session ResponseError
+  Session (TResponseError Method_TextDocumentRename)
 expectRenameError doc pos newName = do
   let params = RenameParams Nothing doc pos (pack newName)
   rsp <- request SMethod_TextDocumentRename params
