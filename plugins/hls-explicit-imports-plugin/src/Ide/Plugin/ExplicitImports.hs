@@ -63,7 +63,7 @@ importCommandId = "ImportLensCommand"
 
 data Log
   = LogShake Shake.Log
-  | LogWAEResponseError ResponseError
+  | LogWAEResponseError (TResponseError Method_WorkspaceApplyEdit)
   | forall a. (Pretty a) => LogResolve a
 
 
@@ -109,7 +109,7 @@ runImportCommand recorder ideState _ eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
-  where logErrors (Left re@(ResponseError{})) = do
+  where logErrors (Left re) = do
           logWith recorder Error (LogWAEResponseError re)
           pure ()
         logErrors (Right _) = pure ()

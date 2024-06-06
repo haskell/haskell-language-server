@@ -537,7 +537,7 @@ instance Default (TestConfig b) where
     testPluginDescriptor = mempty,
     testLspConfig = def,
     testConfigSession = def,
-    testConfigCaps = fullCaps,
+    testConfigCaps = fullLatestClientCaps,
     testCheckProject = False
   }
 
@@ -834,7 +834,7 @@ waitForBuildQueue = do
         -- assume a ghcide binary lacking the WaitForShakeQueue method
         _                                    -> return 0
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 callTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
@@ -842,17 +842,17 @@ callTestPlugin cmd = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err -> Left $ ResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
+        A.Error err -> Left $ TResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
         A.Success a -> pure a
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) WaitForIdeRuleResult)
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
+waitForTypecheck :: TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Bool)
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 
-getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
 hlsConfigToClientConfig :: Config -> A.Object

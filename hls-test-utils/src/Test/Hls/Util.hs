@@ -99,12 +99,12 @@ codeActionSupportCaps = def & L.textDocument ?~ textDocumentCaps
     literalSupport = ClientCodeActionLiteralOptions (ClientCodeActionKindOptions [])
 
 codeActionResolveCaps :: ClientCapabilities
-codeActionResolveCaps = Test.fullCaps
+codeActionResolveCaps = Test.fullLatestClientCaps
                           & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ ClientCodeActionResolveOptions {_properties= ["edit"]}
                           & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 codeActionNoResolveCaps :: ClientCapabilities
-codeActionNoResolveCaps = Test.fullCaps
+codeActionNoResolveCaps = Test.fullLatestClientCaps
                           & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport) .~ Nothing
                           & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ False
 -- ---------------------------------------------------------------------

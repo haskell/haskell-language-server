@@ -96,7 +96,7 @@ runLanguageServer
     -> (config -> Value -> Either T.Text config)
     -> (config -> m config ())
     -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
+        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
@@ -223,22 +223,24 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
         exceptionInHandler e = do
             logWith recorder Error $ LogReactorMessageActionException e
 
+        checkCancelled :: forall m . LspId m -> IO () -> (TResponseError m -> IO ()) -> IO ()
         checkCancelled _id act k =
-            flip finally (clearReqId _id) $
+            let sid = SomeLspId _id
+            in flip finally (clearReqId sid) $
                 catch (do
                     -- We could optimize this by first checking if the id
                     -- is in the cancelled set. However, this is unlikely to be a
                     -- bottleneck and the additional check might hide
                     -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (waitForCancel _id) act
+                    cancelOrRes <- race (waitForCancel sid) act
                     case cancelOrRes of
                         Left () -> do
-                            logWith recorder Debug $ LogCancelledRequest _id
-                            k $ ResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
+                            logWith recorder Debug $ LogCancelledRequest sid
+                            k $ TResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
-                    k $ ResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
+                    k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
         untilMVar lifetime $ runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
             putMVar dbMVar (WithHieDbShield withHieDb',threadQueue')

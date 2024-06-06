@@ -22,7 +22,7 @@ import           UnliftIO.Chan
 
 data ReactorMessage
   = ReactorNotification (IO ())
-  | ReactorRequest SomeLspId (IO ()) (ResponseError -> IO ())
+  | forall m . ReactorRequest (LspId m) (IO ()) (TResponseError m -> IO ())
 
 type ReactorChan = Chan ReactorMessage
 newtype ServerM c a = ServerM { unServerM :: ReaderT (ReactorChan, IdeState) (LspM c) a }
@@ -31,17 +31,17 @@ newtype ServerM c a = ServerM { unServerM :: ReaderT (ReactorChan, IdeState) (Ls
 requestHandler
   :: forall m c. PluginMethod Request m =>
      SMethod m
-  -> (IdeState -> MessageParams m -> LspM c (Either ResponseError (MessageResult m)))
+  -> (IdeState -> MessageParams m -> LspM c (Either (TResponseError m) (MessageResult m)))
   -> Handlers (ServerM c)
 requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params} resp -> do
   st@(chan,ide) <- ask
   env <- LSP.getLspEnv
-  let resp' :: Either ResponseError (MessageResult m) -> LspM c ()
+  let resp' :: Either (TResponseError m) (MessageResult m) -> LspM c ()
       resp' = flip (runReaderT . unServerM) st . resp
       trace x = otTracedHandler "Request" (show _method) $ \sp -> do
         traceWithSpan sp _params
         x
-  writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
+  writeChan chan $ ReactorRequest (_id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
 notificationHandler
   :: forall m c. PluginMethod Notification m =>
