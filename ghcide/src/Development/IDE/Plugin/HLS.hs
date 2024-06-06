@@ -54,7 +54,7 @@ import           UnliftIO.Exception            (catchAny)
 
 data Log
     =  LogPluginError PluginId PluginError
-    | LogResponseError PluginId ResponseError
+    | forall m . A.ToJSON (ErrorData m) => LogResponseError PluginId (TResponseError m)
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
     | ExceptionInPlugin PluginId (Some SMethod) SomeException
@@ -73,10 +73,10 @@ instance Pretty Log where
           <> pretty method <> ": " <> viaShow exception
 instance Show Log where show = renderString . layoutCompact . pretty
 
-noPluginHandles :: Recorder (WithPriority Log) -> SMethod m -> [(PluginId, HandleRequestResult)] -> IO (Either ResponseError c)
+noPluginHandles :: Recorder (WithPriority Log) -> SMethod m -> [(PluginId, HandleRequestResult)] -> IO (Either (TResponseError m) c)
 noPluginHandles recorder m fs' = do
   logWith recorder Warning (LogNoPluginForMethod $ Some m)
-  let err = ResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
+  let err = TResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
       msg = noPluginHandlesMsg m fs'
   return $ Left err
   where noPluginHandlesMsg :: SMethod m -> [(PluginId, HandleRequestResult)] -> Text
@@ -112,9 +112,9 @@ exceptionInPlugin plId method exception =
     "Exception in plugin " <> T.pack (show plId) <> " while processing "<> T.pack (show method) <> ": " <> T.pack (show exception)
 
 -- | Build a ResponseError and log it before returning to the caller
-logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |? ErrorCodes) -> Text -> LSP.LspT Config IO (Either ResponseError a)
+logAndReturnError :: A.ToJSON (ErrorData m) => Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |? ErrorCodes) -> Text -> LSP.LspT Config IO (Either (TResponseError m) a)
 logAndReturnError recorder p errCode msg = do
-    let err = ResponseError errCode msg Nothing
+    let err = TResponseError errCode msg Nothing
     logWith recorder Warning $ LogResponseError p err
     pure $ Left err
 
@@ -176,7 +176,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
       _                    -> Nothing
 
     -- The parameters to the HLS command are always the first element
-    execCmd :: IdeState -> ExecuteCommandParams -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
+    execCmd :: IdeState -> ExecuteCommandParams -> LSP.LspT Config IO (Either (TResponseError Method_WorkspaceExecuteCommand) (A.Value |? Null))
     execCmd ide (ExecuteCommandParams mtoken cmdId args) = do
       let cmdParams :: A.Value
           cmdParams = case args of
@@ -196,8 +196,10 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
                 -- If we have a command, continue to execute it
                 Just (Command _ innerCmdId innerArgs)
                     -> execCmd ide (ExecuteCommandParams Nothing innerCmdId innerArgs)
+                -- TODO: This should be a response error?
                 Nothing -> return $ Right $ InR Null
 
+            -- TODO: This should be a response error?
             A.Error _str -> return $ Right $ InR Null
 
         -- Just an ordinary HIE command
@@ -206,9 +208,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
         -- Couldn't parse the command identifier
         _ -> do
             logWith recorder Warning LogInvalidCommandIdentifier
-            return $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Invalid command identifier" Nothing
+            return $ Left $ TResponseError (InR ErrorCodes_InvalidParams) "Invalid command identifier" Nothing
 
-    runPluginCommand :: IdeState -> PluginId -> CommandId -> Maybe ProgressToken -> A.Value -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
+    runPluginCommand :: IdeState -> PluginId -> CommandId -> Maybe ProgressToken -> A.Value -> LSP.LspT Config IO (Either (TResponseError Method_WorkspaceExecuteCommand) (A.Value |? Null))
     runPluginCommand ide p com mtoken arg =
       case Map.lookup p pluginMap  of
         Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (pluginDoesntExist p)
@@ -314,13 +316,13 @@ runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedPro
   f a b  -- See Note [Exception handling in plugins]
      `catchAny` (\e -> pure $ pure $ Left $ PluginInternalError (msg pid method e))
 
-combineErrors :: NonEmpty (PluginId, PluginError) -> ResponseError
+combineErrors :: NonEmpty (PluginId, PluginError) -> TResponseError m
 combineErrors (x NE.:| []) = toResponseError x
 combineErrors xs = toResponseError $ NE.last $ NE.sortWith (toPriority . snd) xs
 
-toResponseError :: (PluginId, PluginError) -> ResponseError
+toResponseError :: (PluginId, PluginError) -> TResponseError m
 toResponseError (PluginId plId, err) =
-        ResponseError (toErrorCode err) (plId <> ": " <> tPretty err) Nothing
+        TResponseError (toErrorCode err) (plId <> ": " <> tPretty err) Nothing
     where tPretty = T.pack . show . pretty
 
 logErrors :: Recorder (WithPriority Log) -> [(PluginId, PluginError)] -> IO ()

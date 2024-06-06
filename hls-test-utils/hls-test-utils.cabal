@@ -48,7 +48,7 @@ library
     , lens
     , lsp
     , lsp-test                ^>=0.17
-    , lsp-types               ^>=2.2
+    , lsp-types               ^>=2.3
     , neat-interpolation
     , safe-exceptions
     , tasty

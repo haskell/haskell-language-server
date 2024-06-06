@@ -33,7 +33,6 @@ import           Control.Lens.Setter         ((.~))
 import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
 import qualified Data.Text                   as T
-import           Development.IDE             (Pretty)
 import           Development.IDE.Test        (canonicalizeUri)
 import           Ide.Types                   (defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens  as L
@@ -90,19 +89,11 @@ testWithExtraFiles testName dirName action = testCase testName $ runWithExtraFil
 runInDir :: FilePath -> Session a -> IO a
 runInDir fs = runSessionWithServer def dummyPlugin fs
 
-testSession' :: TestName -> (FilePath -> Session ()) -> TestTree
-testSession' name = testCase name . run'
-
 run :: Session a -> IO a
 run = runSessionWithTestConfig def
     { testDirLocation = Right (mkIdeTestFs [])
     , testPluginDescriptor = dummyPlugin }
     . const
-
-run' :: (FilePath -> Session a) -> IO a
-run' = runSessionWithTestConfig def
-    { testDirLocation = Right (mkIdeTestFs [])
-    , testPluginDescriptor = dummyPlugin }
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
@@ -162,7 +153,7 @@ defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_t
 defToLocation (InR (InR Null)) = []
 
 lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+lspTestCaps = fullLatestClientCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 lspTestCapsNoFileWatches :: ClientCapabilities
 lspTestCapsNoFileWatches = lspTestCaps & L.workspace . traverse . L.didChangeWatchedFiles .~ Nothing

@@ -187,7 +187,7 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (TNotificationMessage Method_TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message SMethod_TextDocumentPublishDiagnostics
 
-tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 tryCallTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
@@ -202,8 +202,8 @@ callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     res <- tryCallTestPlugin cmd
     case res of
-        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
-        Right a                      -> pure a
+        Left (TResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                       -> pure a
 
 
 waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
