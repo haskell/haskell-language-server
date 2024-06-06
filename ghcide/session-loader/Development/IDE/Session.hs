@@ -811,20 +811,19 @@ fromTargetId :: [FilePath]          -- ^ import paths
              -> TargetId
              -> IdeResult HscEnvEq
              -> DependencyInfo
-             -> FilePath -- ^ root dir, see Note [Root Directory]
              -> IO [TargetDetails]
 -- For a target module we consider all the import paths
-fromTargetId is exts (GHC.TargetModule modName) env dep dir = do
+fromTargetId is exts (GHC.TargetModule modName) env dep = do
     let fps = [i </> moduleNameSlashes modName -<.> ext <> boot
               | ext <- exts
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    let locs = fmap (toNormalizedFilePath' . toAbsolute dir) fps
+    let locs = fmap toNormalizedFilePath' fps
     return [TargetDetails (TargetModule modName) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
-fromTargetId _ _ (GHC.TargetFile f _) env deps dir = do
-    let nf = toNormalizedFilePath' $ toAbsolute dir f
+fromTargetId _ _ (GHC.TargetFile f _) env deps = do
+    let nf = toNormalizedFilePath' f
     let other
           | "-boot" `isSuffixOf` f = toNormalizedFilePath' (L.dropEnd 5 $ fromNormalizedFilePath nf)
           | otherwise = toNormalizedFilePath' (fromNormalizedFilePath nf ++ "-boot")
@@ -985,7 +984,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
       logWith recorder Debug $ LogNewComponentCache (targetEnv, targetDepends)
       evaluate $ liftRnf rwhnf $ componentTargets ci
 
-      let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends dir
+      let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
       ctargets <- concatMapM mk (componentTargets ci)
 
       return (L.nubOrdOn targetTarget ctargets)
