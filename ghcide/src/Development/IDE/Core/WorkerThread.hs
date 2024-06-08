@@ -20,8 +20,6 @@ Originally we used various ways to implement this, but it was hard to maintain a
 Moreover, we can not stop these threads uniformly when we are shutting down the server.
 
 `Development.IDE.Core.WorkerThread` module provides a simple api to implement this easily.
-* `withWorkerQueue`: accepts an action to run in separate thread and returns a `TQueue` to send the actions to run.
-* `awaitRunInThread` : accepts a `TQueue` and an action to run in separate thread and waits for the result.
 -}
 
 -- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
