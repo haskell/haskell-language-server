@@ -1,5 +1,5 @@
 module Development.IDE.Core.WorkerThread
-    (withWorkerQueue, blockRunInThread)
+    (withWorkerQueue, awaitRunInThread)
  where
 
 import           Control.Concurrent.Async
@@ -20,7 +20,7 @@ import           Control.Monad.Cont        (ContT (ContT))
 --
 -- `Development.IDE.Core.WorkerThread` module provides a simple api to implement this easily.
 -- * `withWorkerQueue`: accepts an action to run in separate thread and returns a `TQueue` to send the actions to run.
--- * `blockRunInThread` : accepts a `TQueue` and an action to run in separate thread and waits for the result.
+-- * `awaitRunInThread` : accepts a `TQueue` and an action to run in separate thread and waits for the result.
 
 
 -- | withWorkerQueue creates a new TQueue and runs the workerAction in a separate thread.
@@ -34,9 +34,9 @@ withWorkerQueue workerAction = ContT $ \mainAction -> do
                 l <- atomically $ readTQueue q
                 workerAction l
 
--- | blockRunInThread run and wait for the result
-blockRunInThread :: TQueue (IO ()) -> IO result -> IO result
-blockRunInThread q act = do
+-- | awaitRunInThread run and wait for the result
+awaitRunInThread :: TQueue (IO ()) -> IO result -> IO result
+awaitRunInThread q act = do
     -- Take an action from TQueue, run it and
     -- use barrier to wait for the result
     barrier <- newBarrier

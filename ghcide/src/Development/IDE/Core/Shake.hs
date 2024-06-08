@@ -806,7 +806,7 @@ delayedAction a = do
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
-    void $ blockRunInThread (restartQueue shakeExtras) $ do
+    void $ awaitRunInThread (restartQueue shakeExtras) $ do
         withMVar'
             shakeSession
             (\runner -> do
