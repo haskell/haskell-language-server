@@ -262,12 +262,12 @@ data HieDbWriter
 -- | Actions to queue up on the index worker thread
 -- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
 -- with (currently) retry functionality
-type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
+type IndexQueue = WorkerQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
 data ThreadQueue = ThreadQueue {
     tIndexQueue     :: IndexQueue
-    , tRestartQueue :: TQueue (IO ())
-    , tLoaderQueue  :: TQueue (IO ())
+    , tRestartQueue :: WorkerQueue (IO ())
+    , tLoaderQueue  :: WorkerQueue (IO ())
 }
 
 -- Note [Semantic Tokens Cache Location]
@@ -342,9 +342,9 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
-    , restartQueue :: TQueue (IO ())
+    , restartQueue :: WorkerQueue (IO ())
       -- ^ Queue of restart actions to be run.
-    , loaderQueue :: TQueue (IO ())
+    , loaderQueue :: WorkerQueue (IO ())
       -- ^ Queue of loader actions to be run.
     }
 

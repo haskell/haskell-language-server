@@ -94,7 +94,6 @@ import           Data.Void
 
 import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
                                                        readTVar, writeTVar)
-import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
 import           Control.Exception                    (evaluate)
 import           Control.Monad.IO.Unlift              (MonadUnliftIO)
@@ -105,7 +104,8 @@ import           Data.HashSet                         (HashSet)
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
-import           Development.IDE.Core.WorkerThread    (awaitRunInThread,
+import           Development.IDE.Core.WorkerThread    (WorkerQueue,
+                                                       awaitRunInThread,
                                                        withWorkerQueue)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
 import           Development.IDE.Types.Shake          (WithHieDb,
@@ -438,7 +438,7 @@ getHieDbLoc dir = do
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> WorkerQueue (IO ()) -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef []

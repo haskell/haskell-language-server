@@ -39,7 +39,8 @@ import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
-import           Development.IDE.Core.WorkerThread     (withWorkerQueue)
+import           Development.IDE.Core.WorkerThread     (withWorkerQueue,
+                                                        withWorkerQueueOfOne)
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb,
                                                         WithHieDbShield (..))
@@ -261,7 +262,7 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
 runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
 runWithWorkerThreads recorder dbLoc f = evalContT $ do
             sessionRestartTQueue <- withWorkerQueue id
-            sessionLoaderTQueue <- withWorkerQueue id
+            sessionLoaderTQueue <- withWorkerQueueOfOne id
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 

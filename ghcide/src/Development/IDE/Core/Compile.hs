@@ -129,6 +129,7 @@ import           GHC.Driver.Config.CoreToStg.Prep
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                     (toList)
 import           GHC.Unit.Module.Warnings
+import Development.IDE.Core.WorkerThread (writeWorkerQueue)
 #else
 import           Development.IDE.Core.FileStore    (shareFilePath)
 #endif
@@ -899,7 +900,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
       modifyTVar' indexPending $ HashMap.insert srcPath hash
-      writeTQueue indexQueue $ \withHieDb -> do
+      writeWorkerQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
