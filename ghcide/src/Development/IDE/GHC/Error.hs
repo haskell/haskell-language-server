@@ -52,17 +52,22 @@ import           Language.LSP.VFS                  (CodePointPosition (CodePoint
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc,ShowDiag,)
-    Diagnostic
-    { _range    = fromMaybe noRange $ srcSpanToRange loc
-    , _severity = Just sev
-    , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
-    , _message  = msg
-    , _code     = Nothing
-    , _relatedInformation = Nothing
-    , _tags     = Nothing
-    , _codeDescription = Nothing
-    , _data_   = Nothing
+diagFromText diagSource sev loc msg =
+  FileDiagnostic
+    { fdFilePath = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc
+    , fdShouldShowDiagnostic = ShowDiag
+    , fdLspDiagnostic =
+        Diagnostic
+        { _range    = fromMaybe noRange $ srcSpanToRange loc
+        , _severity = Just sev
+        , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
+        , _message  = msg
+        , _code     = Nothing
+        , _relatedInformation = Nothing
+        , _tags     = Nothing
+        , _codeDescription = Nothing
+        , _data_   = Nothing
+        }
     }
 
 -- | Produce a GHC-style error from a source span and a message.

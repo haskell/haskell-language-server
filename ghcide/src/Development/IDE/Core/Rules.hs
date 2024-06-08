@@ -486,7 +486,7 @@ reportImportCyclesRule recorder =
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
-          toDiag imp mods = (fp , ShowDiag , ) $ Diagnostic
+          toDiag imp mods = FileDiagnostic fp ShowDiag $ Diagnostic
             { _range = rng
             , _severity = Just DiagnosticSeverity_Error
             , _source = Just "Import cycle detection"
