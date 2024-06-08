@@ -11,8 +11,6 @@ module Development.IDE.LSP.LanguageServer
     , setupLSP
     , Log(..)
     , ThreadQueue
-    , sessionRestartThread
-    , sessionLoaderThread
     , runWithWorkerThreads
     ) where
 
@@ -25,7 +23,7 @@ import           Data.Maybe
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
 import           Development.IDE.LSP.Server
-import           Development.IDE.Session               (dbThread)
+import           Development.IDE.Session               (runWithDb)
 import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -41,9 +39,8 @@ import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
-import           Development.IDE.Core.Thread           (ThreadRun (..),
-                                                        runWithThread)
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Core.WorkerThread     (withWorkerQueue)
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb,
                                                         WithHieDbShield (..))
@@ -259,22 +256,16 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
     pure $ Right (env,ide)
 
 
+
 -- | runWithWorkerThreads
 -- create several threads to run the session, db and session loader
 -- see Note [Serializing runs in separate thread]
 runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
 runWithWorkerThreads recorder dbLoc f = evalContT $ do
-            (_, sessionRestartTQueue) <- runWithThread sessionRestartThread ()
-            (_, sessionLoaderTQueue) <- runWithThread sessionLoaderThread ()
-            (WithHieDbShield hiedb, threadQueue) <- runWithThread dbThread (recorder, dbLoc)
+            sessionRestartTQueue <- withWorkerQueue id
+            sessionLoaderTQueue <- withWorkerQueue id
+            (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
-
-
-sessionRestartThread :: ThreadRun () () () (IO ())
-sessionRestartThread = ThreadRun { tWorker = \_ _ run -> run, tRunWithResource = \_ f -> do f () () }
-
-sessionLoaderThread :: ThreadRun () () () (IO ())
-sessionLoaderThread = ThreadRun { tWorker = \_ _ run -> run, tRunWithResource = \_ f -> do f () () }
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   Rethrows any exceptions.
