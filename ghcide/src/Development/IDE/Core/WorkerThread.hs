@@ -1,8 +1,16 @@
+{-
+Module : Development.IDE.Core.WorkerThread
+Author : @soulomoon
+SPDX-License-Identifier: Apache-2.0
+
+Description : This module provides an API for managing worker threads in the IDE.
+see Note [Serializing runs in separate thread]
+-}
 module Development.IDE.Core.WorkerThread
     (withWorkerQueue, awaitRunInThread)
  where
 
-import           Control.Concurrent.Async
+import           Control.Concurrent.Async  (withAsync)
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
@@ -18,8 +26,6 @@ Like the db writes, session loading in session loader, shake session restarts.
 
 Originally we used various ways to implement this, but it was hard to maintain and error prone.
 Moreover, we can not stop these threads uniformly when we are shutting down the server.
-
-`Development.IDE.Core.WorkerThread` module provides a simple api to implement this easily.
 -}
 
 -- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
