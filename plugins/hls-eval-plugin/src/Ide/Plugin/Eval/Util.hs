@@ -38,6 +38,7 @@ import           GHC.Stack                             (HasCallStack, callStack,
                                                         srcLocStartCol,
                                                         srcLocStartLine)
 import           Ide.Plugin.Error
+import           Ide.Types                             (PluginM, pluginSendRequest)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
@@ -55,13 +56,13 @@ timed out name op = do
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT PluginError (LspM c) WorkspaceEdit -> ExceptT PluginError (LspM c) (Value |? Null)
+response' :: ExceptT PluginError (PluginM c) WorkspaceEdit -> ExceptT PluginError (PluginM c) (Value |? Null)
 response' act = do
     res <-  ExceptT (runExceptT act
              `catchAny` \e -> do
                 res <- showErr e
                 pure . Left  . PluginInternalError $ fromString res)
-    _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
+    _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
     pure $ InR Null
 
 gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)

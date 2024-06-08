@@ -43,7 +43,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server                         (getVirtualFile)
 import qualified Language.LSP.VFS                            as VFS
 
 data Log
@@ -311,7 +310,7 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let (TextDocumentIdentifier uri) = complParams ^. JL.textDocument
       position = complParams ^. JL.position
-  mVf <- lift $ getVirtualFile $ toNormalizedUri uri
+  mVf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
   case (,) <$> mVf <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ide) $ useWithStaleFast ParseCabalFields $ toNormalizedFilePath path

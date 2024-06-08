@@ -219,7 +219,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a -> do
-              res <- runExceptT (f ide mtoken a) `catchAny` -- See Note [Exception handling in plugins]
+              res <- runPluginM (runExceptT (f ide mtoken a)) `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> pure $ Left $ PluginInternalError (exceptionInPlugin p SMethod_WorkspaceExecuteCommand e))
               case res of
                 (Left (PluginRequestRefused r)) ->
@@ -254,7 +254,7 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
           Nothing -> liftIO $ noPluginHandles recorder m disabledPluginsReason
           Just neFs -> do
             let  plidsAndHandlers = fmap (\(plid,_,handler) -> (plid,handler)) neFs
-            es <- runConcurrently exceptionInPlugin m plidsAndHandlers ide params
+            es <- runPluginM $ runConcurrently exceptionInPlugin m plidsAndHandlers ide params
             caps <- LSP.getClientCapabilities
             let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) plidsAndHandlers es
             liftIO $ unless (null errs) $ logErrors recorder errs
@@ -335,7 +335,7 @@ logErrors recorder errs = do
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: Method ClientToServer Request)
-  = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either PluginError (MessageResult m))))]
+  = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> PluginM Config (NonEmpty (Either PluginError (MessageResult m))))]
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: Method ClientToServer Notification)

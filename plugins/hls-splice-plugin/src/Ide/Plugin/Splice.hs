@@ -63,7 +63,6 @@ import qualified GHC.Types.Error as Error
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
-import           Language.LSP.Server
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Lens         as J
@@ -95,10 +94,10 @@ expandTHSplice ::
     ExpandStyle ->
     CommandFunction IdeState ExpandSpliceParams
 expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
-    clientCapabilities <- getClientCapabilities
+    clientCapabilities <- pluginGetClientCapabilities
     rio <- askRunInIO
     let reportEditor :: ReportEditor
-        reportEditor msgTy msgs = liftIO $ rio $ sendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
+        reportEditor msgTy msgs = liftIO $ rio $ pluginSendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
         expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
         expandManually fp = do
             mresl <-
@@ -195,7 +194,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
       Nothing -> pure $ Right $ InR Null
       Just (Left err) -> pure $ Left $ err
       Just (Right edit) -> do
-        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        _ <- pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
         pure $ Right $ InR Null
 
     where
@@ -471,7 +470,7 @@ fromSearchResult _        = Nothing
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction state plId (CodeActionParams _ _ docId ran _) = do
-    verTxtDocId <- lift $ getVersionedTextDoc docId
+    verTxtDocId <- lift $ pluginGetVersionedTextDoc docId
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri

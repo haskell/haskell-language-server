@@ -47,7 +47,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural
 import           Prelude                                  hiding (mod)
 import           Text.Fuzzy.Parallel                      (Scored (..))
@@ -170,7 +169,7 @@ getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
                   ,_context=completionContext} = ExceptT $ do
-    contents <- LSP.getVirtualFile $ toNormalizedUri uri
+    contents <- pluginGetVirtualFile $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
