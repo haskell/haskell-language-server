@@ -12,13 +12,13 @@ import           Test.Hls.Command
 tests :: TestTree
 tests = testGroup "behaviour on malformed projects"
     [ testCase "Missing module diagnostic" $ do
-        runSession hlsLspCommand fullCaps "test/testdata/missingModuleTest/missingModule/" $ do
+        runSession hlsLspCommand fullLatestClientCaps "test/testdata/missingModuleTest/missingModule/" $ do
             doc <- openDoc "src/MyLib.hs" "haskell"
             [diag] <- waitForDiagnosticsFrom doc
             liftIO $ assertBool "missing module name" $ "MyLib" `T.isInfixOf` (diag ^. L.message)
             liftIO $ assertBool "module missing context" $ "may not be listed" `T.isInfixOf` (diag ^. L.message)
     , testCase "Missing module diagnostic - no matching prefix" $ do
-        runSession hlsLspCommand fullCaps "test/testdata/missingModuleTest/noPrefixMatch/" $ do
+        runSession hlsLspCommand fullLatestClientCaps "test/testdata/missingModuleTest/noPrefixMatch/" $ do
             doc <- openDoc "app/Other.hs" "haskell"
             [diag] <- waitForDiagnosticsFrom doc
             liftIO $ assertBool "missing module name" $

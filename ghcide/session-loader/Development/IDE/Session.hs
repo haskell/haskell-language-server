@@ -7,21 +7,19 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
-  ,loadSession
   ,loadSessionWithOptions
   ,setInitialDynFlags
   ,getHieDbLoc
-  ,runWithDb
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
+  ,runWithDb
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
 -- the real GHC library and the types are incompatible. Furthermore, when
 -- building with ghc-lib we need to make this Haskell agnostic, so no hie-bios!
 
-import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe               as Safe
 import           Control.Monad
@@ -100,14 +98,19 @@ import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
 import           Control.Exception                    (evaluate)
 import           Control.Monad.IO.Unlift              (MonadUnliftIO)
+import           Control.Monad.Trans.Cont             (ContT (ContT, runContT))
 import           Data.Foldable                        (for_)
 import           Data.HashMap.Strict                  (HashMap)
 import           Data.HashSet                         (HashSet)
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
+import           Development.IDE.Core.WorkerThread    (awaitRunInThread,
+                                                       withWorkerQueue)
 import           Development.IDE.Session.Diagnostics  (renderCradleError)
-import           Development.IDE.Types.Shake          (WithHieDb, toNoFileKey)
+import           Development.IDE.Types.Shake          (WithHieDb,
+                                                       WithHieDbShield (..),
+                                                       toNoFileKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -375,8 +378,10 @@ makeWithHieDbRetryable recorder rng hieDb f =
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: Recorder (WithPriority Log) -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
-runWithDb recorder fp k = do
+--
+-- Also see Note [Serializing runs in separate thread]
+runWithDb :: Recorder (WithPriority Log) -> FilePath -> ContT () IO (WithHieDbShield, IndexQueue)
+runWithDb recorder fp = ContT $ \k -> do
   -- use non-deterministic seed because maybe multiple HLS start at same time
   -- and send bursts of requests
   rng <- Random.newStdGen
@@ -394,18 +399,15 @@ runWithDb recorder fp k = do
         withWriteDbRetryable = makeWithHieDbRetryable recorder rng writedb
     withWriteDbRetryable initConn
 
-    chan <- newTQueueIO
 
-    withAsync (writerThread withWriteDbRetryable chan) $ \_ -> do
-      withHieDb fp (\readDb -> k (makeWithHieDbRetryable recorder rng readDb) chan)
+    -- Clear the index of any files that might have been deleted since the last run
+    _ <- withWriteDbRetryable deleteMissingRealFiles
+    _ <- withWriteDbRetryable garbageCollectTypeNames
+
+    runContT (withWorkerQueue (writer withWriteDbRetryable)) $ \chan ->
+        withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
   where
-    writerThread :: WithHieDb -> IndexQueue -> IO ()
-    writerThread withHieDbRetryable chan = do
-      -- Clear the index of any files that might have been deleted since the last run
-      _ <- withHieDbRetryable deleteMissingRealFiles
-      _ <- withHieDbRetryable garbageCollectTypeNames
-      forever $ do
-        l <- atomically $ readTQueue chan
+    writer withHieDbRetryable l = do
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
         l withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
@@ -435,11 +437,9 @@ getHieDbLoc dir = do
 -- This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
-loadSession recorder = loadSessionWithOptions recorder def
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
-loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef []
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
@@ -463,9 +463,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
       -- e.g. see https://github.com/haskell/ghcide/issues/126
       let res' = toAbsolutePath <$> res
       return $ normalise <$> res'
-
-  dummyAs <- async $ return (error "Uninitialised")
-  runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
     clientConfig <- getClientConfigAction
@@ -739,12 +736,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
-      opts <- join $ mask_ $ modifyVar runningCradle $ \as -> do
-        -- If the cradle is not finished, then wait for it to finish.
-        void $ wait as
-        asyncRes <- async $ getOptions file
-        return (asyncRes, wait asyncRes)
-      pure opts
+      -- see Note [Serializing runs in separate thread]
+      awaitRunInThread que $ getOptions file
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
@@ -811,20 +804,19 @@ fromTargetId :: [FilePath]          -- ^ import paths
              -> TargetId
              -> IdeResult HscEnvEq
              -> DependencyInfo
-             -> FilePath -- ^ root dir, see Note [Root Directory]
              -> IO [TargetDetails]
 -- For a target module we consider all the import paths
-fromTargetId is exts (GHC.TargetModule modName) env dep dir = do
+fromTargetId is exts (GHC.TargetModule modName) env dep = do
     let fps = [i </> moduleNameSlashes modName -<.> ext <> boot
               | ext <- exts
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    let locs = fmap (toNormalizedFilePath' . toAbsolute dir) fps
+    let locs = fmap toNormalizedFilePath' fps
     return [TargetDetails (TargetModule modName) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
-fromTargetId _ _ (GHC.TargetFile f _) env deps dir = do
-    let nf = toNormalizedFilePath' $ toAbsolute dir f
+fromTargetId _ _ (GHC.TargetFile f _) env deps = do
+    let nf = toNormalizedFilePath' f
     let other
           | "-boot" `isSuffixOf` f = toNormalizedFilePath' (L.dropEnd 5 $ fromNormalizedFilePath nf)
           | otherwise = toNormalizedFilePath' (fromNormalizedFilePath nf ++ "-boot")
@@ -985,7 +977,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
       logWith recorder Debug $ LogNewComponentCache (targetEnv, targetDepends)
       evaluate $ liftRnf rwhnf $ componentTargets ci
 
-      let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends dir
+      let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
       ctargets <- concatMapM mk (componentTargets ci)
 
       return (L.nubOrdOn targetTarget ctargets)

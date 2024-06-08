@@ -20,9 +20,9 @@ extra-deps:
 - hiedb-0.6.0.0
 - hie-bios-0.14.0
 - implicit-hie-0.1.4.0
-- lsp-2.6.0.0
-- lsp-test-0.17.0.2
-- lsp-types-2.2.0.0
+- lsp-2.7.0.0
+- lsp-test-0.17.1.0
+- lsp-types-2.3.0.0
 - monad-dijkstra-0.1.1.4
 
 # stan and friends
