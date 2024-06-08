@@ -74,6 +74,7 @@ import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing      (withTrace)
+import           Development.IDE.Core.WorkerThread (writeWorkerQueue)
 import           Development.IDE.GHC.Compat        hiding (loadInterface,
                                                     parseHeader, parseModule,
                                                     tcRnModule, writeHieFile)
@@ -108,7 +109,6 @@ import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
-import Development.IDE.Core.WorkerThread (writeWorkerQueue)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
