@@ -112,7 +112,7 @@ data CPPDiag
 
 diagsFromCPPLogs :: FilePath -> [CPPLog] -> [FileDiagnostic]
 diagsFromCPPLogs filename logs =
-  map (\d -> (toNormalizedFilePath' filename, ShowDiag, cppDiagToDiagnostic d)) $
+  map (\d -> FileDiagnostic (toNormalizedFilePath' filename) ShowDiag (cppDiagToDiagnostic d)) $
     go [] logs
   where
     -- On errors, CPP calls logAction with a real span for the initial log and

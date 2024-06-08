@@ -739,20 +739,20 @@ unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = (True, upgradeWarning
 unDefer ( _                                        , fd) = (False, fd)
 
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
-upgradeWarningToError (nfp, sh, fd) =
-  (nfp, sh, fd{_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message fd}) where
+upgradeWarningToError fd =
+  modifyFdLspDiagnostic (\diag -> diag {_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message diag}) fd where
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
 #if MIN_VERSION_ghc(9,3,0)
 hideDiag :: DynFlags -> (Maybe DiagnosticReason, FileDiagnostic) -> (Maybe DiagnosticReason, FileDiagnostic)
-hideDiag originalFlags (w@(Just (WarningWithFlag warning)), (nfp, _sh, fd))
+hideDiag originalFlags (w@(Just (WarningWithFlag warning)), fd)
 #else
 hideDiag :: DynFlags -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
-hideDiag originalFlags (w@(Reason warning), (nfp, _sh, fd))
+hideDiag originalFlags (w@(Reason warning), fd)
 #endif
   | not (wopt warning originalFlags)
-  = (w, (nfp, HideDiag, fd))
+  = (w, fd { fdShouldShowDiagnostic = HideDiag })
 hideDiag _originalFlags t = t
 
 -- | Warnings which lead to a diagnostic tag
@@ -780,20 +780,20 @@ tagDiag :: (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
 #endif
 
 #if MIN_VERSION_ghc(9,7,0)
-tagDiag (w@(Just (WarningWithCategory cat)), (nfp, sh, fd))
+tagDiag (w@(Just (WarningWithCategory cat)), fd)
   | cat == defaultWarningCategory -- default warning category is for deprecations
-  = (w, (nfp, sh, fd { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags fd) }))
-tagDiag (w@(Just (WarningWithFlags warnings)), (nfp, sh, fd))
+  = (w, modifyFdLspDiagnostic (\diag -> diag { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags diag) }) fd)
+tagDiag (w@(Just (WarningWithFlags warnings)), fd)
   | tags <- mapMaybe requiresTag (toList warnings)
-  = (w, (nfp, sh, fd { _tags = Just $ tags ++ concat (_tags fd) }))
+  = (w, modifyFdLspDiagnostic (\diag -> diag { _tags = Just $ tags ++ concat (_tags diag) }) fd)
 #elif MIN_VERSION_ghc(9,3,0)
-tagDiag (w@(Just (WarningWithFlag warning)), (nfp, sh, fd))
+tagDiag (w@(Just (WarningWithFlag warning)), fd)
   | Just tag <- requiresTag warning
-  = (w, (nfp, sh, fd { _tags = Just $ tag : concat (_tags fd) }))
+  = (w, modifyFdLspDiagnostic (\diag -> diag { _tags = Just $ tag : concat (_tags diag) }) fd)
 #else
-tagDiag (w@(Reason warning), (nfp, sh, fd))
+tagDiag (w@(Reason warning), fd)
   | Just tag <- requiresTag warning
-  = (w, (nfp, sh, fd { _tags = Just $ tag : concat (_tags fd) }))
+  = (w, modifyFdLspDiagnostic (\diag -> { _tags = Just $ tag : concat (_tags diag) }) fd)
 #endif
   where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
