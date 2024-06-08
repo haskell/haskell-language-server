@@ -599,7 +599,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                         this_target_details = TargetDetails (TargetFile _cfp) this_error_env this_dep_info [_cfp]
                         this_flags = (this_error_env, this_dep_info)
                         this_error_env = ([this_error], Nothing)
-                        this_error = uncurry (FileDiagnostic _cfp) $ ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error)
+                        this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) _cfp
                                        $ T.unlines
                                        [ "No cradle target found. Is this file listed in the targets of your cradle?"
                                        , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
@@ -923,7 +923,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
 
 #if MIN_VERSION_ghc(9,3,0)
     let closure_errs = checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
-        multi_errs = map (uncurry (FileDiagnostic _cfp) . ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) . T.pack . Compat.printWithoutUniques) closure_errs
+        multi_errs = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp . T.pack . Compat.printWithoutUniques) closure_errs
         bad_units = OS.fromList $ concat $ do
             x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages closure_errs
             DriverHomePackagesNotClosed us <- pure x
@@ -1311,6 +1311,4 @@ showPackageSetupException PackageSetupException{..} = unwords
 
 renderPackageSetupException :: FilePath -> PackageSetupException -> FileDiagnostic
 renderPackageSetupException fp e =
-  let (showDiag, lspDiag) = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (T.pack $ showPackageSetupException e)
-  in
-  FileDiagnostic (toNormalizedFilePath' fp) showDiag lspDiag
+  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)
