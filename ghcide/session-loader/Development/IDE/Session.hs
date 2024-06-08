@@ -379,7 +379,7 @@ makeWithHieDbRetryable recorder rng hieDb f =
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
 --
--- ALso see Note [Serializing runs in separate thread]
+-- Also see Note [Serializing runs in separate thread]
 runWithDb :: Recorder (WithPriority Log) -> FilePath -> ContT () IO (WithHieDbShield, IndexQueue)
 runWithDb recorder fp = ContT $ \k -> do
   -- use non-deterministic seed because maybe multiple HLS start at same time
