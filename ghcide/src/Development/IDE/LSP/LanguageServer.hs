@@ -1,15 +1,16 @@
-      -- Copyright (c) 2019 The DAML Authors. All rights reserved.
+-- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE NumericUnderscores    #-}
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     , setupLSP
     , Log(..)
+    , ThreadQueue
+    , runWithWorkerThreads
     ) where
 
 import           Control.Concurrent.STM
@@ -34,11 +35,14 @@ import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
+import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Core.WorkerThread     (withWorkerQueue)
 import qualified Development.IDE.Session               as Session
-import           Development.IDE.Types.Shake           (WithHieDb)
+import           Development.IDE.Types.Shake           (WithHieDb,
+                                                        WithHieDbShield (..))
 import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
@@ -77,8 +81,6 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
--- used to smuggle RankNType WithHieDb through dbMVar
-newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config a m. (Show config)
@@ -130,7 +132,7 @@ setupLSP ::
   -> FilePath -- ^ root directory, see Note [Root Directory]
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
-  -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+  -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
   -> MVar ()
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
@@ -189,7 +191,7 @@ handleInit
     :: Recorder (WithPriority Log)
     -> FilePath -- ^ root directory, see Note [Root Directory]
     -> (FilePath -> IO FilePath)
-    -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
     -> MVar ()
     -> IO ()
     -> (SomeLspId -> IO ())
@@ -236,8 +238,8 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
                     exceptionInHandler e
                     k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
-        untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' hieChan' -> do
-            putMVar dbMVar (WithHieDbShield withHieDb',hieChan')
+        untilMVar lifetime $ runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
+            putMVar dbMVar (WithHieDbShield withHieDb',threadQueue')
             forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
@@ -247,11 +249,21 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
 
-    (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env root withHieDb hieChan
+    (WithHieDbShield withHieDb, threadQueue) <- takeMVar dbMVar
+    ide <- getIdeState env root withHieDb threadQueue
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
+
+-- | runWithWorkerThreads
+-- create several threads to run the session, db and session loader
+-- see Note [Serializing runs in separate thread]
+runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
+runWithWorkerThreads recorder dbLoc f = evalContT $ do
+            sessionRestartTQueue <- withWorkerQueue id
+            sessionLoaderTQueue <- withWorkerQueue id
+            (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
+            liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   Rethrows any exceptions.
