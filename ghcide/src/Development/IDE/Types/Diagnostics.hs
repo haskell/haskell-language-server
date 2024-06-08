@@ -49,17 +49,15 @@ type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
 ideErrorText fdFilePath msg =
-  let (fdShouldShowDiagnostic, fdLspDiagnostic) =
-        ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) msg
-  in
-  FileDiagnostic{..}
+  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) fdFilePath msg
 
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
+  -> NormalizedFilePath
   -> T.Text
-  -> (ShowDiagnostic, Diagnostic)
-ideErrorWithSource source sev msg = (ShowDiag, LSP.Diagnostic {
+  -> FileDiagnostic
+ideErrorWithSource source sev fp msg = FileDiagnostic fp ShowDiag LSP.Diagnostic {
     _range = noRange,
     _severity = sev,
     _code = Nothing,
@@ -69,7 +67,7 @@ ideErrorWithSource source sev msg = (ShowDiag, LSP.Diagnostic {
     _tags = Nothing,
     _codeDescription = Nothing,
     _data_ = Nothing
-    })
+    }
 
 -- | Defines whether a particular diagnostic should be reported
 --   back to the user.
