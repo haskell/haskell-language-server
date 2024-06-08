@@ -1,9 +1,8 @@
-      -- Copyright (c) 2019 The DAML Authors. All rights reserved.
+-- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE NumericUnderscores    #-}
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer

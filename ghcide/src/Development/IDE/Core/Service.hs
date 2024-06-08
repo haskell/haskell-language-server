@@ -31,7 +31,6 @@ import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.Server              as LSP
 
-import           Control.Concurrent.STM           (TQueue)
 import           Control.Monad
 import qualified Development.IDE.Core.FileExists  as FileExists
 import qualified Development.IDE.Core.OfInterest  as OfInterest
