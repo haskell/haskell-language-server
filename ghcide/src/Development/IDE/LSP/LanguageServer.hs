@@ -256,7 +256,6 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
     pure $ Right (env,ide)
 
 
-
 -- | runWithWorkerThreads
 -- create several threads to run the session, db and session loader
 -- see Note [Serializing runs in separate thread]
