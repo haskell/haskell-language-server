@@ -1,11 +1,13 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE DeriveGeneric #-}
 
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
-  FileDiagnostic,
+  FileDiagnostic(..),
+  modifyFdLspDiagnostic,
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
@@ -20,6 +22,7 @@ import           Data.ByteString                (ByteString)
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
 import           Development.IDE.Types.Location
+import           GHC.Generics
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Types    as LSP (Diagnostic (..),
                                                         DiagnosticSeverity (..))
@@ -45,15 +48,18 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText = ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error)
+ideErrorText fdFilePath msg =
+  let (fdShouldShowDiagnostic, fdLspDiagnostic) =
+        ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) msg
+  in
+  FileDiagnostic{..}
 
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
-  -> a
   -> T.Text
-  -> (a, ShowDiagnostic, Diagnostic)
-ideErrorWithSource source sev fp msg = (fp, ShowDiag, LSP.Diagnostic {
+  -> (ShowDiagnostic, Diagnostic)
+ideErrorWithSource source sev msg = (ShowDiag, LSP.Diagnostic {
     _range = noRange,
     _severity = sev,
     _code = Nothing,
@@ -86,7 +92,18 @@ instance NFData ShowDiagnostic where
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
-type FileDiagnostic = (NormalizedFilePath, ShowDiagnostic, Diagnostic)
+data FileDiagnostic = FileDiagnostic
+  { fdFilePath :: NormalizedFilePath
+  , fdShouldShowDiagnostic :: ShowDiagnostic
+  , fdLspDiagnostic :: Diagnostic
+  }
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData FileDiagnostic
+
+modifyFdLspDiagnostic :: (Diagnostic -> Diagnostic) -> FileDiagnostic -> FileDiagnostic
+modifyFdLspDiagnostic f diag =
+  diag { fdLspDiagnostic = f (fdLspDiagnostic diag) }
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
@@ -106,10 +123,10 @@ prettyDiagnostics :: [FileDiagnostic] -> Doc Terminal.AnsiStyle
 prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
-prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
+prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     vcat
-        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fp)
-        , slabel_ "Hidden:  " $ if sh == ShowDiag then "no" else "yes"
+        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fdFilePath)
+        , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
