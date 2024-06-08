@@ -36,7 +36,8 @@ withWorkerQueue workerAction = ContT $ \mainAction -> do
                 l <- atomically $ readTQueue q
                 workerAction l
 
--- | blockRunInThread run and wait for the result
+-- | 'blockRunInThread' queues up an 'IO' action to be run by a worker thread,
+-- and then blocks until the result is computed.
 blockRunInThread :: TQueue (IO ()) -> IO result -> IO result
 blockRunInThread q act = do
     -- Take an action from TQueue, run it and
