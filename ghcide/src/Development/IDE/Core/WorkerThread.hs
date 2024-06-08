@@ -24,7 +24,9 @@ Moreover, we can not stop these threads uniformly when we are shutting down the 
 * `awaitRunInThread` : accepts a `TQueue` and an action to run in separate thread and waits for the result.
 -}
 
--- | withWorkerQueue creates a new TQueue and runs the workerAction in a separate thread.
+-- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
+-- thread which polls the queue for requests and runs the given worker
+-- function on them.
 withWorkerQueue :: (t -> IO a) -> ContT () IO (TQueue t)
 withWorkerQueue workerAction = ContT $ \mainAction -> do
     q <- newTQueueIO
@@ -35,7 +37,8 @@ withWorkerQueue workerAction = ContT $ \mainAction -> do
                 l <- atomically $ readTQueue q
                 workerAction l
 
--- | awaitRunInThread run and wait for the result
+-- | 'awaitRunInThread' queues up an 'IO' action to be run by a worker thread,
+-- and then blocks until the result is computed.
 awaitRunInThread :: TQueue (IO ()) -> IO result -> IO result
 awaitRunInThread q act = do
     -- Take an action from TQueue, run it and
