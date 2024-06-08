@@ -108,6 +108,7 @@ import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
+import Development.IDE.Core.WorkerThread (writeWorkerQueue)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -129,7 +130,6 @@ import           GHC.Driver.Config.CoreToStg.Prep
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                     (toList)
 import           GHC.Unit.Module.Warnings
-import Development.IDE.Core.WorkerThread (writeWorkerQueue)
 #else
 import           Development.IDE.Core.FileStore    (shareFilePath)
 #endif
