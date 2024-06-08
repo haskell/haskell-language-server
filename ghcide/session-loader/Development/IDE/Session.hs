@@ -62,14 +62,12 @@ import           Development.IDE.GHC.Compat.Units     (UnitId)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph                (Action)
 import qualified Development.IDE.Session.Implicit     as GhcIde
-import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC.Check
 import           GHC.ResponseFile
 import qualified HIE.Bios                             as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
@@ -114,6 +112,8 @@ import           HieDb.Utils
 import           Ide.PluginUtils                      (toAbsolute)
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
+import           Text.ParserCombinators.ReadP (readP_to_S)
+
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -144,7 +144,7 @@ data Log
   | LogDLLLoadError !String
   | LogCradlePath !FilePath
   | LogCradleNotFound !FilePath
-  | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
+  | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath, String))
   | LogCradle !(Cradle Void)
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
@@ -657,16 +657,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
            case eopts of
              -- The cradle gave us some options so get to work turning them
              -- into and HscEnv.
-             Right (opts, libDir) -> do
-               installationCheck <- ghcVersionChecker libDir
-               case installationCheck of
-                 InstallationNotFound{..} ->
-                     error $ "GHC installation not found in libdir: " <> libdir
-                 InstallationMismatch{..} ->
-                     return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
-                 InstallationChecked _compileTime _ghcLibCheck -> do
-                   atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
-                   session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+             Right (opts, libDir, version) -> do
+               let compileTime = fullCompilerVersion
+               case reverse $ readP_to_S parseVersion version of
+                 [] -> error $ "GHC version could not be parsed: " <> version
+                 ((runTime, _):_)
+                   | compileTime == runTime -> do
+                     atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
+                     session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                   | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
                dep_info <- getDependencyInfo (maybeToList hieYaml)
@@ -750,7 +749,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir = do
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
 cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> Cradle Void -> FilePath -> [FilePath]
-                      -> IO (Either [CradleError] (ComponentOptions, FilePath))
+                      -> IO (Either [CradleError] (ComponentOptions, FilePath, String))
 cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
     -- let noneCradleFoundMessage :: FilePath -> T.Text
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
@@ -761,9 +760,10 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
         CradleSuccess r -> do
             -- Now get the GHC lib dir
             libDirRes <- getRuntimeGhcLibDir cradle
-            case libDirRes of
+            versionRes <- getRuntimeGhcVersion cradle
+            case liftA2 (,) libDirRes versionRes of
                 -- This is the successful path
-                CradleSuccess libDir -> pure (Right (r, libDir))
+                (CradleSuccess (libDir, version)) -> pure (Right (r, libDir, version))
                 CradleFail err       -> return (Left [err])
                 CradleNone           -> do
                     logWith recorder Info $ LogNoneCradleFound file
@@ -1293,7 +1293,6 @@ data PackageSetupException
         { compileTime :: !Version
         , runTime     :: !Version
         }
-    | PackageCheckFailed !NotCompatibleReason
     deriving (Eq, Show, Typeable)
 
 instance Exception PackageSetupException
@@ -1313,21 +1312,9 @@ showPackageSetupException GhcVersionMismatch{..} = unwords
     ,"\nThis is unsupported, ghcide must be compiled with the same GHC version as the project."
     ]
 showPackageSetupException PackageSetupException{..} = unwords
-    [ "ghcide compiled by GHC", showVersion compilerVersion
+    [ "ghcide compiled by GHC", showVersion fullCompilerVersion
     , "failed to load packages:", message <> "."
     , "\nPlease ensure that ghcide is compiled with the same GHC installation as the project."]
-showPackageSetupException (PackageCheckFailed PackageVersionMismatch{..}) = unwords
-    ["ghcide compiled with package "
-    , packageName <> "-" <> showVersion compileTime
-    ,"but project uses package"
-    , packageName <> "-" <> showVersion runTime
-    ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
-    ]
-showPackageSetupException (PackageCheckFailed BasePackageAbiMismatch{..}) = unwords
-    ["ghcide compiled with base-" <> showVersion compileTime <> "-" <> compileTimeAbi
-    ,"but project uses base-" <> showVersion compileTime <> "-" <> runTimeAbi
-    ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
-    ]
 
 renderPackageSetupException :: FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
 renderPackageSetupException fp e =
