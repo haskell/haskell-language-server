@@ -8,7 +8,7 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
+module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
 import           Prelude                              hiding (unzip)
 
@@ -139,6 +139,9 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                 waitAll
                 pure results
 
+
+-- | isDirty
+-- only dirty when it's build time is older than the changed time of one of its dependencies
 isDirty :: Foldable t => Result -> t (a, Result) -> Bool
 isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 
@@ -185,14 +188,22 @@ compute db@Database{..} stack key mode result = do
     deps <- newIORef UnknownDeps
     (execution, RunResult{..}) <-
         duration $ runReaderT (fromAction act) $ SAction db deps stack
-    built <- readTVarIO databaseStep
+    curStep <- readTVarIO databaseStep
     deps <- readIORef deps
-    let changed = if runChanged == ChangedRecomputeDiff then built else maybe built resultChanged result
-        built' = if runChanged /= ChangedNothing then built else changed
-        -- only update the deps when the rule ran with changes
+    let lastChanged = maybe curStep resultChanged result
+    let lastBuild = maybe curStep resultBuilt result
+    -- changed time is always older than or equal to build time
+    let (changed, built) =  case runChanged of
+            -- some thing changed
+            ChangedRecomputeDiff -> (curStep, curStep)
+            -- recomputed is the same
+            ChangedRecomputeSame -> (lastChanged, curStep)
+            -- nothing changed
+            ChangedNothing       -> (lastChanged, lastBuild)
+    let -- only update the deps when the rule ran with changes
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= maybe UnknownDeps resultDeps result
-    let res = Result runValue built' changed built actualDeps execution runStore
+    let res = Result runValue built changed curStep actualDeps execution runStore
     case getResultDepsDefault mempty actualDeps of
         deps | not (nullKeySet deps)
             && runChanged /= ChangedNothing

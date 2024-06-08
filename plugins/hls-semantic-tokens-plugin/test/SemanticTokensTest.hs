@@ -152,7 +152,7 @@ semanticTokensConfigTest =
           , testConfigSession = def
             { ignoreConfigurationRequests = False
             }
-          , testConfigCaps = fullCaps
+          , testConfigCaps = fullLatestClientCaps
           , testDirLocation = Right fs
           , testLspConfig = mkSemanticConfig funcVar
           }

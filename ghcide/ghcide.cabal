@@ -88,8 +88,8 @@ library
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.6.0.0
-    , lsp-types                    ^>=2.2.0.0
+    , lsp                          ^>=2.7
+    , lsp-types                    ^>=2.3
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
@@ -265,21 +265,3 @@ executable ghcide
 
   if !flag(executable)
     buildable: False
-
-library ghcide-test-utils
-  import: warnings
-  visibility: public
-  default-language:   GHC2021
-
-  hs-source-dirs: test/cabal
-  exposed-modules:
-    Development.IDE.Test.Runfiles
-
-  build-depends:
-      base > 4.9 && < 5
-
-  default-extensions:
-      LambdaCase
-      OverloadedStrings
-      RecordWildCards
-      ViewPatterns

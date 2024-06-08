@@ -48,9 +48,9 @@ import           Ide.Logger                         (Doc, Pretty (pretty),
 import           Ide.Plugin.Config                  (Config)
 import           Ide.Types                          (IdePlugins (IdePlugins))
 import           Language.LSP.Protocol.Message      (Method (Method_Initialize),
-                                                     ResponseError,
                                                      SMethod (SMethod_Exit, SMethod_WindowShowMessageRequest),
-                                                     TRequestMessage)
+                                                     TRequestMessage,
+                                                     TResponseError)
 import           Language.LSP.Protocol.Types        (MessageActionItem (MessageActionItem),
                                                      MessageType (MessageType_Error),
                                                      ShowMessageRequestParams (ShowMessageRequestParams),
@@ -283,7 +283,7 @@ launchErrorLSP recorder errorMsg = do
         -- Forcefully exit
         let exit = void $ tryPutMVar clientMsgVar ()
 
-        let doInitialize :: LSP.LanguageContextEnv Config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv Config, ()))
+        let doInitialize :: LSP.LanguageContextEnv Config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv Config, ()))
             doInitialize env _ = do
 
               let restartTitle = "Try to restart"

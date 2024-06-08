@@ -38,7 +38,7 @@ import           Language.LSP.Server           (LspT, getClientCapabilities,
 
 data Log
     = DoesNotSupportResolve T.Text
-    | ApplyWorkspaceEditFailed ResponseError
+    | forall m . A.ToJSON (ErrorData m) => ApplyWorkspaceEditFailed (TResponseError m)
 instance Pretty Log where
     pretty = \case
         DoesNotSupportResolve fallback->
