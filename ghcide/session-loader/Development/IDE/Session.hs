@@ -1232,6 +1232,9 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
               Just wdir -> compRoot </> wdir
         let dflags''' =
               setWorkingDirectory root $
+#if MIN_VERSION_ghc(9,8,0)
+              setNoShowErrorContext $
+#endif
               disableWarningsAsErrors $
               -- disabled, generated directly by ghcide instead
               flip gopt_unset Opt_WriteInterface $
@@ -1252,6 +1255,12 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
         -- is done later in newComponentCache
         final_flags <- liftIO $ wrapPackageSetupException $ Compat.oldInitUnits dflags'''
         return (final_flags, targets)
+
+#if MIN_VERSION_ghc(9,8,0)
+setNoShowErrorContext :: DynFlags -> DynFlags
+setNoShowErrorContext df =
+    gopt_unset df Opt_ShowErrorContext
+#endif
 
 setIgnoreInterfacePragmas :: DynFlags -> DynFlags
 setIgnoreInterfacePragmas df =
