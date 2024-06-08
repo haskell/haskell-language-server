@@ -11,7 +11,8 @@ import           Control.Monad.Cont        (ContT (ContT))
 
 -- Note [Serializing runs in separate thread]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- In a lof cases we want to have a separate thread that will serialize the runs of the actions.
+-- We often want to take long-running actions using some resource that cannot be shared.
+-- In this instance it is useful to have a queue of jobs to run using the resource.
 -- Like the db writes, session loading in session loader, shake session restarts.
 --
 -- Originally we used various ways to implement this, but it was hard to maintain and error prone.
