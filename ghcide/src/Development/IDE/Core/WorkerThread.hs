@@ -23,6 +23,7 @@ import           Control.Monad.Cont        (ContT (ContT))
 -- * `blockRunInThread` : accepts a `TQueue` and an action to run in separate thread and waits for the result.
 
 
+-- | withWorkerQueue creates a new TQueue and runs the workerAction in a separate thread.
 withWorkerQueue :: (t -> IO a) -> ContT () IO (TQueue t)
 withWorkerQueue workerAction = ContT $ \mainAction -> do
     q <- newTQueueIO
