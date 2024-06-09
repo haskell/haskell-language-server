@@ -2640,29 +2640,29 @@ fillTypedHoleTests = let
   , testSession "postfix hole uses postfix notation of infix operator" $ do
       let mkDoc x = T.unlines
               [ "module Testing where"
-              , "test :: Int -> Int -> Int"
-              , "test a1 a2 = " <> x <> " a1 a2"
+              , "test :: Int -> Maybe Int -> Maybe Int"
+              , "test a ma = " <> x <> " (a +) ma"
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
-      chosen <- pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
-      liftIO $ mkDoc "(+)" @=? modifiedCode
+      liftIO $ mkDoc "(<$>)" @=? modifiedCode
   , testSession "filling infix type hole uses infix operator" $ do
       let mkDoc x = T.unlines
               [ "module Testing where"
-              , "test :: Int -> Int -> Int"
-              , "test a1 a2 = a1 " <> x <> " a2"
+              , "test :: Int -> Maybe Int -> Maybe Int"
+              , "test a ma = (a +) " <> x <> " ma"
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
-      chosen <- pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
-      liftIO $ mkDoc "+" @=? modifiedCode
+      liftIO $ mkDoc "<$>" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree

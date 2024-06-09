@@ -74,8 +74,6 @@ library
     , ghc                          >=9.2
     , ghc-boot
     , ghc-boot-th
-    , ghc-check                    >=0.5.0.8
-    , ghc-paths
     , ghc-trace-events
     , Glob
     , haddock-library              >=1.8      && <1.12
@@ -205,7 +203,6 @@ library
     Development.IDE.Core.FileExists
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
-    Development.IDE.Session.VersionCheck
     Development.IDE.Types.Action
 
   if flag(pedantic)
