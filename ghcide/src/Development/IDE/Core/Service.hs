@@ -53,6 +53,7 @@ instance Pretty Log where
     LogOfInterest msg -> pretty msg
     LogFileExists msg -> pretty msg
 
+
 ------------------------------------------------------------
 -- Exposed API
 
@@ -65,7 +66,7 @@ initialise :: Recorder (WithPriority Log)
            -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> WithHieDb
-           -> IndexQueue
+           -> ThreadQueue
            -> Monitoring
            -> FilePath -- ^ Root directory see Note [Root Directory]
            -> IO IdeState
