@@ -6,6 +6,7 @@
 module Development.IDE.Graph.Internal.Types where
 
 import           Control.Concurrent.STM             (STM)
+import           Control.Monad                      ((>=>))
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
@@ -110,6 +111,9 @@ data Database = Database {
     databaseValues :: !(Map Key KeyDetails)
     }
 
+waitForDatabaseRunningKeys :: Database -> IO ()
+waitForDatabaseRunningKeys = getDatabaseValues >=> mapM_ (waitRunning . snd)
+
 getDatabaseValues :: Database -> IO [(Key, Status)]
 getDatabaseValues = atomically
                   . (fmap.fmap) (second keyStatus)
@@ -135,6 +139,10 @@ getResult :: Status -> Maybe Result
 getResult (Clean re)           = Just re
 getResult (Dirty m_re)         = m_re
 getResult (Running _ _ _ m_re) = m_re -- watch out: this returns the previous result
+
+waitRunning :: Status -> IO ()
+waitRunning Running{..} = runningWait
+waitRunning _           = return ()
 
 data Result = Result {
     resultValue     :: !Value,
