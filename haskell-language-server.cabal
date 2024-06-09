@@ -1829,7 +1829,6 @@ test-suite hls-notes-plugin-tests
   main-is:          NotesTest.hs
   build-depends:
     , base
-    , directory
     , filepath
     , haskell-language-server:hls-notes-plugin
     , hls-test-utils == 2.8.0.0
