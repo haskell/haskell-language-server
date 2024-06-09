@@ -108,7 +108,7 @@ jobs:
         # to include 'new' in the filters, since many of our test suites are in the
         # same package.
         run: |
-          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new"
+          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --disable-optimization
 
       - if: matrix.test
         name: Test hls-graph
