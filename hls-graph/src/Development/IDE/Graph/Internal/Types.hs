@@ -79,6 +79,9 @@ data SAction = SAction {
 getDatabase :: Action Database
 getDatabase = Action $ asks actionDatabase
 
+waitForDatabaseRunningKeysAction :: Action ()
+waitForDatabaseRunningKeysAction = getDatabase >>= liftIO . waitForDatabaseRunningKeys
+
 ---------------------------------------------------------------------
 -- DATABASE
 
