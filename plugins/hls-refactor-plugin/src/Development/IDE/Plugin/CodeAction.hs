@@ -330,12 +330,13 @@ findSigOfBinds range = go
             findSigOfBind range (unLoc lHsBindLR)
     go _ = Nothing
 
-findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
-findInstanceHead df instanceHead decls =
+findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> Range -> [LHsDecl p] -> Maybe (LHsType p)
+findInstanceHead df diagnosticLocation decls =
   listToMaybe
     [ hsib_body
-      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
-        showSDoc df (ppr hsib_body) == instanceHead
+      | L (locA -> instanceLocation) (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls
+      , Just instanceRange <- [srcSpanToRange instanceLocation]
+      , (subRange diagnosticLocation instanceRange)
     ]
 
 findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a) e) -> Maybe (GenLocated (SrcSpanAnn' a) e)
@@ -1250,8 +1251,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         -- • In the expression: x == y
         --   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
         --   In the instance declaration for ‘Eq (Wrap a)’
-        | Just [instanceDeclaration] <- matchRegexUnifySpaces _message "In the instance declaration for ‘([^`]*)’"
-        , Just instHead <- findInstanceHead df (T.unpack instanceDeclaration) hsmodDecls
+        | Just instHead <- findInstanceHead df _range hsmodDecls
         = Just instHead
         -- Suggests a constraint for an instance declaration with one or more existing constraints.
         -- • Could not deduce (Eq b) arising from a use of ‘==’
