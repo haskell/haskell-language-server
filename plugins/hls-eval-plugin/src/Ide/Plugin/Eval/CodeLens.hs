@@ -203,7 +203,7 @@ runEvalCmd :: Recorder (WithPriority Log) -> PluginId -> CommandFunction IdeStat
 runEvalCmd recorder plId st mtoken EvalParams{..} =
     let dbg = logWith recorder Debug
         perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
-        cmd :: ExceptT PluginError (PluginM Config) WorkspaceEdit
+        cmd :: ExceptT PluginError (HandlerM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
@@ -305,7 +305,7 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: Uri -> ExceptT PluginError (PluginM config) Text
+moduleText :: Uri -> ExceptT PluginError (HandlerM config) Text
 moduleText uri =
     handleMaybeM (PluginInternalError "mdlText") $
       (virtualFileText <$>)

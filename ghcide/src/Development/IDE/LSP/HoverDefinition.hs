@@ -43,10 +43,10 @@ instance Pretty Log where
       pretty label <+> "request at position" <+> pretty (showPosition pos) <+>
         "in file:" <+> pretty (fromNormalizedFilePath nfp)
 
-gotoDefinition     :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (PluginM c) (MessageResult Method_TextDocumentDefinition)
-hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (PluginM c) (Hover |? Null)
-gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (PluginM c) (MessageResult Method_TextDocumentTypeDefinition)
-documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (PluginM c) ([DocumentHighlight] |? Null)
+gotoDefinition     :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentDefinition)
+hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (Hover |? Null)
+gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
+documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
 gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
 gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)
 hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
@@ -76,7 +76,7 @@ request
   -> Recorder (WithPriority Log)
   -> IdeState
   -> TextDocumentPositionParams
-  -> ExceptT PluginError (PluginM c) b
+  -> ExceptT PluginError (HandlerM c) b
 request label getResults notFound found recorder ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
     mbResult <- case uriToFilePath' uri of
         Just path -> logAndRunRequest recorder label getResults ide pos path

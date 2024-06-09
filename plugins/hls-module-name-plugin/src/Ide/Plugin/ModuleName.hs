@@ -108,7 +108,7 @@ data Action = Replace
   deriving (Show)
 
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
-action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (PluginM c) [Action]
+action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (HandlerM c) [Action]
 action recorder state uri = do
     nfp <- getNormalizedFilePathE  uri
     fp <- uriToFilePathE uri

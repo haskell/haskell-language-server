@@ -211,7 +211,7 @@ codeActionResolveProvider _ ideState _ ca _ rd = do
     pure $ ca & L.edit ?~ wedit
 --------------------------------------------------------------------------------
 
-resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (PluginM Config) WorkspaceEdit
+resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (HandlerM Config) WorkspaceEdit
 -- Providing the edit for the command, or the resolve for the code action is
 -- completely generic, as all we need is the unique id and the text edit.
 resolveWTextEdit ideState (ResolveOne uri int) = do

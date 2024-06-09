@@ -72,7 +72,7 @@ mkCodeActionHandlerWithResolve recorder codeActionMethod codeResolveMethod =
   <> mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
   where dropData :: CodeAction -> CodeAction
         dropData ca = ca & L.data_ .~ Nothing
-        resolveCodeAction :: Uri -> ideState -> PluginId -> (Command |? CodeAction) -> ExceptT PluginError (PluginM Config) (Command |? CodeAction)
+        resolveCodeAction :: Uri -> ideState -> PluginId -> (Command |? CodeAction) -> ExceptT PluginError (HandlerM Config) (Command |? CodeAction)
         resolveCodeAction _uri _ideState _plId c@(InL _) = pure c
         resolveCodeAction uri ideState pid (InR codeAction@CodeAction{_data_=Just value}) = do
           case A.fromJSON value of

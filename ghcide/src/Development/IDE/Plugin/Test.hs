@@ -90,7 +90,7 @@ plugin = (defaultPluginDescriptor "test" "") {
 
 testRequestHandler ::  IdeState
                 -> TestRequest
-                -> PluginM config (Either PluginError Value)
+                -> HandlerM config (Either PluginError Value)
 testRequestHandler _ (BlockSeconds secs) = do
     pluginSendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/request")) $
       toJSON secs

@@ -117,7 +117,7 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
 
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 
-   ret :: Either SomeException T.Text -> ExceptT PluginError (PluginM Types.Config) ([TextEdit] |? Null)
+   ret :: Either SomeException T.Text -> ExceptT PluginError (HandlerM Types.Config) ([TextEdit] |? Null)
    ret (Left err)  = throwError $ PluginInternalError . T.pack $ "ormoluCmd: " ++ show err
    ret (Right new) = pure $ InL $ makeDiffTextEdit contents new
 

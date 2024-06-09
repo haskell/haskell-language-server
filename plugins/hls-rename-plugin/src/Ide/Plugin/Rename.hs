@@ -120,7 +120,7 @@ failWhenImportOrExport ::
     NormalizedFilePath ->
     HashSet Location ->
     [Name] ->
-    ExceptT PluginError (PluginM config) ()
+    ExceptT PluginError (HandlerM config) ()
 failWhenImportOrExport state nfp refLocs names = do
     pm <- runActionE "Rename.GetParsedModule" state
          (useE GetParsedModule nfp)
@@ -141,7 +141,7 @@ getSrcEdit ::
     IdeState ->
     VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    ExceptT PluginError (PluginM config) WorkspaceEdit
+    ExceptT PluginError (HandlerM config) WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift pluginGetClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)

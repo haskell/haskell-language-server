@@ -31,7 +31,7 @@ module Ide.Types
 , PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
 , PluginId(..)
 , PluginHandler(..), mkPluginHandler
-, PluginM, runPluginM, pluginGetClientCapabilities, pluginGetVirtualFile, pluginGetVersionedTextDoc, pluginSendNotification, pluginSendRequest, pluginWithIndefiniteProgress
+, HandlerM, runHandlerM, pluginGetClientCapabilities, pluginGetVirtualFile, pluginGetVersionedTextDoc, pluginSendNotification, pluginSendRequest, pluginWithIndefiniteProgress
 , PluginHandlers(..)
 , PluginMethod(..)
 , PluginMethodHandler
@@ -894,51 +894,51 @@ instance GCompare IdeNotification where
   gcompare (IdeNotification a) (IdeNotification b) = gcompare a b
 
 -- | Restricted version of 'LspM' specific to plugins
-newtype PluginM config a = PluginM { _runPluginM :: LspM config a }
+newtype HandlerM config a = HandlerM { _runHandlerM :: LspM config a }
   deriving newtype (Applicative, Functor, Monad, MonadIO, MonadUnliftIO)
 
-runPluginM :: PluginM config a -> LspM config a
-runPluginM = _runPluginM
+runHandlerM :: HandlerM config a -> LspM config a
+runHandlerM = _runHandlerM
 
--- | Wrapper of 'getVirtualFile' for PluginM
+-- | Wrapper of 'getVirtualFile' for HandlerM
 --
 -- TODO: To be replaced by a lookup of the Shake build graph
-pluginGetVirtualFile :: NormalizedUri -> PluginM config (Maybe VirtualFile)
-pluginGetVirtualFile uri = PluginM $ getVirtualFile uri
+pluginGetVirtualFile :: NormalizedUri -> HandlerM config (Maybe VirtualFile)
+pluginGetVirtualFile uri = HandlerM $ getVirtualFile uri
 
--- | Version of 'getVersionedTextDoc' for PluginM
+-- | Version of 'getVersionedTextDoc' for HandlerM
 --
 -- TODO: Should use 'pluginGetVirtualFile' instead of wrapping 'getVersionedTextDoc'.
 -- At the time of writing, 'pluginGetVirtualFile' of the "lsp" package is implemented with 'getVirtualFile'.
-pluginGetVersionedTextDoc :: TextDocumentIdentifier -> PluginM config VersionedTextDocumentIdentifier
-pluginGetVersionedTextDoc = PluginM . getVersionedTextDoc
+pluginGetVersionedTextDoc :: TextDocumentIdentifier -> HandlerM config VersionedTextDocumentIdentifier
+pluginGetVersionedTextDoc = HandlerM . getVersionedTextDoc
 
--- | Wrapper of 'getClientCapabilities' for PluginM
-pluginGetClientCapabilities :: PluginM config ClientCapabilities
-pluginGetClientCapabilities = PluginM getClientCapabilities
+-- | Wrapper of 'getClientCapabilities' for HandlerM
+pluginGetClientCapabilities :: HandlerM config ClientCapabilities
+pluginGetClientCapabilities = HandlerM getClientCapabilities
 
--- | Wrapper of 'sendNotification for PluginM
+-- | Wrapper of 'sendNotification for HandlerM
 --
 -- TODO: Return notification in result instead of calling `sendNotification` directly
-pluginSendNotification :: forall (m :: Method ServerToClient Notification) config. SServerMethod m -> MessageParams m -> PluginM config ()
-pluginSendNotification smethod params = PluginM $ sendNotification smethod params
+pluginSendNotification :: forall (m :: Method ServerToClient Notification) config. SServerMethod m -> MessageParams m -> HandlerM config ()
+pluginSendNotification smethod params = HandlerM $ sendNotification smethod params
 
--- | Wrapper of 'sendRequest' for PluginM
+-- | Wrapper of 'sendRequest' for HandlerM
 --
 -- TODO: Return request in result instead of calling `sendRequest` directly
-pluginSendRequest :: forall (m :: Method ServerToClient Request) config. SServerMethod m -> MessageParams m -> (Either (TResponseError m) (MessageResult m) -> PluginM config ()) -> PluginM config (LspId m)
-pluginSendRequest smethod params action = PluginM $ sendRequest smethod params (runPluginM . action)
+pluginSendRequest :: forall (m :: Method ServerToClient Request) config. SServerMethod m -> MessageParams m -> (Either (TResponseError m) (MessageResult m) -> HandlerM config ()) -> HandlerM config (LspId m)
+pluginSendRequest smethod params action = HandlerM $ sendRequest smethod params (runHandlerM . action)
 
--- | Wrapper of 'withIndefiniteProgress' for PluginM
-pluginWithIndefiniteProgress :: T.Text -> Maybe ProgressToken -> ProgressCancellable -> ((T.Text -> PluginM config ()) -> PluginM config a) -> PluginM config a
+-- | Wrapper of 'withIndefiniteProgress' for HandlerM
+pluginWithIndefiniteProgress :: T.Text -> Maybe ProgressToken -> ProgressCancellable -> ((T.Text -> HandlerM config ()) -> HandlerM config a) -> HandlerM config a
 pluginWithIndefiniteProgress title progressToken cancellable updateAction =
-  PluginM $
+  HandlerM $
     withIndefiniteProgress title progressToken cancellable $ \putUpdate ->
-      runPluginM $ updateAction (PluginM . putUpdate)
+      runHandlerM $ updateAction (HandlerM . putUpdate)
 
 -- | Combine handlers for the
 newtype PluginHandler a (m :: Method ClientToServer Request)
-  = PluginHandler (PluginId -> a -> MessageParams m -> PluginM Config (NonEmpty (Either PluginError (MessageResult m))))
+  = PluginHandler (PluginId -> a -> MessageParams m -> HandlerM Config (NonEmpty (Either PluginError (MessageResult m))))
 
 newtype PluginNotificationHandler a (m :: Method ClientToServer Notification)
   = PluginNotificationHandler (PluginId -> a -> VFS -> MessageParams m -> LspM Config ())
@@ -963,7 +963,7 @@ instance Semigroup (PluginNotificationHandlers a) where
 instance Monoid (PluginNotificationHandlers a) where
   mempty = PluginNotificationHandlers mempty
 
-type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> ExceptT PluginError (PluginM Config) (MessageResult m)
+type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> ExceptT PluginError (HandlerM Config) (MessageResult m)
 
 type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
@@ -976,7 +976,7 @@ mkPluginHandler
   -> PluginHandlers ideState
 mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler (f' m))
   where
-    f' :: SMethod m -> PluginId -> ideState -> MessageParams m -> PluginM Config (NonEmpty (Either PluginError (MessageResult m)))
+    f' :: SMethod m -> PluginId -> ideState -> MessageParams m -> HandlerM Config (NonEmpty (Either PluginError (MessageResult m)))
     -- We need to have separate functions for each method that supports resolve, so far we only support CodeActions
     -- CodeLens, and Completion methods.
     f' SMethod_TextDocumentCodeAction pid ide params@CodeActionParams{_textDocument=TextDocumentIdentifier {_uri}} =
@@ -1080,7 +1080,7 @@ type CommandFunction ideState a
   = ideState
   -> Maybe ProgressToken
   -> a
-  -> ExceptT PluginError (PluginM Config) (Value |? Null)
+  -> ExceptT PluginError (HandlerM Config) (Value |? Null)
 
 -- ---------------------------------------------------------------------
 
@@ -1090,7 +1090,7 @@ type ResolveFunction ideState a (m :: Method ClientToServer Request) =
   -> MessageParams m
   -> Uri
   -> a
-  -> ExceptT PluginError (PluginM Config) (MessageResult m)
+  -> ExceptT PluginError (HandlerM Config) (MessageResult m)
 
 -- | Make a handler for resolve methods. In here we take your provided ResolveFunction
 -- and turn it into a PluginHandlers. See Note [Resolve in PluginHandlers]
@@ -1172,7 +1172,7 @@ type FormattingHandler a
   -> T.Text
   -> NormalizedFilePath
   -> FormattingOptions
-  -> ExceptT PluginError (PluginM Config) ([TextEdit] |? Null)
+  -> ExceptT PluginError (HandlerM Config) ([TextEdit] |? Null)
 
 mkFormattingHandlers :: forall a. FormattingHandler a -> PluginHandlers a
 mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)

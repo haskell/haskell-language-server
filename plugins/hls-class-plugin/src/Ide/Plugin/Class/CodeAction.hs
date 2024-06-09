@@ -94,7 +94,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
             :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
             -> Diagnostic
-            -> ExceptT PluginError (PluginM Ide.Plugin.Config.Config) [Command |? CodeAction]
+            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]
         mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStaleE GetHieAst docPath
@@ -165,7 +165,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
         findImplementedMethods
             :: HieASTs a
             -> Position
-            -> ExceptT PluginError (PluginM Ide.Plugin.Config.Config) [T.Text]
+            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [T.Text]
         findImplementedMethods asts instancePosition = do
             pure
                 $ concat
