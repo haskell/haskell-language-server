@@ -188,6 +188,9 @@ getContextTests =
             , (Stanza "source-repository" (Just "head"), KeyWord "type:")
             , (Stanza "source-repository" (Just "head"), KeyWord "type:")
             , (Stanza "source-repository" (Just "head"), None)
+            , (Stanza "common" (Just "cabalfmt"), None)
+            , (Stanza "common" (Just "cabalfmt"), None)
+            , (Stanza "common" (Just "cabalfmt"), KeyWord "build-depends:")
             ]
             $ \fileContent posPrefInfo ->
                 callGetContext (cursorPos posPrefInfo) (prefixText posPrefInfo) fileContent
@@ -276,4 +279,10 @@ source-repository head
   location: https://github.com/haskell/haskell-language-server
 
   ^
+common cabalfmt
+
+  ^
+  build-depends: haskell-language-server:hls-cabal-fmt-plugin
+    ^            ^
+  cpp-options: -Dhls_cabalfmt
 |]
