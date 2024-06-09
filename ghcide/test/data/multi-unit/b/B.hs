@@ -1,3 +1,3 @@
 module B(module B) where
-import A
+import "a" A
 qux = foo
