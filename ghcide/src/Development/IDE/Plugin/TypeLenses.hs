@@ -67,8 +67,7 @@ import           Ide.Types                            (CommandFunction,
                                                        mkCustomConfig,
                                                        mkPluginHandler,
                                                        mkResolveHandler,
-                                                       pluginSendRequest,
-                                                       )
+                                                       pluginSendRequest)
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        (Method (Method_CodeLensResolve, Method_TextDocumentCodeLens),
                                                        SMethod (..))

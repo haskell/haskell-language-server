@@ -38,7 +38,8 @@ import           GHC.Stack                             (HasCallStack, callStack,
                                                         srcLocStartCol,
                                                         srcLocStartLine)
 import           Ide.Plugin.Error
-import           Ide.Types                             (HandlerM, pluginSendRequest)
+import           Ide.Types                             (HandlerM,
+                                                        pluginSendRequest)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
