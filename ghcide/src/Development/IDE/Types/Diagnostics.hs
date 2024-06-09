@@ -2,11 +2,16 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
   FileDiagnostic(..),
+  fdFilePath,
+  fdShouldShowDiagnostic,
+  fdLspDiagnostic,
+  fdStructuredMessage,
   modifyFdLspDiagnostic,
   StructuredMessage(..),
   IdeResult,
@@ -14,6 +19,7 @@ module Development.IDE.Types.Diagnostics (
   DiagnosticStore,
   ideErrorText,
   ideErrorWithSource,
+  ideErrorFromLspDiag,
   showDiagnostics,
   showDiagnosticsColored,
   IdeResultNoDiagnosticsEarlyCutoff) where
@@ -25,13 +31,14 @@ import qualified Data.Text                      as T
 import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope)
 import           Development.IDE.Types.Location
 import           GHC.Generics
+import           GHC.Types.Error                (diagnosticCode, DiagnosticCode (..), errMsgDiagnostic)
 import           Language.LSP.Diagnostics
-import           Language.LSP.Protocol.Types    as LSP (Diagnostic (..),
-                                                        DiagnosticSeverity (..))
+import           Language.LSP.Protocol.Types    as LSP
 import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
 import qualified Prettyprinter.Render.Terminal  as Terminal
 import           Prettyprinter.Render.Text
+import           Text.Printf                    (printf)
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -53,6 +60,27 @@ ideErrorText :: Maybe (MsgEnvelope GhcMessage) -> NormalizedFilePath -> T.Text -
 ideErrorText origMsg fdFilePath msg =
   ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) fdFilePath msg origMsg
 
+ideErrorFromLspDiag
+  :: LSP.Diagnostic
+  -> NormalizedFilePath
+  -> Maybe (MsgEnvelope GhcMessage)
+  -> FileDiagnostic
+ideErrorFromLspDiag lspDiag fdFilePath origMsg =
+  let fdShouldShowDiagnostic = ShowDiag
+      fdStructuredMessage =
+        maybe NoStructuredMessage SomeStructuredMessage origMsg
+      fdLspDiagnostic = lspDiag
+        { _code = fmap ghcCodeToLspCode . diagnosticCode . errMsgDiagnostic =<< origMsg
+        }
+      ghcCodeToLspCode :: DiagnosticCode -> Int32 LSP.|? T.Text
+#if MIN_VERSION_ghc(9,10,1)
+      ghcCodeToLspCode = InR . T.pack . show
+#else
+      ghcCodeToLspCode (DiagnosticCode prefix c) = InR $ T.pack $ prefix ++ "-" ++ printf "%05d" c
+#endif
+  in
+  FileDiagnostic {..}
+
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
@@ -61,8 +89,7 @@ ideErrorWithSource
   -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
 ideErrorWithSource source sev fdFilePath msg origMsg =
-  let fdShouldShowDiagnostic = ShowDiag
-      fdLspDiagnostic =
+  let lspDiagnostic =
         LSP.Diagnostic {
           _range = noRange,
           _severity = sev,
@@ -74,10 +101,8 @@ ideErrorWithSource source sev fdFilePath msg origMsg =
           _codeDescription = Nothing,
           _data_ = Nothing
         }
-      fdStructuredMessage =
-        maybe NoStructuredMessage SomeStructuredMessage origMsg
   in
-  FileDiagnostic {..}
+  ideErrorFromLspDiag lspDiagnostic fdFilePath origMsg
 
 -- | Defines whether a particular diagnostic should be reported
 --   back to the user.
