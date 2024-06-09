@@ -3112,6 +3112,7 @@ addSigActionTests = let
     , "(!!!) a b = a > b"       >:: "(!!!) :: Ord a => a -> a -> Bool"
     , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
     , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
+    , "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a\n  where Some a = Just a" >:: "pattern Some :: a -> Maybe a"
