@@ -51,6 +51,11 @@ basicCompleterTests =
         compls <- getCompletions doc (Position 8 2)
         let complTexts = getTextEditTexts compls
         liftIO $ assertBool "suggests benchmark" $ "benchmark" `elem` complTexts
+    , runCabalTestCaseSession "In top level context - stanza should be suggested" "" $ do
+        doc <- openDoc "completer.cabal" "cabal"
+        compls <- getCompletions doc (Position 13 2)
+        let complTexts = getTextEditTexts compls
+        liftIO $ assertBool "suggests common" $ "common" `elem` complTexts
     , runCabalTestCaseSession "Main-is completions should be relative to hs-source-dirs of same stanza" "filepath-completions" $ do
         doc <- openDoc "main-is.cabal" "cabal"
         compls <- getCompletions doc (Position 10 12)
