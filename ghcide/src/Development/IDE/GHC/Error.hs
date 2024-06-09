@@ -6,6 +6,8 @@ module Development.IDE.GHC.Error
     -- * Producing Diagnostic values
     diagFromErrMsgs
   , diagFromErrMsg
+  , diagFromSDocErrMsgs
+  , diagFromSDocErrMsg
   , diagFromString
   , diagFromStrings
   , diagFromGhcException
@@ -36,10 +38,11 @@ module Development.IDE.GHC.Error
 import           Data.Maybe
 import           Data.String                       (fromString)
 import qualified Data.Text                         as T
-import           Development.IDE.GHC.Compat        (DecoratedSDoc, MsgEnvelope,
-                                                    errMsgSeverity, errMsgSpan,
+import           Data.Tuple.Extra                  (uncurry3)
+import           Development.IDE.GHC.Compat        (MsgEnvelope,
+                                                    errMsgSeverity, errMsgSpan, errMsgDiagnostic,
                                                     formatErrorWithQual,
-                                                    srcErrorMessages)
+                                                    srcErrorMessages, GhcMessage)
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat.Util   as Compat
 import           Development.IDE.GHC.Orphans       ()
@@ -51,8 +54,8 @@ import           Language.LSP.VFS                  (CodePointPosition (CodePoint
                                                     CodePointRange (CodePointRange))
 
 
-diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText diagSource sev loc msg =
+diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> Maybe (MsgEnvelope GhcMessage) -> FileDiagnostic
+diagFromText diagSource sev loc msg origMsg =
   FileDiagnostic
     { fdFilePath = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc
     , fdShouldShowDiagnostic = ShowDiag
@@ -68,17 +71,30 @@ diagFromText diagSource sev loc msg =
         , _codeDescription = Nothing
         , _data_   = Nothing
         }
+    , fdStructuredMessage = maybe NoStructuredMessage SomeStructuredMessage origMsg
     }
 
 -- | Produce a GHC-style error from a source span and a message.
-diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope DecoratedSDoc -> [FileDiagnostic]
-diagFromErrMsg diagSource dflags e =
-    [ diagFromText diagSource sev (errMsgSpan e)
-      $ T.pack $ formatErrorWithQual dflags e
-    | Just sev <- [toDSeverity $ errMsgSeverity e]]
+diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope GhcMessage -> [FileDiagnostic]
+diagFromErrMsg diagSource dflags origErr =
+    let err = fmap (\e -> (Compat.renderDiagnosticMessageWithHints e, Just origErr)) origErr
+    in
+    diagFromSDocWithOptionalOrigMsg diagSource dflags err
 
-diagFromErrMsgs :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope DecoratedSDoc) -> [FileDiagnostic]
+diagFromErrMsgs :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope GhcMessage) -> [FileDiagnostic]
 diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . Compat.bagToList
+
+diagFromSDocErrMsg :: T.Text -> DynFlags -> MsgEnvelope Compat.DecoratedSDoc -> [FileDiagnostic]
+diagFromSDocErrMsg diagSource dflags err =
+    diagFromSDocWithOptionalOrigMsg diagSource dflags (fmap (,Nothing) err)
+
+diagFromSDocErrMsgs :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope Compat.DecoratedSDoc) -> [FileDiagnostic]
+diagFromSDocErrMsgs diagSource dflags = concatMap (diagFromSDocErrMsg diagSource dflags) . Compat.bagToList
+
+diagFromSDocWithOptionalOrigMsg :: T.Text -> DynFlags -> MsgEnvelope (Compat.DecoratedSDoc, Maybe (MsgEnvelope GhcMessage)) -> [FileDiagnostic]
+diagFromSDocWithOptionalOrigMsg diagSource dflags err =
+    [ diagFromText diagSource sev (errMsgSpan err) (T.pack (formatErrorWithQual dflags (fmap fst err))) (snd (errMsgDiagnostic err))
+    | Just sev <- [toDSeverity $ errMsgSeverity err]]
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
 srcSpanToRange :: SrcSpan -> Maybe Range
@@ -169,12 +185,12 @@ toDSeverity SevError   = Just DiagnosticSeverity_Error
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given
 --   (optional) locations and message strings.
-diagFromStrings :: T.Text -> D.DiagnosticSeverity -> [(SrcSpan, String)] -> [FileDiagnostic]
-diagFromStrings diagSource sev = concatMap (uncurry (diagFromString diagSource sev))
+diagFromStrings :: T.Text -> D.DiagnosticSeverity -> [(SrcSpan, String, Maybe (MsgEnvelope GhcMessage))] -> [FileDiagnostic]
+diagFromStrings diagSource sev = concatMap (uncurry3 (diagFromString diagSource sev))
 
 -- | Produce a GHC-style error from a source span and a message.
-diagFromString :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> String -> [FileDiagnostic]
-diagFromString diagSource sev sp x = [diagFromText diagSource sev sp $ T.pack x]
+diagFromString :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> String -> Maybe (MsgEnvelope GhcMessage) -> [FileDiagnostic]
+diagFromString diagSource sev sp x origMsg = [diagFromText diagSource sev sp (T.pack x) origMsg]
 
 
 -- | Produces an "unhelpful" source span with the given string.
@@ -204,13 +220,11 @@ catchSrcErrors dflags fromWhere ghcM = do
       Right <$> ghcM
     where
         ghcExceptionToDiagnostics = return . Left . diagFromGhcException fromWhere dflags
-        sourceErrorToDiagnostics = return . Left . diagFromErrMsgs fromWhere dflags
-                                        . fmap (fmap Compat.renderDiagnosticMessageWithHints) . Compat.getMessages
-                                        . srcErrorMessages
-
+        sourceErrorToDiagnostics diag = pure $ Left $
+          diagFromErrMsgs fromWhere dflags (Compat.getMessages (srcErrorMessages diag))
 
 diagFromGhcException :: T.Text -> DynFlags -> GhcException -> [FileDiagnostic]
-diagFromGhcException diagSource dflags exc = diagFromString diagSource DiagnosticSeverity_Error (noSpan "<Internal>") (showGHCE dflags exc)
+diagFromGhcException diagSource dflags exc = diagFromString diagSource DiagnosticSeverity_Error (noSpan "<Internal>") (showGHCE dflags exc) Nothing
 
 showGHCE :: DynFlags -> GhcException -> String
 showGHCE dflags exc = case exc of

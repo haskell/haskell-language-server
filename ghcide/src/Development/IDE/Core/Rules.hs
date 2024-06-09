@@ -486,17 +486,9 @@ reportImportCyclesRule recorder =
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
-          toDiag imp mods = FileDiagnostic fp ShowDiag $ Diagnostic
-            { _range = rng
-            , _severity = Just DiagnosticSeverity_Error
-            , _source = Just "Import cycle detection"
-            , _message = "Cyclic module dependency between " <> showCycle mods
-            , _code = Nothing
-            , _relatedInformation = Nothing
-            , _tags = Nothing
-            , _codeDescription = Nothing
-            , _data_ = Nothing
-            }
+          toDiag imp mods =
+            modifyFdLspDiagnostic (\lspDiag -> lspDiag { _range = rng })
+              $ ideErrorWithSource (Just "Import cycle detection") (Just DiagnosticSeverity_Error) fp ("Cyclic module dependency between " <> showCycle mods) Nothing
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
