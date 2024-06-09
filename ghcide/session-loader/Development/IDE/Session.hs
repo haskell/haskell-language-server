@@ -101,14 +101,14 @@ import           Data.HashMap.Strict                 (HashMap)
 import           Data.HashSet                        (HashSet)
 import qualified Data.HashSet                        as Set
 import           Database.SQLite.Simple
-import           Development.IDE.Core.Tracing         (withTrace)
-import           Development.IDE.Core.WorkerThread    (WorkerQueue,
-                                                       awaitRunInThread,
-                                                       withWorkerQueue)
-import           Development.IDE.Session.Diagnostics  (renderCradleError)
-import           Development.IDE.Types.Shake          (WithHieDb,
-                                                       WithHieDbShield (..),
-                                                       toNoFileKey)
+import           Development.IDE.Core.Tracing        (withTrace)
+import           Development.IDE.Core.WorkerThread   (WorkerQueue,
+                                                      awaitRunInThread,
+                                                      withWorkerQueue)
+import           Development.IDE.Session.Diagnostics (renderCradleError)
+import           Development.IDE.Types.Shake         (WithHieDb,
+                                                      WithHieDbShield (..),
+                                                      toNoFileKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
