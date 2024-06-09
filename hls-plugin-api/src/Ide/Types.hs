@@ -914,7 +914,7 @@ pluginGetVirtualFile uri = HandlerM $ getVirtualFile uri
 -- | Version of 'getVersionedTextDoc' for HandlerM
 --
 -- TODO: Should use 'pluginGetVirtualFile' instead of wrapping 'getVersionedTextDoc'.
--- At the time of writing, 'pluginGetVirtualFile' of the "lsp" package is implemented with 'getVirtualFile'.
+-- At the time of writing, 'getVersionedTextDoc' of the "lsp" package is implemented with 'getVirtualFile'.
 pluginGetVersionedTextDoc :: TextDocumentIdentifier -> HandlerM config VersionedTextDocumentIdentifier
 pluginGetVersionedTextDoc = HandlerM . getVersionedTextDoc
 
