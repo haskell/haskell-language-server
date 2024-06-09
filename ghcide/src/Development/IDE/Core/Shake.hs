@@ -1356,7 +1356,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
                 let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
-                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (\lspDiag -> FileDiagnostic fp ShowDiag lspDiag NoStructuredMessage) newDiags) -- TODO: Should try to get structured diagnostics plumbed here if possible
+                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (\lspDiag -> ideErrorFromLspDiag lspDiag fp Nothing) newDiags) -- TODO: Should try to get structured diagnostics plumbed here if possible
                         Just env -> LSP.runLspT env $ do
                             liftIO $ tag "count" (show $ Prelude.length newDiags)
                             liftIO $ tag "key" (show k)
@@ -1423,7 +1423,7 @@ getAllDiagnostics ::
     STMDiagnosticStore ->
     STM [FileDiagnostic]
 getAllDiagnostics =
-    fmap (concatMap (\(k,v) -> map (\diag -> FileDiagnostic (fromUri k) ShowDiag diag NoStructuredMessage) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT -- TODO: Do we need the structured message here?
+    fmap (concatMap (\(k,v) -> map (\diag -> ideErrorFromLspDiag diag (fromUri k) Nothing) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT -- TODO: Do we need the structured message here?
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =

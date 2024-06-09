@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 module Development.IDE.GHC.Error
@@ -56,23 +57,11 @@ import           Language.LSP.VFS                  (CodePointPosition (CodePoint
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> Maybe (MsgEnvelope GhcMessage) -> FileDiagnostic
 diagFromText diagSource sev loc msg origMsg =
-  FileDiagnostic
-    { fdFilePath = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc
-    , fdShouldShowDiagnostic = ShowDiag
-    , fdLspDiagnostic =
-        Diagnostic
-        { _range    = fromMaybe noRange $ srcSpanToRange loc
-        , _severity = Just sev
-        , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
-        , _message  = msg
-        , _code     = Nothing
-        , _relatedInformation = Nothing
-        , _tags     = Nothing
-        , _codeDescription = Nothing
-        , _data_   = Nothing
-        }
-    , fdStructuredMessage = maybe NoStructuredMessage SomeStructuredMessage origMsg
-    }
+  modifyFdLspDiagnostic (\diag -> diag { D._range = fromMaybe noRange $ srcSpanToRange loc }) $
+    D.ideErrorWithSource
+      (Just diagSource) (Just sev)
+      (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc)
+      msg origMsg
 
 -- | Produce a GHC-style error from a source span and a message.
 diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope GhcMessage -> [FileDiagnostic]
