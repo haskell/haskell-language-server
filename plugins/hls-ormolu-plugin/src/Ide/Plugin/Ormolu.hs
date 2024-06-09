@@ -39,7 +39,6 @@ import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
-import           Text.Read                       (readMaybe)
 
 -- ---------------------------------------------------------------------
 
@@ -64,16 +63,13 @@ properties =
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
 provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
-  fileOpts <-
-      maybe [] (fromDyn . hsc_dflags . hscEnv)
-          <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)
   useCLI <- liftIO $ runAction "Ormolu" ideState $ usePropertyAction #external plId properties
 
   if useCLI
       then mapExceptT liftIO $ ExceptT
            $ handle @IOException
           (pure . Left . PluginInternalError . T.pack . show)
-           $ runExceptT $ cliHandler fileOpts
+           $ runExceptT cliHandler
       else do
           logWith recorder Debug $ LogCompiledInVersion VERSION_ormolu
 
@@ -102,6 +98,9 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefini
               [ Handler $ pure . Left . SomeException @OrmoluException
               , Handler $ pure . Left . SomeException @IOException
               ]
+          fileOpts <-
+              maybe [] (fromDyn . hsc_dflags . hscEnv)
+                  <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)
 
           res <- liftIO $ fmt contents defaultConfig { cfgDynOptions = map DynOption fileOpts, cfgRegion = region }
           ret res
@@ -131,31 +130,13 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefini
        ex = showExtension <$> S.toList (D.extensionFlags df)
      in pp <> pm <> ex
 
-   cliHandler :: [String] -> ExceptT PluginError IO ([TextEdit] |? Null)
-   cliHandler fileOpts = do
-       CLIVersionInfo{noCabal} <- do -- check Ormolu version so that we know which flags to use
-           (exitCode, out, _err) <- liftIO $ readCreateProcessWithExitCode ( proc "ormolu" ["--version"] ) ""
-           let version = do
-                   guard $ exitCode == ExitSuccess
-                   "ormolu" : v : _ <- pure $ T.words out
-                   traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
-           case version of
-               Just v -> do
-                   logWith recorder Debug $ LogExternalVersion v
-                   pure CLIVersionInfo
-                       { noCabal = v >= [0, 7]
-                       }
-               Nothing -> do
-                   logWith recorder Debug $ LogExternalVersion []
-                   logWith recorder Warning $ NoVersion out
-                   pure CLIVersionInfo
-                       { noCabal = True
-                       }
+   cliHandler :: ExceptT PluginError IO ([TextEdit] |? Null)
+   cliHandler = do
        (exitCode, out, err) <- do -- run Ormolu
-           let commandArgs = map ("-o" <>) fileOpts
+           let commandArgs =
                        -- "The --stdin-input-file option is necessary when using input from
                        -- stdin and accounting for .cabal files" as per Ormolu documentation
-                       <> (if noCabal then ["--no-cabal"] else ["--stdin-input-file", fp'])
+                       ["--stdin-input-file", fp']
                        <> catMaybes
                            [ ("--start-line=" <>) . show <$> regionStartLine region
                            , ("--end-line=" <>) . show <$> regionEndLine region
@@ -171,13 +152,8 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefini
                logWith recorder Info $ StdErr err
                throwError $ PluginInternalError $ "Ormolu failed with exit code " <> T.pack (show n)
 
-newtype CLIVersionInfo =   CLIVersionInfo
-    { noCabal :: Bool
-    }
-
 data LogEvent
-    = NoVersion Text
-    | StdErr Text
+    = StdErr Text
     | LogCompiledInVersion String
     | LogExternalVersion [Int]
     | LogOrmoluCommand [String] FilePath
@@ -185,7 +161,6 @@ data LogEvent
 
 instance Pretty LogEvent where
     pretty = \case
-        NoVersion t -> "Couldn't get Ormolu version:" <> line <> indent 2 (pretty t)
         StdErr t -> "Ormolu stderr:" <> line <> indent 2 (pretty t)
         LogCompiledInVersion v -> "Using compiled in ormolu-" <> pretty v
         LogExternalVersion v ->
