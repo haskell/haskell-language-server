@@ -26,6 +26,11 @@ test-options: -j1
 package *
   ghc-options: -haddock
 
+source-repository-package
+  type:git
+  location: https://github.com/jhrcek/text-rope.git
+  tag: 37e808b26c8e8c862a04c985663fefd7c64335e2 
+
 constraints:
   -- C++ is hard to distribute, especially on older GHCs
   -- See https://github.com/haskell/haskell-language-server/issues/3822
@@ -41,3 +46,4 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd
+

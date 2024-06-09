@@ -12,7 +12,7 @@ import           Data.Maybe                       (catMaybes, listToMaybe,
                                                    mapMaybe)
 import           Data.Text                        (Text, intercalate)
 import qualified Data.Text                        as T
-import qualified Data.Text.Utf16.Rope.Mixed       as Rope
+import qualified Data.Text.Mixed.Rope             as Rope
 import           Development.IDE                  hiding (line)
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
 import           Development.IDE.Core.Shake       (toKnownFiles)
@@ -82,8 +82,7 @@ jumpToNote state _ param
         let Position l c = param ^. L.position
         contents <- fmap _file_text . err "Error getting file contents"
             =<< lift (LSP.getVirtualFile uriOrig)
-        line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
-            (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
+        let line = Rope.getLine (fromIntegral l) contents
         let noteOpt = listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
         case noteOpt of
             Nothing -> pure (InR (InR Null))

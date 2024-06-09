@@ -61,7 +61,7 @@ import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
-import qualified Data.Text.Utf16.Rope.Mixed               as Rope
+import qualified Data.Text.Mixed.Rope                     as Rope
 import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
@@ -907,9 +907,8 @@ getCompletionPrefixFromRope pos@(Position l c) ropetext =
             lastMaybe = headMaybe . reverse
 
         -- grab the entire line the cursor is at
-        curLine <- headMaybe $ Rope.lines
-                             $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
-        let beforePos = T.take (fromIntegral c) curLine
+            curLine = Rope.getLine (fromIntegral l) ropetext
+            beforePos = T.take (fromIntegral c) curLine
         -- the word getting typed, after previous space and before cursor
         curWord <-
             if | T.null beforePos        -> Just ""
