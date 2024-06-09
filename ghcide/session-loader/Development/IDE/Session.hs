@@ -573,10 +573,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                         this_flags = (this_error_env, this_dep_info)
                         this_error_env = ([this_error], Nothing)
                         this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) _cfp
-                                       $ T.unlines
-                                       [ "No cradle target found. Is this file listed in the targets of your cradle?"
-                                       , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
-                                       ]
+                                       (T.unlines
+                                         [ "No cradle target found. Is this file listed in the targets of your cradle?"
+                                         , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
+                                         ])
+                                       Nothing
 
           void $ modifyVar' fileToFlags $ Map.insert hieYaml this_flags_map
           void $ modifyVar' filesMap $ flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
@@ -797,10 +798,10 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- GHC had an implementation of this function, but it was horribly inefficient
 -- We should move back to the GHC implementation on compilers where
 -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/12162 is included
-checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> [DriverMessages]
+checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> Maybe (Compat.MsgEnvelope DriverMessage)
 checkHomeUnitsClosed' ue home_id_set
-    | OS.null bad_unit_ids = []
-    | otherwise = [singleMessage $ GHC.mkPlainErrorMsgEnvelope rootLoc $ DriverHomePackagesNotClosed (OS.toList bad_unit_ids)]
+    | OS.null bad_unit_ids = Nothing
+    | otherwise = Just (GHC.mkPlainErrorMsgEnvelope rootLoc $ DriverHomePackagesNotClosed (OS.toList bad_unit_ids))
   where
     bad_unit_ids = upwards_closure OS.\\ home_id_set
     rootLoc = mkGeneralSrcSpan (Compat.fsLit "<command line>")
@@ -875,13 +876,29 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
     hscEnv' <- -- Set up a multi component session with the other units on GHC 9.4
               Compat.initUnits dfs hsc_env
 
-    let closure_errs = checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
-        multi_errs = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp . T.pack . Compat.printWithoutUniques) closure_errs
+#if MIN_VERSION_ghc(9,6,1)
+    let closure_errs = maybeToList $ checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
+        -- TODO: Is this the right thing to do here, to produce an error for each DriverMessage generated?
+        closure_err_to_multi_err err =
+            ideErrorWithSource
+                (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
+                (T.pack (Compat.printWithoutUniques (singleMessage err)))
+                (Just (fmap GhcDriverMessage err))
+        multi_errs = map closure_err_to_multi_err closure_errs
         bad_units = OS.fromList $ concat $ do
-            x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages closure_errs
+            x <- map errMsgDiagnostic closure_errs
             DriverHomePackagesNotClosed us <- pure x
             pure us
         isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
+#else
+    let closure_errs = maybeToList $ checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
+        multi_errs = map (\diag -> ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp (T.pack (Compat.printWithoutUniques (singleMessage diag))) Nothing) closure_errs
+        bad_units = OS.fromList $ concat $ do
+            x <- map errMsgDiagnostic closure_errs
+            DriverHomePackagesNotClosed us <- pure x
+            pure us
+        isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
+#endif
     -- Whenever we spin up a session on Linux, dynamically load libm.so.6
     -- in. We need this in case the binary is statically linked, in which
     -- case the interactive session will fail when trying to load
@@ -1225,4 +1242,4 @@ showPackageSetupException PackageSetupException{..} = unwords
 
 renderPackageSetupException :: FilePath -> PackageSetupException -> FileDiagnostic
 renderPackageSetupException fp e =
-  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)
+  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e) Nothing

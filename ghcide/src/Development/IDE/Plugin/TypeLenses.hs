@@ -126,7 +126,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
           -- We don't actually pass any data to resolve, however we need this
           -- dummy type to make sure HLS resolves our lens
           [ CodeLens _range Nothing (Just $ toJSON TypeLensesResolve)
-            | FileDiagnostic dFile _ diag@Diagnostic{_range} <- diags
+            | FileDiagnostic dFile _ diag@Diagnostic{_range} _ <- diags
             , dFile == nfp
             , isGlobalDiagnostic diag]
         -- The second option is to generate lenses from the GlobalBindingTypeSig

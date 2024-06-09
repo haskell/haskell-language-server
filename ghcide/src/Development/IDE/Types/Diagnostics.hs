@@ -8,6 +8,7 @@ module Development.IDE.Types.Diagnostics (
   ShowDiagnostic(..),
   FileDiagnostic(..),
   modifyFdLspDiagnostic,
+  StructuredMessage(..),
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
@@ -21,6 +22,7 @@ import           Control.DeepSeq
 import           Data.ByteString                (ByteString)
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
+import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope)
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           Language.LSP.Diagnostics
@@ -47,27 +49,35 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
-ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText fdFilePath msg =
-  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) fdFilePath msg
+ideErrorText :: Maybe (MsgEnvelope GhcMessage) -> NormalizedFilePath -> T.Text -> FileDiagnostic
+ideErrorText origMsg fdFilePath msg =
+  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) fdFilePath msg origMsg
 
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
   -> NormalizedFilePath
   -> T.Text
+  -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
-ideErrorWithSource source sev fp msg = FileDiagnostic fp ShowDiag LSP.Diagnostic {
-    _range = noRange,
-    _severity = sev,
-    _code = Nothing,
-    _source = source,
-    _message = msg,
-    _relatedInformation = Nothing,
-    _tags = Nothing,
-    _codeDescription = Nothing,
-    _data_ = Nothing
-    }
+ideErrorWithSource source sev fdFilePath msg origMsg =
+  let fdShouldShowDiagnostic = ShowDiag
+      fdLspDiagnostic =
+        LSP.Diagnostic {
+          _range = noRange,
+          _severity = sev,
+          _code = Nothing,
+          _source = source,
+          _message = msg,
+          _relatedInformation = Nothing,
+          _tags = Nothing,
+          _codeDescription = Nothing,
+          _data_ = Nothing
+        }
+      fdStructuredMessage =
+        maybe NoStructuredMessage SomeStructuredMessage origMsg
+  in
+  FileDiagnostic {..}
 
 -- | Defines whether a particular diagnostic should be reported
 --   back to the user.
@@ -94,10 +104,35 @@ data FileDiagnostic = FileDiagnostic
   { fdFilePath :: NormalizedFilePath
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic :: Diagnostic
+  , fdStructuredMessage :: StructuredMessage
   }
   deriving (Eq, Ord, Show, Generic)
 
 instance NFData FileDiagnostic
+
+data StructuredMessage
+  = NoStructuredMessage
+  | SomeStructuredMessage (MsgEnvelope GhcMessage)
+  deriving (Generic)
+
+instance Show StructuredMessage where
+  show NoStructuredMessage = "NoStructuredMessage"
+  show SomeStructuredMessage {} = "SomeStructuredMessage"
+
+instance Eq StructuredMessage where
+  (==) NoStructuredMessage NoStructuredMessage = True
+  (==) SomeStructuredMessage {} SomeStructuredMessage {} = True
+  (==) _ _ = False
+
+instance Ord StructuredMessage where
+  compare NoStructuredMessage NoStructuredMessage = EQ
+  compare SomeStructuredMessage {} SomeStructuredMessage {} = EQ
+  compare NoStructuredMessage SomeStructuredMessage {} = GT
+  compare SomeStructuredMessage {} NoStructuredMessage = LT
+
+instance NFData StructuredMessage where
+  rnf NoStructuredMessage = ()
+  rnf SomeStructuredMessage {} = ()
 
 modifyFdLspDiagnostic :: (Diagnostic -> Diagnostic) -> FileDiagnostic -> FileDiagnostic
 modifyFdLspDiagnostic f diag =
