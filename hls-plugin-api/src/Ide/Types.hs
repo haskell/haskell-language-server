@@ -893,7 +893,12 @@ instance GEq IdeNotification where
 instance GCompare IdeNotification where
   gcompare (IdeNotification a) (IdeNotification b) = gcompare a b
 
--- | Restricted version of 'LspM' specific to plugins
+-- | Restricted version of 'LspM' specific to plugins.
+--
+-- We plan to use this monad for running plugins instead of 'LspM', since there
+-- are parts of the LSP server state which plugins should not access directly,
+-- but instead only via the build system. Note that this restriction of the LSP
+-- server state has not yet been implemented. See 'pluginGetVirtualFile'.
 newtype HandlerM config a = HandlerM { _runHandlerM :: LspM config a }
   deriving newtype (Applicative, Functor, Monad, MonadIO, MonadUnliftIO)
 
