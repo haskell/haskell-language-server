@@ -27,7 +27,8 @@ module Development.IDE.GHC.Util(
     dontWriteHieFiles,
     disableWarningsAsErrors,
     printOutputable,
-    getExtensions
+    getExtensions,
+    textInRange
     ) where
 
 import           Control.Concurrent
@@ -272,3 +273,21 @@ printOutputable =
 
 getExtensions :: ParsedModule -> [Extension]
 getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary
+
+-- | Returns [start .. end[
+textInRange :: Range -> T.Text -> T.Text
+textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCol)) (Position (fromIntegral -> endRow) (fromIntegral -> endCol))) text =
+    case compare startRow endRow of
+      LT ->
+        let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine
+            (textInRangeInFirstLine, linesBetween) = case linesInRangeBeforeEndLine of
+              [] -> ("", [])
+              firstLine:linesInBetween -> (T.drop startCol firstLine, linesInBetween)
+            maybeTextInRangeInEndLine = T.take endCol <$> listToMaybe endLineAndFurtherLines
+        in T.intercalate "\n" (textInRangeInFirstLine : linesBetween ++ maybeToList maybeTextInRangeInEndLine)
+      EQ ->
+        let line = fromMaybe "" (listToMaybe linesBeginningWithStartLine)
+        in T.take (endCol - startCol) (T.drop startCol line)
+      GT -> ""
+    where
+      linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
