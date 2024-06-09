@@ -160,8 +160,13 @@ computePackageDeps
     -> IO (Either [FileDiagnostic] [UnitId])
 computePackageDeps env pkg = do
     case lookupUnit env pkg of
-        Nothing -> return $ Left [ideErrorText (toNormalizedFilePath' noFilePath) $
-            T.pack $ "unknown package: " ++ show pkg]
+        Nothing ->
+          return $ Left
+            [ ideErrorText
+                Nothing
+                (toNormalizedFilePath' noFilePath)
+                (T.pack $ "unknown package: " ++ show pkg)
+            ]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
 newtype TypecheckHelpers
@@ -599,8 +604,14 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
     source = "compile"
     catchErrs x = x `catches`
       [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
-      , Handler $ return . (,Nothing) . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
-      . (("Error during " ++ T.unpack source) ++) . show @SomeException
+      , Handler $ \diag ->
+          return
+            ( diagFromString
+                source DiagnosticSeverity_Error (noSpan "<internal>")
+                ("Error during " ++ T.unpack source ++ show @SomeException diag)
+                Nothing
+            , Nothing
+            )
       ]
 
 -- | Whether we should run the -O0 simplifier when generating core.
@@ -1028,16 +1039,25 @@ handleGenerationErrors :: DynFlags -> T.Text -> IO () -> IO [FileDiagnostic]
 handleGenerationErrors dflags source action =
   action >> return [] `catches`
     [ Handler $ return . diagFromGhcException source dflags
-    , Handler $ return . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
-    . (("Error during " ++ T.unpack source) ++) . show @SomeException
+    , Handler $ \(exception :: SomeException) -> return $
+        diagFromString
+          source DiagnosticSeverity_Error (noSpan "<internal>")
+          ("Error during " ++ T.unpack source ++ show exception)
+          Nothing
     ]
 
 handleGenerationErrors' :: DynFlags -> T.Text -> IO (Maybe a) -> IO ([FileDiagnostic], Maybe a)
 handleGenerationErrors' dflags source action =
   fmap ([],) action `catches`
     [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
-    , Handler $ return . (,Nothing) . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
-    . (("Error during " ++ T.unpack source) ++) . show @SomeException
+    , Handler $ \(exception :: SomeException) ->
+        return
+          ( diagFromString
+              source DiagnosticSeverity_Error (noSpan "<internal>")
+              ("Error during " ++ T.unpack source ++ show exception)
+              Nothing
+          , Nothing
+          )
     ]
 
 
@@ -1290,12 +1310,21 @@ parseFileContents env customPreprocessor filename ms = do
              psMessages = getPsMessages pst
          in
            do
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+               let IdePreprocessedSource preproc_warns preproc_errs parsed = customPreprocessor rdr_module
+               let attachNoStructuredError (span, msg) = (span, msg, Nothing)
 
-               unless (null errs) $
-                  throwE $ diagFromStrings sourceParser DiagnosticSeverity_Error errs
+               unless (null preproc_errs) $
+                  throwE $
+                    diagFromStrings
+                      sourceParser
+                      DiagnosticSeverity_Error
+                      (fmap attachNoStructuredError preproc_errs)
 
-               let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
+               let preproc_warning_file_diagnostics =
+                     diagFromStrings
+                      sourceParser
+                      DiagnosticSeverity_Warning
+                      (fmap attachNoStructuredError preproc_warns)
                (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms hpm_annotations parsed psMessages
                let (warns, errors) = renderMessages msgs
 
@@ -1345,7 +1374,7 @@ parseFileContents env customPreprocessor filename ms = do
 
                let pm = ParsedModule ms parsed' srcs2 hpm_annotations
                    warnings = diagFromErrMsgs sourceParser dflags warns
-               pure (warnings ++ preproc_warnings, pm)
+               pure (warnings ++ preproc_warning_file_diagnostics, pm)
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do
