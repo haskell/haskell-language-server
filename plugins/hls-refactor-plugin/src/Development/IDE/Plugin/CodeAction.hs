@@ -52,7 +52,8 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint                    as E
 import           Development.IDE.GHC.Util                          (printOutputable,
-                                                                    printRdrName)
+                                                                    printRdrName,
+                                                                    textInRange)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -330,8 +331,8 @@ findSigOfBinds range = go
             findSigOfBind range (unLoc lHsBindLR)
     go _ = Nothing
 
-findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> Range -> [LHsDecl p] -> Maybe (LHsType p)
-findInstanceHead df diagnosticLocation decls =
+findInstanceHead :: (p ~ GhcPass p0) => Range -> [LHsDecl p] -> Maybe (LHsType p)
+findInstanceHead diagnosticLocation decls =
   listToMaybe
     [ hsib_body
       | L (locA -> instanceLocation) (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls
@@ -1215,7 +1216,7 @@ suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
   | Just missingConstraint <- findMissingConstraint _message
   = let codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedModule
-                        else suggestInstanceConstraint df parsedModule
+                        else suggestInstanceConstraint parsedModule
      in codeAction diag missingConstraint
   | otherwise = []
     where
@@ -1237,9 +1238,9 @@ suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
         in getCorrectGroup <$> match
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
-suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
+suggestInstanceConstraint :: ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
 
-suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
+suggestInstanceConstraint (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
   | Just instHead <- instanceHead
   = [(actionTitle missingConstraint , appendConstraint (T.unpack missingConstraint) instHead)]
   | otherwise = []
@@ -1251,7 +1252,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         -- • In the expression: x == y
         --   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
         --   In the instance declaration for ‘Eq (Wrap a)’
-        | Just instHead <- findInstanceHead df _range hsmodDecls
+        | Just instHead <- findInstanceHead _range hsmodDecls
         = Just instHead
         -- Suggests a constraint for an instance declaration with one or more existing constraints.
         -- • Could not deduce (Eq b) arising from a use of ‘==’
@@ -1883,24 +1884,6 @@ splitTextAtPosition (Position (fromIntegral -> row) (fromIntegral -> col)) x
     , (preCol, postCol) <- T.splitAt col mid
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
     | otherwise = (x, T.empty)
-
--- | Returns [start .. end[
-textInRange :: Range -> T.Text -> T.Text
-textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCol)) (Position (fromIntegral -> endRow) (fromIntegral -> endCol))) text =
-    case compare startRow endRow of
-      LT ->
-        let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine
-            (textInRangeInFirstLine, linesBetween) = case linesInRangeBeforeEndLine of
-              [] -> ("", [])
-              firstLine:linesInBetween -> (T.drop startCol firstLine, linesInBetween)
-            maybeTextInRangeInEndLine = T.take endCol <$> listToMaybe endLineAndFurtherLines
-        in T.intercalate "\n" (textInRangeInFirstLine : linesBetween ++ maybeToList maybeTextInRangeInEndLine)
-      EQ ->
-        let line = fromMaybe "" (listToMaybe linesBeginningWithStartLine)
-        in T.take (endCol - startCol) (T.drop startCol line)
-      GT -> ""
-    where
-      linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
