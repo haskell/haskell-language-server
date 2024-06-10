@@ -17,9 +17,9 @@ type ErrorMsg = String
 requireDiagnostic
     :: (Foldable f, Show (f Diagnostic), HasCallStack)
     => f Diagnostic
-    -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)
+    -> (DiagnosticSeverity, Cursor, T.Text, Maybe T.Text, Maybe DiagnosticTag)
     -> Maybe ErrorMsg
-requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag)
+requireDiagnostic actuals expected@(severity, cursor, expectedMsg, mbExpectedCode, expectedTag)
     | any match actuals = Nothing
     | otherwise = Just $
             "Could not find " <> show expected <>
@@ -32,6 +32,13 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag)
         && standardizeQuotes (T.toLower expectedMsg) `T.isInfixOf`
            standardizeQuotes (T.toLower $ d ^. message)
         && hasTag expectedTag (d ^. tags)
+        && codeMatches d
+
+    codeMatches d =
+        case (mbExpectedCode, _code d) of
+          (Nothing, _) -> True
+          (Just expectedCode, Nothing) -> False
+          (Just expectedCode, Just actualCode) -> InR expectedCode == actualCode
 
     hasTag :: Maybe DiagnosticTag -> Maybe [DiagnosticTag] -> Bool
     hasTag Nothing  _                   = True
