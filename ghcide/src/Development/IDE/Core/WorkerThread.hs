@@ -37,10 +37,12 @@ Moreover, we can not stop these threads uniformly when we are shutting down the 
 
 data WorkerQueue a = WorkerQueueOfOne (TMVar a) | WorkerQueueOfMany (TQueue a)
 
+-- | peekWorkerQueue returns the next action in the queue without removing it.
 peekWorkerQueue :: WorkerQueue a -> STM a
 peekWorkerQueue (WorkerQueueOfOne tVar)    = readTMVar tVar
 peekWorkerQueue (WorkerQueueOfMany tQueue) = peekTQueue tQueue
 
+-- | readWorkerQueue returns the next action in the queue and removes it.
 readWorkerQueue :: WorkerQueue a -> STM a
 readWorkerQueue (WorkerQueueOfOne tVar)    = takeTMVar tVar
 readWorkerQueue (WorkerQueueOfMany tQueue) = readTQueue tQueue
@@ -48,6 +50,15 @@ readWorkerQueue (WorkerQueueOfMany tQueue) = readTQueue tQueue
 writeWorkerQueue :: WorkerQueue a -> a -> STM ()
 writeWorkerQueue (WorkerQueueOfOne tVar) action    = putTMVar tVar action
 writeWorkerQueue (WorkerQueueOfMany tQueue) action = writeTQueue tQueue action
+
+-- | waitUntilWorkerQueueEmpty blocks until the worker queue is empty.
+waitUntilWorkerQueueEmpty :: WorkerQueue a -> STM ()
+waitUntilWorkerQueueEmpty (WorkerQueueOfOne tVar) = do
+    isEmpty <- isEmptyTMVar tVar
+    unless isEmpty retry
+waitUntilWorkerQueueEmpty (WorkerQueueOfMany queue) = do
+    isEmpty <- isEmptyTQueue queue
+    unless isEmpty retry
 
 newWorkerQueue :: STM (WorkerQueue a)
 newWorkerQueue = WorkerQueueOfMany <$> newTQueue
@@ -84,14 +95,6 @@ runWorkerQueue q workerAction = ContT $ \mainAction -> do
                 l <- atomically $ peekWorkerQueue q
                 workerAction l `finally` atomically (readWorkerQueue q)
 
--- | waitUntilWorkerQueueEmpty blocks until the worker queue is empty.
-waitUntilWorkerQueueEmpty :: WorkerQueue a -> IO ()
-waitUntilWorkerQueueEmpty (WorkerQueueOfOne tVar) = atomically $ do
-    isEmpty <- isEmptyTMVar tVar
-    unless isEmpty retry
-waitUntilWorkerQueueEmpty (WorkerQueueOfMany queue) = atomically $ do
-    isEmpty <- isEmptyTQueue queue
-    unless isEmpty retry
 
 -- | 'awaitRunInThread' queues up an 'IO' action to be run by a worker thread,
 -- and then blocks until the result is computed.
