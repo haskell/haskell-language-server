@@ -147,14 +147,13 @@ import           Ide.Logger                                   (Pretty (pretty),
 import qualified Ide.Logger                                   as Logger
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties                        (HasProperty,
-                                                               KeyNameProxy,
+                                                               HasPropertyByPath,
                                                                KeyNamePath,
+                                                               KeyNameProxy,
                                                                Properties,
                                                                ToHsType,
                                                                useProperty,
-                                                               usePropertyByPath,
-                                                               HasPropertyByPath
-                                                               )
+                                                               usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
@@ -226,6 +225,9 @@ toIdeResult = either (, Nothing) (([],) . Just)
 ------------------------------------------------------------
 -- Exposed API
 ------------------------------------------------------------
+
+-- TODO: rename
+-- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp

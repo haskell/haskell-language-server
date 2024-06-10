@@ -49,7 +49,6 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Server                  as LSP
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
 import           System.Time.Extra
@@ -91,9 +90,9 @@ plugin = (defaultPluginDescriptor "test" "") {
 
 testRequestHandler ::  IdeState
                 -> TestRequest
-                -> LSP.LspM c (Either PluginError Value)
+                -> HandlerM config (Either PluginError Value)
 testRequestHandler _ (BlockSeconds secs) = do
-    LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/request")) $
+    pluginSendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/request")) $
       toJSON secs
     liftIO $ sleep secs
     return (Right A.Null)
@@ -171,6 +170,6 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId "") {
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
 blockCommandHandler _ideState _ _params = do
-  lift $ LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
+  lift $ pluginSendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
   liftIO $ threadDelay maxBound
   pure $ InR Null

@@ -99,7 +99,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
-import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
@@ -110,7 +109,7 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
+  contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
   liftIO $ do
     let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -190,7 +189,7 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
     whenJust (listToMaybe =<< listToMaybe . M.elems =<< _changes) $ \TextEdit {_range} -> do
       let srcSpan = rangeToSrcSpan nfp _range
-      LSP.sendNotification SMethod_WindowShowMessage $
+      pluginSendNotification SMethod_WindowShowMessage $
         ShowMessageParams MessageType_Info $
           "Import "
             <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
@@ -199,7 +198,7 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
             <> " (at "
             <> printOutputable srcSpan
             <> ")"
-      void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+      void $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right $ InR Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)

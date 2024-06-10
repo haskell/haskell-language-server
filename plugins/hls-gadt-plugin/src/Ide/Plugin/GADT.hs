@@ -32,7 +32,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server              (sendRequest)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId "Provides a code action to convert datatypes to GADT syntax")
@@ -70,7 +69,7 @@ toGADTCommand pId@(PluginId pId') state _ ToGADTParams{..} = withExceptT handleG
     pragma <- withExceptT GhcidePluginErrors $ getFirstPragma pId state nfp
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
-    _ <- lift $ sendRequest
+    _ <- lift $ pluginSendRequest
             SMethod_WorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp (TextEdit range txt : insertEdit)))
             (\_ -> pure ())
