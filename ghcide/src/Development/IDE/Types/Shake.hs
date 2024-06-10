@@ -12,7 +12,7 @@ module Development.IDE.Types.Shake
     ShakeValue(..),
     currentValue,
     isBadDependency,
-  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType,WithHieDb)
+  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType,WithHieDb,WithHieDbShield(..))
 where
 
 import           Control.DeepSeq
@@ -41,6 +41,9 @@ import           Unsafe.Coerce                        (unsafeCoerce)
 -- | Intended to represent HieDb calls wrapped with (currently) retry
 -- functionality
 type WithHieDb = forall a. (HieDb -> IO a) -> IO a
+
+-- used to smuggle RankNType WithHieDb through dbMVar
+newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 data Value v
     = Succeeded (Maybe FileVersion) v
