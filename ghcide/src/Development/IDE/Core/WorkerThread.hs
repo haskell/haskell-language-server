@@ -7,7 +7,12 @@ Description : This module provides an API for managing worker threads in the IDE
 see Note [Serializing runs in separate thread]
 -}
 module Development.IDE.Core.WorkerThread
-    (withWorkerQueue, awaitRunInThread, withWorkerQueueOfOne, WorkerQueue, writeWorkerQueue)
+    (withWorkerQueue
+    , awaitRunInThread
+    , withWorkerQueueOfOne
+    , WorkerQueue
+    , writeWorkerQueue
+    , waitUntilWorkerQueueEmpty)
  where
 
 import           Control.Concurrent.Async  (withAsync)
@@ -15,7 +20,7 @@ import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
 import           Control.Exception         (finally)
-import           Control.Monad             (forever)
+import           Control.Monad             (forever, unless)
 import           Control.Monad.Cont        (ContT (ContT))
 import           Control.Monad.IO.Class    (liftIO)
 
@@ -53,7 +58,7 @@ withWorkerQueue workerAction = do
 
 -- | 'withWorkerQueueOfOne' creates a new 'WorkerQueue' that only allows one action to be queued at a time.
 -- and one action can only be queued after the previous action has been done.
--- this is useful when we want to cancel the action waiting in the queue, if it's thread is cancelled.
+-- this is useful when we want to cancel the action waiting to be enqueue if it's thread is cancelled.
 -- e.g. session loading in session loader. When a shake session is restarted, we want to cancel the previous pending session loading.
 withWorkerQueueOfOne :: (t -> IO a) -> ContT () IO (WorkerQueue t)
 withWorkerQueueOfOne workerAction = do
@@ -67,13 +72,22 @@ runWorkerQueue q workerAction = ContT $ \mainAction -> do
         writerThread q =
             forever $ do
                 case q of
-                    -- only remove the action from the queue after it has been run if it is a one-shot queue
+                    -- only remove the action from the queue after it has done
                     WorkerQueueOfOne tvar -> do
                         l <- atomically $ readTMVar tvar
                         workerAction l `finally` atomically (takeTMVar tvar)
                     WorkerQueueOfMany q -> do
-                        l <- atomically $ readTQueue q
-                        workerAction l
+                        l <- atomically $ peekTQueue q
+                        workerAction l `finally` atomically (readTQueue q)
+
+-- | waitUntilWorkerQueueEmpty blocks until the worker queue is empty.
+waitUntilWorkerQueueEmpty :: WorkerQueue a -> IO ()
+waitUntilWorkerQueueEmpty (WorkerQueueOfOne tvar) = atomically $ do
+    isEmpty <- isEmptyTMVar tvar
+    unless isEmpty retry
+waitUntilWorkerQueueEmpty (WorkerQueueOfMany queue) = atomically $ do
+    isEmpty <- isEmptyTQueue queue
+    unless isEmpty retry
 
 -- | 'awaitRunInThread' queues up an 'IO' action to be run by a worker thread,
 -- and then blocks until the result is computed.
