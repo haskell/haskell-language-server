@@ -16,7 +16,6 @@ import           Data.Default
 import           Data.List.Extra
 import           Data.Maybe
 import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
 import           Development.IDE.Types.Location
 import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Lens     as L
@@ -30,10 +29,9 @@ import           Language.LSP.Test
 import           Test.Hls                       (waitForTypecheck)
 import qualified Test.Hls.FileSystem            as FS
 import           Test.Hls.FileSystem            (file, text)
-import           Test.Hls.Util                  (knownBrokenOnWindows)
+import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 
 tests :: TestTree
@@ -277,7 +275,7 @@ nonLocalCompletionTests =
   ]
   where
     brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
-    brokenForWinOldGhc = knownBrokenFor (BrokenSpecific Windows [GHC92 .. GHC98]) "Windows (GHC <= 9.8) has strange things in scope for some reason"
+    brokenForWinOldGhc = knownBrokenInEnv ([HostOS Windows] ++ (map GhcVer [GHC92 .. GHC98])) "Windows (GHC <= 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
