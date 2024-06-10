@@ -4,7 +4,9 @@ import qualified Data.ByteString                       as B
 import           Data.Data                             hiding (Fixity)
 import           Development.IDE.GHC.Compat            hiding (LocatedA,
                                                         NameAnn)
-import           Development.IDE.GHC.Compat.ExactPrint
+import           Development.IDE.GHC.Compat.ExactPrint hiding ( showAstData
+                                                              , NoBlankEpAnnotations
+                                                              , NoBlankSrcSpan)
 import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
 import           GHC.Hs                                hiding (AnnLet)

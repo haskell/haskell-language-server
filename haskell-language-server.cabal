@@ -323,7 +323,7 @@ library hls-class-plugin
     , deepseq
     , extra
     , ghc
-    , ghc-exactprint  >= 1.5
+    , ghc-exactprint  >= 1.5 && < 1.10.0.0
     , ghcide          == 2.8.0.0
     , hls-graph
     , hls-plugin-api  == 2.8.0.0
