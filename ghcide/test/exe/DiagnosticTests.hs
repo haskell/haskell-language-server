@@ -104,7 +104,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'", Nothing)]
+          , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'", Just "GHC-83865")]
           )
         ]
   , testWithDummyPluginEmpty "typed hole" $ do
