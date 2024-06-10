@@ -38,16 +38,16 @@ Moreover, we can not stop these threads uniformly when we are shutting down the 
 data WorkerQueue a = WorkerQueueOfOne (TMVar a) | WorkerQueueOfMany (TQueue a)
 
 peekWorkerQueue :: WorkerQueue a -> STM a
-peekWorkerQueue (WorkerQueueOfOne tvar)    = readTMVar tvar
-peekWorkerQueue (WorkerQueueOfMany tqueue) = peekTQueue tqueue
+peekWorkerQueue (WorkerQueueOfOne tVar)    = readTMVar tVar
+peekWorkerQueue (WorkerQueueOfMany tQueue) = peekTQueue tQueue
 
 readWorkerQueue :: WorkerQueue a -> STM a
-readWorkerQueue (WorkerQueueOfOne tvar)    = takeTMVar tvar
-readWorkerQueue (WorkerQueueOfMany tqueue) = readTQueue tqueue
+readWorkerQueue (WorkerQueueOfOne tVar)    = takeTMVar tVar
+readWorkerQueue (WorkerQueueOfMany tQueue) = readTQueue tQueue
 
 writeWorkerQueue :: WorkerQueue a -> a -> STM ()
-writeWorkerQueue (WorkerQueueOfOne tvar) action    = putTMVar tvar action
-writeWorkerQueue (WorkerQueueOfMany tqueue) action = writeTQueue tqueue action
+writeWorkerQueue (WorkerQueueOfOne tVar) action    = putTMVar tVar action
+writeWorkerQueue (WorkerQueueOfMany tQueue) action = writeTQueue tQueue action
 
 newWorkerQueue :: STM (WorkerQueue a)
 newWorkerQueue = WorkerQueueOfMany <$> newTQueue
@@ -86,8 +86,8 @@ runWorkerQueue q workerAction = ContT $ \mainAction -> do
 
 -- | waitUntilWorkerQueueEmpty blocks until the worker queue is empty.
 waitUntilWorkerQueueEmpty :: WorkerQueue a -> IO ()
-waitUntilWorkerQueueEmpty (WorkerQueueOfOne tvar) = atomically $ do
-    isEmpty <- isEmptyTMVar tvar
+waitUntilWorkerQueueEmpty (WorkerQueueOfOne tVar) = atomically $ do
+    isEmpty <- isEmptyTMVar tVar
     unless isEmpty retry
 waitUntilWorkerQueueEmpty (WorkerQueueOfMany queue) = atomically $ do
     isEmpty <- isEmptyTQueue queue
