@@ -37,7 +37,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Protocol.Types              as LSP
-import qualified Language.LSP.Server                      as LSP
 import qualified Text.Fuzzy                               as Fuzzy
 
 -- ---------------------------------------------------------------------
@@ -199,7 +198,7 @@ completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion _ide _ complParams = do
     let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
         position@(Position ln col) = complParams ^. L.position
-    contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
+    contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
     fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
             pure $ result $ getCompletionPrefix position cnts

@@ -43,7 +43,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server                         (getVirtualFile)
 import qualified Language.LSP.VFS                            as VFS
 
 data Log
@@ -311,10 +310,12 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let (TextDocumentIdentifier uri) = complParams ^. JL.textDocument
       position = complParams ^. JL.position
-  mVf <- lift $ getVirtualFile $ toNormalizedUri uri
+  mVf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
   case (,) <$> mVf <*> uriToFilePath' uri of
     Just (cnts, path) -> do
-      mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ide) $ useWithStaleFast ParseCabalFields $ toNormalizedFilePath path
+      -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
+      -- In case it fails, we still will get some completion results instead of an error.
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
       case mFields of
         Nothing ->
           pure . InR $ InR Null
@@ -335,6 +336,9 @@ completion recorder ide _ complParams = do
         let completer = Completions.contextToCompleter ctx
         let completerData = CompleterTypes.CompleterData
               { getLatestGPD = do
+                -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
+                -- thus, a quick response gives us the desired result most of the time.
+                -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
                 mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath fp
                 pure $ fmap fst mGPD
               , cabalPrefixInfo = prefInfo

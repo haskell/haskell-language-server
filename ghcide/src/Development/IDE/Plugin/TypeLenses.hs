@@ -66,7 +66,8 @@ import           Ide.Types                            (CommandFunction,
                                                        defaultPluginDescriptor,
                                                        mkCustomConfig,
                                                        mkPluginHandler,
-                                                       mkResolveHandler)
+                                                       mkResolveHandler,
+                                                       pluginSendRequest)
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        (Method (Method_CodeLensResolve, Method_TextDocumentCodeLens),
                                                        SMethod (..))
@@ -79,7 +80,6 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
                                                        type (|?) (..))
-import qualified Language.LSP.Server                  as LSP
 import           Text.Regex.TDFA                      ((=~))
 
 data Log = LogShake Shake.Log deriving Show
@@ -193,7 +193,7 @@ generateLensCommand pId uri title edit =
 -- and applies it.
 commandHandler :: CommandFunction IdeState WorkspaceEdit
 commandHandler _ideState _ wedit = do
-  _ <- lift $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   pure $ InR Null
 
 --------------------------------------------------------------------------------
