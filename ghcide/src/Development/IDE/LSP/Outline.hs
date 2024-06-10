@@ -26,7 +26,7 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
                                                  SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
-                                                 type (|?) (InL, InR), uriToFilePath)
+                                                 type (|?) (InL, InR), uriToFilePath, mkRange, SymbolInformation (_deprecated))
 import          Language.LSP.Protocol.Message
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
