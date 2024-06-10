@@ -66,7 +66,9 @@ withWorkerQueue workerAction = do
 -- | 'withWorkerQueueOfOne' creates a new 'WorkerQueue' that only allows one action to be queued at a time.
 -- and one action can only be queued after the previous action has been done.
 -- this is useful when we want to cancel the action waiting to be enqueue if it's thread is cancelled.
--- e.g. session loading in session loader. When a shake session is restarted, we want to cancel the previous pending session loading.
+-- e.g. session loading in session loader. When a shake session is restarted
+-- , we want to cancel the previous pending session loading.
+-- since the hls-graph can handle the retrying of the session loading.
 withWorkerQueueOfOne :: (t -> IO a) -> ContT () IO (WorkerQueue t)
 withWorkerQueueOfOne workerAction = do
     q <- liftIO $ atomically newWorkerQueueOfOne
