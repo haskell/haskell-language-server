@@ -45,6 +45,7 @@ import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
 import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
+import GHC.Driver.Errors.Types (WarningMessages)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -157,6 +158,7 @@ data TcModuleResult = TcModuleResult
         -- ^ Which modules did we need at runtime while compiling this file?
         -- Used for recompilation checking in the presence of TH
         -- Stores the hash of their core file
+    , tmrWarnings        :: WarningMessages
     }
 instance Show TcModuleResult where
     show = show . pm_mod_summary . tmrParsed

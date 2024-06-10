@@ -150,6 +150,7 @@ library
     Development.IDE.GHC.Compat
     Development.IDE.GHC.Compat.Core
     Development.IDE.GHC.Compat.CmdLine
+    Development.IDE.GHC.Compat.Driver
     Development.IDE.GHC.Compat.Env
     Development.IDE.GHC.Compat.Iface
     Development.IDE.GHC.Compat.Logger
