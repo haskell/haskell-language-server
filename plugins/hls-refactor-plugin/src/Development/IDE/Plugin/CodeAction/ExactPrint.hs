@@ -11,6 +11,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   extendImport,
   hideSymbol,
   liftParseAST,
+  appendRecordFields,
 
   wildCardSymbol
 ) where
@@ -50,7 +51,7 @@ import           GHC                                    (AddEpAnn (..),
                                                          NameAdornment (NameParens),
                                                          TrailingAnn (AddCommaAnn),
                                                          addAnns, ann,
-                                                         emptyComments, reAnnL)
+                                                         emptyComments, reAnnL, NoEpAnns (..))
 
 
 ------------------------------------------------------------------------------
@@ -190,6 +191,44 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
     ast <- pure $ setEntryDP ast (SameLine 1)
 
     return $ reLocA $ L lTop $ HsQualTy noExtField context ast
+
+appendRecordFields :: [String] -> LHsExpr GhcPs -> Maybe Rewrite
+appendRecordFields newFields (L l recordCon@RecordCon{rcon_flds}) = Just $ Rewrite @(HsExpr GhcPs) (locA l) $ \df -> do
+  lContext <- uniqueSrcSpanT
+  let mkLFieldOcc :: XRec GhcPs RdrName -> TransformT (Either String) (LFieldOcc GhcPs)
+      mkLFieldOcc label = do
+          pure $ reAnnL NoEpAnns emptyComments $ L lContext $ FieldOcc {foExt = NoExtField , foLabel = label}
+  newRecPairs :: [(LFieldOcc GhcPs, LHsExpr GhcPs)] <- mapM (\f -> (,)
+                                                                      <$> (mkLFieldOcc =<< liftParseAST df f)
+                                                                      <*> liftParseAST df ("_" <> f)
+                                                               ) newFields
+  let newFieldRec :: (LFieldOcc GhcPs, LHsExpr GhcPs) -> (LHsRecField GhcPs (LHsExpr GhcPs))
+      newFieldRec (name, val) =
+           let bind = HsFieldBind { hfbAnn = epAnn lContext [AddEpAnn AnnEqual (epl 0)]
+                                  , hfbLHS = name
+                                  , hfbRHS = val
+                                  , hfbPun = False
+                                  }
+           in reAnnL (AnnListItem [AddCommaAnn (epl 0)]) emptyComments $ L lContext bind
+      newRecFlds = map newFieldRec newRecPairs
+      oldRecFlds = rec_flds rcon_flds
+
+      addTrailingComma :: [LHsRecField GhcPs (LHsExpr GhcPs)] -> [LHsRecField GhcPs (LHsExpr GhcPs)]
+      addTrailingComma = updateLast $ \(L _ x) -> reAnnL (AnnListItem [AddCommaAnn (epl 0)]) emptyComments $ L lContext x
+
+      removeTrailingComma :: [LHsRecField GhcPs (LHsExpr GhcPs)] -> [LHsRecField GhcPs (LHsExpr GhcPs)]
+      removeTrailingComma = updateLast $ \(L _ x) -> reAnnL (AnnListItem []) emptyComments $ L lContext x
+  pure $ L l (recordCon {
+       rcon_flds = rcon_flds {
+         rec_flds =  addTrailingComma oldRecFlds <> removeTrailingComma newRecFlds
+       }
+  })
+appendRecordFields _ _ = Nothing
+
+updateLast :: (a -> a) -> [a] -> [a]
+updateLast _ [] = []
+updateLast f [x] = [f x]
+updateLast f (x : xs) = x : updateLast f xs
 
 liftParseAST
     :: forall ast l.  (ASTElement l ast, ExactPrint (LocatedAn l ast))

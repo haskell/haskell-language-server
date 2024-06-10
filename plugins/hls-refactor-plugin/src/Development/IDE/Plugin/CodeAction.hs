@@ -9,6 +9,7 @@ module Development.IDE.Plugin.CodeAction
     typeSigsPluginDescriptor,
     bindingsPluginDescriptor,
     fillHolePluginDescriptor,
+    suggestAddMissingFieldsPluginDescriptor,
     extendImportPluginDescriptor,
     -- * For testing
     matchRegExMultipleImports
@@ -40,6 +41,7 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
+import           Debug.Trace
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -102,7 +104,8 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
 import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
-import           Text.Regex.TDFA                                   ((=~), (=~~))
+import           Text.Regex.TDFA                                   (mrAfter,
+                                                                    (=~), (=~~))
 
 -------------------------------------------------------------------------------------------------
 
@@ -166,6 +169,9 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
 
 fillHolePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId "Provides a code action to fill a hole")
+
+suggestAddMissingFieldsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+suggestAddMissingFieldsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestAddMissingFields) plId "Provides a code action to add missing fields")
 
 extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId "Provides a command to extend the import list")
@@ -1236,7 +1242,6 @@ suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
-
 suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
   | Just instHead <- instanceHead
   = [(actionTitle missingConstraint , appendConstraint (T.unpack missingConstraint) instHead)]
@@ -1275,6 +1280,225 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
       actionTitle :: T.Text -> T.Text
       actionTitle constraint = "Add `" <> constraint
         <> "` to the context of the instance declaration"
+
+suggestAddMissingFields :: ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+suggestAddMissingFields parsedSrc Diagnostic{_range=_range,..}
+    | Just constructorName <- extractConstructorName _message
+    , missingFields <- processMissingFields (T.lines _message) =
+      addMissingFields parsedSrc _range constructorName missingFields
+    | otherwise = []
+    where
+      extractConstructorName = fmap (headOrThrow "impossible") . flip matchRegexUnifySpaces "Fields of ‘([^ ]*)’ not initialised"
+      headOrThrow msg = \case
+        [] -> error msg
+        (x:_) -> x
+
+      processMissingFields :: [T.Text] -> [T.Text]
+      processMissingFields missingFieldLines = do
+          missingFieldsSection <-
+              getIndentedGroupsBy (=~ t " *• Fields of ‘([^ ]*)’ not initialised") missingFieldLines
+          missingFieldLine <-
+              mapHead
+                  (mrAfter . (=~ t " *• Fields of ‘([^ ]*)’ not initialised"))
+                  missingFieldsSection
+          let missingField = T.strip $ T.takeWhile (/= ':') missingFieldLine
+          guard $ not $ T.null missingField
+          pure missingField
+
+      t = id @T.Text
+
+      mapHead f (a:aa) = f a : aa
+      mapHead _ []     = []
+
+-- TODO: Extract this copy pasted code from FillHole.hs into something else
+
+-- |
+-- > getIndentedGroupsBy (" H" `isPrefixOf`) [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1", "  l1", "  l2"], [" H2", "  l3"]]
+getIndentedGroupsBy :: (T.Text -> Bool) -> [T.Text] -> [[T.Text]]
+getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
+    (l:ll) -> case span (\l' -> indentation l < indentation l') ll of
+        (indented, rest) -> (l:indented) : getIndentedGroupsBy pred rest
+    _ -> []
+
+indentation :: T.Text -> Int
+indentation = T.length . T.takeWhile isSpace
+
+addMissingFields :: ParsedSource -> Range -> T.Text -> [T.Text] -> [(T.Text, Rewrite)]
+addMissingFields (L _ HsModule {hsmodDecls}) range constructor missingFields
+ | Just (L _ (ValD _ FunBind {fun_matches})) <- findDeclContainingLoc (_start range) hsmodDecls
+ , Just recordCon <- findExprInMatchesWithConstructorApp constructor (_start range) fun_matches
+   = mkRewriteAddMissingFields missingFields $ traceAst "found-record-con" recordCon
+ | otherwise = []
+
+mkRewriteAddMissingFields :: [T.Text] -> LHsExpr GhcPs -> [(T.Text, Rewrite)]
+mkRewriteAddMissingFields missingFields expr
+  | (Just rewrite) <- appendRecordFields (map T.unpack missingFields) expr
+    = [("add all missing fields: " <> T.intercalate ", " missingFields, rewrite)]
+  | otherwise = []
+
+findExprInMatchesWithConstructorApp :: T.Text -> Position -> MatchGroup GhcPs (LHsExpr GhcPs) -> Maybe (LHsExpr GhcPs)
+findExprInMatchesWithConstructorApp constructor pos (MG _ (L _ matches))
+    | Just (L _ (Match{m_grhss = GRHSs {grhssGRHSs, grhssLocalBinds}})) <- findDeclContainingLoc pos matches =
+          findExprInLGRHSsWithConstructorApp constructor pos grhssGRHSs
+          <|> findExprInHsLocalBindsWithConstructorApp constructor pos grhssLocalBinds
+          -- findExprWithConstructorApp constructor pos matchWithLoc
+    | otherwise = Nothing
+
+findExprInLGRHSsWithConstructorApp :: T.Text -> Position -> [LGRHS GhcPs (LHsExpr GhcPs)] -> Maybe (LHsExpr GhcPs)
+findExprInLGRHSsWithConstructorApp constructor pos grhss
+  | (Just (L _ (GRHS _ _ expr))) <- findDeclContainingLoc pos grhss = findExprWithConstructorApp constructor pos expr
+  | otherwise = Nothing
+
+findExprInHsLocalBindsWithConstructorApp :: T.Text -> Position -> HsLocalBinds GhcPs -> Maybe (LHsExpr GhcPs)
+findExprInHsLocalBindsWithConstructorApp constructor pos (HsValBinds _ (ValBinds _ bag _))
+  | Just (L _ (FunBind{fun_matches})) <- findDeclContainingLoc pos bag
+    = findExprInMatchesWithConstructorApp constructor pos fun_matches
+  | otherwise = Nothing
+findExprInHsLocalBindsWithConstructorApp _ _ _ = Nothing
+
+findExprInHsTupArgWithConstructorApp :: T.Text -> Position -> HsTupArg GhcPs -> Maybe (LHsExpr GhcPs)
+findExprInHsTupArgWithConstructorApp constructor pos (Present _ expr) =
+  findExprWithConstructorApp constructor pos expr
+findExprInHsTupArgWithConstructorApp constructor pos _ = Nothing
+
+findExprInHsRecordBindsWithConstructorApp :: T.Text -> Position -> HsRecordBinds GhcPs -> Maybe (LHsExpr GhcPs)
+findExprInHsRecordBindsWithConstructorApp constructor pos (HsRecFields{rec_flds})
+  | Just (L _ (HsFieldBind{hfbRHS})) <- findDeclContainingLoc pos rec_flds
+    = findExprWithConstructorApp constructor pos hfbRHS
+  | otherwise = Nothing
+
+findExprInLHsRecUpdFieldsWithConstructorApp :: T.Text -> Position -> LHsRecUpdFields GhcPs -> Maybe (LHsExpr GhcPs)
+findExprInLHsRecUpdFieldsWithConstructorApp constructor pos (RegularRecUpdFields{recUpdFields})
+  | Just (L _ (HsFieldBind{hfbRHS})) <- findDeclContainingLoc pos recUpdFields
+    = findExprWithConstructorApp constructor pos hfbRHS
+  | otherwise = Nothing
+findExprInLHsRecUpdFieldsWithConstructorApp constructor pos (OverloadedRecUpdFields{olRecUpdFields})
+  | Just (L _ (HsFieldBind{hfbRHS})) <- findDeclContainingLoc pos olRecUpdFields
+    = findExprWithConstructorApp constructor pos hfbRHS
+  | otherwise = Nothing
+
+findExprInStmtLRWithConstructorApp :: T.Text -> Position -> StmtLR GhcPs GhcPs (LHsExpr GhcPs) -> Maybe (LHsExpr GhcPs)
+findExprInStmtLRWithConstructorApp constructor pos = \case
+    LastStmt _ expr _ _ -> findInExpr expr
+    BindStmt _ _ expr -> findInExpr expr
+    ApplicativeStmt _ syntaxAndArgs _ -> Nothing
+    _ -> Nothing
+    where
+        findInExpr = findExprWithConstructorApp constructor pos
+
+findExprWithConstructorApp :: T.Text -> Position -> LHsExpr GhcPs -> Maybe (LHsExpr GhcPs)
+findExprWithConstructorApp constructor pos lhsexpr@(L l insideExpr) =
+    if pos `isInsideSrcSpan` locA l
+    then go insideExpr
+    else Nothing
+    where
+      findInExpr = findExprWithConstructorApp constructor pos
+      go (HsLam _ matchGroup) =
+          findExprInMatchesWithConstructorApp constructor pos matchGroup
+      go (HsLamCase _ _ matchGroup) =
+          findExprInMatchesWithConstructorApp constructor pos matchGroup
+      go (HsApp _ expr1 expr2) =
+          findInExpr expr1
+          <|> findInExpr expr2
+      go (HsAppType _ expr _ _) =
+          findInExpr expr
+      go (OpApp _ expr1 expr2 expr3) =
+          findInExpr expr1
+          <|> findInExpr expr2
+          <|> findInExpr expr3
+      go (NegApp _ expr _) =
+          findInExpr expr
+      go (HsPar _ _ expr _) =
+          findInExpr expr
+      go (SectionL _ expr1 expr2) =
+          findInExpr expr1
+          <|> findInExpr expr2
+      go (SectionR _ expr1 expr2) =
+          findInExpr expr1
+          <|> findInExpr expr2
+      go (ExplicitTuple _ tupArgs _) =
+          firstJust (findExprInHsTupArgWithConstructorApp constructor pos) tupArgs
+      go (ExplicitSum _ _ _ expr) =
+          findInExpr expr
+      go (HsCase _ expr matchGroup) =
+          findInExpr expr
+          <|> findExprInMatchesWithConstructorApp constructor pos matchGroup
+      go (HsIf _ expr1 expr2 expr3) =
+          findInExpr expr1
+          <|> findInExpr expr2
+          <|> findInExpr expr3
+      go (HsMultiIf _ lgrhss) =
+          findExprInLGRHSsWithConstructorApp constructor pos lgrhss
+      go (HsLet _ _ localBinds _ expr) =
+          findExprInHsLocalBindsWithConstructorApp constructor pos localBinds
+          <|> findInExpr expr
+      go (HsDo _ _ (L _ statements))
+          | (Just (L _ stmtLR)) <- findDeclContainingLoc pos statements
+          = findExprInStmtLRWithConstructorApp constructor pos stmtLR
+          | otherwise  = Nothing
+      go (ExplicitList _ lhsexprs) =
+          firstJust (findInExpr) lhsexprs
+      go (RecordCon _ (L _ conName) recBinds ) =
+          -- TODO: this name comparison is dodgy
+          if Just pos == (_start <$> (srcSpanToRange (locA l))) && occName conName == mkDataOcc (T.unpack constructor)
+          then Just lhsexpr
+          else findExprInHsRecordBindsWithConstructorApp constructor pos recBinds
+      go (RecordUpd _ expr recBinds) =
+          findInExpr expr
+          <|> findExprInLHsRecUpdFieldsWithConstructorApp constructor pos recBinds
+      go (HsGetField{gf_expr}) =
+          findInExpr gf_expr
+      go (HsProjection{}) = Nothing
+      go (ExprWithTySig _ expr _) =
+          findInExpr expr
+      go (ArithSeq _ _ (From expr)) =
+          findInExpr expr
+      go (ArithSeq _ _ (FromThen expr1 expr2)) =
+          findInExpr expr1
+          <|> findInExpr expr2
+      go (ArithSeq _ _ (FromTo expr1 expr2)) =
+          findInExpr expr1
+          <|> findInExpr expr2
+      go (ArithSeq _ _ (FromThenTo expr1 expr2 expr3)) =
+          findInExpr expr1
+          <|> findInExpr expr2
+          <|> findInExpr expr3
+      go (HsTypedBracket _ expr) =
+          findInExpr expr
+      go (HsUntypedBracket _ quote) =
+          findExprInQuoteWithConstructorApp constructor pos quote
+      go (HsTypedSplice _ expr) =
+          findInExpr expr
+      go (HsUntypedSplice _ (HsUntypedSpliceExpr _ expr)) =
+          findInExpr expr
+      go (HsUntypedSplice _ _) =
+          Nothing
+      go (HsProc _ _ _) = undefined -- TODO
+      go (HsStatic _ expr) =
+          findInExpr expr
+      go (HsPragE _ _ expr) =
+          findInExpr expr
+      go (HsVar{}) =
+          Nothing
+      go (HsUnboundVar{}) =
+          Nothing
+      go (HsRecSel{}) =
+          Nothing
+      go (HsOverLabel{}) =
+          Nothing
+      go (HsIPVar{}) =
+          Nothing
+      go (HsOverLit{}) =
+          Nothing
+      go (HsLit{}) =
+          Nothing
+      -- go (HsEmbTy _ _) =
+      --     Nothing
+
+findExprInQuoteWithConstructorApp :: T.Text -> Position -> HsQuote GhcPs -> Maybe (LHsExpr GhcPs)
+findExprInQuoteWithConstructorApp constructor pos (ExpBr _ expr)
+  = findExprWithConstructorApp constructor pos expr
+findExprInQuoteWithConstructorApp _ _ _ = Nothing
 
 suggestImplicitParameter ::
   ParsedSource ->

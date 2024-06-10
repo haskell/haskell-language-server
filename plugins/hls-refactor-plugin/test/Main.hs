@@ -60,6 +60,7 @@ refactorPlugin = do
       <> mkPluginTestDescriptor Refactor.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures"
       <> mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings"
       <> mkPluginTestDescriptor Refactor.fillHolePluginDescriptor "ghcide-code-actions-fill-holes"
+      <> mkPluginTestDescriptor Refactor.suggestAddMissingFieldsPluginDescriptor "ghcide-code-actions-add-missing-fields"
       <> mkPluginTestDescriptor Refactor.extendImportPluginDescriptor "ghcide-completions-1"
 
 
@@ -317,6 +318,7 @@ codeActionTests = testGroup "code actions"
   , exportUnusedTests
   , addImplicitParamsConstraintTests
   , removeExportTests
+  , suggestMissingFieldsTests
   , Test.AddArgument.tests
   ]
 
@@ -3477,6 +3479,39 @@ exportTemplate mRange initialLines expectedAction expectedLines = do
       liftIO $ T.unlines content @=? contentAfterAction
     Nothing ->
       liftIO $ [_title | InR CodeAction{_title} <- actions, _title == expectedAction ] @?= []
+
+suggestMissingFieldsTests :: TestTree
+suggestMissingFieldsTests = testGroup "suggest missing fields"
+    [ testSession "when no fields are specified" $ do
+        let mkDoc x = T.unlines
+                [ "module Testing where"
+                , "data Person = Person { firstname :: String, lastname :: String }"
+                , "test :: Person"
+                , "test = Person {" <> x <>"}"
+                ]
+        doc <- createDoc "Test.hs" "haskell" $ mkDoc ""
+        _ <- waitForDiagnostics
+        actions <- getCodeActions doc (Range (Position 3 7) (Position 3 16))
+        chosen <- pickActionWithTitle "add all missing fields: firstname, lastname" actions
+        executeCodeAction chosen
+        modifiedCode <- documentContents doc
+        liftIO $ mkDoc "firstname=_firstname,lastname=_lastname" @=? modifiedCode
+    , testSession "when some fields are specified" $ do
+        let mkDoc x = T.unlines
+                [ "module Testing where"
+                , "data Person = Person { foo :: String, firstname :: String, lastname :: String }"
+                , "test :: Person"
+                , "test = Person {foo = \"bar\", firstname = \"Somebody\"" <> x <>"}"
+                ]
+        doc <- createDoc "Test.hs" "haskell" $ mkDoc ""
+        _ <- waitForDiagnostics
+        -- actions <- getCodeActions doc (Range (Position 0 0) (Position 4 0))
+        actions <- getAllCodeActions doc
+        chosen <- pickActionWithTitle "add all missing fields: lastname" actions
+        executeCodeAction chosen
+        modifiedCode <- documentContents doc
+        liftIO $ mkDoc ",lastname=_lastname" @=? modifiedCode
+    ]
 
 removeExportTests :: TestTree
 removeExportTests = testGroup "remove export actions"

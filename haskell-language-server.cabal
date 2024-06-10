@@ -1627,6 +1627,7 @@ library hls-refactor-plugin
                     Development.IDE.Plugin.Plugins.Diagnostic
                     Development.IDE.Plugin.Plugins.FillHole
                     Development.IDE.Plugin.Plugins.FillTypeWildcard
+                    Development.IDE.Plugin.Plugins.SuggestAddMissingFields
                     Development.IDE.Plugin.Plugins.ImportUtils
   default-extensions:
     CPP

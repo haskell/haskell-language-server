@@ -42,4 +42,3 @@ traceAst lbl x
             [prettyCallStack callStack ++ ":"
             , exactPrint x
             , "file://" ++ htmlDumpFileName]
-
