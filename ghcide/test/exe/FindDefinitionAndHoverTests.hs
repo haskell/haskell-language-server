@@ -88,8 +88,8 @@ tests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , testGroup "hover compile" [checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DiagnosticSeverity_Error, (62, 7), "Found hole: _")])
-          , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _")])
+          [ ( "GotoHover.hs", [(DiagnosticSeverity_Error, (62, 7), "Found hole: _", Nothing)])
+          , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _", Nothing)])
           ]]
     , testGroup "type-definition" typeDefinitionTests
     , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
