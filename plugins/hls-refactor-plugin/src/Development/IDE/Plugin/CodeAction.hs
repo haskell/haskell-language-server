@@ -423,19 +423,7 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
     , Just c <- contents
-    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
-    , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
-    , not (null ranges')
-    = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
-
-    -- In case of an unused record field import, the binding from the message will not match any import
-    -- and the pattern above will not match.
-    -- In this case, we try if we can extract only a record field name
-    -- Example: The import of ‘B(b2)’ from module ‘ModuleB’ is redundant
-    | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘[^’]*\\(([^’]*)\\)’ from module [^ ]* is redundant"
-    , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
-    , Just c <- contents
-    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
+    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings >>= trySplitIntoOriginalAndRecordField)
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
     , not (null ranges')
     = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
@@ -447,6 +435,15 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | _message =~ ("The( qualified)? import of [^ ]* is redundant" :: String)
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
+    where
+      -- In case of an unused record field import, the binding from the message will not match any import directly
+      -- In this case, we try if we can additionally extract a record field name
+      -- Example: The import of ‘B(b2)’ from module ‘ModuleB’ is redundant
+      trySplitIntoOriginalAndRecordField :: T.Text -> [T.Text]
+      trySplitIntoOriginalAndRecordField binding =
+        case matchRegexUnifySpaces binding "([^ ]+)\\(([^)]+)\\)" of
+          Just [_, fields] -> [binding, fields]
+          _ -> [binding]
 
 diagInRange :: Diagnostic -> Range -> Bool
 diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange

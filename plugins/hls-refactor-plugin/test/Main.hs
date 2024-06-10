@@ -1011,11 +1011,7 @@ removeImportTests = testGroup "remove import actions"
             , "  a1 :: String,"
             , "  a2 :: Int"
             , "}"
-            , "newA :: A"
-            , "newA = A {"
-            , "  a1 = \"foo\","
-            , "  a2 = 1"
-            , "}"
+            , "newA = A \"foo\" 42"
             ]
       _docA <- createDoc "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
@@ -1025,12 +1021,11 @@ removeImportTests = testGroup "remove import actions"
             , "  ( A (a1, a2),"
             , "    newA"
             , "  )"
-            , "x :: String"
             , "x = a1 newA"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- pickActionWithTitle "Remove a2 from import" =<< getCodeActions docB (R 2 0 5 3)
+      action <- pickActionWithTitle "Remove A(a2) from import" =<< getCodeActions docB (R 2 0 5 3)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1040,8 +1035,43 @@ removeImportTests = testGroup "remove import actions"
             , "  ( A (a1),"
             , "    newA"
             , "  )"
-            , "x :: String"
             , "x = a1 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove multiple redundant record field imports" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int,"
+            , "  a3 :: Int,"
+            , "  a4 :: Int"
+            , "}"
+            , "newA = A \"foo\" 2 3 4"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2, a3, a4),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a1), A(a3), A(a4) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a2),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
