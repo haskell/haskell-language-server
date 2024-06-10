@@ -111,6 +111,7 @@ import qualified Data.Set                               as Set
 import qualified GHC                                    as G
 import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Tc.Gen.Splice
+import           GHC.Types.Error
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
@@ -129,6 +130,8 @@ import           GHC.Unit.Module.Warnings
 #else
 import           Development.IDE.Core.FileStore         (shareFilePath)
 #endif
+
+import           Development.IDE.GHC.Compat.Driver (hscTypecheckRenameWithDiagnostics)
 
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
@@ -184,20 +187,22 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         case initialized of
           Left errs -> return (errs, Nothing)
           Right hscEnv -> do
-            (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
+            etcm <-
                 let
-                  session = tweak (hscSetFlags dflags hscEnv)
-                   -- TODO: maybe settings ms_hspp_opts is unnecessary?
-                  mod_summary'' = modSummary { ms_hspp_opts = hsc_dflags session}
+                   -- TODO: maybe setting ms_hspp_opts is unnecessary?
+                  mod_summary' = modSummary { ms_hspp_opts = hsc_dflags session}
                 in
                   catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
-                    tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
-            let errorPipeline = unDefer . hideDiag dflags . tagDiag
-                diags = map errorPipeline warnings
-                deferredError = any fst diags
+                    tcRnModule hscEnv tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary'}
             case etcm of
-              Left errs -> return (map snd diags ++ errs, Nothing)
-              Right tcm -> return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
+              Left errs -> return (errs, Nothing)
+              Right tcm ->
+                let addReason diag = map (Just (diagnosticReason (errMsgDiagnostic diag)),) $ diagFromErrMsg sourceTypecheck (hsc_dflags hscEnv) diag
+                    errorPipeline = map (unDefer . hideDiag dflags . tagDiag) . addReason
+                    diags = concatMap errorPipeline $ Compat.getMessages $ tmrWarnings tcm
+                    deferredError = any fst diags
+                in
+                return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
@@ -363,9 +368,9 @@ tcRnModule hsc_env tc_helpers pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
 
-  ((tc_gbl_env', mrn_info), splices, mod_env)
+  (((tc_gbl_env', mrn_info), warning_messages), splices, mod_env)
       <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hscEnvTmp ->
-             do  hscTypecheckRename hscEnvTmp ms $
+             do  hscTypecheckRenameWithDiagnostics hscEnvTmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod
                                          , hpm_src_files = pm_extra_src_files pmod
                                          }
@@ -377,7 +382,7 @@ tcRnModule hsc_env tc_helpers pmod = do
       mod_env_anns = map (\(mod, hash) -> Annotation (ModuleTarget mod) $ toSerialized BS.unpack hash)
                          (moduleEnvToList mod_env)
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
-  pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
+  pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env warning_messages)
 
 
 -- Note [Clearing mi_globals after generating an iface]

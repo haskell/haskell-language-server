@@ -1,0 +1,125 @@
+-- This module copies parts of the driver code in GHC.Main.Driver to provide
+-- `hscTypecheckRenameWithDiagnostics`.
+module Development.IDE.GHC.Compat.Driver
+    ( hscTypecheckRenameWithDiagnostics
+    ) where
+
+import GHC.Driver.Main
+import GHC.Driver.Session
+import GHC.Driver.Env
+import GHC.Driver.Errors.Types
+import GHC.Hs
+import GHC.Hs.Dump
+import GHC.Iface.Ext.Ast    ( mkHieFile )
+import GHC.Iface.Ext.Types  ( getAsts, hie_asts, hie_module )
+import GHC.Iface.Ext.Binary ( readHieFile, writeHieFile , hie_file_result)
+import GHC.Iface.Ext.Debug  ( diffFile, validateScopes )
+import GHC.Core
+import GHC.Tc.Module
+import GHC.Tc.Utils.Monad
+import GHC.Unit
+import GHC.Unit.Module.ModDetails
+import GHC.Unit.Module.ModIface
+import GHC.Unit.Module.ModSummary
+import GHC.Types.SourceFile
+import GHC.Types.SrcLoc
+import GHC.Utils.Panic.Plain
+import GHC.Utils.Error
+import GHC.Utils.Outputable
+import GHC.Utils.Logger
+import GHC.Data.FastString
+import GHC.Data.Maybe
+import Control.Monad
+
+-- -----------------------------------------------------------------------------
+-- | Rename and typecheck a module the same way that GHC does, additionally returning the renamed syntax and the diagnostics produced.
+hscTypecheckRenameWithDiagnostics :: HscEnv -> ModSummary -> HsParsedModule
+                   -> IO ((TcGblEnv, RenamedStuff), Messages GhcMessage)
+hscTypecheckRenameWithDiagnostics hsc_env mod_summary rdr_module = runHsc' hsc_env $
+    hsc_typecheck True mod_summary (Just rdr_module)
+
+-- | A bunch of logic piled around @tcRnModule'@, concerning a) backpack
+-- b) concerning dumping rename info and hie files. It would be nice to further
+-- separate this stuff out, probably in conjunction better separating renaming
+-- and type checking (#17781).
+hsc_typecheck :: Bool -- ^ Keep renamed source?
+              -> ModSummary -> Maybe HsParsedModule
+              -> Hsc (TcGblEnv, RenamedStuff)
+hsc_typecheck keep_rn mod_summary mb_rdr_module = do
+    hsc_env <- getHscEnv
+    let hsc_src = ms_hsc_src mod_summary
+        dflags = hsc_dflags hsc_env
+        home_unit = hsc_home_unit hsc_env
+        outer_mod = ms_mod mod_summary
+        mod_name = moduleName outer_mod
+        outer_mod' = mkHomeModule home_unit mod_name
+        inner_mod = homeModuleNameInstantiation home_unit mod_name
+        src_filename  = ms_hspp_file mod_summary
+        real_loc = realSrcLocSpan $ mkRealSrcLoc (mkFastString src_filename) 1 1
+        keep_rn' = gopt Opt_WriteHie dflags || keep_rn
+    massert (isHomeModule home_unit outer_mod)
+    tc_result <- if hsc_src == HsigFile && not (isHoleModule inner_mod)
+        then ioMsgMaybe $ hoistTcRnMessage $ tcRnInstantiateSignature hsc_env outer_mod' real_loc
+        else
+         do hpm <- case mb_rdr_module of
+                    Just hpm -> return hpm
+                    Nothing -> hscParse' mod_summary
+            tc_result0 <- tcRnModule' mod_summary keep_rn' hpm
+            if hsc_src == HsigFile
+                then do (iface, _) <- liftIO $ hscSimpleIface hsc_env Nothing tc_result0 mod_summary
+                        ioMsgMaybe $ hoistTcRnMessage $
+                            tcRnMergeSignatures hsc_env hpm tc_result0 iface
+                else return tc_result0
+    -- TODO are we extracting anything when we merely instantiate a signature?
+    -- If not, try to move this into the "else" case above.
+    rn_info <- extract_renamed_stuff mod_summary tc_result
+    return (tc_result, rn_info)
+
+extract_renamed_stuff :: ModSummary -> TcGblEnv -> Hsc RenamedStuff
+extract_renamed_stuff mod_summary tc_result = do
+    let rn_info = getRenamedStuff tc_result
+
+    dflags <- getDynFlags
+    logger <- getLogger
+    liftIO $ putDumpFileMaybe logger Opt_D_dump_rn_ast "Renamer"
+                FormatHaskell (showAstData NoBlankSrcSpan NoBlankEpAnnotations rn_info)
+
+    -- Create HIE files
+    when (gopt Opt_WriteHie dflags) $ do
+        -- I assume this fromJust is safe because `-fwrite-hie-file`
+        -- enables the option which keeps the renamed source.
+        hieFile <- mkHieFile mod_summary tc_result (fromJust rn_info)
+        let out_file = ml_hie_file $ ms_location mod_summary
+        liftIO $ writeHieFile out_file hieFile
+        liftIO $ putDumpFileMaybe logger Opt_D_dump_hie "HIE AST" FormatHaskell (ppr $ hie_asts hieFile)
+
+        -- Validate HIE files
+        when (gopt Opt_ValidateHie dflags) $ do
+            hs_env <- Hsc $ \e w -> return (e, w)
+            liftIO $ do
+              -- Validate Scopes
+              case validateScopes (hie_module hieFile) $ getAsts $ hie_asts hieFile of
+                  [] -> putMsg logger $ text "Got valid scopes"
+                  xs -> do
+                    putMsg logger $ text "Got invalid scopes"
+                    mapM_ (putMsg logger) xs
+              -- Roundtrip testing
+              file' <- readHieFile (hsc_NC hs_env) out_file
+              case diffFile hieFile (hie_file_result file') of
+                [] ->
+                  putMsg logger $ text "Got no roundtrip errors"
+                xs -> do
+                  putMsg logger $ text "Got roundtrip errors"
+                  let logger' = updateLogFlags logger (log_set_dopt Opt_D_ppr_debug)
+                  mapM_ (putMsg logger') xs
+    return rn_info
+
+-- | Generate a stripped down interface file, e.g. for boot files or when ghci
+-- generates interface files. See Note [simpleTidyPgm - mkBootModDetailsTc]
+hscSimpleIface :: HscEnv
+               -> Maybe CoreProgram
+               -> TcGblEnv
+               -> ModSummary
+               -> IO (ModIface, ModDetails)
+hscSimpleIface hsc_env mb_core_program tc_result summary
+    = runHsc hsc_env $ hscSimpleIface' mb_core_program tc_result summary
