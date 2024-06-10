@@ -98,10 +98,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
-import           Language.LSP.Server                  (ProgressCancellable (Cancellable),
-                                                       sendNotification,
-                                                       sendRequest,
-                                                       withIndefiniteProgress)
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule,
                                                        Fixity (Fixity),
@@ -174,7 +171,7 @@ data RunRetrieParams = RunRetrieParams
 
 runRetrieCmd :: Recorder (WithPriority Log) ->  CommandFunction IdeState RunRetrieParams
 runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  withIndefiniteProgress description token Cancellable $ \_updater -> do
+  pluginWithIndefiniteProgress description token Cancellable $ \_updater -> do
     _ <- runExceptT $ do
         nfp <- getNormalizedFilePathE uri
         (session, _) <-
@@ -192,12 +189,12 @@ runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = E
                 nfp
                 restrictToOriginatingFile
         unless (null errors) $
-            lift $ sendNotification SMethod_WindowShowMessage $
+            lift $ pluginSendNotification SMethod_WindowShowMessage $
                     ShowMessageParams MessageType_Warning $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
     return $ Right $ InR Null
 
@@ -238,7 +235,7 @@ runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
                 ourReplacement = [ r
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
-            _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit
+            _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
             return $ InR Null
 

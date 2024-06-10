@@ -23,7 +23,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server                  (sendRequest)
 
 -- The code lens method is only responsible for providing the ranges of the code
 -- lenses matched to a unique id
@@ -83,7 +82,7 @@ codeLensCommandHandler plId state _ InstanceBindLensCommand{commandUri, commandE
         pragmaInsertion =
             maybeToList $ flip insertNewPragma InstanceSigs <$> mbPragma
         wEdit = workspaceEdit pragmaInsertion
-    _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wEdit) (\_ -> pure ())
+    _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wEdit) (\_ -> pure ())
     pure $ InR Null
     where
         workspaceEdit pragmaInsertion=
