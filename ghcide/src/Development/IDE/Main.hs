@@ -24,7 +24,6 @@ import           Control.Monad.IO.Class                   (liftIO)
 import qualified Data.Aeson                               as J
 import           Data.Coerce                              (coerce)
 import           Data.Default                             (Default (def))
-import           Data.Foldable                            (traverse_)
 import           Data.Hashable                            (hashed)
 import qualified Data.HashMap.Strict                      as HashMap
 import           Data.List.Extra                          (intercalate,
@@ -54,12 +53,13 @@ import           Development.IDE.Core.Service             (initialise,
                                                            runAction)
 import qualified Development.IDE.Core.Service             as Service
 import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
-                                                           IndexQueue,
+                                                           ThreadQueue (tLoaderQueue),
                                                            shakeSessionInit,
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Graph                    (action)
 import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
+                                                           runWithWorkerThreads,
                                                            setupLSP)
 import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
 import           Development.IDE.Main.HeapStats           (withHeapStats)
@@ -74,7 +74,6 @@ import           Development.IDE.Session                  (SessionLoadingOptions
                                                            getHieDbLoc,
                                                            loadSessionWithOptions,
                                                            retryOnSqliteBusy,
-                                                           runWithDb,
                                                            setInitialDynFlags)
 import qualified Development.IDE.Session                  as Session
 import           Development.IDE.Types.Location           (NormalizedUri,
@@ -326,8 +325,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
             ideStateVar <- newEmptyMVar
-            let getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> IndexQueue -> IO IdeState
-                getIdeState env rootPath withHieDb hieChan = do
+            let getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
+                getIdeState env rootPath withHieDb threadQueue = do
                   t <- ioT
                   logWith recorder Info $ LogLspStartDuration t
                   -- We want to set the global DynFlags right now, so that we can use
@@ -337,7 +336,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                           -- TODO: should probably catch/log/rethrow at top level instead
                           `catchAny` (\e -> logWith recorder Error (LogSetInitialDynFlagsException e) >> pure Nothing)
 
-                  sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions rootPath
+                  sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions rootPath (tLoaderQueue threadQueue)
                   config <- LSP.runLspT env LSP.getConfig
                   let def_options = argsIdeOptions config sessionLoader
 
@@ -361,7 +360,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                       debouncer
                       ideOptions
                       withHieDb
-                      hieChan
+                      threadQueue
                       monitoring
                       rootPath
                   putMVar ideStateVar ide
@@ -387,7 +386,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         Check argFiles -> do
           let dir = argsProjectRoot
           dbLoc <- getHieDbLoc dir
-          runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \hiedb hieChan -> do
+          runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \hiedb threadQueue -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -408,14 +407,14 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
             when (n > 0) $ putStrLn $ "  (" ++ intercalate ", " (catMaybes ucradles) ++ ")"
             putStrLn "\nStep 3/4: Initializing the IDE"
-            sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
+            sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir (tLoaderQueue threadQueue)
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 ideOptions = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb hieChan mempty dir
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb threadQueue mempty dir
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -445,15 +444,15 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         Custom (IdeCommand c) -> do
           let root = argsProjectRoot
           dbLoc <- getHieDbLoc root
-          runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \hiedb hieChan -> do
-            sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions "."
+          runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \hiedb threadQueue -> do
+            sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions "." (tLoaderQueue threadQueue)
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 ideOptions = def_options
                     { optCheckParents = pure NeverCheck
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb hieChan mempty root
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb threadQueue mempty root
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
