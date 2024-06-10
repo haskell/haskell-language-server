@@ -442,7 +442,7 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
       trySplitIntoOriginalAndRecordField binding =
         case matchRegexUnifySpaces binding "([^ ]+)\\(([^)]+)\\)" of
           Just [_, fields] -> [binding, fields]
-          _ -> [binding]
+          _                -> [binding]
 
 diagInRange :: Diagnostic -> Range -> Bool
 diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
