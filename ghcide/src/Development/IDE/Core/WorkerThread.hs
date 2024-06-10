@@ -37,6 +37,14 @@ Moreover, we can not stop these threads uniformly when we are shutting down the 
 
 data WorkerQueue a = WorkerQueueOfOne (TMVar a) | WorkerQueueOfMany (TQueue a)
 
+peekWorkerQueue :: WorkerQueue a -> STM a
+peekWorkerQueue (WorkerQueueOfOne tvar)    = readTMVar tvar
+peekWorkerQueue (WorkerQueueOfMany tqueue) = peekTQueue tqueue
+
+readWorkerQueue :: WorkerQueue a -> STM a
+readWorkerQueue (WorkerQueueOfOne tvar)    = takeTMVar tvar
+readWorkerQueue (WorkerQueueOfMany tqueue) = readTQueue tqueue
+
 writeWorkerQueue :: WorkerQueue a -> a -> STM ()
 writeWorkerQueue (WorkerQueueOfOne tvar) action    = putTMVar tvar action
 writeWorkerQueue (WorkerQueueOfMany tqueue) action = writeTQueue tqueue action
@@ -46,7 +54,6 @@ newWorkerQueue = WorkerQueueOfMany <$> newTQueue
 
 newWorkerQueueOfOne :: STM (WorkerQueue a)
 newWorkerQueueOfOne = WorkerQueueOfOne <$> newEmptyTMVar
-
 
 -- | 'withWorkerQueue' creates a new 'WorkerQueue', and launches a worker
 -- thread which polls the queue for requests and runs the given worker
@@ -71,14 +78,9 @@ runWorkerQueue q workerAction = ContT $ \mainAction -> do
     where
         writerThread q =
             forever $ do
-                case q of
-                    -- only remove the action from the queue after it has done
-                    WorkerQueueOfOne tvar -> do
-                        l <- atomically $ readTMVar tvar
-                        workerAction l `finally` atomically (takeTMVar tvar)
-                    WorkerQueueOfMany q -> do
-                        l <- atomically $ peekTQueue q
-                        workerAction l `finally` atomically (readTQueue q)
+                -- peek the action from the queue, run it and then remove it from the queue
+                l <- atomically $ peekWorkerQueue q
+                workerAction l `finally` atomically (readWorkerQueue q)
 
 -- | waitUntilWorkerQueueEmpty blocks until the worker queue is empty.
 waitUntilWorkerQueueEmpty :: WorkerQueue a -> IO ()
