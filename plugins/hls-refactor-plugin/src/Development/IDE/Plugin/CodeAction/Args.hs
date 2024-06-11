@@ -28,7 +28,6 @@ import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)
@@ -217,7 +216,7 @@ instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
 #if !MIN_VERSION_ghc(9,3,0)
   toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaAnnSource = x} ->
     x >>= \case
-      Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . astA $ s
+      Just s -> flip runReaderT caa . runExceptT . toCodeAction $ f s
       _      -> pure $ Right []
 #else
   toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->

@@ -10,68 +10,60 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.Splice
-    ( descriptor,
-    )
-where
+module Ide.Plugin.Splice (descriptor) where
 
-import           Control.Applicative                       (Alternative ((<|>)))
-import           Control.Arrow                             (Arrow (first))
-import           Control.Exception                         (SomeException)
-import qualified Control.Foldl                             as L
-import           Control.Lens                              (Identity (..), ix,
-                                                            view, (%~), (<&>),
-                                                            (^.))
-import           Control.Monad                             (forM, guard, unless)
-import           Control.Monad.Error.Class                 (MonadError (throwError))
-import           Control.Monad.Extra                       (eitherM)
-import qualified Control.Monad.Fail                        as Fail
-import           Control.Monad.IO.Unlift                   (MonadIO (..),
-                                                            askRunInIO)
-import           Control.Monad.Trans.Class                 (MonadTrans (lift))
-import           Control.Monad.Trans.Except                (ExceptT (..),
-                                                            runExceptT)
+import           Control.Applicative                   (Alternative ((<|>)))
+import           Control.Arrow                         (Arrow (first))
+import           Control.Exception                     (SomeException)
+import qualified Control.Foldl                         as L
+import           Control.Lens                          (Identity (..), ix, view,
+                                                        (%~), (<&>), (^.))
+import           Control.Monad                         (forM, guard, unless)
+import           Control.Monad.Error.Class             (MonadError (throwError))
+import           Control.Monad.Extra                   (eitherM)
+import qualified Control.Monad.Fail                    as Fail
+import           Control.Monad.IO.Unlift               (MonadIO (..),
+                                                        askRunInIO)
+import           Control.Monad.Trans.Class             (MonadTrans (lift))
+import           Control.Monad.Trans.Except            (ExceptT (..),
+                                                        runExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                                hiding (Null)
-import qualified Data.Bifunctor                            as B (first)
+import           Data.Aeson                            hiding (Null)
+import qualified Data.Bifunctor                        as B (first)
 import           Data.Function
 import           Data.Generics
-import qualified Data.Kind                                 as Kinds
-import           Data.List                                 (sortOn)
-import           Data.Maybe                                (fromMaybe,
-                                                            listToMaybe,
-                                                            mapMaybe)
-import qualified Data.Text                                 as T
+import qualified Data.Kind                             as Kinds
+import           Data.List                             (sortOn)
+import           Data.Maybe                            (fromMaybe, listToMaybe,
+                                                        mapMaybe)
+import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.GHC.Compat                as Compat
+import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import qualified Development.IDE.GHC.Compat.Util           as Util
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
-import qualified GHC.Types.Error                           as Error
-import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
+import qualified GHC.Types.Error                       as Error
+import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint           (uniqueSrcSpanT)
-import           Language.Haskell.GHC.ExactPrint.Transform (TransformT (TransformT))
-import qualified Language.LSP.Protocol.Lens                as J
+import qualified Language.LSP.Protocol.Lens            as J
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 
 #if !MIN_VERSION_base(4,20,0)
-import           Data.Foldable                             (Foldable (foldl'))
+import           Data.Foldable                         (Foldable (foldl'))
 #endif
 
 #if MIN_VERSION_ghc(9,4,1)
-import           GHC.Data.Bag                              (Bag)
+import           GHC.Data.Bag                          (Bag)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
-import           GHC.Parser.Annotation                     (EpAnn (..))
+import           GHC.Parser.Annotation                 (EpAnn (..))
 #else
-import           GHC.Parser.Annotation                     (SrcSpanAnn' (..))
+import           GHC.Parser.Annotation                 (SrcSpanAnn' (..))
 #endif
 
 
