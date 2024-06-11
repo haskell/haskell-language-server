@@ -35,11 +35,6 @@ import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       (HsConDetails (RecCon),
-#if __GLASGOW_HASKELL__ < 910
-                                                   HsExpansion (HsExpanded),
-#else
-                                                   XXExprGhcRn(..),
-#endif
                                                    HsExpr (XExpr),
                                                    HsRecFields (..), LPat,
                                                    Outputable, getLoc,
@@ -86,6 +81,11 @@ import           Language.LSP.Protocol.Types      (CodeAction (..),
                                                    WorkspaceEdit (WorkspaceEdit),
                                                    type (|?) (InL, InR))
 
+#if __GLASGOW_HASKELL__ < 910
+import           Development.IDE.GHC.Compat       (HsExpansion (HsExpanded))
+#else
+import           Development.IDE.GHC.Compat       (XXExprGhcRn (..))
+#endif
 
 data Log
   = LogShake Shake.Log
