@@ -36,7 +36,7 @@ licenseErrorAction
   -> Diagnostic -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> [CodeAction]
 licenseErrorAction maxCompletions uri diag =
-  mkCodeAction <$> licenseErrorSuggestion maxCompletions (_message diag) 
+  mkCodeAction <$> licenseErrorSuggestion maxCompletions (_message diag)
   where
     mkCodeAction (original, suggestion) =
       let

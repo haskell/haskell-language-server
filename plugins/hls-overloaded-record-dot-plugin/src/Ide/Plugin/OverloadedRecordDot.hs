@@ -36,24 +36,12 @@ import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
 import           Development.IDE.Core.Shake           (define, useWithStale)
 import qualified Development.IDE.Core.Shake           as Shake
 
-#if __GLASGOW_HASKELL__ >= 903
-import           Development.IDE.GHC.Compat           (HsExpr (HsRecSel))
-#else
-import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
-#endif
-
 import           Control.DeepSeq                      (rwhnf)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
-                                                       GhcPass,
-#if __GLASGOW_HASKELL__ < 910
-                                                       HsExpansion (HsExpanded),
-#else
-                                                       XXExprGhcRn(..),
-#endif
-                                                       HsExpr (HsApp, HsVar, OpApp, XExpr),
+                                                       GhcPass, HsExpr (..),
                                                        LHsExpr, Pass (..),
                                                        appPrec, dollarName,
                                                        getLoc, hs_valds,
@@ -90,6 +78,14 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        TextEdit (..), Uri (..),
                                                        WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                        type (|?) (..))
+
+
+#if __GLASGOW_HASKELL__ < 910
+import           Development.IDE.GHC.Compat           (HsExpansion (HsExpanded))
+#else
+import           Development.IDE.GHC.Compat           (XXExprGhcRn (..))
+#endif
+
 
 data Log
     = LogShake Shake.Log

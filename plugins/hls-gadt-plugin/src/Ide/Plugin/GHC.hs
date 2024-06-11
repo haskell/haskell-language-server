@@ -35,7 +35,6 @@ import           GHC.Parser.Annotation                   (Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           spanAsAnchor)
-import           Language.Haskell.GHC.ExactPrint         (d1, showAst)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
