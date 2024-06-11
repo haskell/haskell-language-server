@@ -31,7 +31,7 @@ module Ide.Types
 , PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
 , PluginId(..)
 , PluginHandler(..), mkPluginHandler
-, HandlerM, runHandlerM, pluginGetClientCapabilities, pluginGetVirtualFile, pluginGetVersionedTextDoc, pluginSendNotification, pluginSendRequest, pluginWithIndefiniteProgress, pluginGetConfig
+, HandlerM, runHandlerM, pluginGetClientCapabilities, pluginGetVirtualFile, pluginGetVersionedTextDoc, pluginSendNotification, pluginSendRequest, pluginWithIndefiniteProgress
 , PluginHandlers(..)
 , PluginMethod(..)
 , PluginMethodHandler
@@ -925,10 +925,6 @@ pluginGetVersionedTextDoc = HandlerM . getVersionedTextDoc
 -- | Wrapper of 'getClientCapabilities' for HandlerM
 pluginGetClientCapabilities :: HandlerM config ClientCapabilities
 pluginGetClientCapabilities = HandlerM getClientCapabilities
-
--- | Wrapper of 'getConfig' for HandlerM
-pluginGetConfig :: HandlerM config config
-pluginGetConfig = HandlerM getConfig
 
 -- | Wrapper of 'sendNotification for HandlerM
 --
