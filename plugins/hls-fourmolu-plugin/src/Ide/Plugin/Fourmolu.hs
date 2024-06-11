@@ -66,7 +66,7 @@ properties =
             False
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState token typ contents fp fo = ExceptT $ withIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
+provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
@@ -87,7 +87,7 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ withIndefin
                         logWith recorder Info $ NoConfigPath searchDirs
                         pure emptyConfig
                     ConfigParseError f err -> do
-                        lift $ sendNotification SMethod_WindowShowMessage $
+                        lift $ pluginSendNotification SMethod_WindowShowMessage $
                             ShowMessageParams
                                 { _type_ = MessageType_Error
                                 , _message = errorMessage

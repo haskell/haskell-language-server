@@ -143,9 +143,14 @@ instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = ParsedSource
 
+#if MIN_VERSION_ghc(9,5,0)
 instance Show (HsModule GhcPs) where
   show _ = "<HsModule GhcPs>"
- 
+#else
+instance Show HsModule where
+  show _ = "<HsModule GhcPs>"
+#endif
+
 -- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Recorder (WithPriority Log) -> Rules ()
 getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) $ \GetAnnotatedParsedSource nfp -> do

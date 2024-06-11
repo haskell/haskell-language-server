@@ -97,7 +97,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
-import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
@@ -123,7 +122,7 @@ import           GHC.Types.SrcLoc                                  (srcSpanToRea
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
+  contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
   liftIO $ do
     let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -203,7 +202,7 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
     whenJust (listToMaybe =<< listToMaybe . M.elems =<< _changes) $ \TextEdit {_range} -> do
       let srcSpan = rangeToSrcSpan nfp _range
-      LSP.sendNotification SMethod_WindowShowMessage $
+      pluginSendNotification SMethod_WindowShowMessage $
         ShowMessageParams MessageType_Info $
           "Import "
             <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
@@ -212,7 +211,7 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
             <> " (at "
             <> printOutputable srcSpan
             <> ")"
-      void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+      void $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right $ InR Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
@@ -445,7 +444,7 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
     , Just c <- contents
-    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
+    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings >>= trySplitIntoOriginalAndRecordField)
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
     , not (null ranges')
     = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
@@ -457,6 +456,15 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | _message =~ ("The( qualified)? import of [^ ]* is redundant" :: String)
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
+    where
+      -- In case of an unused record field import, the binding from the message will not match any import directly
+      -- In this case, we try if we can additionally extract a record field name
+      -- Example: The import of ‘B(b2)’ from module ‘ModuleB’ is redundant
+      trySplitIntoOriginalAndRecordField :: T.Text -> [T.Text]
+      trySplitIntoOriginalAndRecordField binding =
+        case matchRegexUnifySpaces binding "([^ ]+)\\(([^)]+)\\)" of
+          Just [_, fields] -> [binding, fields]
+          _                -> [binding]
 
 diagInRange :: Diagnostic -> Range -> Bool
 diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange

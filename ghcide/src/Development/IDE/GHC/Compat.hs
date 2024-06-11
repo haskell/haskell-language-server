@@ -133,6 +133,7 @@ import           Compat.HieTypes                         hiding
                                                          (nodeAnnotations)
 import qualified Compat.HieTypes                         as GHC (nodeAnnotations)
 import           Compat.HieUtils
+import           Control.Applicative                     ((<|>))
 import qualified Data.ByteString                         as BS
 import           Data.Coerce                             (coerce)
 import           Data.List                               (foldl')
@@ -438,7 +439,7 @@ setHieDir _f d = d { hieDir = Just _f}
 dontWriteHieFiles :: DynFlags -> DynFlags
 dontWriteHieFiles d = gopt_unset d Opt_WriteHie
 
-setUpTypedHoles ::DynFlags -> DynFlags
+setUpTypedHoles :: DynFlags -> DynFlags
 setUpTypedHoles df
   = flip gopt_unset Opt_AbstractRefHoleFits    -- too spammy
   $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
@@ -451,9 +452,13 @@ setUpTypedHoles df
   $ flip gopt_unset Opt_SortValidHoleFits
   $ flip gopt_unset Opt_UnclutterValidHoleFits
   $ df
-  { refLevelHoleFits = Just 1   -- becomes slow at higher levels
-  , maxRefHoleFits   = Just 10  -- quantity does not impact speed
-  , maxValidHoleFits = Nothing  -- quantity does not impact speed
+  { refLevelHoleFits = refLevelHoleFits df <|> Just 1   -- becomes slow at higher levels
+
+   -- Sometimes GHC can emit a lot of hole fits, this causes editors to be slow
+   -- or just crash, we limit the hole fits to 10. The number was chosen
+   -- arbirtarily by the author.
+  , maxRefHoleFits   = maxRefHoleFits df <|> Just 10
+  , maxValidHoleFits = maxValidHoleFits df <|> Just 10
   }
 
 

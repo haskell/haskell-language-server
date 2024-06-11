@@ -1010,6 +1010,76 @@ removeImportTests = testGroup "remove import actions"
             , "x = a -- Must use something from module A, but not (@.)"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove redundant record field import" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int"
+            , "}"
+            , "newA = A \"foo\" 42"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2),"
+            , "    newA"
+            , "  )"
+            , "x = a1 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a2) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1),"
+            , "    newA"
+            , "  )"
+            , "x = a1 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove multiple redundant record field imports" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int,"
+            , "  a3 :: Int,"
+            , "  a4 :: Int"
+            , "}"
+            , "newA = A \"foo\" 2 3 4"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2, a3, a4),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a1), A(a3), A(a4) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a2),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 extendImportTests :: TestTree
@@ -2646,29 +2716,29 @@ fillTypedHoleTests = let
   , testSession "postfix hole uses postfix notation of infix operator" $ do
       let mkDoc x = T.unlines
               [ "module Testing where"
-              , "test :: Int -> Int -> Int"
-              , "test a1 a2 = " <> x <> " a1 a2"
+              , "test :: Int -> Maybe Int -> Maybe Int"
+              , "test a ma = " <> x <> " (a +) ma"
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
-      chosen <- pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
-      liftIO $ mkDoc "(+)" @=? modifiedCode
+      liftIO $ mkDoc "(<$>)" @=? modifiedCode
   , testSession "filling infix type hole uses infix operator" $ do
       let mkDoc x = T.unlines
               [ "module Testing where"
-              , "test :: Int -> Int -> Int"
-              , "test a1 a2 = a1 " <> x <> " a2"
+              , "test :: Int -> Maybe Int -> Maybe Int"
+              , "test a ma = (a +) " <> x <> " ma"
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
-      chosen <- pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
-      liftIO $ mkDoc "+" @=? modifiedCode
+      liftIO $ mkDoc "<$>" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -3118,6 +3188,7 @@ addSigActionTests = let
     , "(!!!) a b = a > b"       >:: "(!!!) :: Ord a => a -> a -> Bool"
     , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
     , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
+    , "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a\n  where Some a = Just a" >:: "pattern Some :: a -> Maybe a"
