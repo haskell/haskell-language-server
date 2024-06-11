@@ -141,7 +141,7 @@ jobs:
         name: Test hls-refactor-plugin
         run: cabal test hls-refactor-plugin-tests || cabal test hls-refactor-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.10' -- TODO enable when it supports 9.10
         name: Test hls-floskell-plugin
         run: cabal test hls-floskell-plugin-tests || cabal test hls-floskell-plugin-tests
 
@@ -157,7 +157,7 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin-tests || cabal test hls-eval-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.10' -- TODO enable when it supports 9.10
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin-tests || cabal test hls-splice-plugin-tests
 
@@ -165,7 +165,7 @@ jobs:
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.10' -- TODO enable when it supports 9.10
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin-tests || cabal test hls-stylish-haskell-plugin-tests
 
@@ -173,7 +173,7 @@ jobs:
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin-tests || cabal test hls-ormolu-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.10' -- TODO enable when it supports 9.10
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin-tests || cabal test hls-fourmolu-plugin-tests
 
@@ -189,7 +189,7 @@ jobs:
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin-tests || cabal test hls-rename-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.10' -- TODO enable when it supports 9.10
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin-tests || cabal test hls-hlint-plugin-tests
 
@@ -238,7 +238,7 @@ jobs:
         name: Test hls-cabal-plugin test suite
         run: cabal test hls-cabal-plugin-tests || cabal test hls-cabal-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.10' -- TODO enable when it supports 9.10
         name: Test hls-retrie-plugin test suite
         run: cabal test hls-retrie-plugin-tests || cabal test hls-retrie-plugin-tests
 
