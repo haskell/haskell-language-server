@@ -84,8 +84,6 @@ tests =
   , goldenWithEval "Shows a kind with :kind" "T12" "hs"
   , goldenWithEval "Reports an error for an incorrect type with :kind" "T13" "hs"
   , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
-  , knownBrokenForGhcVersions [GHC92 .. ] "type +v does not work anymore with 9.2" $
-      goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
   , goldenWithEval "Doesn't break in module containing main function" "T4139" "hs"
   , goldenWithEval "Returns defaulted type for :type +d, admitting multiple whitespaces around arguments" "T16" "hs"
   , goldenWithEval ":type reports an error when given with unknown +x option" "T17" "hs"
