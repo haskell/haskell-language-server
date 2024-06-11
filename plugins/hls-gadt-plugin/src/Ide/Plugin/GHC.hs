@@ -18,7 +18,6 @@ import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           EpAnn (..),
                                                           EpAnnComments (EpaComments))
 import           Ide.PluginUtils                         (subRange)
-import           Language.Haskell.GHC.ExactPrint         (d1)
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -36,7 +35,7 @@ import           GHC.Parser.Annotation                   (Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           spanAsAnchor)
-import           Language.Haskell.GHC.ExactPrint         (showAst)
+import           Language.Haskell.GHC.ExactPrint         (d1, showAst)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
