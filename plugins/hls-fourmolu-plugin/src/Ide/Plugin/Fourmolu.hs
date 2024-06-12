@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedLabels  #-}
@@ -99,16 +98,14 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
 
             let config =
-#if MIN_VERSION_fourmolu(0,13,0)
-                    refineConfig ModuleSource Nothing Nothing Nothing
-#endif
-                    defaultConfig
-                        { cfgDynOptions = map DynOption fileOpts
-                        , cfgFixityOverrides = cfgFileFixities
-                        , cfgRegion = region
-                        , cfgDebug = False
-                        , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
-                        }
+                    refineConfig ModuleSource Nothing Nothing Nothing $
+                        defaultConfig
+                            { cfgDynOptions = map DynOption fileOpts
+                            , cfgFixityOverrides = cfgFileFixities
+                            , cfgRegion = region
+                            , cfgDebug = False
+                            , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
+                            }
             ExceptT . liftIO $
                 bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
                     <$> try @OrmoluException (ormolu config fp' contents)
@@ -199,8 +196,3 @@ newtype CLIVersionInfo = CLIVersionInfo
 
 mwhen :: Monoid a => Bool -> a -> a
 mwhen b x = if b then x else mempty
-
-#if !MIN_VERSION_fourmolu(0,14,0)
-resolvePrinterOpts :: [PrinterOptsPartial] -> PrinterOptsTotal
-resolvePrinterOpts = foldr fillMissingPrinterOpts defaultPrinterOpts
-#endif
