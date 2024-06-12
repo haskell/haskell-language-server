@@ -62,7 +62,7 @@ library
     , deepseq
     , dependent-map
     , dependent-sum
-    , Diff                         ^>=0.4.0
+    , Diff                         ^>=0.5
     , directory
     , dlist
     , enummapset

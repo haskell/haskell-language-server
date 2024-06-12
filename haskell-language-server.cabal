@@ -455,7 +455,7 @@ library hls-eval-plugin
     , bytestring
     , containers
     , deepseq
-    , Diff                  ^>=0.4.0
+    , Diff                  ^>=0.5
     , dlist
     , extra
     , filepath
