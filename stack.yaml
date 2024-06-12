@@ -12,6 +12,12 @@ packages:
 ghc-options:
   "$everything": -haddock
 
+allow-newer: true
+allow-newer-deps:
+  - extensions
+  - hw-fingertree
+  - retrie
+
 extra-deps:
   - floskell-0.11.1
   - hiedb-0.6.0.1
