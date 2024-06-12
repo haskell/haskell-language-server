@@ -23,6 +23,7 @@ import           Data.List                       (intercalate)
 import           Data.Maybe                      (catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
+import           Data.Version                    (showVersion)
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
@@ -38,6 +39,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Ormolu
 import           Ormolu.Config
+import qualified Paths_fourmolu                  as Fourmolu
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
@@ -51,7 +53,7 @@ descriptor recorder plId =
         , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
         }
   where
-    desc = "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> VERSION_fourmolu
+    desc = T.pack $ "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> showVersion Fourmolu.version
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean, 'PropertyKey "path" 'TString]
 properties =
@@ -77,7 +79,7 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                 handle @IOException (pure . Left . PluginInternalError . T.pack . show) $
                     runExceptT (cliHandler fourmoluExePath fileOpts)
         else do
-            logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
+            logWith recorder Debug $ LogCompiledInVersion (showVersion Fourmolu.version)
             FourmoluConfig{..} <-
                 liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> do
