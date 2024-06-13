@@ -136,7 +136,7 @@ test-suite tests
     , stm
     , stm-containers
     , tasty
-    , tasty-hspec
+    , tasty-hspec >= 1.2
     , tasty-rerun
 
   build-tool-depends: hspec-discover:hspec-discover

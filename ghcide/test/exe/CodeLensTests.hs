@@ -88,7 +88,11 @@ addSigLensesTests =
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", if ghcVersion >= GHC96 then "promotedKindTest :: Proxy Nothing" else "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", "typeOperatorTest :: forall {k} {a :: k}. a :~: a")
-        , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
+        , ("notInScopeTest = mkCharType"
+          , if ghcVersion < GHC910
+              then "notInScopeTest :: String -> Data.Data.DataType"
+              else "notInScopeTest :: String -> GHC.Internal.Data.Data.DataType"
+          )
         , ("aVeryLongSignature a b c d e f g h i j k l m n = a && b && c && d && e && f && g && h && i && j && k && l && m && n", "aVeryLongSignature :: Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool")
         ]
    in testGroup

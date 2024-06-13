@@ -219,7 +219,7 @@ runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
         useE GetAnnotatedParsedSource nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
-    inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
+    inlineRewrite <- liftIO $ constructInlineFromIdentifer (unsafeMkA astSrc 0) fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
@@ -345,7 +345,11 @@ getBinds nfp = do
   -- so that we can include adding the required imports in the retrie command
   let rn = tmrRenamed tm
   case rn of
+#if MIN_VERSION_ghc(9,9,0)
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _, _) -> do
+#else
     (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _) -> do
+#endif
       topLevelBinds <- case hs_valds of
         ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
         XValBindsLR (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn) ->
@@ -740,7 +744,12 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
 #if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
-      { ideclAnn = GHCGHC.EpAnnNotUsed
+      { ideclAnn =
+#if MIN_VERSION_ghc(9,9,0)
+        GHCGHC.noAnn
+#else
+        GHCGHC.EpAnnNotUsed
+#endif
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
       }

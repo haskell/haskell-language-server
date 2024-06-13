@@ -197,7 +197,9 @@ module Development.IDE.GHC.Compat.Core (
     pattern RealSrcLoc,
     SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
+#if !MIN_VERSION_ghc(9,9,0)
     GHC.SrcAnn,
+#endif
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
     SrcLoc.mkGeneralSrcSpan,
@@ -494,8 +496,11 @@ import           Data.Foldable               (toList)
 import           GHC.Core.Multiplicity       (scaledThing)
 import           GHC.Data.Bag
 import           GHC.Driver.Env
-import           GHC.Hs                      (HsModule (..), SrcSpanAnn')
-import           GHC.Hs.Decls                hiding (FunDep)
+import           GHC.Hs                       (HsModule (..))
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Hs                       (SrcSpanAnn')
+#endif
+import           GHC.Hs.Decls                 hiding (FunDep)
 import           GHC.Hs.Doc
 import           GHC.Hs.Expr
 import           GHC.Hs.Extension
@@ -651,10 +656,20 @@ instance HasSrcSpan SrcSpan where
 instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
   getLoc = GHC.getLoc
 
+#if MIN_VERSION_ghc(9,9,0)
+instance HasSrcSpan (EpAnn a) where
+  getLoc = GHC.getHasLoc
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+instance HasSrcSpan (SrcLoc.GenLocated (EpAnn ann) a) where
+  getLoc (L l _) = getLoc l
+#else
 instance HasSrcSpan (SrcSpanAnn' ann) where
   getLoc = GHC.locA
 instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
   getLoc (L l _) = l
+#endif
 
 pattern L :: HasSrcSpan a => SrcSpan -> e -> SrcLoc.GenLocated a e
 pattern L l a <- GHC.L (getLoc -> l) a
@@ -662,9 +677,15 @@ pattern L l a <- GHC.L (getLoc -> l) a
 
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
+#if MIN_VERSION_ghc(9,9,0)
+pattern ConPatIn con args <- ConPat _ (L _ (SrcLoc.noLoc -> con)) args
+  where
+    ConPatIn con args = ConPat GHC.noAnn (GHC.noLocA $ SrcLoc.unLoc con) args
+#else
 pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (SrcLoc.noLoc -> con)) args
   where
     ConPatIn con args = ConPat EpAnnNotUsed (GHC.noLocA $ SrcLoc.unLoc con) args
+#endif
 
 conPatDetails :: Pat p -> Maybe (HsConPatDetails p)
 conPatDetails (ConPat _ _ args) = Just args
@@ -680,8 +701,16 @@ initObjLinker env =
     GHCi.initObjLinker (GHCi.hscInterp env)
 
 loadDLL :: HscEnv -> String -> IO (Maybe String)
-loadDLL env =
-    GHCi.loadDLL (GHCi.hscInterp env)
+loadDLL env str = do
+    res <- GHCi.loadDLL (GHCi.hscInterp env) str
+#if MIN_VERSION_ghc(9,11,0)
+    pure $
+      case res of
+        Left err_msg -> Just err_msg
+        Right _      -> Nothing
+#else
+    pure res
+#endif
 
 unload :: HscEnv -> [Linkable] -> IO ()
 unload hsc_env linkables =

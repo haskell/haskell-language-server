@@ -335,7 +335,11 @@ myCoreToStg logger dflags ictxt
 
     return (stg_binds2, denv, cost_centre_info)
 
-
+#if MIN_VERSION_ghc(9,9,0)
+reLocA :: (HasLoc (GenLocated a e), HasAnnotation b)
+      => GenLocated a e -> GenLocated b e
+reLocA = reLoc
+#endif
 
 getDependentMods :: ModIface -> [ModuleName]
 #if MIN_VERSION_ghc(9,3,0)
@@ -515,13 +519,16 @@ data GhcVersion
   | GHC94
   | GHC96
   | GHC98
-  deriving (Eq, Ord, Show)
+  | GHC910
+  deriving (Eq, Ord, Show, Enum)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,10,0,0)
+ghcVersion = GHC910
+#elif MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
 ghcVersion = GHC98
 #elif MIN_VERSION_GLASGOW_HASKELL(9,6,0,0)
 ghcVersion = GHC96

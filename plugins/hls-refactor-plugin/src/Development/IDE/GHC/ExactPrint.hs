@@ -30,7 +30,6 @@ module Development.IDE.GHC.ExactPrint
       removeComma,
       -- * Helper function
       eqSrcSpan,
-      eqSrcSpanA,
       epl,
       epAnn,
       removeTrailingComma,
@@ -55,7 +54,6 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
-import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
 import           Data.Functor.Classes
@@ -81,38 +79,54 @@ import           Ide.Logger                              (Pretty (pretty),
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Protocol.Types
-import           Retrie.ExactPrint                       hiding (parseDecl,
-                                                          parseExpr,
-                                                          parsePattern,
-                                                          parseType)
-#if MIN_VERSION_ghc(9,9,0)
-import           GHC.Plugins                             (showSDoc)
-import           GHC.Utils.Outputable                    (Outputable (ppr))
-#else
-import           GHC                                     (EpAnn (..),
+
+import           Control.Lens                            (_last, (&))
+import           Control.Lens.Operators                  ((%~))
+import           Data.List                               (partition)
+import           GHC                                     (DeltaPos (..),
+                                                          SrcSpanAnnN)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           Data.Default                            (Default)
+import           GHC                                     (Anchor (..),
+                                                          AnchorOperation,
+                                                          EpAnn (..),
                                                           NameAdornment (NameParens),
                                                           NameAnn (..),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           SrcSpanAnnA,
                                                           TrailingAnn (AddCommaAnn),
                                                           emptyComments,
+                                                          realSrcSpan,
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           EpaLocation (EpaDelta),
                                                           deltaPos)
+import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 #endif
 
-import           Control.Lens                            (_last, (&))
-import           Control.Lens.Operators                  ((%~))
-import           Data.List                               (partition)
-import           GHC                                     (Anchor (..),
-                                                          AnchorOperation,
-                                                          DeltaPos (..),
-                                                          SrcSpanAnnN,
-                                                          realSrcSpan)
-import           GHC.Types.SrcLoc                        (generatedSrcSpan)
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC                                     (Anchor,
+                                                          AnnContext (..),
+                                                          EpAnn (..),
+                                                          EpaLocation,
+                                                          EpaLocation' (..),
+                                                          NameAdornment (..),
+                                                          NameAnn (..),
+                                                          SrcSpanAnnA,
+                                                          TrailingAnn (..),
+                                                          deltaPos,
+                                                          emptyComments,
+                                                          spanAsAnchor)
+#endif
 
-setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
+setPrecedingLines ::
+#if !MIN_VERSION_ghc(9,9,0)
+     Default t =>
+#endif
+    LocatedAn t a -> Int -> Int -> LocatedAn t a
 setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
 ------------------------------------------------------------------------------
 
@@ -122,18 +136,20 @@ instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
 
-instance Show (Annotated ParsedSource) where
-  show _ = "<Annotated ParsedSource>"
-
-instance NFData (Annotated ParsedSource) where
-  rnf = rwhnf
-
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
-type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
+type instance RuleResult GetAnnotatedParsedSource = ParsedSource
+
+#if MIN_VERSION_ghc(9,5,0)
+instance Show (HsModule GhcPs) where
+  show _ = "<HsModule GhcPs>"
+#else
+instance Show HsModule where
+  show _ = "<HsModule GhcPs>"
+#endif
 
 -- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Recorder (WithPriority Log) -> Rules ()
@@ -141,8 +157,13 @@ getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) 
   pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 
-annotateParsedSource :: ParsedModule -> Annotated ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
+annotateParsedSource :: ParsedModule -> ParsedSource
+annotateParsedSource (ParsedModule _ ps _ _) =
+#if MIN_VERSION_ghc(9,9,0)
+    ps
+#else
+    (makeDeltaAst ps)
+#endif
 
 ------------------------------------------------------------------------------
 
@@ -195,7 +216,7 @@ transform ::
     ClientCapabilities ->
     VersionedTextDocumentIdentifier ->
     Graft (Either String) ParsedSource ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     Either String WorkspaceEdit
 transform dflags ccs verTxtDocId f a = do
     let src = printA a
@@ -212,7 +233,7 @@ transformM ::
     ClientCapabilities ->
     VersionedTextDocumentIdentifier ->
     Graft (ExceptStringT m) ParsedSource ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     m (Either String WorkspaceEdit)
 transformM dflags ccs verTextDocId f a = runExceptT $
     runExceptString $ do
@@ -232,7 +253,9 @@ needsParensSpace ::
     -- | (Needs parens, needs space)
     (All, All)
 needsParensSpace HsLam{}         = (All False, All False)
+#if !MIN_VERSION_ghc(9,9,0)
 needsParensSpace HsLamCase{}     = (All False, All True)
+#endif
 needsParensSpace HsApp{}         = mempty
 needsParensSpace HsAppType{}     = mempty
 needsParensSpace OpApp{}         = mempty
@@ -421,8 +444,8 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
 -- For example, if you would like to move a where-clause-defined variable to the same
 -- level as its parent HsDecl, you could use this function.
 --
--- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`. If
--- not declaration matched, then `Nothing` is returned.
+-- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`.
+-- If no declaration matched, then `Nothing` is returned.
 modifySmallestDeclWithM ::
   forall a m r.
   (HasDecls a, Monad m) =>
@@ -440,19 +463,35 @@ modifySmallestDeclWithM validSpan f a = do
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
+#if MIN_VERSION_ghc(9,9,0)
+generatedAnchor :: DeltaPos -> Anchor
+generatedAnchor dp = EpaDelta dp []
+#else
 generatedAnchor :: AnchorOperation -> Anchor
 generatedAnchor anchorOp = GHC.Anchor (GHC.realSrcSpan generatedSrcSpan) anchorOp
+#endif
 
 setAnchor :: Anchor -> SrcSpanAnnN -> SrcSpanAnnN
+#if MIN_VERSION_ghc(9,9,0)
+setAnchor anc (EpAnn _ nameAnn comments) =
+  EpAnn anc nameAnn comments
+#else
 setAnchor anc (SrcSpanAnn (EpAnn _ nameAnn comments) span) =
   SrcSpanAnn (EpAnn anc nameAnn comments) span
 setAnchor _ spanAnnN = spanAnnN
+#endif
 
 removeTrailingAnns :: SrcSpanAnnN -> SrcSpanAnnN
+#if MIN_VERSION_ghc(9,9,0)
+removeTrailingAnns (EpAnn anc nameAnn comments) =
+  let nameAnnSansTrailings = nameAnn {nann_trailing = []}
+  in EpAnn anc nameAnnSansTrailings comments
+#else
 removeTrailingAnns (SrcSpanAnn (EpAnn anc nameAnn comments) span) =
   let nameAnnSansTrailings = nameAnn {nann_trailing = []}
   in SrcSpanAnn (EpAnn anc nameAnnSansTrailings comments) span
 removeTrailingAnns spanAnnN = spanAnnN
+#endif
 
 -- | Modify the type signature for the given IdP. This function handles splitting a multi-sig
 -- SigD into multiple SigD if the type signature is changed.
@@ -471,7 +510,7 @@ removeTrailingAnns spanAnnN = spanAnnN
 -- + foo :: Bool
 modifySigWithM ::
   forall a m.
-  (HasDecls a, Monad m) =>
+  (HasDecls a, Monad m, ExactPrint a) =>
   IdP GhcPs ->
   (LHsSigType GhcPs -> LHsSigType GhcPs) ->
   a ->
@@ -490,28 +529,49 @@ modifySigWithM queryId f a = do
                   let matchedId' = L (setAnchor genAnchor0 $ removeTrailingAnns annMatchedId) matchedId
                       matchedIdSig =
                         let sig' = SigD xsig (TypeSig xTypeSig [matchedId'] (HsWC xHsWc newSig))
-                            epAnn = bool (noAnnSrcSpanDP generatedSrcSpan (DifferentLine 1 0)) annSigD (null otherIds)
+                            epAnn = bool (noAnnSrcSpanDP
+#if !MIN_VERSION_ghc(9,9,0)
+                                            generatedSrcSpan
+#endif
+                                            (DifferentLine 1 0))
+                                         annSigD (null otherIds)
                         in L epAnn sig'
                       otherSig = case otherIds of
                         [] -> []
-                        (L (SrcSpanAnn epAnn span) id1:ids) -> [
+#if MIN_VERSION_ghc(9,9,0)
+                        (L epAnn id1:ids) ->
+#else
+                        (L (SrcSpanAnn epAnn span) id1:ids) ->
+#endif
+                          [
                           let epAnn' = case epAnn of
                                 EpAnn _ nameAnn commentsId1 -> EpAnn genAnchor0 nameAnn commentsId1
+#if MIN_VERSION_ghc(9,9,0)
+                              ids' = L epAnn' id1:ids
+#else
                                 EpAnnNotUsed -> EpAnn genAnchor0 mempty emptyComments
                               ids' = L (SrcSpanAnn epAnn' span) id1:ids
+#endif
                               ids'' = ids' & _last %~ first removeTrailingAnns
                             in L annSigD (SigD xsig (TypeSig xTypeSig ids'' (HsWC xHsWc lHsSig)))
-                            ]
+                          ]
                   in pure $ DL.fromList otherSig <> DL.singleton matchedIdSig <> DL.fromList rest
                 _ -> error "multiple ids matched"
       modifyMatchingSigD (ldecl : rest) = (DL.singleton ldecl <>) <$> modifyMatchingSigD rest
-  modifyDeclsT (fmap DL.toList . modifyMatchingSigD) a
+  modifyDeclsT (fmap DL.toList . modifyMatchingSigD) $ makeDeltaAst a
 
 genAnchor0 :: Anchor
 genAnchor0 = generatedAnchor m0
 
 genAnchor1 :: Anchor
 genAnchor1 = generatedAnchor m1
+
+#if MIN_VERSION_ghc(9,9,0)
+m0, m1 :: DeltaPos
+m0 = SameLine 0
+m1 = SameLine 1
+#endif
+
 
 -- | Apply a transformation to the decls contained in @t@
 modifyDeclsT' :: (HasDecls t, HasTransform m)
@@ -543,7 +603,7 @@ modifyMgMatchesT' ::
 modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- TransformT $ lift $ foldM combineResults def rs
-  pure $ (MG xMg (L locMatches matches'), r')
+  pure (MG xMg (L locMatches matches'), r')
 #else
 modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
@@ -596,7 +656,9 @@ class
     , Typeable l
     , Outputable l
     , Outputable ast
+#if !MIN_VERSION_ghc(9,9,0)
     , Default l
+#endif
     ) => ASTElement l ast | ast -> l where
     parseAST :: Parser (LocatedAn l ast)
     maybeParensAST :: LocatedAn l ast -> LocatedAn l ast
@@ -690,11 +752,6 @@ parenthesize = parenthesizeHsExpr appPrec
 eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
 eqSrcSpan l r = leftmost_smallest l r == EQ
 
--- | Equality on SrcSpan's.
--- Ignores the (Maybe BufSpan) field of SrcSpan's.
-eqSrcSpanA :: SrcAnn a -> SrcAnn b -> Bool
-eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
-
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
 addParensToCtxt close_dp = addOpen . addClose
   where
@@ -712,15 +769,27 @@ epAnn :: SrcSpan -> ann -> EpAnn ann
 epAnn srcSpan anns = EpAnn (spanAsAnchor srcSpan) anns emptyComments
 
 modifyAnns :: LocatedAn a ast -> (a -> a) -> LocatedAn a ast
+#if MIN_VERSION_ghc(9,9,0)
+modifyAnns x f = first (fmap f) x
+#else
 modifyAnns x f = first ((fmap.fmap) f) x
+#endif
 
 removeComma :: SrcSpanAnnA -> SrcSpanAnnA
+#if MIN_VERSION_ghc(9,9,0)
+removeComma  (EpAnn anc (AnnListItem as) cs)
+  = EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs
+  where
+      isCommaAnn AddCommaAnn{} = True
+      isCommaAnn _             = False
+#else
 removeComma it@(SrcSpanAnn EpAnnNotUsed _) = it
 removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
   = SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l
   where
       isCommaAnn AddCommaAnn{} = True
       isCommaAnn _             = False
+#endif
 
 addParens :: Bool -> GHC.NameAnn -> GHC.NameAnn
 addParens True it@NameAnn{} =
