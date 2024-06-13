@@ -207,7 +207,7 @@ test-suite hls-cabal-gild-plugin-tests
     , hls-test-utils        == 2.8.0.0
 
   if flag(isolateCabalGildTests)
-    build-tool-depends: cabal-gild:cabal-gild ^>=1.1
+    build-tool-depends: cabal-gild:cabal-gild ^>=1.3
     cpp-options: -Dhls_isolate_cabalgild_tests
 
 -----------------------------
