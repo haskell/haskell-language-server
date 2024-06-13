@@ -23,7 +23,6 @@ import           Control.Monad.Trans.Class      (lift)
 import           Data.Functor                   (($>))
 import qualified Data.Text                      as T
 import           Development.IDE.GHC.Orphans    ()
-import           Development.IDE.Graph          hiding (ShakeValue)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
@@ -33,19 +32,20 @@ import           Language.LSP.Server            (ProgressAmount (..),
                                                  withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
-import           UnliftIO                       (Async, async, cancel)
+import           UnliftIO                       (Async, MonadUnliftIO, async,
+                                                 bracket, cancel)
 
 data ProgressEvent
-    = KickStarted
-    | KickCompleted
+    = ProgressStarted
+    | ProgressCompleted
 
-data ProgressReporting  = ProgressReporting
+data ProgressReporting m = ProgressReporting
   { progressUpdate :: ProgressEvent -> IO ()
-  , inProgress     :: forall a. NormalizedFilePath -> Action a -> Action a
+  , inProgress     :: forall a. NormalizedFilePath -> m a -> m a
   , progressStop   :: IO ()
   }
 
-noProgressReporting :: IO ProgressReporting
+noProgressReporting :: IO (ProgressReporting m)
 noProgressReporting = return $ ProgressReporting
   { progressUpdate = const $ pure ()
   , inProgress = const id
@@ -63,10 +63,10 @@ data Transition = Event ProgressEvent | StopProgress
 
 updateState :: IO () -> Transition -> State -> IO State
 updateState _      _                    Stopped       = pure Stopped
-updateState start (Event KickStarted)   NotStarted    = Running <$> async start
-updateState start (Event KickStarted)   (Running job) = cancel job >> Running <$> async start
-updateState _     (Event KickCompleted) (Running job) = cancel job $> NotStarted
-updateState _     (Event KickCompleted) st            = pure st
+updateState start (Event ProgressStarted)   NotStarted    = Running <$> async start
+updateState start (Event ProgressStarted)   (Running job) = cancel job >> Running <$> async start
+updateState _     (Event ProgressCompleted) (Running job) = cancel job $> NotStarted
+updateState _     (Event ProgressCompleted) st            = pure st
 updateState _     StopProgress          (Running job) = cancel job $> Stopped
 updateState _     StopProgress          st            = pure st
 
@@ -100,11 +100,13 @@ recordProgress InProgressState{..} file shift = do
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
 progressReporting
-  :: Maybe (LSP.LanguageContextEnv c)
+  :: (MonadUnliftIO m, MonadIO m)
+  => Maybe (LSP.LanguageContextEnv c)
+  -> T.Text
   -> ProgressReportingStyle
-  -> IO ProgressReporting
-progressReporting Nothing _optProgressStyle = noProgressReporting
-progressReporting (Just lspEnv) optProgressStyle = do
+  -> IO (ProgressReporting m)
+progressReporting Nothing _title  _optProgressStyle = noProgressReporting
+progressReporting (Just lspEnv) title  optProgressStyle = do
     inProgressState <- newInProgress
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
@@ -115,7 +117,7 @@ progressReporting (Just lspEnv) optProgressStyle = do
     where
         lspShakeProgressNew :: InProgressState -> IO ()
         lspShakeProgressNew InProgressState{..} =
-            LSP.runLspT lspEnv $ withProgress "Processing" Nothing NotCancellable $ \update -> loop update 0
+            LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
             where
                 loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
                 loop update prevPct = do
@@ -131,7 +133,7 @@ progressReporting (Just lspEnv) optProgressStyle = do
 
                     update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
                     loop update nextPct
-        updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
+        updateStateForFile inProgress file = UnliftIO.bracket (liftIO $ f succ) (const $ liftIO $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.

@@ -255,7 +255,7 @@ data HieDbWriter
   { indexQueue         :: IndexQueue
   , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted     :: TVar Int -- ^ to report progress
-  , indexProgressToken :: Var (Maybe LSP.ProgressToken)
+  , indexProgressToken :: Var (Maybe (ProgressReporting IO))
   -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
   }
 
@@ -306,7 +306,7 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumulation to the current version.
-    ,progress :: ProgressReporting
+    ,progress :: ProgressReporting Action
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
@@ -710,7 +710,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
 
         progress <-
             if reportProgress
-                then progressReporting lspEnv optProgressStyle
+                then progressReporting lspEnv "Processing" optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 

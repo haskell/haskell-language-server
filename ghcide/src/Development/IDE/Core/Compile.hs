@@ -129,6 +129,7 @@ import           GHC.Driver.Config.CoreToStg.Prep
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                     (toList)
 import           GHC.Unit.Module.Warnings
+import Development.IDE.Core.ProgressReporting (progressReporting, ProgressReporting (..))
 #else
 import           Development.IDE.Core.FileStore    (shareFilePath)
 #endif
@@ -898,6 +899,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
     _ -> do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
+      -- todo, this is the real pending count
       modifyTVar' indexPending $ HashMap.insert srcPath hash
       writeTQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
@@ -911,69 +913,20 @@ indexHieFile se mod_summary srcPath !hash hf = do
         unless newerScheduled $ do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
-          bracket_ (pre optProgressStyle) post $
-            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
+          tok <- modifyVar indexProgressToken $ fmap (first Just . dupe) . \case
+              Just x -> return x
+              -- create a progressReport if we don't already have one
+              Nothing -> do
+                  tt <- progressReporting (lspEnv se) "Indexing" optProgressStyle
+                  progressUpdate tt ProgressStarted
+                  return tt
+          inProgress tok srcPath
+            (withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf'))
+            `finally` post
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
     HieDbWriter{..} = hiedbWriter se
-
-    -- Get a progress token to report progress and update it for the current file
-    pre style = do
-      tok <- modifyVar indexProgressToken $ fmap dupe . \case
-        x@(Just _) -> pure x
-        -- Create a token if we don't already have one
-        Nothing -> do
-          case lspEnv se of
-            Nothing -> pure Nothing
-            Just env -> LSP.runLspT env $ do
-              u <- LSP.ProgressToken . LSP.InR . T.pack . show . hashUnique <$> liftIO Unique.newUnique
-              -- TODO: Wait for the progress create response to use the token
-              _ <- LSP.sendRequest LSP.SMethod_WindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
-              LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams u $
-                toJSON $ LSP.WorkDoneProgressBegin
-                  { _kind = LSP.AString @"begin"
-                  ,  _title = "Indexing"
-                  , _cancellable = Nothing
-                  , _message = Nothing
-                  , _percentage = Nothing
-                  }
-              pure (Just u)
-
-      (!done, !remaining) <- atomically $ do
-        done <- readTVar indexCompleted
-        remaining <- HashMap.size <$> readTVar indexPending
-        pure (done, remaining)
-      let
-        progressFrac :: Double
-        progressFrac = fromIntegral done / fromIntegral (done + remaining)
-        progressPct :: LSP.UInt
-        progressPct = floor $ 100 * progressFrac
-
-      whenJust (lspEnv se) $ \env -> whenJust tok $ \token -> LSP.runLspT env $
-        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams token $
-          toJSON $
-            case style of
-                Percentage -> LSP.WorkDoneProgressReport
-                    { _kind = LSP.AString @"report"
-                    , _cancellable = Nothing
-                    , _message = Nothing
-                    , _percentage = Just progressPct
-                    }
-                Explicit -> LSP.WorkDoneProgressReport
-                    { _kind = LSP.AString @"report"
-                    , _cancellable = Nothing
-                    , _message = Just $
-                        T.pack " (" <> T.pack (show done) <> "/" <> T.pack (show $ done + remaining) <> ")..."
-                    , _percentage = Nothing
-                    }
-                NoProgress -> LSP.WorkDoneProgressReport
-                  { _kind = LSP.AString @"report"
-                  , _cancellable = Nothing
-                  , _message = Nothing
-                  , _percentage = Nothing
-                  }
-
     -- Report the progress once we are done indexing this file
     post = do
       mdone <- atomically $ do
@@ -988,16 +941,11 @@ indexHieFile se mod_summary srcPath !hash hf = do
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
             toJSON $ fromNormalizedFilePath srcPath
-      whenJust mdone $ \done ->
+      whenJust mdone $ \_ ->
         modifyVar_ indexProgressToken $ \tok -> do
-          whenJust (lspEnv se) $ \env -> LSP.runLspT env $
-            whenJust tok $ \token ->
-              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams token $
-                toJSON $
-                LSP.WorkDoneProgressEnd
-                  { _kind = LSP.AString @"end"
-                  , _message = Just $ "Finished indexing " <> T.pack (show done) <> " files"
-                  }
+          case tok of
+            Just token -> progressUpdate token ProgressCompleted
+            Nothing -> return ()
           -- We are done with the current indexing cycle, so destroy the token
           pure Nothing
 
