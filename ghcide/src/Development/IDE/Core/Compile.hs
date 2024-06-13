@@ -67,7 +67,6 @@ import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
-import           Data.Unique                       as Unique
 import           Debug.Trace
 import           Development.IDE.Core.FileStore    (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
@@ -80,7 +79,7 @@ import           Development.IDE.GHC.Compat        hiding (loadInterface,
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util
-import           Development.IDE.Core.ProgressReporting (progressReporting, ProgressReporting (..), progressReportingOutsideState)
+import           Development.IDE.Core.ProgressReporting (ProgressReporting (..), progressReportingOutsideState)
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
@@ -97,7 +96,6 @@ import           GHC.Serialized
 import           HieDb                             hiding (withHieDb)
 import qualified Language.LSP.Protocol.Message     as LSP
 import           Language.LSP.Protocol.Types       (DiagnosticTag (..))
-import qualified Language.LSP.Protocol.Types       as LSP
 import qualified Language.LSP.Server               as LSP
 import           Prelude                           hiding (mod)
 import           System.Directory
