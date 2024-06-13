@@ -452,7 +452,7 @@ library hls-eval-plugin
     , bytestring
     , containers
     , deepseq
-    , Diff                  ^>=0.4.0
+    , Diff                  ^>=0.5
     , dlist
     , extra
     , filepath
@@ -581,7 +581,6 @@ library hls-rename-plugin
     , hls-plugin-api        == 2.8.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
-    , lsp
     , lsp-types
     , mtl
     , mod
