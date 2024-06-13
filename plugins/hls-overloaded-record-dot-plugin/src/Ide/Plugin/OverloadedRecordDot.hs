@@ -36,20 +36,12 @@ import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
 import           Development.IDE.Core.Shake           (define, useWithStale)
 import qualified Development.IDE.Core.Shake           as Shake
 
-#if __GLASGOW_HASKELL__ >= 903
-import           Development.IDE.GHC.Compat           (HsExpr (HsRecSel))
-#else
-import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
-#endif
-
 import           Control.DeepSeq                      (rwhnf)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
-                                                       GhcPass,
-                                                       HsExpansion (HsExpanded),
-                                                       HsExpr (HsApp, HsVar, OpApp, XExpr),
+                                                       GhcPass, HsExpr (..),
                                                        LHsExpr, Pass (..),
                                                        appPrec, dollarName,
                                                        getLoc, hs_valds,
@@ -86,6 +78,14 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        TextEdit (..), Uri (..),
                                                        WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                        type (|?) (..))
+
+
+#if __GLASGOW_HASKELL__ < 910
+import           Development.IDE.GHC.Compat           (HsExpansion (HsExpanded))
+#else
+import           Development.IDE.GHC.Compat           (XXExprGhcRn (..))
+#endif
+
 
 data Log
     = LogShake Shake.Log
@@ -246,8 +246,11 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
     where getEnabledExtensions :: TcModuleResult -> [Extension]
           getEnabledExtensions = getExtensions . tmrParsed
           getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
-          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
-            collectRecordSelectors valBinds
+#if __GLASGOW_HASKELL__ >= 910
+          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_,_)) = collectRecordSelectors valBinds
+#else
+          getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) = collectRecordSelectors valBinds
+#endif
           rewriteRange :: PositionMapping -> RecordSelectorExpr
                             -> Maybe RecordSelectorExpr
           rewriteRange pm recSel =
@@ -281,7 +284,11 @@ getRecSels :: LHsExpr (GhcPass 'Renamed) -> ([RecordSelectorExpr], Bool)
 -- branch. We do this here, by explicitly returning occurrences from traversing
 -- the original branch, and returning True, which keeps syb from implicitly
 -- continuing to traverse.
+#if __GLASGOW_HASKELL__ >= 910
+getRecSels (unLoc -> XExpr (ExpandedThingRn a _)) = (collectRecordSelectors a, True)
+#else
 getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
+#endif
 #if __GLASGOW_HASKELL__ >= 903
 -- applied record selection: "selector record" or "selector (record)" or
 -- "selector selector2.record2"

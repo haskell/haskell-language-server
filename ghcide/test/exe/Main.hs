@@ -29,7 +29,7 @@
 
 
 module Main (main) where
--- import Test.QuickCheck.Instances ()
+
 import qualified HieDbRetry
 import           Test.Tasty
 import           Test.Tasty.Ingredients.Rerun
