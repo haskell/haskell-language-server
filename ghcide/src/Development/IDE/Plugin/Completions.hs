@@ -180,7 +180,7 @@ getCompletionsLSP ide plId
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
-            let localModules = maybe [] Map.keys knownTargets
+            let localModules = maybe [] (Map.keys . targetMap) knownTargets
             let lModules = mempty{importableModules = map toModueNameText localModules}
             -- set up the exports map including both package and project-level identifiers
             packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath

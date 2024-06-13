@@ -24,7 +24,7 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets, Target(..), toKnownFiles,
+    KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -691,7 +691,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         publishedDiagnostics <- STM.newIO
         semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newTVarIO $ hashed HMap.empty
+        knownTargetsVar <- newTVarIO $ hashed emptyKnownTargets
         let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
