@@ -80,7 +80,7 @@ import           Development.IDE.GHC.Compat        hiding (loadInterface,
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util
-import           Development.IDE.Core.ProgressReporting (progressReporting, ProgressReporting (..))
+import           Development.IDE.Core.ProgressReporting (progressReporting, ProgressReporting (..), progressReportingOutsideState)
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
@@ -913,20 +913,22 @@ indexHieFile se mod_summary srcPath !hash hf = do
         unless newerScheduled $ do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
-          tok <- modifyVar indexProgressToken $ fmap (first Just . dupe) . \case
-              Just x -> return x
-              -- create a progressReport if we don't already have one
-              Nothing -> do
-                  tt <- progressReporting (lspEnv se) "Indexing" optProgressStyle
-                  progressUpdate tt ProgressStarted
-                  return tt
-          inProgress tok srcPath
-            (withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf'))
-            `finally` post
+          bracket (pre optProgressStyle) (const post) $ \_ ->
+            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
     HieDbWriter{..} = hiedbWriter se
+    pre optProgressStyle = modifyVar_ indexProgressToken $ fmap Just . \case
+              Just x -> return x
+              -- create a progressReport if we don't already have one
+              Nothing -> do
+                  tt <- progressReportingOutsideState
+                    (liftM2 (+) (HashMap.size <$> readTVar indexPending) (readTVar indexCompleted))
+                    (readTVar indexCompleted)
+                    (lspEnv se) "Indexing" optProgressStyle
+                  progressUpdate tt ProgressStarted
+                  return tt
     -- Report the progress once we are done indexing this file
     post = do
       mdone <- atomically $ do

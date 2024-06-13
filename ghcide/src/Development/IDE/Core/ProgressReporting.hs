@@ -3,6 +3,7 @@ module Development.IDE.Core.ProgressReporting
   , ProgressReporting(..)
   , noProgressReporting
   , progressReporting
+  , progressReportingOutsideState
   -- utilities, reexported for use in Core.Shake
   , mRunLspT
   , mRunLspTCallback
@@ -12,6 +13,7 @@ module Development.IDE.Core.ProgressReporting
   )
    where
 
+import           Control.Concurrent.STM         (STM)
 import           Control.Concurrent.STM.Stats   (TVar, atomically,
                                                  atomicallyNamed, modifyTVar',
                                                  newTVarIO, readTVar, retry)
@@ -76,11 +78,17 @@ data InProgressState = InProgressState
     , doneVar    :: TVar Int  -- ^ Number of files done
     , currentVar :: STM.Map NormalizedFilePath Int
     }
+    | InProgressStateOutSide {
+        todo   :: STM Int  -- ^ Number of files to do
+        , done :: STM Int  -- ^ Number of files done
+    }
+
 
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 
 recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
+recordProgress InProgressStateOutSide{} _ _ = return ()
 recordProgress InProgressState{..} file shift = do
     (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
     atomicallyNamed "recordProgress2" $ do
@@ -99,15 +107,36 @@ recordProgress InProgressState{..} file shift = do
         return (prev, new)
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
+
 progressReporting
   :: (MonadUnliftIO m, MonadIO m)
   => Maybe (LSP.LanguageContextEnv c)
   -> T.Text
   -> ProgressReportingStyle
   -> IO (ProgressReporting m)
-progressReporting Nothing _title  _optProgressStyle = noProgressReporting
-progressReporting (Just lspEnv) title  optProgressStyle = do
-    inProgressState <- newInProgress
+progressReporting = progressReporting' newInProgress
+
+progressReportingOutsideState
+  :: (MonadUnliftIO m, MonadIO m)
+  => STM Int
+  -> STM Int
+  -> Maybe (LSP.LanguageContextEnv c)
+  -> T.Text
+  -> ProgressReportingStyle
+  -> IO (ProgressReporting m)
+progressReportingOutsideState todo done = progressReporting' (pure $ InProgressStateOutSide todo done)
+
+
+progressReporting'
+  :: (MonadUnliftIO m, MonadIO m)
+  => IO InProgressState
+  -> Maybe (LSP.LanguageContextEnv c)
+  -> T.Text
+  -> ProgressReportingStyle
+  -> IO (ProgressReporting m)
+progressReporting' _newState Nothing _title  _optProgressStyle = noProgressReporting
+progressReporting' newState (Just lspEnv) title  optProgressStyle = do
+    inProgressState <- newState
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
         progressStop  = updateStateVar StopProgress
@@ -116,23 +145,24 @@ progressReporting (Just lspEnv) title  optProgressStyle = do
     return ProgressReporting{..}
     where
         lspShakeProgressNew :: InProgressState -> IO ()
+        lspShakeProgressNew InProgressStateOutSide{..} =
+            LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0 todo done
         lspShakeProgressNew InProgressState{..} =
-            LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
-            where
-                loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
-                loop update prevPct = do
-                    (todo, done, nextPct) <- liftIO $ atomically $ do
-                        todo <- readTVar todoVar
-                        done <- readTVar doneVar
-                        let nextFrac :: Double
-                            nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
-                            nextPct :: UInt
-                            nextPct = floor $ 100 * nextFrac
-                        when (nextPct == prevPct) retry
-                        pure (todo, done, nextPct)
+            LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0 (readTVar todoVar) (readTVar doneVar)
+        loop _ _ _todoSTM _doneSTM | optProgressStyle  == NoProgress = forever $ liftIO $ threadDelay maxBound
+        loop update prevPct todoSTM doneSTM = do
+            (todo, done, nextPct) <- liftIO $ atomically $ do
+                todo <- todoSTM
+                done <- doneSTM
+                let nextFrac :: Double
+                    nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
+                    nextPct :: UInt
+                    nextPct = floor $ 100 * nextFrac
+                when (nextPct == prevPct) retry
+                pure (todo, done, nextPct)
 
-                    update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
-                    loop update nextPct
+            void $ update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+            loop update nextPct todoSTM doneSTM
         updateStateForFile inProgress file = UnliftIO.bracket (liftIO $ f succ) (const $ liftIO $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
