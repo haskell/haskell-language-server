@@ -947,7 +947,6 @@ indexHieFile se mod_summary srcPath !hash hf = do
             Just token -> progressUpdate token ProgressCompleted >> progressStop token
             Nothing -> return ()
           -- We are done with the current indexing cycle, so destroy the token
-
           pure Nothing
 
 writeAndIndexHieFile :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
