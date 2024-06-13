@@ -913,7 +913,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
         unless newerScheduled $ do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
-          bracket (pre optProgressStyle) (const post) $ \_ ->
+          bracket_ (pre optProgressStyle) post $
             withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
   where
     mod_location    = ms_location mod_summary
