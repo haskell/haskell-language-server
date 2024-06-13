@@ -276,9 +276,10 @@ nonLocalCompletionTests =
   where
     brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
     brokenForWinOldGhc =
-      knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC92] "Windows (GHC <= 9.8) has strange things in scope for some reason"
-      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC94] "Windows (GHC <= 9.8) has strange things in scope for some reason"
-      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC96] "Windows (GHC <= 9.8) has strange things in scope for some reason"
+      knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC92] "Windows (GHC == 9.2) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC94] "Windows (GHC == 9.4) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC96] "Windows (GHC == 9.6) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC98] "Windows (GHC == 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
