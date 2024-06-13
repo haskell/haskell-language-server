@@ -1480,6 +1480,9 @@ test-suite hls-fourmolu-plugin-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
   main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
@@ -1533,6 +1536,9 @@ test-suite hls-ormolu-plugin-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   build-tool-depends:
     ormolu:ormolu
   build-depends:
