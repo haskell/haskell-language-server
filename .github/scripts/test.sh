@@ -8,7 +8,7 @@ set -eux
 . .github/scripts/env.sh
 . .github/scripts/common.sh
 
-test_package="bytestring-0.11.1.0"
+test_package="bytestring-0.12.1.0"
 test_module="Data/ByteString.hs"
 
 create_cradle() {
