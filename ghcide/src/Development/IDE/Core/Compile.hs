@@ -80,6 +80,7 @@ import           Development.IDE.GHC.Compat        hiding (loadInterface,
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import           Development.IDE.Core.ProgressReporting (progressReporting, ProgressReporting (..))
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
@@ -129,7 +130,6 @@ import           GHC.Driver.Config.CoreToStg.Prep
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                     (toList)
 import           GHC.Unit.Module.Warnings
-import Development.IDE.Core.ProgressReporting (progressReporting, ProgressReporting (..))
 #else
 import           Development.IDE.Core.FileStore    (shareFilePath)
 #endif
@@ -944,9 +944,10 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust mdone $ \_ ->
         modifyVar_ indexProgressToken $ \tok -> do
           case tok of
-            Just token -> progressUpdate token ProgressCompleted
+            Just token -> progressUpdate token ProgressCompleted >> progressStop token
             Nothing -> return ()
           -- We are done with the current indexing cycle, so destroy the token
+
           pure Nothing
 
 writeAndIndexHieFile :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
