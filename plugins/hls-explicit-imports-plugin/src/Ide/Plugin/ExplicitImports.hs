@@ -11,6 +11,7 @@ module Ide.Plugin.ExplicitImports
   ( descriptor
   , descriptorForModules
   , abbreviateImportTitle
+  , squashedAbbreviateImportTitle
   , Log(..)
   ) where
 
@@ -174,11 +175,12 @@ lensResolveProvider _ _ _ _ _ rd = do
 
 
 inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
-inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}} = do
+inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} = do
     nfp <- getNormalizedFilePathE _uri
     (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
     let inlayHints = [ generateInlayHints newRange ie
                      | (range, int) <- forLens
+                     , range < visibleRange
                      , Just newRange <- [toCurrentRange pm range]
                      , Just ie <- [forResolve IM.!? int]]
     pure $ InL inlayHints
@@ -194,10 +196,10 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                 , _paddingRight = Nothing
                 , _data_ = Nothing
                 }
-    mkLabel ::  ImportEdit -> T.Text |? [InlayHintLabelPart]
+    mkLabel :: ImportEdit -> T.Text |? [InlayHintLabelPart]
     mkLabel (ImportEdit{ieResType, ieText}) =
-      let title ExplicitImport = abbreviateImportTitle $ (T.intercalate " " . filter (not . T.null) . T.split isSpace . T.dropWhile (/= '(')) ieText
-          title RefineImport = T.intercalate ", " (T.lines ieText)
+      let title ExplicitImport = squashedAbbreviateImportTitle ieText
+          title RefineImport   = T.intercalate ", " (T.lines ieText)
       in InL $ title ieResType
 
 
@@ -445,7 +447,6 @@ isExplicitImport _                                                = False
 maxColumns :: Int
 maxColumns = 120
 
--- | The title of the command is ideally the minimal explicit import decl, but
 -- we don't want to create a really massive code lens (and the decl can be extremely large!).
 -- So we abbreviate it to fit a max column size, and indicate how many more items are in the list
 -- after the abbreviation
@@ -478,6 +479,10 @@ abbreviateImportTitle input =
           else actualPrefix <> suffixText
   in title
 
+squashedAbbreviateImportTitle :: T.Text -> T.Text
+squashedAbbreviateImportTitle ieText  = abbreviateImportTitle $ (T.intercalate " " . filter (not . T.null) . T.split isSpace . T.dropWhile (/= '(')) ieText
+
+-- | The title of the command is ideally the minimal explicit import decl, but
 --------------------------------------------------------------------------------
 
 
