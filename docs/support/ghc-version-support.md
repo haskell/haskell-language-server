@@ -84,7 +84,7 @@ This is the static part of the policy that can be checked by a machine.
 A major GHC version is a "legacy" version if it is 3 or more major versions behind the latest GHC version that is
 
 1. Fully supported by HLS
-2. Used in the a Stackage LTS
+2. Used in a Stackage LTS snapshot
 
 For example, if 9.2 is the latest major version fully supported by HLS and used in a Stackage LTS, then the 8.8 major version and older will be legacy.
 
@@ -103,9 +103,9 @@ by a discussion.
 
 #### Ecosystem factors
 
-To establish and apply the policy we also take into account:
+To establish and apply the policy we take the following ecosystem factors into account:
 
-- Completeness: support includes all plugins and features
+- Support status of HLS
 - The most recent [stackage](https://www.stackage.org/) LTS snapshot
 - The GHC versions used in the most popular [linux distributions](https://repology.org/project/ghc/versions)
 - The reliability of different ghc versions on the major operating systems (Linux, Windows, MacOS)
@@ -114,7 +114,8 @@ To establish and apply the policy we also take into account:
 ### Supporting a GHC version beyond normal deprecation time
 
 In cases where the base policy demands a deprecation, but ecosystem factors
-suggest that it's still widely used (e.g. last [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)), the deprecation should be suspended for the next release and the situation be re-evaluated for the release after that.
+suggest that it's still widely used (e.g. last [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)),
+the deprecation should be suspended for the next release and the situation be re-evaluated for the release after that.
 
 When we decide to keep on an old version, we should track it as follows:
 
