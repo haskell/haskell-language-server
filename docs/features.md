@@ -111,6 +111,7 @@ Completions for language pragmas.
 ## Formatting
 
 Format your code with various Haskell code formatters.
+The default Haskell code formatter is `ormolu`, and the Haskell formatter be configured via the `formattingProvider` option.
 
 | Formatter       | Provided by                  |
 | --------------- | ---------------------------- |
@@ -119,12 +120,17 @@ Format your code with various Haskell code formatters.
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
 
+---
+
 Format your cabal files with a cabal code formatter.
+The default cabal code formatter is `cabal-gild`, which needs to be available on the `$PATH`,
+or the location needs to be explicitly provided.
+To change the cabal formatter, edit the `cabalFormattingProvider` option.
 
 | Formatter       | Provided by                  |
 |-----------------|------------------------------|
 | cabal-fmt       | `hls-cabal-fmt-plugin`       |
-
+| cabal-gild      | `hls-cabal-gild-plugin`      |
 
 ## Document symbols
 
