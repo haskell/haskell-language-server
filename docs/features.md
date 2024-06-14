@@ -111,7 +111,7 @@ Completions for language pragmas.
 ## Formatting
 
 Format your code with various Haskell code formatters.
-The default Haskell code formatter is `ormolu`, and the Haskell formatter be configured via the `formattingProvider` option.
+The default Haskell code formatter is `ormolu`, and the Haskell formatter can be configured via the `formattingProvider` option.
 
 | Formatter       | Provided by                  |
 | --------------- | ---------------------------- |
