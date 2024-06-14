@@ -1470,7 +1470,7 @@ library hls-fourmolu-plugin
     , process-extras  >= 0.7.1
     , text
     , transformers
-
+    , yaml
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedLabels  #-}
@@ -45,6 +46,10 @@ import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 import           Text.Read                       (readMaybe)
 
+#if MIN_VERSION_fourmolu(0,16,0)
+import qualified Data.Yaml                       as Yaml
+#endif
+
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
     (defaultPluginDescriptor plId desc)
@@ -79,24 +84,7 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                     runExceptT (cliHandler fourmoluExePath fileOpts)
         else do
             logWith recorder Debug $ LogCompiledInVersion (showVersion Fourmolu.version)
-            FourmoluConfig{..} <-
-                liftIO (loadConfigFile fp') >>= \case
-                    ConfigLoaded file opts -> do
-                        logWith recorder Info $ ConfigPath file
-                        pure opts
-                    ConfigNotFound searchDirs -> do
-                        logWith recorder Info $ NoConfigPath searchDirs
-                        pure emptyConfig
-                    ConfigParseError f err -> do
-                        lift $ pluginSendNotification SMethod_WindowShowMessage $
-                            ShowMessageParams
-                                { _type_ = MessageType_Error
-                                , _message = errorMessage
-                                }
-                        throwError $ PluginInternalError errorMessage
-                      where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
-
+            FourmoluConfig{..} <- loadConfig recorder fp'
             let config =
                     refineConfig ModuleSource Nothing Nothing Nothing $
                         defaultConfig
@@ -156,6 +144,49 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
             ExitFailure n -> do
                 logWith recorder Info $ StdErr err
                 throwError $ PluginInternalError $ "Fourmolu failed with exit code " <> T.pack (show n)
+
+loadConfig ::
+    Recorder (WithPriority LogEvent) ->
+    FilePath ->
+    ExceptT PluginError (HandlerM Ide.Types.Config) FourmoluConfig
+#if MIN_VERSION_fourmolu(0,16,0)
+loadConfig recorder fp = do
+    liftIO (findConfigFile fp) >>= \case
+        Left (ConfigNotFound searchDirs) -> do
+            logWith recorder Info $ NoConfigPath searchDirs
+            pure emptyConfig
+        Right file -> do
+            logWith recorder Info $ ConfigPath file
+            liftIO (Yaml.decodeFileEither file) >>= \case
+                Left err -> do
+                    let errorMessage = "Failed to load " <> T.pack file <> ": " <> T.pack (show err)
+                    lift $ pluginSendNotification SMethod_WindowShowMessage $
+                        ShowMessageParams
+                            { _type_ = MessageType_Error
+                            , _message = errorMessage
+                            }
+                    throwError $ PluginInternalError errorMessage
+                Right cfg -> do
+                  pure cfg
+#else
+loadConfig recorder fp = do
+    liftIO (loadConfigFile fp) >>= \case
+        ConfigLoaded file opts -> do
+            logWith recorder Info $ ConfigPath file
+            pure opts
+        ConfigNotFound searchDirs -> do
+            logWith recorder Info $ NoConfigPath searchDirs
+            pure emptyConfig
+        ConfigParseError f err -> do
+            lift $ pluginSendNotification SMethod_WindowShowMessage $
+                ShowMessageParams
+                    { _type_ = MessageType_Error
+                    , _message = errorMessage
+                    }
+            throwError $ PluginInternalError errorMessage
+          where
+            errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
+#endif
 
 data LogEvent
     = NoVersion Text
