@@ -12,8 +12,6 @@ index-state: 2024-06-10T12:08:58Z
 tests: True
 test-show-details: direct
 
--- benchmarks: True
-
 write-ghc-environment-files: never
 
 -- Many of our tests only work single-threaded, and the only way to
@@ -54,15 +52,7 @@ if impl(ghc >= 9.9)
     -- https://github.com/ndmitchell/hlint/pull/1594
     haskell-language-server -stylishHaskell -fourmolu -hlint -retrie -splice -floskell,
   allow-newer:
-    entropy:base,
-    entropy:directory,
-    entropy:filepath,
-    entropy:process,
     haddock-library:base,
     haddock-library:containers,
-    -- These can be removed when we get a new lsp release
-    quickcheck-instances:base,
-    quickcheck-instances:containers,
-    uuid-types:template-haskell,
 else
   benchmarks: True
