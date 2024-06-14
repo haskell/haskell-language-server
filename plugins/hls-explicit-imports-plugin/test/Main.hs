@@ -34,10 +34,33 @@ main = defaultTestRunner $ testGroup "import-actions"
     "Make imports explicit"
     [ codeActionAllGoldenTest "ExplicitUsualCase" 3 0
     , codeActionAllResolveGoldenTest "ExplicitUsualCase" 3 0
+    , inlayHintsTest "ExplicitUsualCase" 3 0 $ (@=?)
+        [InlayHint
+           { _position = Position {_line = 2, _character = 16}
+           , _label = InL "( a1 )"
+           , _kind = Nothing
+           , _textEdits = Nothing
+           , _tooltip = Nothing
+           , _paddingLeft = Just True
+           , _paddingRight = Nothing
+           , _data_ = Nothing
+           }]
     , codeActionOnlyGoldenTest "ExplicitOnlyThis" 3 0
     , codeActionOnlyResolveGoldenTest "ExplicitOnlyThis" 3 0
+    , inlayHintsTest "ExplicitOnlyThis" 3 0 $ (@?=)
+        [InlayHint
+           { _position = Position {_line = 2, _character = 16}
+           , _label = InL "( a1 )"
+           , _kind = Nothing
+           , _textEdits = Nothing
+           , _tooltip = Nothing
+           , _paddingLeft = Just True
+           , _paddingRight = Nothing
+           , _data_ = Nothing
+           }]
     , codeLensGoldenTest notRefineImports "ExplicitUsualCase" 0
     , codeActionBreakFile "ExplicitBreakFile" 4 0
+    , inlayHintsTest "ExplicitBreakFile" 3 0 $ (@=?) []
     , codeActionStaleAction "ExplicitStaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer def explicitImportsPlugin testDataDir $ do
@@ -49,6 +72,11 @@ main = defaultTestRunner $ testGroup "import-actions"
         doc <- openDoc "ExplicitExported.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
+    , testCase "No InlayHints when exported" $
+      runSessionWithServer def explicitImportsPlugin testDataDir $ do
+        doc <- openDoc "ExplicitExported.hs" "haskell"
+        inlayHints <- getInlayHints doc (pointRange 3 0)
+        liftIO $ inlayHints @?= []
     , testGroup "Title abbreviation"
       [ testCase "not abbreviated" $
           let i = "import " <> T.replicate 70 "F" <> " (Athing, Bthing, Cthing)"
@@ -71,6 +99,20 @@ main = defaultTestRunner $ testGroup "import-actions"
           let i = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, Cthing, Dthing, Ething)"
               o = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, ... (3 items))"
           in ExplicitImports.abbreviateImportTitle i @?= o
+      ]
+    , testGroup "Title abbreviation squashed"
+      [ testCase "not abbreviated squashed" $
+          let i = "import M (" <> T.replicate 70 "F" <> ", Athing, Bthing, Cthing)"
+              o = "(FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, Athing, Bthing, Cthing)"
+          in ExplicitImports.squashedAbbreviateImportTitle i @?= o
+      , testCase "abbreviated squashed that drop module name" $
+          let i = "import " <> T.replicate 120 "F" <> " (Athing, Bthing, Cthing)"
+              o = "(Athing, Bthing, Cthing)"
+          in ExplicitImports.squashedAbbreviateImportTitle i @?= o
+      , testCase "abbreviated squashed in import list" $
+          let i = "import M (Athing, Bthing, " <> T.replicate 100 "F" <> ", Cthing, Dthing, Ething)"
+              o = "(Athing, Bthing, ... (4 items))"
+          in ExplicitImports.squashedAbbreviateImportTitle i @?= o
       ]
     ]]
 
@@ -161,6 +203,12 @@ notRefineImports :: CodeLens -> Bool
 notRefineImports (CodeLens _ (Just (Command text _ _)) _)
   | "Refine imports to" `T.isPrefixOf` text = False
 notRefineImports _ = True
+
+inlayHintsTest :: FilePath -> Int -> Int -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTest fp l c assert = testCase (fp ++ " inlay hints") $ runSessionWithServer def explicitImportsPlugin testDataDir $ do
+  doc <- openDoc (fp ++ ".hs") "haskell"
+  inlayHints <- getInlayHints doc (pointRange l c)
+  liftIO $ assert inlayHints
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()
