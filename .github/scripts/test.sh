@@ -16,6 +16,15 @@ create_cradle() {
     echo "  cabal:" >> hie.yaml
 }
 
+# Tests and benchmarks can't be built on some GHC versions, such as GHC 9.10.1 on Windows.
+# Disable these packages for now, building bytestring-0.12.1.0 works completely fine.
+create_cabal_project() {
+    echo "packages: ./" > cabal.project
+    echo "" >> cabal.project
+    echo "tests: False" >> cabal.project
+    echo "benchmarks: False" >> cabal.project
+}
+
 enter_test_package() {
     local tmp_dir
     tmp_dir=$(mktempdir)
@@ -60,7 +69,7 @@ env
 
 # ensure ghcup
 install_ghcup
-ghcup install ghc --set 9.4.5
+ghcup install ghc --set 9.4.8
 
 (cd .. && ecabal update) # run cabal update outside project dir
 
@@ -77,6 +86,7 @@ case "${TARBALL_EXT}" in
 
         enter_test_package
         create_cradle
+        create_cabal_project
         test_all_hls "$GHCUP_BIN"
 
         ;;
@@ -106,6 +116,7 @@ case "${TARBALL_EXT}" in
 
         enter_test_package
         create_cradle
+        create_cabal_project
         test_all_hls "$(ghcup whereis bindir)"
 
         ;;
