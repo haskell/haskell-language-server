@@ -81,13 +81,11 @@ This is the static part of the policy that can be checked by a machine.
 
 #### Major versions
 
-A major GHC version is a "legacy" version if it is 3 or more major versions behind the latest GHC version that is
+A major GHC version is a "legacy" version if it is a major versions behind the latest GHC version that is
+used in a Stackage LTS snapshot or the GHCup recommended version, whichever is lower.
+* `min(ghcup recommended version, stackage lts snapshot)`
 
-1. Fully supported by HLS (support status "full support")
-2. Used in a Stackage LTS snapshot or the GHCup recommended version, whichever is lower.
-    * `min(ghcup recommended version, stackage lts snapshot)`
-
-For example, if 9.2 is the latest major version fully supported by HLS and used in a Stackage LTS, then the 8.8 major version and older will be legacy.
+For example, if 9.2 is the latest major version fully supported by HLS and used in a Stackage LTS, then the 9.1 major version and older will be legacy.
 
 Another example, if there is a Stackage LTS for GHC 9.6 and recommended version
 
