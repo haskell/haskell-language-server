@@ -58,11 +58,10 @@ import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.VFS                     (virtualFileText)
-import           System.FilePath                      (dropExtension,
-                                                       isAbsolute, normalise,
+import           System.FilePath                      (dropExtension, normalise,
                                                        pathSeparator,
                                                        splitDirectories,
-                                                       takeFileName, (</>))
+                                                       takeFileName)
 
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState

@@ -31,13 +31,12 @@ import qualified Text.Fuzzy.Parallel         as Fuzzy
 --   with a suggestion, then return a 'CodeAction' for replacing the
 --   the incorrect license identifier with the suggestion.
 licenseErrorAction
-  :: Uri
-  -- ^ File for which the diagnostic was generated
-  -> Diagnostic
-  -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
+  :: Int -- ^ Maximum number of suggestions to return
+  -> Uri -- ^ File for which the diagnostic was generated
+  -> Diagnostic -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> [CodeAction]
-licenseErrorAction uri diag =
-  mkCodeAction <$> licenseErrorSuggestion (_message diag)
+licenseErrorAction maxCompletions uri diag =
+  mkCodeAction <$> licenseErrorSuggestion maxCompletions (_message diag)
   where
     mkCodeAction (original, suggestion) =
       let
@@ -66,22 +65,22 @@ licenseNames = map (T.pack . licenseId) [minBound .. maxBound]
 --   Results are sorted by best fit, and prefer solutions that have smaller
 --   length distance to the original word.
 --
--- >>> take 2 $ licenseErrorSuggestion (T.pack "Unknown SPDX license identifier: 'BSD3'")
+-- >>> licenseErrorSuggestion 2 (T.pack "Unknown SPDX license identifier: 'BSD3'")
 -- [("BSD3","BSD-3-Clause"),("BSD3","BSD-3-Clause-LBNL")]
 licenseErrorSuggestion ::
-  T.Text
-  -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
+  Int -- ^ Maximum number of suggestions to return
+  -> T.Text -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> [(T.Text, T.Text)]
   -- ^ (Original (incorrect) license identifier, suggested replacement)
-licenseErrorSuggestion msg =
+licenseErrorSuggestion maxCompletions msg  =
    (getMatch <$> msg =~~ regex) >>= \case
           [original] ->
-            let matches = map Fuzzy.original $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults original licenseNames
-            in [(original,candidate) | candidate <- List.sortBy (lengthDistance original) matches]
+            let matches = map Fuzzy.original $ Fuzzy.simpleFilter Fuzzy.defChunkSize maxCompletions original licenseNames
+            in [(original,candidate) | candidate <- List.sortOn (lengthDistance original) matches]
           _ -> []
   where
     regex :: T.Text
     regex = "Unknown SPDX license identifier: '(.*)'"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results
-    lengthDistance original x1 x2 = abs (T.length original - T.length x1) `compare` abs (T.length original - T.length x2)
+    lengthDistance original x = abs $ T.length original - T.length x

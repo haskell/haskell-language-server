@@ -505,13 +505,12 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 return [(targetTarget, Set.fromList found)]
           hasUpdate <- atomically $ do
             known <- readTVar knownTargetsVar
-            let known' = flip mapHashed known $ \k ->
-                            HM.unionWith (<>) k $ HM.fromList knownTargets
+            let known' = flip mapHashed known $ \k -> unionKnownTargets k (mkKnownTargets knownTargets)
                 hasUpdate = if known /= known' then Just (unhashed known') else Nothing
             writeTVar knownTargetsVar known'
             pure hasUpdate
           for_ hasUpdate $ \x ->
-            logWith recorder Debug $ LogKnownFilesUpdated x
+            logWith recorder Debug $ LogKnownFilesUpdated (targetMap x)
           return $ toNoFileKey GetKnownTargets
 
     -- Create a new HscEnv from a hieYaml root and a set of options

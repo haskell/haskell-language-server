@@ -642,7 +642,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x = x"
         ]
-        [ "func :: p -> p"
+        [ if ghcVersion >= GHC910 then "func :: t -> t" else "func :: p -> p"
         , "func x = x"
         ]
   , testUseTypeSignature "local signature"
@@ -662,9 +662,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func :: Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func :: t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+              "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -692,9 +695,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func::Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func::t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+               "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"
