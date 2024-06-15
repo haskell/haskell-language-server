@@ -23,6 +23,7 @@ import           Data.List                       (intercalate)
 import           Data.Maybe                      (catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
+import           Data.Version                    (showVersion)
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
@@ -38,11 +39,16 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Ormolu
 import           Ormolu.Config
+import qualified Paths_fourmolu                  as Fourmolu
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 import           Text.Read                       (readMaybe)
+
+#if MIN_VERSION_fourmolu(0,16,0)
+import qualified Data.Yaml                       as Yaml
+#endif
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -51,7 +57,7 @@ descriptor recorder plId =
         , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
         }
   where
-    desc = "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> VERSION_fourmolu
+    desc = T.pack $ "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> showVersion Fourmolu.version
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean, 'PropertyKey "path" 'TString]
 properties =
@@ -77,36 +83,17 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                 handle @IOException (pure . Left . PluginInternalError . T.pack . show) $
                     runExceptT (cliHandler fourmoluExePath fileOpts)
         else do
-            logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
-            FourmoluConfig{..} <-
-                liftIO (loadConfigFile fp') >>= \case
-                    ConfigLoaded file opts -> do
-                        logWith recorder Info $ ConfigPath file
-                        pure opts
-                    ConfigNotFound searchDirs -> do
-                        logWith recorder Info $ NoConfigPath searchDirs
-                        pure emptyConfig
-                    ConfigParseError f err -> do
-                        lift $ pluginSendNotification SMethod_WindowShowMessage $
-                            ShowMessageParams
-                                { _type_ = MessageType_Error
-                                , _message = errorMessage
-                                }
-                        throwError $ PluginInternalError errorMessage
-                      where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
-
+            logWith recorder Debug $ LogCompiledInVersion (showVersion Fourmolu.version)
+            FourmoluConfig{..} <- loadConfig recorder fp'
             let config =
-#if MIN_VERSION_fourmolu(0,13,0)
-                    refineConfig ModuleSource Nothing Nothing Nothing
-#endif
-                    defaultConfig
-                        { cfgDynOptions = map DynOption fileOpts
-                        , cfgFixityOverrides = cfgFileFixities
-                        , cfgRegion = region
-                        , cfgDebug = False
-                        , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
-                        }
+                    refineConfig ModuleSource Nothing Nothing Nothing $
+                        defaultConfig
+                            { cfgDynOptions = map DynOption fileOpts
+                            , cfgFixityOverrides = cfgFileFixities
+                            , cfgRegion = region
+                            , cfgDebug = False
+                            , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
+                            }
             ExceptT . liftIO $
                 bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
                     <$> try @OrmoluException (ormolu config fp' contents)
@@ -158,6 +145,49 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                 logWith recorder Info $ StdErr err
                 throwError $ PluginInternalError $ "Fourmolu failed with exit code " <> T.pack (show n)
 
+loadConfig ::
+    Recorder (WithPriority LogEvent) ->
+    FilePath ->
+    ExceptT PluginError (HandlerM Ide.Types.Config) FourmoluConfig
+#if MIN_VERSION_fourmolu(0,16,0)
+loadConfig recorder fp = do
+    liftIO (findConfigFile fp) >>= \case
+        Left (ConfigNotFound searchDirs) -> do
+            logWith recorder Info $ NoConfigPath searchDirs
+            pure emptyConfig
+        Right file -> do
+            logWith recorder Info $ ConfigPath file
+            liftIO (Yaml.decodeFileEither file) >>= \case
+                Left err -> do
+                    let errorMessage = "Failed to load " <> T.pack file <> ": " <> T.pack (show err)
+                    lift $ pluginSendNotification SMethod_WindowShowMessage $
+                        ShowMessageParams
+                            { _type_ = MessageType_Error
+                            , _message = errorMessage
+                            }
+                    throwError $ PluginInternalError errorMessage
+                Right cfg -> do
+                  pure cfg
+#else
+loadConfig recorder fp = do
+    liftIO (loadConfigFile fp) >>= \case
+        ConfigLoaded file opts -> do
+            logWith recorder Info $ ConfigPath file
+            pure opts
+        ConfigNotFound searchDirs -> do
+            logWith recorder Info $ NoConfigPath searchDirs
+            pure emptyConfig
+        ConfigParseError f err -> do
+            lift $ pluginSendNotification SMethod_WindowShowMessage $
+                ShowMessageParams
+                    { _type_ = MessageType_Error
+                    , _message = errorMessage
+                    }
+            throwError $ PluginInternalError errorMessage
+          where
+            errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
+#endif
+
 data LogEvent
     = NoVersion Text
     | ConfigPath FilePath
@@ -197,8 +227,3 @@ newtype CLIVersionInfo = CLIVersionInfo
 
 mwhen :: Monoid a => Bool -> a -> a
 mwhen b x = if b then x else mempty
-
-#if !MIN_VERSION_fourmolu(0,14,0)
-resolvePrinterOpts :: [PrinterOptsPartial] -> PrinterOptsTotal
-resolvePrinterOpts = foldr fillMissingPrinterOpts defaultPrinterOpts
-#endif
