@@ -2,7 +2,7 @@
   description = "haskell-language-server development flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/haskell-updates";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     # for default.nix
     flake-compat = {
@@ -96,11 +96,10 @@
         # Developement shell with only dev tools
         devShells = {
           default = mkDevShell pkgs.haskellPackages;
-          shell-ghc90 = mkDevShell pkgs.haskell.packages.ghc90;
-          shell-ghc92 = mkDevShell pkgs.haskell.packages.ghc92;
           shell-ghc94 = mkDevShell pkgs.haskell.packages.ghc94;
           shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
+          shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
         };
 
         packages = {
