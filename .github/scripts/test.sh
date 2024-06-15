@@ -8,8 +8,8 @@ set -eux
 . .github/scripts/env.sh
 . .github/scripts/common.sh
 
-test_package="bytestring-0.12.1.0"
-test_module="Data/ByteString.hs"
+test_package="text-2.1.1"
+test_module="src/Data/Text.hs"
 
 create_cradle() {
     echo "cradle:" > hie.yaml
@@ -23,6 +23,8 @@ create_cabal_project() {
     echo "" >> cabal.project
     echo "tests: False" >> cabal.project
     echo "benchmarks: False" >> cabal.project
+
+    echo "flags: -simdutf -pure-haskell" >> cabal.project
 }
 
 enter_test_package() {
