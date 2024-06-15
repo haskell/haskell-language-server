@@ -81,15 +81,17 @@ This is the static part of the policy that can be checked by a machine.
 
 #### Major versions
 
-A major GHC version is a "legacy" version if it is a major versions behind the latest GHC version that is
-used in a Stackage LTS snapshot or the GHCup recommended version, whichever is lower.
-* `min(ghcup recommended version, stackage lts snapshot)`
+HLS will support major versions of GHC until they are older than _both_
 
-For example, if 9.2 is the latest major version fully supported by HLS and used in a Stackage LTS, then the 9.1 major version and older will be legacy.
+1. The major version of GHC used in the current Stackage LTS; and
+2. The major version of GHC recommended by GHCup
 
-Another example, if there is a Stackage LTS for GHC 9.6 and recommended version
+For example, if 
 
-HLS will support all non-legacy major versions of GHC.
+1. Stackage LTS uses GHC 9.2; and
+2. GHCUp recommends GHC 9.4
+
+then HLS will support back to GHC 9.2.
 
 #### Minor versions
 
@@ -129,10 +131,6 @@ When we decide to keep on an old version, we should track it as follows:
     - e.g. if Haskell Survey results show that 25% or more of users are still on the GHC version in question, then dropping should be avoided
 3. if dropping is still undesired, but maintenance burden is also high, then set out a call-for-help and contact HF for additional funding to support this GHC version
 4. if no help or funding was received within 2 releases (say, e.g. 3-6 months), then drop the version regardless
-
-### Announcements
-
-We will warn users about the upcoming deprecation of a GHC version in the notes of the release *prior* to the deprecation itself.
 
 ### Why deprecate older versions of GHC?
 
