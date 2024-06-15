@@ -171,3 +171,6 @@ lspPositionToCabalPosition :: Position -> Syntax.Position
 lspPositionToCabalPosition pos = Syntax.Position
   (fromIntegral (pos ^. JL.line) + 1)
   (fromIntegral (pos ^. JL.character) + 1)
+
+cabalPositionToLSPPosition :: Syntax.Position -> Position
+cabalPositionToLSPPosition (Syntax.Position start end) = Position (toEnum start -1) (toEnum end -1)
