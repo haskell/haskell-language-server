@@ -15,12 +15,16 @@ import Control.Monad.IO.Class
 import Data.Maybe
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeASCII, decodeLatin1)
-import Debug.Trace as Debug
 import Development.IDE.Core.Rules
 import Development.IDE.Core.Shake (IdeState (shakeExtras), runIdeAction, useWithStaleFast)
 import Development.IDE.Types.Location (toNormalizedFilePath')
-import Distribution.Fields.Field (Field (Field), Name (Name), FieldName, FieldLine(FieldLine))
-import Distribution.Parsec.Position (Position (Position))
+import Distribution.Fields.Field
+  ( Field (Field, Section),
+    FieldLine (FieldLine),
+    Name (Name),
+    SectionArg (SecArgName, SecArgOther, SecArgStr),
+  )
+import Distribution.Parsec.Position (Position)
 import Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..), cabalPositionToLSPPosition)
 import Ide.Plugin.Cabal.Orphans ()
 import Ide.Types
@@ -32,8 +36,6 @@ moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocum
   case LSP.uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
       mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields fp)
-      let debug = fmap fst mFields
-      -- Debug.traceShowM debug
       case fmap fst mFields of
         Just fieldPositions -> pure $ LSP.InR (LSP.InL allSymbols)
           where
@@ -42,39 +44,88 @@ moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocum
     Nothing -> pure $ LSP.InL []
 
 documentSymbolForField :: Field Position -> Maybe LSP.DocumentSymbol
-documentSymbolForField (Field (Name pos fieldName) fieldLines) = Just $ LSP.DocumentSymbol {..}
+documentSymbolForField (Field (Name pos fieldName) fieldLines) =
+  Just
+    (defDocumentSymbol range)
+      { LSP._name = decodeASCII fieldName,
+        LSP._kind = LSP.SymbolKind_Object,
+        LSP._children = Just $ mapMaybe documentSymbolForFieldLine fieldLines
+      }
   where
-    _detail = Nothing
-    _deprecated = Nothing
-    _name = decodeASCII fieldName
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII fieldName
+documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
+  Just
+    (defDocumentSymbol range)
+      { LSP._name = decodeASCII fieldName,
+        LSP._kind = LSP.SymbolKind_Object,
+        LSP._children =
+          Just
+            ( mapMaybe documentSymbolForField fields
+                ++ mapMaybe documentSymbolForSectionArgs sectionArgs
+            )
+      }
+  where
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII fieldName
 
-    _kind = LSP.SymbolKind_Field
-    _range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII fieldName
-    _selectionRange = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII fieldName
-    _children = Just $ mapMaybe documentSymbolForFieldLine fieldLines
-    _tags = Nothing
-
-documentSymbolForField _ = Nothing
+documentSymbolForSectionArgs :: SectionArg Position -> Maybe LSP.DocumentSymbol
+documentSymbolForSectionArgs (SecArgName pos identifier) =
+  Just
+    (defDocumentSymbol range)
+      { LSP._name = decodeLatin1 identifier,
+        LSP._kind = LSP.SymbolKind_Variable,
+        LSP._children = Nothing
+      }
+  where
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII identifier
+documentSymbolForSectionArgs (SecArgStr pos quotedString) =
+  Just
+    (defDocumentSymbol range)
+      { LSP._name = decodeLatin1 quotedString,
+        LSP._kind = LSP.SymbolKind_Constant,
+        LSP._children = Nothing
+      }
+  where
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII quotedString
+documentSymbolForSectionArgs (SecArgOther pos string) =
+  Just
+    (defDocumentSymbol range)
+      { LSP._name = decodeLatin1 string,
+        LSP._kind = LSP.SymbolKind_String,
+        LSP._children = Nothing
+      }
+  where
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII string
 
 documentSymbolForFieldLine :: FieldLine Position -> Maybe LSP.DocumentSymbol
-documentSymbolForFieldLine (FieldLine pos line) = Just $ LSP.DocumentSymbol {..}
+documentSymbolForFieldLine (FieldLine pos line) =
+  Just
+    (defDocumentSymbol range)
+      { LSP._name = decodeLatin1 line, -- since there is no ascii invariant (?)
+        LSP._kind = LSP.SymbolKind_Field,
+        LSP._children = Nothing -- can't delete even though the base case covers this (?)
+      }
   where
-    _detail = Nothing
-    _deprecated = Nothing
-    _name = decodeLatin1 line -- since there is no ascii invariant (?)
-
-    _kind = LSP.SymbolKind_Field
-    _range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII line
-    _selectionRange = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII line
-    _children = Nothing
-    _tags = Nothing
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII line
 
 cabalPositionToLSPRange :: Position -> LSP.Range
 cabalPositionToLSPRange pos = LSP.Range lspPos lspPos
-  where lspPos = cabalPositionToLSPPosition pos
+  where
+    lspPos = cabalPositionToLSPPosition pos
 
 addNameLengthToLSPRange :: LSP.Range -> T.Text -> LSP.Range
 addNameLengthToLSPRange (LSP.Range pos1 (LSP.Position line char)) name =
-                            LSP.Range
-                              pos1
-                              (LSP.Position line (char + fromIntegral (T.length name)))
+  LSP.Range
+    pos1
+    (LSP.Position line (char + fromIntegral (T.length name)))
+
+defDocumentSymbol :: LSP.Range -> LSP.DocumentSymbol
+defDocumentSymbol range = LSP.DocumentSymbol {..}
+  where
+    _detail = Nothing
+    _deprecated = Nothing
+    _name = ""
+    _kind = LSP.SymbolKind_File
+    _range = range
+    _selectionRange = range
+    _children = Nothing
+    _tags = Nothing
