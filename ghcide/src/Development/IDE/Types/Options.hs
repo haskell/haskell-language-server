@@ -89,9 +89,9 @@ data OptHaddockParse = HaddockParse | NoHaddockParse
   deriving (Eq,Ord,Show,Enum)
 
 data IdePreprocessedSource = IdePreprocessedSource
-  { preprocWarnings :: [(GHC.SrcSpan, String)] -- TODO: Make these warnings structured as well
+  { preprocWarnings :: [(GHC.SrcSpan, String)] -- TODO: Future work could we make these warnings structured as well?
     -- ^ Warnings emitted by the preprocessor.
-  , preprocErrors   :: [(GHC.SrcSpan, String)] -- TODO: Make these errors structured as well
+  , preprocErrors   :: [(GHC.SrcSpan, String)] -- TODO: Future work could we make these errors structured as well?
     -- ^ Errors emitted by the preprocessor.
   , preprocSource   :: GHC.ParsedSource
     -- ^ New parse tree emitted by the preprocessor.

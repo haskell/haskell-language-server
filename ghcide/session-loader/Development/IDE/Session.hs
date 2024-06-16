@@ -878,7 +878,6 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
 
 #if MIN_VERSION_ghc(9,6,1)
     let closure_errs = maybeToList $ checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
-        -- TODO: Is this the right thing to do here, to produce an error for each DriverMessage generated?
         closure_err_to_multi_err err =
             ideErrorWithSource
                 (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
