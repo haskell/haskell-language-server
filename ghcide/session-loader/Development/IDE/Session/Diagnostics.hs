@@ -2,6 +2,7 @@
 
 module Development.IDE.Session.Diagnostics where
 import           Control.Applicative
+import           Control.Lens
 import           Control.Monad
 import qualified Data.Aeson                        as Aeson
 import           Data.List
@@ -32,7 +33,7 @@ renderCradleError (CradleError deps _ec ms) cradle nfp =
         ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines $ map T.pack userFriendlyMessage) Nothing
   in
   if HieBios.isCabalCradle cradle
-     then flip modifyFdLspDiagnostic noDetails $ \diag -> diag{_data_ = Just $ Aeson.toJSON CradleErrorDetails{cabalProjectFiles=absDeps}}
+     then noDetails & fdLspDiagnosticL %~ \diag -> diag{_data_ = Just $ Aeson.toJSON CradleErrorDetails{cabalProjectFiles=absDeps}}
      else noDetails
   where
     absDeps = fmap (cradleRootDir cradle </>) deps
