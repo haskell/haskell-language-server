@@ -1,5 +1,9 @@
--- This module copies parts of the driver code in GHC.Main.Driver to provide
+-- ============================================================================
+-- DO NOT EDIT
+-- This module copies parts of the driver code in GHC.Driver.Main to provide
 -- `hscTypecheckRenameWithDiagnostics`.
+-- ============================================================================
+
 module Development.IDE.GHC.Compat.Driver
     ( hscTypecheckRenameWithDiagnostics
     ) where
@@ -31,17 +35,14 @@ import GHC.Data.FastString
 import GHC.Data.Maybe
 import Control.Monad
 
--- -----------------------------------------------------------------------------
--- | Rename and typecheck a module the same way that GHC does, additionally returning the renamed syntax and the diagnostics produced.
 hscTypecheckRenameWithDiagnostics :: HscEnv -> ModSummary -> HsParsedModule
                    -> IO ((TcGblEnv, RenamedStuff), Messages GhcMessage)
 hscTypecheckRenameWithDiagnostics hsc_env mod_summary rdr_module = runHsc' hsc_env $
     hsc_typecheck True mod_summary (Just rdr_module)
 
--- | A bunch of logic piled around @tcRnModule'@, concerning a) backpack
--- b) concerning dumping rename info and hie files. It would be nice to further
--- separate this stuff out, probably in conjunction better separating renaming
--- and type checking (#17781).
+-- ============================================================================
+-- DO NOT EDIT - Refer to top of file
+-- ============================================================================
 hsc_typecheck :: Bool -- ^ Keep renamed source?
               -> ModSummary -> Maybe HsParsedModule
               -> Hsc (TcGblEnv, RenamedStuff)
@@ -73,6 +74,9 @@ hsc_typecheck keep_rn mod_summary mb_rdr_module = do
     rn_info <- extract_renamed_stuff mod_summary tc_result
     return (tc_result, rn_info)
 
+-- ============================================================================
+-- DO NOT EDIT - Refer to top of file
+-- ============================================================================
 extract_renamed_stuff :: ModSummary -> TcGblEnv -> Hsc RenamedStuff
 extract_renamed_stuff mod_summary tc_result = do
     let rn_info = getRenamedStuff tc_result
@@ -112,8 +116,9 @@ extract_renamed_stuff mod_summary tc_result = do
                   mapM_ (putMsg logger') xs
     return rn_info
 
--- | Generate a stripped down interface file, e.g. for boot files or when ghci
--- generates interface files. See Note [simpleTidyPgm - mkBootModDetailsTc]
+-- ============================================================================
+-- DO NOT EDIT - Refer to top of file
+-- ============================================================================
 hscSimpleIface :: HscEnv
                -> Maybe CoreProgram
                -> TcGblEnv
