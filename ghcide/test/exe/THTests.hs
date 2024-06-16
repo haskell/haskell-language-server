@@ -45,7 +45,7 @@ tests =
                 ]
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
-        expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Error, (6, 29), "Variable not in scope: n", Nothing)] ) ]
+        expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Error, (6, 29), "Variable not in scope: n", Just "GHC-88464")] ) ]
     , testWithDummyPluginEmpty "newtype-closure" $ do
         let sourceA =
               T.unlines
@@ -93,7 +93,7 @@ tests =
                 , "main = $a (putStrLn \"success!\")"]
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
-        expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding with no type signature: main :: IO ()", Nothing)] ) ]
+        expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding with no type signature: main :: IO ()", Just "GHC-38417")] ) ]
     , testCase "findsTHnewNameConstructor" $ runWithExtraFiles "THNewName" $ \dir -> do
 
     -- This test defines a TH value with the meaning "data A = A" in A.hs
@@ -104,7 +104,7 @@ tests =
 
     let cPath = dir </> "C.hs"
     _ <- openDoc cPath "haskell"
-    expectDiagnostics [ ( cPath, [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding with no type signature: a :: A", Nothing)] ) ]
+    expectDiagnostics [ ( cPath, [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding with no type signature: a :: A", Just "GHC-38417")] ) ]
     ]
 
 
@@ -137,7 +137,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     cdoc <- createDoc cPath "haskell" cSource
 
-    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Nothing)])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")])]
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
@@ -147,9 +147,9 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 
     -- Check that the change propagates to C
     expectDiagnostics
-        [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'", Nothing)])
-        ,("THC.hs", [(DiagnosticSeverity_Warning, (6,0), "Top-level binding", Nothing)])
-        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level bindin", Nothing)])
+        [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'", Just "GHC-83865")])
+        ,("THC.hs", [(DiagnosticSeverity_Warning, (6,0), "Top-level binding", Just "GHC-38417")])
+        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level bindin", Just "GHC-38417")])
         ]
 
     closeDoc adoc
@@ -172,7 +172,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     adoc <- createDoc aPath "haskell" aSource
     bdoc <- createDoc bPath "haskell" bSource
 
-    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Nothing)])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
     changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
@@ -182,7 +182,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
     waitForDiagnostics
 
-    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Nothing)]
+    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")]
 
     closeDoc adoc
     closeDoc bdoc
