@@ -6,14 +6,11 @@
 module Development.IDE.GHC.Warnings(withWarnings) where
 
 import           Control.Concurrent.Strict
-import           Control.Lens (over)
-import           Data.List
 import qualified Data.Text                         as T
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
-import           Language.LSP.Protocol.Types       (type (|?) (..))
 
 
 -- | Take a GHC monadic action (e.g. @typecheckModule pm@ for some
@@ -30,20 +27,9 @@ withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> LogActionCompat
       newAction dynFlags logFlags wr _ loc prUnqual msg = do
-        let wr_d = map ((wr,) . over fdLspDiagnosticL (attachReason wr)) $ diagFromSDocErrMsg diagSource dynFlags (mkWarnMsg dynFlags wr logFlags loc prUnqual msg)
+        let wr_d = map (wr,) $ diagFromSDocErrMsg diagSource dynFlags (mkWarnMsg dynFlags wr logFlags loc prUnqual msg)
         modifyVar_ warnings $ return . (wr_d:)
       newLogger env = pushLogHook (const (logActionCompat (newAction (hsc_dflags env)))) (hsc_logger env)
   res <- action $ \env -> putLogHook (newLogger env) env
   warns <- readVar warnings
   return (reverse $ concat warns, res)
-
-attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
-attachReason Nothing d = d
-attachReason (Just wr) d = d{_code = InR <$> showReason wr}
- where
-  showReason = \case
-    WarningWithFlag flag -> showFlag flag
-    _                    -> Nothing
-
-showFlag :: WarningFlag -> Maybe T.Text
-showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags
