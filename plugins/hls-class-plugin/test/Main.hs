@@ -63,9 +63,10 @@ codeActionTests = testGroup
       getActionByTitle "Add placeholders for 'g'"
   , goldenWithClass "Creates a placeholder for other two methods" "T6" "2" $
       getActionByTitle "Add placeholders for 'g','h'"
-  , onlyRunForGhcVersions [GHC92, GHC94] "Only ghc-9.2+ enabled GHC2021 implicitly" $
-      goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
-        getActionByTitle "Add placeholders for '==' with signature(s)"
+  , goldenWithClass "Creates a placeholder when all top-level decls are indented" "T7" "" $
+      getActionByTitle "Add placeholders for 'g','h','i'"
+  , goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
+      getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $
       getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Don't insert pragma if exist" "InsertWithPragma" "" $
@@ -132,8 +133,7 @@ codeLensTests = testGroup
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens "Apply code lens on the same line" "Inline" 0
     , goldenCodeLens "Don't insert pragma while existing" "CodeLensWithPragma" 0
-    , onlyRunForGhcVersions [GHC92, GHC94] "Only ghc-9.2+ enabled GHC2021 implicitly" $
-        goldenCodeLens "Don't insert pragma while GHC2021 enabled" "CodeLensWithGHC2021" 0
+    , goldenCodeLens "Don't insert pragma while GHC2021 enabled" "CodeLensWithGHC2021" 0
     , goldenCodeLens "Qualified name" "Qualified" 0
     , goldenCodeLens "Type family" "TypeFamily" 0
     , testCase "keep stale lens" $ do

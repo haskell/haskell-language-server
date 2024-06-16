@@ -7,12 +7,10 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-06-07T00:00:00Z
+index-state: 2024-06-13T17:12:34Z
 
 tests: True
 test-show-details: direct
-
-benchmarks: True
 
 write-ghc-environment-files: never
 
@@ -40,4 +38,20 @@ constraints:
   -- the flag '-fopen-simd', which blocked the release 2.2.0.0.
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
-  bitvec -simd
+  bitvec -simd,
+
+
+if impl(ghc >= 9.9)
+  benchmarks: False
+  constraints:
+    lens >= 5.3.2,
+    -- See
+    -- https://github.com/haskell/stylish-haskell/issues/479
+    -- https://github.com/ennocramer/floskell/pull/82
+    -- https://github.com/ndmitchell/hlint/pull/1594
+    haskell-language-server -stylishHaskell -hlint -retrie -splice -floskell,
+  allow-newer:
+    haddock-library:base,
+    haddock-library:containers,
+else
+  benchmarks: True

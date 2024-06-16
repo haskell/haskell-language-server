@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
 extra-source-files:
   README.md
   ChangeLog.md
@@ -207,7 +207,7 @@ test-suite hls-cabal-gild-plugin-tests
     , hls-test-utils        == 2.8.0.0
 
   if flag(isolateCabalGildTests)
-    build-tool-depends: cabal-gild:cabal-gild ^>=1.1
+    build-tool-depends: cabal-gild:cabal-gild ^>=1.3
     cpp-options: -Dhls_isolate_cabalgild_tests
 
 -----------------------------
@@ -291,8 +291,6 @@ test-suite hls-cabal-plugin-tests
     , lens
     , lsp-types
     , text
-    , text-rope
-    , transformers
 
 -----------------------------
 -- class plugin
@@ -326,7 +324,7 @@ library hls-class-plugin
     , deepseq
     , extra
     , ghc
-    , ghc-exactprint  >= 1.5
+    , ghc-exactprint  >= 1.5 && < 1.10.0.0
     , ghcide          == 2.8.0.0
     , hls-graph
     , hls-plugin-api  == 2.8.0.0
@@ -1463,7 +1461,7 @@ library hls-fourmolu-plugin
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>= 0.14 || ^>= 0.15
+    , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16
     , ghc-boot-th
     , ghcide          == 2.8.0.0
     , hls-plugin-api  == 2.8.0.0
@@ -1473,7 +1471,7 @@ library hls-fourmolu-plugin
     , process-extras  >= 0.7.1
     , text
     , transformers
-
+    , yaml
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
@@ -1482,6 +1480,9 @@ test-suite hls-fourmolu-plugin-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
   main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
@@ -1535,6 +1536,9 @@ test-suite hls-ormolu-plugin-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   build-tool-depends:
     ormolu:ormolu
   build-depends:
@@ -1653,18 +1657,18 @@ library hls-refactor-plugin
     , containers
     , ghc-exactprint < 1 || >= 1.4
     , extra
-    , retrie
     , syb
     , hls-graph
     , dlist
     , deepseq
     , mtl
     , lens
-    , data-default
     , time
     -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
     , regex-applicative
     , parser-combinators
+  if impl(ghc < 9.10)
+    build-depends: data-default
 
 test-suite hls-refactor-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
@@ -1825,7 +1829,6 @@ test-suite hls-notes-plugin-tests
   main-is:          NotesTest.hs
   build-depends:
     , base
-    , directory
     , filepath
     , haskell-language-server:hls-notes-plugin
     , hls-test-utils == 2.8.0.0
@@ -2095,7 +2098,6 @@ test-suite ghcide-tests
 
   build-depends:
     , aeson
-    , async
     , base
     , containers
     , data-default
@@ -2190,7 +2192,6 @@ executable ghcide-bench
         bytestring,
         containers,
         data-default,
-        directory,
         extra,
         filepath,
         hls-plugin-api,

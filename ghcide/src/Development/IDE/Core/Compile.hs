@@ -76,7 +76,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing      (withTrace)
 import           Development.IDE.GHC.Compat        hiding (loadInterface,
                                                     parseHeader, parseModule,
-                                                    tcRnModule, writeHieFile)
+                                                    tcRnModule, writeHieFile, assert)
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util

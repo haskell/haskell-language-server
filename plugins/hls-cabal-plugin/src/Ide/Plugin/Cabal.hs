@@ -234,8 +234,9 @@ kick = do
 -- ----------------------------------------------------------------
 
 licenseSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
-  pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
+licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) = do
+  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.suggestLicense" ideState getClientConfigAction
+  pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction maxCompls uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

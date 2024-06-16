@@ -271,7 +271,9 @@ hsConDeclsBinders cons
 
     get_flds_gadt :: HsConDeclGADTDetails GhcPs
                   -> [LFieldOcc GhcPs]
-#if MIN_VERSION_ghc(9,3,0)
+#if MIN_VERSION_ghc(9,9,0)
+    get_flds_gadt (RecConGADT _ flds) = get_flds (reLoc flds)
+#elif MIN_VERSION_ghc(9,3,0)
     get_flds_gadt (RecConGADT flds _) = get_flds (reLoc flds)
 #else
     get_flds_gadt (RecConGADT flds) = get_flds (reLoc flds)

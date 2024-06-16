@@ -129,7 +129,7 @@ progressReporting (Just lspEnv) optProgressStyle = do
                         when (nextPct == prevPct) retry
                         pure (todo, done, nextPct)
 
-                    update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+                    _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
                     loop update nextPct
         updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
