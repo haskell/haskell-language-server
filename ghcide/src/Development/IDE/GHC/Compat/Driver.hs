@@ -2,6 +2,8 @@
 -- DO NOT EDIT
 -- This module copies parts of the driver code in GHC.Driver.Main to provide
 -- `hscTypecheckRenameWithDiagnostics`.
+-- Issue to add this function: https://gitlab.haskell.org/ghc/ghc/-/issues/24996
+-- MR to add this function: https://gitlab.haskell.org/ghc/ghc/-/merge_requests/12891
 -- ============================================================================
 
 module Development.IDE.GHC.Compat.Driver
