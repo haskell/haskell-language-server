@@ -67,8 +67,8 @@ genericConfigTests = testGroup "generic plugin config"
             expectDiagnostics standardDiagnostics
     ]
     where
-        standardDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Warning, (1,0), "Top-level binding")])]
-        testPluginDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Error, (0,0), "testplugin")])]
+        standardDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Warning, (1,0), "Top-level binding", Nothing)])]
+        testPluginDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Error, (0,0), "testplugin", Nothing)])]
 
         runConfigSession subdir session = do
           failIfSessionTimeout $
@@ -90,7 +90,7 @@ genericConfigTests = testGroup "generic plugin config"
                     files <- getFilesOfInterestUntracked
                     void $ uses_ GetTestDiagnostics $ HM.keys files
               define mempty $ \GetTestDiagnostics file -> do
-                let diags = [ideErrorText file "testplugin"]
+                let diags = [ideErrorText Nothing file "testplugin"]
                 return (diags,Nothing)
           }
         -- A config that disables the plugin initially
