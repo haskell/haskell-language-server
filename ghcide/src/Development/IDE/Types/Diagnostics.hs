@@ -72,12 +72,16 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
           Nothing -> NoStructuredMessage
           Just msg -> SomeStructuredMessage msg
       fdLspDiagnostic = lspDiag
+#if MIN_VERSION_ghc(9,6,1)
         { _code = fmap ghcCodeToLspCode . diagnosticCode . errMsgDiagnostic =<< origMsg
         }
+#endif
+#if MIN_VERSION_ghc(9,8,1)
       ghcCodeToLspCode :: DiagnosticCode -> Int32 LSP.|? T.Text
-#if MIN_VERSION_ghc(9,10,1)
       ghcCodeToLspCode = InR . T.pack . show
-#else
+#elif MIN_VERSION_ghc(9,6,1)
+      -- DiagnosticCode only got a show instance in 9.8.1
+      ghcCodeToLspCode :: DiagnosticCode -> Int32 LSP.|? T.Text
       ghcCodeToLspCode (DiagnosticCode prefix c) = InR $ T.pack $ prefix ++ "-" ++ printf "%05d" c
 #endif
   in
