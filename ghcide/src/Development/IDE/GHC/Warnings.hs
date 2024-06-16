@@ -6,6 +6,7 @@
 module Development.IDE.GHC.Warnings(withWarnings) where
 
 import           Control.Concurrent.Strict
+import           Control.Lens (over)
 import           Data.List
 import qualified Data.Text                         as T
 
@@ -29,7 +30,7 @@ withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> LogActionCompat
       newAction dynFlags logFlags wr _ loc prUnqual msg = do
-        let wr_d = map ((wr,) . modifyFdLspDiagnostic (attachReason wr)) $ diagFromSDocErrMsg diagSource dynFlags (mkWarnMsg dynFlags wr logFlags loc prUnqual msg)
+        let wr_d = map ((wr,) . over fdLspDiagnosticL (attachReason wr)) $ diagFromSDocErrMsg diagSource dynFlags (mkWarnMsg dynFlags wr logFlags loc prUnqual msg)
         modifyVar_ warnings $ return . (wr_d:)
       newLogger env = pushLogHook (const (logActionCompat (newAction (hsc_dflags env)))) (hsc_logger env)
   res <- action $ \env -> putLogHook (newLogger env) env

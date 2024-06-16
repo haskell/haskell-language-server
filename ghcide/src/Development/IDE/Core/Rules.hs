@@ -64,6 +64,7 @@ import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
+import           Control.Lens                                 ((%~), (&))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Unlift
 import           Control.Monad.Reader
@@ -487,8 +488,8 @@ reportImportCyclesRule recorder =
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
           toDiag imp mods =
-            modifyFdLspDiagnostic (\lspDiag -> lspDiag { _range = rng })
-              $ ideErrorWithSource (Just "Import cycle detection") (Just DiagnosticSeverity_Error) fp ("Cyclic module dependency between " <> showCycle mods) Nothing
+            ideErrorWithSource (Just "Import cycle detection") (Just DiagnosticSeverity_Error) fp ("Cyclic module dependency between " <> showCycle mods) Nothing
+              & fdLspDiagnosticL %~ \lspDiag -> (lspDiag { _range = rng } :: Diagnostic)
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do

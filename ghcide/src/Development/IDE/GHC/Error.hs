@@ -36,6 +36,7 @@ module Development.IDE.GHC.Error
   , toDSeverity
   ) where
 
+import           Control.Lens
 import           Data.Maybe
 import           Data.String                       (fromString)
 import qualified Data.Text                         as T
@@ -57,11 +58,11 @@ import           Language.LSP.VFS                  (CodePointPosition (CodePoint
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> Maybe (MsgEnvelope GhcMessage) -> FileDiagnostic
 diagFromText diagSource sev loc msg origMsg =
-  modifyFdLspDiagnostic (\diag -> diag { D._range = fromMaybe noRange $ srcSpanToRange loc }) $
-    D.ideErrorWithSource
-      (Just diagSource) (Just sev)
-      (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc)
-      msg origMsg
+  D.ideErrorWithSource
+    (Just diagSource) (Just sev)
+    (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc)
+    msg origMsg
+    & fdLspDiagnosticL %~ \diag -> diag { D._range = fromMaybe noRange $ srcSpanToRange loc }
 
 -- | Produce a GHC-style error from a source span and a message.
 diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope GhcMessage -> [FileDiagnostic]

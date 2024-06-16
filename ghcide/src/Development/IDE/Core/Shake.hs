@@ -83,7 +83,7 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
-import           Control.Lens                           ((&), (?~))
+import           Control.Lens                           ((&), (?~), (%~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -1340,7 +1340,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
         update :: (forall a. String -> String -> a -> a) -> [FileDiagnostic] -> STMDiagnosticStore -> STM [FileDiagnostic]
         update addTagUnsafeMethod new store = addTagUnsafeMethod "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafeMethod uri ver (renderKey k) new store
-        current = map (modifyFdLspDiagnostic diagsFromRule) current0
+        current = map (fdLspDiagnosticL %~ diagsFromRule) current0
     addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always

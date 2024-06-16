@@ -676,8 +676,9 @@ unDefer (Just (WarningWithFlag Opt_WarnDeferredOutOfScopeVariables), fd) = (True
 unDefer ( _                                        , fd) = (False, fd)
 
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
-upgradeWarningToError fd =
-  modifyFdLspDiagnostic (\diag -> diag {_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message diag}) fd where
+upgradeWarningToError =
+  fdLspDiagnosticL %~ \diag -> diag {_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message diag}
+  where
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
@@ -710,14 +711,14 @@ tagDiag :: (Maybe DiagnosticReason, FileDiagnostic) -> (Maybe DiagnosticReason, 
 #if MIN_VERSION_ghc(9,7,0)
 tagDiag (w@(Just (WarningWithCategory cat)), fd)
   | cat == defaultWarningCategory -- default warning category is for deprecations
-  = (w, modifyFdLspDiagnostic (\diag -> diag { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags diag) }) fd)
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags diag) })
 tagDiag (w@(Just (WarningWithFlags warnings)), fd)
   | tags <- mapMaybe requiresTag (toList warnings)
-  = (w, modifyFdLspDiagnostic (\diag -> diag { _tags = Just $ tags ++ concat (_tags diag) }) fd)
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tags ++ concat (_tags diag) })
 #else
 tagDiag (w@(Just (WarningWithFlag warning)), fd)
   | Just tag <- requiresTag warning
-  = (w, modifyFdLspDiagnostic (\diag -> diag { _tags = Just $ tag : concat (_tags diag) }) fd)
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tag : concat (_tags diag) })
 #endif
   where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
