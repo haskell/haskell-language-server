@@ -188,6 +188,10 @@ prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagn
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
+        , slabel_ "Code:    " $ case _code of
+                                  Just (InR text) -> pretty text
+                                  Just (InL i) -> pretty i
+                                  Nothing -> "<none>"
         , slabel_ "Message: "
             $ case sev of
               LSP.DiagnosticSeverity_Error       -> annotate $ color Red
