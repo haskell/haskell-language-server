@@ -211,9 +211,9 @@ rules recorder plugin = do
 
       diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
       diagnostics file (Right ideas) =
-       (file, ShowDiag,) <$> catMaybes [ideaToDiagnostic i | i <- ideas]
+        [ideErrorFromLspDiag diag file Nothing | i <- ideas, Just diag <- [ideaToDiagnostic i]]
       diagnostics file (Left parseErr) =
-        [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
+        [ideErrorFromLspDiag (parseErrorToDiagnostic parseErr) file Nothing]
 
 
       ideaToDiagnostic :: Idea -> Maybe Diagnostic
@@ -371,9 +371,11 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
       allDiagnostics <- atomically $ getDiagnostics ideState
 
       let numHintsInDoc = length
-            [diagnostic | (diagnosticNormalizedFilePath, _, diagnostic) <- allDiagnostics
-                        , validCommand diagnostic
-                        , diagnosticNormalizedFilePath == docNormalizedFilePath
+            [lspDiagnostic
+            | diag <- allDiagnostics
+            , let lspDiagnostic = fdLspDiagnostic diag
+            , validCommand lspDiagnostic
+            , fdFilePath diag == docNormalizedFilePath
             ]
       let numHintsInContext = length
             [diagnostic | diagnostic <- diags
