@@ -11,9 +11,11 @@ module Ide.Plugin.Cabal.Diagnostics
 )
 where
 
+import           Control.Lens                ((.~), (&))
 import qualified Data.Text                   as T
 import           Development.IDE             (FileDiagnostic,
                                               ShowDiagnostic (ShowDiag))
+import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL, ideErrorWithSource)
 import           Distribution.Fields         (showPError, showPWarning)
 import qualified Distribution.Parsec         as Syntax
 import           Ide.PluginUtils             (extendNextLine)
@@ -23,6 +25,7 @@ import           Language.LSP.Protocol.Types (Diagnostic (..),
                                               Position (Position),
                                               Range (Range),
                                               fromNormalizedFilePath)
+import           Language.LSP.Protocol.Lens   (range)
 
 -- | Produce a diagnostic for a fatal Cabal parser error.
 fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic
@@ -79,15 +82,11 @@ mkDiag
   -> T.Text
   -- ^ The message displayed by the editor
   -> FileDiagnostic
-mkDiag file diagSource sev loc msg = (file, ShowDiag,)
-    Diagnostic
-    { _range    = loc
-    , _severity = Just sev
-    , _source   = Just diagSource
-    , _message  = msg
-    , _code     = Nothing
-    , _tags     = Nothing
-    , _relatedInformation = Nothing
-    , _codeDescription = Nothing
-    , _data_ = Nothing
-    }
+mkDiag file diagSource sev loc msg =
+  ideErrorWithSource
+    (Just diagSource)
+    (Just sev)
+    file
+    msg
+    Nothing
+    & fdLspDiagnosticL . range .~ loc

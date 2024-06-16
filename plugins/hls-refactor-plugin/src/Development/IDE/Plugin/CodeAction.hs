@@ -67,6 +67,7 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Diagnostics
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -113,7 +114,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   liftIO $ do
     let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
+    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       actions = caRemoveRedundantImports parsedModule text allDiags range uri

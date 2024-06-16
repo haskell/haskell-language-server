@@ -12,6 +12,7 @@ import qualified Data.HashMap.Strict         as HM
 import           Data.Maybe                  (mapMaybe)
 import qualified Data.Text                   as T
 import           Development.IDE
+import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Core.Rules  (getHieFile)
 import qualified Development.IDE.Core.Shake  as Shake
 import           GHC.Generics                (Generic)
@@ -187,17 +188,18 @@ rules recorder plId = do
                 "Possible solutions:"
               ]
                 ++ map ("  - " <>) (inspectionSolution inspection)
-        return ( file,
-          ShowDiag,
-          LSP.Diagnostic
-            { _range = realSrcSpanToRange observationSrcSpan,
-              _severity = Just LSP.DiagnosticSeverity_Hint,
-              _code = Just (LSP.InR $ unId (inspectionId inspection)),
-              _source = Just "stan",
-              _message = message,
-              _relatedInformation = Nothing,
-              _tags = Nothing,
-              _codeDescription = Nothing,
-              _data_ = Nothing
-            }
-          )
+        return $
+          ideErrorFromLspDiag
+            LSP.Diagnostic
+              { _range = realSrcSpanToRange observationSrcSpan,
+                _severity = Just LSP.DiagnosticSeverity_Hint,
+                _code = Just (LSP.InR $ unId (inspectionId inspection)),
+                _source = Just "stan",
+                _message = message,
+                _relatedInformation = Nothing,
+                _tags = Nothing,
+                _codeDescription = Nothing,
+                _data_ = Nothing
+              }
+            file
+            Nothing
