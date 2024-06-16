@@ -1891,7 +1891,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     compareHideFunctionTo = compareTwo "HideFunction.hs"
     withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
-        void $ expectDiagnostics [(file, [(DiagnosticSeverity_Error, loc, "Ambiguous occurrence") | loc <- locs])]
+        void $ expectDiagnostics [(file, [(DiagnosticSeverity_Error, loc, "Ambiguous occurrence", Nothing) | loc <- locs])] -- TODO: Give this a proper error
         actions <- getAllCodeActions doc
         k dir doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
@@ -2350,7 +2350,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
   where
     testFor sourceLines pos@(l,c) expectedTitle expectedLines = do
       docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
-      expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used")]) ]
+      expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used", Nothing)]) ]
       action <- pickActionWithTitle expectedTitle =<< getCodeActions docId  (R l c l c)
       executeCodeAction action
       contentAfterAction <- documentContents docId
@@ -2366,8 +2366,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "f = 1"
       ]
       (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
-        else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ])
+        then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
+        else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint", Nothing) ])
       "Add type annotation ‘Integer’ to ‘1’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A (f) where"
@@ -2385,8 +2385,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    in x"
       ]
       (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
-        else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ])
+        then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
+        else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint", Nothing) ])
       "Add type annotation ‘Integer’ to ‘3’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2405,8 +2405,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    in x"
       ]
       (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
-        else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ])
+        then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
+        else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint", Nothing) ])
       "Add type annotation ‘Integer’ to ‘5’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2427,12 +2427,12 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       ]
       (if ghcVersion >= GHC94
         then
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
+          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
+          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
           ]
         else
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
+          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint", Nothing)
+          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint", Nothing)
           ])
       "Add type annotation ‘String’ to ‘\"debug\"’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2454,8 +2454,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "f a = traceShow \"debug\" a"
       ]
       (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
-        else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ])
+        then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
+        else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint", Nothing) ])
       "Add type annotation ‘String’ to ‘\"debug\"’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2476,8 +2476,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
       ]
       (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
-        else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ])
+        then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
+        else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint", Nothing) ])
       "Add type annotation ‘String’ to ‘\"debug\"’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2492,7 +2492,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
     testFor sourceLines diag expectedTitle expectedLines = do
       docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
       expectDiagnostics [ ("A.hs", diag) ]
-      let cursors = map snd3 diag
+      let cursors = map (\(_, snd, _, _) -> snd) diag
           (ls, cs) = minimum cursors
           (le, ce) = maximum cursors
 
