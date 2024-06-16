@@ -2,17 +2,14 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
   FileDiagnostic(..),
-  fdFilePath,
-  fdShouldShowDiagnostic,
-  fdLspDiagnostic,
-  fdStructuredMessage,
-  modifyFdLspDiagnostic,
+  fdLspDiagnosticL,
   StructuredMessage(..),
   IdeResult,
   LSP.DiagnosticSeverity(..),
@@ -25,6 +22,7 @@ module Development.IDE.Types.Diagnostics (
   IdeResultNoDiagnosticsEarlyCutoff) where
 
 import           Control.DeepSeq
+import           Control.Lens
 import           Data.ByteString                (ByteString)
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
@@ -125,22 +123,9 @@ data ShowDiagnostic
 instance NFData ShowDiagnostic where
     rnf = rwhnf
 
--- | Human readable diagnostics for a specific file.
---
---   This type packages a pretty printed, human readable error message
---   along with the related source location so that we can display the error
---   on either the console or in the IDE at the right source location.
---
-data FileDiagnostic = FileDiagnostic
-  { fdFilePath :: NormalizedFilePath
-  , fdShouldShowDiagnostic :: ShowDiagnostic
-  , fdLspDiagnostic :: Diagnostic
-  , fdStructuredMessage :: StructuredMessage
-  }
-  deriving (Eq, Ord, Show, Generic)
-
-instance NFData FileDiagnostic
-
+-- | A Maybe-like wrapper for a GhcMessage that doesn't try to compare, show, or
+-- force the GhcMessage inside, so that we can derive Show, Eq, Ord, NFData on
+-- FileDiagnostic
 data StructuredMessage
   = NoStructuredMessage
   | SomeStructuredMessage (MsgEnvelope GhcMessage)
@@ -165,9 +150,25 @@ instance NFData StructuredMessage where
   rnf NoStructuredMessage = ()
   rnf SomeStructuredMessage {} = ()
 
-modifyFdLspDiagnostic :: (Diagnostic -> Diagnostic) -> FileDiagnostic -> FileDiagnostic
-modifyFdLspDiagnostic f diag =
-  diag { fdLspDiagnostic = f (fdLspDiagnostic diag) }
+-- | Human readable diagnostics for a specific file.
+--
+--   This type packages a pretty printed, human readable error message
+--   along with the related source location so that we can display the error
+--   on either the console or in the IDE at the right source location.
+--
+data FileDiagnostic = FileDiagnostic
+  { fdFilePath :: NormalizedFilePath
+  , fdShouldShowDiagnostic :: ShowDiagnostic
+  , fdLspDiagnostic :: Diagnostic
+  , fdStructuredMessage :: StructuredMessage
+  }
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData FileDiagnostic
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''FileDiagnostic
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
