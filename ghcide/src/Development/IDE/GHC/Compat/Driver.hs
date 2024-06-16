@@ -70,8 +70,6 @@ hsc_typecheck keep_rn mod_summary mb_rdr_module = do
                         ioMsgMaybe $ hoistTcRnMessage $
                             tcRnMergeSignatures hsc_env hpm tc_result0 iface
                 else return tc_result0
-    -- TODO are we extracting anything when we merely instantiate a signature?
-    -- If not, try to move this into the "else" case above.
     rn_info <- extract_renamed_stuff mod_summary tc_result
     return (tc_result, rn_info)
 
