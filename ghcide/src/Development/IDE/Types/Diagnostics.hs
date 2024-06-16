@@ -68,7 +68,9 @@ ideErrorFromLspDiag
 ideErrorFromLspDiag lspDiag fdFilePath origMsg =
   let fdShouldShowDiagnostic = ShowDiag
       fdStructuredMessage =
-        maybe NoStructuredMessage SomeStructuredMessage origMsg
+        case origMsg of
+          Nothing -> NoStructuredMessage
+          Just msg -> SomeStructuredMessage msg
       fdLspDiagnostic = lspDiag
         { _code = fmap ghcCodeToLspCode . diagnosticCode . errMsgDiagnostic =<< origMsg
         }
