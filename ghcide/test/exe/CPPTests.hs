@@ -42,7 +42,7 @@ tests =
           ,"  failed"
           ,"#endif"
           ]
-        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 2), "Variable not in scope: worked", Nothing)])]
+        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 2), "Variable not in scope: worked", Just "GHC-88464")])]
     ]
   where
     expectError :: T.Text -> Cursor -> Session ()
