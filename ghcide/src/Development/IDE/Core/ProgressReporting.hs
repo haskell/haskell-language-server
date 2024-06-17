@@ -150,24 +150,31 @@ progressReporting' newState (Just lspEnv) title optProgressStyle = do
   return ProgressReporting {..}
   where
     lspShakeProgressNew :: InProgressState -> IO ()
-    lspShakeProgressNew InProgressStateOutSide {..} =
-      LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0 todo done
-    lspShakeProgressNew InProgressState {..} =
-      LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0 (readTVar todoVar) (readTVar doneVar)
-    loop _ _ _todoSTM _doneSTM | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
-    loop update prevPct todoSTM doneSTM = do
-      (todo, done, nextPct) <- liftIO $ atomically $ do
-        todo <- todoSTM
-        done <- doneSTM
-        let nextFrac :: Double
-            nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
-            nextPct :: UInt
-            nextPct = floor $ 100 * nextFrac
-        when (nextPct == prevPct) retry
-        pure (todo, done, nextPct)
+    lspShakeProgressNew InProgressStateOutSide {..} = progressCounter lspEnv todo done
+    lspShakeProgressNew InProgressState {..} = progressCounter lspEnv (readTVar todoVar) (readTVar doneVar)
+    -- Kill this to complete the progress session
+    progressCounter
+      :: LSP.LanguageContextEnv c
+      -> STM Int
+      -> STM Int
+      -> IO ()
+    progressCounter lspEnv getTodo getDone =
+        LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
+        where
+            loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
+            loop update prevPct = do
+                (todo, done, nextPct) <- liftIO $ atomically $ do
+                    todo <- getTodo
+                    done <- getDone
+                    let nextFrac :: Double
+                        nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
+                        nextPct :: UInt
+                        nextPct = floor $ 100 * nextFrac
+                    when (nextPct == prevPct) retry
+                    pure (todo, done, nextPct)
 
-      void $ update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
-      loop update nextPct todoSTM doneSTM
+                _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+                loop update nextPct
     updateStateForFile inProgress file = UnliftIO.bracket (liftIO $ f succ) (const $ liftIO $ f pred) . const
       where
         -- This functions are deliberately eta-expanded to avoid space leaks.
