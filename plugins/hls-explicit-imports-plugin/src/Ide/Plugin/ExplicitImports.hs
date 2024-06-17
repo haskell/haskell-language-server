@@ -104,7 +104,6 @@ descriptorForModules recorder modFilter plId =
         <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
         -- This plugin provides inlay hints
         <> mkPluginHandler SMethod_TextDocumentInlayHint (inlayHintProvider recorder)
-        -- <> mkResolveHandler SMethod_InlayHintResolve (inlayHintResolveProvider recorder)
         -- This plugin provides code actions
         <> codeActionHandlers
     }
