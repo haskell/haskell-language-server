@@ -185,6 +185,12 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                      , Just ie <- [forResolve IM.!? int]]
     pure $ InL inlayHints
   where
+    -- The appropriate and intended position for the hint hints to begin
+    -- is the end of the range for the code lens.
+    --   import Data.Char (isSpace)
+    --   |--- range ----|-- IH ---|
+    --                  |^-padding
+    --                  ^-_position
     generateInlayHints :: Range -> ImportEdit -> InlayHint
     generateInlayHints Range {_end} ie =
       InlayHint { _position = _end
