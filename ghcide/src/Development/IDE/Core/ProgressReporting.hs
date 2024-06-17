@@ -13,29 +13,45 @@ module Development.IDE.Core.ProgressReporting
   )
 where
 
-import           Control.Concurrent.STM         (STM)
-import           Control.Concurrent.STM.Stats   (TVar, atomically,
-                                                 atomicallyNamed, modifyTVar',
-                                                 newTVarIO, readTVar, retry)
-import           Control.Concurrent.Strict      (modifyVar_, newVar,
-                                                 threadDelay)
-import           Control.Monad.Extra            hiding (loop)
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class      (lift)
-import           Data.Functor                   (($>))
-import qualified Data.Text                      as T
-import           Development.IDE.GHC.Orphans    ()
-import           Development.IDE.Types.Location
-import           Development.IDE.Types.Options
-import qualified Focus
-import           Language.LSP.Protocol.Types
-import           Language.LSP.Server            (ProgressAmount (..),
-                                                 ProgressCancellable (..),
-                                                 withProgress)
-import qualified Language.LSP.Server            as LSP
-import qualified StmContainers.Map              as STM
-import           UnliftIO                       (Async, MonadUnliftIO, async,
-                                                 bracket, cancel)
+import Control.Concurrent.STM (STM)
+import Control.Concurrent.STM.Stats
+  ( TVar,
+    atomically,
+    atomicallyNamed,
+    modifyTVar',
+    newTVarIO,
+    readTVar,
+    retry,
+  )
+import Control.Concurrent.Strict
+  ( modifyVar_,
+    newVar,
+    threadDelay,
+  )
+import Control.Monad.Extra hiding (loop)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Class (lift)
+import Data.Functor (($>))
+import Data.Text qualified as T
+import Development.IDE.GHC.Orphans ()
+import Development.IDE.Types.Location
+import Development.IDE.Types.Options
+import Focus qualified
+import Language.LSP.Protocol.Types
+import Language.LSP.Server
+  ( ProgressAmount (..),
+    ProgressCancellable (..),
+    withProgress,
+  )
+import Language.LSP.Server qualified as LSP
+import StmContainers.Map qualified as STM
+import UnliftIO
+  ( Async,
+    MonadUnliftIO,
+    async,
+    bracket,
+    cancel,
+  )
 
 data ProgressEvent
   = ProgressStarted
@@ -43,8 +59,8 @@ data ProgressEvent
 
 data ProgressReporting m = ProgressReporting
   { progressUpdate :: ProgressEvent -> m (),
-    inProgress     :: forall a. NormalizedFilePath -> m a -> m a,
-    progressStop   :: IO ()
+    inProgress :: forall a. NormalizedFilePath -> m a -> m a,
+    progressStop :: IO ()
   }
 
 noProgressReporting :: (MonadUnliftIO m) => IO (ProgressReporting m)
@@ -78,13 +94,13 @@ updateState _ StopProgress st = pure st
 data InProgressState
   = InProgressState
       { -- | Number of files to do
-        todoVar    :: TVar Int,
+        todoVar :: TVar Int,
         -- | Number of files done
-        doneVar    :: TVar Int,
+        doneVar :: TVar Int,
         currentVar :: STM.Map NormalizedFilePath Int
       }
   | InProgressStateOutSide
-    -- we transform the outside state into STM Int for progress reporting purposes
+      -- we transform the outside state into STM Int for progress reporting purposes
       { -- | Number of files to do
         todo :: STM Int,
         -- | Number of files done
@@ -102,10 +118,10 @@ recordProgress InProgressState {..} file shift = do
     case (prev, new) of
       (Nothing, 0) -> modifyTVar' doneVar (+ 1) >> modifyTVar' todoVar (+ 1)
       (Nothing, _) -> modifyTVar' todoVar (+ 1)
-      (Just 0, 0)  -> pure ()
-      (Just 0, _)  -> modifyTVar' doneVar pred
-      (Just _, 0)  -> modifyTVar' doneVar (+ 1)
-      (Just _, _)  -> pure ()
+      (Just 0, 0) -> pure ()
+      (Just 0, _) -> modifyTVar' doneVar pred
+      (Just _, 0) -> modifyTVar' doneVar (+ 1)
+      (Just _, _) -> pure ()
   where
     alterPrevAndNew = do
       prev <- Focus.lookup
@@ -161,34 +177,34 @@ progressReporting' newState (Just lspEnv) title optProgressStyle = do
         f shift = recordProgress inProgress file shift
 
 -- Kill this to complete the progress session
-progressCounter
-  :: LSP.LanguageContextEnv c
-  -> T.Text
-  -> ProgressReportingStyle
-  -> STM Int
-  -> STM Int
-  -> IO ()
+progressCounter ::
+  LSP.LanguageContextEnv c ->
+  T.Text ->
+  ProgressReportingStyle ->
+  STM Int ->
+  STM Int ->
+  IO ()
 progressCounter lspEnv title optProgressStyle getTodo getDone =
-    LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
-    where
-        loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
-        loop update prevPct = do
-            (todo, done, nextPct) <- liftIO $ atomically $ do
-                todo <- getTodo
-                done <- getDone
-                let nextFrac :: Double
-                    nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
-                    nextPct :: UInt
-                    nextPct = floor $ 100 * nextFrac
-                when (nextPct == prevPct) retry
-                pure (todo, done, nextPct)
+  LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
+  where
+    loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
+    loop update prevPct = do
+      (todo, done, nextPct) <- liftIO $ atomically $ do
+        todo <- getTodo
+        done <- getDone
+        let nextFrac :: Double
+            nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
+            nextPct :: UInt
+            nextPct = floor $ 100 * nextFrac
+        when (nextPct == prevPct) retry
+        pure (todo, done, nextPct)
 
-            _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
-            loop update nextPct
+      _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+      loop update nextPct
 
 mRunLspT :: (Applicative m) => Maybe (LSP.LanguageContextEnv c) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
-mRunLspT Nothing _       = pure ()
+mRunLspT Nothing _ = pure ()
 
 mRunLspTCallback ::
   (Monad m) =>
@@ -197,4 +213,4 @@ mRunLspTCallback ::
   m a ->
   m a
 mRunLspTCallback (Just lspEnv) f g = LSP.runLspT lspEnv $ f (lift g)
-mRunLspTCallback Nothing _ g       = g
+mRunLspTCallback Nothing _ g = g
