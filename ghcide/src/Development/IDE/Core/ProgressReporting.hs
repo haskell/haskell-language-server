@@ -84,6 +84,7 @@ data InProgressState
         currentVar :: STM.Map NormalizedFilePath Int
       }
   | InProgressStateOutSide
+    -- we transform the outside state into STM Int for progress reporting purposes
       { -- | Number of files to do
         todo :: STM Int,
         -- | Number of files done
