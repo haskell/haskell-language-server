@@ -150,31 +150,8 @@ progressReporting' newState (Just lspEnv) title optProgressStyle = do
   return ProgressReporting {..}
   where
     lspShakeProgressNew :: InProgressState -> IO ()
-    lspShakeProgressNew InProgressStateOutSide {..} = progressCounter lspEnv todo done
-    lspShakeProgressNew InProgressState {..} = progressCounter lspEnv (readTVar todoVar) (readTVar doneVar)
-    -- Kill this to complete the progress session
-    progressCounter
-      :: LSP.LanguageContextEnv c
-      -> STM Int
-      -> STM Int
-      -> IO ()
-    progressCounter lspEnv getTodo getDone =
-        LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
-        where
-            loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
-            loop update prevPct = do
-                (todo, done, nextPct) <- liftIO $ atomically $ do
-                    todo <- getTodo
-                    done <- getDone
-                    let nextFrac :: Double
-                        nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
-                        nextPct :: UInt
-                        nextPct = floor $ 100 * nextFrac
-                    when (nextPct == prevPct) retry
-                    pure (todo, done, nextPct)
-
-                _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
-                loop update nextPct
+    lspShakeProgressNew InProgressStateOutSide {..} = progressCounter lspEnv title optProgressStyle todo done
+    lspShakeProgressNew InProgressState {..} = progressCounter lspEnv title optProgressStyle (readTVar todoVar) (readTVar doneVar)
     updateStateForFile inProgress file = UnliftIO.bracket (liftIO $ f succ) (const $ liftIO $ f pred) . const
       where
         -- This functions are deliberately eta-expanded to avoid space leaks.
@@ -182,6 +159,32 @@ progressReporting' newState (Just lspEnv) title optProgressStyle = do
         -- least 1000 modifications.
 
         f shift = recordProgress inProgress file shift
+
+-- Kill this to complete the progress session
+progressCounter
+  :: LSP.LanguageContextEnv c
+  -> T.Text
+  -> ProgressReportingStyle
+  -> STM Int
+  -> STM Int
+  -> IO ()
+progressCounter lspEnv title optProgressStyle getTodo getDone =
+    LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
+    where
+        loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
+        loop update prevPct = do
+            (todo, done, nextPct) <- liftIO $ atomically $ do
+                todo <- getTodo
+                done <- getDone
+                let nextFrac :: Double
+                    nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
+                    nextPct :: UInt
+                    nextPct = floor $ 100 * nextFrac
+                when (nextPct == prevPct) retry
+                pure (todo, done, nextPct)
+
+            _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+            loop update nextPct
 
 mRunLspT :: (Applicative m) => Maybe (LSP.LanguageContextEnv c) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
