@@ -810,10 +810,7 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentInlayHint where
-  combineResponses _ _ _ _ (x :| _) = x
-
-instance PluginRequestMethod Method_InlayHintResolve where
-  combineResponses _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ x = sconcat x
 
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
