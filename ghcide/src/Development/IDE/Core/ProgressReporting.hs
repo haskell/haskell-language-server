@@ -9,6 +9,8 @@ module Development.IDE.Core.ProgressReporting
   -- for tests
   , recordProgress
   , InProgressState(..)
+  -- simple counter
+  , progressCounter
   )
    where
 
@@ -33,7 +35,7 @@ import           Language.LSP.Server            (ProgressAmount (..),
                                                  withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
-import           UnliftIO                       (Async, async, cancel)
+import           UnliftIO                       (Async, STM, async, cancel)
 
 data ProgressEvent
     = KickStarted
@@ -103,40 +105,46 @@ progressReporting
   :: Maybe (LSP.LanguageContextEnv c)
   -> ProgressReportingStyle
   -> IO ProgressReporting
+progressReporting _ optProgressStyle | optProgressStyle == NoProgress = noProgressReporting
 progressReporting Nothing _optProgressStyle = noProgressReporting
-progressReporting (Just lspEnv) optProgressStyle = do
-    inProgressState <- newInProgress
+progressReporting (Just lspEnv) _optProgressStyle = do
+    inProgressState@InProgressState{todoVar, doneVar} <- newInProgress
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
         progressStop  = updateStateVar StopProgress
-        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgressNew inProgressState)
+        updateStateVar = modifyVar_ progressState . updateState (progressCounter lspEnv (readTVar todoVar) (readTVar doneVar))
         inProgress = updateStateForFile inProgressState
     return ProgressReporting{..}
     where
-        lspShakeProgressNew :: InProgressState -> IO ()
-        lspShakeProgressNew InProgressState{..} =
-            LSP.runLspT lspEnv $ withProgress "Processing" Nothing NotCancellable $ \update -> loop update 0
-            where
-                loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
-                loop update prevPct = do
-                    (todo, done, nextPct) <- liftIO $ atomically $ do
-                        todo <- readTVar todoVar
-                        done <- readTVar doneVar
-                        let nextFrac :: Double
-                            nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
-                            nextPct :: UInt
-                            nextPct = floor $ 100 * nextFrac
-                        when (nextPct == prevPct) retry
-                        pure (todo, done, nextPct)
+      updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
+          -- This functions are deliberately eta-expanded to avoid space leaks.
+          -- Do not remove the eta-expansion without profiling a session with at
+          -- least 1000 modifications.
+          where
+            f shift = recordProgress inProgress file shift
 
-                    _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
-                    loop update nextPct
-        updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
-            -- This functions are deliberately eta-expanded to avoid space leaks.
-            -- Do not remove the eta-expansion without profiling a session with at
-            -- least 1000 modifications.
-            where
-              f shift = recordProgress inProgress file shift
+-- Kill this to complete the progress session
+progressCounter
+  :: LSP.LanguageContextEnv c
+  -> STM Int
+  -> STM Int
+  -> IO ()
+progressCounter lspEnv getTodo getDone =
+    LSP.runLspT lspEnv $ withProgress "Processing" Nothing NotCancellable $ \update -> loop update 0
+    where
+        loop update prevPct = do
+            (todo, done, nextPct) <- liftIO $ atomically $ do
+                todo <- getTodo
+                done <- getDone
+                let nextFrac :: Double
+                    nextFrac = if todo == 0 then 0 else fromIntegral done / fromIntegral todo
+                    nextPct :: UInt
+                    nextPct = floor $ 100 * nextFrac
+                when (nextPct == prevPct) retry
+                pure (todo, done, nextPct)
+
+            _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack $ show done <> "/" <> show todo))
+            loop update nextPct
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
