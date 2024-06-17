@@ -16,24 +16,6 @@ benchmarks: True
 
 write-ghc-environment-files: never
 
-source-repository-package
-    type: git
-    location: https://github.com/jetjinser/lsp
-    tag: e6d5c5d5b62d4ce4fbdf8cb41d2347507886dd0f
-    subdir: lsp-test
-
-source-repository-package
-    type: git
-    location: https://github.com/jetjinser/lsp
-    tag: e6d5c5d5b62d4ce4fbdf8cb41d2347507886dd0f
-    subdir: lsp
-
-source-repository-package
-    type: git
-    location: https://github.com/jetjinser/lsp
-    tag: e6d5c5d5b62d4ce4fbdf8cb41d2347507886dd0f
-    subdir: lsp-types
-
 -- Many of our tests only work single-threaded, and the only way to
 -- ensure tasty runs everything purely single-threaded is to pass
 -- this at the top-level
