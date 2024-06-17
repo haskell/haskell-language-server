@@ -125,7 +125,8 @@ instance NFData ShowDiagnostic where
 
 -- | A Maybe-like wrapper for a GhcMessage that doesn't try to compare, show, or
 -- force the GhcMessage inside, so that we can derive Show, Eq, Ord, NFData on
--- FileDiagnostic
+-- FileDiagnostic. FileDiagnostic only uses this as metadata so we can safely
+-- ignore it in fields.
 data StructuredMessage
   = NoStructuredMessage
   | SomeStructuredMessage (MsgEnvelope GhcMessage)
@@ -156,10 +157,17 @@ instance NFData StructuredMessage where
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
+--   It also optionally keeps a structured diagnostic message GhcMessage in
+--   StructuredMessage.
+--
 data FileDiagnostic = FileDiagnostic
   { fdFilePath :: NormalizedFilePath
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic :: Diagnostic
+    -- | The optional GhcMessage inside of this StructuredMessage is ignored for
+    -- Eq, Ord, Show, and NFData instances. This is fine because this field
+    -- should only ever be metadata and should never be used to distinguish
+    -- between FileDiagnostics.
   , fdStructuredMessage :: StructuredMessage
   }
   deriving (Eq, Ord, Show, Generic)
