@@ -255,8 +255,7 @@ data HieDbWriter
   { indexQueue         :: IndexQueue
   , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted     :: TVar Int -- ^ to report progress
-  , indexProgressToken :: Var (Maybe (ProgressReporting IO))
-  -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
+  , indexProgressReporting :: ProgressReporting IO
   }
 
 -- | Actions to queue up on the index worker thread
@@ -677,6 +676,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
+
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
 #else
@@ -697,7 +697,10 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         semanticTokensId <- newTVarIO 0
-        indexProgressToken <- newVar Nothing
+        indexProgressReporting <- progressReportingOutsideState
+            (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
+            (readTVar indexCompleted)
+            lspEnv "Indexing" optProgressStyle
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb

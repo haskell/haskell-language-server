@@ -889,7 +889,6 @@ spliceExpressions Splices{..} =
 --
 indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
- IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
   pending <- readTVar indexPending
   case HashMap.lookup srcPath pending of
@@ -910,22 +909,14 @@ indexHieFile se mod_summary srcPath !hash hf = do
         unless newerScheduled $ do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
-          bracket_ (pre optProgressStyle) post $
+          bracket_ pre post $
             withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
     HieDbWriter{..} = hiedbWriter se
-    pre optProgressStyle = modifyVar_ indexProgressToken $ fmap Just . \case
-              Just x -> return x
-              -- create a progressReport if we don't already have one
-              Nothing -> do
-                  tt <- progressReportingOutsideState
-                    (liftM2 (+) (HashMap.size <$> readTVar indexPending) (readTVar indexCompleted))
-                    (readTVar indexCompleted)
-                    (lspEnv se) "Indexing" optProgressStyle
-                  progressUpdate tt ProgressStarted
-                  return tt
+
+    pre = progressUpdate indexProgressReporting ProgressTryToStart
     -- Report the progress once we are done indexing this file
     post = do
       mdone <- atomically $ do
@@ -940,13 +931,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
             toJSON $ fromNormalizedFilePath srcPath
-      whenJust mdone $ \_ ->
-        modifyVar_ indexProgressToken $ \tok -> do
-          case tok of
-            Just token -> progressUpdate token ProgressCompleted >> progressStop token
-            Nothing -> return ()
-          -- We are done with the current indexing cycle, so destroy the token
-          pure Nothing
+      whenJust mdone $ \_ -> progressUpdate indexProgressReporting ProgressCompleted
 
 writeAndIndexHieFile :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
 writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =

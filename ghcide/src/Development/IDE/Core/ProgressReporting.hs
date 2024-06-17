@@ -56,6 +56,7 @@ import UnliftIO
 data ProgressEvent
   = ProgressStarted
   | ProgressCompleted
+  | ProgressTryToStart
 
 data ProgressReporting m = ProgressReporting
   { progressUpdate :: ProgressEvent -> m (),
@@ -85,6 +86,8 @@ updateState :: IO () -> Transition -> State -> IO State
 updateState _ _ Stopped = pure Stopped
 updateState start (Event ProgressStarted) NotStarted = Running <$> async start
 updateState start (Event ProgressStarted) (Running job) = cancel job >> Running <$> async start
+updateState start (Event ProgressTryToStart) NotStarted = Running <$> async start
+updateState _ (Event ProgressTryToStart) (Running job) = return (Running job)
 updateState _ (Event ProgressCompleted) (Running job) = cancel job $> NotStarted
 updateState _ (Event ProgressCompleted) st = pure st
 updateState _ StopProgress (Running job) = cancel job $> Stopped
