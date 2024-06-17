@@ -42,12 +42,12 @@ data ProgressEvent
   | ProgressCompleted
 
 data ProgressReporting m = ProgressReporting
-  { progressUpdate :: ProgressEvent -> IO (),
+  { progressUpdate :: ProgressEvent -> m (),
     inProgress     :: forall a. NormalizedFilePath -> m a -> m a,
     progressStop   :: IO ()
   }
 
-noProgressReporting :: IO (ProgressReporting m)
+noProgressReporting :: (MonadUnliftIO m) => IO (ProgressReporting m)
 noProgressReporting =
   return $
     ProgressReporting
@@ -143,7 +143,7 @@ progressReporting' _newState Nothing _title _optProgressStyle = noProgressReport
 progressReporting' newState (Just lspEnv) title optProgressStyle = do
   inProgressState <- newState
   progressState <- newVar NotStarted
-  let progressUpdate event = updateStateVar $ Event event
+  let progressUpdate event = liftIO $ updateStateVar $ Event event
       progressStop = updateStateVar StopProgress
       updateStateVar = modifyVar_ progressState . updateState (lspShakeProgressNew inProgressState)
       inProgress = updateStateForFile inProgressState
