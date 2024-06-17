@@ -162,7 +162,8 @@ flagFields =
 libExecTestBenchCommons :: Map KeyWordName Completer
 libExecTestBenchCommons =
   Map.fromList
-    [ ("build-depends:", noopCompleter),
+    [ ("import:", importCompleter),
+      ("build-depends:", noopCompleter),
       ("hs-source-dirs:", directoryCompleter),
       ("default-extensions:", noopCompleter),
       ("other-extensions:", noopCompleter),

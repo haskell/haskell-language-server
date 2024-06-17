@@ -59,6 +59,15 @@ instance Hashable ParseCabalFields
 
 instance NFData ParseCabalFields
 
+type instance RuleResult ParseCabalCommonSections = [Syntax.Field Syntax.Position]
+
+data ParseCabalCommonSections = ParseCabalCommonSections
+  deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable ParseCabalCommonSections
+
+instance NFData ParseCabalCommonSections
+
 -- | The context a cursor can be in within a cabal file.
 --
 --  We can be in stanzas or the top level,
