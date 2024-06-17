@@ -180,7 +180,7 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
     let inlayHints = [ generateInlayHints newRange ie
                      | (range, int) <- forLens
-                     , range < visibleRange
+                     , isSubrangeOf range visibleRange
                      , Just newRange <- [toCurrentRange pm range]
                      , Just ie <- [forResolve IM.!? int]]
     pure $ InL inlayHints
