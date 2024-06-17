@@ -916,7 +916,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
     targetPath      = Compat.ml_hie_file mod_location
     HieDbWriter{..} = hiedbWriter se
 
-    pre = progressUpdate indexProgressReporting ProgressTryToStart
+    pre = progressUpdate indexProgressReporting ProgressStarted
     -- Report the progress once we are done indexing this file
     post = do
       mdone <- atomically $ do

@@ -141,7 +141,7 @@ kick = do
                 toJSON $ map fromNormalizedFilePath files
 
     signal (Proxy @"kick/start")
-    progressUpdate progress ProgressStarted
+    progressUpdate progress ProgressNewStarted
 
     -- Update the exports map
     results <- uses GenerateCore files

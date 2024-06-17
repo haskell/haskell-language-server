@@ -778,6 +778,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
+    progressStop $ progress shakeExtras
     stopMonitoring
 
 
