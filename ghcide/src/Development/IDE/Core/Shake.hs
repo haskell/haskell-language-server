@@ -252,9 +252,9 @@ instance Pretty Log where
 -- a worker thread.
 data HieDbWriter
   = HieDbWriter
-  { indexQueue         :: IndexQueue
-  , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
-  , indexCompleted     :: TVar Int -- ^ to report progress
+  { indexQueue             :: IndexQueue
+  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted         :: TVar Int -- ^ to report progress
   , indexProgressReporting :: ProgressReporting IO
   }
 
@@ -778,7 +778,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
-    progressStop $ progress shakeExtras
+    progressStop $ indexProgressReporting $ hiedbWriter shakeExtras
     stopMonitoring
 
 
