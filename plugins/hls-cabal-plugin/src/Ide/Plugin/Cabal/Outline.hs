@@ -1,35 +1,35 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Cabal.Outline
   ( moduleOutline,
   )
 where
 
-import Control.Monad.IO.Class
-import Data.Maybe
-import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8)
-import Development.IDE.Core.Rules
-import Development.IDE.Core.Shake (IdeState (shakeExtras), runIdeAction, useWithStaleFast)
-import Development.IDE.Types.Location (toNormalizedFilePath')
-import Distribution.Fields.Field
-  ( Field (Field, Section),
-    FieldLine (FieldLine),
-    Name (Name),
-    SectionArg (SecArgName, SecArgOther, SecArgStr),
-  )
-import Distribution.Parsec.Position (Position (Position))
-import Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..), cabalPositionToLSPPosition)
-import Ide.Plugin.Cabal.Orphans ()
-import Ide.Types (PluginMethodHandler)
-import Language.LSP.Protocol.Message qualified as LSP
-import Language.LSP.Protocol.Types qualified as LSP
+import           Control.Monad.IO.Class
+import           Data.Maybe
+import qualified Data.Text                         as T
+import           Data.Text.Encoding                (decodeUtf8)
+import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Shake        (IdeState (shakeExtras),
+                                                    runIdeAction,
+                                                    useWithStaleFast)
+import           Development.IDE.Types.Location    (toNormalizedFilePath')
+import           Distribution.Fields.Field         (Field (Field, Section),
+                                                    Name (Name),
+                                                    SectionArg (SecArgName, SecArgOther, SecArgStr))
+import           Distribution.Parsec.Position      (Position)
+import           Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..),
+                                                    cabalPositionToLSPPosition)
+import           Ide.Plugin.Cabal.Orphans          ()
+import           Ide.Types                         (PluginMethodHandler)
+import qualified Language.LSP.Protocol.Message     as LSP
+import qualified Language.LSP.Protocol.Types       as LSP
 
 moduleOutline :: PluginMethodHandler IdeState LSP.Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocumentIdentifier uri} =
@@ -75,9 +75,9 @@ joinedNameForSectionArgs sectionArgs = joinedName
     joinedName = T.unwords $ map getName sectionArgs
 
     getName :: SectionArg Position -> T.Text
-    getName (SecArgName _ identifier) = decodeUtf8 identifier
+    getName (SecArgName _ identifier)  = decodeUtf8 identifier
     getName (SecArgStr _ quotedString) = decodeUtf8 quotedString
-    getName (SecArgOther _ string) = decodeUtf8 string
+    getName (SecArgOther _ string)     = decodeUtf8 string
 
 -- | Creates a single point LSP range
 --   using cabal position

@@ -38,8 +38,8 @@ import qualified Ide.Plugin.Cabal.Completion.Types           as Types
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                    ()
-import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Plugin.Cabal.Outline
+import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
