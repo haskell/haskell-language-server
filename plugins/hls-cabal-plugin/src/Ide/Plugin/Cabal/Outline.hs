@@ -24,10 +24,10 @@ import Distribution.Fields.Field
     Name (Name),
     SectionArg (SecArgName, SecArgOther, SecArgStr),
   )
-import Distribution.Parsec.Position (Position)
+import Distribution.Parsec.Position (Position (Position))
 import Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..), cabalPositionToLSPPosition)
 import Ide.Plugin.Cabal.Orphans ()
-import Ide.Types ( PluginMethodHandler )
+import Ide.Types (PluginMethodHandler)
 import Language.LSP.Protocol.Message qualified as LSP
 import Language.LSP.Protocol.Types qualified as LSP
 
@@ -43,70 +43,41 @@ moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocum
         Nothing -> pure $ LSP.InL []
     Nothing -> pure $ LSP.InL []
 
+-- | Creates a DocumentSumbol object for the
+--   cabal AST, without displaying fieldLines and
+--   displaying Section name and SectionArgs in one line
 documentSymbolForField :: Field Position -> Maybe LSP.DocumentSymbol
-documentSymbolForField (Field (Name pos fieldName) fieldLines) =
+documentSymbolForField (Field (Name pos fieldName) _) =
   Just
     (defDocumentSymbol range)
       { LSP._name = decodeUtf8 fieldName,
         LSP._kind = LSP.SymbolKind_Field,
-        LSP._children = Just $ mapMaybe documentSymbolForFieldLine fieldLines
+        LSP._children = Nothing
       }
   where
     range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 fieldName
 documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeUtf8 fieldName,
+      { LSP._name = joinedName,
         LSP._kind = LSP.SymbolKind_Object,
         LSP._children =
           Just
-            ( mapMaybe documentSymbolForField fields
-                ++ mapMaybe documentSymbolForSectionArgs sectionArgs
-            )
+            (mapMaybe documentSymbolForField fields)
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 fieldName
+    joinedName = decodeUtf8 fieldName <> " " <> joinedNameForSectionArgs sectionArgs
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` joinedName
 
-documentSymbolForSectionArgs :: SectionArg Position -> Maybe LSP.DocumentSymbol
-documentSymbolForSectionArgs (SecArgName pos identifier) =
-  Just
-    (defDocumentSymbol range)
-      { LSP._name = decodeUtf8 identifier,
-        LSP._kind = LSP.SymbolKind_Variable,
-        LSP._children = Nothing
-      }
+joinedNameForSectionArgs :: [SectionArg Position] -> T.Text
+joinedNameForSectionArgs sectionArgs = joinedName
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 identifier
-documentSymbolForSectionArgs (SecArgStr pos quotedString) =
-  Just
-    (defDocumentSymbol range)
-      { LSP._name = decodeUtf8 quotedString,
-        LSP._kind = LSP.SymbolKind_Constant,
-        LSP._children = Nothing
-      }
-  where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 quotedString
-documentSymbolForSectionArgs (SecArgOther pos string) =
-  Just
-    (defDocumentSymbol range)
-      { LSP._name = decodeUtf8 string,
-        LSP._kind = LSP.SymbolKind_String,
-        LSP._children = Nothing
-      }
-  where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 string
+    joinedName = T.unwords $ map getName sectionArgs
 
-documentSymbolForFieldLine :: FieldLine Position -> Maybe LSP.DocumentSymbol
-documentSymbolForFieldLine (FieldLine pos line) =
-  Just
-    (defDocumentSymbol range)
-      { LSP._name = decodeUtf8 line,
-        LSP._kind = LSP.SymbolKind_Field,
-        LSP._children = Nothing
-      }
-  where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 line
-
+    getName :: SectionArg Position -> T.Text
+    getName (SecArgName _ identifier) = decodeUtf8 identifier
+    getName (SecArgStr _ quotedString) = decodeUtf8 quotedString
+    getName (SecArgOther _ string) = decodeUtf8 string
 
 -- | Creates a single point LSP range
 --   using cabal position
