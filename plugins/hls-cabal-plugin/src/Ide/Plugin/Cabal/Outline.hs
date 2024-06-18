@@ -14,7 +14,7 @@ where
 import Control.Monad.IO.Class
 import Data.Maybe
 import Data.Text qualified as T
-import Data.Text.Encoding (decodeASCII, decodeLatin1)
+import Data.Text.Encoding (decodeUtf8)
 import Development.IDE.Core.Rules
 import Development.IDE.Core.Shake (IdeState (shakeExtras), runIdeAction, useWithStaleFast)
 import Development.IDE.Types.Location (toNormalizedFilePath')
@@ -27,7 +27,7 @@ import Distribution.Fields.Field
 import Distribution.Parsec.Position (Position)
 import Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..), cabalPositionToLSPPosition)
 import Ide.Plugin.Cabal.Orphans ()
-import Ide.Types
+import Ide.Types ( PluginMethodHandler )
 import Language.LSP.Protocol.Message qualified as LSP
 import Language.LSP.Protocol.Types qualified as LSP
 
@@ -47,16 +47,16 @@ documentSymbolForField :: Field Position -> Maybe LSP.DocumentSymbol
 documentSymbolForField (Field (Name pos fieldName) fieldLines) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeASCII fieldName,
-        LSP._kind = LSP.SymbolKind_Object,
+      { LSP._name = decodeUtf8 fieldName,
+        LSP._kind = LSP.SymbolKind_Field,
         LSP._children = Just $ mapMaybe documentSymbolForFieldLine fieldLines
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII fieldName
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 fieldName
 documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeASCII fieldName,
+      { LSP._name = decodeUtf8 fieldName,
         LSP._kind = LSP.SymbolKind_Object,
         LSP._children =
           Just
@@ -65,48 +65,51 @@ documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
             )
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII fieldName
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 fieldName
 
 documentSymbolForSectionArgs :: SectionArg Position -> Maybe LSP.DocumentSymbol
 documentSymbolForSectionArgs (SecArgName pos identifier) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeLatin1 identifier,
+      { LSP._name = decodeUtf8 identifier,
         LSP._kind = LSP.SymbolKind_Variable,
         LSP._children = Nothing
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII identifier
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 identifier
 documentSymbolForSectionArgs (SecArgStr pos quotedString) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeLatin1 quotedString,
+      { LSP._name = decodeUtf8 quotedString,
         LSP._kind = LSP.SymbolKind_Constant,
         LSP._children = Nothing
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII quotedString
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 quotedString
 documentSymbolForSectionArgs (SecArgOther pos string) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeLatin1 string,
+      { LSP._name = decodeUtf8 string,
         LSP._kind = LSP.SymbolKind_String,
         LSP._children = Nothing
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII string
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 string
 
 documentSymbolForFieldLine :: FieldLine Position -> Maybe LSP.DocumentSymbol
 documentSymbolForFieldLine (FieldLine pos line) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeLatin1 line, -- since there is no ascii invariant (?)
+      { LSP._name = decodeUtf8 line,
         LSP._kind = LSP.SymbolKind_Field,
-        LSP._children = Nothing -- can't delete even though the base case covers this (?)
+        LSP._children = Nothing
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeASCII line
+    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 line
 
+
+-- | Creates a single point LSP range
+--   using cabal position
 cabalPositionToLSPRange :: Position -> LSP.Range
 cabalPositionToLSPRange pos = LSP.Range lspPos lspPos
   where
