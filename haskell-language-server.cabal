@@ -231,6 +231,7 @@ library hls-cabal-plugin
   exposed-modules:
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.Completion.CabalFields
     Ide.Plugin.Cabal.Completion.Completer.FilePath
     Ide.Plugin.Cabal.Completion.Completer.Module
     Ide.Plugin.Cabal.Completion.Completer.Paths
