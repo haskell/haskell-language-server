@@ -289,7 +289,6 @@ getRecSels (unLoc -> XExpr (ExpandedThingRn a _)) = (collectRecordSelectors a, T
 #else
 getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
 #endif
-#if __GLASGOW_HASKELL__ >= 903
 -- applied record selection: "selector record" or "selector (record)" or
 -- "selector selector2.record2"
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
@@ -301,15 +300,6 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
                         (unLoc -> HsVar _ (unLoc -> d)) re) | d == dollarName =
     ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
-#else
-getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecFld _ _) re) =
-    ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re
-      | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
-getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecFld _ _)
-                        (unLoc -> HsVar _ (unLoc -> d)) re) | d == dollarName =
-    ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re
-      | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
-#endif
 getRecSels _ = ([], False)
 
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
