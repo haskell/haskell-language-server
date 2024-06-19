@@ -32,9 +32,6 @@ showAstDataHtml a0 = html $
     li = tag "li"
     caret x = tag' [("class", text "caret")] "span" "" <+> x
     nested foo cts
-#if !MIN_VERSION_ghc(9,3,0)
-      | cts == empty = foo
-#endif
       | otherwise = foo $$ (caret $ ul cts)
     body cts = tag "body" $ cts $$ tag "script" (text js)
     header = tag "head" $ tag "style" $ text css

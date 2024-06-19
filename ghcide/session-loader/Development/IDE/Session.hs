@@ -120,7 +120,6 @@ import           Text.ParserCombinators.ReadP        (readP_to_S)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,3,0)
 import qualified Data.Set                            as OS
 import qualified Development.IDE.GHC.Compat.Util     as Compat
 import           GHC.Data.Graph.Directed
@@ -131,7 +130,6 @@ import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
-#endif
 
 data Log
   = LogSettingInitialDynFlags
@@ -245,13 +243,6 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir    :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
-#if !MIN_VERSION_ghc(9,3,0)
-  , fakeUid                :: UnitId
-    -- ^ unit id used to tag the internal component built by ghcide
-    --   To reuse external interface files the unit ids must match,
-    --   thus make sure to build them with `--this-unit-id` set to the
-    --   same value as the ghcide fake uid
-#endif
   }
 
 instance Default SessionLoadingOptions where
@@ -260,9 +251,6 @@ instance Default SessionLoadingOptions where
         ,loadCradle = loadWithImplicitCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
-#if !MIN_VERSION_ghc(9,3,0)
-        ,fakeUid = Compat.toUnitId (Compat.stringToUnit "main")
-#endif
         }
 
 -- | Find the cradle for a given 'hie.yaml' configuration.
@@ -542,11 +530,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
                   -- components in this HscEnv
-#if MIN_VERSION_ghc(9,3,0)
                   let (df2, uids) = (rawComponentDynFlags, [])
-#else
-                  let (df2, uids) = _removeInplacePackages fakeUid _inplace rawComponentDynFlags
-#endif
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
                   let hscComponents = sort $ map show uids
@@ -771,11 +755,7 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
             PreferSingleComponentLoading -> LoadFile
             PreferMultiComponentLoading  -> LoadWithContext old_fps
 
-#if MIN_VERSION_ghc(9,3,0)
 emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
-#else
-emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
-#endif
 emptyHscEnv nc libDir = do
     -- We call setSessionDynFlags so that the loader is initialised
     -- We need to do this before we call initUnits.
@@ -786,9 +766,6 @@ emptyHscEnv nc libDir = do
     -- package database subsequently. So clear the unit db cache in
     -- hsc_unit_dbs
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
-#if !MIN_VERSION_ghc(9,3,0)
-              {hsc_unit_dbs = Nothing}
-#endif
 
 data TargetDetails = TargetDetails
   {
@@ -826,14 +803,9 @@ toFlagsMap TargetDetails{..} =
     [ (l, (targetEnv, targetDepends)) | l <-  targetLocations]
 
 
-#if MIN_VERSION_ghc(9,3,0)
 setNameCache :: NameCache -> HscEnv -> HscEnv
-#else
-setNameCache :: IORef NameCache -> HscEnv -> HscEnv
-#endif
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
-#if MIN_VERSION_ghc(9,3,0)
 -- This function checks the important property that if both p and q are home units
 -- then any dependency of p, which transitively depends on q is also a home unit.
 -- GHC had an implementation of this function, but it was horribly inefficient
@@ -890,7 +862,6 @@ checkHomeUnitsClosed' ue home_id_set
                     Just depends ->
                       let todo'' = (depends OS.\\ done) `OS.union` todo'
                       in DigraphNode uid uid (OS.toList depends) : go (OS.insert uid done) todo''
-#endif
 
 -- | Create a mapping from FilePaths to HscEnvEqs
 -- This combines all the components we know about into
@@ -920,7 +891,6 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
     hscEnv' <- -- Set up a multi component session with the other units on GHC 9.4
               Compat.initUnits dfs hsc_env
 
-#if MIN_VERSION_ghc(9,3,0)
     let closure_errs = checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
         multi_errs = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp . T.pack . Compat.printWithoutUniques) closure_errs
         bad_units = OS.fromList $ concat $ do
@@ -928,10 +898,6 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
             DriverHomePackagesNotClosed us <- pure x
             pure us
         isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
-#else
-    let isBad = const False
-        multi_errs = []
-#endif
     -- Whenever we spin up a session on Linux, dynamically load libm.so.6
     -- in. We need this in case the binary is statically linked, in which
     -- case the interactive session will fail when trying to load
@@ -953,23 +919,10 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
       let df = componentDynFlags ci
       let createHscEnvEq = maybe newHscEnvEqPreserveImportPaths (newHscEnvEq dir) cradlePath
       thisEnv <- do
-#if MIN_VERSION_ghc(9,3,0)
             -- In GHC 9.4 we have multi component support, and we have initialised all the units
             -- above.
             -- We just need to set the current unit here
             pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
-#else
-            -- This initializes the units for GHC 9.2
-            -- Add the options for the current component to the HscEnv
-            -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
-            -- because `setSessionDynFlags` also initializes the package database,
-            -- which we need for any changes to the package flags in the dynflags
-            -- to be visible.
-            -- See #2693
-            evalGhcEnv hscEnv' $ do
-              _ <- setSessionDynFlags df
-              getSession
-#endif
       henv <- createHscEnvEq thisEnv (zip uids dfs)
       let targetEnv = (if isBad ci then multi_errs else [], Just henv)
           targetDepends = componentDependencyInfo ci
@@ -1201,7 +1154,6 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
       initOne this_opts = do
         (dflags', targets') <- addCmdOpts this_opts dflags
         let dflags'' =
-#if MIN_VERSION_ghc(9,3,0)
                 case unitIdString (homeUnitId_ dflags') of
                      -- cabal uses main for the unit id of all executable packages
                      -- This makes multi-component sessions confused about what
@@ -1214,9 +1166,6 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in setHomeUnitId_ hashed_uid dflags'
                      _ -> dflags'
-#else
-                dflags'
-#endif
 
         let targets = makeTargetsAbsolute root targets'
             root = case workingDirectory dflags'' of

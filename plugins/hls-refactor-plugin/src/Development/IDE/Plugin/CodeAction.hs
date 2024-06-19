@@ -312,11 +312,7 @@ findSigOfBind range bind =
       msum
         [findSigOfBinds range (grhssLocalBinds grhs) -- where clause
         , do
-#if MIN_VERSION_ghc(9,3,0)
           grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
-#else
-          grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
-#endif
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
         ]
@@ -324,7 +320,7 @@ findSigOfBind range bind =
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
-#if MIN_VERSION_ghc(9,3,0) && !MIN_VERSION_ghc(9,9,0)
+#if !MIN_VERSION_ghc(9,9,0)
         go (HsLet _ _ binds _ _) = findSigOfBinds range binds
 #else
         go (HsLet _ binds _) = findSigOfBinds range binds

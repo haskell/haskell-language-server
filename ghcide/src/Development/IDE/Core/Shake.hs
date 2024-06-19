@@ -176,16 +176,8 @@ import           System.Time.Extra
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           Data.IORef
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
-                                                         mkSplitUniqSupply,
-                                                         upNameCache)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat             (NameCacheUpdater)
-#endif
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -315,11 +307,7 @@ data ShakeExtras = ShakeExtras
         -> [DelayedAction ()]
         -> IO [Key]
         -> IO ()
-#if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
-#else
-    ,ideNc :: IORef NameCache
-#endif
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
@@ -677,12 +665,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
-#if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
-#else
-    us <- mkSplitUniqSupply 'r'
-    ideNc <- newIORef (initNameCache us knownKeyNames)
-#endif
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO
@@ -1080,13 +1063,8 @@ askShake :: IdeAction ShakeExtras
 askShake = ask
 
 
-#if MIN_VERSION_ghc(9,3,0)
 mkUpdater :: NameCache -> NameCacheUpdater
 mkUpdater = id
-#else
-mkUpdater :: IORef NameCache -> NameCacheUpdater
-mkUpdater ref = NCU (upNameCache ref)
-#endif
 
 -- | A (maybe) stale result now, and an up to date one later
 data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate :: IO (Maybe a)  }

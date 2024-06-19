@@ -33,51 +33,25 @@ import qualified GHC.Runtime.Loader                    as Loader
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           Data.Bifunctor                        (bimap)
-import           Development.IDE.GHC.Compat.Outputable as Out
-import           Development.IDE.GHC.Compat.Util       (Bag)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Driver.Plugins                    (ParsedResult (..),
                                                         PsMessages (..),
                                                         staticPlugins)
 import qualified GHC.Parser.Lexer                      as Lexer
-#endif
 
-#if !MIN_VERSION_ghc(9,3,0)
-type PsMessages = (Bag WarnMsg, Bag ErrMsg)
-#endif
 
 getPsMessages :: PState -> PsMessages
 getPsMessages pst =
-#if MIN_VERSION_ghc(9,3,0)
   uncurry PsMessages $ Lexer.getPsMessages pst
-#else
-  bimap (fmap pprWarning) (fmap pprError) $ getMessages pst
-#endif
 
 applyPluginsParsedResultAction :: HscEnv -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
 applyPluginsParsedResultAction env ms hpm_annotations parsed msgs = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
-#if MIN_VERSION_ghc(9,3,0)
   fmap (\result -> (hpm_module (parsedResultModule result), (parsedResultMessages result))) $ runHsc env $ withPlugins
-#else
-  fmap (\parsed_module -> (hpm_module parsed_module, msgs)) $ runHsc env $ withPlugins
-#endif
-#if MIN_VERSION_ghc(9,3,0)
       (Env.hsc_plugins env)
-#else
-      env
-#endif
       applyPluginAction
-#if MIN_VERSION_ghc(9,3,0)
       (ParsedResult (HsParsedModule parsed [] hpm_annotations) msgs)
-#else
-      (HsParsedModule parsed [] hpm_annotations)
-#endif
 
 initializePlugins :: HscEnv -> IO HscEnv
 initializePlugins env = do
@@ -91,8 +65,4 @@ initPlugins session modSummary = do
     return (modSummary{ms_hspp_opts = hsc_dflags session1}, session1)
 
 hsc_static_plugins :: HscEnv -> [StaticPlugin]
-#if MIN_VERSION_ghc(9,3,0)
 hsc_static_plugins = staticPlugins . Env.hsc_plugins
-#else
-hsc_static_plugins = Env.hsc_static_plugins
-#endif
