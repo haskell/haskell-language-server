@@ -38,8 +38,7 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        Priority (Debug),
                                                        Recorder, WithPriority,
                                                        colon, evalGhcEnv,
-                                                       hscEnv,
-                                                       logWith,
+                                                       hscEnv, logWith,
                                                        realSrcSpanToRange,
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
