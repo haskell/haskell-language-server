@@ -738,13 +738,11 @@ generateHieAsts hscEnv tcm =
         top_ev_binds = tcg_ev_binds ts :: Util.Bag EvBind
         insts = tcg_insts ts :: [ClsInst]
         tcs = tcg_tcs ts :: [TyCon]
-    run ts $
-      pure $ Just $
-          GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
+
+    pure $ Just $
+        GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
   where
     dflags = hsc_dflags hscEnv
-    run _ts = -- ts is only used in GHC 9.2
-        id
 
 spliceExpressions :: Splices -> [LHsExpr GhcTc]
 spliceExpressions Splices{..} =
