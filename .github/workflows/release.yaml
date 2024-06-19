@@ -118,15 +118,6 @@ jobs:
         # Perhaps we can migrate *all* unknown linux builds to a uniform
         # image.
         include:
-          - ghc: 9.2.8
-            platform:
-              { image: "rockylinux:8"
-              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
-              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-              , DISTRO: "Unknown"
-              , ARTIFACT: "x86_64-linux-unknown"
-              , ADD_CABAL_ARGS: "--enable-split-sections"
-              }
           - ghc: 9.4.8
             platform:
               { image: "fedora:27"
@@ -222,7 +213,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8" ]
+        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -282,7 +273,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -327,7 +318,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -372,7 +363,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8"]
     steps:
       - name: install windows deps
         shell: pwsh
