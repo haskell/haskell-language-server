@@ -319,18 +319,11 @@ getLocatedImportsRule recorder =
         (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
-        let env = hscEnvWithImportPaths env_eq
-        let import_dirs = deps env_eq
+        let env = hscEnv env_eq
+        let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
-            isImplicitCradle = isNothing $ envImportPaths env_eq
-        let dflags' = if isImplicitCradle
-                    then addRelativeImport file (moduleName $ ms_mod ms) dflags
-                    else dflags
         opt <- getIdeOptions
         let getTargetFor modName nfp
-                | isImplicitCradle = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
                 | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     itExists <- getFileExists nfp'
@@ -341,10 +334,11 @@ getLocatedImportsRule recorder =
                         nfp' = HM.lookupDefault nfp nfp ttmap
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
-                | otherwise
-                = return Nothing
+                | otherwise = do
+                    itExists <- getFileExists nfp
+                    return $ if itExists then Just nfp else Nothing
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule (hscSetFlags dflags' env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
