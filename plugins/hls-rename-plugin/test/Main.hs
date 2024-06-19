@@ -20,10 +20,6 @@ main = defaultTestRunner tests
 renamePlugin :: PluginTestDescriptor Rename.Log
 renamePlugin = mkPluginTestDescriptor Rename.descriptor "rename"
 
--- See https://github.com/wz1000/HieDb/issues/45
-recordConstructorIssue :: String
-recordConstructorIssue = "HIE references for record fields incorrect with GHC versions >= 9"
-
 tests :: TestTree
 tests = testGroup "Rename"
     [ goldenWithRename "Data constructor" "DataConstructor" $ \doc ->

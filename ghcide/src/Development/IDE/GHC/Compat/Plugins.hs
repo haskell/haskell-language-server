@@ -43,14 +43,14 @@ getPsMessages :: PState -> PsMessages
 getPsMessages pst =
   uncurry PsMessages $ Lexer.getPsMessages pst
 
-applyPluginsParsedResultAction :: HscEnv -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
-applyPluginsParsedResultAction env ms hpm_annotations parsed msgs = do
+applyPluginsParsedResultAction :: HscEnv -> ModSummary -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
+applyPluginsParsedResultAction env ms parsed msgs = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
   fmap (\result -> (hpm_module (parsedResultModule result), (parsedResultMessages result))) $ runHsc env $ withPlugins
       (Env.hsc_plugins env)
       applyPluginAction
-      (ParsedResult (HsParsedModule parsed [] hpm_annotations) msgs)
+      (ParsedResult (HsParsedModule parsed []) msgs)
 
 initializePlugins :: HscEnv -> IO HscEnv
 initializePlugins env = do

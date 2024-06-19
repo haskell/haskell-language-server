@@ -10,7 +10,6 @@ import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      (GhcVersion (..))
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           Development.IDE.Test            (expectDiagnostics,
@@ -30,7 +29,6 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
-import           Test.Hls                        (ignoreForGhcVersions)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

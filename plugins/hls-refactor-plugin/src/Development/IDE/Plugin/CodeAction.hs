@@ -47,7 +47,6 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
-import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
@@ -105,6 +104,7 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat.ExactPrint             (makeDeltaAst)
 import           GHC                                               (Anchor (anchor_op),
                                                                     AnchorOperation (..),
                                                                     EpaLocation (..))
