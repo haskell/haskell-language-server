@@ -9,30 +9,34 @@ module Development.IDE.LSP.Outline
 where
 
 import           Control.Monad.IO.Class
-import           Data.Foldable                  (toList)
+import           Data.Foldable                       (toList)
 import           Data.Functor
-import           Data.Generics                  hiding (Prefix)
-import           Data.List.NonEmpty             (nonEmpty)
+import           Data.Generics                       hiding (Prefix)
+import           Data.List.NonEmpty                  (nonEmpty)
+import           Data.List.Extra                     (nubOrdOn)
 import           Data.Maybe
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
-                                                 realSrcSpanToRange)
+import           Development.IDE.GHC.Error           (rangeToRealSrcSpan,
+                                                      realSrcSpanToRange,
+                                                      realSrcLocToPosition)
+import           Development.IDE.Spans.LocalBindings (getFuzzyScope, bindings)
 import           Development.IDE.Types.Location
-import           Development.IDE.GHC.Util       (printOutputable)
+import           Development.IDE.GHC.Util            (printOutputable)
 import           Ide.Types
-import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
-                                                 DocumentSymbolParams (DocumentSymbolParams, _textDocument),
-                                                 SymbolKind (..),
-                                                 TextDocumentIdentifier (TextDocumentIdentifier),
-                                                 type (|?) (InL, InR), uriToFilePath)
+import           Language.LSP.Protocol.Types         (DocumentSymbol (..),
+                                                      DocumentSymbolParams (DocumentSymbolParams, _textDocument),
+                                                      SymbolKind (..),
+                                                      TextDocumentIdentifier (TextDocumentIdentifier),
+                                                      type (|?) (InL, InR), uriToFilePath)
 import          Language.LSP.Protocol.Message
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
-import qualified Data.Text                      as T
+import qualified Data.Text                           as T
 #endif
 
 moduleOutline
@@ -41,11 +45,13 @@ moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdent
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
       mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
+      mb_hieAst <- fmap fst <$> runAction "Outline" ideState (useWithStale GetHieAst fp)
       pure $ case mb_decls of
         Nothing -> InL []
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
           -> let
-               declSymbols  = mapMaybe documentSymbolForDecl hsmodDecls
+               refMap = maybe mempty getRefMap mb_hieAst
+               declSymbols  = mapMaybe (documentSymbolForDecl refMap) hsmodDecls
                moduleSymbol = hsmodName >>= \case
                  (L (locA -> (RealSrcSpan l _)) m) -> Just $
                    (defDocumentSymbol l :: DocumentSymbol)
@@ -66,11 +72,16 @@ moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdent
              in
                InR (InL allSymbols)
 
-
     Nothing -> pure $ InL []
 
-documentSymbolForDecl :: LHsDecl GhcPs -> Maybe DocumentSymbol
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
+getRefMap :: HieAstResult -> RefMap Type
+getRefMap HAR{refMap=refMap, hieKind=hieKind} =
+  case hieKind of
+    HieFromDisk _ -> mempty
+    HieFresh -> refMap
+
+documentSymbolForDecl :: RefMap Type -> LHsDecl GhcPs -> Maybe DocumentSymbol
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name   = printOutputable n
                   <> (case printOutputable fdTyVars of
@@ -80,7 +91,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam =
     , _detail = Just $ printOutputable fdInfo
     , _kind   = SymbolKind_Function
     }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLName = L _ name, tcdSigs, tcdTyVars }))
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLName = L _ name, tcdSigs, tcdTyVars }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name     = printOutputable name
                     <> (case printOutputable tcdTyVars of
@@ -100,7 +111,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLNa
         , L (locA -> (RealSrcSpan l'' _)) n                            <- names
         ]
     }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name     = printOutputable name
     , _kind     = SymbolKind_Struct
@@ -136,16 +147,16 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
                 , _kind = SymbolKind_Field
                 }
     cvtFld _  = Nothing
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ SynDecl { tcdLName = L (locA -> (RealSrcSpan l' _)) n })) = Just
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (TyClD _ SynDecl { tcdLName = L (locA -> (RealSrcSpan l' _)) n })) = Just
   (defDocumentSymbol l :: DocumentSymbol) { _name           = printOutputable n
                                           , _kind           = SymbolKind_TypeParameter
                                           , _selectionRange = realSrcSpanToRange l'
                                           }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } }))
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } }))
   = Just (defDocumentSymbol l :: DocumentSymbol) { _name = printOutputable cid_poly_ty
                                                  , _kind = SymbolKind_Interface
                                                  }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
 #if MIN_VERSION_ghc(9,3,0)
@@ -156,7 +167,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfi
 #endif
     , _kind = SymbolKind_Interface
     }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
 #if MIN_VERSION_ghc(9,3,0)
@@ -167,24 +178,36 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_
 #endif
     , _kind = SymbolKind_Interface
     }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
   gfindtype deriv_type <&> \(L (_ :: SrcSpan) name) ->
     (defDocumentSymbol l :: DocumentSymbol) { _name = printOutputable @(HsType GhcPs)
                                               name
                                             , _kind = SymbolKind_Interface
                                             }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ValD _ FunBind{fun_id = L _ name})) = Just
-    (defDocumentSymbol l :: DocumentSymbol)
-      { _name   = printOutputable name
-      , _kind   = SymbolKind_Function
-      }
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ValD _ PatBind{pat_lhs})) = Just
+documentSymbolForDecl refMap decl@(L (locA -> (RealSrcSpan l _)) (ValD _ FunBind{fun_id = L _ name})) = Just
+  (mkFunDocSym name)
+    { _children = toMaybe localDocSyms
+    }
+  where
+    mkFunDocSym :: Outputable n => n -> DocumentSymbol
+    mkFunDocSym n =
+      (defDocumentSymbol l :: DocumentSymbol)
+        { _name = printOutputable n
+        , _kind = SymbolKind_Function
+        }
+
+    toMaybe [] = Nothing
+    toMaybe xs = Just xs
+
+    localDocSyms = map mkFunDocSym (getLocalBindings refMap decl)
+
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (ValD _ PatBind{pat_lhs})) = Just
     (defDocumentSymbol l :: DocumentSymbol)
       { _name   = printOutputable pat_lhs
       , _kind   = SymbolKind_Function
       }
 
-documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
+documentSymbolForDecl _ (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = case x of
                   ForeignImport{} -> name
@@ -196,7 +219,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
     }
   where name = printOutputable $ unLoc $ fd_name x
 
-documentSymbolForDecl _ = Nothing
+documentSymbolForDecl _ _ = Nothing
 
 -- | Wrap the Document imports into a hierarchical outline for
 -- a better overview of symbols in scope.
@@ -284,4 +307,11 @@ hsConDeclsBinders cons
              -> [LFieldOcc GhcPs]
     get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
 
-
+getLocalBindings :: RefMap Type -> LHsDecl GhcPs -> [Name]
+getLocalBindings refmap (L (locA -> (RealSrcSpan l _)) _) =
+  nubOrdOn getOccFS . filter isVarName . map fst $ locals
+  where
+    locals = getFuzzyScope (bindings refmap) start end
+    start = realSrcLocToPosition (realSrcSpanStart l)
+    end = realSrcLocToPosition (realSrcSpanEnd l)
+getLocalBindings _ _ = []

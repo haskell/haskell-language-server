@@ -66,7 +66,40 @@ tests =
       testSymbolsA "constant" ["a = ()"] [docSymbol "a" SymbolKind_Function (R 0 0 0 6)],
       testSymbolsA "pattern" ["Just foo = Just 21"] [docSymbol "Just foo" SymbolKind_Function (R 0 0 0 18)],
       testSymbolsA "pattern with type signature" ["{-# language ScopedTypeVariables #-}", "a :: () = ()"] [docSymbol "a :: ()" SymbolKind_Function (R 1 0 1 12)],
-      testSymbolsA "function" ["a _x = ()"] [docSymbol "a" SymbolKind_Function (R 0 0 0 9)],
+      testSymbolsA
+        "function"
+        ["a _x = ()"]
+        [ docSymbolWithChildren
+            "a"
+            SymbolKind_Function
+            (R 0 0 0 9)
+            [ docSymbol
+              "_x"
+              SymbolKind_Function
+              (R 0 0 0 9)
+            ]
+        ],
+      testSymbolsA
+        "function with nested scope"
+        ["a x = g x where g = h where h = id"]
+        [ docSymbolWithChildren
+            "a"
+            SymbolKind_Function
+            (R 0 0 0 34)
+            [ docSymbol "x" SymbolKind_Function (R 0 0 0 34)
+            , docSymbol "g" SymbolKind_Function (R 0 0 0 34)
+            , docSymbol "h" SymbolKind_Function (R 0 0 0 34)
+            ]
+        ],
+      testSymbolsA
+        "function with patterns"
+        ["f 1 = g where g = 2", "f _ = g where g = 3"]
+        [ docSymbolWithChildren
+            "f"
+            SymbolKind_Function
+            (R 0 0 1 19)
+            [docSymbol "g" SymbolKind_Function (R 0 0 1 19)]
+        ],
       testSymbolsA "type synonym" ["type A = Bool"] [docSymbol' "A" SymbolKind_TypeParameter (R 0 0 0 13) (R 0 5 0 6)],
       testSymbolsA "datatype" ["data A = C"] [docSymbolWithChildren "A" SymbolKind_Struct (R 0 0 0 10) [docSymbol "C" SymbolKind_Constructor (R 0 9 0 10)]],
       testSymbolsA
