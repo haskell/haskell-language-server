@@ -20,24 +20,23 @@ module Development.IDE.GHC.Compat.Plugins (
     ) where
 
 import           Development.IDE.GHC.Compat.Core
-import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
-import           Development.IDE.GHC.Compat.Parser     as Parser
+import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
+import           Development.IDE.GHC.Compat.Parser as Parser
 
-import qualified GHC.Driver.Env                        as Env
-import           GHC.Driver.Plugins                    (Plugin (..),
-                                                        PluginWithArgs (..),
-                                                        StaticPlugin (..),
-                                                        defaultPlugin,
-                                                        withPlugins)
-import qualified GHC.Runtime.Loader                    as Loader
+import qualified GHC.Driver.Env                    as Env
+import           GHC.Driver.Plugins                (Plugin (..),
+                                                    PluginWithArgs (..),
+                                                    StaticPlugin (..),
+                                                    defaultPlugin, withPlugins)
+import qualified GHC.Runtime.Loader                as Loader
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 
-import           GHC.Driver.Plugins                    (ParsedResult (..),
-                                                        PsMessages (..),
-                                                        staticPlugins)
-import qualified GHC.Parser.Lexer                      as Lexer
+import           GHC.Driver.Plugins                (ParsedResult (..),
+                                                    PsMessages (..),
+                                                    staticPlugins)
+import qualified GHC.Parser.Lexer                  as Lexer
 
 
 getPsMessages :: PState -> PsMessages
