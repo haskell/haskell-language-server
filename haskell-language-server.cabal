@@ -152,7 +152,7 @@ test-suite hls-cabal-fmt-plugin-tests
     , hls-test-utils        == 2.9.0.0
 
   if flag(isolateCabalfmtTests)
-    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.12
     cpp-options: -Dhls_isolate_cabalfmt_tests
 
 -----------------------------
