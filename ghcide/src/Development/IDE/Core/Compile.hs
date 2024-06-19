@@ -357,9 +357,9 @@ tcRnModule hsc_env tc_helpers pmod = do
   ((tc_gbl_env', mrn_info), splices, mod_env)
       <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hscEnvTmp ->
              do  hscTypecheckRename hscEnvTmp ms $
-                          HsParsedModule { hpm_module = parsedSource pmod,
-                                           hpm_src_files = pm_extra_src_files pmod,
-                                           hpm_annotations = pm_annotations pmod }
+                          HsParsedModule { hpm_module = parsedSource pmod
+                                         , hpm_src_files = pm_extra_src_files pmod
+                                         }
   let rn_info = case mrn_info of
         Just x  -> x
         Nothing -> error "no renamed info tcRnModule"
@@ -1140,7 +1140,6 @@ parseFileContents env customPreprocessor filename ms = do
      PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
      POk pst rdr_module ->
          let
-             hpm_annotations = mkApiAnns pst
              psMessages = getPsMessages pst
          in
            do
@@ -1150,7 +1149,7 @@ parseFileContents env customPreprocessor filename ms = do
                   throwE $ diagFromStrings sourceParser DiagnosticSeverity_Error errs
 
                let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
-               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms hpm_annotations parsed psMessages
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms parsed psMessages
                let (warns, errors) = renderMessages msgs
 
                -- Just because we got a `POk`, it doesn't mean there
@@ -1193,7 +1192,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- filter them out:
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
-               let pm = ParsedModule ms parsed' srcs2 hpm_annotations
+               let pm = ParsedModule ms parsed' srcs2
                    warnings = diagFromErrMsgs sourceParser dflags warns
                pure (warnings ++ preproc_warnings, pm)
 

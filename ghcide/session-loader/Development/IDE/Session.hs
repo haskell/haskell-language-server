@@ -1223,12 +1223,6 @@ data PackageSetupException
 
 instance Exception PackageSetupException
 
--- | Wrap any exception as a 'PackageSetupException'
-wrapPackageSetupException :: IO a -> IO a
-wrapPackageSetupException = handleAny $ \case
-  e | Just (pkgE :: PackageSetupException) <- fromException e -> throwIO pkgE
-  e -> (throwIO . PackageSetupException . show) e
-
 showPackageSetupException :: PackageSetupException -> String
 showPackageSetupException GhcVersionMismatch{..} = unwords
     ["ghcide compiled against GHC"
