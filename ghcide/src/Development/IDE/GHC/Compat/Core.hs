@@ -58,9 +58,6 @@ module Development.IDE.GHC.Compat.Core (
     pattern ExposePackage,
     parseDynamicFlagsCmdLine,
     parseDynamicFilePragma,
-#if !MIN_VERSION_ghc(9,3,0)
-    WarnReason(..),
-#endif
     wWarningFlags,
     updOptLevel,
     -- slightly unsafe
@@ -75,9 +72,6 @@ module Development.IDE.GHC.Compat.Core (
     HscSource(..),
     WhereFrom(..),
     loadInterface,
-#if !MIN_VERSION_ghc(9,3,0)
-    SourceModified(..),
-#endif
     loadModuleInterface,
     RecompileRequired(..),
     mkPartialIface,
@@ -359,7 +353,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Parser.Header,
     module GHC.Parser.Lexer,
     module GHC.Utils.Panic,
-#if MIN_VERSION_ghc(9,3,0)
     CompileReason(..),
     hsc_type_env_vars,
     hscUpdateHUG, hsc_HUG,
@@ -372,7 +365,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Unit.Finder.Types,
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
-#endif
 #if !MIN_VERSION_ghc(9,4,0)
     pattern HsFieldBind,
     hfbAnn,
@@ -536,13 +528,7 @@ import           Language.Haskell.Syntax     hiding (FunDep)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Types.SourceFile        (SourceModified (..))
-import qualified GHC.Unit.Finder             as GHC
-import           GHC.Unit.Module.Graph       (mkModuleGraph)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import qualified GHC.Data.Strict             as Strict
 import qualified GHC.Driver.Config.Finder    as GHC
 import qualified GHC.Driver.Config.Tidy      as GHC
@@ -558,39 +544,22 @@ import           GHC.Unit.Module.Graph
 import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
-#endif
 
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
-#if MIN_VERSION_ghc(9,3,0)
 mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
-#else
-mkHomeModLocation = GHC.mkHomeModLocation
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
-#else
-pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 pattern RealSrcSpan x y <- SrcLoc.RealSrcSpan x ((\case Strict.Nothing -> Nothing; Strict.Just a -> Just a) -> y) where
   RealSrcSpan x y = SrcLoc.RealSrcSpan x (case y of Nothing -> Strict.Nothing; Just a -> Strict.Just a)
 
-#else
-pattern RealSrcSpan x y = SrcLoc.RealSrcSpan x y
-#endif
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
 
-#if MIN_VERSION_ghc(9,3,0)
 pattern RealSrcLoc :: SrcLoc.RealSrcLoc -> Strict.Maybe BufPos-> SrcLoc.SrcLoc
-#else
-pattern RealSrcLoc :: SrcLoc.RealSrcLoc -> Maybe BufPos-> SrcLoc.SrcLoc
-#endif
 pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
 {-# COMPLETE RealSrcLoc, UnhelpfulLoc #-}
 
@@ -718,12 +687,6 @@ unload hsc_env linkables =
     (GHCi.hscInterp hsc_env)
     hsc_env linkables
 
-#if !MIN_VERSION_ghc(9,3,0)
-setOutputFile :: FilePath -> DynFlags -> DynFlags
-setOutputFile f d = d {
-  outputFile_    = Just f
-  }
-#endif
 
 isSubspanOfA :: LocatedAn la a -> LocatedAn lb b -> Bool
 isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLocA a) (GHC.getLocA b)
@@ -752,54 +715,28 @@ collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 makeSimpleDetails :: HscEnv -> TcGblEnv -> IO ModDetails
 makeSimpleDetails hsc_env =
   GHC.makeSimpleDetails
-#if MIN_VERSION_ghc(9,3,0)
               (hsc_logger hsc_env)
-#else
-              hsc_env
-#endif
 
 mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> Maybe CoreProgram -> TcGblEnv -> IO ModIface
 mkIfaceTc hscEnv shm md _ms _mcp =
 #if MIN_VERSION_ghc(9,5,0)
   GHC.mkIfaceTc hscEnv shm md _ms _mcp -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
-#elif MIN_VERSION_ghc(9,3,0)
-  GHC.mkIfaceTc hscEnv shm md _ms -- ms::ModSummary is only used in GHC >= 9.4
 #else
-  GHC.mkIfaceTc hscEnv shm md
+  GHC.mkIfaceTc hscEnv shm md _ms -- ms::ModSummary is only used in GHC >= 9.4
 #endif
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
 mkBootModDetailsTc session = GHC.mkBootModDetailsTc
-#if MIN_VERSION_ghc(9,3,0)
           (hsc_logger session)
-#else
-          session
-#endif
 
-#if !MIN_VERSION_ghc(9,3,0)
-type TidyOpts = HscEnv
-#endif
 
 initTidyOpts :: HscEnv -> IO TidyOpts
 initTidyOpts =
-#if MIN_VERSION_ghc(9,3,0)
   GHC.initTidyOpts
-#else
-  pure
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 driverNoStop :: StopPhase
 driverNoStop = NoStop
-#else
-driverNoStop :: Phase
-driverNoStop = StopLn
-#endif
 
-#if !MIN_VERSION_ghc(9,3,0)
-hscUpdateHPT :: (HomePackageTable -> HomePackageTable) -> HscEnv -> HscEnv
-hscUpdateHPT k session = session { hsc_HPT = k (hsc_HPT session) }
-#endif
 
 #if !MIN_VERSION_ghc(9,4,0)
 pattern HsFieldBind :: XHsRecField id -> id -> arg -> Bool -> HsRecField' id arg
@@ -846,11 +783,7 @@ field_label = id
 #endif
 
 mkSimpleTarget :: DynFlags -> FilePath -> Target
-#if MIN_VERSION_ghc(9,3,0)
 mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Nothing
-#else
-mkSimpleTarget _ fp = Target (TargetFile fp Nothing) True Nothing
-#endif
 
 #if MIN_VERSION_ghc(9,7,0)
 lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevantGREs)

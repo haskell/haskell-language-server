@@ -77,7 +77,6 @@ gevaluate = liftIO . evaluate
 
 showErr :: Monad m => SomeException -> m String
 showErr e =
-#if MIN_VERSION_ghc(9,3,0)
   case fromException e of
     -- On GHC 9.4+, the show instance adds the error message span
     -- We don't want this for the plugin
@@ -93,7 +92,6 @@ showErr e =
                                                    . errMsgDiagnostic)
                                       $ getMessages msgs
     _ ->
-#endif
       return . show $ e
 
 #if MIN_VERSION_ghc(9,8,0)

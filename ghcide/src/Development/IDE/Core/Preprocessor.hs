@@ -33,9 +33,7 @@ import           System.IO.Extra
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Utils.Logger                  (LogFlags (..))
-#endif
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
@@ -88,11 +86,7 @@ preprocessor env filename mbContents = do
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
-#if MIN_VERSION_ghc(9,3,0)
       let cppLog = CPPLog (fromMaybe SevWarning severity) srcSpan $ T.pack $ renderWithContext (log_default_user_context dflags) msg
-#else
-      let cppLog = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
-#endif
       modifyIORef cppLogs (cppLog :)
 
 
@@ -152,11 +146,7 @@ parsePragmasIntoHscEnv
     -> Util.StringBuffer
     -> IO (Either [FileDiagnostic] ([String], HscEnv))
 parsePragmasIntoHscEnv env fp contents = catchSrcErrors dflags0 "pragmas" $ do
-#if MIN_VERSION_ghc(9,3,0)
     let (_warns,opts) = getOptions (initParserOpts dflags0) contents fp
-#else
-    let opts = getOptions dflags0 contents fp
-#endif
 
     -- Force bits that might keep the dflags and stringBuffer alive unnecessarily
     evaluate $ rnf opts

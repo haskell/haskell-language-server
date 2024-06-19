@@ -127,9 +127,7 @@ import           Retrie.SYB                           (everything, extQ,
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
-#endif
 
 data Log
   = LogParsingModule FilePath
@@ -735,11 +733,7 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclAs = toMod <$> ideclAsString
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 
-#if MIN_VERSION_ghc(9,3,0)
     ideclPkgQual = NoRawPkgQual
-#else
-    ideclPkgQual = Nothing
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
