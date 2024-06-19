@@ -940,7 +940,6 @@ library hls-splice-plugin
     , extra
     , foldl
     , ghc
-    , ghc-exactprint
     , ghcide                == 2.9.0.0
     , hls-plugin-api        == 2.9.0.0
     , haskell-language-server:hls-refactor-plugin
