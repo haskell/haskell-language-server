@@ -133,7 +133,6 @@ tests =
           GHC98  -> "ghc98.expected"
           GHC96  -> "ghc96.expected"
           GHC94  -> "ghc94.expected"
-          GHC92  -> "ghc92.expected"
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"

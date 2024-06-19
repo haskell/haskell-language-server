@@ -30,8 +30,7 @@ tests = testGroup "Rename"
         rename doc (Position 0 15) "Op"
     , goldenWithRename "Exported function" "ExportedFunction" $ \doc ->
         rename doc (Position 2 1) "quux"
-    , ignoreForGhcVersions [GHC92] recordConstructorIssue $
-      goldenWithRename "Field Puns" "FieldPuns" $ \doc ->
+    , goldenWithRename "Field Puns" "FieldPuns" $ \doc ->
         rename doc (Position 7 13) "bleh"
     , goldenWithRename "Function argument" "FunctionArgument" $ \doc ->
         rename doc (Position 3 4) "y"
@@ -45,8 +44,7 @@ tests = testGroup "Rename"
         rename doc (Position 3 8) "baz"
     , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->
         rename doc (Position 0 22) "hiddenFoo"
-    , ignoreForGhcVersions [GHC92] recordConstructorIssue $
-      goldenWithRename "Indirect Puns" "IndirectPuns" $ \doc ->
+    , goldenWithRename "Indirect Puns" "IndirectPuns" $ \doc ->
         rename doc (Position 4 23) "blah"
     , goldenWithRename "Let expression" "LetExpression" $ \doc ->
         rename doc (Position 5 11) "foobar"
@@ -58,8 +56,7 @@ tests = testGroup "Rename"
         rename doc (Position 3 12) "baz"
     , goldenWithRename "Realigns do block indentation" "RealignDo" $ \doc ->
         rename doc (Position 0 2) "fooBarQuux"
-    , ignoreForGhcVersions [GHC92] recordConstructorIssue $
-      goldenWithRename "Record field" "RecordField" $ \doc ->
+    , goldenWithRename "Record field" "RecordField" $ \doc ->
         rename doc (Position 6 9) "number"
     , goldenWithRename "Shadowed name" "ShadowedName" $ \doc ->
         rename doc (Position 1 1) "baz"
