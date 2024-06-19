@@ -41,17 +41,11 @@ constraints:
   bitvec -simd,
 
 
+
 if impl(ghc >= 9.9)
-  benchmarks: False
-  constraints:
-    lens >= 5.3.2,
-    -- See
-    -- https://github.com/haskell/stylish-haskell/issues/479
-    -- https://github.com/ennocramer/floskell/pull/82
-    -- https://github.com/ndmitchell/hlint/pull/1594
-    haskell-language-server -stylishHaskell -hlint -retrie -splice -floskell,
   allow-newer:
     haddock-library:base,
     haddock-library:containers,
+  benchmarks: False
 else
   benchmarks: True
