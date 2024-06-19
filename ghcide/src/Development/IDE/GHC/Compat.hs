@@ -429,8 +429,7 @@ generatedNodeInfo :: HieAST a -> Maybe (NodeInfo a)
 generatedNodeInfo = Map.lookup GeneratedInfo . getSourcedNodeInfo . sourcedNodeInfo
 
 data GhcVersion
-  = GHC92
-  | GHC94
+  = GHC94
   | GHC96
   | GHC98
   | GHC910
@@ -448,8 +447,6 @@ ghcVersion = GHC98
 ghcVersion = GHC96
 #elif MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
 ghcVersion = GHC94
-#elif MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
-ghcVersion = GHC92
 #endif
 
 simpleNodeInfoCompat :: FastStringCompat -> FastStringCompat -> NodeInfo a
