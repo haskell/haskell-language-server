@@ -264,9 +264,8 @@ semanticTokensTests =
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
       goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
+      goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
     ]
-      -- not supported in ghc92
-      ++ [goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc" | ghcVersion > GHC92]
 
 semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =
