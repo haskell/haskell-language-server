@@ -50,7 +50,6 @@ import           Development.IDE.Graph                 as X (Action, RuleResult,
 import           Development.IDE.Plugin                as X
 import           Development.IDE.Types.Diagnostics     as X
 import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
-                                                             hscEnv,
-                                                             hscEnvWithImportPaths)
+                                                             hscEnv)
 import           Development.IDE.Types.Location        as X
 import           Ide.Logger                            as X

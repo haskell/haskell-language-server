@@ -5,7 +5,6 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitState
     UnitState,
     initUnits,
-    oldInitUnits,
     unitState,
     getUnitName,
     explicitUnits,
@@ -126,12 +125,6 @@ initUnits unitDflags env = do
         }
   pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
 
-
--- | oldInitUnits only needs to modify DynFlags for GHC <9.2
--- For GHC >= 9.2, we need to set the hsc_unit_env also, that is
--- done later by initUnits
-oldInitUnits :: DynFlags -> IO DynFlags
-oldInitUnits = pure
 
 explicitUnits :: UnitState -> [Unit]
 explicitUnits ue =

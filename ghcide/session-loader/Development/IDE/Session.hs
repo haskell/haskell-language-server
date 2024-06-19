@@ -62,8 +62,7 @@ import           Development.IDE.Graph               (Action)
 import qualified Development.IDE.Session.Implicit    as GhcIde
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq      (HscEnvEq, newHscEnvEq,
-                                                      newHscEnvEqPreserveImportPaths)
+import           Development.IDE.Types.HscEnvEq      (HscEnvEq, newHscEnvEq)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.ResponseFile
@@ -569,8 +568,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           -- For GHC's supporting multi component sessions, we create a shared
           -- HscEnv but set the active component accordingly
           hscEnv <- emptyHscEnv ideNc _libDir
-          let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv
-          all_target_details <- new_cache old_deps new_deps rootDir
+          let new_cache = newComponentCache recorder optExtensions _cfp hscEnv
+          all_target_details <- new_cache old_deps new_deps
 
           this_dep_info <- getDependencyInfo $ maybeToList hieYaml
           let (all_targets, this_flags_map, this_options)
@@ -761,10 +760,6 @@ emptyHscEnv nc libDir = do
     -- We need to do this before we call initUnits.
     env <- runGhc (Just libDir) $
       getSessionDynFlags >>= setSessionDynFlags >> getSession
-    -- On GHC 9.2 calling setSessionDynFlags caches the unit databases
-    -- for an empty environment. This prevents us from reading the
-    -- package database subsequently. So clear the unit db cache in
-    -- hsc_unit_dbs
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
 
 data TargetDetails = TargetDetails
@@ -870,14 +865,12 @@ checkHomeUnitsClosed' ue home_id_set
 newComponentCache
          :: Recorder (WithPriority Log)
          -> [String]           -- ^ File extensions to consider
-         -> Maybe FilePath     -- ^ Path to cradle
          -> NormalizedFilePath -- ^ Path to file that caused the creation of this component
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
-         -> FilePath           -- ^ root dir, see Note [Root Directory]
          -> IO [ [TargetDetails] ]
-newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
+newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
         -- When we have multiple components with the same uid,
         -- prefer the new one over the old.
@@ -917,13 +910,12 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
 
     forM (Map.elems cis) $ \ci -> do
       let df = componentDynFlags ci
-      let createHscEnvEq = maybe newHscEnvEqPreserveImportPaths (newHscEnvEq dir) cradlePath
       thisEnv <- do
             -- In GHC 9.4 we have multi component support, and we have initialised all the units
             -- above.
             -- We just need to set the current unit here
             pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
-      henv <- createHscEnvEq thisEnv (zip uids dfs)
+      henv <- newHscEnvEq thisEnv
       let targetEnv = (if isBad ci then multi_errs else [], Just henv)
           targetDepends = componentDependencyInfo ci
       logWith recorder Debug $ LogNewComponentCache (targetEnv, targetDepends)
@@ -1185,14 +1177,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
               Compat.setUpTypedHoles $
               makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
               dflags''
-        -- initPackages parses the -package flags and
-        -- sets up the visibility for each component.
-        -- Throws if a -package flag cannot be satisfied.
-        -- This only works for GHC <9.2
-        -- For GHC >= 9.2, we need to modify the unit env in the hsc_dflags, which
-        -- is done later in newComponentCache
-        final_flags <- liftIO $ wrapPackageSetupException $ Compat.oldInitUnits dflags'''
-        return (final_flags, targets)
+        return (dflags''', targets)
 
 setIgnoreInterfacePragmas :: DynFlags -> DynFlags
 setIgnoreInterfacePragmas df =
