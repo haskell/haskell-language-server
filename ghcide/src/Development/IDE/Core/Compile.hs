@@ -74,9 +74,10 @@ import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing      (withTrace)
-import           Development.IDE.GHC.Compat        hiding (loadInterface,
-                                                    parseHeader, parseModule,
-                                                    tcRnModule, writeHieFile, assert)
+import           Development.IDE.GHC.Compat        hiding (assert,
+                                                    loadInterface, parseHeader,
+                                                    parseModule, tcRnModule,
+                                                    writeHieFile)
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util
@@ -1078,7 +1079,7 @@ getModSummaryFromImports env fp _modTime mContents = do
                   forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
                     put $ Util.uniq $ moduleNameFS $ unLoc m
                     case mb_p of
-                      G.NoPkgQual -> pure ()
+                      G.NoPkgQual    -> pure ()
                       G.ThisPkg uid  -> put $ getKey $ getUnique uid
                       G.OtherPkg uid -> put $ getKey $ getUnique uid
             return $! Util.fingerprintFingerprints $
@@ -1323,7 +1324,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
             _read_dflags = hsc_dflags sessionWithMsDynFlags
         read_result <- liftIO $ readIface _read_dflags _ncu mod iface_file
         case read_result of
-          Util.Failed{} -> return Nothing
+          Util.Failed{}        -> return Nothing
           -- important to call `shareUsages` here before checkOldIface
           -- consults `mi_usages`
           Util.Succeeded iface -> return $ Just (shareUsages iface)
@@ -1416,9 +1417,9 @@ recompBecause =
 data SourceModified = SourceModified | SourceUnmodified deriving (Eq, Ord, Show)
 
 showReason :: RecompileRequired -> String
-showReason UpToDate          = "UpToDate"
-showReason (NeedsRecompile MustCompile)    = "MustCompile"
-showReason (NeedsRecompile s) = printWithoutUniques s
+showReason UpToDate                     = "UpToDate"
+showReason (NeedsRecompile MustCompile) = "MustCompile"
+showReason (NeedsRecompile s)           = printWithoutUniques s
 
 mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
 mkDetailsFromIface session iface = do
@@ -1506,7 +1507,7 @@ lookupName hsc_env name = exceptionHandle $ do
         res <- initIfaceLoad hsc_env $ importDecl name
         case res of
           Util.Succeeded x -> return (Just x)
-          _ -> return Nothing
+          _                -> return Nothing
   where
     exceptionHandle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
