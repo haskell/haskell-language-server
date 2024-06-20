@@ -21,6 +21,9 @@ import           Data.Maybe                       (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set                         as Set
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
+import qualified Data.Text.Lines                  as Text.Lines
+import           Data.Text.Utf16.Rope.Mixed       (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE                  (spanContainsRange)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileContents),
@@ -178,10 +181,12 @@ updateColOffset row lineOffset colOffset
   | row == lineOffset = colOffset
   | otherwise = 0
 
-usedIdentifiersToTextEdits :: Range -> NameEnv [ImportedBy] -> Text -> [UsedIdentifier] -> [TextEdit]
-usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
+usedIdentifiersToTextEdits :: Range -> NameEnv [ImportedBy] -> Rope -> [UsedIdentifier] -> [TextEdit]
+usedIdentifiersToTextEdits range nameToImportedByMap source usedIdentifiers
   | let sortedUsedIdentifiers = sortOn usedIdentifierSpan usedIdentifiers =
-      State.evalState (makeStateComputation sortedUsedIdentifiers) (Text.lines sourceText, 0, 0)
+      State.evalState
+        (makeStateComputation sortedUsedIdentifiers)
+        (Text.Lines.lines (Rope.toTextLines source), 0, 0)
   where
     folder :: [TextEdit] -> UsedIdentifier -> State ([Text], Int, Int) [TextEdit]
     folder prevTextEdits UsedIdentifier{usedIdentifierName, usedIdentifierSpan}
@@ -227,12 +232,12 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId range _) 
   if isJust (findLImportDeclAt range tmrParsed)
     then do
           HAR {..} <- runActionE "QualifyImportedNames.GetHieAst" ideState (useE GetHieAst normalizedFilePath)
-          (_, sourceTextM) <-  runActionE "QualifyImportedNames.GetFileContents" ideState (useE GetFileContents normalizedFilePath)
-          sourceText <- handleMaybe (PluginRuleFailed "GetFileContents") sourceTextM
+          (_, sourceM) <-  runActionE "QualifyImportedNames.GetFileContents" ideState (useE GetFileContents normalizedFilePath)
+          source <- handleMaybe (PluginRuleFailed "GetFileContents") sourceM
           let globalRdrEnv = tcg_rdr_env tmrTypechecked
               nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
               usedIdentifiers = refMapToUsedIdentifiers refMap
-              textEdits = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
+              textEdits = usedIdentifiersToTextEdits range nameToImportedByMap source usedIdentifiers
           pure  $ InL (makeCodeActions (documentId ^. L.uri) textEdits)
     else pure  $ InL []
 

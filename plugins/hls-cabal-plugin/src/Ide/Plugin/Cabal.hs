@@ -20,6 +20,7 @@ import qualified Data.HashMap.Strict                         as HashMap
 import qualified Data.List.NonEmpty                          as NE
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text.Encoding                          as Encoding
+import qualified Data.Text.Utf16.Rope.Mixed                  as Rope
 import           Data.Typeable
 import           Development.IDE                             as D
 import           Development.IDE.Core.Shake                  (restartShakeSession)
@@ -162,7 +163,7 @@ cabalRules recorder plId = do
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 sources
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
             liftIO $ BS.readFile $ fromNormalizedFilePath file
 
@@ -191,7 +192,7 @@ cabalRules recorder plId = do
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 sources
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
             liftIO $ BS.readFile $ fromNormalizedFilePath file
 

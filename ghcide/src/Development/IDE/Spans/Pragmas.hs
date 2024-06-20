@@ -15,6 +15,8 @@ import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
+import           Data.Text.Utf16.Rope.Mixed      (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed      as Rope
 import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
@@ -27,10 +29,10 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.PluginUtils
 import qualified Language.LSP.Protocol.Lens     as L
 
-getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
-getNextPragmaInfo dynFlags mbSourceText =
-  if | Just sourceText <- mbSourceText
-     , let sourceStringBuffer = stringToStringBuffer (Text.unpack sourceText)
+getNextPragmaInfo :: DynFlags -> Maybe Rope -> NextPragmaInfo
+getNextPragmaInfo dynFlags mbSource =
+  if | Just source <- mbSource
+     , let sourceStringBuffer = stringToStringBuffer (Text.unpack (Rope.toText source))
      , POk _ parserState <- parsePreDecl dynFlags sourceStringBuffer
      -> case parserState of
          ParserStateNotDone{ nextPragma } -> nextPragma

@@ -110,7 +110,7 @@ findNotesInFile file recorder = do
     -- the user. If not, we need to read it from disk.
     contentOpt <- (snd =<<) <$> use GetFileContents file
     content <- case contentOpt of
-        Just x  -> pure x
+        Just x  -> pure $ Rope.toText x
         Nothing -> liftIO $ readFileUtf8 $ fromNormalizedFilePath file
     let matches = (A.! 1) <$> matchAllText noteRegex content
         m = toPositions matches content

@@ -50,6 +50,8 @@ import qualified Data.Map                                           as M
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
+import           Data.Text.Utf16.Rope.Mixed                         (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed                         as Rope
 import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error,
@@ -307,7 +309,7 @@ getIdeas recorder nfp = do
                      flags' <- setExtensions flags
                      (_, contents) <- getFileContents nfp
                      let fp = fromNormalizedFilePath nfp
-                     let contents' = T.unpack <$> contents
+                     let contents' = T.unpack . Rope.toText <$> contents
                      Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
@@ -445,7 +447,7 @@ mkCodeAction title diagnostic data_  isPreferred =
     , _data_ = data_
     }
 
-mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
+mkSuppressHintTextEdits :: DynFlags -> Rope -> T.Text -> [LSP.TextEdit]
 mkSuppressHintTextEdits dynFlags fileContents hint =
   let
     NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
@@ -516,7 +518,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
     let fp = fromNormalizedFilePath nfp
-    (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
+    (_, fmap Rope.toText -> mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum

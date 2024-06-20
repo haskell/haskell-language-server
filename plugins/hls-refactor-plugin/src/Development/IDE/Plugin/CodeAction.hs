@@ -41,6 +41,7 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
+import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -249,7 +250,7 @@ extendImportHandler' ideState ExtendImport {..}
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
+            t <- liftMaybe $ snd <$> newImportToEdit n ps (Rope.toText (fromMaybe mempty contents))
             return (nfp, WorkspaceEdit {_changes=Just (M.singleton doc [t]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
@@ -1995,11 +1996,19 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens $ unqualify b
+    ranges'
+        ( L
+            _
+            ( IEThingWith
+                _
+                thing
+                _
+                inners
 #if MIN_VERSION_ghc(9,9,0)
-    ranges' (L _ (IEThingWith _ thing _  inners _))
-#else
-    ranges' (L _ (IEThingWith _ thing _  inners))
+                _
 #endif
+            )
+        )
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']

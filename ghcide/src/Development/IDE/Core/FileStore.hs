@@ -33,6 +33,7 @@ import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
+import           Data.Text.Utf16.Rope.Mixed                   (Rope)
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
@@ -175,20 +176,20 @@ getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFil
 
 getFileContentsImpl
     :: NormalizedFilePath
-    -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
+    -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
     res <- do
         mbVirtual <- getVirtualFile file
-        pure $ virtualFileText <$> mbVirtual
+        pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe T.Text)
+getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
 getFileContents f = do
-    (fv, txt) <- use_ GetFileContents f
+    (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
       Just t -> pure t
       Nothing -> do
@@ -198,7 +199,7 @@ getFileContents f = do
           _ -> do
             posix <- getModTime $ fromNormalizedFilePath f
             pure $ posixSecondsToUTCTime posix
-    return (modTime, txt)
+    return (modTime, contents)
 
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do

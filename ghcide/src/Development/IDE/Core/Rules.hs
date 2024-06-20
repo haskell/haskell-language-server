@@ -91,6 +91,7 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
+import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Data.Time                                    (UTCTime (..))
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
@@ -233,7 +234,7 @@ getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
     case msource of
         Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
-        Just source -> pure $ T.encodeUtf8 source
+        Just source -> pure $ T.encodeUtf8 $ Rope.toText source
 
 -- | Parse the contents of a haskell file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
@@ -898,7 +899,7 @@ getModSummaryRule displayTHWarning recorder = do
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
-                getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
+                getModSummaryFromImports session fp modTime (textToStringBuffer . Rope.toText <$> mFileContent)
         case modS of
             Right res -> do
                 -- Check for Template Haskell

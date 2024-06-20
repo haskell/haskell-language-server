@@ -264,6 +264,7 @@ library hls-cabal-plugin
     , lsp-types             ^>=2.3
     , regex-tdfa            ^>=1.3.1
     , text
+    , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
@@ -649,6 +650,7 @@ library hls-retrie-plugin
     , safe-exceptions
     , stm
     , text
+    , text-rope
     , transformers
     , unordered-containers
 
@@ -718,6 +720,7 @@ library hls-hlint-plugin
     , stm
     , temporary
     , text
+    , text-rope
     , transformers
     , unordered-containers
     , ghc-lib-parser-ex
@@ -1061,6 +1064,7 @@ library hls-qualify-imported-names-plugin
     , lens
     , lsp
     , text
+    , text-rope
     , dlist
     , transformers
 
@@ -1655,6 +1659,7 @@ library hls-refactor-plugin
     , hls-plugin-api        == 2.9.0.0
     , lsp
     , text
+    , text-rope
     , transformers
     , unordered-containers
     , containers
