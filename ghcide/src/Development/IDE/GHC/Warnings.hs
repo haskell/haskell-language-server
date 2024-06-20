@@ -15,6 +15,29 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Language.LSP.Protocol.Types       (type (|?) (..))
 
+{-
+ NOTE on withWarnings and its dangers
+
+    withWarnings collects warnings by registering a custom logger which extracts
+    the SDocs of those warnings. If you receive warnings this way, you will not
+    get them in a structured form. In the medium term we'd like to remove all
+    uses of withWarnings to get structured messages everywhere we can.
+
+    For the time being, withWarnings is no longer used for anything in the main
+    typecheckModule codepath, but it is still used for bytecode/object code
+    generation, as well as a few other places.
+
+    I suspect some of these functions (e.g. codegen) will need deeper changes to
+    be able to get diagnostics as a list, though I don't have great evidence for
+    that atm. I haven't taken a look to see if those functions that are wrapped
+    with this could produce diagnostics another way.
+
+    It would be good for someone to take a look. What we've done so far gives us
+    diagnostics for renaming and typechecking, and doesn't require us to copy
+    too much code from GHC or make any deeper changes, and lets us get started
+    with the bulk of the useful plugin work, but it would be good to have all
+    diagnostics with structure be collected that way.
+-}
 
 -- | Take a GHC monadic action (e.g. @typecheckModule pm@ for some
 -- parsed module 'pm@') and produce a "decorated" action that will
