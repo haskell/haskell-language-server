@@ -664,11 +664,6 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
-<<<<<<< soulomoon/wait-for-token-indexHieFile
-
-#if MIN_VERSION_ghc(9,3,0)
-=======
->>>>>>> master
     ideNc <- initNameCache 'r' knownKeyNames
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
