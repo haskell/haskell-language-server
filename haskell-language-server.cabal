@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8
 extra-source-files:
   README.md
   ChangeLog.md
@@ -152,7 +152,7 @@ test-suite hls-cabal-fmt-plugin-tests
     , hls-test-utils        == 2.9.0.0
 
   if flag(isolateCabalfmtTests)
-    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.12
     cpp-options: -Dhls_isolate_cabalfmt_tests
 
 -----------------------------
@@ -768,13 +768,13 @@ flag stan
   manual:      True
 
 common stan
-  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && impl(ghc < 9.10.0)
     build-depends: haskell-language-server:hls-stan-plugin
     cpp-options: -Dhls_stan
 
 library hls-stan-plugin
   import:           defaults, pedantic, warnings
-  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && impl(ghc < 9.10.0)
     buildable: True
   else
     buildable: False
@@ -802,7 +802,7 @@ library hls-stan-plugin
 
 test-suite hls-stan-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && impl(ghc < 9.10.0)
     buildable: True
   else
     buildable: False
@@ -945,7 +945,6 @@ library hls-splice-plugin
     , extra
     , foldl
     , ghc
-    , ghc-exactprint
     , ghcide                == 2.9.0.0
     , hls-plugin-api        == 2.9.0.0
     , haskell-language-server:hls-refactor-plugin

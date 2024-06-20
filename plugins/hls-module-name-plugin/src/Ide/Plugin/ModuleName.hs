@@ -39,8 +39,7 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        Priority (Debug),
                                                        Recorder, WithPriority,
                                                        colon, evalGhcEnv,
-                                                       hscEnvWithImportPaths,
-                                                       logWith,
+                                                       hscEnv, logWith,
                                                        realSrcSpanToRange,
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
@@ -141,7 +140,7 @@ pathModuleNames recorder state normFilePath filePath
   | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
       (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
-      srcPaths <- liftIO $ evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
+      srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
       -- Append a `pathSeparator` to make the path looks like a directory,

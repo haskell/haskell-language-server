@@ -89,10 +89,6 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-        exclude:
-          # We disable this this combo in test.yml due to long path issues, so we also need to disable it here
-          - os: windows-latest
-            ghc: "9.2"
     steps:
       - uses: actions/checkout@v3
 
@@ -105,7 +101,7 @@ jobs:
       # Fetching from github cache is faster than doing it from hackage
       # Sources does not change per ghc and ghc version son only doing it
       # for one matrix job (it is arbitrary)
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.2'
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.6'
         name: Download sources
         run: |
           cabal $cabalBuild --only-download --enable-benchmarks --enable-tests
@@ -120,7 +116,7 @@ jobs:
       # We build ghcide with benchs and test enabled to include its dependencies in the cache
       # (including shake-bench)
       # Only for the same ghc and os used in the bench workflow, so we save cache space
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.2'
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.6'
         name: Build ghcide benchmark
         run: |
           cabal $cabalBuild ghcide --enable-benchmarks --enable-tests

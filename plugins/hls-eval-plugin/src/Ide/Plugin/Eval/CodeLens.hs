@@ -153,14 +153,6 @@ codeLens recorder st plId CodeLensParams{_textDocument} =
                 dbg $ LogCodeLensFp fp
                 (comments, _) <-
                     runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
-                -- dbg "excluded comments" $ show $  DL.toList $
-                --     foldMap (\(L a b) ->
-                --         case b of
-                --             AnnLineComment{}  -> mempty
-                --             AnnBlockComment{} -> mempty
-                --             _                 -> DL.singleton (a, b)
-                --     )
-                --     $ apiAnnComments' pm_annotations
                 dbg $ LogCodeLensComments comments
 
                 -- Extract tests from source code
