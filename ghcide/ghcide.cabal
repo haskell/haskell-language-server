@@ -85,6 +85,7 @@ library
     , hls-plugin-api               == 2.9.0.1
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
+    , lens-aeson
     , list-t
     , lsp                          ^>=2.7
     , lsp-types                    ^>=2.3

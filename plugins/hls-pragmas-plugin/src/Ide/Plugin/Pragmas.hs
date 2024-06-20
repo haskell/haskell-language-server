@@ -15,6 +15,7 @@ module Ide.Plugin.Pragmas
   , AppearWhere(..)
   ) where
 
+import qualified Data.Aeson as JSON
 import           Control.Lens                             hiding (List)
 import           Control.Monad.IO.Class                   (MonadIO (liftIO))
 import           Data.Char                                (isAlphaNum)
@@ -120,8 +121,9 @@ suggest dflags diag =
 -- ---------------------------------------------------------------------
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
-suggestDisableWarning Diagnostic {_code}
-  | Just (LSP.InR (T.stripPrefix "-W" -> Just w)) <- _code
+suggestDisableWarning diagnostic
+  | Just (Just (JSON.String attachedReason)) <- diagnostic ^? attachedReason
+  , Just w <- T.stripPrefix "-W" attachedReason
   , w `notElem` warningBlacklist =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []

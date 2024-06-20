@@ -19,18 +19,24 @@ module Development.IDE.Types.Diagnostics (
   ideErrorFromLspDiag,
   showDiagnostics,
   showDiagnosticsColored,
-  IdeResultNoDiagnosticsEarlyCutoff) where
+  IdeResultNoDiagnosticsEarlyCutoff,
+  attachReason,
+  attachedReason) where
 
 import           Control.DeepSeq
 import           Control.Lens
+import qualified Data.Aeson as JSON
+import qualified Data.Aeson.Lens as JSON
 import           Data.ByteString                (ByteString)
+import           Data.List
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope)
+import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope, WarningFlag, wWarningFlags, flagSpecFlag, flagSpecName)
 import           Development.IDE.Types.Location
 import           GHC.Generics
-import           GHC.Types.Error                (diagnosticCode, DiagnosticCode (..), errMsgDiagnostic)
+import           GHC.Types.Error                (diagnosticCode, DiagnosticCode (..), errMsgDiagnostic, DiagnosticReason(..), diagnosticReason)
 import           Language.LSP.Diagnostics
+import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP
 import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
@@ -69,7 +75,7 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
         case origMsg of
           Nothing -> NoStructuredMessage
           Just msg -> SomeStructuredMessage msg
-      fdLspDiagnostic = lspDiag
+      fdLspDiagnostic = (attachReason (fmap (diagnosticReason . errMsgDiagnostic) origMsg) lspDiag)
 #if MIN_VERSION_ghc(9,6,1)
         { _code = fmap ghcCodeToLspCode . diagnosticCode . errMsgDiagnostic =<< origMsg
         }
@@ -84,6 +90,30 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
 #endif
   in
   FileDiagnostic {..}
+
+attachedReason :: Traversal' Diagnostic (Maybe JSON.Value)
+attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"
+
+#if MIN_VERSION_ghc(9,3,0)
+attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
+attachReason Nothing = id
+attachReason (Just wr) = attachedReason .~ fmap JSON.toJSON (showReason wr)
+ where
+  showReason = \case
+    WarningWithFlag flag -> showFlag flag
+    _                    -> Nothing
+#else
+attachReason :: WarnReason -> Diagnostic -> Diagnostic
+attachReason wr = attachedReason .~ fmap JSON.toJSON (showReason wr)
+ where
+  showReason = \case
+    NoReason       -> Nothing
+    Reason flag    -> showFlag flag
+    ErrReason flag -> showFlag =<< flag
+#endif
+
+showFlag :: WarningFlag -> Maybe T.Text
+showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags
 
 ideErrorWithSource
   :: Maybe T.Text
