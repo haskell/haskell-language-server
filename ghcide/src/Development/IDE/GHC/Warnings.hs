@@ -7,13 +7,11 @@ module Development.IDE.GHC.Warnings(withWarnings) where
 
 import           Control.Concurrent.Strict
 import           Control.Lens (over)
-import           Data.List
 import qualified Data.Text                         as T
 
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
-import           Language.LSP.Protocol.Types       (type (|?) (..))
+import           Development.IDE.GHC.Error
 
 {-
  NOTE on withWarnings and its dangers
@@ -59,24 +57,3 @@ withWarnings diagSource action = do
   res <- action $ \env -> putLogHook (newLogger env) env
   warns <- readVar warnings
   return (reverse $ concat warns, res)
-
-#if MIN_VERSION_ghc(9,3,0)
-attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
-attachReason Nothing d = d
-attachReason (Just wr) d = d{_code = InR <$> showReason wr}
- where
-  showReason = \case
-    WarningWithFlag flag -> showFlag flag
-    _                    -> Nothing
-#else
-attachReason :: WarnReason -> Diagnostic -> Diagnostic
-attachReason wr d = d{_code = InR <$> showReason wr}
- where
-  showReason = \case
-    NoReason       -> Nothing
-    Reason flag    -> showFlag flag
-    ErrReason flag -> showFlag =<< flag
-#endif
-
-showFlag :: WarningFlag -> Maybe T.Text
-showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags
