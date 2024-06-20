@@ -318,7 +318,6 @@ renderMessages msgs =
   let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
 #endif
   in (renderMsgs psWarnings, renderMsgs psErrors)
-  in (renderMsgs psWarnings, renderMsgs psErrors)
 
 #if MIN_VERSION_ghc(9,6,1)
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope GhcMessage)) -> ParseResult a

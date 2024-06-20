@@ -94,7 +94,6 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
 attachedReason :: Traversal' Diagnostic (Maybe JSON.Value)
 attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"
 
-#if MIN_VERSION_ghc(9,3,0)
 attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
 attachReason Nothing = id
 attachReason (Just wr) = attachedReason .~ fmap JSON.toJSON (showReason wr)
@@ -102,15 +101,6 @@ attachReason (Just wr) = attachedReason .~ fmap JSON.toJSON (showReason wr)
   showReason = \case
     WarningWithFlag flag -> showFlag flag
     _                    -> Nothing
-#else
-attachReason :: WarnReason -> Diagnostic -> Diagnostic
-attachReason wr = attachedReason .~ fmap JSON.toJSON (showReason wr)
- where
-  showReason = \case
-    NoReason       -> Nothing
-    Reason flag    -> showFlag flag
-    ErrReason flag -> showFlag =<< flag
-#endif
 
 showFlag :: WarningFlag -> Maybe T.Text
 showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags

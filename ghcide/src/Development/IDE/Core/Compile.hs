@@ -365,7 +365,6 @@ tcRnModule hsc_env tc_helpers pmod = do
              do  hscTypecheckRenameWithDiagnostics hscEnvTmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod
                                          , hpm_src_files = pm_extra_src_files pmod
-                                         , hpm_annotations = pm_annotations pmod
                                          }
   let rn_info = case mrn_info of
         Just x  -> x
@@ -708,11 +707,12 @@ tagDiag (w@(Just (WarningWithCategory cat)), fd)
 tagDiag (w@(Just (WarningWithFlags warnings)), fd)
   | tags <- mapMaybe requiresTag (toList warnings)
   = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tags ++ concat (_tags diag) })
-tagDiag (w@(Just (WarningWithFlag warning)), (nfp, sh, fd))
+#else
+tagDiag (w@(Just (WarningWithFlag warning)), fd)
   | Just tag <- requiresTag warning
-  = (w, fd & fdLspDiagnosticL %~ \diag -> { _tags = Just $ tag : concat (_tags diag) })
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tag : concat (_tags diag) })
 #endif
-  where
+    where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
 #if !MIN_VERSION_ghc(9,7,0)
     -- doesn't exist on 9.8, we use WarningWithCategory instead
@@ -1111,7 +1111,7 @@ parseFileContents env customPreprocessor filename ms = do
                       sourceParser
                       DiagnosticSeverity_Warning
                       (fmap attachNoStructuredError preproc_warns)
-               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms hpm_annotations parsed psMessages
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms parsed psMessages
                let (warns, errors) = renderMessages msgs
 
                -- Just because we got a `POk`, it doesn't mean there

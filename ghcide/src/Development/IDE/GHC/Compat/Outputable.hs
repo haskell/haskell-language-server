@@ -123,9 +123,10 @@ pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
 #if MIN_VERSION_ghc(9,6,1)
 type ErrMsg  = MsgEnvelope GhcMessage
 type WarnMsg  = MsgEnvelope GhcMessage
-#elif MIN_VERSION_ghc(9,3,0)
+#else
 type ErrMsg  = MsgEnvelope DecoratedSDoc
 type WarnMsg  = MsgEnvelope DecoratedSDoc
+#endif
 
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 #if MIN_VERSION_ghc(9,5,0)
