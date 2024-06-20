@@ -67,7 +67,6 @@ import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
-import           Data.Unique                       as Unique
 import           Debug.Trace
 import           Development.IDE.Core.FileStore    (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
@@ -81,6 +80,7 @@ import           Development.IDE.GHC.Compat        hiding (assert,
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import           Development.IDE.Core.ProgressReporting (ProgressReporting (..), progressReportingOutsideState)
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
@@ -97,7 +97,6 @@ import           GHC.Serialized
 import           HieDb                             hiding (withHieDb)
 import qualified Language.LSP.Protocol.Message     as LSP
 import           Language.LSP.Protocol.Types       (DiagnosticTag (..))
-import qualified Language.LSP.Protocol.Types       as LSP
 import qualified Language.LSP.Server               as LSP
 import           Prelude                           hiding (mod)
 import           System.Directory
@@ -785,7 +784,6 @@ spliceExpressions Splices{..} =
 --
 indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
- IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
   pending <- readTVar indexPending
   case HashMap.lookup srcPath pending of
@@ -806,69 +804,14 @@ indexHieFile se mod_summary srcPath !hash hf = do
         unless newerScheduled $ do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
-          bracket_ (pre optProgressStyle) post $
+          bracket_ pre post $
             withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
     HieDbWriter{..} = hiedbWriter se
 
-    -- Get a progress token to report progress and update it for the current file
-    pre style = do
-      tok <- modifyVar indexProgressToken $ fmap dupe . \case
-        x@(Just _) -> pure x
-        -- Create a token if we don't already have one
-        Nothing -> do
-          case lspEnv se of
-            Nothing -> pure Nothing
-            Just env -> LSP.runLspT env $ do
-              u <- LSP.ProgressToken . LSP.InR . T.pack . show . hashUnique <$> liftIO Unique.newUnique
-              -- TODO: Wait for the progress create response to use the token
-              _ <- LSP.sendRequest LSP.SMethod_WindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
-              LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams u $
-                toJSON $ LSP.WorkDoneProgressBegin
-                  { _kind = LSP.AString @"begin"
-                  ,  _title = "Indexing"
-                  , _cancellable = Nothing
-                  , _message = Nothing
-                  , _percentage = Nothing
-                  }
-              pure (Just u)
-
-      (!done, !remaining) <- atomically $ do
-        done <- readTVar indexCompleted
-        remaining <- HashMap.size <$> readTVar indexPending
-        pure (done, remaining)
-      let
-        progressFrac :: Double
-        progressFrac = fromIntegral done / fromIntegral (done + remaining)
-        progressPct :: LSP.UInt
-        progressPct = floor $ 100 * progressFrac
-
-      whenJust (lspEnv se) $ \env -> whenJust tok $ \token -> LSP.runLspT env $
-        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams token $
-          toJSON $
-            case style of
-                Percentage -> LSP.WorkDoneProgressReport
-                    { _kind = LSP.AString @"report"
-                    , _cancellable = Nothing
-                    , _message = Nothing
-                    , _percentage = Just progressPct
-                    }
-                Explicit -> LSP.WorkDoneProgressReport
-                    { _kind = LSP.AString @"report"
-                    , _cancellable = Nothing
-                    , _message = Just $
-                        T.pack " (" <> T.pack (show done) <> "/" <> T.pack (show $ done + remaining) <> ")..."
-                    , _percentage = Nothing
-                    }
-                NoProgress -> LSP.WorkDoneProgressReport
-                  { _kind = LSP.AString @"report"
-                  , _cancellable = Nothing
-                  , _message = Nothing
-                  , _percentage = Nothing
-                  }
-
+    pre = progressUpdate indexProgressReporting ProgressStarted
     -- Report the progress once we are done indexing this file
     post = do
       mdone <- atomically $ do
@@ -883,18 +826,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
             toJSON $ fromNormalizedFilePath srcPath
-      whenJust mdone $ \done ->
-        modifyVar_ indexProgressToken $ \tok -> do
-          whenJust (lspEnv se) $ \env -> LSP.runLspT env $
-            whenJust tok $ \token ->
-              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams token $
-                toJSON $
-                LSP.WorkDoneProgressEnd
-                  { _kind = LSP.AString @"end"
-                  , _message = Just $ "Finished indexing " <> T.pack (show done) <> " files"
-                  }
-          -- We are done with the current indexing cycle, so destroy the token
-          pure Nothing
+      whenJust mdone $ \_ -> progressUpdate indexProgressReporting ProgressCompleted
 
 writeAndIndexHieFile :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
 writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
