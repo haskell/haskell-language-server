@@ -4,6 +4,7 @@
 
 module Development.IDE.Core.FileStore(
     getFileContents,
+    getVersionedTextDoc,
     setFileModified,
     setSomethingModified,
     fileStoreRules,
@@ -18,12 +19,13 @@ module Development.IDE.Core.FileStore(
     isWatchSupported,
     registerFileWatches,
     shareFilePath,
-    Log(..)
+    Log(..),
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically)
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
+import           Control.Lens                                 ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.Binary                                  as B
@@ -57,13 +59,16 @@ import           Ide.Logger                                   (Pretty (pretty),
                                                                logWith, viaShow,
                                                                (<+>))
 import qualified Ide.Logger                                   as L
-import           Ide.Plugin.Config                            (CheckParents (..),
-                                                               Config)
+import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message                (toUntypedRegistration)
 import qualified Language.LSP.Protocol.Message                as LSP
 import           Language.LSP.Protocol.Types                  (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
                                                                FileSystemWatcher (..),
-                                                               _watchers)
+                                                               TextDocumentIdentifier (..),
+                                                               VersionedTextDocumentIdentifier (..),
+                                                               _watchers,
+                                                               uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types                  as LSP
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -201,6 +206,21 @@ getFileContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
+-- | Given a text document identifier, annotate it with the latest version.
+--
+-- Like Language.LSP.Server.Core.getVersionedTextDoc, but gets the virtual file
+-- from the Shake VFS rather than the LSP VFS.
+getVersionedTextDoc :: TextDocumentIdentifier -> Action VersionedTextDocumentIdentifier
+getVersionedTextDoc doc = do
+  let uri = doc ^. L.uri
+  mvf <-
+    maybe (pure Nothing) getVirtualFile $
+        uriToNormalizedFilePath $ toNormalizedUri uri
+  let ver = case mvf of
+        Just (VirtualFile lspver _ _) -> lspver
+        Nothing                       -> 0
+  return (VersionedTextDocumentIdentifier uri ver)
+
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
@@ -304,4 +324,3 @@ shareFilePath k = unsafePerformIO $ do
           Just v  -> (km, v)
           Nothing -> (HashMap.insert k k km, k)
 {-# NOINLINE shareFilePath  #-}
-

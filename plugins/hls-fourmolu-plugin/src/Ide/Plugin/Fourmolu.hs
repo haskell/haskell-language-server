@@ -12,42 +12,44 @@ module Ide.Plugin.Fourmolu (
 ) where
 
 import           Control.Exception
-import           Control.Lens                    ((^.))
-import           Control.Monad                   (guard)
-import           Control.Monad.Error.Class       (MonadError (throwError))
-import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import           Control.Monad.Trans.Class       (MonadTrans (lift))
-import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT)
-import           Data.Bifunctor                  (bimap)
-import           Data.List                       (intercalate)
-import           Data.Maybe                      (catMaybes)
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Data.Version                    (showVersion)
-import           Development.IDE                 hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
-                                                            hang, vcat)
-import qualified Development.IDE.GHC.Compat.Util as S
-import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Control.Lens                     ((^.))
+import           Control.Monad                    (guard)
+import           Control.Monad.Error.Class        (MonadError (throwError))
+import           Control.Monad.IO.Class           (MonadIO (liftIO))
+import           Control.Monad.Trans.Class        (MonadTrans (lift))
+import           Control.Monad.Trans.Except       (ExceptT (..), runExceptT)
+import           Data.Bifunctor                   (bimap)
+import           Data.List                        (intercalate)
+import           Data.Maybe                       (catMaybes)
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import           Data.Version                     (showVersion)
+import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
+import           Development.IDE.GHC.Compat       as Compat hiding (Cpp,
+                                                             Warning, hang,
+                                                             vcat)
+import qualified Development.IDE.GHC.Compat.Util  as S
+import           GHC.LanguageExtensions.Type      (Extension (Cpp))
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                 (makeDiffTextEdit)
+import           Ide.PluginUtils                  (makeDiffTextEdit)
 import           Ide.Types
-import           Language.LSP.Protocol.Lens      (HasTabSize (tabSize))
+import           Language.LSP.Protocol.Lens       (HasTabSize (tabSize))
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server             hiding (defaultConfig)
+import           Language.LSP.Server              hiding (defaultConfig)
 import           Ormolu
 import           Ormolu.Config
-import qualified Paths_fourmolu                  as Fourmolu
+import qualified Paths_fourmolu                   as Fourmolu
 import           System.Exit
 import           System.FilePath
-import           System.Process.Run              (cwd, proc)
-import           System.Process.Text             (readCreateProcessWithExitCode)
-import           Text.Read                       (readMaybe)
+import           System.Process.Run               (cwd, proc)
+import           System.Process.Text              (readCreateProcessWithExitCode)
+import           Text.Read                        (readMaybe)
 
 #if MIN_VERSION_fourmolu(0,16,0)
-import qualified Data.Yaml                       as Yaml
+import qualified Data.Yaml                        as Yaml
 #endif
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState

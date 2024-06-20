@@ -32,6 +32,7 @@ import           Data.Maybe                           (mapMaybe)
 import           Data.Ord                             (comparing)
 import           Data.String                          (IsString)
 import qualified Data.Text                            as T
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE                      (GetParsedModule (GetParsedModule),
                                                        GhcSession (GhcSession),
                                                        IdeState, Pretty,
@@ -43,6 +44,7 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        realSrcSpanToRange,
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
+import           Development.IDE.Core.FileStore       (getFileContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
@@ -57,7 +59,6 @@ import           Ide.PluginUtils                      (toAbsolute)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.VFS                     (virtualFileText)
 import           System.FilePath                      (dropExtension, normalise,
                                                        pathSeparator,
                                                        splitDirectories,
@@ -112,8 +113,8 @@ action recorder state uri = do
     nfp <- getNormalizedFilePathE  uri
     fp <- uriToFilePathE uri
 
-    contents <- lift . pluginGetVirtualFile $ toNormalizedUri uri
-    let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
+    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ fmap snd $ getFileContents nfp
+    let emptyModule = maybe True (T.null . T.strip . Rope.toText) contents
 
     correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
     logWith recorder Debug (CorrectNames correctNames)

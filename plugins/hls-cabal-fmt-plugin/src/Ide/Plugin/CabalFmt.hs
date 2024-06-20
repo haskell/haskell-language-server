@@ -6,22 +6,23 @@
 module Ide.Plugin.CabalFmt where
 
 import           Control.Lens
-import           Control.Monad.Except        (throwError)
+import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class
-import qualified Data.Text                   as T
-import           Development.IDE             hiding (pluginHandlers)
-import           Ide.Plugin.Error            (PluginError (PluginInternalError, PluginInvalidParams))
+import qualified Data.Text                        as T
+import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
+import           Ide.Plugin.Error                 (PluginError (PluginInternalError, PluginInvalidParams))
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens  as L
+import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Types
-import           Prelude                     hiding (log)
+import           Prelude                          hiding (log)
 import           System.Directory
 import           System.Exit
 import           System.FilePath
 import           System.Process.ListLike
-import qualified System.Process.Text         as Process
+import qualified System.Process.Text              as Process
 
 data Log
   = LogProcessInvocationFailure Int

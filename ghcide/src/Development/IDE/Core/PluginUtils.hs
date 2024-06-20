@@ -36,6 +36,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Functor.Identity
 import qualified Data.Text                            as T
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Service         (runAction)
@@ -176,10 +177,10 @@ fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
 -- Formatting handlers
 -- ----------------------------------------------------------------------------
 
--- `mkFormattingHandlers` was moved here from the Ide.Types module of the
--- hls-plugin-api package so that `mkFormattingHandlers` could refer to
--- `IdeState`. `IdeState` is defined in the ghcide package, but hls-plugin-api
--- does not depend on ghcide, so `IdeState` is not in scope there.
+-- `mkFormattingHandlers` was moved here from hls-plugin-api package so that
+-- `mkFormattingHandlers` can refer to `IdeState`. `IdeState` is defined in the
+-- ghcide package, but hls-plugin-api does not depend on ghcide, so `IdeState`
+-- is not in scope there.
 
 mkFormattingHandlers :: FormattingHandler IdeState -> PluginHandlers IdeState
 mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)
@@ -188,15 +189,14 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
     provider m ide _pid params
       | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
-        mVirtualFileContents <-
-          liftIO $ runAction "mkFormattingHandlers" ide $ fmap snd $ getFileContents nfp
-        case mVirtualFileContents of
+        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ fmap snd $ getFileContents nfp
+        case contentsMaybe of
           Just contents -> do
             let (typ, mtoken) = case m of
                   SMethod_TextDocumentFormatting -> (FormatText, params ^. LSP.workDoneToken)
                   SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. LSP.range), params ^. LSP.workDoneToken)
                   _ -> Prelude.error "mkFormattingHandlers: impossible"
-            f ide mtoken typ contents nfp opts
+            f ide mtoken typ (Rope.toText contents) nfp opts
           Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
       | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri

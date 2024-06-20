@@ -37,7 +37,6 @@ import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
-import           Control.Monad.Trans.Class                          (MonadTrans (lift))
 import           Control.Monad.Trans.Except                         (ExceptT (..),
                                                                      runExceptT)
 import           Data.Aeson.Types                                   (FromJSON (..),
@@ -57,6 +56,7 @@ import           Development.IDE                                    hiding
                                                                     (Error,
                                                                      getExtensions)
 import           Development.IDE.Core.Compile                       (sourceParser)
+import           Development.IDE.Core.FileStore                     (getVersionedTextDoc)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
@@ -368,7 +368,10 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
-    verTxtDocId <- lift $ pluginGetVersionedTextDoc documentId
+    verTxtDocId <-
+        liftIO $
+            runAction "Hlint.getVersionedTextDoc" ideState $
+                getVersionedTextDoc documentId
     liftIO $ fmap (InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 

@@ -3,7 +3,6 @@ module Ide.Plugin.Notes (descriptor, Log) where
 import           Control.Lens                     ((^.))
 import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class           (liftIO)
-import           Control.Monad.Trans              (lift)
 import qualified Data.Array                       as A
 import           Data.HashMap.Strict              (HashMap)
 import qualified Data.HashMap.Strict              as HM
@@ -25,7 +24,6 @@ import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition),
                                                    SMethod (SMethod_TextDocumentDefinition))
 import           Language.LSP.Protocol.Types
-import           Language.LSP.VFS                 (VirtualFile (..))
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
@@ -79,8 +77,9 @@ jumpToNote state _ param
     | Just nfp <- uriToNormalizedFilePath uriOrig
     = do
         let Position l c = param ^. L.position
-        contents <- fmap _file_text . err "Error getting file contents"
-            =<< lift (pluginGetVirtualFile uriOrig)
+        contents <-
+            err "Error getting file contents"
+            =<< liftIO (runAction "notes.getfileContents" state (fmap snd (getFileContents nfp)))
         line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
             (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
         let noteOpt = listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line

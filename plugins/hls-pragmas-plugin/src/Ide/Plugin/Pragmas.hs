@@ -17,7 +17,6 @@ module Ide.Plugin.Pragmas
 
 import           Control.Lens                             hiding (List)
 import           Control.Monad.IO.Class                   (MonadIO (liftIO))
-import           Control.Monad.Trans.Class                (lift)
 import           Data.Char                                (isAlphaNum)
 import           Data.List.Extra                          (nubOrdOn)
 import qualified Data.Map                                 as M
@@ -29,7 +28,7 @@ import           Development.IDE.Core.Compile             (sourceParser,
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.Completions       (ghcideCompletionsPluginPriority)
-import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefix)
+import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
 import qualified Development.IDE.Spans.Pragmas            as Pragmas
 import           Ide.Plugin.Error
@@ -195,13 +194,13 @@ flags :: [T.Text]
 flags = map T.pack $ flagsForCompletion False
 
 completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
-completion _ide _ complParams = do
+completion ide _ complParams = do
     let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
         position@(Position ln col) = complParams ^. L.position
-    contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
+    contents <- liftIO $ runAction "Pragmas.GetFileContents" ide $ maybe (pure Nothing) (fmap snd . getFileContents) $ LSP.uriToNormalizedFilePath $ toNormalizedUri uri
     fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            pure $ result $ getCompletionPrefix position cnts
+            pure $ result $ getCompletionPrefixFromRope position cnts
             where
                 result pfix
                     | "{-# language" `T.isPrefixOf` line

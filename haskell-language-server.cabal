@@ -470,6 +470,7 @@ library hls-eval-plugin
     , mtl
     , parser-combinators    >=1.2
     , text
+    , text-rope
     , transformers
     , unliftio
     , unordered-containers
@@ -849,6 +850,7 @@ library hls-module-name-plugin
     , hls-plugin-api        == 2.9.0.0
     , lsp
     , text
+    , text-rope
     , transformers
 
 

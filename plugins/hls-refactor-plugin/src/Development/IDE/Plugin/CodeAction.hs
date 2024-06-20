@@ -23,7 +23,6 @@ import           Control.Arrow                                     (second,
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans
 import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
 import           Control.Monad.Trans.Maybe
 import           Data.Char
@@ -42,6 +41,7 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
+import           Development.IDE.Core.FileStore                    (getFileContents)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -97,8 +97,8 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
-                                                                    uriToFilePath)
-import           Language.LSP.VFS                                  (virtualFileText)
+                                                                    uriToFilePath,
+                                                                    uriToNormalizedFilePath)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
@@ -123,15 +123,14 @@ import           GHC.Types.SrcLoc                                  (srcSpanToRea
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
+  contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getFileContents" state $ maybe (pure Nothing) (fmap (fmap Rope.toText . snd) . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
   liftIO $ do
-    let text = virtualFileText <$> contents
-        mbFile = toNormalizedFilePath' <$> uriToFilePath uri
+    let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
-      actions = caRemoveRedundantImports parsedModule text allDiags range uri
-               <> caRemoveInvalidExports parsedModule text allDiags range uri
+      actions = caRemoveRedundantImports parsedModule contents allDiags range uri
+               <> caRemoveInvalidExports parsedModule contents allDiags range uri
     pure $ InL actions
 
 -------------------------------------------------------------------------------------------------

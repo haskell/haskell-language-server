@@ -11,7 +11,6 @@ import           Control.DeepSeq
 import           Control.Lens                                ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe                   (runMaybeT)
 import qualified Data.ByteString                             as BS
 import           Data.Hashable
@@ -322,8 +321,8 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let (TextDocumentIdentifier uri) = complParams ^. JL.textDocument
       position = complParams ^. JL.position
-  mVf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
-  case (,) <$> mVf <*> uriToFilePath' uri of
+  mContents <- liftIO $ runAction "cabal-plugin.getFileContents" ide $ maybe (pure Nothing) (fmap snd . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+  case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
@@ -332,7 +331,7 @@ completion recorder ide _ complParams = do
         Nothing ->
           pure . InR $ InR Null
         Just (fields, _) -> do
-          let pref = Ghcide.getCompletionPrefix position cnts
+          let pref = Ghcide.getCompletionPrefixFromRope position cnts
           let res = produceCompletions pref path fields
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null

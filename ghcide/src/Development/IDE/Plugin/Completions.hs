@@ -19,6 +19,7 @@ import qualified Data.HashSet                             as Set
 import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.Core.Compile
+import           Development.IDE.Core.FileStore           (getFileContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
@@ -169,8 +170,9 @@ getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
                   ,_context=completionContext} = ExceptT $ do
-    contents <- pluginGetVirtualFile $ toNormalizedUri uri
-    fmap Right $ case (contents, uriToFilePath' uri) of
+    contentsMaybe <-
+      liftIO $ runAction "Completion" ide $ maybe (pure Nothing) (fmap snd . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+    fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
         (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
@@ -204,7 +206,7 @@ getCompletionsLSP ide plId
             pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
-            let pfix = getCompletionPrefix position cnts
+            let pfix = getCompletionPrefixFromRope position cnts
             case (pfix, completionContext) of
               (PosPrefixInfo _ "" _ _, Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (InL [])

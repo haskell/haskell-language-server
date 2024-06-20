@@ -40,7 +40,9 @@ import           Data.Maybe                                   (catMaybes)
 import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
+import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Data.Typeable                                (Typeable)
+import           Development.IDE.Core.FileStore               (getFileContents)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
 import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
@@ -210,7 +212,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
             let nfp = toNormalizedFilePath' fp
-            mdlText <- moduleText _uri
+            mdlText <- moduleText st _uri
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
@@ -305,12 +307,14 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: Uri -> ExceptT PluginError (HandlerM config) Text
-moduleText uri =
-    handleMaybeM (PluginInternalError "mdlText") $
-      (virtualFileText <$>)
-          <$> pluginGetVirtualFile
-              (toNormalizedUri uri)
+moduleText :: IdeState -> Uri -> ExceptT PluginError (HandlerM config) Text
+moduleText state uri = do
+    contents <-
+        handleMaybeM (PluginInternalError "mdlText") $
+            liftIO $
+                runAction "eval.getFileContents" state $
+                    maybe (pure Nothing) (fmap snd . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+    pure $ Rope.toText contents
 
 testsBySection :: [Section] -> [(Section, EvalId, Test)]
 testsBySection sections =

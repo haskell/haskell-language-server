@@ -156,9 +156,7 @@ import           Ide.Logger                             hiding (Priority)
 import qualified Ide.Logger                             as Logger
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (IdePlugins (IdePlugins),
-                                                         PluginDescriptor (pluginId),
-                                                         PluginId)
+import           Ide.Types
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
