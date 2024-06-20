@@ -45,8 +45,27 @@ data ProgressEvent
 data ProgressReporting m = ProgressReporting
   { progressUpdate :: ProgressEvent -> m (),
     inProgress     :: forall a. NormalizedFilePath -> m a -> m a,
+    -- ^ see Note [ProgressReporting API and InProgressState]
     progressStop   :: IO ()
+    -- ^ we are using IO here because creating and stopping the `ProgressReporting`
+    -- is different from how we use it.
   }
+
+{- Note [ProgressReporting API and InProgressState]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The progress of tasks can be tracked in two ways:
+
+1. `InProgressState`: This is an internal state that actively tracks the progress.
+   Changes to the progress are made directly to this state.
+
+2. `InProgressStateOutSide`: This is an external state that tracks the progress.
+   The external state is converted into an STM Int for the purpose of reporting progress.
+
+The `inProgress` function is only useful when we are using `InProgressState`.
+
+An alternative design could involve using GADTs to eliminate this discrepancy between
+`InProgressState` and `InProgressStateOutSide`.
+-}
 
 noProgressReporting :: (MonadUnliftIO m) => IO (ProgressReporting m)
 noProgressReporting =
@@ -78,6 +97,7 @@ updateState _ StopProgress (Running job) = cancel job $> Stopped
 updateState _ StopProgress st = pure st
 
 -- | Data structure to track progress across the project
+-- see Note [ProgressReporting API and InProgressState]
 data InProgressState
   = InProgressState
       { -- | Number of files to do
