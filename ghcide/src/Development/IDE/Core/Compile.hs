@@ -720,7 +720,7 @@ tagDiag (w@(Just (WarningWithFlag warning)), fd)
   | Just tag <- requiresTag warning
   = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tag : concat (_tags diag) })
 #endif
-  where
+    where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
 #if !MIN_VERSION_ghc(9,7,0)
     -- doesn't exist on 9.8, we use WarningWithCategory instead
