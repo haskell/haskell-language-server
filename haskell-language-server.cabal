@@ -889,11 +889,13 @@ library hls-pragmas-plugin
   hs-source-dirs:   plugins/hls-pragmas-plugin/src
   build-depends:
     , base                  >=4.12 && <5
+    , aeson
     , extra
     , fuzzy
     , ghcide                == 2.8.0.0
     , hls-plugin-api        == 2.8.0.0
     , lens
+    , lens-aeson
     , lsp
     , text
     , transformers
