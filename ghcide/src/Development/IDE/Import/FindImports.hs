@@ -30,14 +30,9 @@ import           System.FilePath
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat.Util
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 import           GHC.Unit.State
-#endif
 
 data Import
   = FileImport !ArtifactsLocation
@@ -105,13 +100,8 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
 -- It only returns Just for unit-ids which are possible to import into the
 -- current module. In particular, it will return Nothing for 'main' components
 -- as they can never be imported into another package.
-#if MIN_VERSION_ghc(9,3,0)
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, ([FilePath], S.Set ModuleName))
 mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModules flags))
-#else
-mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (PackageName, (UnitId, [FilePath], S.Set ModuleName))
-mkImportDirs env (i, flags) = (, (i, importPaths flags, S.empty)) <$> getUnitName env i
-#endif
 
 -- | locate a module in either the file system or the package database. Where we go from *daml to
 -- Haskell
@@ -122,42 +112,22 @@ locateModule
     -> [String]                        -- ^ File extensions
     -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))  -- ^ does file exist predicate
     -> Located ModuleName              -- ^ Module name
-#if MIN_VERSION_ghc(9,3,0)
     -> PkgQual                -- ^ Package name
-#else
-    -> Maybe FastString                -- ^ Package name
-#endif
     -> Bool                            -- ^ Is boot module
     -> m (Either [FileDiagnostic] Import)
 locateModule env comp_info exts targetFor modName mbPkgName isSource = do
   case mbPkgName of
-#if MIN_VERSION_ghc(9,3,0)
     -- 'ThisPkg' just means some home module, not the current unit
     ThisPkg uid
       | Just (dirs, reexports) <- lookup uid import_paths
           -> lookupLocal uid dirs reexports
       | otherwise -> return $ Left $ notFoundErr env modName $ LookupNotFound []
-#else
-    -- "this" means that we should only look in the current package
-    Just "this" -> do
-      lookupLocal (homeUnitId_ dflags) (importPaths dflags) S.empty
-#endif
     -- if a package name is given we only go look for a package
-#if MIN_VERSION_ghc(9,3,0)
     OtherPkg uid
       | Just (dirs, reexports) <- lookup uid import_paths
           -> lookupLocal uid dirs reexports
-#else
-    Just pkgName
-      | Just (uid, dirs, reexports) <- lookup (PackageName pkgName) import_paths
-          -> lookupLocal uid dirs reexports
-#endif
       | otherwise -> lookupInPackageDB
-#if MIN_VERSION_ghc(9,3,0)
     NoPkgQual -> do
-#else
-    Nothing -> do
-#endif
 
       -- Reexports for current unit have to be empty because they only apply to other units depending on the
       -- current unit. If we set the reexports to be the actual reexports then we risk looping forever trying
@@ -196,11 +166,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       -- This is particularly important for Paths_* modules which get generated for every component but unless you use it in
       -- each component will end up being found in the wrong place and cause a multi-cradle match failure.
     _import_paths' = -- import_paths' is only used in GHC < 9.4
-#if MIN_VERSION_ghc(9,3,0)
             import_paths
-#else
-            map snd import_paths
-#endif
 
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
@@ -263,10 +229,5 @@ notFound = NotFound
   , fr_suggestions = []
   }
 
-#if MIN_VERSION_ghc(9,3,0)
 noPkgQual :: PkgQual
 noPkgQual = NoPkgQual
-#else
-noPkgQual :: Maybe a
-noPkgQual = Nothing
-#endif

@@ -54,13 +54,8 @@ safeTyThingId (AConLike (RealDataCon dataCon)) = Just (dataConWrapId dataCon)
 safeTyThingId _                                = Nothing
 
 -- Possible documentation for an element in the code
-#if MIN_VERSION_ghc(9,3,0)
 data SpanDoc
   = SpanDocString [HsDocString] SpanDocUris
-#else
-data SpanDoc
-  = SpanDocString HsDocString SpanDocUris
-#endif
   | SpanDocText   [T.Text] SpanDocUris
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
@@ -97,11 +92,7 @@ spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown = \case
     (SpanDocString docs uris) ->
         let doc = T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $
-#if MIN_VERSION_ghc(9,3,0)
                       renderHsDocStrings docs
-#else
-                      unpackHDS docs
-#endif
         in  go [doc] uris
     (SpanDocText txt uris) -> go txt uris
   where

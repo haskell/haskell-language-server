@@ -47,7 +47,6 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
-import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
@@ -105,6 +104,7 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat.ExactPrint             (makeDeltaAst)
 import           GHC                                               (Anchor (anchor_op),
                                                                     AnchorOperation (..),
                                                                     EpaLocation (..))
@@ -312,11 +312,7 @@ findSigOfBind range bind =
       msum
         [findSigOfBinds range (grhssLocalBinds grhs) -- where clause
         , do
-#if MIN_VERSION_ghc(9,3,0)
           grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
-#else
-          grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
-#endif
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
         ]
@@ -324,7 +320,7 @@ findSigOfBind range bind =
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
-#if MIN_VERSION_ghc(9,3,0) && !MIN_VERSION_ghc(9,9,0)
+#if !MIN_VERSION_ghc(9,9,0)
         go (HsLet _ _ binds _ _) = findSigOfBinds range binds
 #else
         go (HsLet _ binds _) = findSigOfBinds range binds

@@ -189,7 +189,7 @@ stack install haskell-language-server
 You also can leverage `ghcup compile hls`:
 
 ```bash
-ghcup compile hls -v 1.9.0.0 --ghc 9.2.5
+ghcup compile hls -v 2.9.0.0 --ghc 9.6.5
 ```
 
 ### Preprocessors

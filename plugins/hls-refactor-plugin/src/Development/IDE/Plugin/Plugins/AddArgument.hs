@@ -126,7 +126,7 @@ appendFinalPatToMatches name = \case
 --
 -- TODO instead of inserting a typed hole; use GHC's suggested type from the error
 addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either PluginError [(T.Text, [TextEdit])]
-addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
+addArgumentAction (ParsedModule _ moduleSrc _) range name _typ = do
     (newSource, _, _) <- runTransformT $ do
       (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl
 #if MIN_VERSION_ghc(9,9,0)

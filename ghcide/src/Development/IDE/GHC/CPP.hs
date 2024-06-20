@@ -22,11 +22,8 @@ import           GHC.Settings
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import qualified GHC.Driver.Pipeline             as Pipeline
-#endif
 
-#if MIN_VERSION_ghc(9,3,0) && !MIN_VERSION_ghc(9,5,0)
+#if !MIN_VERSION_ghc(9,5,0)
 import qualified GHC.Driver.Pipeline.Execute     as Pipeline
 #endif
 

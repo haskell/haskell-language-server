@@ -78,9 +78,6 @@ jobs:
           - true
           - false
         exclude:
-          # Don't do anything for windows on 9.2, it has particularly bad long-path issues
-          - os: windows-latest
-            ghc: "9.2"
           # Exclude the test configuration on macos, it's sufficiently similar to other OSs
           # that it mostly just burns CI time. Buiding is still useful since it catches
           # solver issues.
@@ -164,7 +161,7 @@ jobs:
         run: cabal test hls-splice-plugin-tests || cabal test hls-splice-plugin-tests
 
       # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.2' && matrix.ghc != '9.10'
+      - if: matrix.test && matrix.ghc != '9.10'
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
 
@@ -230,8 +227,8 @@ jobs:
         name: Test hls-explicit-record-fields-plugin test suite
         run: cabal test hls-explicit-record-fields-plugin-tests || cabal test hls-explicit-record-fields-plugin-tests
 
-      ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
-      - if: matrix.test && matrix.ghc == '9.2'
+      # versions need to be limited since the tests depend on cabal-fmt which only builds with ghc <9.10
+      - if: matrix.test && matrix.ghc != '9.10'
         name: Test hls-cabal-fmt-plugin test suite
         run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests
 

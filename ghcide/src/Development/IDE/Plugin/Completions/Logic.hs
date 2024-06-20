@@ -74,10 +74,6 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Plugins                              (defaultSDocContext,
-                                                           renderWithContext)
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
 import           Language.Haskell.Syntax.Basic
@@ -514,13 +510,8 @@ findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
-#if MIN_VERSION_ghc(9,3,0)
         extract ConDeclField{..}
             = map (foLabel . unLoc) cd_fld_names
-#else
-        extract ConDeclField{..}
-            = map (rdrNameFieldOcc . unLoc) cd_fld_names
-#endif
         -- XConDeclField
         extract _ = []
 findRecordCompl _ _ _ = []
