@@ -137,6 +137,10 @@ recordProgress InProgressState {..} file shift = do
       return (prev, new)
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
+
+-- | `progressReporting` initiates a new progress reporting session.
+-- It necessitates the active tracking of progress using the `inProgress` function.
+-- Refer to Note [ProgressReporting API and InProgressState] for more details.
 progressReporting ::
   (MonadUnliftIO m, MonadIO m) =>
   Maybe (LSP.LanguageContextEnv c) ->
@@ -145,6 +149,9 @@ progressReporting ::
   IO (ProgressReporting m)
 progressReporting = progressReporting' newInProgress
 
+-- | `progressReportingOutsideState` initiates a new progress reporting session.
+-- It functions similarly to `progressReporting`, but it utilizes an external state for progress tracking.
+-- Refer to Note [ProgressReporting API and InProgressState] for more details.
 progressReportingOutsideState ::
   (MonadUnliftIO m, MonadIO m) =>
   STM Int ->
