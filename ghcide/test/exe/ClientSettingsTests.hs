@@ -1,8 +1,7 @@
 {-# LANGUAGE GADTs #-}
 module ClientSettingsTests (tests) where
 
-import           Config                          (lspTestCaps, testWithConfig,
-                                                  testWithDummyPluginEmpty)
+import           Config                          (testWithDummyPluginEmpty)
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Data.Aeson                      (toJSON)
@@ -16,8 +15,7 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
-import           Test.Hls                        (testConfigCaps,
-                                                  waitForProgressDone)
+import           Test.Hls                        (waitForProgressDone)
 import           Test.Tasty
 
 tests :: TestTree

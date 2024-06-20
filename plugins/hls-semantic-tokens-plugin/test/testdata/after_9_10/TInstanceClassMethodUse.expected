@@ -1,0 +1,3 @@
+1:8-31 TModule "TInstanceClassMethodUse"
+4:1-3 TFunction "go"
+4:8-12 TClassMethod "show"

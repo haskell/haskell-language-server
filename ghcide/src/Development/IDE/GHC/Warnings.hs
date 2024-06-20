@@ -46,11 +46,7 @@ import           Development.IDE.GHC.Error
 --   https://github.com/ghc/ghc/blob/5f1d949ab9e09b8d95319633854b7959df06eb58/compiler/main/GHC.hs#L623-L640
 --   which basically says that log_action is taken from the ModSummary when GHC feels like it.
 --   The given argument lets you refresh a ModSummary log_action
-#if MIN_VERSION_ghc(9,3,0)
 withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(Maybe DiagnosticReason, FileDiagnostic)], a)
-#else
-withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(WarnReason, FileDiagnostic)], a)
-#endif
 withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> LogActionCompat

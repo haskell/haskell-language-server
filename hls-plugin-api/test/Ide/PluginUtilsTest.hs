@@ -7,15 +7,11 @@ module Ide.PluginUtilsTest
     ) where
 
 import qualified Data.Aeson                  as A
-import qualified Data.Aeson.Text             as A
 import qualified Data.Aeson.Types            as A
 import           Data.ByteString.Lazy        (ByteString)
-import           Data.Char                   (isPrint)
 import           Data.Function               ((&))
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
-import qualified Data.Text.Lazy              as Tl
-import           Debug.Trace                 (trace, traceM)
 import           Ide.Plugin.Properties       (KeyNamePath (..),
                                               definePropertiesProperty,
                                               defineStringProperty,

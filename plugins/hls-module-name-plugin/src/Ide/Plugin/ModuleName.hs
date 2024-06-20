@@ -38,8 +38,7 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        Priority (Debug),
                                                        Recorder, WithPriority,
                                                        colon, evalGhcEnv,
-                                                       hscEnvWithImportPaths,
-                                                       logWith,
+                                                       hscEnv, logWith,
                                                        realSrcSpanToRange,
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
@@ -58,11 +57,10 @@ import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.VFS                     (virtualFileText)
-import           System.FilePath                      (dropExtension,
-                                                       isAbsolute, normalise,
+import           System.FilePath                      (dropExtension, normalise,
                                                        pathSeparator,
                                                        splitDirectories,
-                                                       takeFileName, (</>))
+                                                       takeFileName)
 
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -141,7 +139,7 @@ pathModuleNames recorder state normFilePath filePath
   | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
       (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
-      srcPaths <- liftIO $ evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
+      srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
       -- Append a `pathSeparator` to make the path looks like a directory,

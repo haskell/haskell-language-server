@@ -41,16 +41,8 @@ mkDocMap
   -> IO DocAndTyThingMap
 mkDocMap env rm this_mod =
   do
-#if MIN_VERSION_ghc(9,3,0)
      (Just Docs{docs_decls = UniqMap this_docs}) <- extractDocs (hsc_dflags env) this_mod
-#else
-     (_ , DeclDocMap this_docs, _) <- extractDocs this_mod
-#endif
-#if MIN_VERSION_ghc(9,3,0)
      d <- foldrM getDocs (fmap (\(_, x) -> (map hsDocString x) `SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
-#else
-     d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
-#endif
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
@@ -84,11 +76,7 @@ getDocumentationsTryGhc env names = do
       Left _    -> return []
       Right res -> zipWithM unwrap res names
   where
-#if MIN_VERSION_ghc(9,3,0)
     unwrap (Right (Just docs, _)) n = SpanDocString (map hsDocString docs) <$> getUris n
-#else
-    unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
-#endif
     unwrap _ n                      = mkSpanDocText n
 
     mkSpanDocText name =

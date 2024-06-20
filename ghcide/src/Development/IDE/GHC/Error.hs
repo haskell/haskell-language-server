@@ -168,17 +168,9 @@ spanContainsRange srcSpan range = (range `isSubrangeOf`) <$> srcSpanToRange srcS
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
 toDSeverity :: GHC.Severity -> Maybe D.DiagnosticSeverity
-#if !MIN_VERSION_ghc(9,3,0)
-toDSeverity SevOutput      = Nothing
-toDSeverity SevInteractive = Nothing
-toDSeverity SevDump        = Nothing
-toDSeverity SevInfo        = Just DiagnosticSeverity_Information
-toDSeverity SevFatal       = Just DiagnosticSeverity_Error
-#else
-toDSeverity SevIgnore      = Nothing
-#endif
-toDSeverity SevWarning     = Just DiagnosticSeverity_Warning
-toDSeverity SevError       = Just DiagnosticSeverity_Error
+toDSeverity SevIgnore  = Nothing
+toDSeverity SevWarning = Just DiagnosticSeverity_Warning
+toDSeverity SevError   = Just DiagnosticSeverity_Error
 
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given

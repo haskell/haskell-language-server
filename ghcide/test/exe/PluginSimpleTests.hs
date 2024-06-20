@@ -1,19 +1,14 @@
 
 module PluginSimpleTests (tests) where
 
+import           Config
 import           Control.Monad.IO.Class      (liftIO)
-import           Development.IDE.GHC.Compat  (GhcVersion (..))
 import           Development.IDE.Test        (expectDiagnostics)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
--- import Test.QuickCheck.Instances ()
-import           Config
-import           Test.Hls.Util               (EnvSpec (..), OS (..),
-                                              knownBrokenForGhcVersions,
-                                              knownBrokenInSpecificEnv)
 import           Test.Tasty
 
 tests :: TestTree

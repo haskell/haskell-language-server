@@ -13,8 +13,6 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
-import           Test.Hls                    (waitForAllProgressDone,
-                                              waitForProgressBegin)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -180,7 +178,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
-    waitForDiagnostics
+    _ <- waitForDiagnostics
 
     expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")]
 
