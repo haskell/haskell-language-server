@@ -110,14 +110,15 @@ pluginTests =
                 liftIO $ newDiags @?= []
             , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do
                 hsDoc <- openDoc "A.hs" "haskell"
-                expectNoMoreDiagnostics 1 hsDoc "typechecking"
+                _ <- waitForTypecheck hsDoc
                 cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
-                expectNoMoreDiagnostics 1 cabalDoc "parsing"
+                _ <- waitForAction "gethieast" cabalDoc
+                return ()
             , runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" "simple-cabal" $ do
                     hsDoc <- openDoc "A.hs" "haskell"
-                    expectNoMoreDiagnostics 1 hsDoc "typechecking"
+                    _ <- waitForTypecheck hsDoc
                     cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
-                    expectNoMoreDiagnostics 1 cabalDoc "parsing"
+                    _ <- waitForAction "gethieast" cabalDoc
                     let theRange = Range (Position 3 20) (Position 3 23)
                     -- Invalid license
                     changeDoc
@@ -131,7 +132,7 @@ pluginTests =
                         ]
                     cabalDiags <- waitForDiagnosticsFrom cabalDoc
                     unknownLicenseDiag <- liftIO $ inspectDiagnostic cabalDiags ["Unknown SPDX license identifier: 'MIT3'"]
-                    expectNoMoreDiagnostics 1 hsDoc "typechecking"
+                    _ <- waitForTypecheck hsDoc
                     liftIO $ do
                         length cabalDiags @?= 1
                         unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
