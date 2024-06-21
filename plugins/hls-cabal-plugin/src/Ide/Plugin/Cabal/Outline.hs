@@ -6,10 +6,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.Cabal.Outline
-  ( moduleOutline,
-  )
-where
+module Ide.Plugin.Cabal.Outline where
 
 import           Control.Monad.IO.Class
 import           Data.Maybe
