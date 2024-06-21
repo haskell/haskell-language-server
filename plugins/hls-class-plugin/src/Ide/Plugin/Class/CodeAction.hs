@@ -39,11 +39,10 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
-    caps <- lift getClientCapabilities
+    caps <- lift pluginGetClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
         $ useE GetParsedModule nfp
@@ -58,7 +57,7 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
             then mergeEdit (workspaceEdit caps old new) pragmaInsertion
             else workspaceEdit caps old new
 
-    void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+    void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
     pure $ InR Null
     where
@@ -81,7 +80,7 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
-    verTxtDocId <- lift $ getVersionedTextDoc docId
+    verTxtDocId <- lift $ pluginGetVersionedTextDoc docId
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
     pure $ InL actions
@@ -95,7 +94,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
             :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
             -> Diagnostic
-            -> ExceptT PluginError (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
+            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]
         mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStaleE GetHieAst docPath
@@ -166,7 +165,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
         findImplementedMethods
             :: HieASTs a
             -> Position
-            -> ExceptT PluginError (LspT Ide.Plugin.Config.Config IO) [T.Text]
+            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [T.Text]
         findImplementedMethods asts instancePosition = do
             pure
                 $ concat

@@ -49,12 +49,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: cachix/install-nix-action@v26
+    - uses: cachix/install-nix-action@V27
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v14
+    - uses: cachix/cachix-action@v15
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}

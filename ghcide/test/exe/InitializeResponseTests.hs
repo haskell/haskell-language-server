@@ -87,7 +87,7 @@ tests = withResource acquire release tests where
   innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
 
   acquire :: IO (TResponseMessage Method_Initialize)
-  acquire = runWithDummyPlugin (mkIdeTestFs []) initializeResponse
+  acquire = run initializeResponse
 
   release :: TResponseMessage Method_Initialize -> IO ()
   release = mempty

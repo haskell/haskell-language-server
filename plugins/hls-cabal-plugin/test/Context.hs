@@ -1,18 +1,20 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE QuasiQuotes              #-}
 
 module Context where
 
-import           Control.Monad.Trans.Maybe                   (runMaybeT)
 import qualified Data.Text                                   as T
-import qualified Data.Text.Utf16.Rope.Mixed                  as Rope
+import qualified Data.Text.Encoding                          as Text
+import           Development.IDE.Plugin.Completions.Types    (PosPrefixInfo (..))
 import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types           (Context,
                                                               FieldContext (KeyWord, None),
                                                               StanzaContext (Stanza, TopLevel))
+import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Test.Hls
 import           Utils                                       as T
 
@@ -22,7 +24,7 @@ cabalPlugin = mkPluginTestDescriptor descriptor "cabal context"
 contextTests :: TestTree
 contextTests =
     testGroup
-        "Context Tests "
+        "Context Tests"
         [ pathCompletionInfoFromCompletionContextTests
         , getContextTests
         ]
@@ -31,12 +33,12 @@ pathCompletionInfoFromCompletionContextTests :: TestTree
 pathCompletionInfoFromCompletionContextTests =
     testGroup
         "Completion Info to Completion Context Tests"
-        [ testCase "Current Directory" $ do
+        [ testCase "Current Directory - no leading ./ by default" $ do
             let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "" testDataDir
-            queryDirectory complInfo @?= "./"
+            queryDirectory complInfo @?= ""
         , testCase "Current Directory - partly written next" $ do
             let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "di" testDataDir
-            queryDirectory complInfo @?= "./"
+            queryDirectory complInfo @?= ""
             pathSegment complInfo @?= "di"
         , testCase "Current Directory - alternative writing" $ do
             let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "./" testDataDir
@@ -58,39 +60,39 @@ pathCompletionInfoFromCompletionContextTests =
 getContextTests :: TestTree
 getContextTests =
     testGroup
-        "Context Tests"
+        "Context Tests Real"
         [ testCase "Empty File - Start" $ do
             -- for a completely empty file, the context needs to
             -- be top level without a specified keyword
-            ctx <- callGetContext (Position 0 0) "" [""]
+            ctx <- callGetContext (Position 0 0) "" ""
             ctx @?= (TopLevel, None)
         , testCase "Cabal version keyword - no value, no space after :" $ do
             -- on a file, where the keyword is already written
             -- the context should still be toplevel but the keyword should be recognized
-            ctx <- callGetContext (Position 0 14) "" ["cabal-version:"]
+            ctx <- callGetContext (Position 0 14) "" "cabal-version:\n"
             ctx @?= (TopLevel, KeyWord "cabal-version:")
         , testCase "Cabal version keyword - cursor in keyword" $ do
             -- on a file, where the keyword is already written
             -- but the cursor is in the middle of the keyword,
             -- we are not in a keyword context
-            ctx <- callGetContext (Position 0 5) "cabal" ["cabal-version:"]
+            ctx <- callGetContext (Position 0 5) "cabal" "cabal-version:\n"
             ctx @?= (TopLevel, None)
         , testCase "Cabal version keyword - no value, many spaces" $ do
             -- on a file, where the "cabal-version:" keyword is already written
             -- the context should still be top level but the keyword should be recognized
-            ctx <- callGetContext (Position 0 45) "" ["cabal-version:" <> T.replicate 50 " "]
+            ctx <- callGetContext (Position 0 45) "" ("cabal-version:" <> T.replicate 50 " " <> "\n")
             ctx @?= (TopLevel, KeyWord "cabal-version:")
         , testCase "Cabal version keyword - keyword partly written" $ do
             -- in the first line of the file, if the keyword
             -- has not been written completely, the keyword context
             -- should still be None
-            ctx <- callGetContext (Position 0 5) "cabal" ["cabal"]
+            ctx <- callGetContext (Position 0 5) "cabal" "cabal"
             ctx @?= (TopLevel, None)
         , testCase "Cabal version keyword - value partly written" $ do
             -- in the first line of the file, if the keyword
             -- has not been written completely, the keyword context
             -- should still be None
-            ctx <- callGetContext (Position 0 17) "1." ["cabal-version: 1."]
+            ctx <- callGetContext (Position 0 17) "1." "cabal-version: 1."
             ctx @?= (TopLevel, KeyWord "cabal-version:")
         , testCase "Inside Stanza - no keyword" $ do
             -- on a file, where the library stanza has been defined
@@ -102,14 +104,15 @@ getContextTests =
             -- has been defined, the keyword and stanza should be recognized
             ctx <- callGetContext (Position 4 21) "" libraryStanzaData
             ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
-        , expectFailBecause "While not valid, it is not that important to make the code more complicated for this" $
-            testCase "Cabal version keyword - no value, next line" $ do
-                -- if the cabal version keyword has been written but without a value,
-                -- in the next line we still should be in top level context with no keyword
-                -- since the cabal version keyword and value pair need to be in the same line
-                ctx <- callGetContext (Position 1 2) "" ["cabal-version:", ""]
-                ctx @?= (TopLevel, None)
-        , testCase "Non-cabal-version keyword - no value, next line indentented position" $ do
+        , testCase "Cabal version keyword - no value, next line" $ do
+            -- if the cabal version keyword has been written but without a value,
+            -- in the next line we still should be in top level context with no keyword
+            -- since the cabal version keyword and value pair need to be in the same line.
+            -- However, that's too much work to implement for virtually no benefit, so we
+            -- test here the status-quo is satisfied.
+            ctx <- callGetContext (Position 1 2) "" "cabal-version:\n\n"
+            ctx @?= (TopLevel, KeyWord "cabal-version:")
+        , testCase "Non-cabal-version keyword - no value, next line indented position" $ do
             -- if a keyword, other than the cabal version keyword has been written
             -- with no value, in the next line we still should be in top level keyword context
             -- of the keyword with no value, since its value may be written in the next line
@@ -153,46 +156,133 @@ getContextTests =
             ctx @?= (TopLevel, KeyWord "name:")
         , testCase "Named Stanza" $ do
             ctx <- callGetContext (Position 2 18) "" executableStanzaData
-            ctx @?= (Stanza "executable" (Just "exeName"), None)
+            ctx @?= (TopLevel, None)
+        , testCase "Multi line, finds context in same line" $ do
+            ctx <- callGetContext (Position 5 18) "" multiLineOptsData
+            ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
+        , testCase "Multi line, in the middle of option" $ do
+            ctx <- callGetContext (Position 6 11) "" multiLineOptsData
+            ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
+        , testCase "Multi line, finds context in between lines" $ do
+            ctx <- callGetContext (Position 7 8) "" multiLineOptsData
+            ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
+        , testCase "Multi line, finds context in between lines, start if line" $ do
+            ctx <- callGetContext (Position 7 0) "" multiLineOptsData
+            ctx @?= (TopLevel, None)
+        , testCase "Multi line, end of option" $ do
+            ctx <- callGetContext (Position 8 14) "" multiLineOptsData
+            ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
+        , parameterisedCursorTest "Contexts in large testfile" multiPositionTestData
+            [ (TopLevel, None)
+            , (TopLevel, KeyWord "cabal-version:")
+            , (TopLevel, None)
+            , (TopLevel, KeyWord "description:")
+            , (TopLevel, KeyWord "extra-source-files:")
+            , (TopLevel, None)
+            -- this might not be what we want, maybe add another Context
+            , (TopLevel, None)
+            -- this might not be what we want, maybe add another Context
+            , (TopLevel, None)
+            , (Stanza "source-repository" (Just "head"), None)
+            , (Stanza "source-repository" (Just "head"), KeyWord "type:")
+            , (Stanza "source-repository" (Just "head"), KeyWord "type:")
+            , (Stanza "source-repository" (Just "head"), KeyWord "type:")
+            , (Stanza "source-repository" (Just "head"), None)
+            , (Stanza "common" (Just "cabalfmt"), None)
+            , (Stanza "common" (Just "cabalfmt"), None)
+            , (Stanza "common" (Just "cabalfmt"), KeyWord "build-depends:")
+            ]
+            $ \fileContent posPrefInfo ->
+                callGetContext (cursorPos posPrefInfo) (prefixText posPrefInfo) fileContent
         ]
   where
-    callGetContext :: Position -> T.Text -> [T.Text] -> IO Context
+    callGetContext :: Position -> T.Text -> T.Text -> IO Context
     callGetContext pos pref ls = do
-        runMaybeT (getContext mempty (simpleCabalPrefixInfoFromPos pos pref) (Rope.fromText $ T.unlines ls))
-            >>= \case
-                Nothing -> assertFailure "Context must be found"
-                Just ctx -> pure ctx
+        case Parse.readCabalFields "not-real" (Text.encodeUtf8 ls) of
+            Left err -> fail $ show err
+            Right fields -> do
+                getContext mempty (simpleCabalPrefixInfoFromPos pos pref) fields
 
 -- ------------------------------------------------------------------------
 -- Test Data
 -- ------------------------------------------------------------------------
 
-libraryStanzaData :: [T.Text]
-libraryStanzaData =
-    [ "cabal-version:      3.0"
-    , "name:               simple-cabal"
-    , "library "
-    , "    default-language: Haskell98"
-    , "    build-depends:    "
-    , "           "
-    , "ma  "
-    ]
+libraryStanzaData :: T.Text
+libraryStanzaData = [trimming|
+cabal-version:      3.0
+name:               simple-cabal
+library
+    default-language: Haskell98
+    build-depends:
 
-executableStanzaData :: [T.Text]
-executableStanzaData =
-    [ "cabal-version:      3.0"
-    , "name:               simple-cabal"
-    , "executable exeName"
-    , "    default-language: Haskell2010"
-    , "    hs-source-dirs: test/preprocessor"
-    ]
+ma
+|]
 
-topLevelData :: [T.Text]
-topLevelData =
-    [ "cabal-version:      3.0"
-    , "name:"
-    , ""
-    , ""
-    , ""
-    , "          eee"
-    ]
+executableStanzaData :: T.Text
+executableStanzaData = [trimming|
+cabal-version:      3.0
+name:               simple-cabal
+executable exeName
+    default-language: Haskell2010
+    hs-source-dirs: test/preprocessor
+|]
+
+topLevelData :: T.Text
+topLevelData = [trimming|
+cabal-version:      3.0
+name:
+
+
+
+          eee
+|]
+
+multiLineOptsData :: T.Text
+multiLineOptsData = [trimming|
+cabal-version:      3.0
+name:
+
+
+library
+    build-depends:
+        base,
+
+        text ,
+|]
+
+multiPositionTestData :: T.Text
+multiPositionTestData = [trimming|
+cabal-version:      3.4
+       ^             ^
+category:           Development
+^
+name:               haskell-language-server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+    ^
+extra-source-files:
+  README.md
+  ChangeLog.md
+  test/testdata/**/*.project
+  test/testdata/**/*.cabal
+  test/testdata/**/*.yaml
+  test/testdata/**/*.hs
+  test/testdata/**/*.json
+    ^
+  -- These globs should only match test/testdata
+  plugins/**/*.project
+
+source-repository head
+     ^              ^   ^
+  type:     git
+    ^    ^    ^  ^
+  location: https://github.com/haskell/haskell-language-server
+
+  ^
+common cabalfmt
+
+  ^
+  build-depends: haskell-language-server:hls-cabal-fmt-plugin
+    ^            ^
+  cpp-options: -Dhls_cabalfmt
+|]

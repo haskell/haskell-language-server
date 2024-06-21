@@ -7,125 +7,129 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
-  ,loadSession
   ,loadSessionWithOptions
   ,setInitialDynFlags
   ,getHieDbLoc
-  ,runWithDb
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
+  ,runWithDb
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
 -- the real GHC library and the types are incompatible. Furthermore, when
 -- building with ghc-lib we need to make this Haskell agnostic, so no hie-bios!
 
-import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
-import           Control.Exception.Safe               as Safe
+import           Control.Exception.Safe              as Safe
 import           Control.Monad
-import           Control.Monad.Extra                  as Extra
+import           Control.Monad.Extra                 as Extra
 import           Control.Monad.IO.Class
-import qualified Crypto.Hash.SHA1                     as H
-import           Data.Aeson                           hiding (Error)
+import qualified Crypto.Hash.SHA1                    as H
+import           Data.Aeson                          hiding (Error)
 import           Data.Bifunctor
-import qualified Data.ByteString.Base16               as B16
-import qualified Data.ByteString.Char8                as B
+import qualified Data.ByteString.Base16              as B16
+import qualified Data.ByteString.Char8               as B
 import           Data.Default
 import           Data.Either.Extra
 import           Data.Function
-import           Data.Hashable                        hiding (hash)
-import qualified Data.HashMap.Strict                  as HM
+import           Data.Hashable                       hiding (hash)
+import qualified Data.HashMap.Strict                 as HM
 import           Data.IORef
 import           Data.List
-import           Data.List.Extra                      as L
-import           Data.List.NonEmpty                   (NonEmpty (..))
-import qualified Data.List.NonEmpty                   as NE
-import qualified Data.Map.Strict                      as Map
+import           Data.List.Extra                     as L
+import           Data.List.NonEmpty                  (NonEmpty (..))
+import qualified Data.List.NonEmpty                  as NE
+import qualified Data.Map.Strict                     as Map
 import           Data.Maybe
 import           Data.Proxy
-import qualified Data.Text                            as T
+import qualified Data.Text                           as T
 import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake           hiding (Log, knownTargets,
-                                                       withHieDb)
-import qualified Development.IDE.GHC.Compat           as Compat
+import           Development.IDE.Core.Shake          hiding (Log, knownTargets,
+                                                      withHieDb)
+import qualified Development.IDE.GHC.Compat          as Compat
 import           Development.IDE.GHC.Compat.CmdLine
-import           Development.IDE.GHC.Compat.Core      hiding (Target,
-                                                       TargetFile, TargetModule,
-                                                       Var, Warning, getOptions)
-import qualified Development.IDE.GHC.Compat.Core      as GHC
-import           Development.IDE.GHC.Compat.Env       hiding (Logger)
-import           Development.IDE.GHC.Compat.Units     (UnitId)
+import           Development.IDE.GHC.Compat.Core     hiding (Target, TargetFile,
+                                                      TargetModule, Var,
+                                                      Warning, getOptions)
+import qualified Development.IDE.GHC.Compat.Core     as GHC
+import           Development.IDE.GHC.Compat.Env      hiding (Logger)
+import           Development.IDE.GHC.Compat.Units    (UnitId)
 import           Development.IDE.GHC.Util
-import           Development.IDE.Graph                (Action)
-import qualified Development.IDE.Session.Implicit     as GhcIde
-import           Development.IDE.Session.VersionCheck
+import           Development.IDE.Graph               (Action)
+import qualified Development.IDE.Session.Implicit    as GhcIde
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
-                                                       newHscEnvEqPreserveImportPaths)
+import           Development.IDE.Types.HscEnvEq      (HscEnvEq, newHscEnvEq,
+                                                      newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC.Check
 import           GHC.ResponseFile
-import qualified HIE.Bios                             as HieBios
-import           HIE.Bios.Environment                 hiding (getCacheDir)
-import           HIE.Bios.Types                       hiding (Log)
-import qualified HIE.Bios.Types                       as HieBios
-import           Ide.Logger                           (Pretty (pretty),
-                                                       Priority (Debug, Error, Info, Warning),
-                                                       Recorder, WithPriority,
-                                                       cmapWithPrio, logWith,
-                                                       nest,
-                                                       toCologActionWithPrio,
-                                                       vcat, viaShow, (<+>))
-import           Ide.Types                            (SessionLoadingPreferenceConfig (..),
-                                                       sessionLoading)
+import qualified HIE.Bios                            as HieBios
+import           HIE.Bios.Environment                hiding (getCacheDir)
+import           HIE.Bios.Types                      hiding (Log)
+import qualified HIE.Bios.Types                      as HieBios
+import           Ide.Logger                          (Pretty (pretty),
+                                                      Priority (Debug, Error, Info, Warning),
+                                                      Recorder, WithPriority,
+                                                      cmapWithPrio, logWith,
+                                                      nest,
+                                                      toCologActionWithPrio,
+                                                      vcat, viaShow, (<+>))
+import           Ide.Types                           (SessionLoadingPreferenceConfig (..),
+                                                      sessionLoading)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
-import qualified System.Directory.Extra               as IO
+import qualified System.Directory.Extra              as IO
 import           System.FilePath
 import           System.Info
 
-import           Control.Applicative                  (Alternative ((<|>)))
+import           Control.Applicative                 (Alternative ((<|>)))
 import           Data.Void
 
-import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
-                                                       readTVar, writeTVar)
+import           Control.Concurrent.STM.Stats        (atomically, modifyTVar',
+                                                      readTVar, writeTVar)
 import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
-import           Control.Exception                    (evaluate)
-import           Control.Monad.IO.Unlift              (MonadUnliftIO)
-import           Data.Foldable                        (for_)
-import           Data.HashMap.Strict                  (HashMap)
-import           Data.HashSet                         (HashSet)
-import qualified Data.HashSet                         as Set
+import           Control.Exception                   (evaluate)
+import           Control.Monad.IO.Unlift             (MonadUnliftIO)
+import           Control.Monad.Trans.Cont            (ContT (ContT, runContT))
+import           Data.Foldable                       (for_)
+import           Data.HashMap.Strict                 (HashMap)
+import           Data.HashSet                        (HashSet)
+import qualified Data.HashSet                        as Set
 import           Database.SQLite.Simple
-import           Development.IDE.Core.Tracing         (withTrace)
-import           Development.IDE.Session.Diagnostics  (renderCradleError)
-import           Development.IDE.Types.Shake          (WithHieDb, toNoFileKey)
+import           Development.IDE.Core.Tracing        (withTrace)
+import           Development.IDE.Core.WorkerThread   (awaitRunInThread,
+                                                      withWorkerQueue)
+import           Development.IDE.Session.Diagnostics (renderCradleError)
+import           Development.IDE.Types.Shake         (WithHieDb,
+                                                      WithHieDbShield (..),
+                                                      toNoFileKey)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import qualified System.Random                        as Random
-import           System.Random                        (RandomGen)
+import           Ide.PluginUtils                     (toAbsolute)
+import qualified System.Random                       as Random
+import           System.Random                       (RandomGen)
+import           Text.ParserCombinators.ReadP        (readP_to_S)
+
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,3,0)
-import qualified Data.Set                             as OS
-import qualified Development.IDE.GHC.Compat.Util      as Compat
+import qualified Data.Set                            as OS
+import qualified Development.IDE.GHC.Compat.Util     as Compat
 import           GHC.Data.Graph.Directed
 
 import           GHC.Data.Bag
-import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
+import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
-import           GHC.Types.Error                      (errMsgDiagnostic,
-                                                       singleMessage)
+import           GHC.Types.Error                     (errMsgDiagnostic,
+                                                      singleMessage)
 import           GHC.Unit.State
 #endif
 
@@ -143,7 +147,7 @@ data Log
   | LogDLLLoadError !String
   | LogCradlePath !FilePath
   | LogCradleNotFound !FilePath
-  | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
+  | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath, String))
   | LogCradle !(Cradle Void)
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
@@ -374,8 +378,10 @@ makeWithHieDbRetryable recorder rng hieDb f =
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: Recorder (WithPriority Log) -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
-runWithDb recorder fp k = do
+--
+-- Also see Note [Serializing runs in separate thread]
+runWithDb :: Recorder (WithPriority Log) -> FilePath -> ContT () IO (WithHieDbShield, IndexQueue)
+runWithDb recorder fp = ContT $ \k -> do
   -- use non-deterministic seed because maybe multiple HLS start at same time
   -- and send bursts of requests
   rng <- Random.newStdGen
@@ -393,18 +399,15 @@ runWithDb recorder fp k = do
         withWriteDbRetryable = makeWithHieDbRetryable recorder rng writedb
     withWriteDbRetryable initConn
 
-    chan <- newTQueueIO
 
-    withAsync (writerThread withWriteDbRetryable chan) $ \_ -> do
-      withHieDb fp (\readDb -> k (makeWithHieDbRetryable recorder rng readDb) chan)
+    -- Clear the index of any files that might have been deleted since the last run
+    _ <- withWriteDbRetryable deleteMissingRealFiles
+    _ <- withWriteDbRetryable garbageCollectTypeNames
+
+    runContT (withWorkerQueue (writer withWriteDbRetryable)) $ \chan ->
+        withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
   where
-    writerThread :: WithHieDb -> IndexQueue -> IO ()
-    writerThread withHieDbRetryable chan = do
-      -- Clear the index of any files that might have been deleted since the last run
-      _ <- withHieDbRetryable deleteMissingRealFiles
-      _ <- withHieDbRetryable garbageCollectTypeNames
-      forever $ do
-        l <- atomically $ readTQueue chan
+    writer withHieDbRetryable l = do
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
         l withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
@@ -434,11 +437,10 @@ getHieDbLoc dir = do
 -- This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
-loadSession recorder = loadSessionWithOptions recorder def
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
-loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
+  let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef []
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
@@ -459,11 +461,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
       -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
       -- try and normalise that
       -- e.g. see https://github.com/haskell/ghcide/issues/126
-      res' <- traverse makeAbsolute res
+      let res' = toAbsolutePath <$> res
       return $ normalise <$> res'
-
-  dummyAs <- async $ return (error "Uninitialised")
-  runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
     clientConfig <- getClientConfigAction
@@ -521,7 +520,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          newTargetDfs <- evalGhcEnv hscEnv $ setOptions cfp opts (hsc_dflags hscEnv)
+          newTargetDfs <- evalGhcEnv hscEnv $ setOptions cfp opts (hsc_dflags hscEnv) rootDir
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -588,7 +587,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           -- HscEnv but set the active component accordingly
           hscEnv <- emptyHscEnv ideNc _libDir
           let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv
-          all_target_details <- new_cache old_deps new_deps
+          all_target_details <- new_cache old_deps new_deps rootDir
 
           this_dep_info <- getDependencyInfo $ maybeToList hieYaml
           let (all_targets, this_flags_map, this_options)
@@ -632,25 +631,20 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
-           lfpLog <- flip makeRelative cfp <$> getCurrentDirectory
+           let lfpLog = makeRelative rootDir cfp
            logWith recorder Info $ LogCradlePath lfpLog
-
            when (isNothing hieYaml) $
              logWith recorder Warning $ LogCradleNotFound lfpLog
-
-           cradle <- loadCradle recorder hieYaml dir
-           -- TODO: Why are we repeating the same command we have on line 646?
-           lfp <- flip makeRelative cfp <$> getCurrentDirectory
-
+           cradle <- loadCradle recorder hieYaml rootDir
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
 
            -- Display a user friendly progress message here: They probably don't know what a cradle is
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
-                         <> " (for " <> T.pack lfp <> ")"
+                         <> " (for " <> T.pack lfpLog <> ")"
            eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
               withTrace "Load cradle" $ \addTag -> do
-                  addTag "file" lfp
+                  addTag "file" lfpLog
                   old_files <- readIORef cradle_files
                   res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
                   addTag "result" (show res)
@@ -660,16 +654,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
            case eopts of
              -- The cradle gave us some options so get to work turning them
              -- into and HscEnv.
-             Right (opts, libDir) -> do
-               installationCheck <- ghcVersionChecker libDir
-               case installationCheck of
-                 InstallationNotFound{..} ->
-                     error $ "GHC installation not found in libdir: " <> libdir
-                 InstallationMismatch{..} ->
-                     return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
-                 InstallationChecked _compileTime _ghcLibCheck -> do
-                   atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
-                   session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+             Right (opts, libDir, version) -> do
+               let compileTime = fullCompilerVersion
+               case reverse $ readP_to_S parseVersion version of
+                 [] -> error $ "GHC version could not be parsed: " <> version
+                 ((runTime, _):_)
+                   | compileTime == runTime -> do
+                     atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
+                     session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                   | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
                dep_info <- getDependencyInfo (maybeToList hieYaml)
@@ -713,7 +706,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
             modifyVar_ hscEnvs (const (return Map.empty))
 
           v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
-          cfp <- makeAbsolute file
+          let cfp = toAbsolutePath file
           case HM.lookup (toNormalizedFilePath' cfp) v of
             Just (opts, old_di) -> do
               deps_ok <- checkDependencyInfo old_di
@@ -735,25 +728,21 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
     -- before attempting to do so.
     let getOptions :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         getOptions file = do
-            ncfp <- toNormalizedFilePath' <$> makeAbsolute file
+            let ncfp = toNormalizedFilePath' (toAbsolutePath file)
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
-      opts <- join $ mask_ $ modifyVar runningCradle $ \as -> do
-        -- If the cradle is not finished, then wait for it to finish.
-        void $ wait as
-        asyncRes <- async $ getOptions file
-        return (asyncRes, wait asyncRes)
-      pure opts
+      -- see Note [Serializing runs in separate thread]
+      awaitRunInThread que $ getOptions file
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
 cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> Cradle Void -> FilePath -> [FilePath]
-                      -> IO (Either [CradleError] (ComponentOptions, FilePath))
+                      -> IO (Either [CradleError] (ComponentOptions, FilePath, String))
 cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
     -- let noneCradleFoundMessage :: FilePath -> T.Text
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
@@ -764,9 +753,10 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
         CradleSuccess r -> do
             -- Now get the GHC lib dir
             libDirRes <- getRuntimeGhcLibDir cradle
-            case libDirRes of
+            versionRes <- getRuntimeGhcVersion cradle
+            case liftA2 (,) libDirRes versionRes of
                 -- This is the successful path
-                CradleSuccess libDir -> pure (Right (r, libDir))
+                (CradleSuccess (libDir, version)) -> pure (Right (r, libDir, version))
                 CradleFail err       -> return (Left [err])
                 CradleNone           -> do
                     logWith recorder Info $ LogNoneCradleFound file
@@ -822,11 +812,11 @@ fromTargetId is exts (GHC.TargetModule modName) env dep = do
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    locs <- mapM (fmap toNormalizedFilePath' . makeAbsolute) fps
+    let locs = fmap toNormalizedFilePath' fps
     return [TargetDetails (TargetModule modName) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do
-    nf <- toNormalizedFilePath' <$> makeAbsolute f
+    let nf = toNormalizedFilePath' f
     let other
           | "-boot" `isSuffixOf` f = toNormalizedFilePath' (L.dropEnd 5 $ fromNormalizedFilePath nf)
           | otherwise = toNormalizedFilePath' (fromNormalizedFilePath nf ++ "-boot")
@@ -915,8 +905,9 @@ newComponentCache
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
+         -> FilePath           -- ^ root dir, see Note [Root Directory]
          -> IO [ [TargetDetails] ]
-newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
+newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis dir = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
         -- When we have multiple components with the same uid,
         -- prefer the new one over the old.
@@ -961,7 +952,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
 
     forM (Map.elems cis) $ \ci -> do
       let df = componentDynFlags ci
-      let createHscEnvEq = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
+      let createHscEnvEq = maybe newHscEnvEqPreserveImportPaths (newHscEnvEq dir) cradlePath
       thisEnv <- do
 #if MIN_VERSION_ghc(9,3,0)
             -- In GHC 9.4 we have multi component support, and we have initialised all the units
@@ -1171,8 +1162,13 @@ addUnit unit_str = liftEwM $ do
   putCmdLineState (unit_str : units)
 
 -- | Throws if package flags are unsatisfiable
-setOptions :: GhcMonad m => NormalizedFilePath -> ComponentOptions -> DynFlags -> m (NonEmpty (DynFlags, [GHC.Target]))
-setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
+setOptions :: GhcMonad m
+    => NormalizedFilePath
+    -> ComponentOptions
+    -> DynFlags
+    -> FilePath -- ^ root dir, see Note [Root Directory]
+    -> m (NonEmpty (DynFlags, [GHC.Target]))
+setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
     ((theOpts',_errs,_warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
     case NE.nonEmpty units of
       Just us -> initMulti us
@@ -1195,7 +1191,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
         --
         -- If we don't end up with a target for the current file in the end, then
         -- we will report it as an error for that file
-        abs_fp <- liftIO $ makeAbsolute (fromNormalizedFilePath cfp)
+        let abs_fp = toAbsolute rootDir (fromNormalizedFilePath cfp)
         let special_target = Compat.mkSimpleTarget df abs_fp
         pure $ (df, special_target : targets) :| []
     where
@@ -1290,7 +1286,6 @@ data PackageSetupException
         { compileTime :: !Version
         , runTime     :: !Version
         }
-    | PackageCheckFailed !NotCompatibleReason
     deriving (Eq, Show, Typeable)
 
 instance Exception PackageSetupException
@@ -1310,21 +1305,9 @@ showPackageSetupException GhcVersionMismatch{..} = unwords
     ,"\nThis is unsupported, ghcide must be compiled with the same GHC version as the project."
     ]
 showPackageSetupException PackageSetupException{..} = unwords
-    [ "ghcide compiled by GHC", showVersion compilerVersion
+    [ "ghcide compiled by GHC", showVersion fullCompilerVersion
     , "failed to load packages:", message <> "."
     , "\nPlease ensure that ghcide is compiled with the same GHC installation as the project."]
-showPackageSetupException (PackageCheckFailed PackageVersionMismatch{..}) = unwords
-    ["ghcide compiled with package "
-    , packageName <> "-" <> showVersion compileTime
-    ,"but project uses package"
-    , packageName <> "-" <> showVersion runTime
-    ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
-    ]
-showPackageSetupException (PackageCheckFailed BasePackageAbiMismatch{..}) = unwords
-    ["ghcide compiled with base-" <> showVersion compileTime <> "-" <> compileTimeAbi
-    ,"but project uses base-" <> showVersion compileTime <> "-" <> runTimeAbi
-    ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
-    ]
 
 renderPackageSetupException :: FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
 renderPackageSetupException fp e =

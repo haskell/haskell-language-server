@@ -241,6 +241,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Parse
 
 
@@ -258,11 +259,10 @@ library hls-cabal-plugin
     , hls-plugin-api        == 2.8.0.0
     , hls-graph             == 2.8.0.0
     , lens
-    , lsp                   ^>=2.5
-    , lsp-types             ^>=2.2
+    , lsp                   ^>=2.7
+    , lsp-types             ^>=2.3
     , regex-tdfa            ^>=1.3.1
     , text
-    , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
@@ -389,7 +389,7 @@ library hls-call-hierarchy-plugin
     , hiedb                 ^>= 0.6.0.0
     , hls-plugin-api        == 2.8.0.0
     , lens
-    , lsp                    >=2.5
+    , lsp                    >=2.7
     , sqlite-simple
     , text
 
@@ -454,7 +454,7 @@ library hls-eval-plugin
     , bytestring
     , containers
     , deepseq
-    , Diff                  ^>=0.4.0
+    , Diff                  ^>=0.5
     , dlist
     , extra
     , filepath
@@ -583,7 +583,6 @@ library hls-rename-plugin
     , hls-plugin-api        == 2.8.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
-    , lsp
     , lsp-types
     , mtl
     , mod
@@ -637,7 +636,6 @@ library hls-retrie-plugin
     , base                  >=4.12    && <5
     , bytestring
     , containers
-    , directory
     , extra
     , ghc
     , ghcide                == 2.8.0.0
@@ -843,7 +841,6 @@ library hls-module-name-plugin
     , aeson
     , base                  >=4.12 && <5
     , containers
-    , directory
     , filepath
     , ghcide                == 2.8.0.0
     , hls-plugin-api        == 2.8.0.0
@@ -1002,7 +999,7 @@ library hls-alternate-number-format-plugin
     , hls-graph
     , hls-plugin-api       == 2.8.0.0
     , lens
-    , lsp                  ^>=2.5
+    , lsp                  ^>=2.7
     , mtl
     , regex-tdfa
     , syb
@@ -1232,7 +1229,7 @@ library hls-gadt-plugin
     , hls-plugin-api         == 2.8.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
-    , lsp                    >=2.5
+    , lsp                    >=2.7
     , mtl
     , text
     , transformers
@@ -1281,7 +1278,7 @@ library hls-explicit-fixity-plugin
     , ghcide                == 2.8.0.0
     , hashable
     , hls-plugin-api        == 2.8.0.0
-    , lsp                   >=2.5
+    , lsp                   >=2.7
     , text
 
   default-extensions: DataKinds
@@ -1424,7 +1421,7 @@ library hls-floskell-plugin
     , floskell        ^>=0.11.0
     , ghcide          == 2.8.0.0
     , hls-plugin-api  == 2.8.0.0
-    , lsp-types       ^>=2.2
+    , lsp-types       ^>=2.3
     , mtl
     , text
 
@@ -1736,7 +1733,7 @@ library hls-semantic-tokens-plugin
     , ghcide                == 2.8.0.0
     , hls-plugin-api        == 2.8.0.0
     , lens
-    , lsp                    >=2.5
+    , lsp                    >=2.6
     , text
     , transformers
     , bytestring
@@ -1804,7 +1801,7 @@ library hls-notes-plugin
     , hls-graph == 2.8.0.0
     , hls-plugin-api == 2.8.0.0
     , lens
-    , lsp >=2.5
+    , lsp >=2.7
     , mtl >= 2.2
     , regex-tdfa >= 1.3.1
     , text
@@ -2107,12 +2104,11 @@ test-suite ghcide-tests
     , filepath
     , fuzzy
     , ghcide
-    , ghcide:ghcide-test-utils
     , hls-plugin-api
     , lens
     , list-t
     , lsp
-    , lsp-test                ^>=0.17.0.1
+    , lsp-test                ^>=0.17.1
     , lsp-types
     , monoid-subclasses
     , mtl
@@ -2173,7 +2169,6 @@ test-suite ghcide-tests
     RootUriTests
     SafeTests
     SymlinkTests
-    TestUtils
     THTests
     UnitTests
     WatchedFileTests
@@ -2236,7 +2231,7 @@ library ghcide-bench-lib
         directory,
         extra,
         filepath,
-        ghcide:{ghcide, ghcide-test-utils},
+        ghcide:{ghcide},
         hashable,
         lens,
         lsp-test,

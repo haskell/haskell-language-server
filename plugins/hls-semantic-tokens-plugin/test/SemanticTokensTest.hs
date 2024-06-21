@@ -3,7 +3,6 @@
 {-# LANGUAGE OverloadedStrings        #-}
 
 import           Control.Lens                       ((^.), (^?))
-import           Control.Monad.IO.Class             (liftIO)
 import           Data.Aeson                         (KeyValue (..), Object)
 import qualified Data.Aeson.KeyMap                  as KV
 import           Data.Default
@@ -15,35 +14,17 @@ import           Data.Text                          hiding (length, map,
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
 import           Development.IDE                    (Pretty)
-import           Development.IDE.GHC.Compat         (GhcVersion (..),
-                                                     ghcVersion)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
-import           Development.IDE.Test               (waitForBuildQueue)
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Test                  (Session,
-                                                     SessionConfig (ignoreConfigurationRequests),
-                                                     openDoc, request)
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
-import           Test.Hls                           (HasCallStack,
-                                                     PluginTestDescriptor,
-                                                     SMethod (SMethod_TextDocumentSemanticTokensFullDelta),
-                                                     TestName, TestTree,
-                                                     changeDoc,
-                                                     defaultTestRunner,
-                                                     documentContents, fullCaps,
-                                                     goldenGitDiff,
-                                                     mkPluginTestDescriptor,
-                                                     runSessionWithServerInTmpDir,
-                                                     runSessionWithServerInTmpDir',
-                                                     testCase, testGroup,
-                                                     waitForAction, (@?=))
+import           Test.Hls
 import qualified Test.Hls.FileSystem                as FS
 import           Test.Hls.FileSystem                (file, text)
 
@@ -155,20 +136,22 @@ semanticTokensConfigTest =
         let funcVar = KV.fromList ["functionToken" .= var]
             var :: String
             var = "variable"
-        do
-          Test.Hls.runSessionWithServerInTmpDir'
-            semanticTokensPlugin
-            (mkSemanticConfig funcVar)
-            def {ignoreConfigurationRequests = False}
-            fullCaps
-            fs
-            $ do
-              -- modifySemantic funcVar
-              void waitForBuildQueue
-              doc <- openDoc "Hello.hs" "haskell"
-              void waitForBuildQueue
-              result1 <- docLspSemanticTokensString doc
-              liftIO $ unlines (map show result1) @?= "2:1-3 SemanticTokenTypes_Variable \"go\"\n"
+        Test.Hls.runSessionWithTestConfig def
+          { testPluginDescriptor = semanticTokensPlugin
+          , testConfigSession = def
+            { ignoreConfigurationRequests = False
+            }
+          , testConfigCaps = fullLatestClientCaps
+          , testDirLocation = Right fs
+          , testLspConfig = mkSemanticConfig funcVar
+          }
+        $ const $ do
+            -- modifySemantic funcVar
+            void waitForBuildQueue
+            doc <- openDoc "Hello.hs" "haskell"
+            void waitForBuildQueue
+            result1 <- docLspSemanticTokensString doc
+            liftIO $ unlines (map show result1) @?= "2:1-3 SemanticTokenTypes_Variable \"go\"\n"
     ]
 
 semanticTokensFullDeltaTests :: TestTree

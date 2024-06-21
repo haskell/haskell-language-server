@@ -23,6 +23,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    usePropertyByPathAction,
     getHieFile,
     -- * Rules
     CompiledLinkables(..),
@@ -146,10 +147,13 @@ import           Ide.Logger                                   (Pretty (pretty),
 import qualified Ide.Logger                                   as Logger
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties                        (HasProperty,
+                                                               HasPropertyByPath,
+                                                               KeyNamePath,
                                                                KeyNameProxy,
                                                                Properties,
                                                                ToHsType,
-                                                               useProperty)
+                                                               useProperty,
+                                                               usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
@@ -159,8 +163,7 @@ import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           Prelude                                      hiding (mod)
-import           System.Directory                             (doesFileExist,
-                                                               makeAbsolute)
+import           System.Directory                             (doesFileExist)
 import           System.Info.Extra                            (isWindows)
 
 
@@ -222,6 +225,9 @@ toIdeResult = either (, Nothing) (([],) . Just)
 ------------------------------------------------------------
 -- Exposed API
 ------------------------------------------------------------
+
+-- TODO: rename
+-- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
@@ -714,13 +720,13 @@ loadGhcSession recorder ghcSessionDepsConfig = do
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+        -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
 
         -- add the deps to the Shake graph
         let addDependency fp = do
                 -- VSCode uses absolute paths in its filewatch notifications
-                afp <- liftIO $ makeAbsolute fp
-                let nfp = toNormalizedFilePath' afp
+                let nfp = toNormalizedFilePath' fp
                 itExists <- getFileExists nfp
                 when itExists $ void $ do
                   use_ GetModificationTime nfp
@@ -848,7 +854,7 @@ getModIfaceFromDiskAndIndexRule recorder =
       hie_loc = Compat.ml_hie_file $ ms_location ms
   fileHash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
-  hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
+  let hie_loc' = HieDb.hieModuleHieFile <$> mrow
   case mrow of
     Just row
       | fileHash == HieDb.modInfoHash (HieDb.hieModInfo row)
@@ -1060,6 +1066,16 @@ usePropertyAction ::
 usePropertyAction kn plId p = do
   pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
+
+usePropertyByPathAction ::
+  (HasPropertyByPath props path t) =>
+  KeyNamePath path ->
+  PluginId ->
+  Properties props ->
+  Action (ToHsType t)
+usePropertyByPathAction path plId p = do
+  pluginConfig <- getPluginConfigAction plId
+  pure $ usePropertyByPath path p $ plcConfig pluginConfig
 
 -- ---------------------------------------------------------------------
 

@@ -30,13 +30,7 @@
 
 module Main (main) where
 -- import Test.QuickCheck.Instances ()
-import           Data.Function                ((&))
 import qualified HieDbRetry
-import           Ide.Logger                   (Pretty (pretty),
-                                               Priority (Debug),
-                                               WithPriority (WithPriority, priority),
-                                               cfilter, cmapWithPrio,
-                                               makeDefaultStderrRecorder)
 import           Test.Tasty
 import           Test.Tasty.Ingredients.Rerun
 
@@ -48,7 +42,6 @@ import           CompletionTests
 import           CPPTests
 import           CradleTests
 import           DependentFileTest
-import           Development.IDE              (LoggingColumn (..))
 import           DiagnosticTests
 import           ExceptionTests
 import           FindDefinitionAndHoverTests
@@ -74,15 +67,6 @@ import           WatchedFileTests
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [ThreadIdColumn, PriorityColumn, DataColumn])
-
-  let docWithFilteredPriorityRecorder =
-        docWithPriorityRecorder
-        & cfilter (\WithPriority{ priority } -> priority >= Debug)
-
-  let recorder = docWithFilteredPriorityRecorder
-               & cmapWithPrio pretty
-
   -- We mess with env vars so run single-threaded.
   defaultMainWithRerun $ testGroup "ghcide"
     [ OpenCloseTest.tests
@@ -99,7 +83,7 @@ main = do
     , THTests.tests
     , SymlinkTests.tests
     , SafeTests.tests
-    , UnitTests.tests recorder
+    , UnitTests.tests
     , HaddockTests.tests
     , PositionMappingTests.tests
     , WatchedFileTests.tests
@@ -114,5 +98,5 @@ main = do
     , ReferenceTests.tests
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
-    , ExceptionTests.tests recorder
+    , ExceptionTests.tests
     ]

@@ -62,7 +62,7 @@ library
     , deepseq
     , dependent-map
     , dependent-sum
-    , Diff                         ^>=0.4.0
+    , Diff                         ^>=0.5
     , directory
     , dlist
     , enummapset
@@ -74,8 +74,6 @@ library
     , ghc                          >=9.2
     , ghc-boot
     , ghc-boot-th
-    , ghc-check                    >=0.5.0.8
-    , ghc-paths
     , ghc-trace-events
     , Glob
     , haddock-library              >=1.8      && <1.12
@@ -88,8 +86,8 @@ library
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.5.0.0
-    , lsp-types                    ^>=2.2.0.0
+    , lsp                          ^>=2.7
+    , lsp-types                    ^>=2.3
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
@@ -148,6 +146,7 @@ library
     Development.IDE.Core.Shake
     Development.IDE.Core.Tracing
     Development.IDE.Core.UseStale
+    Development.IDE.Core.WorkerThread
     Development.IDE.GHC.Compat
     Development.IDE.GHC.Compat.Core
     Development.IDE.GHC.Compat.CmdLine
@@ -204,7 +203,6 @@ library
     Development.IDE.Core.FileExists
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
-    Development.IDE.Session.VersionCheck
     Development.IDE.Types.Action
 
   if flag(pedantic)
@@ -265,21 +263,3 @@ executable ghcide
 
   if !flag(executable)
     buildable: False
-
-library ghcide-test-utils
-  import: warnings
-  visibility: public
-  default-language:   GHC2021
-
-  hs-source-dirs: test/cabal
-  exposed-modules:
-    Development.IDE.Test.Runfiles
-
-  build-depends:
-      base > 4.9 && < 5
-
-  default-extensions:
-      LambdaCase
-      OverloadedStrings
-      RecordWildCards
-      ViewPatterns

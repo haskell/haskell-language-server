@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-04-30T10:44:19Z
+index-state: 2024-06-07T00:00:00Z
 
 tests: True
 test-show-details: direct

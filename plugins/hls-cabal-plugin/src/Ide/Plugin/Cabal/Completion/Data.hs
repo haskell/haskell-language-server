@@ -63,7 +63,7 @@ cabalKeywords =
       ("extra-tmp-files:", filePathCompleter)
     ]
 
--- | Map, containing all stanzas in a cabal file as keys
+-- | Map, containing all stanzas in a cabal file as keys,
 --  and lists of their possible nested keywords as values.
 stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
 stanzaKeywordMap =
@@ -73,6 +73,7 @@ stanzaKeywordMap =
       ("test-suite", testSuiteFields <> libExecTestBenchCommons),
       ("benchmark", benchmarkFields <> libExecTestBenchCommons),
       ("foreign-library", foreignLibraryFields <> libExecTestBenchCommons),
+      ("common", libExecTestBenchCommons),
       ("flag", flagFields),
       ("source-repository", sourceRepositoryFields)
     ]

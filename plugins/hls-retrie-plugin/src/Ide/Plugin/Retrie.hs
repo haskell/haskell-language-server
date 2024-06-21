@@ -98,10 +98,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
-import           Language.LSP.Server                  (ProgressCancellable (Cancellable),
-                                                       sendNotification,
-                                                       sendRequest,
-                                                       withIndefiniteProgress)
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule,
                                                        Fixity (Fixity),
@@ -129,7 +126,6 @@ import           Retrie.SYB                           (everything, extQ,
                                                        listify, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
-import           System.Directory                     (makeAbsolute)
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
@@ -175,7 +171,7 @@ data RunRetrieParams = RunRetrieParams
 
 runRetrieCmd :: Recorder (WithPriority Log) ->  CommandFunction IdeState RunRetrieParams
 runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  withIndefiniteProgress description token Cancellable $ \_updater -> do
+  pluginWithIndefiniteProgress description token Cancellable $ \_updater -> do
     _ <- runExceptT $ do
         nfp <- getNormalizedFilePathE uri
         (session, _) <-
@@ -193,12 +189,12 @@ runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = E
                 nfp
                 restrictToOriginatingFile
         unless (null errors) $
-            lift $ sendNotification SMethod_WindowShowMessage $
+            lift $ pluginSendNotification SMethod_WindowShowMessage $
                     ShowMessageParams MessageType_Warning $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
     return $ Right $ InR Null
 
@@ -239,7 +235,7 @@ runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
                 ourReplacement = [ r
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
-            _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit
+            _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
             return $ InR Null
 
@@ -762,7 +758,8 @@ reuseParsedModule state f = do
 
 getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
 getCPPmodule recorder state session t = do
-    nt <- toNormalizedFilePath' <$> makeAbsolute t
+    -- TODO: is it safe to drop this makeAbsolute?
+    let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
     let getParsedModule f contents = do
           modSummary <- msrModSummary <$>
             useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt

@@ -35,9 +35,9 @@ tests = testGroup "Interface loading tests"
 -- | test that TH reevaluates across interfaces
 ifaceTHTest :: TestTree
 ifaceTHTest = testWithExtraFiles "iface-th-test" "TH" $ \dir -> do
-    let aPath = dir `toAbsFp` "THA.hs"
-        bPath = dir `toAbsFp` "THB.hs"
-        cPath = dir `toAbsFp` "THC.hs"
+    let aPath = dir </> "THA.hs"
+        bPath = dir </> "THB.hs"
+        cPath = dir </> "THC.hs"
 
     aSource <- liftIO $ readFileUtf8 aPath -- [TH] a :: ()
     _bSource <- liftIO $ readFileUtf8 bPath -- a :: ()
@@ -58,8 +58,8 @@ ifaceTHTest = testWithExtraFiles "iface-th-test" "TH" $ \dir -> do
 ifaceErrorTest :: TestTree
 ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
     configureCheckProject True
-    let bPath = dir `toAbsFp` "B.hs"
-        pPath = dir `toAbsFp` "P.hs"
+    let bPath = dir </> "B.hs"
+        pPath = dir </> "P.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
@@ -106,8 +106,8 @@ ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
 
 ifaceErrorTest2 :: TestTree
 ifaceErrorTest2 = testWithExtraFiles "iface-error-test-2" "recomp" $ \dir -> do
-    let bPath = dir `toAbsFp` "B.hs"
-        pPath = dir `toAbsFp` "P.hs"
+    let bPath = dir </> "B.hs"
+        pPath = dir </> "P.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
@@ -140,8 +140,8 @@ ifaceErrorTest2 = testWithExtraFiles "iface-error-test-2" "recomp" $ \dir -> do
 
 ifaceErrorTest3 :: TestTree
 ifaceErrorTest3 = testWithExtraFiles "iface-error-test-3" "recomp" $ \dir -> do
-    let bPath = dir `toAbsFp` "B.hs"
-        pPath = dir `toAbsFp` "P.hs"
+    let bPath = dir </> "B.hs"
+        pPath = dir </> "P.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int

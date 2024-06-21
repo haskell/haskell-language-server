@@ -17,6 +17,7 @@ on:
 jobs:
   pre_job:
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'performance')
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
@@ -126,7 +127,7 @@ jobs:
         example: ['cabal', 'lsp-types']
 
     steps:
-    - uses: haskell-actions/setup@v2.7.1
+    - uses: haskell-actions/setup@v2.7.3
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}

@@ -116,7 +116,12 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCaps def hlintPlugin noLiteralCaps testDir $ do
+    , testCase "falls back to pre 3.8 code actions" $
+        runSessionWithTestConfig def
+            { testConfigCaps = noLiteralCaps
+            , testDirLocation = Left testDir
+            , testPluginDescriptor = hlintPlugin
+            , testShiftRoot = True} $ const $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "hlint"
@@ -236,13 +241,10 @@ suggestionsTests =
     , testCase "[#1279] hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
 
-        waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         expectNoMoreDiagnostics 3 doc "hlint"
     , testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
         doc <- openDoc "StrictData.hs" "haskell"
-
-        waitForAllProgressDone
 
         expectNoMoreDiagnostics 3 doc "hlint"
     ]
@@ -341,7 +343,14 @@ testDir :: FilePath
 testDir = "plugins/hls-hlint-plugin/test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
-runHlintSession subdir = failIfSessionTimeout . runSessionWithServerAndCaps def hlintPlugin codeActionNoResolveCaps (testDir </> subdir)
+runHlintSession subdir = failIfSessionTimeout .
+    runSessionWithTestConfig def
+      { testConfigCaps = codeActionNoResolveCaps
+      , testShiftRoot = True
+      , testDirLocation = Left (testDir </> subdir)
+      , testPluginDescriptor = hlintPlugin
+      }
+    . const
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
@@ -419,9 +428,17 @@ goldenTest testCaseName goldenFilename point hintText =
           void $ skipManyTill anyMessage $ getDocumentEdit document
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
+
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-  goldenWithHaskellAndCaps def codeActionNoResolveCaps hlintPlugin testName testDir path "expected" "hs"
+    goldenWithTestConfig def
+    { testConfigCaps = codeActionNoResolveCaps
+    , testShiftRoot = True
+    , testPluginDescriptor = hlintPlugin
+    , testDirLocation = Left testDir
+    }
+    testName testDir path "expected" "hs"
+
 
 ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
@@ -442,4 +459,10 @@ goldenResolveTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintResolveTest testName path =
-  goldenWithHaskellAndCaps def codeActionResolveCaps hlintPlugin testName testDir path "expected" "hs"
+    goldenWithTestConfig def
+    { testConfigCaps = codeActionResolveCaps
+    , testShiftRoot = True
+    , testPluginDescriptor = hlintPlugin
+    , testDirLocation = Left testDir
+    }
+    testName testDir path "expected" "hs"

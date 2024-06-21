@@ -16,6 +16,7 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
+import           System.FilePath                 ((</>))
 import           Test.Hls.FileSystem             (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -24,7 +25,7 @@ import           Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "boot"
   [ testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
-        let cPath = dir `toAbsFp` "C.hs"
+        let cPath = dir </> "C.hs"
         cSource <- liftIO $ readFileUtf8 cPath
         -- Dirty the cache
         liftIO $ runInDir dir $ do
@@ -51,6 +52,6 @@ tests = testGroup "boot"
         let floc = mkR 9 0 9 1
         checkDefs locs (pure [floc])
   , testCase "graph with boot modules" $ runWithExtraFiles "boot2" $ \dir -> do
-      _ <- openDoc (dir `toAbsFp` "A.hs") "haskell"
+      _ <- openDoc (dir </> "A.hs") "haskell"
       expectNoMoreDiagnostics 2
   ]

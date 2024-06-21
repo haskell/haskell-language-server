@@ -29,15 +29,16 @@ tests =
             runSession hlsLspCommand progressCaps "test/testdata/diagnostics" $ do
                 let path = "Foo.hs"
                 _ <- openDoc path "haskell"
-                expectProgressMessages [pack ("Setting up diagnostics (for " ++ path ++ ")"), "Processing", "Indexing"] []
+                expectProgressMessages [pack ("Setting up diagnostics (for " ++ path ++ ")"), "Processing", "Indexing"] [] []
         , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
             runSession hlsLspCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
-              doc <- openDoc "T1.hs" "haskell"
+              doc <- openDoc "TIO.hs" "haskell"
               lspId <- sendRequest SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
 
-              (codeLensResponse, activeProgressTokens) <- expectProgressMessagesTill
+              (codeLensResponse, createdProgressTokens, activeProgressTokens) <- expectProgressMessagesTill
                 (responseForId SMethod_TextDocumentCodeLens lspId)
-                ["Setting up testdata (for T1.hs)", "Processing"]
+                ["Setting up testdata (for TIO.hs)", "Processing"]
+                []
                 []
 
               -- this is a test so exceptions result in fails
@@ -52,31 +53,31 @@ tests =
                           (command ^. L.command)
                           (decode $ encode $ fromJust $ command ^. L.arguments)
 
-                      expectProgressMessages ["Evaluating"] activeProgressTokens
+                      expectProgressMessages ["Evaluating"] createdProgressTokens activeProgressTokens
                   _ -> error $ "Unexpected response result: " ++ show response
         , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
             runSessionWithConfig (def { ignoreConfigurationRequests = False }) hlsLspCommand progressCaps "test/testdata/format" $ do
                 void configurationRequest
                 setHlsConfig (formatLspConfig "ormolu")
                 doc <- openDoc "Format.hs" "haskell"
-                expectProgressMessages ["Setting up format (for Format.hs)", "Processing", "Indexing"] []
+                expectProgressMessages ["Setting up format (for Format.hs)", "Processing", "Indexing"] [] []
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-                expectProgressMessages ["Formatting Format.hs"] []
+                expectProgressMessages ["Formatting Format.hs"] [] []
         , requiresFourmoluPlugin $ testCase "fourmolu plugin sends progress notifications" $ do
             runSessionWithConfig (def { ignoreConfigurationRequests = False }) hlsLspCommand progressCaps "test/testdata/format" $ do
                 void configurationRequest
                 setHlsConfig (formatLspConfig "fourmolu")
                 doc <- openDoc "Format.hs" "haskell"
-                expectProgressMessages ["Setting up format (for Format.hs)", "Processing", "Indexing"] []
+                expectProgressMessages ["Setting up format (for Format.hs)", "Processing", "Indexing"] [] []
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-                expectProgressMessages ["Formatting Format.hs"] []
+                expectProgressMessages ["Formatting Format.hs"] [] []
         ]
 
 formatLspConfig :: Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
 
 progressCaps :: ClientCapabilities
-progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}
+progressCaps = fullLatestClientCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}
 
 data ProgressMessage
   = ProgressCreate WorkDoneProgressCreateParams
@@ -113,57 +114,59 @@ interestingMessage :: Session a -> Session (InterestingMessage a)
 interestingMessage theMessage =
   fmap InterestingMessage theMessage <|> fmap ProgressMessage progressMessage
 
-expectProgressMessagesTill :: Session a -> [Text] -> [ProgressToken] -> Session (a, [ProgressToken])
-expectProgressMessagesTill stopMessage expectedTitles activeProgressTokens = do
+expectProgressMessagesTill :: Session a -> [Text] -> [ProgressToken] -> [ProgressToken] -> Session (a, [ProgressToken], [ProgressToken])
+expectProgressMessagesTill stopMessage expectedTitles createdProgressTokens activeProgressTokens = do
   message <- skipManyTill anyMessage (interestingMessage stopMessage)
   case message of
     InterestingMessage a -> do
       liftIO $ null expectedTitles @? "Expected titles not empty " <> show expectedTitles
-      pure (a, activeProgressTokens)
+      pure (a, createdProgressTokens, activeProgressTokens)
     ProgressMessage progressMessage ->
       updateExpectProgressStateAndRecurseWith
         (expectProgressMessagesTill stopMessage)
         progressMessage
         expectedTitles
+        createdProgressTokens
         activeProgressTokens
 
 {- | Test that the server is correctly producing a sequence of progress related
- messages. Each create must be pair with a corresponding begin and end,
+ messages. Creates can be dangling, but should be paired with a corresponding begin and end,
  optionally with some progress in between. Tokens must match. The begin
  messages have titles describing the work that is in-progress, we check that
  the titles we see are those we expect.
 -}
-expectProgressMessages :: [Text] -> [ProgressToken] -> Session ()
-expectProgressMessages [] [] = pure ()
-expectProgressMessages expectedTitles activeProgressTokens = do
+expectProgressMessages :: [Text] -> [ProgressToken] -> [ProgressToken] -> Session ()
+expectProgressMessages [] _ [] = pure ()
+expectProgressMessages expectedTitles createdProgressTokens activeProgressTokens = do
   message <- skipManyTill anyMessage progressMessage
-  updateExpectProgressStateAndRecurseWith expectProgressMessages message expectedTitles activeProgressTokens
+  updateExpectProgressStateAndRecurseWith expectProgressMessages message expectedTitles createdProgressTokens activeProgressTokens
 
-updateExpectProgressStateAndRecurseWith :: ([Text] -> [ProgressToken] -> Session a)
+updateExpectProgressStateAndRecurseWith :: ([Text] -> [ProgressToken] -> [ProgressToken] -> Session a)
                                         -> ProgressMessage
                                         -> [Text]
                                         -> [ProgressToken]
+                                        -> [ProgressToken]
                                         -> Session a
-updateExpectProgressStateAndRecurseWith f progressMessage expectedTitles activeProgressTokens = do
+updateExpectProgressStateAndRecurseWith f progressMessage expectedTitles createdProgressTokens activeProgressTokens = do
   case progressMessage of
     ProgressCreate params -> do
-      f expectedTitles ((params ^. L.token): activeProgressTokens)
+      f expectedTitles ((params ^. L.token): createdProgressTokens) activeProgressTokens
     ProgressBegin token params -> do
-      liftIO $ token `expectedIn` activeProgressTokens
-      f (delete (params ^. L.title) expectedTitles) activeProgressTokens
+      liftIO $ token `expectedIn` createdProgressTokens
+      f (delete (params ^. L.title) expectedTitles) (delete token createdProgressTokens) (token:activeProgressTokens)
     ProgressReport token _ -> do
       liftIO $ token `expectedIn` activeProgressTokens
-      f expectedTitles activeProgressTokens
+      f expectedTitles createdProgressTokens activeProgressTokens
     ProgressEnd token _ -> do
       liftIO $ token `expectedIn` activeProgressTokens
-      f expectedTitles (delete token activeProgressTokens)
+      f expectedTitles createdProgressTokens (delete token activeProgressTokens)
 
 
 expectedIn :: (Foldable t, Eq a, Show a) => a -> t a -> Assertion
 expectedIn a as = a `elem` as @? "Unexpected " ++ show a
 
-getMessageResult :: TResponseMessage m -> MessageResult m
+getMessageResult :: Show (ErrorData m) => TResponseMessage m -> MessageResult m
 getMessageResult rsp =
   case rsp ^. L.result of
-    Right x -> x
-    Left err -> throw $ UnexpectedResponseError (SomeLspId $ fromJust $ rsp ^. L.id) err
+    Right x  -> x
+    Left err -> throw $ UnexpectedResponseError (fromJust $ rsp ^. L.id) err

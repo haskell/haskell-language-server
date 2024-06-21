@@ -22,7 +22,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeSessionInit, shakeExtras, shakeDb,
+    IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,
@@ -73,6 +73,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeysOlderThan,
     Log(..),
     VFSModified(..), getClientConfigAction,
+    ThreadQueue(..)
     ) where
 
 import           Control.Concurrent.Async
@@ -123,6 +124,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          initNameCache,
                                                          knownKeyNames)
@@ -262,6 +264,12 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+data ThreadQueue = ThreadQueue {
+    tIndexQueue     :: IndexQueue
+    , tRestartQueue :: TQueue (IO ())
+    , tLoaderQueue  :: TQueue (IO ())
+}
+
 -- Note [Semantic Tokens Cache Location]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- storing semantic tokens cache for each file in shakeExtras might
@@ -334,6 +342,10 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
+    , restartQueue :: TQueue (IO ())
+      -- ^ Queue of restart actions to be run.
+    , loaderQueue :: TQueue (IO ())
+      -- ^ Queue of loader actions to be run.
     }
 
 type WithProgressFunc = forall a.
@@ -527,6 +539,33 @@ newtype ShakeSession = ShakeSession
     -- ^ Closes the Shake session
   }
 
+-- Note [Root Directory]
+-- ~~~~~~~~~~~~~~~~~~~~~
+-- We keep track of the root directory explicitly, which is the directory of the project root.
+-- We might be setting it via these options with decreasing priority:
+--
+-- 1. from LSP workspace root, `resRootPath` in `LanguageContextEnv`.
+-- 2. command line (--cwd)
+-- 3. default to the current directory.
+--
+-- Using `getCurrentDirectory` makes it more difficult to run the tests, as we spawn one thread of HLS per test case.
+-- If we modify the global Variable CWD, via `setCurrentDirectory`, all other test threads are suddenly affected,
+-- forcing us to run all integration tests sequentially.
+--
+-- Also, there might be a race condition if we depend on the current directory, as some plugin might change it.
+-- e.g. stylish's `loadConfig`. https://github.com/haskell/haskell-language-server/issues/4234
+--
+-- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
+-- The root dir is deprecated, that means we should cleanup dependency on the project root(Or $CWD) thing gradually,
+-- so multi-workspaces can actually be supported when we use absolute path everywhere(might also need some high level design).
+-- That might not be possible unless we have everything adapted to it, like 'hlint' and 'evaluation of template haskell'.
+-- But we should still be working towards the goal.
+--
+-- We can drop it in the future once:
+-- 1. We can get rid all the usages of root directory in the codebase.
+-- 2. LSP version we support actually removes the root directory from the protocol.
+--
+
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
@@ -535,6 +574,8 @@ data IdeState = IdeState
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopMonitoring       :: IO ()
+    -- | See Note [Root Directory]
+    ,rootDir              :: FilePath
     }
 
 
@@ -619,15 +660,22 @@ shakeOpen :: Recorder (WithPriority Log)
           -> IdeReportProgress
           -> IdeTesting
           -> WithHieDb
-          -> IndexQueue
+          -> ThreadQueue
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
+          -> FilePath
+          -- ^ Root directory, this one might be picking up from `LanguageContextEnv`'s `resRootPath`
+          -- , see Note [Root Directory]
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
-  ideTesting@(IdeTesting testing)
-  withHieDb indexQueue opts monitoring rules = mdo
+  ideTesting
+  withHieDb threadQueue opts monitoring rules rootDir = mdo
+    -- see Note [Serializing runs in separate thread]
+    let indexQueue = tIndexQueue threadQueue
+        restartQueue = tRestartQueue threadQueue
+        loaderQueue = tLoaderQueue threadQueue
 
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
@@ -660,10 +708,9 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
             atomically $ modifyTVar' exportsMap (<> em)
             logWith recorder Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
-        progress <- do
-            let (before, after) = if testing then (0,0.1) else (0.1,0.1)
+        progress <-
             if reportProgress
-                then delayedProgressReporting before after lspEnv optProgressStyle
+                then progressReporting lspEnv optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
@@ -753,31 +800,33 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
-    withMVar'
-        shakeSession
-        (\runner -> do
-              (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-              keys <- ioActionBetweenShakeSession
-              -- it is every important to update the dirty keys after we enter the critical section
-              -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
-              res <- shakeDatabaseProfile shakeDb
-              backlog <- readTVarIO $ dirtyKeys shakeExtras
-              queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+    void $ awaitRunInThread (restartQueue shakeExtras) $ do
+        withMVar'
+            shakeSession
+            (\runner -> do
+                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                keys <- ioActionBetweenShakeSession
+                -- it is every important to update the dirty keys after we enter the critical section
+                -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                res <- shakeDatabaseProfile shakeDb
+                backlog <- readTVarIO $ dirtyKeys shakeExtras
+                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              -- this log is required by tests
-              logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-        )
-        -- It is crucial to be masked here, otherwise we can get killed
-        -- between spawning the new thread and updating shakeSession.
-        -- See https://github.com/haskell/ghcide/issues/79
-        (\() -> do
-          (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+                -- this log is required by tests
+                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+            )
+            -- It is crucial to be masked here, otherwise we can get killed
+            -- between spawning the new thread and updating shakeSession.
+            -- See https://github.com/haskell/ghcide/issues/79
+            (\() -> do
+            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
     where
         logErrorAfter :: Seconds -> IO () -> IO ()
         logErrorAfter seconds action = flip withAsync (const action) $ do

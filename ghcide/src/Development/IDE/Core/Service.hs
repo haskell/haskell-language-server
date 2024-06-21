@@ -53,6 +53,7 @@ instance Pretty Log where
     LogOfInterest msg -> pretty msg
     LogFileExists msg -> pretty msg
 
+
 ------------------------------------------------------------
 -- Exposed API
 
@@ -65,10 +66,11 @@ initialise :: Recorder (WithPriority Log)
            -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> WithHieDb
-           -> IndexQueue
+           -> ThreadQueue
            -> Monitoring
+           -> FilePath -- ^ Root directory see Note [Root Directory]
            -> IO IdeState
-initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan metrics = do
+initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan metrics rootDir = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
@@ -86,11 +88,12 @@ initialise recorder defaultConfig plugins mainRule lspEnv debouncer options with
         hiedbChan
         (optShakeOptions options)
         metrics
-          $ do
+        (do
             addIdeGlobal $ GlobalIdeOptions options
             ofInterestRules (cmapWithPrio LogOfInterest recorder)
             fileExistsRules (cmapWithPrio LogFileExists recorder) lspEnv
-            mainRule
+            mainRule)
+        rootDir
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()

@@ -41,8 +41,8 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        hscEnvWithImportPaths,
                                                        logWith,
                                                        realSrcSpanToRange,
-                                                       runAction, useWithStale,
-                                                       (<+>))
+                                                       rootDir, runAction,
+                                                       useWithStale, (<+>))
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
@@ -53,16 +53,16 @@ import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        pm_parsed_source, unLoc)
 import           Ide.Logger                           (Pretty (..))
 import           Ide.Plugin.Error
+import           Ide.PluginUtils                      (toAbsolute)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 import           Language.LSP.VFS                     (virtualFileText)
-import           System.Directory                     (makeAbsolute)
-import           System.FilePath                      (dropExtension, normalise,
+import           System.FilePath                      (dropExtension,
+                                                       isAbsolute, normalise,
                                                        pathSeparator,
                                                        splitDirectories,
-                                                       takeFileName)
+                                                       takeFileName, (</>))
 
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -95,7 +95,7 @@ command recorder state _ uri = do
       -- | Convert an Action to the corresponding edit operation
       edit = WorkspaceEdit (Just $ Map.singleton aUri [TextEdit aRange aCode]) Nothing Nothing
     in
-      void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
+      void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
   pure $ InR Null
 
 -- | A source code change
@@ -108,12 +108,12 @@ data Action = Replace
   deriving (Show)
 
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
-action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (LspM c) [Action]
+action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (HandlerM c) [Action]
 action recorder state uri = do
     nfp <- getNormalizedFilePathE  uri
     fp <- uriToFilePathE uri
 
-    contents <- lift . getVirtualFile $ toNormalizedUri uri
+    contents <- lift . pluginGetVirtualFile $ toNormalizedUri uri
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
     correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
@@ -150,7 +150,10 @@ pathModuleNames recorder state normFilePath filePath
       let paths = map (normalise . (<> pure pathSeparator)) srcPaths
       logWith recorder Debug (NormalisedPaths paths)
 
-      mdlPath <- liftIO $ makeAbsolute filePath
+      -- TODO, this can be avoid if the filePath is already absolute,
+      -- we can avoid the toAbsolute call in the future.
+      -- see Note [Root Directory]
+      let mdlPath = (toAbsolute $ rootDir state) filePath
       logWith recorder Debug (AbsoluteFilePath mdlPath)
 
       let suffixes = mapMaybe (`stripPrefix` mdlPath) paths

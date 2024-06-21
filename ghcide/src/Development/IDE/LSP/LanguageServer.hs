@@ -1,4 +1,4 @@
-      -- Copyright (c) 2019 The DAML Authors. All rights reserved.
+-- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -9,6 +9,8 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     , setupLSP
     , Log(..)
+    , ThreadQueue
+    , runWithWorkerThreads
     ) where
 
 import           Control.Concurrent.STM
@@ -33,11 +35,14 @@ import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
+import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Core.WorkerThread     (withWorkerQueue)
 import qualified Development.IDE.Session               as Session
-import           Development.IDE.Types.Shake           (WithHieDb)
+import           Development.IDE.Types.Shake           (WithHieDb,
+                                                        WithHieDbShield (..))
 import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
@@ -76,8 +81,6 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
--- used to smuggle RankNType WithHieDb through dbMVar
-newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config a m. (Show config)
@@ -89,7 +92,7 @@ runLanguageServer
     -> (config -> Value -> Either T.Text config)
     -> (config -> m config ())
     -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
+        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
@@ -126,14 +129,15 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
 setupLSP ::
      forall config err.
      Recorder (WithPriority Log)
+  -> FilePath -- ^ root directory, see Note [Root Directory]
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
-  -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+  -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
   -> MVar ()
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
          (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
-setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
+setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar = do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
   clientMsgChan :: Chan ReactorMessage <- newChan
@@ -176,7 +180,7 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
 
-  let doInitialize = handleInit recorder getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
+  let doInitialize = handleInit recorder defaultRoot getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
@@ -185,19 +189,23 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
 
 handleInit
     :: Recorder (WithPriority Log)
+    -> FilePath -- ^ root directory, see Note [Root Directory]
     -> (FilePath -> IO FilePath)
-    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
     -> MVar ()
     -> IO ()
     -> (SomeLspId -> IO ())
     -> (SomeLspId -> IO ())
     -> Chan ReactorMessage
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
-    let root = LSP.resRootPath env
-    dir <- maybe getCurrentDirectory return root
-    dbLoc <- getHieDbLoc dir
+    -- only shift if lsp root is different from the rootDir
+    -- see Note [Root Directory]
+    root <- case LSP.resRootPath env of
+        Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
+        _ -> pure defaultRoot
+    dbLoc <- getHieDbLoc root
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
     dbMVar <- newEmptyMVar
@@ -211,25 +219,27 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
         exceptionInHandler e = do
             logWith recorder Error $ LogReactorMessageActionException e
 
+        checkCancelled :: forall m . LspId m -> IO () -> (TResponseError m -> IO ()) -> IO ()
         checkCancelled _id act k =
-            flip finally (clearReqId _id) $
+            let sid = SomeLspId _id
+            in flip finally (clearReqId sid) $
                 catch (do
                     -- We could optimize this by first checking if the id
                     -- is in the cancelled set. However, this is unlikely to be a
                     -- bottleneck and the additional check might hide
                     -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (waitForCancel _id) act
+                    cancelOrRes <- race (waitForCancel sid) act
                     case cancelOrRes of
                         Left () -> do
-                            logWith recorder Debug $ LogCancelledRequest _id
-                            k $ ResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
+                            logWith recorder Debug $ LogCancelledRequest sid
+                            k $ TResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
-                    k $ ResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
+                    k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
-        untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' hieChan' -> do
-            putMVar dbMVar (WithHieDbShield withHieDb',hieChan')
+        untilMVar lifetime $ runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
+            putMVar dbMVar (WithHieDbShield withHieDb',threadQueue')
             forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
@@ -239,11 +249,21 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
 
-    (WithHieDbShield withHieDb,hieChan) <- takeMVar dbMVar
-    ide <- getIdeState env root withHieDb hieChan
+    (WithHieDbShield withHieDb, threadQueue) <- takeMVar dbMVar
+    ide <- getIdeState env root withHieDb threadQueue
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
+
+-- | runWithWorkerThreads
+-- create several threads to run the session, db and session loader
+-- see Note [Serializing runs in separate thread]
+runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
+runWithWorkerThreads recorder dbLoc f = evalContT $ do
+            sessionRestartTQueue <- withWorkerQueue id
+            sessionLoaderTQueue <- withWorkerQueue id
+            (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
+            liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   Rethrows any exceptions.
