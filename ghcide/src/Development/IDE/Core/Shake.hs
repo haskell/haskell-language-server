@@ -24,7 +24,7 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets, Target(..), toKnownFiles,
+    KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -176,16 +176,8 @@ import           System.Time.Extra
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           Data.IORef
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
-                                                         mkSplitUniqSupply,
-                                                         upNameCache)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat             (NameCacheUpdater)
-#endif
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -252,11 +244,10 @@ instance Pretty Log where
 -- a worker thread.
 data HieDbWriter
   = HieDbWriter
-  { indexQueue         :: IndexQueue
-  , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
-  , indexCompleted     :: TVar Int -- ^ to report progress
-  , indexProgressToken :: Var (Maybe LSP.ProgressToken)
-  -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
+  { indexQueue             :: IndexQueue
+  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted         :: TVar Int -- ^ to report progress
+  , indexProgressReporting :: ProgressReporting IO
   }
 
 -- | Actions to queue up on the index worker thread
@@ -306,7 +297,7 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumulation to the current version.
-    ,progress :: ProgressReporting
+    ,progress :: ProgressReporting Action
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
@@ -315,11 +306,7 @@ data ShakeExtras = ShakeExtras
         -> [DelayedAction ()]
         -> IO [Key]
         -> IO ()
-#if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
-#else
-    ,ideNc :: IORef NameCache
-#endif
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
@@ -677,12 +664,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
-#if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
-#else
-    us <- mkSplitUniqSupply 'r'
-    ideNc <- newIORef (initNameCache us knownKeyNames)
-#endif
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO
@@ -691,13 +673,16 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         publishedDiagnostics <- STM.newIO
         semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newTVarIO $ hashed HMap.empty
+        knownTargetsVar <- newTVarIO $ hashed emptyKnownTargets
         let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         semanticTokensId <- newTVarIO 0
-        indexProgressToken <- newVar Nothing
+        indexProgressReporting <- progressReportingOutsideState
+            (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
+            (readTVar indexCompleted)
+            lspEnv "Indexing" optProgressStyle
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
@@ -710,7 +695,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
 
         progress <-
             if reportProgress
-                then progressReporting lspEnv optProgressStyle
+                then progressReporting lspEnv "Processing" optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
@@ -775,6 +760,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
+    progressStop $ indexProgressReporting $ hiedbWriter shakeExtras
     stopMonitoring
 
 
@@ -1080,13 +1066,8 @@ askShake :: IdeAction ShakeExtras
 askShake = ask
 
 
-#if MIN_VERSION_ghc(9,3,0)
 mkUpdater :: NameCache -> NameCacheUpdater
 mkUpdater = id
-#else
-mkUpdater :: IORef NameCache -> NameCacheUpdater
-mkUpdater ref = NCU (upNameCache ref)
-#endif
 
 -- | A (maybe) stale result now, and an up to date one later
 data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate :: IO (Maybe a)  }

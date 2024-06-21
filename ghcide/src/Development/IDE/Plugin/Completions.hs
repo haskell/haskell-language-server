@@ -133,11 +133,7 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
                   $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
                   $ useWithStaleFastE GhcSessionDeps file
     let nc = ideNc $ shakeExtras ide
-#if MIN_VERSION_ghc(9,3,0)
     name <- liftIO $ lookupNameCache nc mod occ
-#else
-    name <- liftIO $ upNameCache nc (lookupNameCache mod occ)
-#endif
     mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
     let (dm,km) = case mdkm of
           Just (DKMap docMap tyThingMap, _) -> (docMap,tyThingMap)
@@ -180,7 +176,7 @@ getCompletionsLSP ide plId
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
-            let localModules = maybe [] Map.keys knownTargets
+            let localModules = maybe [] (Map.keys . targetMap) knownTargets
             let lModules = mempty{importableModules = map toModueNameText localModules}
             -- set up the exports map including both package and project-level identifiers
             packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath

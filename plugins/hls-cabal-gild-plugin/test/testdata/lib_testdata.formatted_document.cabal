@@ -17,4 +17,5 @@ executable testdata
     testdata,
 
   hs-source-dirs: app
-  default-language: Haskell2010
+  default-language:
+    Haskell2010

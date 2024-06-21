@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Cabal.Completion.Completer.Simple where
@@ -7,11 +8,14 @@ import           Data.Function                               ((&))
 import qualified Data.List                                   as List
 import           Data.Map                                    (Map)
 import qualified Data.Map                                    as Map
-import           Data.Maybe                                  (fromMaybe)
+import           Data.Maybe                                  (fromMaybe,
+                                                              mapMaybe)
 import           Data.Ord                                    (Down (Down))
 import qualified Data.Text                                   as T
+import qualified Distribution.Fields                         as Syntax
 import           Ide.Logger                                  (Priority (..),
                                                               logWith)
+import           Ide.Plugin.Cabal.Completion.CabalFields
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types           (CabalPrefixInfo (..),
                                                               Log)
@@ -40,6 +44,22 @@ constantCompleter completions _ cData = do
       scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults (completionPrefix prefInfo) completions
       range = completionRange prefInfo
   pure $ map (mkSimpleCompletionItem range . Fuzzy.original) scored
+
+-- | Completer to be used for import fields.
+--
+-- TODO: Does not exclude imports, defined after the current cursor position
+-- which are not allowed according to the cabal specification
+importCompleter :: Completer
+importCompleter l cData = do
+  cabalCommonsM <- getCabalCommonSections cData
+  case cabalCommonsM of
+    Just cabalCommons -> do
+        let commonNames = mapMaybe (\case
+              Syntax.Section (Syntax.Name _ "common") commonNames _ -> getOptionalSectionName commonNames
+              _ -> Nothing)
+              cabalCommons
+        constantCompleter commonNames l cData
+    Nothing -> noopCompleter l cData
 
 -- | Completer to be used for the field @name:@ value.
 --

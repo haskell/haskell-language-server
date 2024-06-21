@@ -18,6 +18,7 @@ import           Data.Hashable
 import           Data.HashMap.Strict                         (HashMap)
 import qualified Data.HashMap.Strict                         as HashMap
 import qualified Data.List.NonEmpty                          as NE
+import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text.Encoding                          as Encoding
 import           Data.Typeable
 import           Development.IDE                             as D
@@ -32,7 +33,8 @@ import qualified Distribution.Parsec.Position                as Syntax
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
-import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalFields (..),
+import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
+                                                              ParseCabalFields (..),
                                                               ParseCabalFile (..))
 import qualified Ide.Plugin.Cabal.Completion.Types           as Types
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
@@ -170,6 +172,14 @@ cabalRules recorder plId = do
           Right fields ->
             pure ([], Just fields)
 
+  define (cmapWithPrio LogShake recorder) $ \ParseCabalCommonSections file -> do
+    fields <- use_ ParseCabalFields file
+    let commonSections = Maybe.mapMaybe (\case
+          commonSection@(Syntax.Section (Syntax.Name _ "common") _ _) -> Just commonSection
+          _ -> Nothing)
+          fields
+    pure ([], Just commonSections)
+
   define (cmapWithPrio LogShake recorder) $ \ParseCabalFile file -> do
     config <- getPluginConfigAction plId
     if not (plcGlobalOn config && plcDiagnosticsOn config)
@@ -224,8 +234,9 @@ kick = do
 -- ----------------------------------------------------------------
 
 licenseSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
-  pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
+licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) = do
+  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.suggestLicense" ideState getClientConfigAction
+  pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction maxCompls uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
@@ -341,6 +352,9 @@ completion recorder ide _ complParams = do
                 -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
                 mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath fp
                 pure $ fmap fst mGPD
+              , getCabalCommonSections = do
+                mSections <- runIdeAction "cabal-plugin.modulesCompleter.commonsections" (shakeExtras ide) $ useWithStaleFast ParseCabalCommonSections $ toNormalizedFilePath fp
+                pure $ fmap fst mSections
               , cabalPrefixInfo = prefInfo
               , stanzaName =
                 case fst ctx of

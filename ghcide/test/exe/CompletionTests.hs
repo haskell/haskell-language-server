@@ -16,7 +16,6 @@ import           Data.Default
 import           Data.List.Extra
 import           Data.Maybe
 import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
 import           Development.IDE.Types.Location
 import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Lens     as L
@@ -30,7 +29,7 @@ import           Language.LSP.Test
 import           Test.Hls                       (waitForTypecheck)
 import qualified Test.Hls.FileSystem            as FS
 import           Test.Hls.FileSystem            (file, text)
-import           Test.Hls.Util                  (knownBrokenOnWindows)
+import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -217,7 +216,7 @@ localCompletionTests = [
 
 nonLocalCompletionTests :: [TestTree]
 nonLocalCompletionTests =
-  [ brokenForWinGhc $ completionTest
+  [ brokenForWinOldGhc $ completionTest
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
@@ -276,6 +275,10 @@ nonLocalCompletionTests =
   ]
   where
     brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
+    brokenForWinOldGhc =
+      knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC94] "Windows (GHC == 9.4) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC96] "Windows (GHC == 9.6) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC98] "Windows (GHC == 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
@@ -352,7 +355,7 @@ packageCompletionTests =
               , "'GHC.Exts"
               ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
 
-  , testSessionEmpty "Map" $ do
+  , testSessionEmptyWithCradle "Map" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, containers, A]}}" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",

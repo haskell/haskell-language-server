@@ -136,7 +136,7 @@ tests = let
   xvL20  = Position 24  8  ;  xvMsg  = [ExpectHoverText ["pack", ":: String -> Text", "Data.Text", "text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
-  eclL15 = Position 19  8  ;  ecls   = [ExpectHoverText ["Num", "Defined in ", "GHC.Num", "base"]]
+  eclL15 = Position 19  8  ;  ecls   = [ExpectHoverText ["Num", "Defined in ", if ghcVersion < GHC910 then "GHC.Num" else "GHC.Internal.Num", "base"]]
   dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
   dnbL30 = Position 34 23
   lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
@@ -159,7 +159,7 @@ tests = let
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
-  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 (if ghcVersion >= GHC94 then 5 else 0) 3 (if ghcVersion >= GHC94 then 8 else 14)]
+  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], if ghcVersion >= GHC94 && ghcVersion < GHC910 then mkL bar 3 5 3 8 else mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]

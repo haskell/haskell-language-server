@@ -642,7 +642,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x = x"
         ]
-        [ "func :: p -> p"
+        [ if ghcVersion >= GHC910 then "func :: t -> t" else "func :: p -> p"
         , "func x = x"
         ]
   , testUseTypeSignature "local signature"
@@ -662,9 +662,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func :: Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func :: t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+              "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -692,9 +695,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func::Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func::t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+               "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"
@@ -1341,8 +1347,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , brokenForGHC92 "On GHC 9.2, the error doesn't contain \"perhaps you want ...\" part from which import suggestion can be extracted." $
-          testSession "extend single line import in presence of extra parens" $ template
+        , testSession "extend single line import in presence of extra parens" $ template
             []
             ("Main.hs", T.unlines
                     [ "import Data.Monoid (First)"
@@ -1528,7 +1533,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -3216,7 +3221,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
@@ -3844,6 +3849,3 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
-
-brokenForGHC92 :: String -> TestTree -> TestTree
-brokenForGHC92 = knownBrokenForGhcVersions [GHC92]

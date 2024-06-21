@@ -10,68 +10,62 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.Splice
-    ( descriptor,
-    )
-where
+module Ide.Plugin.Splice (descriptor) where
 
-import           Control.Applicative                       (Alternative ((<|>)))
-import           Control.Arrow                             (Arrow (first))
-import           Control.Exception                         (SomeException)
-import qualified Control.Foldl                             as L
-import           Control.Lens                              (Identity (..), ix,
-                                                            view, (%~), (<&>),
-                                                            (^.))
-import           Control.Monad                             (forM, guard, unless)
-import           Control.Monad.Error.Class                 (MonadError (throwError))
-import           Control.Monad.Extra                       (eitherM)
-import qualified Control.Monad.Fail                        as Fail
-import           Control.Monad.IO.Unlift                   (MonadIO (..),
-                                                            askRunInIO)
-import           Control.Monad.Trans.Class                 (MonadTrans (lift))
-import           Control.Monad.Trans.Except                (ExceptT (..),
-                                                            runExceptT)
+import           Control.Applicative                   (Alternative ((<|>)))
+import           Control.Arrow                         (Arrow (first))
+import           Control.Exception                     (SomeException)
+import qualified Control.Foldl                         as L
+import           Control.Lens                          (Identity (..), ix, view,
+                                                        (%~), (<&>), (^.))
+import           Control.Monad                         (forM, guard, unless)
+import           Control.Monad.Error.Class             (MonadError (throwError))
+import           Control.Monad.Extra                   (eitherM)
+import qualified Control.Monad.Fail                    as Fail
+import           Control.Monad.IO.Unlift               (MonadIO (..),
+                                                        askRunInIO)
+import           Control.Monad.Trans.Class             (MonadTrans (lift))
+import           Control.Monad.Trans.Except            (ExceptT (..),
+                                                        runExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                                hiding (Null)
-import qualified Data.Bifunctor                            as B (first)
-import           Data.Foldable                             (Foldable (foldl'))
+import           Data.Aeson                            hiding (Null)
+import qualified Data.Bifunctor                        as B (first)
 import           Data.Function
 import           Data.Generics
-import qualified Data.Kind                                 as Kinds
-import           Data.List                                 (sortOn)
-import           Data.Maybe                                (fromMaybe,
-                                                            listToMaybe,
-                                                            mapMaybe)
-import qualified Data.Text                                 as T
+import qualified Data.Kind                             as Kinds
+import           Data.List                             (sortOn)
+import           Data.Maybe                            (fromMaybe, listToMaybe,
+                                                        mapMaybe)
+import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.GHC.Compat                as Compat hiding
-                                                                     (getLoc)
+import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import qualified Development.IDE.GHC.Compat.Util           as Util
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.ExactPrint
-import           Language.Haskell.GHC.ExactPrint.Transform (TransformT (TransformT))
-
-#if MIN_VERSION_ghc(9,4,1)
-
-import           GHC.Data.Bag                              (Bag)
-
-#endif
-
 import           GHC.Exts
-
-
-import           GHC.Parser.Annotation                     (SrcSpanAnn' (..))
-import qualified GHC.Types.Error                           as Error
-
-
-import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
+import qualified GHC.Types.Error                       as Error
+import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint           (uniqueSrcSpanT)
-import qualified Language.LSP.Protocol.Lens                as J
+import qualified Language.LSP.Protocol.Lens            as J
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.Foldable                         (Foldable (foldl'))
+#endif
+
+#if MIN_VERSION_ghc(9,4,1)
+import           GHC.Data.Bag                          (Bag)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                 (EpAnn (..))
+#else
+import           GHC.Parser.Annotation                 (SrcSpanAnn' (..))
+#endif
+
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -211,12 +205,12 @@ setupHscEnv
     :: IdeState
     -> NormalizedFilePath
     -> ParsedModule
-    -> ExceptT PluginError IO (Annotated ParsedSource, HscEnv, DynFlags)
+    -> ExceptT PluginError IO (ParsedSource, HscEnv, DynFlags)
 setupHscEnv ideState fp pm = do
     hscEnvEq <- runActionE "expandTHSplice.fallback.ghcSessionDeps" ideState $
                     useE GhcSessionDeps fp
     let ps = annotateParsedSource pm
-        hscEnv0 = hscEnvWithImportPaths hscEnvEq
+        hscEnv0 = hscEnv hscEnvEq
         modSum = pm_mod_summary pm
     hscEnv <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
     pure (ps, hscEnv, hsc_dflags hscEnv)
@@ -227,10 +221,10 @@ setupDynFlagsForGHCiLike env dflags = do
         platform = targetPlatform dflags3
         dflags3a = setWays hostFullWays dflags3
         dflags3b =
-            foldl gopt_set dflags3a $
+            foldl' gopt_set dflags3a $
                 concatMap (wayGeneralFlags platform) hostFullWays
         dflags3c =
-            foldl gopt_unset dflags3b $
+            foldl' gopt_unset dflags3b $
                 concatMap (wayUnsetGeneralFlags platform) hostFullWays
         dflags4 =
             dflags3c
@@ -277,8 +271,13 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
 -- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
 -- earlier it will just be a plain `SrcSpan`.
 {-# COMPLETE AsSrcSpan #-}
+#if MIN_VERSION_ghc(9,9,0)
+pattern AsSrcSpan :: SrcSpan -> EpAnn ann
+pattern AsSrcSpan locA <- (getLoc -> locA)
+#else
 pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
 pattern AsSrcSpan locA <- SrcSpanAnn {locA}
+#endif
 
 findSubSpansDesc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
 findSubSpansDesc srcSpan =
@@ -360,7 +359,7 @@ manualCalcEdit ::
     ClientCapabilities ->
     ReportEditor ->
     Range ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     HscEnv ->
     TcGblEnv ->
     RealSrcSpan ->

@@ -7,12 +7,14 @@ import           Data.Aeson                         (KeyValue (..), Object)
 import qualified Data.Aeson.KeyMap                  as KV
 import           Data.Default
 import           Data.Functor                       (void)
+import qualified Data.List                          as T
 import           Data.Map.Strict                    as Map hiding (map)
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
+import           Data.Version                       (Version (..))
 import           Development.IDE                    (Pretty)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Ide.Plugin.SemanticTokens
@@ -24,12 +26,13 @@ import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
+import           System.Info                        (compilerVersion)
 import           Test.Hls
 import qualified Test.Hls.FileSystem                as FS
 import           Test.Hls.FileSystem                (file, text)
 
 testDataDir :: FilePath
-testDataDir = "plugins" </> "hls-semantic-tokens-plugin" </> "test" </> "testdata"
+testDataDir = "plugins" </> "hls-semantic-tokens-plugin" </> "test" </> "testdata" </> testVersionDir
 
 mkFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkFs = FS.mkVirtualFileTree testDataDir
@@ -48,6 +51,14 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor enabledSemanticDescriptor
                         }
                   }
             }
+
+-- if 9_10 and after we change the directory to the testdata/before_9_10 directory
+-- if 9_10 and after we change the directory to the testdata/after_9_10 directory
+
+testVersionDir :: FilePath
+testVersionDir
+      | compilerVersion >= Version [9, 10] [] = "after_9_10"
+      | otherwise = "before_9_10"
 
 goldenWithHaskellAndCapsOutPut :: (Pretty b) => Config -> PluginTestDescriptor b -> TestName -> FS.VirtualFileTree -> FilePath -> String -> (TextDocumentIdentifier -> Session String) -> TestTree
 goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
@@ -151,8 +162,11 @@ semanticTokensConfigTest =
             doc <- openDoc "Hello.hs" "haskell"
             void waitForBuildQueue
             result1 <- docLspSemanticTokensString doc
-            liftIO $ unlines (map show result1) @?= "2:1-3 SemanticTokenTypes_Variable \"go\"\n"
+            liftIO $ unlines (map show result1) @?=
+                T.unlines (["1:8-13 SemanticTokenTypes_Namespace \"Hello\"" | compilerVersion >= Version [9, 10] []]
+                        ++ ["2:1-3 SemanticTokenTypes_Variable \"go\""])
     ]
+
 
 semanticTokensFullDeltaTests :: TestTree
 semanticTokensFullDeltaTests =
@@ -168,7 +182,9 @@ semanticTokensFullDeltaTests =
           liftIO $ delta @?= expectDelta,
       testCase "add tokens" $ do
         let file1 = "TModuleA.hs"
-        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2, 0, 3, 8, 0])]))
+        let expectDelta
+                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 25 0 (Just [2, 0, 3, 8, 0])]))
+                | otherwise = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2, 0, 3, 8, 0])]))
         --                                                                                         r c l t m
         --                                      where r = row, c = column, l = length, t = token, m = modifier
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
@@ -187,7 +203,9 @@ semanticTokensFullDeltaTests =
           liftIO $ delta @?= expectDelta,
       testCase "remove tokens" $ do
         let file1 = "TModuleA.hs"
-        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
+        let expectDelta
+                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 5 20 (Just [])]))
+                | otherwise = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
         -- delete all tokens
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
           doc1 <- openDoc file1 "haskell"
@@ -226,7 +244,12 @@ semanticTokensTests =
           result <- docSemanticTokensString def doc2
           let expect =
                 unlines
-                  [ "3:8-16 TModule \"TModuleA\"",
+                  (
+                    -- > 9.10 have module name in the token
+                    (["1:8-16 TModule \"TModuleB\"" | compilerVersion >= Version [9, 10] []])
+                      ++
+                    [
+                    "3:8-16 TModule \"TModuleA\"",
                     "4:18-26 TModule \"TModuleA\"",
                     "6:1-3 TVariable \"go\"",
                     "6:6-10 TDataConstructor \"Game\"",
@@ -234,16 +257,15 @@ semanticTokensTests =
                     "8:8-17 TModule \"TModuleA.\"",
                     "8:17-20 TRecordField \"a\\66560b\"",
                     "8:21-23 TVariable \"go\""
-                  ]
+                  ])
           liftIO $ result @?= expect,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
-      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
+      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName",
+      goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
     ]
-      -- not supported in ghc92
-      ++ [goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc" | ghcVersion > GHC92]
 
 semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =

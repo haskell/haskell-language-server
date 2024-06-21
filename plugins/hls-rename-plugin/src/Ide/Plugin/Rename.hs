@@ -147,7 +147,7 @@ getSrcEdit state verTxtDocId updatePs = do
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
-    let ps = astA annAst
+    let ps = annAst
         src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
     pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions

@@ -171,13 +171,8 @@ import           GHC.Fingerprint
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC                                          (mgModSummaries)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import qualified Data.IntMap                                  as IM
-#endif
 
 
 
@@ -321,22 +316,14 @@ getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
-        targets <- useNoFile_ GetKnownTargets
-        let targetsMap = HM.mapWithKey const targets
+        (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
-        let env = hscEnvWithImportPaths env_eq
-        let import_dirs = deps env_eq
+        let env = hscEnv env_eq
+        let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
-            isImplicitCradle = isNothing $ envImportPaths env_eq
-        let dflags' = if isImplicitCradle
-                    then addRelativeImport file (moduleName $ ms_mod ms) dflags
-                    else dflags
         opt <- getIdeOptions
         let getTargetFor modName nfp
-                | isImplicitCradle = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
                 | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     itExists <- getFileExists nfp'
@@ -347,10 +334,11 @@ getLocatedImportsRule recorder =
                         nfp' = HM.lookupDefault nfp nfp ttmap
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
-                | otherwise
-                = return Nothing
+                | otherwise = do
+                    itExists <- getFileExists nfp
+                    return $ if itExists then Just nfp else Nothing
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule (hscSetFlags dflags' env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -642,7 +630,6 @@ dependencyInfoForFiles fs = do
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
   msrs <- uses GetModSummaryWithoutTimestamps all_fs
   let mss = map (fmap msrModSummary) msrs
-#if MIN_VERSION_ghc(9,3,0)
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
       mns = catMaybes $ zipWith go mss deps
@@ -652,14 +639,6 @@ dependencyInfoForFiles fs = do
       go (Just ms) _ = Just $ ModuleNode [] ms
       go _ _ = Nothing
       mg = mkModuleGraph mns
-#else
-  let mg = mkModuleGraph $
-        -- We don't do any instantiation for backpack at this point of time, so it is OK to use
-        -- 'extendModSummaryNoDeps'.
-        -- This may have to change in the future.
-          map extendModSummaryNoDeps $
-          catMaybes mss
-#endif
   pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
 
 -- This is factored out so it can be directly called from the GetModIface
@@ -777,7 +756,6 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
               then depModuleGraph <$> useNoFile_ GetModuleGraph
               else do
                 let mgs = map hsc_mod_graph depSessions
-#if MIN_VERSION_ghc(9,3,0)
                 -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
                 -- also points to all the direct descendants of the current module. To get the keys for the descendants
                 -- we must get their `ModSummary`s
@@ -786,14 +764,6 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                   return $!! map (NodeKey_Module . msKey) dep_mss
                 let module_graph_nodes =
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
-#else
-                let module_graph_nodes =
-                      -- We don't do any instantiation for backpack at this point of time, so it is OK to use
-                      -- 'extendModSummaryNoDeps'.
-                      -- This may have to change in the future.
-                      map extendModSummaryNoDeps $
-                      nubOrdOn ms_mod (ms : concatMap mgModSummaries mgs)
-#endif
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
             session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
@@ -906,12 +876,7 @@ getModSummaryRule displayTHWarning recorder = do
                 when (uses_th_qq $ msrModSummary res) $ do
                     DisplayTHWarning act <- getIdeGlobalAction
                     liftIO act
-#if MIN_VERSION_ghc(9,3,0)
                 let bufFingerPrint = ms_hs_hash (msrModSummary res)
-#else
-                bufFingerPrint <- liftIO $
-                    fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
-#endif
                 let fingerPrint = Util.fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
                 return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
@@ -922,9 +887,6 @@ getModSummaryRule displayTHWarning recorder = do
         case mbMs of
             Just res@ModSummaryResult{..} -> do
                 let ms = msrModSummary {
-#if !MIN_VERSION_ghc(9,3,0)
-                    ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps",
-#endif
                     ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
                     }
                     fp = fingerprintToBS msrFingerprint
