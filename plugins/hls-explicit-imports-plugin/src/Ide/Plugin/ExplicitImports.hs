@@ -462,7 +462,8 @@ abbreviateImportTitle :: T.Text -> T.Text
 abbreviateImportTitle input =
   let
       -- For starters, we only want one line in the title
-      oneLineText = T.unwords $ T.lines input
+      -- we also need to compress multiple spaces into one
+      oneLineText = T.unwords $ filter (not . T.null) $ T.split isSpace input
       -- Now, split at the max columns, leaving space for the summary text we're going to add
       -- (conservatively assuming we won't need to print a number larger than 100)
       (prefix, suffix) = T.splitAt (maxColumns - T.length (summaryText 100)) oneLineText
