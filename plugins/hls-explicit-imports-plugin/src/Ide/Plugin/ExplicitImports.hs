@@ -11,7 +11,7 @@ module Ide.Plugin.ExplicitImports
   ( descriptor
   , descriptorForModules
   , abbreviateImportTitle
-  , squashedAbbreviateImportTitle
+  , abbreviateImportTitleWithoutModule
   , Log(..)
   ) where
 
@@ -488,8 +488,9 @@ abbreviateImportTitle input =
           else actualPrefix <> suffixText
   in title
 
-squashedAbbreviateImportTitle :: T.Text -> T.Text
-squashedAbbreviateImportTitle ieText  = abbreviateImportTitle $ (T.intercalate " " . filter (not . T.null) . T.split isSpace . T.dropWhile (/= '(')) ieText
+-- Create an import abbreviate title without module for inlay hints
+abbreviateImportTitleWithoutModule :: Text.Text -> Text.Text
+abbreviateImportTitleWithoutModule = abbreviateImportTitle . T.dropWhile (/= '(')
 
 -- | The title of the command is ideally the minimal explicit import decl, but
 --------------------------------------------------------------------------------

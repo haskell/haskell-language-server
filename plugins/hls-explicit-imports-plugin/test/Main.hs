@@ -110,19 +110,19 @@ main = defaultTestRunner $ testGroup "import-actions"
               o = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, ... (3 items))"
           in ExplicitImports.abbreviateImportTitle i @?= o
       ]
-    , testGroup "Title abbreviation squashed"
-      [ testCase "not abbreviated squashed" $
+    , testGroup "Title abbreviation without module"
+      [ testCase "not abbreviated" $
           let i = "import M (" <> T.replicate 70 "F" <> ", Athing, Bthing, Cthing)"
               o = "(FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, Athing, Bthing, Cthing)"
-          in ExplicitImports.squashedAbbreviateImportTitle i @?= o
-      , testCase "abbreviated squashed that drop module name" $
+          in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
+      , testCase "abbreviated that drop module name" $
           let i = "import " <> T.replicate 120 "F" <> " (Athing, Bthing, Cthing)"
               o = "(Athing, Bthing, Cthing)"
-          in ExplicitImports.squashedAbbreviateImportTitle i @?= o
-      , testCase "abbreviated squashed in import list" $
+          in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
+      , testCase "abbreviated in import list" $
           let i = "import M (Athing, Bthing, " <> T.replicate 100 "F" <> ", Cthing, Dthing, Ething)"
               o = "(Athing, Bthing, ... (4 items))"
-          in ExplicitImports.squashedAbbreviateImportTitle i @?= o
+          in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
       ]
     ]]
 
