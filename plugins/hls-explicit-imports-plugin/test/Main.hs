@@ -39,7 +39,7 @@ main = defaultTestRunner $ testGroup "import-actions"
            { _position = Position {_line = 2, _character = 16}
            , _label = InL "( a1 )"
            , _kind = Just InlayHintKind_Type
-           , _textEdits = Nothing
+           , _textEdits = Just [TextEdit (Range (Position 2 0) (Position 2 16)) "import ExplicitA ( a1 )"]
            , _tooltip = Nothing
            , _paddingLeft = Just True
            , _paddingRight = Nothing
@@ -52,7 +52,7 @@ main = defaultTestRunner $ testGroup "import-actions"
            { _position = Position {_line = 3, _character = 16}
            , _label = InL "( b1 )"
            , _kind = Just InlayHintKind_Type
-           , _textEdits = Nothing
+           , _textEdits = Just [TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitB ( b1 )"]
            , _tooltip = Nothing
            , _paddingLeft = Just True
            , _paddingRight = Nothing
@@ -65,7 +65,7 @@ main = defaultTestRunner $ testGroup "import-actions"
            { _position = Position {_line = 3, _character = 16}
            , _label = InL "( a1 )"
            , _kind = Just InlayHintKind_Type
-           , _textEdits = Nothing
+           , _textEdits = Just [TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitA ( a1 )"]
            , _tooltip = Nothing
            , _paddingLeft = Just True
            , _paddingRight = Nothing

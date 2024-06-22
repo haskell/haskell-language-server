@@ -28,11 +28,13 @@ import           Data.Char                            (isSpace)
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
+import           Data.List                            (singleton)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (isNothing, mapMaybe)
 import qualified Data.Set                             as S
 import           Data.String                          (fromString)
 import qualified Data.Text                            as T
+import qualified Data.Text                            as Text
 import           Data.Traversable                     (for)
 import qualified Data.Unique                          as U (hashUnique,
                                                             newUnique)
@@ -112,7 +114,7 @@ runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IARe
 runImportCommand recorder ideState _ eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
-  return $ InR  Null
+  return $ InR Null
   where logErrors (Left re) = do
           logWith recorder Error (LogWAEResponseError re)
           pure ()
@@ -172,14 +174,18 @@ lensResolveProvider _ _ _ _ _ rd = do
    throwError $ PluginInvalidParams (T.pack $ "Unexpected argument for lens resolve handler: " <> show rd)
 
 
+-- | Provide explicit imports in inlay hints.
+-- Applying textEdits can make the import explicit.
+-- There is currently no need to resolve inlay hints,
+-- as no tooltips or commands are provided in the label.
 inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} = do
     nfp <- getNormalizedFilePathE _uri
     (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
-    let inlayHints = [ generateInlayHints newRange ie
+    let inlayHints = [ generateInlayHints newRange ie pm
                      | (range, int) <- forLens
-                     , isSubrangeOf range visibleRange
                      , Just newRange <- [toCurrentRange pm range]
+                     , isSubrangeOf newRange visibleRange
                      , Just ie <- [forResolve IM.!? int]]
     pure $ InL inlayHints
   where
@@ -189,22 +195,22 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     --   |--- range ----|-- IH ---|
     --                  |^-padding
     --                  ^-_position
-    generateInlayHints :: Range -> ImportEdit -> InlayHint
-    generateInlayHints Range {_end} ie =
-      InlayHint { _position = _end
-                , _label = mkLabel ie
+    generateInlayHints :: Range -> ImportEdit -> PositionMapping -> InlayHint
+    generateInlayHints (Range _ end) ie pm =
+      InlayHint { _position = end
+                , _label = InL $ mkLabel ie
                 , _kind = Just InlayHintKind_Type -- for type annotations
-                , _textEdits = Nothing
+                , _textEdits = fmap singleton $ toTEdit pm ie
                 , _tooltip = Nothing
                 , _paddingLeft = Just True
                 , _paddingRight = Nothing
                 , _data_ = Nothing
                 }
-    mkLabel :: ImportEdit -> T.Text |? [InlayHintLabelPart]
+    mkLabel :: ImportEdit -> T.Text
     mkLabel (ImportEdit{ieResType, ieText}) =
-      let title ExplicitImport = squashedAbbreviateImportTitle ieText
-          title RefineImport   = T.intercalate ", " (T.lines ieText)
-      in InL $ title ieResType
+      let title ExplicitImport = abbreviateImportTitle . T.dropWhile (/= '(') $ ieText
+          title RefineImport   = "Refine imports to " <> T.intercalate ", " (T.lines ieText)
+      in title ieResType
 
 
 -- |For explicit imports: If there are any implicit imports, provide both one
@@ -273,12 +279,14 @@ resolveWTextEdit ideState (RefineAll uri) = do
   pure $ mkWorkspaceEdit uri edits pm
 mkWorkspaceEdit :: Uri -> [ImportEdit] -> PositionMapping -> WorkspaceEdit
 mkWorkspaceEdit uri edits pm =
-      WorkspaceEdit {_changes = Just $ Map.singleton uri  (mapMaybe toWEdit edits)
+      WorkspaceEdit {_changes = Just $ Map.singleton uri (mapMaybe (toTEdit pm) edits)
                     , _documentChanges = Nothing
                     , _changeAnnotations = Nothing}
-  where toWEdit ImportEdit{ieRange, ieText} =
-          let newRange = toCurrentRange pm ieRange
-          in (\r -> TextEdit r ieText) <$> newRange
+
+toTEdit :: PositionMapping -> ImportEdit -> Maybe TextEdit
+toTEdit pm ImportEdit{ieRange, ieText} =
+      let newRange = toCurrentRange pm ieRange
+      in (\r -> TextEdit r ieText) <$> newRange
 
 data ImportActions = ImportActions
   deriving (Show, Generic, Eq, Ord)
