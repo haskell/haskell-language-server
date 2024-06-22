@@ -34,11 +34,11 @@ main = defaultTestRunner $ testGroup "import-actions"
     "Make imports explicit"
     [ codeActionAllGoldenTest "ExplicitUsualCase" 3 0
     , codeActionAllResolveGoldenTest "ExplicitUsualCase" 3 0
-    , inlayHintsTest "ExplicitUsualCase" 3 0 $ (@=?)
+    , inlayHintsTest "ExplicitUsualCase" 2 $ (@=?)
         [InlayHint
            { _position = Position {_line = 2, _character = 16}
            , _label = InL "( a1 )"
-           , _kind = Nothing
+           , _kind = Just InlayHintKind_Type
            , _textEdits = Nothing
            , _tooltip = Nothing
            , _paddingLeft = Just True
@@ -47,11 +47,11 @@ main = defaultTestRunner $ testGroup "import-actions"
            }]
     , codeActionOnlyGoldenTest "ExplicitOnlyThis" 3 0
     , codeActionOnlyResolveGoldenTest "ExplicitOnlyThis" 3 0
-    , inlayHintsTest "ExplicitOnlyThis" 3 0 $ (@?=)
+    , inlayHintsTest "ExplicitOnlyThis" 3 $ (@=?)
         [InlayHint
-           { _position = Position {_line = 2, _character = 16}
-           , _label = InL "( a1 )"
-           , _kind = Nothing
+           { _position = Position {_line = 3, _character = 16}
+           , _label = InL "( b1 )"
+           , _kind = Just InlayHintKind_Type
            , _textEdits = Nothing
            , _tooltip = Nothing
            , _paddingLeft = Just True
@@ -60,7 +60,17 @@ main = defaultTestRunner $ testGroup "import-actions"
            }]
     , codeLensGoldenTest notRefineImports "ExplicitUsualCase" 0
     , codeActionBreakFile "ExplicitBreakFile" 4 0
-    , inlayHintsTest "ExplicitBreakFile" 3 0 $ (@=?) []
+    , inlayHintsTest "ExplicitBreakFile" 3 $ (@=?)
+        [InlayHint
+           { _position = Position {_line = 3, _character = 16}
+           , _label = InL "( a1 )"
+           , _kind = Just InlayHintKind_Type
+           , _textEdits = Nothing
+           , _tooltip = Nothing
+           , _paddingLeft = Just True
+           , _paddingRight = Nothing
+           , _data_ = Nothing
+           }]
     , codeActionStaleAction "ExplicitStaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer def explicitImportsPlugin testDataDir $ do
@@ -204,11 +214,14 @@ notRefineImports (CodeLens _ (Just (Command text _ _)) _)
   | "Refine imports to" `T.isPrefixOf` text = False
 notRefineImports _ = True
 
-inlayHintsTest :: FilePath -> Int -> Int -> ([InlayHint] -> Assertion) -> TestTree
-inlayHintsTest fp l c assert = testCase (fp ++ " inlay hints") $ runSessionWithServer def explicitImportsPlugin testDataDir $ do
+inlayHintsTest :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTest fp line assert = testCase (fp ++ " inlay hints") $ runSessionWithServer def explicitImportsPlugin testDataDir $ do
   doc <- openDoc (fp ++ ".hs") "haskell"
-  inlayHints <- getInlayHints doc (pointRange l c)
+  inlayHints <- getInlayHints doc (lineRange line)
   liftIO $ assert inlayHints
+  where
+    -- zero-based position
+    lineRange line = Range (Position line 0) (Position line 1000)
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()
