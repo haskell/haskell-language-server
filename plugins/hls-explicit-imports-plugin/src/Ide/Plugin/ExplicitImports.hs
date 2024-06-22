@@ -58,6 +58,8 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Types          as LSP
+import qualified Language.LSP.Server                  as LSP
 
 -- This plugin is named explicit-imports for historical reasons. Besides
 -- providing code actions and lenses to make imports explicit it also provides
@@ -109,6 +111,23 @@ descriptorForModules recorder modFilter plId =
         <> codeActionHandlers
     }
 
+isInlayHintsSupported :: MonadIO m => IdeState -> m Bool
+isInlayHintsSupported state = do
+    Shake.ShakeExtras{lspEnv} <- liftIO $ runAction "" state Shake.getShakeExtras
+    case lspEnv of
+        Just env -> liftIO $ LSP.runLspT env s
+        Nothing  -> pure False
+    where
+      s = do
+        clientCapabilities <- LSP.getClientCapabilities
+        pure $ case () of
+            _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities
+              , Just LSP.WorkspaceClientCapabilities{_inlayHint} <- _workspace
+              , Just _ <- _inlayHint
+              -> True
+              | otherwise -> False
+
+
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
 runImportCommand recorder ideState _ eird@(ResolveOne _ _) = do
@@ -136,13 +155,17 @@ runImportCommand _ _ _ rd = do
 -- the provider should produce one code lens associated to the import statement:
 -- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
-lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
-    nfp <- getNormalizedFilePathE _uri
-    (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
-    let lens = [ generateLens _uri newRange int
-                | (range, int) <- forLens
-                , Just newRange <- [toCurrentRange pm range]]
-    pure $ InL lens
+lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
+    isIHSupported <- liftIO $ isInlayHintsSupported state
+    if isIHSupported
+    then do pure $ InR Null
+    else do
+        nfp <- getNormalizedFilePathE _uri
+        (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+        let lens = [ generateLens _uri newRange int
+                    | (range, int) <- forLens
+                    , Just newRange <- [toCurrentRange pm range]]
+        pure $ InL lens
   where -- because these are non resolved lenses we only need the range and a
         -- unique id to later resolve them with. These are for both refine
         -- import lenses and for explicit import lenses.
@@ -180,14 +203,18 @@ lensResolveProvider _ _ _ _ _ rd = do
 -- as no tooltips or commands are provided in the label.
 inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} = do
-    nfp <- getNormalizedFilePathE _uri
-    (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
-    let inlayHints = [ generateInlayHints newRange ie pm
-                     | (range, int) <- forLens
-                     , Just newRange <- [toCurrentRange pm range]
-                     , isSubrangeOf newRange visibleRange
-                     , Just ie <- [forResolve IM.!? int]]
-    pure $ InL inlayHints
+    isIHSupported <- liftIO $ isInlayHintsSupported state
+    if isIHSupported
+    then do
+        nfp <- getNormalizedFilePathE _uri
+        (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+        let inlayHints = [ generateInlayHints newRange ie pm
+                         | (range, int) <- forLens
+                         , Just newRange <- [toCurrentRange pm range]
+                         , isSubrangeOf newRange visibleRange
+                         , Just ie <- [forResolve IM.!? int]]
+        pure $ InL inlayHints
+    else do pure $ InR Null
   where
     -- The appropriate and intended position for the hint hints to begin
     -- is the end of the range for the code lens.
