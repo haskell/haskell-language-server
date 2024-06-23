@@ -203,7 +203,7 @@ caTitle _                         = Nothing
 -- code lens tests
 
 codeLensGoldenTest :: (CodeLens -> Bool) -> FilePath -> Int -> TestTree
-codeLensGoldenTest predicate fp i = goldenWithImportActions " code lens" fp codeActionNoResolveCaps $ \doc -> do
+codeLensGoldenTest predicate fp i = goldenWithImportActions " code lens" fp codeActionNoInlayHintsCaps $ \doc -> do
   codeLenses <- getCodeLenses doc
   resolvedCodeLenses <- for codeLenses resolveCodeLens
   (CodeLens {_command = Just c}) <- pure (filter predicate resolvedCodeLenses !! i)

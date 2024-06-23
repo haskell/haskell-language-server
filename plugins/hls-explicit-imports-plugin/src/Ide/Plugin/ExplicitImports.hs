@@ -121,8 +121,8 @@ isInlayHintsSupported state = do
       s = do
         clientCapabilities <- LSP.getClientCapabilities
         pure $ case () of
-            _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities
-              , Just LSP.WorkspaceClientCapabilities{_inlayHint} <- _workspace
+            _ | LSP.ClientCapabilities{_textDocument} <- clientCapabilities
+              , Just LSP.TextDocumentClientCapabilities{_inlayHint} <- _textDocument
               , Just _ <- _inlayHint
               -> True
               | otherwise -> False
