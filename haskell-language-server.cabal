@@ -1563,14 +1563,13 @@ flag stylishHaskell
   manual:      True
 
 common stylishHaskell
-  if flag(stylishHaskell) && impl(ghc < 9.10)
+  if flag(stylishHaskell)
     build-depends: haskell-language-server:hls-stylish-haskell-plugin
     cpp-options: -Dhls_stylishHaskell
 
 library hls-stylish-haskell-plugin
   import:           defaults, pedantic, warnings
-  -- https://github.com/haskell/stylish-haskell/issues/479
-  if !(flag(stylishHaskell) && impl(ghc < 9.10))
+  if !flag(stylishHaskell)
     buildable: False
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
@@ -1589,7 +1588,7 @@ library hls-stylish-haskell-plugin
 
 test-suite hls-stylish-haskell-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !(flag(stylishHaskell) && impl(ghc < 9.10))
+  if !flag(stylishHaskell)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
