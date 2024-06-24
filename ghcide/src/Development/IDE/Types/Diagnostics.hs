@@ -19,6 +19,7 @@ module Development.IDE.Types.Diagnostics (
   ideErrorFromLspDiag,
   showDiagnostics,
   showDiagnosticsColored,
+  showGhcCode,
   IdeResultNoDiagnosticsEarlyCutoff,
   attachReason,
   attachedReason) where
@@ -77,19 +78,20 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
           Just msg -> SomeStructuredMessage msg
       fdLspDiagnostic = (attachReason (fmap (diagnosticReason . errMsgDiagnostic) origMsg) lspDiag)
 #if MIN_VERSION_ghc(9,6,1)
-        { _code = fmap ghcCodeToLspCode . diagnosticCode . errMsgDiagnostic =<< origMsg
+        { _code = fmap (InR . showGhcCode) . diagnosticCode . errMsgDiagnostic =<< origMsg
         }
-#endif
-#if MIN_VERSION_ghc(9,8,1)
-      ghcCodeToLspCode :: DiagnosticCode -> Int32 LSP.|? T.Text
-      ghcCodeToLspCode = InR . T.pack . show
-#elif MIN_VERSION_ghc(9,6,1)
-      -- DiagnosticCode only got a show instance in 9.8.1
-      ghcCodeToLspCode :: DiagnosticCode -> Int32 LSP.|? T.Text
-      ghcCodeToLspCode (DiagnosticCode prefix c) = InR $ T.pack $ prefix ++ "-" ++ printf "%05d" c
 #endif
   in
   FileDiagnostic {..}
+
+#if MIN_VERSION_ghc(9,8,1)
+showGhcCode :: DiagnosticCode -> T.Text
+showGhcCode = T.pack . show
+#elif MIN_VERSION_ghc(9,6,1)
+-- DiagnosticCode only got a show instance in 9.8.1
+showGhcCode :: DiagnosticCode -> T.Text
+showGhcCode (DiagnosticCode prefix c) = T.pack $ prefix ++ "-" ++ printf "%05d" c
+#endif
 
 attachedReason :: Traversal' Diagnostic (Maybe JSON.Value)
 attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"
