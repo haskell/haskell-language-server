@@ -34,43 +34,22 @@ main = defaultTestRunner $ testGroup "import-actions"
     "Make imports explicit"
     [ codeActionAllGoldenTest "ExplicitUsualCase" 3 0
     , codeActionAllResolveGoldenTest "ExplicitUsualCase" 3 0
-    , inlayHintsTest "ExplicitUsualCase" 2 $ (@=?)
-        [InlayHint
-           { _position = Position {_line = 2, _character = 16}
-           , _label = InL "( a1 )"
-           , _kind = Just InlayHintKind_Type
-           , _textEdits = Just [TextEdit (Range (Position 2 0) (Position 2 16)) "import ExplicitA ( a1 )"]
-           , _tooltip = Nothing
-           , _paddingLeft = Just True
-           , _paddingRight = Nothing
-           , _data_ = Nothing
-           }]
+    , inlayHintsTestWithCap "ExplicitUsualCase" 2 $ (@=?)
+        [mkInlayHint (Position 2 16) "( a1 )"
+                     (TextEdit (Range (Position 2 0) (Position 2 16)) "import ExplicitA ( a1 )")]
+    , inlayHintsTestWithoutCap "ExplicitUsualCase" 2 $ (@=?) []
     , codeActionOnlyGoldenTest "ExplicitOnlyThis" 3 0
     , codeActionOnlyResolveGoldenTest "ExplicitOnlyThis" 3 0
-    , inlayHintsTest "ExplicitOnlyThis" 3 $ (@=?)
-        [InlayHint
-           { _position = Position {_line = 3, _character = 16}
-           , _label = InL "( b1 )"
-           , _kind = Just InlayHintKind_Type
-           , _textEdits = Just [TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitB ( b1 )"]
-           , _tooltip = Nothing
-           , _paddingLeft = Just True
-           , _paddingRight = Nothing
-           , _data_ = Nothing
-           }]
+    , inlayHintsTestWithCap "ExplicitOnlyThis" 3 $ (@=?)
+        [mkInlayHint (Position 3 16) "( b1 )"
+                     (TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitB ( b1 )")]
+    , inlayHintsTestWithoutCap "ExplicitOnlyThis" 3 $ (@=?) []
     , codeLensGoldenTest notRefineImports "ExplicitUsualCase" 0
     , codeActionBreakFile "ExplicitBreakFile" 4 0
-    , inlayHintsTest "ExplicitBreakFile" 3 $ (@=?)
-        [InlayHint
-           { _position = Position {_line = 3, _character = 16}
-           , _label = InL "( a1 )"
-           , _kind = Just InlayHintKind_Type
-           , _textEdits = Just [TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitA ( a1 )"]
-           , _tooltip = Nothing
-           , _paddingLeft = Just True
-           , _paddingRight = Nothing
-           , _data_ = Nothing
-           }]
+    , inlayHintsTestWithCap "ExplicitBreakFile" 3 $ (@=?)
+        [mkInlayHint (Position 3 16) "( a1 )"
+                     (TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitA ( a1 )")]
+    , inlayHintsTestWithoutCap "ExplicitBreakFile" 3 $ (@=?) []
     , codeActionStaleAction "ExplicitStaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer def explicitImportsPlugin testDataDir $ do
@@ -214,14 +193,41 @@ notRefineImports (CodeLens _ (Just (Command text _ _)) _)
   | "Refine imports to" `T.isPrefixOf` text = False
 notRefineImports _ = True
 
-inlayHintsTest :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
-inlayHintsTest fp line assert = testCase (fp ++ " inlay hints") $ runSessionWithServer def explicitImportsPlugin testDataDir $ do
+-- inlay hints tests
+
+inlayHintsTest :: ClientCapabilities -> String -> FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTest configCaps postfix fp line assert = testCase (fp ++ postfix) $ run $ \_ -> do
   doc <- openDoc (fp ++ ".hs") "haskell"
   inlayHints <- getInlayHints doc (lineRange line)
   liftIO $ assert inlayHints
   where
     -- zero-based position
     lineRange line = Range (Position line 0) (Position line 1000)
+    run = runSessionWithTestConfig def
+        { testDirLocation = Left testDataDir
+        , testPluginDescriptor = explicitImportsPlugin
+        , testConfigCaps = configCaps
+        }
+
+inlayHintsTestWithCap :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTestWithCap = inlayHintsTest fullLatestClientCaps " inlay hints with client caps"
+
+inlayHintsTestWithoutCap :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTestWithoutCap = inlayHintsTest codeActionNoInlayHintsCaps " inlay hints without client caps"
+
+
+mkInlayHint :: Position -> Text -> TextEdit -> InlayHint
+mkInlayHint pos label textEdit =
+  InlayHint
+  { _position = pos
+  , _label = InL label
+  , _kind = Just InlayHintKind_Type
+  , _textEdits = Just [textEdit]
+  , _tooltip = Nothing
+  , _paddingLeft = Just True
+  , _paddingRight = Nothing
+  , _data_ = Nothing
+  }
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()
