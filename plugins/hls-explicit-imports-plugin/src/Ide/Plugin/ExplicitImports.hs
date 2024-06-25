@@ -214,7 +214,7 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     -- is the end of the range for the code lens.
     --   import Data.Char (isSpace)
     --   |--- range ----|-- IH ---|
-    --                  |^-padding
+    --                  |^-paddingLeft
     --                  ^-_position
     generateInlayHints :: Range -> ImportEdit -> PositionMapping -> InlayHint
     generateInlayHints (Range _ end) ie pm =
