@@ -113,7 +113,7 @@ descriptorForModules recorder modFilter plId =
 
 isInlayHintsSupported :: Applicative f => IdeState -> f Bool
 isInlayHintsSupported ideState = do
-  let clientCaps = clientCapabilities $ shakeExtras ideState
+  let clientCaps = Shake.clientCapabilities $ shakeExtras ideState
   pure $ case clientCaps of
     LSP.ClientCapabilities{_textDocument = Just LSP.TextDocumentClientCapabilities{_inlayHint = Just _}} -> True
     _ -> False
