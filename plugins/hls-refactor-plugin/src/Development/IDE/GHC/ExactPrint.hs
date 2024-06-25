@@ -158,7 +158,7 @@ getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) 
   return ([], fmap annotateParsedSource pm)
 
 annotateParsedSource :: ParsedModule -> ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) =
+annotateParsedSource (ParsedModule _ ps _) =
 #if MIN_VERSION_ghc(9,9,0)
     ps
 #else

@@ -1347,8 +1347,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , brokenForGHC92 "On GHC 9.2, the error doesn't contain \"perhaps you want ...\" part from which import suggestion can be extracted." $
-          testSession "extend single line import in presence of extra parens" $ template
+        , testSession "extend single line import in presence of extra parens" $ template
             []
             ("Main.hs", T.unlines
                     [ "import Data.Monoid (First)"
@@ -1534,7 +1533,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -3222,7 +3221,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
@@ -3850,6 +3849,3 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
-
-brokenForGHC92 :: String -> TestTree -> TestTree
-brokenForGHC92 = knownBrokenForGhcVersions [GHC92]
