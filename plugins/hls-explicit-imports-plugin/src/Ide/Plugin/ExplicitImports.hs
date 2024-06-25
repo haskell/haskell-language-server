@@ -146,6 +146,8 @@ runImportCommand _ _ _ rd = do
 -- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
+    -- Code lens are not provided when the client supports inlay hints,
+    -- otherwise it will be provided as a fallback
     isIHSupported <- liftIO $ isInlayHintsSupported state
     if isIHSupported
     then do pure $ InR Null
@@ -204,6 +206,8 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                          , isSubrangeOf newRange visibleRange
                          , Just ie <- [forResolve IM.!? int]]
         pure $ InL inlayHints
+    -- When the client does not support inlay hints, fallback to the code lens,
+    -- so this is Null
     else do pure $ InR Null
   where
     -- The appropriate and intended position for the hint hints to begin
