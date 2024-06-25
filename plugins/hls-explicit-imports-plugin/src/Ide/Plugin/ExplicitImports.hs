@@ -150,7 +150,7 @@ lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_
     -- otherwise it will be provided as a fallback
     isIHSupported <- liftIO $ isInlayHintsSupported state
     if isIHSupported
-    then do pure $ InR Null
+    then do pure $ InL []
     else do
         nfp <- getNormalizedFilePathE _uri
         (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
