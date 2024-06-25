@@ -111,22 +111,12 @@ descriptorForModules recorder modFilter plId =
         <> codeActionHandlers
     }
 
-isInlayHintsSupported :: MonadIO m => IdeState -> m Bool
-isInlayHintsSupported state = do
-    Shake.ShakeExtras{lspEnv} <- liftIO $ runAction "" state Shake.getShakeExtras
-    case lspEnv of
-        Just env -> liftIO $ LSP.runLspT env s
-        Nothing  -> pure False
-    where
-      s = do
-        clientCapabilities <- LSP.getClientCapabilities
-        pure $ case () of
-            _ | LSP.ClientCapabilities{_textDocument} <- clientCapabilities
-              , Just LSP.TextDocumentClientCapabilities{_inlayHint} <- _textDocument
-              , Just _ <- _inlayHint
-              -> True
-              | otherwise -> False
-
+isInlayHintsSupported :: Applicative f => IdeState -> f Bool
+isInlayHintsSupported ideState = do
+  let clientCaps = clientCapabilities $ shakeExtras ideState
+  pure $ case clientCaps of
+    LSP.ClientCapabilities{_textDocument = Just LSP.TextDocumentClientCapabilities{_inlayHint = Just _}} -> True
+    _ -> False
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
