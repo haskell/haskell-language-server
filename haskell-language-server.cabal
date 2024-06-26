@@ -232,6 +232,7 @@ library hls-cabal-plugin
 
 
   build-depends:
+    , aeson
     , base                  >=4.12     && <5
     , bytestring
     , Cabal-syntax          >= 3.7

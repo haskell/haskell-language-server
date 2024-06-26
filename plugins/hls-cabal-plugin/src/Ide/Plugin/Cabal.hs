@@ -5,7 +5,6 @@
 {-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.Cabal (descriptor, Log (..)) where
-
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -14,6 +13,7 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class                   (lift)
 import           Control.Monad.Trans.Maybe                   (runMaybeT)
+import           Data.Aeson.Types                            (ToJSON (..))
 import qualified Data.ByteString                             as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                         (HashMap)
@@ -27,7 +27,9 @@ import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (alwaysRerun)
 import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
 import qualified Development.IDE.Plugin.Completions.Types    as Ghcide
+import qualified Development.IDE.Types.Options               as Options
 import           GHC.Generics
+import           GHC.TypeLits                                (KnownSymbol)
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
 import qualified Ide.Plugin.Cabal.Completion.Types           as Types
@@ -36,9 +38,11 @@ import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
+import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                         (getVirtualFile)
+import qualified Language.LSP.Server                         as LSP
 import qualified Language.LSP.VFS                            as VFS
 
 data Log
@@ -187,7 +191,14 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
+  Shake.ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- Shake.getShakeExtras
+  let signal :: KnownSymbol s => Proxy s -> Action ()
+      signal msg = when testing $ liftIO $ Shake.mRunLspT lspEnv $
+        LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
+        toJSON $ map fromNormalizedFilePath files
+  signal (Proxy @"kick/start/cabal")
   void $ uses Types.GetCabalDiagnostics files
+  signal(Proxy @"kick/done/cabal")
 
 -- ----------------------------------------------------------------
 -- Code Actions

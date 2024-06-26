@@ -72,6 +72,7 @@ codeActionUnitTests =
                 @?= [("MiT", "MIT"), ("MiT", "MIT-0")]
         ]
 
+
 -- ------------------------ ------------------------------------------------
 -- Integration Tests
 -- ------------------------------------------------------------------------
@@ -83,8 +84,9 @@ pluginTests =
         [ testGroup
             "Diagnostics"
             [ runCabalTestCaseSession "Publishes Diagnostics on Error" "" $ do
-                doc <- openDoc "invalid.cabal" "cabal"
-                diags <- waitForDiagnosticsFromSource doc "cabal"
+                _ <- openDoc "invalid.cabal" "cabal"
+                -- diags <- waitForDiagnosticsFromSource doc "cabal"
+                diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
@@ -92,14 +94,16 @@ pluginTests =
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
             , runCabalTestCaseSession "Clears diagnostics" "" $ do
                 doc <- openDoc "invalid.cabal" "cabal"
-                diags <- waitForDiagnosticsFrom doc
+                -- diags <- waitForDiagnosticsFrom doc
+                diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
                     unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
                 _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
-                newDiags <- waitForDiagnosticsFrom doc
+                -- newDiags <- waitForDiagnosticsFrom doc
+                newDiags <- cabalCaptureKick
                 liftIO $ newDiags @?= []
             , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do
                 hsDoc <- openDoc "A.hs" "haskell"
@@ -137,7 +141,8 @@ pluginTests =
             "Code Actions"
             [ runCabalTestCaseSession "BSD-3" "" $ do
                 doc <- openDoc "licenseCodeAction.cabal" "cabal"
-                diags <- waitForDiagnosticsFromSource doc "cabal"
+                -- diags <- waitForDiagnosticsFromSource doc "cabal"
+                diags <- cabalCaptureKick
                 reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
@@ -160,7 +165,8 @@ pluginTests =
                             ]
             , runCabalTestCaseSession "Apache-2.0" "" $ do
                 doc <- openDoc "licenseCodeAction2.cabal" "cabal"
-                diags <- waitForDiagnosticsFromSource doc "cabal"
+                -- diags <- waitForDiagnosticsFromSource doc "cabal"
+                diags <- cabalCaptureKick
                 -- test if it supports typos in license name, here 'apahe'
                 reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'APAHE'"]
                 liftIO $ do

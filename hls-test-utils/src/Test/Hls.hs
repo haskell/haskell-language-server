@@ -4,7 +4,6 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedLists       #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE OverloadedStrings     #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -59,6 +58,7 @@ module Test.Hls
     Recorder,
     Priority(..),
     captureKickDiagnostics,
+    kick
     )
 where
 
@@ -66,6 +66,7 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
+import           Control.Lens                       ((^.))
 import           Control.Lens.Extras                (is)
 import           Control.Monad                      (guard, unless, void)
 import           Control.Monad.Extra                (forM)
@@ -77,7 +78,7 @@ import qualified Data.Aeson                         as A
 import           Data.ByteString.Lazy               (ByteString)
 import           Data.Default                       (def)
 import qualified Data.Map                           as M
-import           Data.Maybe                         (fromMaybe)
+import           Data.Maybe                         (fromMaybe, mapMaybe)
 import           Data.Proxy                         (Proxy (Proxy))
 import qualified Data.Text                          as T
 import qualified Data.Text.Lazy                     as TL
@@ -104,6 +105,7 @@ import           Ide.Logger                         (Doc, Logger (Logger),
                                                      (<+>))
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
+import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Test
@@ -126,9 +128,6 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
-import Language.LSP.Protocol.Lens qualified as L
-import Data.Maybe (mapMaybe)
-import Control.Lens ((^.))
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -717,10 +716,10 @@ setHlsConfig config = do
   -- requests!
   skipManyTill anyMessage (void configurationRequest)
 
-captureKickDiagnostics :: Session [Diagnostic]
-captureKickDiagnostics = do
-    _ <- skipManyTill anyMessage nonTrivialKickStart2
-    messages <- manyTill anyMessage nonTrivialKickDone2
+captureKickDiagnostics :: Session () -> Session () -> Session [Diagnostic]
+captureKickDiagnostics start done = do
+    _ <- skipManyTill anyMessage start
+    messages <- manyTill anyMessage done
     pure $ concat $ mapMaybe diagnostics messages
     where
         diagnostics :: FromServerMessage' a -> Maybe [Diagnostic]
@@ -739,12 +738,6 @@ nonTrivialKickDone = kick (Proxy @"kick/done") >>= guard . not . null
 
 nonTrivialKickStart :: Session ()
 nonTrivialKickStart = kick (Proxy @"kick/start") >>= guard . not . null
-
-nonTrivialKickDone2 :: Session ()
-nonTrivialKickDone2 = kick (Proxy @"kick/done/hlint") >>= guard . not . null
-
-nonTrivialKickStart2 :: Session ()
-nonTrivialKickStart2 = kick (Proxy @"kick/start/hlint") >>= guard . not . null
 
 
 kick :: KnownSymbol k => Proxy k -> Session [FilePath]
