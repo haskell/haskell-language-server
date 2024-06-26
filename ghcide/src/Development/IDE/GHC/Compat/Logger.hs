@@ -14,12 +14,9 @@ import           Development.IDE.GHC.Compat.Env        as Env
 import           Development.IDE.GHC.Compat.Outputable
 
 
+import           GHC.Types.Error
 import           GHC.Utils.Logger                      as Logger
 import           GHC.Utils.Outputable
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Types.Error
 
 putLogHook :: Logger -> HscEnv -> HscEnv
 putLogHook logger env =

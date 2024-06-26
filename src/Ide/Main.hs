@@ -89,7 +89,7 @@ defaultMain recorder args idePlugins = do
                     $ map describePlugin
                     $ sortOn pluginId
                     $ ipMap idePlugins
-            putStrLn $ show pluginSummary
+            print pluginSummary
 
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory

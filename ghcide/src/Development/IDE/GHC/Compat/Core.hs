@@ -489,9 +489,6 @@ import           GHC.Core.Multiplicity       (scaledThing)
 import           GHC.Data.Bag
 import           GHC.Driver.Env
 import           GHC.Hs                       (HsModule (..))
-#if !MIN_VERSION_ghc(9,9,0)
-import           GHC.Hs                       (SrcSpanAnn')
-#endif
 import           GHC.Hs.Decls                 hiding (FunDep)
 import           GHC.Hs.Doc
 import           GHC.Hs.Expr
@@ -525,10 +522,6 @@ import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
                                               ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary  (ModSummary (..))
 import           Language.Haskell.Syntax     hiding (FunDep)
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 import qualified GHC.Data.Strict             as Strict
 import qualified GHC.Driver.Config.Finder    as GHC
 import qualified GHC.Driver.Config.Tidy      as GHC
@@ -545,8 +538,15 @@ import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
+#endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Hs                       (SrcSpanAnn')
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation

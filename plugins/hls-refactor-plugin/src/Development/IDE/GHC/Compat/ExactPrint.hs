@@ -16,4 +16,4 @@ transformA
   :: Monad m => ast1 -> (ast1 -> TransformT m ast2) -> m ast2
 transformA ast f = do
   (ast',_ ,_) <- runTransformFromT 0 (f ast)
-  return $ ast'
+  return ast'

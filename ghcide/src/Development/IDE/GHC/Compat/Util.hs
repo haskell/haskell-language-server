@@ -68,6 +68,7 @@ module Development.IDE.GHC.Compat.Util (
 
 import           Control.Exception.Safe  (MonadCatch, catch, try)
 import           GHC.Data.Bag
+import           GHC.Data.Bool
 import           GHC.Data.BooleanFormula
 import           GHC.Data.EnumSet
 import           GHC.Data.FastString
@@ -79,8 +80,3 @@ import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
 import           GHC.Utils.Outputable    (pprHsString)
 import           GHC.Utils.Panic         hiding (try)
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           GHC.Data.Bool

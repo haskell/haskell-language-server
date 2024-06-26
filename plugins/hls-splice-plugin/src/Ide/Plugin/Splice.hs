@@ -191,7 +191,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                     pure (Right edits)
     case res of
       Nothing -> pure $ Right $ InR Null
-      Just (Left err) -> pure $ Left $ err
+      Just (Left err) -> pure $ Left err
       Just (Right edit) -> do
         _ <- pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
         pure $ Right $ InR Null
