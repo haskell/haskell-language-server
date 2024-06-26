@@ -808,6 +808,14 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
+#if MIN_VERSION_ghc(9,8,0)
+      pat multiple _ _ _ = T.concat [ ".*Defaulting the type variable "
+                                       , ".*to type ‘([^ ]+)’ "
+                                       , "in the following constraint"
+                                       , if multiple then "s" else " "
+                                       , ".*arising from the literal ‘(.+)’"
+                                       ]
+#else
 #if MIN_VERSION_ghc(9,4,0)
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
                                        , ".*to type ‘([^ ]+)’ "
@@ -829,6 +837,7 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
                                        , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
+#endif
 #endif
       codeEdit range ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
