@@ -58,16 +58,16 @@ defaults: &defaults
 
 version: 2
 jobs:
-  stackage-lts21:
+  stackage-lts22:
     docker:
-      - image: haskell:9.4.8-slim-buster
+      - image: haskell:9.6.5-slim-buster
     environment:
-      - STACK_FILE: "stack-lts21.yaml"
+      - STACK_FILE: "stack-lts22.yaml"
     <<: *defaults
 
   stackage-nightly:
     docker:
-      - image: haskell:9.6.4-slim-buster
+      - image: haskell:9.8.2-slim-buster
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
@@ -76,5 +76,5 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - stackage-lts21
+      - stackage-lts22
       - stackage-nightly

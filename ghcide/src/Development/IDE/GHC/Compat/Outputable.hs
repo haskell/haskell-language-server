@@ -24,7 +24,6 @@ module Development.IDE.GHC.Compat.Outputable (
     initDiagOpts,
     pprMessages,
 #endif
-#if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
     renderDiagnosticMessageWithHints,
     pprMsgEnvelopeBagWithLoc,
@@ -34,10 +33,6 @@ module Development.IDE.GHC.Compat.Outputable (
     errMsgDiagnostic,
     unDecorated,
     diagnosticMessage,
-#else
-    pprWarning,
-    pprError,
-#endif
     -- * Error infrastructure
     DecoratedSDoc,
     MsgEnvelope,
@@ -67,18 +62,11 @@ import           GHC.Utils.Panic
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Parser.Errors
-import qualified GHC.Parser.Errors.Ppr        as Ppr
-import           GHC.Utils.Error              hiding (mkWarnMsg)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
 import           GHC.Driver.Config.Diagnostic
 import           GHC.Parser.Errors.Types
 import           GHC.Utils.Error
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Driver.Errors.Types      (DriverMessage, GhcMessage)
@@ -114,43 +102,26 @@ printSDocQualifiedUnsafe unqual doc =
     doc' = pprWithUnitState emptyUnitState doc
 
 
-#if !MIN_VERSION_ghc(9,3,0)
-pprWarning :: PsWarning -> MsgEnvelope DecoratedSDoc
-pprWarning =
-  Ppr.pprWarning
-
-pprError :: PsError -> MsgEnvelope DecoratedSDoc
-pprError =
-  Ppr.pprError
-#endif
 
 formatErrorWithQual :: DynFlags -> MsgEnvelope DecoratedSDoc -> String
 formatErrorWithQual dflags e =
   showSDoc dflags (pprNoLocMsgEnvelope e)
 
-#if MIN_VERSION_ghc(9,3,0)
 pprNoLocMsgEnvelope :: MsgEnvelope DecoratedSDoc -> SDoc
-#else
-pprNoLocMsgEnvelope :: Error.RenderableDiagnostic e => MsgEnvelope e -> SDoc
-#endif
 pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
                                  , errMsgContext   = unqual })
   = sdocWithContext $ \_ctx ->
     withErrStyle unqual $
 #if MIN_VERSION_ghc(9,7,0)
       formatBulleted e
-#elif MIN_VERSION_ghc(9,3,0)
-      formatBulleted _ctx $ e
 #else
-      formatBulleted _ctx $ Error.renderDiagnostic e
+      formatBulleted _ctx $ e
 #endif
 
 
 
 type ErrMsg  = MsgEnvelope DecoratedSDoc
-#if MIN_VERSION_ghc(9,3,0)
 type WarnMsg  = MsgEnvelope DecoratedSDoc
-#endif
 
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 #if MIN_VERSION_ghc(9,5,0)
@@ -165,7 +136,6 @@ mkPrintUnqualifiedDefault env =
   mkPrintUnqualified (hsc_unit_env env)
 #endif
 
-#if MIN_VERSION_ghc(9,3,0)
 renderDiagnosticMessageWithHints :: forall a. Diagnostic a => a -> DecoratedSDoc
 renderDiagnosticMessageWithHints a = Error.unionDecoratedSDoc
   (diagnosticMessage
@@ -173,16 +143,9 @@ renderDiagnosticMessageWithHints a = Error.unionDecoratedSDoc
     (defaultDiagnosticOpts @a)
 #endif
     a) (mkDecorated $ map ppr $ diagnosticHints a)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 mkWarnMsg :: DynFlags -> Maybe DiagnosticReason -> b -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
 mkWarnMsg df reason _logFlags l st doc = fmap renderDiagnosticMessageWithHints $ mkMsgEnvelope (initDiagOpts df) l st (mkPlainDiagnostic (fromMaybe WarningWithoutFlag reason) [] doc)
-#else
-mkWarnMsg :: a -> b -> DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
-mkWarnMsg _ _ =
-  const Error.mkWarnMsg
-#endif
 
 textDoc :: String -> SDoc
 textDoc = text

@@ -151,14 +151,6 @@ codeLens recorder st plId CodeLensParams{_textDocument} =
                 dbg $ LogCodeLensFp fp
                 (comments, _) <-
                     runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
-                -- dbg "excluded comments" $ show $  DL.toList $
-                --     foldMap (\(L a b) ->
-                --         case b of
-                --             AnnLineComment{}  -> mempty
-                --             AnnBlockComment{} -> mempty
-                --             _                 -> DL.singleton (a, b)
-                --     )
-                --     $ apiAnnComments' pm_annotations
                 dbg $ LogCodeLensComments comments
 
                 -- Extract tests from source code
@@ -203,7 +195,7 @@ runEvalCmd :: Recorder (WithPriority Log) -> PluginId -> CommandFunction IdeStat
 runEvalCmd recorder plId st mtoken EvalParams{..} =
     let dbg = logWith recorder Debug
         perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
-        cmd :: ExceptT PluginError (LspM Config) WorkspaceEdit
+        cmd :: ExceptT PluginError (HandlerM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
@@ -238,7 +230,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 
             return workspaceEdits
      in perf "evalCmd" $ ExceptT $
-            withIndefiniteProgress "Evaluating" mtoken Cancellable $ \_updater ->
+            pluginWithIndefiniteProgress "Evaluating" mtoken Cancellable $ \_updater ->
                 runExceptT $ response' cmd
 
 -- | Create an HscEnv which is suitable for performing interactive evaluation.
@@ -305,11 +297,11 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: MonadLsp c m => Uri -> ExceptT PluginError m Text
+moduleText :: Uri -> ExceptT PluginError (HandlerM config) Text
 moduleText uri =
     handleMaybeM (PluginInternalError "mdlText") $
       (virtualFileText <$>)
-          <$> getVirtualFile
+          <$> pluginGetVirtualFile
               (toNormalizedUri uri)
 
 testsBySection :: [Section] -> [(Section, EvalId, Test)]

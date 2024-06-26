@@ -24,7 +24,7 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets, Target(..), toKnownFiles,
+    KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -73,6 +73,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeysOlderThan,
     Log(..),
     VFSModified(..), getClientConfigAction,
+    ThreadQueue(..)
     ) where
 
 import           Control.Concurrent.Async
@@ -123,6 +124,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          initNameCache,
                                                          knownKeyNames)
@@ -174,16 +176,8 @@ import           System.Time.Extra
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           Data.IORef
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (NCU),
-                                                         mkSplitUniqSupply,
-                                                         upNameCache)
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat             (NameCacheUpdater)
-#endif
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -250,17 +244,22 @@ instance Pretty Log where
 -- a worker thread.
 data HieDbWriter
   = HieDbWriter
-  { indexQueue         :: IndexQueue
-  , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
-  , indexCompleted     :: TVar Int -- ^ to report progress
-  , indexProgressToken :: Var (Maybe LSP.ProgressToken)
-  -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
+  { indexQueue             :: IndexQueue
+  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted         :: TVar Int -- ^ to report progress
+  , indexProgressReporting :: ProgressReporting IO
   }
 
 -- | Actions to queue up on the index worker thread
 -- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
+
+data ThreadQueue = ThreadQueue {
+    tIndexQueue     :: IndexQueue
+    , tRestartQueue :: TQueue (IO ())
+    , tLoaderQueue  :: TQueue (IO ())
+}
 
 -- Note [Semantic Tokens Cache Location]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -298,7 +297,7 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumulation to the current version.
-    ,progress :: ProgressReporting
+    ,progress :: ProgressReporting Action
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
@@ -307,11 +306,7 @@ data ShakeExtras = ShakeExtras
         -> [DelayedAction ()]
         -> IO [Key]
         -> IO ()
-#if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
-#else
-    ,ideNc :: IORef NameCache
-#endif
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
@@ -334,6 +329,10 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
+    , restartQueue :: TQueue (IO ())
+      -- ^ Queue of restart actions to be run.
+    , loaderQueue :: TQueue (IO ())
+      -- ^ Queue of loader actions to be run.
     }
 
 type WithProgressFunc = forall a.
@@ -648,7 +647,7 @@ shakeOpen :: Recorder (WithPriority Log)
           -> IdeReportProgress
           -> IdeTesting
           -> WithHieDb
-          -> IndexQueue
+          -> ThreadQueue
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
@@ -658,15 +657,14 @@ shakeOpen :: Recorder (WithPriority Log)
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
-  ideTesting@(IdeTesting testing)
-  withHieDb indexQueue opts monitoring rules rootDir = mdo
+  ideTesting
+  withHieDb threadQueue opts monitoring rules rootDir = mdo
+    -- see Note [Serializing runs in separate thread]
+    let indexQueue = tIndexQueue threadQueue
+        restartQueue = tRestartQueue threadQueue
+        loaderQueue = tLoaderQueue threadQueue
 
-#if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
-#else
-    us <- mkSplitUniqSupply 'r'
-    ideNc <- newIORef (initNameCache us knownKeyNames)
-#endif
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO
@@ -675,13 +673,16 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         publishedDiagnostics <- STM.newIO
         semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newTVarIO $ hashed HMap.empty
+        knownTargetsVar <- newTVarIO $ hashed emptyKnownTargets
         let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         semanticTokensId <- newTVarIO 0
-        indexProgressToken <- newVar Nothing
+        indexProgressReporting <- progressReportingOutsideState
+            (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
+            (readTVar indexCompleted)
+            lspEnv "Indexing" optProgressStyle
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
@@ -694,7 +695,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
 
         progress <-
             if reportProgress
-                then progressReporting lspEnv optProgressStyle
+                then progressReporting lspEnv "Processing" optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
@@ -759,6 +760,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
+    progressStop $ indexProgressReporting $ hiedbWriter shakeExtras
     stopMonitoring
 
 
@@ -784,31 +786,33 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
 shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
-    withMVar'
-        shakeSession
-        (\runner -> do
-              (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-              keys <- ioActionBetweenShakeSession
-              -- it is every important to update the dirty keys after we enter the critical section
-              -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-              atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
-              res <- shakeDatabaseProfile shakeDb
-              backlog <- readTVarIO $ dirtyKeys shakeExtras
-              queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+    void $ awaitRunInThread (restartQueue shakeExtras) $ do
+        withMVar'
+            shakeSession
+            (\runner -> do
+                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                keys <- ioActionBetweenShakeSession
+                -- it is every important to update the dirty keys after we enter the critical section
+                -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                res <- shakeDatabaseProfile shakeDb
+                backlog <- readTVarIO $ dirtyKeys shakeExtras
+                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              -- this log is required by tests
-              logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-        )
-        -- It is crucial to be masked here, otherwise we can get killed
-        -- between spawning the new thread and updating shakeSession.
-        -- See https://github.com/haskell/ghcide/issues/79
-        (\() -> do
-          (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+                -- this log is required by tests
+                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+            )
+            -- It is crucial to be masked here, otherwise we can get killed
+            -- between spawning the new thread and updating shakeSession.
+            -- See https://github.com/haskell/ghcide/issues/79
+            (\() -> do
+            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
     where
         logErrorAfter :: Seconds -> IO () -> IO ()
         logErrorAfter seconds action = flip withAsync (const action) $ do
@@ -1062,13 +1066,8 @@ askShake :: IdeAction ShakeExtras
 askShake = ask
 
 
-#if MIN_VERSION_ghc(9,3,0)
 mkUpdater :: NameCache -> NameCacheUpdater
 mkUpdater = id
-#else
-mkUpdater :: IORef NameCache -> NameCacheUpdater
-mkUpdater ref = NCU (upNameCache ref)
-#endif
 
 -- | A (maybe) stale result now, and an up to date one later
 data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate :: IO (Maybe a)  }

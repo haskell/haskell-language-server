@@ -7,38 +7,50 @@ import           Data.Bifunctor                            (Bifunctor (..))
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint,
-                                                            makeDeltaAst)
 import           Development.IDE.GHC.Error                 (spanContainsRange)
-import           Development.IDE.GHC.ExactPrint            (genAnchor1,
-                                                            modifyMgMatchesT',
+import           Development.IDE.GHC.ExactPrint            (modifyMgMatchesT',
                                                             modifySigWithM,
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
-import           GHC                                       (EpAnn (..),
-                                                            SrcSpanAnn' (SrcSpanAnn),
-                                                            SrcSpanAnnA,
-                                                            SrcSpanAnnN,
-                                                            emptyComments,
-                                                            noAnn)
-import           GHC.Types.SrcLoc                          (generatedSrcSpan)
+import           GHC.Parser.Annotation                     (SrcSpanAnnA,
+                                                            SrcSpanAnnN, noAnn)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
 import           Ide.PluginUtils                           (makeDiffTextEdit)
 import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
+                                                            exactPrint,
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
 import           Language.LSP.Protocol.Types
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,4,0)
-import           GHC                                       (TrailingAnn (..))
-import           GHC.Hs                                    (IsUnicodeSyntax (..))
-import           Language.Haskell.GHC.ExactPrint.Transform (d1)
+import           GHC.Parser.Annotation                     (IsUnicodeSyntax (..),
+                                                            TrailingAnn (..))
+import           Language.Haskell.GHC.ExactPrint           (d1)
 #endif
 
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,4,0) && !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.ExactPrint            (epl)
 import           GHC.Parser.Annotation                     (TokenLocation (..))
 #endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat.ExactPrint     (makeDeltaAst)
+import           Development.IDE.GHC.ExactPrint            (genAnchor1)
+import           GHC.Parser.Annotation                     (EpAnn (..),
+                                                            SrcSpanAnn' (..),
+                                                            emptyComments)
+import           GHC.Types.SrcLoc                          (generatedSrcSpan)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC                                       (DeltaPos (..),
+                                                            EpUniToken (..),
+                                                            IsUnicodeSyntax (NormalSyntax))
+import           Language.Haskell.GHC.ExactPrint           (d1, setEntryDP)
+#endif
+
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
@@ -64,11 +76,20 @@ plugin parsedModule Diagnostic {_message, _range}
 -- returning how many patterns there were in this match prior to the transformation:
 --      addArgToMatch "foo" `bar arg1 arg2 = ...`
 --   => (`bar arg1 arg2 foo = ...`, 2)
-addArgToMatch :: T.Text -> GenLocated l (Match GhcPs body) -> (GenLocated l (Match GhcPs body), Int)
+addArgToMatch :: T.Text -> GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))) -> (GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))), Int)
 addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
   let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
+#if MIN_VERSION_ghc(9,9,0)
+      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
+      -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
+      -- the newly added pattern and the rest
+      indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
+      indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
+#else
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
-  in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs), Prelude.length pats)
+      indentRhs = id
+#endif
+  in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
 
 -- Attempt to insert a binding pattern into each match for the given LHsDecl; succeeds only if the function is a FunBind.
 -- Also return:
@@ -105,9 +126,14 @@ appendFinalPatToMatches name = \case
 --
 -- TODO instead of inserting a typed hole; use GHC's suggested type from the error
 addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either PluginError [(T.Text, [TextEdit])]
-addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
+addArgumentAction (ParsedModule _ moduleSrc _) range name _typ = do
     (newSource, _, _) <- runTransformT $ do
-      (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl (makeDeltaAst moduleSrc)
+      (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl
+#if MIN_VERSION_ghc(9,9,0)
+        moduleSrc
+#else
+        (makeDeltaAst moduleSrc)
+#endif
       case matchedDeclNameMay of
           Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
           Nothing -> pure moduleSrc'
@@ -136,16 +162,34 @@ hsTypeFromFunTypeAsList (args, res) =
 --   0 `foo :: ()` => foo :: _ -> ()
 --   2 `foo :: FunctionTySyn` => foo :: FunctionTySyn
 --   1 `foo :: () -> () -> Int` => foo :: () -> _ -> () -> Int
-addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> (LHsSigType GhcPs)
+addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> LHsSigType GhcPs
 addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
     let (args, res) = hsTypeToFunTypeAsList lsigTy
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,9,0)
+        wildCardAnn = noAnnSrcSpanDP1
+        newArg =
+          ( noAnn
+          , noExtField
+          , HsUnrestrictedArrow (EpUniTok d1 NormalSyntax)
+          , L wildCardAnn $ HsWildCardTy noExtField
+          )
+#elif MIN_VERSION_ghc(9,4,0)
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem []) emptyComments) generatedSrcSpan
         arrowAnn = TokenLoc (epl 1)
-        newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow (L arrowAnn HsNormalTok), L wildCardAnn $ HsWildCardTy noExtField)
+        newArg =
+          ( SrcSpanAnn mempty generatedSrcSpan
+          , noAnn
+          , HsUnrestrictedArrow (L arrowAnn HsNormalTok)
+          , L wildCardAnn $ HsWildCardTy noExtField
+          )
 #else
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem [AddRarrowAnn d1]) emptyComments) generatedSrcSpan
-        newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow NormalSyntax, L wildCardAnn $ HsWildCardTy noExtField)
+        newArg =
+          ( SrcSpanAnn mempty generatedSrcSpan
+          , noAnn
+          , HsUnrestrictedArrow NormalSyntax
+          , L wildCardAnn $ HsWildCardTy noExtField
+          )
 #endif
         -- NOTE if the location that the argument wants to be placed at is not one more than the number of arguments
         --      in the signature, then we return the original type signature.
@@ -156,4 +200,3 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
         insertArg n (a:as) = a : insertArg (n - 1) as
         lsigTy' = hsTypeFromFunTypeAsList (insertArg loc args, res)
     in L annHsSig (HsSig xHsSig tyVarBndrs lsigTy')
-

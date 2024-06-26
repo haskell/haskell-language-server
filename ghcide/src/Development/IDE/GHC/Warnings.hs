@@ -24,11 +24,7 @@ import           Language.LSP.Protocol.Types       (type (|?) (..))
 --   https://github.com/ghc/ghc/blob/5f1d949ab9e09b8d95319633854b7959df06eb58/compiler/main/GHC.hs#L623-L640
 --   which basically says that log_action is taken from the ModSummary when GHC feels like it.
 --   The given argument lets you refresh a ModSummary log_action
-#if MIN_VERSION_ghc(9,3,0)
 withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(Maybe DiagnosticReason, FileDiagnostic)], a)
-#else
-withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(WarnReason, FileDiagnostic)], a)
-#endif
 withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> LogActionCompat
@@ -43,7 +39,6 @@ withWarnings diagSource action = do
     third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
     third3 f (a, b, c) = (a, b, f c)
 
-#if MIN_VERSION_ghc(9,3,0)
 attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
 attachReason Nothing d = d
 attachReason (Just wr) d = d{_code = InR <$> showReason wr}
@@ -51,15 +46,6 @@ attachReason (Just wr) d = d{_code = InR <$> showReason wr}
   showReason = \case
     WarningWithFlag flag -> showFlag flag
     _                    -> Nothing
-#else
-attachReason :: WarnReason -> Diagnostic -> Diagnostic
-attachReason wr d = d{_code = InR <$> showReason wr}
- where
-  showReason = \case
-    NoReason       -> Nothing
-    Reason flag    -> showFlag flag
-    ErrReason flag -> showFlag =<< flag
-#endif
 
 showFlag :: WarningFlag -> Maybe T.Text
 showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags

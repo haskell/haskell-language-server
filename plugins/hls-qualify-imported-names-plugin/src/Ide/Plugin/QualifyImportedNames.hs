@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
@@ -12,7 +13,7 @@ import           Control.Monad.Trans.State.Strict (State)
 import qualified Control.Monad.Trans.State.Strict as State
 import           Data.DList                       (DList)
 import qualified Data.DList                       as DList
-import           Data.Foldable                    (Foldable (foldl'), find)
+import           Data.Foldable                    (find)
 import           Data.List                        (sortOn)
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
@@ -71,6 +72,10 @@ import           Language.LSP.Protocol.Types      (CodeAction (CodeAction, _comm
                                                    TextEdit (TextEdit),
                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                    type (|?) (InL, InR))
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.Foldable                    (foldl')
+#endif
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}

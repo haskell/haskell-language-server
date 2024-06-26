@@ -73,7 +73,8 @@ processHoleSuggestions mm = (holeSuggestions, refSuggestions)
             (mrAfter . (=~ t " *Valid (hole fits|substitutions) include"))
             validHolesSection
       let holeFit = T.strip $ T.takeWhile (/= ':') holeFitLine
-      guard (not $ T.null holeFit)
+      guard $ not $ holeFit =~ t "Some hole fits suppressed"
+      guard $ not $ T.null holeFit
       return holeFit
     refSuggestions = do -- @[]
       -- get the text indented under Valid refinement hole fits

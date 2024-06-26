@@ -35,7 +35,7 @@ main = do
         ]
 
 selectionRangeGoldenTest :: TestName -> [(UInt, UInt)] -> TestTree
-selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
+selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt" <> ghcSuffix) $ do
     res <- runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request SMethod_TextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
@@ -65,7 +65,7 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
         showLBS = fromString . show
 
 foldingRangeGoldenTest :: TestName -> TestTree
-foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
+foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt" <> ghcSuffix) $ do
     res <- runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request SMethod_TextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
@@ -91,3 +91,6 @@ foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testN
 
         showLBS = fromString . show
         showFRK = fromString . show
+
+ghcSuffix :: String
+ghcSuffix = if ghcVersion >= GHC910 then ".ghc910" else ""

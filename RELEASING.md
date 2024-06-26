@@ -21,6 +21,7 @@
   - Generate a ChangeLog via `./GenChangelogs.hs <api-key> <tag>`
     - `<tag>` is the git tag you want to generate the ChangeLog from.
     - `<api-key>` is a github access key: https://github.com/settings/tokens
+- [ ] update https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html#current-ghc-version-support-status
 - [ ] create release branch as `wip/<version>`
   - `git switch -c wip/<version>`
 - [ ] create release tag as `<version>`
@@ -50,7 +51,6 @@
 - [ ] publish release on github
 - [ ] upload hackage packages
   - requires credentials
-- [ ] update https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html#current-ghc-version-support-status
 - [ ] Supported tools table needs to be updated:
   - https://www.haskell.org/ghcup/install/#supported-platforms
   - https://github.com/haskell/ghcup-hs/blob/master/docs/install.md#supported-platforms
