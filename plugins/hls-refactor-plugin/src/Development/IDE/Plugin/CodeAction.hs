@@ -1625,7 +1625,7 @@ data ImportSuggestion = ImportSuggestion !Int !CodeActionKind !NewImport
 -- which would lead to an unlawful Ord instance.
 simpleCompareImportSuggestion :: ImportSuggestion -> ImportSuggestion -> Ordering
 simpleCompareImportSuggestion (ImportSuggestion s1 _ i1) (ImportSuggestion s2 _ i2)
-  = flip compare s2 s1 <> compare i1 i2
+  = compare s2 s1 <> compare i1 i2
 
 newtype NewImport = NewImport {unNewImport :: T.Text}
   deriving (Show, Eq, Ord)
