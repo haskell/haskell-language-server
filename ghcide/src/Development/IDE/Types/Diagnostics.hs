@@ -84,11 +84,11 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
   in
   FileDiagnostic {..}
 
-#if MIN_VERSION_ghc(9,8,1)
+#if MIN_VERSION_ghc(9,10,1)
+-- DiagnosticCode only got a show instance in 9.10.1
 showGhcCode :: DiagnosticCode -> T.Text
 showGhcCode = T.pack . show
 #elif MIN_VERSION_ghc(9,6,1)
--- DiagnosticCode only got a show instance in 9.8.1
 showGhcCode :: DiagnosticCode -> T.Text
 showGhcCode (DiagnosticCode prefix c) = T.pack $ prefix ++ "-" ++ printf "%05d" c
 #endif
