@@ -1380,9 +1380,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
             , Just heiError <- hei `heiGetError` code
             = pure $ diag & fdLspDiagnosticL %~ attachHeiErrorCodeDescription heiError
             | otherwise
-            = do
-                writeFile "/home/dylan/attachHEI" (show mbHei <> "\n" <> show diag)
-                pure diag
+            = pure diag
 
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
