@@ -42,11 +42,11 @@ constraints:
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
 
-source-repository-package
-  type: git
-  location: https://github.com/jhrcek/stylish-haskell.git
-  tag: afefca07e7d1c6b10b1d71006192afcf49c4783b
-
 if impl(ghc >= 9.9)
   -- https://github.com/haskell/haskell-language-server/issues/4324
   benchmarks: False
+else
+  source-repository-package
+    type: git
+    location: https://github.com/jhrcek/stylish-haskell.git
+    tag: afefca07e7d1c6b10b1d71006192afcf49c4783b
