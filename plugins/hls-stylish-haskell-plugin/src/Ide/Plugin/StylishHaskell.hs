@@ -25,7 +25,6 @@ import           Ide.PluginUtils
 import           Ide.Types                        hiding (Config)
 import           Language.Haskell.Stylish
 import           Language.LSP.Protocol.Types      as LSP
-import           System.Directory
 import           System.FilePath
 
 data Log
@@ -78,12 +77,9 @@ provider recorder ide _token typ contents fp _opts = do
 -- | Recursively search in every directory of the given filepath for .stylish-haskell.yaml.
 -- If no such file has been found, return default config.
 loadConfigFrom :: FilePath -> IO Config
-loadConfigFrom file = do
-  currDir <- getCurrentDirectory
-  setCurrentDirectory (takeDirectory file)
-  config <- loadConfig (makeVerbose False) Nothing
-  setCurrentDirectory currDir
-  pure config
+loadConfigFrom file =
+  let configSearchStrategy = SearchFromDirectory (takeDirectory file)
+  in loadConfig (makeVerbose False) configSearchStrategy
 
 -- | Run stylish-haskell on the given text with the given configuration.
 runStylishHaskell :: FilePath           -- ^ Location of the file being formatted. Used for error message
