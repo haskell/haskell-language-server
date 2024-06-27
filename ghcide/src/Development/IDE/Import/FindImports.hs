@@ -14,25 +14,20 @@ module Development.IDE.Import.FindImports
   ) where
 
 import           Control.DeepSeq
-import           Development.IDE.GHC.Compat        as Compat
-import           Development.IDE.GHC.Error         as ErrUtils
-import           Development.IDE.GHC.Orphans       ()
-import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location
-
--- standard imports
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.List                         (find, isSuffixOf)
 import           Data.Maybe
 import qualified Data.Set                          as S
-import           System.FilePath
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
+import           Development.IDE.GHC.Compat        as Compat
+import           Development.IDE.GHC.Error         as ErrUtils
+import           Development.IDE.GHC.Orphans       ()
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
 import           GHC.Types.PkgQual
 import           GHC.Unit.State
+import           System.FilePath
+
 
 data Import
   = FileImport !ArtifactsLocation

@@ -30,8 +30,6 @@ import           Language.LSP.Protocol.Types    (DocumentSymbol (..),
                                                  type (|?) (InL, InR),
                                                  uriToFilePath)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 
 moduleOutline
   :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
@@ -138,13 +136,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_ins
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
-        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix (feqn_pats)
+        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix feqn_pats
     , _kind = SymbolKind_Interface
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
-        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix (feqn_pats)
+        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix feqn_pats
     , _kind = SymbolKind_Interface
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
