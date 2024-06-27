@@ -1257,7 +1257,7 @@ suggestConstraint df ps diag@Diagnostic {..}
 #endif
         codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedSource
-                        else suggestInstanceConstraint df parsedSource
+                        else suggestInstanceConstraint parsedSource
      in codeAction diag missingConstraint
   | otherwise = []
     where
