@@ -510,7 +510,7 @@ jobs:
             ./out/*.tar.xz
             ./out/plan.json/*
 
-      - uses: geekyeggo/delete-artifact@v2
+      - uses: geekyeggo/delete-artifact@v5
         with:
           name: artifacts-${{ matrix.ARTIFACT }}
 
@@ -561,7 +561,7 @@ jobs:
             ./out/*.tar.xz
             ./out/plan.json/*
 
-      - uses: geekyeggo/delete-artifact@v2
+      - uses: geekyeggo/delete-artifact@v5
         with:
           name: artifacts-arm
 
@@ -599,7 +599,7 @@ jobs:
             ./out/*.tar.xz
             ./out/plan.json/*
 
-      - uses: geekyeggo/delete-artifact@v2
+      - uses: geekyeggo/delete-artifact@v5
         with:
           name: artifacts-mac-x86_64
 
@@ -643,7 +643,7 @@ jobs:
             ./out/*.tar.xz
             ./out/plan.json/*
 
-      - uses: geekyeggo/delete-artifact@v2
+      - uses: geekyeggo/delete-artifact@v5
         with:
           name: artifacts-mac-aarch64
 
@@ -687,7 +687,7 @@ jobs:
             ./out/*.zip
             ./out/plan.json/*
 
-      - uses: geekyeggo/delete-artifact@v2
+      - uses: geekyeggo/delete-artifact@v5
         with:
           name: artifacts-win
 
