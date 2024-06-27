@@ -28,7 +28,6 @@ import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)
@@ -41,7 +40,6 @@ import           Ide.Plugin.Error                             (PluginError)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Server                          as LSP
 
 type CodeActionTitle = T.Text
 
@@ -53,7 +51,7 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 
 -------------------------------------------------------------------------------------------------
 
-runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
+runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
@@ -141,7 +139,7 @@ data CodeActionArgs = CodeActionArgs
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
-    caaAnnSource    :: IO (Maybe (Annotated ParsedSource)),
+    caaAnnSource    :: IO (Maybe ParsedSource),
     caaTmr          :: IO (Maybe TcModuleResult),
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
@@ -215,17 +213,7 @@ toCodeAction3 get f = ExceptT . ReaderT $ \caa -> get caa >>= flip runReaderT ca
 
 -- | this instance returns a delta AST, useful for exactprint transforms
 instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
-#if !MIN_VERSION_ghc(9,3,0)
-  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaAnnSource = x} ->
-    x >>= \case
-      Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . astA $ s
-      _      -> pure $ Right []
-#else
-  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->
-    x >>= \case
-      Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . pm_parsed_source $ s
-      _      -> pure $ Right []
-#endif
+  toCodeAction = toCodeAction2 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (ExportsMap -> r) where
   toCodeAction = toCodeAction3 caaExportsMap
@@ -254,11 +242,8 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
-instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
+instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
-
-instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
-  toCodeAction = toCodeAction2 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr

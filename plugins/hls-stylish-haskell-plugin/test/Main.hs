@@ -10,8 +10,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-stylishHaskellPlugin :: PluginTestDescriptor ()
-stylishHaskellPlugin = mkPluginTestDescriptor' StylishHaskell.descriptor "stylishHaskell"
+stylishHaskellPlugin :: PluginTestDescriptor StylishHaskell.Log
+stylishHaskellPlugin = mkPluginTestDescriptor StylishHaskell.descriptor "stylishHaskell"
 
 tests :: TestTree
 tests = testGroup "stylish-haskell"

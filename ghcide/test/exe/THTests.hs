@@ -1,10 +1,8 @@
 
-{-# LANGUAGE OverloadedLabels #-}
-
 module THTests (tests) where
 
+import           Config
 import           Control.Monad.IO.Class      (liftIO)
-import           Data.Row
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Test        (expectCurrentDiagnostics,
@@ -17,14 +15,13 @@ import           Language.LSP.Test
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests =
   testGroup
     "TemplateHaskell"
     [ -- Test for https://github.com/haskell/ghcide/pull/212
-      testSessionWait "load" $ do
+      testWithDummyPluginEmpty "load" $ do
         let sourceA =
               T.unlines
                 [ "{-# LANGUAGE PackageImports #-}",
@@ -47,7 +44,7 @@ tests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Error, (6, 29), "Variable not in scope: n")] ) ]
-    , testSessionWait "newtype-closure" $ do
+    , testWithDummyPluginEmpty "newtype-closure" $ do
         let sourceA =
               T.unlines
                 [ "{-# LANGUAGE DeriveDataTypeable #-}"
@@ -71,11 +68,11 @@ tests =
     , thReloadingTest False
     , thLoadingTest
     , thCoreTest
-    , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
+    , thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
-    , ignoreInWindowsBecause "Broken in windows" $ thLinkingTest True
-    , testSessionWait "findsTHIdentifiers" $ do
+    , thLinkingTest True
+    , testWithDummyPluginEmpty "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
                 [ "{-# LANGUAGE TemplateHaskell #-}"
@@ -142,9 +139,9 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
     -- generate an artificial warning to avoid timing out if the TH change does not propagate
-    changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource <> "\nfoo=()"]
+    changeDoc cdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ cSource <> "\nfoo=()"]
 
     -- Check that the change propagates to C
     expectDiagnostics
@@ -176,13 +173,12 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument aSource']
 
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
-    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ bSource']
-    waitForProgressBegin
-    waitForAllProgressDone
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
+    _ <- waitForDiagnostics
 
     expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")]
 

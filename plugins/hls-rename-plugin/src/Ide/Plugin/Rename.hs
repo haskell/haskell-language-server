@@ -14,7 +14,7 @@ import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
 import           Control.Monad.Trans.Class             (lift)
-import           Data.Bifunctor                        (first)
+import           Data.Either                           (rights)
 import           Data.Foldable                         (fold)
 import           Data.Generics
 import           Data.Hashable
@@ -25,20 +25,16 @@ import           Data.List.NonEmpty                    (NonEmpty ((:|)),
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
-import           Data.Row
 import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import           Development.IDE.GHC.Compat.Parser
-import           Development.IDE.GHC.Compat.Units
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint        as E
@@ -53,7 +49,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -80,7 +75,7 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     -- In particular it allows some cases through (e.g. cross-module renames),
     -- so that the full rename handler can give more informative error about them.
     let renameValid = not $ null namesUnderCursor
-    pure $ InL $ PrepareRenameResult $ InR $ InR $ #defaultBehavior .== renameValid
+    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
@@ -114,19 +109,18 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
             let newName = mkTcOcc $ T.unpack newNameText
                 filesRefs = collectWith locToUri refs
                 getFileEdit (uri, locations) = do
-                    verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
+                    verTxtDocId <- lift $ pluginGetVersionedTextDoc (TextDocumentIdentifier uri)
                     getSrcEdit state verTxtDocId (replaceRefs newName locations)
             fileEdits <- mapM getFileEdit filesRefs
             pure $ InL $ fold fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
-    (MonadLsp config m) =>
     IdeState ->
     NormalizedFilePath ->
     HashSet Location ->
     [Name] ->
-    ExceptT PluginError m ()
+    ExceptT PluginError (HandlerM config) ()
 failWhenImportOrExport state nfp refLocs names = do
     pm <- runActionE "Rename.GetParsedModule" state
          (useE GetParsedModule nfp)
@@ -144,17 +138,16 @@ failWhenImportOrExport state nfp refLocs names = do
 
 -- | Apply a function to a `ParsedSource` for a given `Uri` to compute a `WorkspaceEdit`.
 getSrcEdit ::
-    (MonadLsp config m) =>
     IdeState ->
     VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    ExceptT PluginError m WorkspaceEdit
+    ExceptT PluginError (HandlerM config) WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
-    ccs <- lift getClientCapabilities
+    ccs <- lift pluginGetClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
-    let ps = astA annAst
+    let ps = annAst
         src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
     pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
@@ -212,9 +205,9 @@ refsAtName state nfp name = do
             )
     pure $ nameLocs name ast ++ dbRefs
 
-nameLocs :: Name -> (HieAstResult, PositionMapping) -> [Location]
-nameLocs name (HAR _ _ rm _ _, pm) =
-    concatMap (mapMaybe (toCurrentLocation pm . realSrcSpanToLocation . fst))
+nameLocs :: Name -> HieAstResult -> [Location]
+nameLocs name (HAR _ _ rm _ _) =
+    concatMap (map (realSrcSpanToLocation . fst))
               (M.lookup (Right name) rm)
 
 ---------------------------------------------------------------------------------------------------
@@ -222,16 +215,19 @@ nameLocs name (HAR _ _ rm _ _, pm) =
 
 getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
-    (HAR{hieAst}, pm) <- handleGetHieAst state nfp
-    pure $ getNamesAtPoint hieAst pos pm
+    HAR{hieAst} <- handleGetHieAst state nfp
+    pure $ getNamesAtPoint' hieAst pos
 
 handleGetHieAst ::
     MonadIO m =>
     IdeState ->
     NormalizedFilePath ->
-    ExceptT PluginError m (HieAstResult, PositionMapping)
+    ExceptT PluginError m HieAstResult
 handleGetHieAst state nfp =
-    fmap (first removeGenerated) $ runActionE "Rename.GetHieAst" state $ useWithStaleE GetHieAst nfp
+    -- We explicitly do not want to allow a stale version here - we only want to rename if
+    -- the module compiles, otherwise we can't guarantee that we'll rename everything,
+    -- which is bad (see https://github.com/haskell/haskell-language-server/issues/3799)
+    fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst nfp
 
 -- | We don't want to rename in code generated by GHC as this gives false positives.
 -- So we restrict the HIE file to remove all the generated code.
@@ -245,6 +241,11 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
 
 collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
 collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS.toList
+
+-- | A variant 'getNamesAtPoint' that does not expect a 'PositionMapping'
+getNamesAtPoint' :: HieASTs a -> Position -> [Name]
+getNamesAtPoint' hf pos =
+  concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
 
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri

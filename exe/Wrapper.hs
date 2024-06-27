@@ -41,19 +41,16 @@ import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as T
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
 import qualified Development.IDE.Main               as Main
-import           GHC.Stack.Types                    (emptyCallStack)
-import           Ide.Logger                         (Doc, Logger (Logger),
-                                                     Pretty (pretty),
-                                                     Recorder (logger_),
-                                                     WithPriority (WithPriority),
+import           Ide.Logger                         (Doc, Pretty (pretty),
+                                                     Recorder, WithPriority,
                                                      cmapWithPrio,
                                                      makeDefaultStderrRecorder)
 import           Ide.Plugin.Config                  (Config)
 import           Ide.Types                          (IdePlugins (IdePlugins))
 import           Language.LSP.Protocol.Message      (Method (Method_Initialize),
-                                                     ResponseError,
                                                      SMethod (SMethod_Exit, SMethod_WindowShowMessageRequest),
-                                                     TRequestMessage)
+                                                     TRequestMessage,
+                                                     TResponseError)
 import           Language.LSP.Protocol.Types        (MessageActionItem (MessageActionItem),
                                                      MessageType (MessageType_Error),
                                                      ShowMessageRequestParams (ShowMessageRequestParams),
@@ -272,9 +269,8 @@ newtype ErrorLSPM c a = ErrorLSPM { unErrorLSPM :: (LspM c) a }
 -- to shut down the LSP.
 launchErrorLSP :: Recorder (WithPriority (Doc ())) -> T.Text -> IO ()
 launchErrorLSP recorder errorMsg = do
-  let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack (pretty m))
-
-  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) logger (IdePlugins [])
+  cwd <- getCurrentDirectory
+  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) cwd (IdePlugins [])
 
   inH <- Main.argsHandleIn defaultArguments
 
@@ -287,7 +283,7 @@ launchErrorLSP recorder errorMsg = do
         -- Forcefully exit
         let exit = void $ tryPutMVar clientMsgVar ()
 
-        let doInitialize :: LSP.LanguageContextEnv Config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv Config, ()))
+        let doInitialize :: LSP.LanguageContextEnv Config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv Config, ()))
             doInitialize env _ = do
 
               let restartTitle = "Try to restart"

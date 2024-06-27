@@ -1,5 +1,4 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ViewPatterns          #-}
 module Main
@@ -8,7 +7,6 @@ module Main
 
 import           Control.Monad           (void)
 import           Data.List               (find)
-import           Data.Row
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.IO            as T
@@ -89,13 +87,15 @@ goldenTestWithEdit fp expect tc line col =
          { _start = Position 0 0
          , _end = Position (fromIntegral $ length lns + 1) 1
          }
-     waitForAllProgressDone -- cradle
-     waitForAllProgressDone
-     alt <- liftIO $ T.readFile (fp <.> "error.hs")
+
+     void waitForDiagnostics
+     void waitForBuildQueue
+     alt <- liftIO $ T.readFile (testDataDir </> fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
-     changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== theRange
-                                                        .+ #rangeLength .== Nothing
-                                                        .+ #text .== alt]
+     changeDoc doc [TextDocumentContentChangeEvent $ InL
+        TextDocumentContentChangePartial {_range = theRange, _rangeLength = Nothing, _text = alt}
+        ]
+
      void waitForDiagnostics
      -- wait for the entire build to finish
      void waitForBuildQueue

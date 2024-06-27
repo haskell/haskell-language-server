@@ -16,7 +16,7 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import           Control.Exception                            (assert)
+import qualified Control.Exception                            as E
 import           Control.Lens
 import           Data.Aeson.Types                             (Value)
 import           Data.Hashable
@@ -41,6 +41,8 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
+import           Ide.Logger                                   (Pretty (..),
+                                                               viaShow)
 import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
 
@@ -186,9 +188,9 @@ hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> maybe "" snd hirCoreFp
 
 mkHiFileResult :: ModSummary -> ModIface -> ModDetails -> ModuleEnv ByteString -> Maybe (CoreFile, ByteString) -> HiFileResult
 mkHiFileResult hirModSummary hirModIface hirModDetails hirRuntimeModules hirCoreFp =
-    assert (case hirCoreFp of Just (CoreFile{cf_iface_hash}, _)
-                                -> getModuleHash hirModIface == cf_iface_hash
-                              _ -> True)
+    E.assert (case hirCoreFp of
+                   Just (CoreFile{cf_iface_hash}, _) -> getModuleHash hirModIface == cf_iface_hash
+                   _ -> True)
     HiFileResult{..}
   where
     hirIfaceFp = fingerprintToBS . getModuleHash $ hirModIface -- will always be two bytes
@@ -339,6 +341,9 @@ data FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus
+
+instance Pretty FileOfInterestStatus where
+    pretty = viaShow
 
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)

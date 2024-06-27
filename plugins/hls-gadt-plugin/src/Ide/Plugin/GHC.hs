@@ -14,22 +14,36 @@ import           Development.IDE
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
-                                                          Anchor (Anchor),
-                                                          AnchorOperation (MovedAnchor),
                                                           DeltaPos (..),
                                                           EpAnn (..),
-                                                          EpAnnComments (EpaComments),
-                                                          EpaLocation (EpaDelta),
-                                                          SrcSpanAnn' (SrcSpanAnn),
-                                                          spanAsAnchor)
+                                                          EpAnnComments (EpaComments))
 import           Ide.PluginUtils                         (subRange)
-import           Language.Haskell.GHC.ExactPrint         (showAst)
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,5,0)
 import qualified Data.List.NonEmpty                      as NE
+#endif
+
+#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                   (TokenLocation (..))
 #endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                   (Anchor (Anchor),
+                                                          AnchorOperation (MovedAnchor),
+                                                          SrcSpanAnn' (SrcSpanAnn),
+                                                          spanAsAnchor)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                   (EpUniToken (..),
+                                                          EpaLocation' (..),
+                                                          noAnn)
+import           Language.Haskell.GHC.ExactPrint.Utils   (showAst)
+#endif
+
 
 type GP = GhcPass Parsed
 
@@ -83,14 +97,18 @@ h98ToGADTConDecl ::
 h98ToGADTConDecl dataName tyVars ctxt = \case
     ConDeclH98{..} ->
         ConDeclGADT
+#if MIN_VERSION_ghc(9,9,0)
+            (NoEpUniTok, con_ext)
+#else
             con_ext
+#endif
 #if MIN_VERSION_ghc(9,5,0)
             (NE.singleton con_name)
 #else
             [con_name]
 #endif
 
-#if MIN_VERSION_ghc(9,5,0)
+#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,9,0)
             (L NoTokenLoc HsNormalTok)
 #endif
             -- Ignore all existential type variable since GADT not needed
@@ -103,12 +121,20 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
     where
         -- Parameters in the data constructor
         renderDetails :: HsConDeclH98Details GP -> HsConDeclGADTDetails GP
-        renderDetails (PrefixCon _ args)   = PrefixConGADT args
-        renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
-#if MIN_VERSION_ghc(9,3,0)
-        renderDetails (RecCon recs)        = RecConGADT recs noHsUniTok
+#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (PrefixCon _ args)   = PrefixConGADT noExtField args
 #else
-        renderDetails (RecCon recs)        = RecConGADT recs
+        renderDetails (PrefixCon _ args)   = PrefixConGADT args
+#endif
+#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (InfixCon arg1 arg2) = PrefixConGADT noExtField [arg1, arg2]
+#else
+        renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
+#endif
+#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (RecCon recs)        = RecConGADT NoEpUniTok recs
+#else
+        renderDetails (RecCon recs)        = RecConGADT recs noHsUniTok
 #endif
 
 
@@ -178,11 +204,7 @@ prettyGADTDecl df decl =
         adjustTyClD = \case
                 Right (L _ (TyClD _ tycld)) -> Right $ adjustDataDecl tycld
                 Right x -> Left $ "Expect TyClD but got " <> showAst x
-#if MIN_VERSION_ghc(9,3,0)
                 Left err -> Left $ printWithoutUniques err
-#else
-                Left err -> Left $ show err
-#endif
 
         adjustDataDecl DataDecl{..} = DataDecl
             { tcdDExt = adjustWhere tcdDExt
@@ -196,16 +218,24 @@ prettyGADTDecl df decl =
 
         -- Make every data constructor start with a new line and 2 spaces
         adjustCon :: LConDecl GP -> LConDecl GP
+#if MIN_VERSION_ghc(9,9,0)
+        adjustCon (L _ r) =
+            let delta = EpaDelta (DifferentLine 1 3) []
+            in L (EpAnn delta (AnnListItem []) (EpaComments [])) r
+#else
         adjustCon (L (SrcSpanAnn _ loc) r) =
-            L (SrcSpanAnn (EpAnn (go (spanAsAnchor loc)) (AnnListItem []) (EpaComments [])) loc) r
-            where
-                go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
+            let go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
+            in L (SrcSpanAnn (EpAnn (go (spanAsAnchor loc)) (AnnListItem []) (EpaComments [])) loc) r
+#endif
 
         -- Adjust where annotation to the same line of the type constructor
-        adjustWhere tcdDExt = tcdDExt <&> map
+        adjustWhere tcdDExt = tcdDExt <&>
+#if !MIN_VERSION_ghc(9,9,0)
+            map
+#endif
             (\(AddEpAnn ann l) ->
             if ann == AnnWhere
-                then AddEpAnn AnnWhere (EpaDelta (SameLine 1) [])
+                then AddEpAnn AnnWhere d1
                 else AddEpAnn ann l
             )
 
@@ -220,7 +250,11 @@ wrapCtxt = id
 emptyCtxt = Nothing
 unWrap = unXRec @GP
 mapX = mapXRec @GP
+#if MIN_VERSION_ghc(9,9,0)
+noUsed = noAnn
+#else
 noUsed = EpAnnNotUsed
+#endif
 
 pattern UserTyVar' :: LIdP pass -> HsTyVarBndr flag pass
 pattern UserTyVar' s <- UserTyVar _ _ s

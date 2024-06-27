@@ -2,6 +2,7 @@
 
 module CodeLensTests (tests) where
 
+import           Config
 import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
 import           Control.Monad                   (void)
@@ -18,9 +19,9 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
+import           Test.Hls                        (mkRange, waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 tests :: TestTree
 tests = testGroup "code lenses"
@@ -45,7 +46,7 @@ addSigLensesTests =
       after' enableGHCWarnings exported (def, sig) others =
         T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported] <> maybe [] pure sig <> [def] <> others
       createConfig mode = A.object ["plugin" A..= A.object ["ghcide-type-lenses" A..= A.object ["config" A..= A.object ["mode" A..= A.String mode]]]]
-      sigSession testName enableGHCWarnings waitForDiags mode exported def others = testSession testName $ do
+      sigSession testName enableGHCWarnings waitForDiags mode exported def others = testWithDummyPluginEmpty testName $ do
         let originalCode = before enableGHCWarnings exported def others
         let expectedCode = after' enableGHCWarnings exported def others
         setConfigSection "haskell" (createConfig mode)
@@ -87,7 +88,11 @@ addSigLensesTests =
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", if ghcVersion >= GHC96 then "promotedKindTest :: Proxy Nothing" else "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", "typeOperatorTest :: forall {k} {a :: k}. a :~: a")
-        , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
+        , ("notInScopeTest = mkCharType"
+          , if ghcVersion < GHC910
+              then "notInScopeTest :: String -> Data.Data.DataType"
+              else "notInScopeTest :: String -> GHC.Internal.Data.Data.DataType"
+          )
         , ("aVeryLongSignature a b c d e f g h i j k l m n = a && b && c && d && e && f && g && h && i && j && k && l && m && n", "aVeryLongSignature :: Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool")
         ]
    in testGroup
@@ -99,7 +104,7 @@ addSigLensesTests =
             [ sigSession "with GHC warnings" True True "diagnostics" "" (second Just $ head cases) []
             , sigSession "without GHC warnings" False False "diagnostics" "" (second (const Nothing) $ head cases) []
             ]
-        , testSession "keep stale lens" $ do
+        , testWithDummyPluginEmpty "keep stale lens" $ do
             let content = T.unlines
                     [ "module Stale where"
                     , "f = _"

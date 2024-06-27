@@ -12,9 +12,8 @@ import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char
 import           Data.Dynamic                            (toDyn)
-import           Data.Foldable                           (fold)
 import qualified Data.HashMap.Strict                     as Map
-import           Data.List                               (dropWhileEnd, foldl',
+import           Data.List                               (dropWhileEnd,
                                                           intercalate,
                                                           partition, sort,
                                                           sortBy)
@@ -33,6 +32,10 @@ import           Numeric.Extra                           (showDP)
 import           System.FilePath
 import           System.IO.Unsafe                        (unsafePerformIO)
 import           System.Time.Extra                       (Seconds)
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.List                               (foldl')
+#endif
 
 #ifdef FILE_EMBED
 import           Data.FileEmbed

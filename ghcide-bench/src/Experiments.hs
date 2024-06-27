@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE ImplicitParams     #-}
 {-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE OverloadedLabels   #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
@@ -43,14 +42,12 @@ import           Data.Either                        (fromRight)
 import           Data.List
 import           Data.Maybe
 import           Data.Proxy
-import           Data.Row                           hiding (switch)
 import           Data.Text                          (Text)
 import qualified Data.Text                          as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
 import           Development.IDE.Test.Diagnostic
-import           Development.Shake                  (CmdOption (Cwd, FileStdout),
-                                                     cmd_)
+import           Development.Shake                  (CmdOption (Cwd), cmd_)
 import           Experiments.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
@@ -72,15 +69,19 @@ import           Text.Printf
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
-    TextDocumentContentChangeEvent $ InL $ #range .== Range p p
-                                        .+ #rangeLength .== Nothing
-                                        .+ #text .== "a"
+    TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+        { _range = Range p p
+        , _rangeLength = Nothing
+        , _text = "a"
+        }
 
 headerEdit :: TextDocumentContentChangeEvent
 headerEdit =
-    TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 0) (Position 0 0)
-                                        .+ #rangeLength .== Nothing
-                                        .+ #text .== "-- header comment \n"
+    TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+        { _range = Range (Position 0 0) (Position 0 0)
+        , _rangeLength = Nothing
+        , _text = "-- header comment \n"
+        }
 
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
@@ -128,7 +129,7 @@ experiments =
         (\docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
              [ FileEvent hieYamlUri FileChangeType_Changed ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         ),
@@ -210,7 +211,7 @@ experiments =
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
              [ FileEvent hieYamlUri FileChangeType_Changed ]
             waitForProgressStart
             waitForProgressStart
@@ -241,9 +242,11 @@ experiments =
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit  =TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
-                                                           .+ #rangeLength .== Nothing
-                                                           .+ #text .== t
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
                 bottom = Position maxBound 0
                 t = T.unlines
                     [""
@@ -266,6 +269,67 @@ experiments =
                 case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute single-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "-- >>> 1 + 2"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute multi-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "data T = A | B | C | D"
+                    , "  deriving (Show, Eq, Ord, Bounded, Enum)"
+                    , ""
+                    , "{-"
+                    , ">>> import Data.List (nub)"
+                    , ">>> xs = ([minBound..maxBound] ++ [minBound..maxBound] :: [T])"
+                    , ">>> nub xs"
+                    , "-}"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
         )
     ]
     where hasDefinitions (InL (Definition (InL _)))  = True
@@ -493,9 +557,9 @@ runBenchmarksFun dir allBenchmarks = do
             ]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
-      fullCaps
+      fullLatestClientCaps
         & (L.window . _Just) .~ WindowClientCapabilities (Just True) Nothing Nothing
-        & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (#properties .== ["edit"])
+        & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (ClientCodeActionResolveOptions ["edit"])
         & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 showMs :: Seconds -> String
@@ -699,10 +763,12 @@ setupDocumentContents config =
 
         -- Setup the special positions used by the experiments
         lastLine <- fromIntegral . length . T.lines <$> documentContents doc
-        changeDoc doc [TextDocumentContentChangeEvent $ InL
-                        $ #range .== Range (Position lastLine 0) (Position lastLine 0)
-                       .+ #rangeLength .== Nothing
-                       .+ #text .== T.unlines [ "_hygienic = \"hygienic\"" ]]
+        changeDoc doc [TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                        { _range = Range (Position lastLine 0) (Position lastLine 0)
+                        , _rangeLength = Nothing
+                        , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
+                        }
+                      ]
         let
         -- Points to a string in the target file,
         -- convenient for hygienic edits
@@ -720,7 +786,7 @@ setupDocumentContents config =
 findEndOfImports :: [DocumentSymbol] -> Maybe Position
 findEndOfImports (DocumentSymbol{_kind = SymbolKind_Module, _name = "imports", _range} : _) =
     Just $ Position (succ $ _line $ _end _range) 4
-findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just (cc)}] =
+findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just cc}] =
     findEndOfImports cc
 findEndOfImports (DocumentSymbol{_range} : _) =
     Just $ _range ^. L.start
@@ -776,19 +842,19 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
         not . null <$> getCompletions doc pos
 
 
-getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
 
-getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
 
-getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
 
-getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
 
-getRebuildsCount :: Session (Either ResponseError Int)
+getRebuildsCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getRebuildsCount = tryCallTestPlugin GetRebuildsCount
 
 -- Copy&paste from ghcide/test/Development.IDE.Test
@@ -796,7 +862,7 @@ getStoredKeys :: Session [Text]
 getStoredKeys = callTestPlugin GetStoredKeys
 
 -- Copy&paste from ghcide/test/Development.IDE.Test
-tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 tryCallTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
@@ -812,5 +878,5 @@ callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     res <- tryCallTestPlugin cmd
     case res of
-        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
-        Right a                      -> pure a
+        Left (TResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                       -> pure a

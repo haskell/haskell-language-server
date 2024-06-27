@@ -1,21 +1,24 @@
 
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs #-}
 
 module CradleTests (tests) where
 
+import           Config                          (checkDefs, mkL, runInDir,
+                                                  runWithExtraFiles,
+                                                  testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
+import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
-import           Data.Row
 import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      (GhcVersion (..))
 import           Development.IDE.GHC.Util
+import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           Development.IDE.Test            (expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   isReferenceReady,
                                                   waitForAction)
 import           Development.IDE.Types.Location
+import           GHC.TypeLits                    (symbolVal)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
@@ -26,13 +29,8 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
--- import Test.QuickCheck.Instances ()
-import           Control.Lens                    ((^.))
-import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
-import           GHC.TypeLits                    (symbolVal)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 
 tests :: TestTree
@@ -41,17 +39,15 @@ tests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "multi"   (multiTests "multi")
-    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
-       $ testGroup "multi-unit" (multiTests "multi-unit")
+    ,testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
-    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
-      $ testGroup "multi-unit-rexport" [multiRexportTest]
+    ,testGroup "multi-unit-rexport" [multiRexportTest]
     ]
 
 loadCradleOnlyonce :: TestTree
 loadCradleOnlyonce = testGroup "load cradle only once"
-    [ testSession' "implicit" implicit
-    , testSession' "direct"   direct
+    [ testWithDummyPluginEmpty' "implicit" implicit
+    , testWithDummyPluginEmpty' "direct"   direct
     ]
     where
         direct dir = do
@@ -63,7 +59,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             doc <- createDoc "B.hs" "haskell" "module B where\nimport Data.Foo"
             msgs <- someTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 1
-            changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ "module B where\nimport Data.Maybe"]
+            changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ "module B where\nimport Data.Maybe"]
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 0
             _ <- createDoc "A.hs" "haskell" "module A where\nimport LoadCradleBar"
@@ -71,7 +67,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             liftIO $ length msgs @?= 0
 
 retryFailedCradle :: TestTree
-retryFailedCradle = testSession' "retry failed" $ \dir -> do
+retryFailedCradle = testWithDummyPluginEmpty' "retry failed" $ \dir -> do
   -- The false cradle always fails
   let hieContents = "cradle: {bios: {shell: \"false\"}}"
       hiePath = dir </> "hie.yaml"
@@ -125,7 +121,7 @@ multiTestName :: FilePath -> String -> String
 multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
 
 simpleMultiTest :: FilePath -> TestTree
-simpleMultiTest variant = testCase (multiTestName variant "test") $ withLongTimeout $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -202,7 +198,7 @@ multiRexportTest =
     expectNoMoreDiagnostics 0.5
 
 sessionDepsArePickedUp :: TestTree
-sessionDepsArePickedUp = testSession'
+sessionDepsArePickedUp = testWithDummyPluginEmpty'
   "session-deps-are-picked-up"
   $ \dir -> do
     liftIO $
@@ -222,9 +218,11 @@ sessionDepsArePickedUp = testSession'
         [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed ]
     -- Send change event.
     let change =
-          TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 4 0) (Position 4 0)
-                                              .+ #rangeLength .== Nothing
-                                              .+ #text .== "\n"
+          TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+              { _range = Range (Position 4 0) (Position 4 0)
+              , _rangeLength = Nothing
+              , _text = "\n"
+              }
     changeDoc doc [change]
     -- Now no errors.
     expectDiagnostics [("Foo.hs", [])]

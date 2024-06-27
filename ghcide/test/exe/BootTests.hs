@@ -1,5 +1,7 @@
 module BootTests (tests) where
 
+import           Config                          (checkDefs, mkR, runInDir,
+                                                  runWithExtraFiles)
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Control.Monad.IO.Class          (liftIO)
@@ -14,10 +16,9 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
-import           System.FilePath
+import           System.FilePath                 ((</>))
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 
 tests :: TestTree

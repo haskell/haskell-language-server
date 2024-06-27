@@ -11,7 +11,7 @@
 
 {-# OPTIONS -Wno-orphans #-}
 
-module Ide.Plugin.Retrie (descriptor) where
+module Ide.Plugin.Retrie (descriptor, Log) where
 
 import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
@@ -98,10 +98,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
-import           Language.LSP.Server                  (ProgressCancellable (Cancellable),
-                                                       sendNotification,
-                                                       sendRequest,
-                                                       withIndefiniteProgress)
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule,
                                                        Fixity (Fixity),
@@ -129,17 +126,21 @@ import           Retrie.SYB                           (everything, extQ,
                                                        listify, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
-import           System.Directory                     (makeAbsolute)
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
-#endif
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+data Log
+  = LogParsingModule FilePath
+
+instance Pretty Log where
+  pretty = \case
+    LogParsingModule fp -> "Parsing module:" <+> pretty fp
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId =
   (defaultPluginDescriptor plId "Provides code actions to inline Haskell definitions")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction provider,
-      pluginCommands = [retrieCommand, retrieInlineThisCommand]
+      pluginCommands = [retrieCommand recorder, retrieInlineThisCommand recorder]
     }
 
 retrieCommandId :: CommandId
@@ -148,14 +149,14 @@ retrieCommandId = "retrieCommand"
 retrieInlineThisCommandId :: CommandId
 retrieInlineThisCommandId = "retrieInlineThisCommand"
 
-retrieCommand :: PluginCommand IdeState
-retrieCommand =
-  PluginCommand retrieCommandId "run the refactoring" runRetrieCmd
+retrieCommand :: Recorder (WithPriority Log) -> PluginCommand IdeState
+retrieCommand recorder =
+  PluginCommand retrieCommandId "run the refactoring" (runRetrieCmd recorder)
 
-retrieInlineThisCommand :: PluginCommand IdeState
-retrieInlineThisCommand =
+retrieInlineThisCommand :: Recorder (WithPriority Log) -> PluginCommand IdeState
+retrieInlineThisCommand recorder =
   PluginCommand retrieInlineThisCommandId "inline function call"
-     runRetrieInlineThisCmd
+    (runRetrieInlineThisCmd recorder)
 
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
@@ -166,9 +167,9 @@ data RunRetrieParams = RunRetrieParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-runRetrieCmd :: CommandFunction IdeState RunRetrieParams
-runRetrieCmd state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  withIndefiniteProgress description token Cancellable $ \_updater -> do
+runRetrieCmd :: Recorder (WithPriority Log) ->  CommandFunction IdeState RunRetrieParams
+runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
+  pluginWithIndefiniteProgress description token Cancellable $ \_updater -> do
     _ <- runExceptT $ do
         nfp <- getNormalizedFilePathE uri
         (session, _) <-
@@ -179,18 +180,19 @@ runRetrieCmd state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
         let importRewrites = concatMap (extractImports ms binds) rewrites
         (errors, edits) <- liftIO $
             callRetrie
+                recorder
                 state
                 (hscEnv session)
                 (map Right rewrites <> map Left importRewrites)
                 nfp
                 restrictToOriginatingFile
         unless (null errors) $
-            lift $ sendNotification SMethod_WindowShowMessage $
+            lift $ pluginSendNotification SMethod_WindowShowMessage $
                     ShowMessageParams MessageType_Warning $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
     return $ Right $ InR Null
 
@@ -201,8 +203,8 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-runRetrieInlineThisCmd :: CommandFunction IdeState RunRetrieInlineThisParams
-runRetrieInlineThisCmd state _token RunRetrieInlineThisParams{..} = do
+runRetrieInlineThisCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState RunRetrieInlineThisParams
+runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
     nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
     nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:
@@ -215,11 +217,11 @@ runRetrieInlineThisCmd state _token RunRetrieInlineThisParams{..} = do
         useE GetAnnotatedParsedSource nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
-    inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
+    inlineRewrite <- liftIO $ constructInlineFromIdentifer (unsafeMkA astSrc 0) fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
-    (fixityEnv, cpp) <- liftIO $ getCPPmodule state (hscEnv session) $ fromNormalizedFilePath nfp
+    (fixityEnv, cpp) <- liftIO $ getCPPmodule recorder state (hscEnv session) $ fromNormalizedFilePath nfp
     result <- liftIO $ try @_ @SomeException $
         runRetrie fixityEnv (applyWithUpdate myContextUpdater inlineRewrite) cpp
     case result of
@@ -231,7 +233,7 @@ runRetrieInlineThisCmd state _token RunRetrieInlineThisParams{..} = do
                 ourReplacement = [ r
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
-            _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit
+            _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
             return $ InR Null
 
@@ -341,7 +343,11 @@ getBinds nfp = do
   -- so that we can include adding the required imports in the retrie command
   let rn = tmrRenamed tm
   case rn of
+#if MIN_VERSION_ghc(9,9,0)
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _, _) -> do
+#else
     (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _) -> do
+#endif
       topLevelBinds <- case hs_valds of
         ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
         XValBindsLR (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn) ->
@@ -506,13 +512,14 @@ instance Show CallRetrieError where
 instance Exception CallRetrieError
 
 callRetrie ::
+  Recorder (WithPriority Log) ->
   IdeState ->
   HscEnv ->
   [Either ImportSpec RewriteSpec] ->
   NormalizedFilePath ->
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie state session rewrites origin restrictToOriginatingFile = do
+callRetrie recorder state session rewrites origin restrictToOriginatingFile = do
   knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
   let
       -- TODO cover all workspaceFolders
@@ -540,7 +547,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
   targets <- getTargetFiles retrieOptions (getGroundTerms retrie)
 
   results <- forM targets $ \t -> runExceptT $ do
-    (fixityEnv, cpp) <- ExceptT $ try $ getCPPmodule state session t
+    (fixityEnv, cpp) <- ExceptT $ try $ getCPPmodule recorder state session t
     -- TODO add the imports to the resulting edits
     (_user, _ast, change@(Change _replacements _imports)) <-
       lift $ runRetrie fixityEnv retrie cpp
@@ -726,16 +733,17 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclAs = toMod <$> ideclAsString
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 
-#if MIN_VERSION_ghc(9,3,0)
     ideclPkgQual = NoRawPkgQual
-#else
-    ideclPkgQual = Nothing
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
-      { ideclAnn = GHCGHC.EpAnnNotUsed
+      { ideclAnn =
+#if MIN_VERSION_ghc(9,9,0)
+        GHCGHC.noAnn
+#else
+        GHCGHC.EpAnnNotUsed
+#endif
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
       }
@@ -751,9 +759,10 @@ reuseParsedModule state f = do
         (fixities, pm') <- fixFixities state f (fixAnns pm)
         return (fixities, pm')
 
-getCPPmodule :: IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
-getCPPmodule state session t = do
-    nt <- toNormalizedFilePath' <$> makeAbsolute t
+getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule)
+getCPPmodule recorder state session t = do
+    -- TODO: is it safe to drop this makeAbsolute?
+    let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
     let getParsedModule f contents = do
           modSummary <- msrModSummary <$>
             useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
@@ -762,7 +771,7 @@ getCPPmodule state session t = do
                   { ms_hspp_buf =
                       Just (stringToStringBuffer contents)
                   }
-          logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
+          logWith recorder Info $ LogParsingModule t
           parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
               `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
           (fixities, parsed) <- fixFixities state f (fixAnns parsed)

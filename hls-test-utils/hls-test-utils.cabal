@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-test-utils
-version:       2.7.0.0
+version:       2.9.0.0
 synopsis:      Utilities used in the tests of Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -29,6 +29,8 @@ library
     Test.Hls
     Test.Hls.Util
     Test.Hls.FileSystem
+    Development.IDE.Test
+    Development.IDE.Test.Diagnostic
 
   hs-source-dirs:   src
   build-depends:
@@ -41,11 +43,13 @@ library
     , directory
     , extra
     , filepath
-    , ghcide                  == 2.7.0.0
-    , hls-plugin-api          == 2.7.0.0
+    , ghcide                  == 2.9.0.0
+    , hls-plugin-api          == 2.9.0.0
     , lens
+    , lsp
     , lsp-test                ^>=0.17
-    , lsp-types               ^>=2.1
+    , lsp-types               ^>=2.3
+    , neat-interpolation
     , safe-exceptions
     , tasty
     , tasty-expected-failure
@@ -54,8 +58,13 @@ library
     , tasty-rerun
     , temporary
     , text
-    , row-types
-  ghc-options:      -Wall -Wunused-packages
+    , text-rope
+
+  ghc-options:
+    -Wall
+    -Wunused-packages
+    -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror

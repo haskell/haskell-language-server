@@ -18,21 +18,20 @@ where
 import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
+import           GHC.Settings
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-import           GHC.Settings
-
-#if !MIN_VERSION_ghc(9,3,0)
-import qualified GHC.Driver.Pipeline             as Pipeline
-#endif
-
-#if MIN_VERSION_ghc(9,3,0) && !MIN_VERSION_ghc(9,5,0)
+#if !MIN_VERSION_ghc(9,5,0)
 import qualified GHC.Driver.Pipeline.Execute     as Pipeline
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
 import qualified GHC.SysTools.Cpp                as Pipeline
+#endif
+
+#if MIN_VERSION_ghc(9,11,0)
+import qualified GHC.SysTools.Tasks              as Pipeline
 #endif
 
 addOptP :: String -> DynFlags -> DynFlags
@@ -53,7 +52,9 @@ doCpp env input_fn output_fn =
 #if MIN_VERSION_ghc(9,5,0)
     let cpp_opts = Pipeline.CppOpts
                  { cppLinePragmas = True
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+                 , sourceCodePreprocessor = Pipeline.SCPHsCpp
+#elif MIN_VERSION_ghc(9,10,0)
                  , useHsCpp = True
 #else
                  , cppUseCc = False

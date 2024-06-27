@@ -1,0 +1,4 @@
+2:8-30 TModule "TClassImportedDeriving"
+4:6-9 TTypeConstructor "Foo"
+4:12-15 TDataConstructor "Foo"
+4:26-30 TClass "Show"

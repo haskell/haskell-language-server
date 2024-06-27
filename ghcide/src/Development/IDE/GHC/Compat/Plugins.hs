@@ -20,74 +20,33 @@ module Development.IDE.GHC.Compat.Plugins (
     ) where
 
 import           Development.IDE.GHC.Compat.Core
-import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
-import           Development.IDE.GHC.Compat.Parser     as Parser
+import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
+import           Development.IDE.GHC.Compat.Parser as Parser
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Driver.Plugins                    (Plugin (..),
-                                                        PluginWithArgs (..),
-                                                        StaticPlugin (..),
-                                                        defaultPlugin,
-                                                        withPlugins)
-import qualified GHC.Runtime.Loader                    as Loader
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat.Outputable as Out
-#endif
-
-import qualified GHC.Driver.Env                        as Env
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           Data.Bifunctor                        (bimap)
-#endif
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat.Util       (Bag)
-#endif
-
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Plugins                    (ParsedResult (..),
-                                                        PsMessages (..),
-                                                        staticPlugins)
-import qualified GHC.Parser.Lexer                      as Lexer
-#endif
+import qualified GHC.Driver.Env                    as Env
+import           GHC.Driver.Plugins                (ParsedResult (..),
+                                                    Plugin (..),
+                                                    PluginWithArgs (..),
+                                                    PsMessages (..),
+                                                    StaticPlugin (..),
+                                                    defaultPlugin,
+                                                    staticPlugins, withPlugins)
+import qualified GHC.Parser.Lexer                  as Lexer
+import qualified GHC.Runtime.Loader                as Loader
 
 
-#if !MIN_VERSION_ghc(9,3,0)
-type PsMessages = (Bag WarnMsg, Bag ErrMsg)
-#endif
-
-getPsMessages :: PState -> DynFlags -> PsMessages
-getPsMessages pst _dflags = --dfags is only used if GHC < 9.2
-#if MIN_VERSION_ghc(9,3,0)
+getPsMessages :: PState -> PsMessages
+getPsMessages pst =
   uncurry PsMessages $ Lexer.getPsMessages pst
-#else
-                 bimap (fmap pprWarning) (fmap pprError) $
-                 getMessages pst
-#endif
 
-applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
-applyPluginsParsedResultAction env _dflags ms hpm_annotations parsed msgs = do
-  -- dflags is only used in GHC < 9.2
+applyPluginsParsedResultAction :: HscEnv -> ModSummary -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
+applyPluginsParsedResultAction env ms parsed msgs = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
-#if MIN_VERSION_ghc(9,3,0)
-  fmap (\result -> (hpm_module (parsedResultModule result), (parsedResultMessages result))) $ runHsc env $ withPlugins
-#else
-  fmap (\parsed_module -> (hpm_module parsed_module, msgs)) $ runHsc env $ withPlugins
-#endif
-#if MIN_VERSION_ghc(9,3,0)
+  fmap (\result -> (hpm_module (parsedResultModule result), parsedResultMessages result)) $ runHsc env $ withPlugins
       (Env.hsc_plugins env)
-#else
-      env
-#endif
       applyPluginAction
-#if MIN_VERSION_ghc(9,3,0)
-      (ParsedResult (HsParsedModule parsed [] hpm_annotations) msgs)
-#else
-      (HsParsedModule parsed [] hpm_annotations)
-#endif
+      (ParsedResult (HsParsedModule parsed []) msgs)
 
 initializePlugins :: HscEnv -> IO HscEnv
 initializePlugins env = do
@@ -101,8 +60,4 @@ initPlugins session modSummary = do
     return (modSummary{ms_hspp_opts = hsc_dflags session1}, session1)
 
 hsc_static_plugins :: HscEnv -> [StaticPlugin]
-#if MIN_VERSION_ghc(9,3,0)
 hsc_static_plugins = staticPlugins . Env.hsc_plugins
-#else
-hsc_static_plugins = Env.hsc_static_plugins
-#endif

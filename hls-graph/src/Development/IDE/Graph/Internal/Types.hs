@@ -5,6 +5,8 @@
 
 module Development.IDE.Graph.Internal.Types where
 
+import           Control.Concurrent.STM             (STM)
+import           Control.Monad                      ((>=>))
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
@@ -77,13 +79,17 @@ data SAction = SAction {
 getDatabase :: Action Database
 getDatabase = Action $ asks actionDatabase
 
+-- | waitForDatabaseRunningKeysAction waits for all keys in the database to finish running.
+waitForDatabaseRunningKeysAction :: Action ()
+waitForDatabaseRunningKeysAction = getDatabase >>= liftIO . waitForDatabaseRunningKeys
+
 ---------------------------------------------------------------------
 -- DATABASE
 
 data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 newtype Step = Step Int
-    deriving newtype (Eq,Ord,Hashable)
+    deriving newtype (Eq,Ord,Hashable,Show)
 
 ---------------------------------------------------------------------
 -- Keys
@@ -108,6 +114,9 @@ data Database = Database {
     databaseStep   :: !(TVar Step),
     databaseValues :: !(Map Key KeyDetails)
     }
+
+waitForDatabaseRunningKeys :: Database -> IO ()
+waitForDatabaseRunningKeys = getDatabaseValues >=> mapM_ (waitRunning . snd)
 
 getDatabaseValues :: Database -> IO [(Key, Status)]
 getDatabaseValues = atomically
@@ -134,6 +143,10 @@ getResult :: Status -> Maybe Result
 getResult (Clean re)           = Just re
 getResult (Dirty m_re)         = m_re
 getResult (Running _ _ _ m_re) = m_re -- watch out: this returns the previous result
+
+waitRunning :: Status -> IO ()
+waitRunning Running{..} = runningWait
+waitRunning _           = return ()
 
 data Result = Result {
     resultValue     :: !Value,
@@ -186,7 +199,6 @@ instance NFData RunMode where rnf x = x `seq` ()
 -- | How the output of a rule has changed.
 data RunChanged
     = ChangedNothing -- ^ Nothing has changed.
-    | ChangedStore -- ^ The stored value has changed, but in a way that should be considered identical (used rarely).
     | ChangedRecomputeSame -- ^ I recomputed the value and it was the same.
     | ChangedRecomputeDiff -- ^ I recomputed the value and it was different.
       deriving (Eq,Show,Generic)
@@ -202,10 +214,10 @@ data RunResult value = RunResult
         -- ^ The value to store in the Shake database.
     ,runValue   :: value
         -- ^ The value to return from 'Development.Shake.Rule.apply'.
+    ,runHook    :: STM ()
+        -- ^ The hook to run at the end of the build in the same transaction
+        -- when the key is marked as clean.
     } deriving Functor
-
-instance NFData value => NFData (RunResult value) where
-    rnf (RunResult x1 x2 x3) = rnf x1 `seq` x2 `seq` rnf x3
 
 ---------------------------------------------------------------------
 -- EXCEPTIONS

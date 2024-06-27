@@ -21,22 +21,17 @@ import           Data.Maybe
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Util
-import           GHC.Fingerprint
-import           Prelude                         hiding (mod)
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import           GHC.Core
 import           GHC.CoreToIface
+import           GHC.Fingerprint
 import           GHC.Iface.Binary
 import           GHC.Iface.Env
 import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
-import           GHC.Utils.Binary
-
-
 import           GHC.Types.TypeEnv
+import           GHC.Utils.Binary
+import           Prelude                         hiding (mod)
 
 
 -- | Initial ram buffer to allocate for writing interface files
@@ -202,6 +197,7 @@ tcIfaceId = fmap getIfaceId . tcIfaceDecl False <=< unmangle_decl_name
         name' <- newIfaceName (mkVarOcc $ getOccString name)
         pure $ ifid{ ifName = name' }
       | otherwise = pure ifid
+    unmangle_decl_name _ifid = error "tcIfaceId: got non IfaceId: "
     -- invariant: 'IfaceId' is always a 'IfaceId' constructor
     getIfaceId (AnId identifier) = identifier
     getIfaceId _                 = error "tcIfaceId: got non Id"

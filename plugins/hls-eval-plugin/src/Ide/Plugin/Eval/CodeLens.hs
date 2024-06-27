@@ -23,8 +23,8 @@ import           Control.Exception                            (bracket_, try)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (_1, _3, ix, (%~),
                                                                (<&>), (^.))
-import           Control.Monad                                (guard, void,
-                                                               when)
+import           Control.Monad                                (guard, join,
+                                                               void, when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..),
                                                                runExceptT)
@@ -47,7 +47,8 @@ import           Development.IDE.Core.RuleTypes               (LinkableResult (l
                                                                NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useNoFile_,
+import           Development.IDE.Core.Shake                   (shakeExtras,
+                                                               useNoFile_,
                                                                useWithStale_,
                                                                use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
@@ -91,10 +92,16 @@ import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcS
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
+import           Control.Concurrent.STM.Stats                 (atomically)
 import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Graph                        (ShakeOptions (shakeExtra))
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
+import           Ide.Logger                                   (Priority (..),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               logWith)
 import           Ide.Plugin.Error                             (PluginError (PluginInternalError),
                                                                handleMaybe,
                                                                handleMaybeM)
@@ -119,7 +126,7 @@ import           Ide.Plugin.Eval.Rules                        (queueForEvaluatio
 import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                isLiterate,
-                                                               logWith,
+                                                               prettyWarnings,
                                                                response', timed)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                   as L
@@ -131,28 +138,20 @@ import           Language.LSP.VFS                             (virtualFileText)
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
-codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens st plId CodeLensParams{_textDocument} =
-    let dbg = logWith st
-        perf = timed dbg
+codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
+codeLens recorder st plId CodeLensParams{_textDocument} =
+    let dbg = logWith recorder Debug
+        perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
      in perf "codeLens" $
             do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- uriToFilePathE uri
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
-                dbg "fp" fp
+                dbg $ LogCodeLensFp fp
                 (comments, _) <-
                     runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
-                -- dbg "excluded comments" $ show $  DL.toList $
-                --     foldMap (\(L a b) ->
-                --         case b of
-                --             AnnLineComment{}  -> mempty
-                --             AnnBlockComment{} -> mempty
-                --             _                 -> DL.singleton (a, b)
-                --     )
-                --     $ apiAnnComments' pm_annotations
-                dbg "comments" $ show comments
+                dbg $ LogCodeLensComments comments
 
                 -- Extract tests from source code
                 let Sections{..} = commentsToSections isLHS comments
@@ -174,17 +173,11 @@ codeLens st plId CodeLensParams{_textDocument} =
                         ]
 
                 perf "tests" $
-                    dbg "Tests" $
-                        unwords
-                            [ show (length tests)
-                            , "tests in"
-                            , show (length nonSetupSections)
-                            , "sections"
-                            , show (length setupSections)
-                            , "setups"
-                            , show (length lenses)
-                            , "lenses."
-                            ]
+                    dbg $ LogTests
+                            (length tests)
+                            (length nonSetupSections)
+                            (length setupSections)
+                            (length lenses)
 
                 return $ InL lenses
   where
@@ -193,16 +186,16 @@ codeLens st plId CodeLensParams{_textDocument} =
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
 
-evalCommand :: PluginId -> PluginCommand IdeState
-evalCommand plId = PluginCommand evalCommandName "evaluate" (runEvalCmd plId)
+evalCommand :: Recorder (WithPriority Log) -> PluginId -> PluginCommand IdeState
+evalCommand recorder plId = PluginCommand evalCommandName "evaluate" (runEvalCmd recorder plId)
 
 type EvalId = Int
 
-runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
-runEvalCmd plId st mtoken EvalParams{..} =
-    let dbg = logWith st
-        perf = timed dbg
-        cmd :: ExceptT PluginError (LspM Config) WorkspaceEdit
+runEvalCmd :: Recorder (WithPriority Log) -> PluginId -> CommandFunction IdeState EvalParams
+runEvalCmd recorder plId st mtoken EvalParams{..} =
+    let dbg = logWith recorder Debug
+        perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
+        cmd :: ExceptT PluginError (HandlerM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
@@ -213,10 +206,14 @@ runEvalCmd plId st mtoken EvalParams{..} =
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
-              (do queueForEvaluation st nfp
-                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
-              (do unqueueForEvaluation st nfp
-                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
+              (setSomethingModified VFSUnmodified st "Eval" $ do
+                queueForEvaluation st nfp
+                return [toKey IsEvaluating nfp]
+                )
+              (setSomethingModified VFSUnmodified st "Eval" $ do
+                unqueueForEvaluation st nfp
+                return [toKey IsEvaluating nfp]
+                )
               (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
@@ -226,14 +223,14 @@ runEvalCmd plId st mtoken EvalParams{..} =
                 perf "edits" $
                     liftIO $
                         evalGhcEnv final_hscEnv $ do
-                            runTests evalCfg (st, fp) tests
+                            runTests recorder evalCfg fp tests
 
             let workspaceEditsMap = Map.singleton _uri (addFinalReturn mdlText edits)
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
      in perf "evalCmd" $ ExceptT $
-            withIndefiniteProgress "Evaluating" mtoken Cancellable $ \_updater ->
+            pluginWithIndefiniteProgress "Evaluating" mtoken Cancellable $ \_updater ->
                 runExceptT $ response' cmd
 
 -- | Create an HscEnv which is suitable for performing interactive evaluation.
@@ -277,6 +274,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
                    . flip xopt_unset  LangExt.MonomorphismRestriction
                    . flip gopt_set    Opt_ImplicitImportQualified
                    . flip gopt_unset  Opt_DiagnosticsShowCaret
+                   . setBackend ghciBackend
                    $ (ms_hspp_opts ms) {
                         useColor = Never
                       , canUseColor = False }
@@ -299,11 +297,11 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: MonadLsp c m => Uri -> ExceptT PluginError m Text
+moduleText :: Uri -> ExceptT PluginError (HandlerM config) Text
 moduleText uri =
     handleMaybeM (PluginInternalError "mdlText") $
       (virtualFileText <$>)
-          <$> getVirtualFile
+          <$> pluginGetVirtualFile
               (toNormalizedUri uri)
 
 testsBySection :: [Section] -> [(Section, EvalId, Test)]
@@ -313,7 +311,7 @@ testsBySection sections =
     , test <- sectionTests section
     ]
 
-type TEnv = (IdeState, String)
+type TEnv = String
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()
 evalSetup = do
@@ -321,26 +319,26 @@ evalSetup = do
     context <- getContext
     setContext (IIDecl preludeAsP : context)
 
-runTests :: EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
-runTests EvalConfig{..} e@(_st, _) tests = do
+runTests :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
+runTests recorder EvalConfig{..} e tests = do
     df <- getInteractiveDynFlags
     evalSetup
-    when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals True e df propSetup
+    when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals recorder True e df propSetup
 
     mapM (processTest e df) tests
   where
     processTest :: TEnv -> DynFlags -> (Section, Test) -> Ghc TextEdit
-    processTest e@(st, fp) df (section, test) = do
-        let dbg = logWith st
+    processTest fp df (section, test) = do
+        let dbg = logWith recorder Debug
         let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
         rs <- runTest e df test
-        dbg "TEST RESULTS" rs
+        dbg $ LogRunTestResults rs
 
         let checkedResult = testCheck eval_cfg_diff (section, test) rs
         let resultLines = concatMap T.lines checkedResult
 
         let edit = asEdit (sectionFormat section) test (map pad resultLines)
-        dbg "TEST EDIT" edit
+        dbg $ LogRunTestEdits edit
         return edit
 
     -- runTest :: String -> DynFlags -> Loc Test -> Ghc [Text]
@@ -349,7 +347,7 @@ runTests EvalConfig{..} e@(_st, _) tests = do
             return $
                 singleLine
                     "Add QuickCheck to your cabal dependencies to run this test."
-    runTest e df test = evals (eval_cfg_exception && not (isProperty test)) e df (asStatements test)
+    runTest e df test = evals recorder (eval_cfg_exception && not (isProperty test)) e df (asStatements test)
 
 asEdit :: Format -> Test -> [Text] -> TextEdit
 asEdit (MultiLine commRange) test resultLines
@@ -425,27 +423,26 @@ Or for a value that does not have a Show instance and can therefore not be displ
 >>> V
 No instance for (Show V) arising from a use of ‘evalPrint’
 -}
-evals :: Bool -> TEnv -> DynFlags -> [Statement] -> Ghc [Text]
-evals mark_exception (st, fp) df stmts = do
+evals :: Recorder (WithPriority Log) -> Bool -> TEnv -> DynFlags -> [Statement] -> Ghc [Text]
+evals recorder mark_exception fp df stmts = do
     er <- gStrictTry $ mapM eval stmts
     return $ case er of
         Left err -> errorLines err
         Right rs -> concat . catMaybes $ rs
   where
-    dbg = logWith st
+    dbg = logWith recorder Debug
     eval :: Statement -> Ghc (Maybe [Text])
     eval (Located l stmt)
         | -- GHCi flags
           Just (words -> flags) <- parseSetFlags stmt = do
-            dbg "{:SET" flags
+            dbg $ LogEvalFlags flags
             ndf <- getInteractiveDynFlags
-            dbg "pre set" $ showDynFlags ndf
+            dbg $ LogEvalPreSetDynFlags ndf
             eans <-
                 liftIO $ try @GhcException $
                 parseDynamicFlagsCmdLine ndf
                 (map (L $ UnhelpfulSpan unhelpfulReason) flags)
-            dbg "parsed flags" $ eans
-              <&> (_1 %~ showDynFlags >>> _3 %~ prettyWarnings)
+            dbg $ LogEvalParsedFlags eans
             case eans of
                 Left err -> pure $ Just $ errorLines $ show err
                 Right (df', ignoreds, warns) -> do
@@ -459,7 +456,7 @@ evals mark_exception (st, fp) df stmts = do
                                 ["Some flags have not been recognized: "
                                 <> T.pack (intercalate ", " $ map SrcLoc.unLoc ignoreds)
                                 ]
-                    dbg "post set" $ showDynFlags df'
+                    dbg $ LogEvalPostSetDynFlags df'
                     setSessionAndInteractiveDynFlags df'
                     pure $ warnings <> igns
         | -- A type/kind command
@@ -468,23 +465,23 @@ evals mark_exception (st, fp) df stmts = do
         | -- A statement
           isStmt pf stmt =
             do
-                dbg "{STMT " stmt
+                dbg $ LogEvalStmtStart stmt
                 res <- exec stmt l
                 let r = case res of
                         Left err -> Just . (if mark_exception then exceptionLines else errorLines) $ err
                         Right x  -> singleLine <$> x
-                dbg "STMT} -> " r
+                dbg $ LogEvalStmtResult r
                 return r
         | -- An import
           isImport pf stmt =
             do
-                dbg "{IMPORT " stmt
+                dbg $ LogEvalImport stmt
                 _ <- addImport stmt
                 return Nothing
         | -- A declaration
           otherwise =
             do
-                dbg "{DECL " stmt
+                dbg $ LogEvalDeclaration stmt
                 void $ runDecls stmt
                 return Nothing
     pf = initParserOpts df
@@ -492,19 +489,6 @@ evals mark_exception (st, fp) df stmts = do
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in myExecStmt stmt opts
-
-#if MIN_VERSION_ghc(9,8,0)
-prettyWarnings :: Messages DriverMessage -> String
-prettyWarnings = printWithoutUniques . pprMessages (defaultDiagnosticOpts @DriverMessage)
-#else
-prettyWarnings :: [Warn] -> String
-prettyWarnings = unlines . map prettyWarn
-
-prettyWarn :: Warn -> String
-prettyWarn Warn{..} =
-    T.unpack (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
-    <> "    " <> SrcLoc.unLoc warnMsg
-#endif
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)

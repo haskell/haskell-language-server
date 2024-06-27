@@ -1,6 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-| This module currently includes helper functions to provide fallback support
 to code actions that use resolve in HLS. The difference between the two
@@ -26,7 +25,6 @@ import           Control.Monad.Trans.Except    (ExceptT (..))
 
 import qualified Data.Aeson                    as A
 import           Data.Maybe                    (catMaybes)
-import           Data.Row                      ((.!))
 import qualified Data.Text                     as T
 import           GHC.Generics                  (Generic)
 import           Ide.Logger
@@ -35,12 +33,10 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server           (LspT, getClientCapabilities,
-                                                sendRequest)
 
 data Log
     = DoesNotSupportResolve T.Text
-    | ApplyWorkspaceEditFailed ResponseError
+    | forall m . A.ToJSON (ErrorData m) => ApplyWorkspaceEditFailed (TResponseError m)
 instance Pretty Log where
     pretty = \case
         DoesNotSupportResolve fallback->
@@ -62,7 +58,7 @@ mkCodeActionHandlerWithResolve
 mkCodeActionHandlerWithResolve recorder codeActionMethod codeResolveMethod =
   let newCodeActionMethod ideState pid params =
         do codeActionReturn <- codeActionMethod ideState pid params
-           caps <- lift getClientCapabilities
+           caps <- lift pluginGetClientCapabilities
            case codeActionReturn of
              r@(InR Null) -> pure r
              (InL ls) | -- We don't need to do anything if the client supports
@@ -76,7 +72,7 @@ mkCodeActionHandlerWithResolve recorder codeActionMethod codeResolveMethod =
   <> mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
   where dropData :: CodeAction -> CodeAction
         dropData ca = ca & L.data_ .~ Nothing
-        resolveCodeAction :: Uri -> ideState -> PluginId -> (Command |? CodeAction) -> ExceptT PluginError (LspT Config IO) (Command |? CodeAction)
+        resolveCodeAction :: Uri -> ideState -> PluginId -> (Command |? CodeAction) -> ExceptT PluginError (HandlerM Config) (Command |? CodeAction)
         resolveCodeAction _uri _ideState _plId c@(InL _) = pure c
         resolveCodeAction uri ideState pid (InR codeAction@CodeAction{_data_=Just value}) = do
           case A.fromJSON value of
@@ -107,7 +103,7 @@ mkCodeActionWithResolveAndCommand
 mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMethod =
   let newCodeActionMethod ideState pid params =
         do codeActionReturn <- codeActionMethod ideState pid params
-           caps <- lift getClientCapabilities
+           caps <- lift pluginGetClientCapabilities
            case codeActionReturn of
              r@(InR Null) -> pure r
              (InL ls) | -- We don't need to do anything if the client supports
@@ -147,7 +143,7 @@ mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMeth
                   resolveResult <- resolveProvider ideState plId ca uri innerValueDecoded
                   case resolveResult of
                     ca2@CodeAction {_edit = Just wedits } | diffCodeActions ca ca2 == ["edit"] -> do
-                        _ <- ExceptT $ Right <$> sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) handleWEditCallback
+                        _ <- ExceptT $ Right <$> pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) handleWEditCallback
                         pure $ InR Null
                     ca2@CodeAction {_edit = Just _ }  ->
                       throwError $ internalError $
@@ -190,7 +186,7 @@ supportsCodeActionResolve :: ClientCapabilities -> Bool
 supportsCodeActionResolve caps =
     caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
     && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
-        Just row -> "edit" `elem` row .! #properties
+        Just ClientCodeActionResolveOptions{_properties} -> "edit" `elem` _properties
         _        -> False
 
 internalError :: T.Text -> PluginError

@@ -1,58 +1,38 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedLabels  #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE OverloadedStrings        #-}
 
 import           Control.Lens                       ((^.), (^?))
-import           Control.Monad.IO.Class             (liftIO)
 import           Data.Aeson                         (KeyValue (..), Object)
 import qualified Data.Aeson.KeyMap                  as KV
 import           Data.Default
 import           Data.Functor                       (void)
+import qualified Data.List                          as T
 import           Data.Map.Strict                    as Map hiding (map)
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
+import           Data.Version                       (Version (..))
 import           Development.IDE                    (Pretty)
-
-import           Data.Row                           ((.==))
-import           Data.Row.Records                   ((.+))
-import           Development.IDE.GHC.Compat         (GhcVersion (..),
-                                                     ghcVersion)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
-import           Development.IDE.Test               (waitForBuildQueue)
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Test                  (Session,
-                                                     SessionConfig (ignoreConfigurationRequests),
-                                                     openDoc, request)
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
-import           Test.Hls                           (HasCallStack,
-                                                     PluginTestDescriptor,
-                                                     SMethod (SMethod_TextDocumentSemanticTokensFullDelta),
-                                                     TestName, TestTree,
-                                                     changeDoc,
-                                                     defaultTestRunner,
-                                                     documentContents, fullCaps,
-                                                     goldenGitDiff,
-                                                     mkPluginTestDescriptor,
-                                                     pluginTestRecorder,
-                                                     runSessionWithServerInTmpDir,
-                                                     runSessionWithServerInTmpDir',
-                                                     testCase, testGroup,
-                                                     waitForAction, (@?=))
+import           System.Info                        (compilerVersion)
+import           Test.Hls
 import qualified Test.Hls.FileSystem                as FS
 import           Test.Hls.FileSystem                (file, text)
 
 testDataDir :: FilePath
-testDataDir = "plugins" </> "hls-semantic-tokens-plugin" </> "test" </> "testdata"
+testDataDir = "plugins" </> "hls-semantic-tokens-plugin" </> "test" </> "testdata" </> testVersionDir
 
 mkFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkFs = FS.mkVirtualFileTree testDataDir
@@ -72,14 +52,24 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor enabledSemanticDescriptor
                   }
             }
 
-goldenWithHaskellAndCapsOutPut :: Pretty b => Config -> PluginTestDescriptor b -> TestName -> FS.VirtualFileTree -> FilePath -> String -> (TextDocumentIdentifier -> Session String) -> TestTree
+-- if 9_10 and after we change the directory to the testdata/before_9_10 directory
+-- if 9_10 and after we change the directory to the testdata/after_9_10 directory
+
+testVersionDir :: FilePath
+testVersionDir
+      | compilerVersion >= Version [9, 10] [] = "after_9_10"
+      | otherwise = "before_9_10"
+
+goldenWithHaskellAndCapsOutPut :: (Pretty b) => Config -> PluginTestDescriptor b -> TestName -> FS.VirtualFileTree -> FilePath -> String -> (TextDocumentIdentifier -> Session String) -> TestTree
 goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
   goldenGitDiff title (FS.vftOriginalRoot tree </> path <.> desc) $
-    runSessionWithServerInTmpDir config plugin tree $
-      fromString <$> do
-        doc <- openDoc (path <.> "hs") "haskell"
-        void waitForBuildQueue
-        act doc
+    fromString
+      <$> ( runSessionWithServerInTmpDir config plugin tree $
+              do
+                doc <- openDoc (path <.> "hs") "haskell"
+                void waitForBuildQueue
+                act doc
+          )
 
 goldenWithSemanticTokensWithDefaultConfig :: TestName -> FilePath -> TestTree
 goldenWithSemanticTokensWithDefaultConfig title path =
@@ -92,9 +82,9 @@ goldenWithSemanticTokensWithDefaultConfig title path =
     "expected"
     (docSemanticTokensString def)
 
-docSemanticTokensString :: SemanticTokensConfig-> TextDocumentIdentifier -> Session String
+docSemanticTokensString :: SemanticTokensConfig -> TextDocumentIdentifier -> Session String
 docSemanticTokensString cf doc = do
-  xs  <- map (lspTokenHsToken cf) <$> docLspSemanticTokensString doc
+  xs <- map (lspTokenHsToken cf) <$> docLspSemanticTokensString doc
   return $ unlines . map show $ xs
 
 docLspSemanticTokensString :: (HasCallStack) => TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
@@ -107,7 +97,6 @@ docLspSemanticTokensString doc = do
       either (error . show) pure $ recoverLspSemanticTokens vfs tokens
     _noTokens -> error "No tokens found"
 
-
 -- | Pass a param and return the response from `semanticTokensFull`
 -- getSemanticTokensFullDelta :: TextDocumentIdentifier -> Session _
 getSemanticTokensFullDelta :: TextDocumentIdentifier -> Text -> Session (SemanticTokens |? (SemanticTokensDelta |? Null))
@@ -117,7 +106,6 @@ getSemanticTokensFullDelta doc lastResultId = do
   case rsp ^. L.result of
     Right x -> return x
     _       -> error "No tokens found"
-
 
 semanticTokensClassTests :: TestTree
 semanticTokensClassTests =
@@ -139,44 +127,50 @@ semanticTokensValuePatternTests =
     ]
 
 mkSemanticConfig :: Object -> Config
-mkSemanticConfig setting = def{plugins = Map.insert "SemanticTokens" conf (plugins def)}
-    where
-      conf = def{plcConfig = setting }
-
-
+mkSemanticConfig setting = def {plugins = Map.insert "SemanticTokens" conf (plugins def)}
+  where
+    conf = def {plcConfig = setting}
 
 directFile :: FilePath -> Text -> [FS.FileTree]
 directFile fp content =
-  [ FS.directCradle [Text.pack fp]
-  , file fp (text content)
+  [ FS.directCradle [Text.pack fp],
+    file fp (text content)
   ]
 
 semanticTokensConfigTest :: TestTree
-semanticTokensConfigTest = testGroup "semantic token config test" [
-        testCase "function to variable" $ do
-            let content = Text.unlines ["module Hello where", "go _ = 1"]
-            let fs = mkFs $ directFile "Hello.hs" content
-            let funcVar = KV.fromList ["functionToken" .= var]
-                var :: String
-                var = "variable"
-            do
-                recorder <- pluginTestRecorder
-                Test.Hls.runSessionWithServerInTmpDir' (semanticTokensPlugin recorder)
-                    (mkSemanticConfig funcVar)
-                    def {ignoreConfigurationRequests = False}
-                    fullCaps
-                    fs $ do
-                    -- modifySemantic funcVar
-                    void waitForBuildQueue
-                    doc <- openDoc "Hello.hs" "haskell"
-                    void waitForBuildQueue
-                    result1 <- docLspSemanticTokensString doc
-                    liftIO $ unlines (map show result1) @?= "2:1-3 SemanticTokenTypes_Variable \"go\"\n"
+semanticTokensConfigTest =
+  testGroup
+    "semantic token config test"
+    [ testCase "function to variable" $ do
+        let content = Text.unlines ["module Hello where", "go _ = 1"]
+        let fs = mkFs $ directFile "Hello.hs" content
+        let funcVar = KV.fromList ["functionToken" .= var]
+            var :: String
+            var = "variable"
+        Test.Hls.runSessionWithTestConfig def
+          { testPluginDescriptor = semanticTokensPlugin
+          , testConfigSession = def
+            { ignoreConfigurationRequests = False
+            }
+          , testConfigCaps = fullLatestClientCaps
+          , testDirLocation = Right fs
+          , testLspConfig = mkSemanticConfig funcVar
+          }
+        $ const $ do
+            -- modifySemantic funcVar
+            void waitForBuildQueue
+            doc <- openDoc "Hello.hs" "haskell"
+            void waitForBuildQueue
+            result1 <- docLspSemanticTokensString doc
+            liftIO $ unlines (map show result1) @?=
+                T.unlines (["1:8-13 SemanticTokenTypes_Namespace \"Hello\"" | compilerVersion >= Version [9, 10] []]
+                        ++ ["2:1-3 SemanticTokenTypes_Variable \"go\""])
     ]
+
 
 semanticTokensFullDeltaTests :: TestTree
 semanticTokensFullDeltaTests =
-  testGroup "semanticTokensFullDeltaTests" $
+  testGroup "semanticTokensFullDeltaTests"
     [ testCase "null delta since unchanged" $ do
         let file1 = "TModuleA.hs"
         let expectDelta = InR (InL (SemanticTokensDelta (Just "1") []))
@@ -185,11 +179,12 @@ semanticTokensFullDeltaTests =
           _ <- waitForAction "TypeCheck" doc1
           _ <- Test.getSemanticTokens doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
-          liftIO $ delta @?= expectDelta
-
-      , testCase "add tokens" $ do
+          liftIO $ delta @?= expectDelta,
+      testCase "add tokens" $ do
         let file1 = "TModuleA.hs"
-        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2,0,3,8,0])]))
+        let expectDelta
+                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 25 0 (Just [2, 0, 3, 8, 0])]))
+                | otherwise = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2, 0, 3, 8, 0])]))
         --                                                                                         r c l t m
         --                                      where r = row, c = column, l = length, t = token, m = modifier
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
@@ -197,28 +192,31 @@ semanticTokensFullDeltaTests =
           _ <- waitForAction "TypeCheck" doc1
           _ <- Test.getSemanticTokens doc1
           -- open the file and append a line to it
-          let change = TextDocumentContentChangeEvent
-                $ InL $ #range .== Range (Position 4 0) (Position 4 6)
-                .+ #rangeLength .== Nothing
-                .+ #text .== "foo = 1"
+          let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                { _range = Range (Position 4 0) (Position 4 6)
+                , _rangeLength = Nothing
+                , _text = "foo = 1"
+                }
           changeDoc doc1 [change]
           _ <- waitForAction "TypeCheck" doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
-          liftIO $ delta @?= expectDelta
-
-      , testCase "remove tokens" $ do
+          liftIO $ delta @?= expectDelta,
+      testCase "remove tokens" $ do
         let file1 = "TModuleA.hs"
-        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
+        let expectDelta
+                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 5 20 (Just [])]))
+                | otherwise = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
         -- delete all tokens
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
           doc1 <- openDoc file1 "haskell"
           _ <- waitForAction "TypeCheck" doc1
           _ <- Test.getSemanticTokens doc1
           -- open the file and append a line to it
-          let change = TextDocumentContentChangeEvent
-                $ InL $ #range .== Range (Position 2 0) (Position 2 28)
-                .+ #rangeLength .== Nothing
-                .+ #text .== Text.replicate 28 " "
+          let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                { _range = Range (Position 2 0) (Position 2 28)
+                , _rangeLength = Nothing
+                , _text = Text.replicate 28 " "
+                }
           changeDoc doc1 [change]
           _ <- waitForAction "TypeCheck" doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
@@ -227,7 +225,7 @@ semanticTokensFullDeltaTests =
 
 semanticTokensTests :: TestTree
 semanticTokensTests =
-  testGroup "other semantic Token test" $
+  testGroup "other semantic Token test"
     [ testCase "module import test" $ do
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
@@ -244,25 +242,30 @@ semanticTokensTests =
             Left _                         -> error "TypeCheck2 failed"
 
           result <- docSemanticTokensString def doc2
-          let expect = unlines [
-                    "3:8-16 TModule \"TModuleA\""
-                    , "4:18-26 TModule \"TModuleA\""
-                    , "6:1-3 TVariable \"go\""
-                    , "6:6-10 TDataConstructor \"Game\""
-                    , "8:1-5 TVariable \"a\\66560bb\""
-                    , "8:8-17 TModule \"TModuleA.\""
-                    , "8:17-20 TRecordField \"a\\66560b\""
-                    , "8:21-23 TVariable \"go\""
-                ]
+          let expect =
+                unlines
+                  (
+                    -- > 9.10 have module name in the token
+                    (["1:8-16 TModule \"TModuleB\"" | compilerVersion >= Version [9, 10] []])
+                      ++
+                    [
+                    "3:8-16 TModule \"TModuleA\"",
+                    "4:18-26 TModule \"TModuleA\"",
+                    "6:1-3 TVariable \"go\"",
+                    "6:6-10 TDataConstructor \"Game\"",
+                    "8:1-5 TVariable \"a\\66560bb\"",
+                    "8:8-17 TModule \"TModuleA.\"",
+                    "8:17-20 TRecordField \"a\\66560b\"",
+                    "8:21-23 TVariable \"go\""
+                  ])
           liftIO $ result @?= expect,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
-      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
+      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName",
+      goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
     ]
-      -- not supported in ghc92
-    ++ [goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc" | ghcVersion > GHC92]
 
 semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =

@@ -11,11 +11,8 @@
 module Development.IDE.Core.Rules(
     -- * Types
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
-    Priority(..), GhcSessionIO(..), GetClientSettings(..),
+    GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
-    priorityTypeCheck,
-    priorityGenerateCore,
-    priorityFilesOfInterest,
     runAction,
     toIdeResult,
     defineNoFile,
@@ -26,6 +23,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    usePropertyByPathAction,
     getHieFile,
     -- * Rules
     CompiledLinkables(..),
@@ -45,7 +43,6 @@ module Development.IDE.Core.Rules(
     getHieAstsRule,
     getBindingsRule,
     needsCompilationRule,
-    computeLinkableTypeForDynFlags,
     generateCoreRule,
     getImportMapRule,
     regenerateHiFile,
@@ -61,17 +58,16 @@ module Development.IDE.Core.Rules(
     ) where
 
 import           Control.Applicative
-import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.STM.Stats                 (atomically)
 import           Control.Concurrent.STM.TVar
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
-import           Control.Monad.Extra                          hiding (msum)
+import           Control.Monad.Extra
 import           Control.Monad.IO.Unlift
-import           Control.Monad.Reader                         hiding (msum)
-import           Control.Monad.State                          hiding (msum)
+import           Control.Monad.Reader
+import           Control.Monad.State
 import           Control.Monad.Trans.Except                   (ExceptT, except,
                                                                runExceptT)
 import           Control.Monad.Trans.Maybe
@@ -81,7 +77,7 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Default                                 (Default, def)
-import           Data.Foldable                                hiding (msum)
+import           Data.Foldable
 import           Data.Hashable
 import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
@@ -93,10 +89,8 @@ import           Data.List.Extra                              (nubOrdOn)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
-import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
-import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time                                    (UTCTime (..))
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
@@ -126,7 +120,6 @@ import           Development.IDE.GHC.Compat                   hiding
 import qualified Development.IDE.GHC.Compat                   as Compat hiding
                                                                         (nest,
                                                                          vcat)
-import           Development.IDE.GHC.Compat.Env
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                     hiding
@@ -154,10 +147,13 @@ import           Ide.Logger                                   (Pretty (pretty),
 import qualified Ide.Logger                                   as Logger
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties                        (HasProperty,
+                                                               HasPropertyByPath,
+                                                               KeyNamePath,
                                                                KeyNameProxy,
                                                                Properties,
                                                                ToHsType,
-                                                               useProperty)
+                                                               useProperty,
+                                                               usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
@@ -167,23 +163,12 @@ import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           Prelude                                      hiding (mod)
-import           System.Directory                             (doesFileExist,
-                                                               makeAbsolute)
+import           System.Directory                             (doesFileExist)
 import           System.Info.Extra                            (isWindows)
 
 
-import           GHC.Fingerprint
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC                                          (mgModSummaries)
-#endif
-
-#if MIN_VERSION_ghc(9,3,0)
 import qualified Data.IntMap                                  as IM
-#endif
-
+import           GHC.Fingerprint
 
 
 data Log
@@ -230,6 +215,9 @@ toIdeResult = either (, Nothing) (([],) . Just)
 ------------------------------------------------------------
 -- Exposed API
 ------------------------------------------------------------
+
+-- TODO: rename
+-- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
@@ -249,15 +237,6 @@ getParsedModuleWithComments = use GetParsedModuleWithComments
 ------------------------------------------------------------
 -- Rules
 -- These typically go from key to value and are oracles.
-
-priorityTypeCheck :: Priority
-priorityTypeCheck = Priority 0
-
-priorityGenerateCore :: Priority
-priorityGenerateCore = Priority (-1)
-
-priorityFilesOfInterest :: Priority
-priorityFilesOfInterest = Priority (-2)
 
 -- | WARNING:
 -- We currently parse the module both with and without Opt_Haddock, and
@@ -332,22 +311,14 @@ getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
-        targets <- useNoFile_ GetKnownTargets
-        let targetsMap = HM.mapWithKey const targets
+        (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
-        let env = hscEnvWithImportPaths env_eq
-        let import_dirs = deps env_eq
+        let env = hscEnv env_eq
+        let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
-            isImplicitCradle = isNothing $ envImportPaths env_eq
-        let dflags' = if isImplicitCradle
-                    then addRelativeImport file (moduleName $ ms_mod ms) dflags
-                    else dflags
         opt <- getIdeOptions
         let getTargetFor modName nfp
-                | isImplicitCradle = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
                 | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     itExists <- getFileExists nfp'
@@ -358,10 +329,11 @@ getLocatedImportsRule recorder =
                         nfp' = HM.lookupDefault nfp nfp ttmap
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
-                | otherwise
-                = return Nothing
+                | otherwise = do
+                    itExists <- getFileExists nfp
+                    return $ if itExists then Just nfp else Nothing
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule (hscSetFlags dflags' env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -408,16 +380,16 @@ rawDependencyInformation fs = do
     go :: NormalizedFilePath -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
-    go f msum = do
+    go f mbModSum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          let al = modSummaryToArtifactsLocation f msum
+          let al = modSummaryToArtifactsLocation f mbModSum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Record this module and its location
-          whenJust msum $ \ms ->
+          whenJust mbModSum $ \ms ->
             modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
                                                                            (ShowableModule $ ms_mod ms)
                                                                            (rawModuleMap rd)})
@@ -564,8 +536,8 @@ getHieAstRuleDefinition f hsc tmr = do
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
           let exports = tcg_exports $ tmrTypechecked tmr
-              msum = tmrModSummary tmr
-          liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
+              modSummary = tmrModSummary tmr
+          liftIO $ writeAndIndexHieFile hsc se modSummary f exports asts source
     _ -> pure []
 
   let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
@@ -653,7 +625,6 @@ dependencyInfoForFiles fs = do
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
   msrs <- uses GetModSummaryWithoutTimestamps all_fs
   let mss = map (fmap msrModSummary) msrs
-#if MIN_VERSION_ghc(9,3,0)
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
       mns = catMaybes $ zipWith go mss deps
@@ -663,14 +634,6 @@ dependencyInfoForFiles fs = do
       go (Just ms) _ = Just $ ModuleNode [] ms
       go _ _ = Nothing
       mg = mkModuleGraph mns
-#else
-  let mg = mkModuleGraph $
-        -- We don't do any instantiation for backpack at this point of time, so it is OK to use
-        -- 'extendModSummaryNoDeps'.
-        -- This may have to change in the future.
-          map extendModSummaryNoDeps $
-          catMaybes mss
-#endif
   pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
 
 -- This is factored out so it can be directly called from the GetModIface
@@ -682,7 +645,6 @@ typeCheckRuleDefinition
     -> ParsedModule
     -> Action (IdeResult TcModuleResult)
 typeCheckRuleDefinition hsc pm = do
-  setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   unlift <- askUnliftIO
@@ -714,20 +676,31 @@ loadGhcSession recorder ghcSessionDepsConfig = do
     defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GhcSessionIO -> do
         alwaysRerun
         opts <- getIdeOptions
+        config <- getClientConfigAction
         res <- optGhcSession opts
 
-        let fingerprint = LBS.toStrict $ B.encode $ hash (sessionVersion res)
+        let fingerprint = LBS.toStrict $ LBS.concat
+                [ B.encode (hash (sessionVersion res))
+                -- When the session version changes, reload all session
+                -- hsc env sessions
+                , B.encode (show (sessionLoading config))
+                -- The loading config affects session loading.
+                -- Invalidate all build nodes.
+                -- Changing the session loading config will increment
+                -- the 'sessionVersion', thus we don't generate the same fingerprint
+                -- twice by accident.
+                ]
         return (fingerprint, res)
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+        -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
 
         -- add the deps to the Shake graph
         let addDependency fp = do
                 -- VSCode uses absolute paths in its filewatch notifications
-                afp <- liftIO $ makeAbsolute fp
-                let nfp = toNormalizedFilePath' afp
+                let nfp = toNormalizedFilePath' fp
                 itExists <- getFileExists nfp
                 when itExists $ void $ do
                   use_ GetModificationTime nfp
@@ -778,7 +751,6 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
               then depModuleGraph <$> useNoFile_ GetModuleGraph
               else do
                 let mgs = map hsc_mod_graph depSessions
-#if MIN_VERSION_ghc(9,3,0)
                 -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
                 -- also points to all the direct descendants of the current module. To get the keys for the descendants
                 -- we must get their `ModSummary`s
@@ -787,14 +759,6 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                   return $!! map (NodeKey_Module . msKey) dep_mss
                 let module_graph_nodes =
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
-#else
-                let module_graph_nodes =
-                      -- We don't do any instantiation for backpack at this point of time, so it is OK to use
-                      -- 'extendModSummaryNoDeps'.
-                      -- This may have to change in the future.
-                      map extendModSummaryNoDeps $
-                      nubOrdOn ms_mod (ms : concatMap mgModSummaries mgs)
-#endif
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
             session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
@@ -855,7 +819,7 @@ getModIfaceFromDiskAndIndexRule recorder =
       hie_loc = Compat.ml_hie_file $ ms_location ms
   fileHash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
-  hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
+  let hie_loc' = HieDb.hieModuleHieFile <$> mrow
   case mrow of
     Just row
       | fileHash == HieDb.modInfoHash (HieDb.hieModInfo row)
@@ -907,12 +871,7 @@ getModSummaryRule displayTHWarning recorder = do
                 when (uses_th_qq $ msrModSummary res) $ do
                     DisplayTHWarning act <- getIdeGlobalAction
                     liftIO act
-#if MIN_VERSION_ghc(9,3,0)
                 let bufFingerPrint = ms_hs_hash (msrModSummary res)
-#else
-                bufFingerPrint <- liftIO $
-                    fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
-#endif
                 let fingerPrint = Util.fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
                 return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
@@ -923,9 +882,6 @@ getModSummaryRule displayTHWarning recorder = do
         case mbMs of
             Just res@ModSummaryResult{..} -> do
                 let ms = msrModSummary {
-#if !MIN_VERSION_ghc(9,3,0)
-                    ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps",
-#endif
                     ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
                     }
                     fp = fingerprintToBS msrFingerprint
@@ -936,7 +892,6 @@ generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts
 generateCore runSimplifier file = do
     packageState <- hscEnv <$> use_ GhcSessionDeps file
     tm <- use_ TypeCheck file
-    setPriority priorityGenerateCore
     liftIO $ compileModule runSimplifier packageState (tmrModSummary tm) (tmrTypechecked tm)
 
 generateCoreRule :: Recorder (WithPriority Log) -> Rules ()
@@ -1069,6 +1024,16 @@ usePropertyAction kn plId p = do
   pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
 
+usePropertyByPathAction ::
+  (HasPropertyByPath props path t) =>
+  KeyNamePath path ->
+  PluginId ->
+  Properties props ->
+  Action (ToHsType t)
+usePropertyByPathAction path plId p = do
+  pluginConfig <- getPluginConfigAction plId
+  pure $ usePropertyByPath path p $ plcConfig pluginConfig
+
 -- ---------------------------------------------------------------------
 
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
@@ -1128,7 +1093,6 @@ getLinkableRule recorder =
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
--- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =
@@ -1151,35 +1115,22 @@ needsCompilationRule file = do
         -- that we just threw away, and thus have to recompile all dependencies once
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
         (modsums,needsComps) <- liftA2
             (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
                 (uses NeedsCompilation revdeps)
-        pure $ computeLinkableType ms modsums (map join needsComps)
+        pure $ computeLinkableType modsums (map join needsComps)
   pure (Just $ encodeLinkableType res, Just res)
   where
-    computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
-    computeLinkableType this deps xs
+    computeLinkableType :: [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
+    computeLinkableType deps xs
       | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
-      | Just BCOLinkable    `elem` xs     = Just this_type      -- If any dependent needs bytecode, then we need to be compiled
-      | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
+      | Just BCOLinkable    `elem` xs     = Just BCOLinkable    -- If any dependent needs bytecode, then we need to be compiled
+      | any (maybe False uses_th_qq) deps = Just BCOLinkable    -- If any dependent needs TH, then we need to be compiled
       | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
-      where
-        this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
 
 uses_th_qq :: ModSummary -> Bool
 uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
--- | How should we compile this module?
--- (assuming we do in fact need to compile it).
--- Depends on whether it uses unboxed tuples or sums
-computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
-computeLinkableTypeForDynFlags d
-          = BCOLinkable
-  where -- unboxed_tuples_or_sums is only used in GHC < 9.2
-        _unboxed_tuples_or_sums =
-            xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }

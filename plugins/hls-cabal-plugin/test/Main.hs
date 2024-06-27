@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 
 module Main (
@@ -12,7 +12,6 @@ import           Control.Lens                    ((^.))
 import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
-import           Data.Row
 import qualified Data.Text                       as T
 import qualified Data.Text                       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
@@ -62,15 +61,23 @@ codeActionUnitTests =
         "Code Action Tests"
         [ testCase "Unknown format" $ do
             -- the message has the wrong format
-            licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= []
+            licenseErrorSuggestion maxCompletions "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= []
         , testCase "BSD-3-Clause" $ do
-            take 2 (licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?")
-                @?= [("BSD3", "BSD-3-Clause"), ("BSD3", "BSD-3-Clause-LBNL")]
+            take 2 (licenseErrorSuggestion maxCompletions "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?")
+                @?=
+-- Cabal-syntax 3.12.0.0 added bunch of new licenses, so now more licenses match "BSD3" pattern
+#if MIN_VERSION_Cabal_syntax(3,12,0)
+                    [("BSD3", "BSD-4.3RENO"), ("BSD3", "BSD-3-Clause")]
+#else
+                    [("BSD3", "BSD-3-Clause"), ("BSD3", "BSD-3-Clause-LBNL")]
+#endif
         , testCase "MiT" $ do
             -- contains no suggestion
-            take 2 (licenseErrorSuggestion "Unknown SPDX license identifier: 'MiT'")
+            take 2 (licenseErrorSuggestion maxCompletions "Unknown SPDX license identifier: 'MiT'")
                 @?= [("MiT", "MIT"), ("MiT", "MIT-0")]
         ]
+  where
+    maxCompletions = 100
 
 
 -- ------------------------ ------------------------------------------------
@@ -110,8 +117,7 @@ pluginTests =
                 expectNoMoreDiagnostics 1 hsDoc "typechecking"
                 cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
                 expectNoMoreDiagnostics 1 cabalDoc "parsing"
-            , ignoreTestBecause "Testcase is flaky for certain GHC versions (e.g. 9.2.5). See #3333 for details." $ do
-                runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" "simple-cabal" $ do
+            , runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" "simple-cabal" $ do
                     hsDoc <- openDoc "A.hs" "haskell"
                     expectNoMoreDiagnostics 1 hsDoc "typechecking"
                     cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
@@ -121,13 +127,11 @@ pluginTests =
                     changeDoc
                         cabalDoc
                         [ TextDocumentContentChangeEvent $
-                            InL $
-                                #range
-                                    .== theRange
-                                    .+ #rangeLength
-                                    .== Nothing
-                                    .+ #text
-                                    .== "MIT3"
+                            InL TextDocumentContentChangePartial
+                                { _range = theRange
+                                , _rangeLength = Nothing
+                                , _text = "MIT3"
+                                }
                         ]
                     cabalDiags <- waitForDiagnosticsFrom cabalDoc
                     unknownLicenseDiag <- liftIO $ inspectDiagnostic cabalDiags ["Unknown SPDX license identifier: 'MIT3'"]

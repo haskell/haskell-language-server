@@ -10,10 +10,7 @@
 -- framework they want to.
 module Ide.Logger
   ( Priority(..)
-  , Logger(..)
   , Recorder(..)
-  , logError, logWarning, logInfo, logDebug
-  , noLogging
   , WithPriority(..)
   , logWith
   , cmap
@@ -30,6 +27,7 @@ module Ide.Logger
   , module PrettyPrinterModule
   , renderStrict
   , toCologActionWithPrio
+  , defaultLoggingColumns
   ) where
 
 import           Colog.Core                    (LogAction (..), Severity,
@@ -48,7 +46,6 @@ import           Data.Foldable                 (for_)
 import           Data.Functor.Contravariant    (Contravariant (contramap))
 import           Data.Maybe                    (fromMaybe)
 import           Data.Text                     (Text)
-import qualified Data.Text                     as T
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
 import           Data.Time                     (defaultTimeLocale, formatTime,
@@ -80,32 +77,6 @@ data Priority
       -- should be investigated.
     | Error -- ^ Such log messages must never occur in expected usage.
     deriving (Eq, Show, Read, Ord, Enum, Bounded)
-
--- | Note that this is logging actions _of the program_, not of the user.
---   You shouldn't call warning/error if the user has caused an error, only
---   if our code has gone wrong and is itself erroneous (e.g. we threw an exception).
-newtype Logger = Logger {logPriority :: Priority -> T.Text -> IO ()}
-
-instance Semigroup Logger where
-    l1 <> l2 = Logger $ \p t -> logPriority l1 p t >> logPriority l2 p t
-
-instance Monoid Logger where
-    mempty = Logger $ \_ _ -> pure ()
-
-logError :: Logger -> T.Text -> IO ()
-logError x = logPriority x Error
-
-logWarning :: Logger -> T.Text -> IO ()
-logWarning x = logPriority x Warning
-
-logInfo :: Logger -> T.Text -> IO ()
-logInfo x = logPriority x Info
-
-logDebug :: Logger -> T.Text -> IO ()
-logDebug x = logPriority x Debug
-
-noLogging :: Logger
-noLogging = Logger $ \_ _ -> return ()
 
 data WithPriority a = WithPriority { priority :: Priority, callStack_ :: CallStack, payload :: a } deriving Functor
 

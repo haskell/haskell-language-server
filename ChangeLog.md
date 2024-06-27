@@ -1,5 +1,230 @@
 # Changelog for haskell-language-server
 
+## 2.9.0.0
+
+- Bindists for GHC 9.10.1 by @wz1000, @jhrcek, @michaelpj
+- More hls-graph reliability improvements by @soulomoon
+- Refactoring of test suite runners by @soulomoon
+- Fixes in multiple home units support by @wz1000
+
+### Pull Requests
+
+- Fix quadratic memory usage in GetLocatedImports
+  ([#4318](https://github.com/haskell/haskell-language-server/pull/4318)) by @mpickering
+- Bump stack configs + CI to 9.6.5 and 9.8.2
+  ([#4316](https://github.com/haskell/haskell-language-server/pull/4316)) by @jhrcek
+- Add support for Fourmolu 0.16
+  ([#4314](https://github.com/haskell/haskell-language-server/pull/4314)) by @ brandonchinn178
+- Code action to remove redundant record field import (fixes #4220)
+  ([#4308](https://github.com/haskell/haskell-language-server/pull/4308)) by @battermann
+- Use restricted monad for plugins (#4057)
+  ([#4304](https://github.com/haskell/haskell-language-server/pull/4304)) by @awjchen
+- 4301 we need to implement utility to wait for all runnning keys in hls graph done
+  ([#4302](https://github.com/haskell/haskell-language-server/pull/4302)) by @soulomoon
+- Call useWithStale instead of useWithStaleFast when calling ParseCabalFields
+  ([#4294](https://github.com/haskell/haskell-language-server/pull/4294)) by @VeryMilkyJoe
+- test: add test documenting #806
+  ([#4292](https://github.com/haskell/haskell-language-server/pull/4292)) by @develop7
+- ghcide: drop ghc-check and ghc-paths dependency
+  ([#4291](https://github.com/haskell/haskell-language-server/pull/4291)) by @wz1000
+- Limit number of valid hole fits to 10
+  ([#4288](https://github.com/haskell/haskell-language-server/pull/4288)) by @akshaymankar
+- Add common stanza to completion data
+  ([#4286](https://github.com/haskell/haskell-language-server/pull/4286)) by @VeryMilkyJoe
+- FindImports: ThisPkg means some home unit, not "this" unit
+  ([#4284](https://github.com/haskell/haskell-language-server/pull/4284)) by @wz1000
+- Remove redudant absolutization in session loader
+  ([#4280](https://github.com/haskell/haskell-language-server/pull/4280)) by @soulomoon
+- Bump to new lsp versions
+  ([#4279](https://github.com/haskell/haskell-language-server/pull/4279)) by @michaelpj
+- Put more test code into pre-commit
+  ([#4275](https://github.com/haskell/haskell-language-server/pull/4275)) by @soulomoon
+- Delete library ghcide test utils
+  ([#4274](https://github.com/haskell/haskell-language-server/pull/4274)) by @soulomoon
+- Delete testUtil from ghcide-tests
+  ([#4272](https://github.com/haskell/haskell-language-server/pull/4272)) by @soulomoon
+- CI change, only run bench on performance label
+  ([#4271](https://github.com/haskell/haskell-language-server/pull/4271)) by @soulomoon
+- Migrate WatchedFileTests
+  ([#4269](https://github.com/haskell/haskell-language-server/pull/4269)) by @soulomoon
+- Migrate UnitTests
+  ([#4268](https://github.com/haskell/haskell-language-server/pull/4268)) by @soulomoon
+- Migrate SafeTests
+  ([#4267](https://github.com/haskell/haskell-language-server/pull/4267)) by @soulomoon
+- Migrate SymlinkTests
+  ([#4266](https://github.com/haskell/haskell-language-server/pull/4266)) by @soulomoon
+- Remove unused and outdated CHANGELOG files
+  ([#4264](https://github.com/haskell/haskell-language-server/pull/4264)) by @fendor
+- Enable cabal flaky test
+  ([#4263](https://github.com/haskell/haskell-language-server/pull/4263)) by @soulomoon
+- Migrate RootUriTests
+  ([#4261](https://github.com/haskell/haskell-language-server/pull/4261)) by @soulomoon
+- Migrate PreprocessorTests
+  ([#4260](https://github.com/haskell/haskell-language-server/pull/4260)) by @soulomoon
+- Migrate PluginSimpleTests
+  ([#4259](https://github.com/haskell/haskell-language-server/pull/4259)) by @soulomoon
+- Migrate ClientSettingsTests
+  ([#4258](https://github.com/haskell/haskell-language-server/pull/4258)) by @soulomoon
+- Unify critical session running in hls
+  ([#4256](https://github.com/haskell/haskell-language-server/pull/4256)) by @soulomoon
+- Bump cachix/cachix-action from 14 to 15
+  ([#4255](https://github.com/haskell/haskell-language-server/pull/4255)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.2 to 2.7.3
+  ([#4254](https://github.com/haskell/haskell-language-server/pull/4254)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.2 to 2.7.3 in /.github/actions/setup-build
+  ([#4253](https://github.com/haskell/haskell-language-server/pull/4253)) by @dependabot[bot]
+- Shorter file names completion
+  ([#4252](https://github.com/haskell/haskell-language-server/pull/4252)) by @VenInf
+- Fix progress start delay
+  ([#4249](https://github.com/haskell/haskell-language-server/pull/4249)) by @michaelpj
+- Bump cachix/install-nix-action from 26 to 27
+  ([#4245](https://github.com/haskell/haskell-language-server/pull/4245)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.1 to 2.7.2
+  ([#4244](https://github.com/haskell/haskell-language-server/pull/4244)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.1 to 2.7.2 in /.github/actions/setup-build
+  ([#4243](https://github.com/haskell/haskell-language-server/pull/4243)) by @dependabot[bot]
+- Enable test for #717
+  ([#4241](https://github.com/haskell/haskell-language-server/pull/4241)) by @soulomoon
+- Remove Pepe from CODEOWNERS
+  ([#4239](https://github.com/haskell/haskell-language-server/pull/4239)) by @michaelpj
+- Fix resultBuilt(dirty mechanism) in hls-graph
+  ([#4238](https://github.com/haskell/haskell-language-server/pull/4238)) by @soulomoon
+- Support for 9.10
+  ([#4233](https://github.com/haskell/haskell-language-server/pull/4233)) by @wz1000
+- Refactor hls-test-util and reduce getCurrentDirectory after initilization
+  ([#4231](https://github.com/haskell/haskell-language-server/pull/4231)) by @soulomoon
+- [Migrate BootTests] part of #4173 Migrate ghcide tests to hls test utils
+  ([#4227](https://github.com/haskell/haskell-language-server/pull/4227)) by @soulomoon
+- Actually enable pedantic flag in ci flags job
+  ([#4224](https://github.com/haskell/haskell-language-server/pull/4224)) by @jhrcek
+- Cleanup cabal files, ghc compat code, fix ghc warnings
+  ([#4222](https://github.com/haskell/haskell-language-server/pull/4222)) by @jhrcek
+- Another attempt at using the lsp API for some progress reporting
+  ([#4218](https://github.com/haskell/haskell-language-server/pull/4218)) by @michaelpj
+- [Migrate diagnosticTests] part of #4173 Migrate ghcide tests to hls test utils
+  ([#4207](https://github.com/haskell/haskell-language-server/pull/4207)) by @soulomoon
+- Prepare release 2.8.0.0
+  ([#4191](https://github.com/haskell/haskell-language-server/pull/4191)) by @wz1000
+- Stabilize the build system by correctly house keeping the dirtykeys and rule values [flaky test #4185 #4093]
+  ([#4190](https://github.com/haskell/haskell-language-server/pull/4190)) by @soulomoon
+- hls-cabal-plugin: refactor context search to use `readFields`
+  ([#4186](https://github.com/haskell/haskell-language-server/pull/4186)) by @fendor
+- 3944 extend the properties api to better support nested configuration
+  ([#3952](https://github.com/haskell/haskell-language-server/pull/3952)) by @soulomoon
+
+## 2.8.0.0
+
+- Bindists for GHC 9.6.5
+- New hls-notes plugin (#4126, @jvanbruegge)
+- Floskell, hlint and stylish-haskell plugins enabled for GHC 9.8
+- Improvements for hls-graph increasing robustness (#4087, @soulomoon)
+- Improvements to multi-component support (#4096, #4109, #4179, @wz1000, @fendor)
+
+### Pull Requests
+
+- Bump haskell-actions/setup from 2.7.0 to 2.7.1
+  ([#4189](https://github.com/haskell/haskell-language-server/pull/4189)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.0 to 2.7.1 in /.github/actions/setup-build
+  ([#4188](https://github.com/haskell/haskell-language-server/pull/4188)) by @dependabot[bot]
+- Fix ghcdie-tests CI
+  ([#4184](https://github.com/haskell/haskell-language-server/pull/4184)) by @soulomoon
+- Fix ghc and hlint warnings, fix formatting
+  ([#4181](https://github.com/haskell/haskell-language-server/pull/4181)) by @jhrcek
+- Allow users to specify whether to use `cabal`'s multi-repl feature
+  ([#4179](https://github.com/haskell/haskell-language-server/pull/4179)) by @fendor
+- Improve parsing of import suggestions extending multiple multiline imports (fixes #4175)
+  ([#4177](https://github.com/haskell/haskell-language-server/pull/4177)) by @jhrcek
+- move ghcide-tests to haskell-language-server.cabal and make it depend on hls-test-utils
+  ([#4176](https://github.com/haskell/haskell-language-server/pull/4176)) by @soulomoon
+- enable ThreadId for when testing
+  ([#4174](https://github.com/haskell/haskell-language-server/pull/4174)) by @soulomoon
+- Drop Legacy Logger from Codebase
+  ([#4171](https://github.com/haskell/haskell-language-server/pull/4171)) by @fendor
+- get rid of the `unsafeInterleaveIO` at start up
+  ([#4167](https://github.com/haskell/haskell-language-server/pull/4167)) by @soulomoon
+- Remove EKG
+  ([#4163](https://github.com/haskell/haskell-language-server/pull/4163)) by @michaelpj
+- Mark plugins as not buildable if the flag is disabled
+  ([#4160](https://github.com/haskell/haskell-language-server/pull/4160)) by @michaelpj
+- Fix references to old CPP names in tests, update tests
+  ([#4159](https://github.com/haskell/haskell-language-server/pull/4159)) by @jhrcek
+- Bump haskell-actions/setup from 2.6.3 to 2.7.0
+  ([#4158](https://github.com/haskell/haskell-language-server/pull/4158)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.6.3 to 2.7.0 in /.github/actions/setup-build
+  ([#4157](https://github.com/haskell/haskell-language-server/pull/4157)) by @dependabot[bot]
+- Remove dead code in ghcide and hls-graph for priority
+  ([#4151](https://github.com/haskell/haskell-language-server/pull/4151)) by @soulomoon
+- Bump haskell-actions/setup from 2.6.2 to 2.6.3 in /.github/actions/setup-build
+  ([#4150](https://github.com/haskell/haskell-language-server/pull/4150)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.6.2 to 2.6.3
+  ([#4149](https://github.com/haskell/haskell-language-server/pull/4149)) by @dependabot[bot]
+- Run ExceptionTests in temporary directory
+  ([#4146](https://github.com/haskell/haskell-language-server/pull/4146)) by @fendor
+- hls-eval-plugin: Replicate #4139
+  ([#4140](https://github.com/haskell/haskell-language-server/pull/4140)) by @mattapet
+- Update comment in refactor tests
+  ([#4138](https://github.com/haskell/haskell-language-server/pull/4138)) by @jhrcek
+- Update contact info in docs
+  ([#4137](https://github.com/haskell/haskell-language-server/pull/4137)) by @jhrcek
+- hls-notes-plugin: Do not error if no note is under the cursor
+  ([#4136](https://github.com/haskell/haskell-language-server/pull/4136)) by @jvanbruegge
+- improve logging in semantic tokens rule
+  ([#4135](https://github.com/haskell/haskell-language-server/pull/4135)) by @soulomoon
+- Bump softprops/action-gh-release from 1 to 2
+  ([#4133](https://github.com/haskell/haskell-language-server/pull/4133)) by @dependabot[bot]
+- Bump cachix/install-nix-action from 25 to 26
+  ([#4132](https://github.com/haskell/haskell-language-server/pull/4132)) by @dependabot[bot]
+- Use Set.member instead of Foldable.elem
+  ([#4128](https://github.com/haskell/haskell-language-server/pull/4128)) by @jhrcek
+- hls-notes-plugin: Initial implementation
+  ([#4126](https://github.com/haskell/haskell-language-server/pull/4126)) by @jvanbruegge
+- Enable floskell and hlint plugins for ghc 9.8
+  ([#4125](https://github.com/haskell/haskell-language-server/pull/4125)) by @jhrcek
+- Integrate stylish-haskell into hls executable with ghc 9.8
+  ([#4124](https://github.com/haskell/haskell-language-server/pull/4124)) by @jhrcek
+- Reduce usage of partial functions
+  ([#4123](https://github.com/haskell/haskell-language-server/pull/4123)) by @jhrcek
+- Benchmark: Enable 9.6, 9.8
+  ([#4118](https://github.com/haskell/haskell-language-server/pull/4118)) by @soulomoon
+- Bump haskell-actions/setup from 2.6.1 to 2.6.2 in /.github/actions/setup-build
+  ([#4116](https://github.com/haskell/haskell-language-server/pull/4116)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.6.1 to 2.6.2
+  ([#4115](https://github.com/haskell/haskell-language-server/pull/4115)) by @dependabot[bot]
+- eval: more robust way to extract comments from ParsedModule
+  ([#4113](https://github.com/haskell/haskell-language-server/pull/4113)) by @jhrcek
+- Improve isolation of build artefacts of test runs
+  ([#4112](https://github.com/haskell/haskell-language-server/pull/4112)) by @fendor
+- Improve handling of nonsense rename attempts
+  ([#4111](https://github.com/haskell/haskell-language-server/pull/4111)) by @jhrcek
+- Exit with non-zero exitcode if wrapper fails to launch
+  ([#4110](https://github.com/haskell/haskell-language-server/pull/4110)) by @fendor
+- Replace checkHomeUnitsClosed with a faster implementation
+  ([#4109](https://github.com/haskell/haskell-language-server/pull/4109)) by @wz1000
+- Don't distribute gifs or plugin readmes
+  ([#4107](https://github.com/haskell/haskell-language-server/pull/4107)) by @fendor
+- Remove locale workaround for Module name that conatins non-ascii characters
+  ([#4106](https://github.com/haskell/haskell-language-server/pull/4106)) by @fendor
+- Track extra-source-files of plugins more accurately
+  ([#4105](https://github.com/haskell/haskell-language-server/pull/4105)) by @fendor
+- remove non-ascii name
+  ([#4103](https://github.com/haskell/haskell-language-server/pull/4103)) by @soulomoon
+- Add cabal-gild as a cabal file formatter plugin
+  ([#4101](https://github.com/haskell/haskell-language-server/pull/4101)) by @fendor
+- Remove more workarounds for GHCs < 9.2 (#4092)
+  ([#4098](https://github.com/haskell/haskell-language-server/pull/4098)) by @jhrcek
+- session-loader: Don't loop forever when we don't find a file in any multi component
+  ([#4096](https://github.com/haskell/haskell-language-server/pull/4096)) by @wz1000
+- Prepare release 2.7.0.0
+  ([#4095](https://github.com/haskell/haskell-language-server/pull/4095)) by @fendor
+- Remove more workarounds for GHCs < 9.0
+  ([#4092](https://github.com/haskell/haskell-language-server/pull/4092)) by @jhrcek
+- Fix hls-graph: phantom dependencies invoke in branching deps (resolve #3423)
+  ([#4087](https://github.com/haskell/haskell-language-server/pull/4087)) by @soulomoon
+- Rename only if the current module compiles (#3799)
+  ([#3848](https://github.com/haskell/haskell-language-server/pull/3848)) by @sgillespie
+- Reintroduce ghc-lib flag for hlint plugin
+  ([#3757](https://github.com/haskell/haskell-language-server/pull/3757)) by @RaoulHC
+
 ## 2.7.0.0
 
 - Bindists for GHC 9.8.2

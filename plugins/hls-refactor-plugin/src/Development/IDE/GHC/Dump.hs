@@ -4,7 +4,7 @@ import qualified Data.ByteString                       as B
 import           Data.Data                             hiding (Fixity)
 import           Development.IDE.GHC.Compat            hiding (LocatedA,
                                                         NameAnn)
-import           Development.IDE.GHC.Compat.ExactPrint
+import           Development.IDE.GHC.Compat.ExactPrint (ExactPrint, exactPrint)
 import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
 import           GHC.Hs                                hiding (AnnLet)
@@ -32,9 +32,6 @@ showAstDataHtml a0 = html $
     li = tag "li"
     caret x = tag' [("class", text "caret")] "span" "" <+> x
     nested foo cts
-#if !MIN_VERSION_ghc(9,3,0)
-      | cts == empty = foo
-#endif
       | otherwise = foo $$ (caret $ ul cts)
     body cts = tag "body" $ cts $$ tag "script" (text js)
     header = tag "head" $ tag "style" $ text css
@@ -61,7 +58,9 @@ showAstDataHtml a0 = html $
               `extQ` sourceText
               `extQ` deltaPos
               `extQ` epaAnchor
+#if !MIN_VERSION_ghc(9,9,0)
               `extQ` anchorOp
+#endif
               `extQ` bytestring
               `extQ` name `extQ` occName `extQ` moduleName `extQ` var
               `extQ` dataCon
@@ -129,16 +128,20 @@ showAstDataHtml a0 = html $
 #endif
 
             epaAnchor :: EpaLocation -> SDoc
-#if MIN_VERSION_ghc(9,5,0)
+#if MIN_VERSION_ghc(9,9,0)
+            epaAnchor (EpaSpan s) = parens $ text "EpaSpan" <+> srcSpan s
+#elif MIN_VERSION_ghc(9,5,0)
             epaAnchor (EpaSpan r _)  = text "EpaSpan" <+> realSrcSpan r
 #else
             epaAnchor (EpaSpan r)  = text "EpaSpan" <+> realSrcSpan r
 #endif
             epaAnchor (EpaDelta d cs) = text "EpaDelta" <+> deltaPos d <+> showAstDataHtml' cs
 
+#if !MIN_VERSION_ghc(9,9,0)
             anchorOp :: AnchorOperation -> SDoc
             anchorOp UnchangedAnchor  = "UnchangedAnchor"
             anchorOp (MovedAnchor dp) = "MovedAnchor " <> deltaPos dp
+#endif
 
             deltaPos :: DeltaPos -> SDoc
             deltaPos (SameLine c) = text "SameLine" <+> ppr c
@@ -249,6 +252,31 @@ showAstDataHtml a0 = html $
 
             -- -------------------------
 
+#if MIN_VERSION_ghc(9,9,0)
+            srcSpanAnnA :: EpAnn AnnListItem -> SDoc
+            srcSpanAnnA = locatedAnn'' (text "SrcSpanAnnA")
+
+            srcSpanAnnL :: EpAnn AnnList -> SDoc
+            srcSpanAnnL = locatedAnn'' (text "SrcSpanAnnL")
+
+            srcSpanAnnP :: EpAnn AnnPragma -> SDoc
+            srcSpanAnnP = locatedAnn'' (text "SrcSpanAnnP")
+
+            srcSpanAnnC :: EpAnn AnnContext -> SDoc
+            srcSpanAnnC = locatedAnn'' (text "SrcSpanAnnC")
+
+            srcSpanAnnN :: EpAnn NameAnn -> SDoc
+            srcSpanAnnN = locatedAnn'' (text "SrcSpanAnnN")
+
+            locatedAnn'' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
+            locatedAnn'' tag ss = parens $
+              case cast ss of
+                Just (ann :: EpAnn a) ->
+                      text (showConstr (toConstr ann))
+                                          $$ vcat (gmapQ showAstDataHtml' ann)
+                Nothing -> text "locatedAnn:unmatched" <+> tag
+                           <+> (parens $ text (showConstr (toConstr ss)))
+#else
             srcSpanAnnA :: SrcSpanAnn' (EpAnn AnnListItem) -> SDoc
             srcSpanAnnA = locatedAnn'' (text "SrcSpanAnnA")
 
@@ -274,6 +302,7 @@ showAstDataHtml a0 = html $
                               $$ li(srcSpan s))
                 Nothing -> text "locatedAnn:unmatched" <+> tag
                            <+> text (showConstr (toConstr ss))
+#endif
 
 
 normalize_newlines :: String -> String

@@ -13,42 +13,33 @@ import qualified Data.HashSet                         as Set
 import           Data.IORef
 import qualified Data.Map.Strict                      as Map
 import           Data.String                          (fromString)
-import           Development.IDE                      (GetModSummaryWithoutTimestamps (GetModSummaryWithoutTimestamps),
-                                                       GetParsedModuleWithComments (GetParsedModuleWithComments),
+import           Development.IDE                      (GetParsedModuleWithComments (GetParsedModuleWithComments),
                                                        IdeState,
+                                                       LinkableType (BCOLinkable),
                                                        NeedsCompilation (NeedsCompilation),
                                                        NormalizedFilePath,
                                                        RuleBody (RuleNoDiagnostics),
                                                        Rules, defineEarlyCutoff,
                                                        encodeLinkableType,
                                                        fromNormalizedFilePath,
-                                                       msrModSummary,
                                                        realSrcSpanToRange,
                                                        useWithStale_, use_)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
-import           Development.IDE.Core.Rules           (computeLinkableTypeForDynFlags,
-                                                       needsCompilationRule)
+import           Development.IDE.Core.Rules           (needsCompilationRule)
 import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        RuleBody (RuleWithCustomNewnessCheck),
                                                        addIdeGlobal,
                                                        getIdeGlobalAction,
                                                        getIdeGlobalState)
-import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
 import           GHC.Parser.Annotation
-import           Ide.Logger                           (Pretty (pretty),
-                                                       Recorder, WithPriority,
+import           Ide.Logger                           (Recorder, WithPriority,
                                                        cmapWithPrio)
 import           Ide.Plugin.Eval.Types
 
-newtype Log = LogShake Shake.Log deriving Show
-
-instance Pretty Log where
-  pretty = \case
-    LogShake shakeLog -> pretty shakeLog
 
 rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do
@@ -128,11 +119,10 @@ isEvaluatingRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $
 redefinedNeedsCompilation :: Recorder (WithPriority Log) -> Rules ()
 redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation f -> do
     isEvaluating <- use_ IsEvaluating f
-
-    if not isEvaluating then needsCompilationRule f else do
-        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps f
-        let df' = ms_hspp_opts ms
-            linkableType = computeLinkableTypeForDynFlags df'
+    if isEvaluating then do
+        let linkableType = BCOLinkable
             fp = encodeLinkableType $ Just linkableType
-
         pure (Just fp, Just (Just linkableType))
+    else
+        needsCompilationRule f
+

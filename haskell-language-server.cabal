@@ -1,7 +1,7 @@
 cabal-version:      3.4
 category:           Development
 name:               haskell-language-server
-version:            2.7.0.0
+version:            2.9.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 9.8.2 || ==9.6.4 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8
 extra-source-files:
   README.md
   ChangeLog.md
@@ -44,7 +44,10 @@ common defaults
   default-extensions: ExplicitNamespaces
 
 common test-defaults
-  ghc-options:        -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  if impl(ghc >= 9.8)
+    -- We allow using partial functions in tests
+    ghc-options: -Wno-x-partial
 
 -- Default warnings in HLS
 common warnings
@@ -118,14 +121,16 @@ flag isolateCabalfmtTests
 
 library hls-cabal-fmt-plugin
   import:           defaults, pedantic, warnings
+  if !flag(cabalfmt)
+    buildable: False
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
   build-depends:
     , base            >=4.12 && <5
     , directory
     , filepath
-    , ghcide          == 2.7.0.0
-    , hls-plugin-api  == 2.7.0.0
+    , ghcide          == 2.9.0.0
+    , hls-plugin-api  == 2.9.0.0
     , lens
     , lsp-types
     , mtl
@@ -134,6 +139,8 @@ library hls-cabal-fmt-plugin
 
 test-suite hls-cabal-fmt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabalfmt)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/test
   main-is:          Main.hs
@@ -142,10 +149,10 @@ test-suite hls-cabal-fmt-plugin-tests
     , directory
     , filepath
     , haskell-language-server:hls-cabal-fmt-plugin
-    , hls-test-utils        == 2.7.0.0
+    , hls-test-utils        == 2.9.0.0
 
   if flag(isolateCabalfmtTests)
-    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.12
     cpp-options: -Dhls_isolate_cabalfmt_tests
 
 -----------------------------
@@ -170,14 +177,16 @@ flag isolateCabalGildTests
 
 library hls-cabal-gild-plugin
   import:           defaults, pedantic, warnings
+  if !flag(cabalgild)
+    buildable: False
   exposed-modules:  Ide.Plugin.CabalGild
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
   build-depends:
     , base            >=4.12 && <5
     , directory
     , filepath
-    , ghcide          == 2.7.0.0
-    , hls-plugin-api  == 2.7.0.0
+    , ghcide          == 2.9.0.0
+    , hls-plugin-api  == 2.9.0.0
     , lsp-types
     , text
     , mtl
@@ -185,6 +194,8 @@ library hls-cabal-gild-plugin
 
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabalgild)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
   main-is:          Main.hs
@@ -193,10 +204,11 @@ test-suite hls-cabal-gild-plugin-tests
     , directory
     , filepath
     , haskell-language-server:hls-cabal-gild-plugin
-    , hls-test-utils        == 2.7.0.0
+    , hls-test-utils        == 2.9.0.0
 
   if flag(isolateCabalGildTests)
-    build-tool-depends: cabal-gild:cabal-gild ^>=1.1
+    -- https://github.com/tfausak/cabal-gild/issues/89
+    build-tool-depends: cabal-gild:cabal-gild >= 1.3 && < 1.3.2
     cpp-options: -Dhls_isolate_cabalgild_tests
 
 -----------------------------
@@ -215,9 +227,12 @@ common cabal
 
 library hls-cabal-plugin
   import:           defaults, pedantic, warnings
+  if !flag(cabal)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.Completion.CabalFields
     Ide.Plugin.Cabal.Completion.Completer.FilePath
     Ide.Plugin.Cabal.Completion.Completer.Module
     Ide.Plugin.Cabal.Completion.Completer.Paths
@@ -228,6 +243,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Parse
 
 
@@ -241,17 +257,15 @@ library hls-cabal-plugin
     , directory
     , filepath
     , extra                 >=1.7.4
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hashable
-    , hls-plugin-api        == 2.7.0.0
-    , hls-graph             == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
+    , hls-graph             == 2.9.0.0
     , lens
-    , lsp                   ^>=2.4
-    , lsp-types             ^>=2.1
+    , lsp                   ^>=2.7
+    , lsp-types             ^>=2.3
     , regex-tdfa            ^>=1.3.1
-    , stm
     , text
-    , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
@@ -259,6 +273,8 @@ library hls-cabal-plugin
 
 test-suite hls-cabal-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabal)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-plugin/test
   main-is:          Main.hs
@@ -273,13 +289,10 @@ test-suite hls-cabal-plugin-tests
     , filepath
     , ghcide
     , haskell-language-server:hls-cabal-plugin
-    , hls-test-utils    == 2.7.0.0
+    , hls-test-utils    == 2.9.0.0
     , lens
     , lsp-types
     , text
-    , text-rope
-    , transformers
-    , row-types
 
 -----------------------------
 -- class plugin
@@ -297,6 +310,8 @@ common class
 
 library hls-class-plugin
   import:           defaults, pedantic, warnings
+  if !flag(class)
+    buildable: False
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
                     , Ide.Plugin.Class.CodeLens
@@ -311,10 +326,10 @@ library hls-class-plugin
     , deepseq
     , extra
     , ghc
-    , ghc-exactprint  >= 1.5
-    , ghcide          == 2.7.0.0
+    , ghc-exactprint  >= 1.5 && < 1.10.0.0
+    , ghcide          == 2.9.0.0
     , hls-graph
-    , hls-plugin-api  == 2.7.0.0
+    , hls-plugin-api  == 2.9.0.0
     , lens
     , lsp
     , mtl
@@ -327,6 +342,8 @@ library hls-class-plugin
 
 test-suite hls-class-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(class)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-class-plugin/test
   main-is:          Main.hs
@@ -334,10 +351,9 @@ test-suite hls-class-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-class-plugin
-    , hls-test-utils     == 2.7.0.0
+    , hls-test-utils     == 2.9.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -356,7 +372,8 @@ common callHierarchy
 
 library hls-call-hierarchy-plugin
   import: defaults, pedantic, warnings
-  buildable: True
+  if !flag(callHierarchy)
+    buildable: False
   exposed-modules:    Ide.Plugin.CallHierarchy
   other-modules:
     Ide.Plugin.CallHierarchy.Internal
@@ -369,11 +386,11 @@ library hls-call-hierarchy-plugin
     , base                  >=4.12 && <5
     , containers
     , extra
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hiedb                 ^>= 0.6.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
-    , lsp                    >=2.4
+    , lsp                    >=2.7
     , sqlite-simple
     , text
 
@@ -381,6 +398,8 @@ library hls-call-hierarchy-plugin
 
 test-suite hls-call-hierarchy-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(callHierarchy)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-call-hierarchy-plugin/test
   main-is:          Main.hs
@@ -391,8 +410,7 @@ test-suite hls-call-hierarchy-plugin-tests
     , extra
     , filepath
     , haskell-language-server:hls-call-hierarchy-plugin
-    , hls-test-utils        == 2.7.0.0
-    , ghcide:ghcide-test-utils
+    , hls-test-utils        == 2.9.0.0
     , lens
     , lsp
     , lsp-test
@@ -414,6 +432,8 @@ common eval
 
 library hls-eval-plugin
   import: defaults, pedantic, warnings
+  if !flag(eval)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Eval.Types
@@ -435,15 +455,15 @@ library hls-eval-plugin
     , bytestring
     , containers
     , deepseq
-    , Diff                  ^>=0.4.0
+    , Diff                  ^>=0.5
     , dlist
     , extra
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hls-graph
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
     , lsp
     , lsp-types
@@ -460,6 +480,8 @@ library hls-eval-plugin
 
 test-suite hls-eval-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(eval)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-eval-plugin/test
   main-is:          Main.hs
@@ -472,11 +494,10 @@ test-suite hls-eval-plugin-tests
     , filepath
     , haskell-language-server:hls-eval-plugin
     , hls-plugin-api
-    , hls-test-utils   == 2.7.0.0
+    , hls-test-utils   == 2.9.0.0
     , lens
     , lsp-types
     , text
-    , row-types
 
 -----------------------------
 -- import lens plugin
@@ -494,6 +515,8 @@ flag importLens
 
 library hls-explicit-imports-plugin
   import:           defaults, pedantic, warnings
+  if !flag(importlens)
+    buildable: False
   exposed-modules:  Ide.Plugin.ExplicitImports
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/src
   build-depends:
@@ -502,9 +525,9 @@ library hls-explicit-imports-plugin
     , containers
     , deepseq
     , ghc
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hls-graph
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
     , lsp
     , mtl
@@ -516,6 +539,8 @@ library hls-explicit-imports-plugin
 
 test-suite hls-explicit-imports-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(importlens)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/test
   main-is:          Main.hs
@@ -524,10 +549,9 @@ test-suite hls-explicit-imports-plugin-tests
     , extra
     , filepath
     , haskell-language-server:hls-explicit-imports-plugin
-    , hls-test-utils   == 2.7.0.0
+    , hls-test-utils   == 2.9.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -546,24 +570,24 @@ common rename
 
 library hls-rename-plugin
   import:           defaults, pedantic, warnings
+  if !flag(rename)
+    buildable: False
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
     , base                  >=4.12    && <5
     , containers
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hashable
     , hiedb                 ^>= 0.6.0.0
     , hie-compat
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
-    , lsp
     , lsp-types
     , mtl
     , mod
     , syb
-    , row-types
     , text
     , transformers
     , unordered-containers
@@ -571,6 +595,8 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(rename)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-rename-plugin/test
   main-is:          Main.hs
@@ -581,7 +607,7 @@ test-suite hls-rename-plugin-tests
     , filepath
     , hls-plugin-api
     , haskell-language-server:hls-rename-plugin
-    , hls-test-utils             == 2.7.0.0
+    , hls-test-utils             == 2.9.0.0
     , lens
     , lsp-types
     , text
@@ -596,12 +622,14 @@ flag retrie
   manual:      True
 
 common retrie
-  if flag(retrie)
+  if flag(retrie) && impl(ghc < 9.10)
     build-depends: haskell-language-server:hls-retrie-plugin
     cpp-options: -Dhls_retrie
 
 library hls-retrie-plugin
   import:           defaults, pedantic, warnings
+  if !(flag(retrie) && impl(ghc < 9.10))
+    buildable: False
   exposed-modules:  Ide.Plugin.Retrie
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
@@ -609,12 +637,11 @@ library hls-retrie-plugin
     , base                  >=4.12    && <5
     , bytestring
     , containers
-    , directory
     , extra
     , ghc
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hashable
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp
@@ -632,6 +659,8 @@ library hls-retrie-plugin
 
 test-suite hls-retrie-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(retrie) && impl(ghc < 9.10))
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-retrie-plugin/test
   main-is:          Main.hs
@@ -641,7 +670,7 @@ test-suite hls-retrie-plugin-tests
     , filepath
     , hls-plugin-api
     , haskell-language-server:{hls-refactor-plugin, hls-retrie-plugin}
-    , hls-test-utils             == 2.7.0.0
+    , hls-test-utils             == 2.9.0.0
     , text
 
 -----------------------------
@@ -661,12 +690,15 @@ flag hlint
   manual:      True
 
 common hlint
-  if flag(hlint)
+  if flag(hlint) && impl(ghc < 9.10)
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
   import:           defaults, pedantic, warnings
+  -- https://github.com/ndmitchell/hlint/pull/1594
+  if !(flag(hlint) && impl(ghc < 9.10))
+    buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
   build-depends:
@@ -676,10 +708,10 @@ library hls-hlint-plugin
     , containers
     , deepseq
     , filepath
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hashable
     , hlint                 >= 3.5 && < 3.9
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
     , lsp
     , mtl
@@ -709,6 +741,8 @@ library hls-hlint-plugin
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(hlint) && impl(ghc < 9.10))
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
   main-is:          Main.hs
@@ -719,10 +753,9 @@ test-suite hls-hlint-plugin-tests
     , filepath
     , haskell-language-server:hls-hlint-plugin
     , hls-plugin-api
-    , hls-test-utils      == 2.7.0.0
+    , hls-test-utils      == 2.9.0.0
     , lens
     , lsp-types
-    , row-types
     , text
 
 -----------------------------
@@ -735,13 +768,13 @@ flag stan
   manual:      True
 
 common stan
-  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && impl(ghc < 9.10.0)
     build-depends: haskell-language-server:hls-stan-plugin
     cpp-options: -Dhls_stan
 
 library hls-stan-plugin
   import:           defaults, pedantic, warnings
-  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && impl(ghc < 9.10.0)
     buildable: True
   else
     buildable: False
@@ -769,7 +802,7 @@ library hls-stan-plugin
 
 test-suite hls-stan-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+  if flag(stan) && impl(ghc < 9.10.0)
     buildable: True
   else
     buildable: False
@@ -781,11 +814,11 @@ test-suite hls-stan-plugin-tests
     , filepath
     , haskell-language-server:hls-stan-plugin
     , hls-plugin-api
-    , hls-test-utils      == 2.7.0.0
+    , hls-test-utils      == 2.9.0.0
     , lens
     , lsp-types
     , text
- default-extensions:
+  default-extensions:
     OverloadedStrings
 
 -----------------------------
@@ -804,16 +837,17 @@ common moduleName
 
 library hls-module-name-plugin
   import:           defaults, pedantic, warnings
+  if !flag(modulename)
+    buildable: False
   exposed-modules:  Ide.Plugin.ModuleName
   hs-source-dirs:   plugins/hls-module-name-plugin/src
   build-depends:
     , aeson
     , base                  >=4.12 && <5
     , containers
-    , directory
     , filepath
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lsp
     , text
     , transformers
@@ -821,6 +855,8 @@ library hls-module-name-plugin
 
 test-suite hls-module-name-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(modulename)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-module-name-plugin/test
   main-is:          Main.hs
@@ -828,7 +864,7 @@ test-suite hls-module-name-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-module-name-plugin
-    , hls-test-utils          == 2.7.0.0
+    , hls-test-utils          == 2.9.0.0
 
 -----------------------------
 -- pragmas plugin
@@ -846,14 +882,16 @@ common pragmas
 
 library hls-pragmas-plugin
   import:           defaults, pedantic, warnings
+  if !flag(pragmas)
+    buildable: False
   exposed-modules:  Ide.Plugin.Pragmas
   hs-source-dirs:   plugins/hls-pragmas-plugin/src
   build-depends:
     , base                  >=4.12 && <5
     , extra
     , fuzzy
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
     , lsp
     , text
@@ -862,6 +900,8 @@ library hls-pragmas-plugin
 
 test-suite hls-pragmas-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(pragmas)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-pragmas-plugin/test
   main-is:          Main.hs
@@ -870,7 +910,7 @@ test-suite hls-pragmas-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-pragmas-plugin
-    , hls-test-utils      == 2.7.0.0
+    , hls-test-utils      == 2.9.0.0
     , lens
     , lsp-types
     , text
@@ -885,12 +925,14 @@ flag splice
   manual:      True
 
 common splice
-  if flag(splice)
+  if flag(splice) && impl(ghc < 9.10)
     build-depends: haskell-language-server:hls-splice-plugin
     cpp-options: -Dhls_splice
 
 library hls-splice-plugin
   import:           defaults, pedantic, warnings
+  if !(flag(splice) && impl(ghc < 9.10))
+    buildable: False
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
@@ -902,9 +944,8 @@ library hls-splice-plugin
     , extra
     , foldl
     , ghc
-    , ghc-exactprint
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp
@@ -919,6 +960,8 @@ library hls-splice-plugin
 
 test-suite hls-splice-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(splice) && impl(ghc < 9.10))
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-splice-plugin/test
   main-is:          Main.hs
@@ -926,9 +969,8 @@ test-suite hls-splice-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-splice-plugin
-    , hls-test-utils == 2.7.0.0
+    , hls-test-utils == 2.9.0.0
     , text
-    , row-types
 
 -----------------------------
 -- alternate number format plugin
@@ -946,6 +988,8 @@ common alternateNumberFormat
 
 library hls-alternate-number-format-plugin
   import:           defaults, pedantic, warnings
+  if !flag(alternateNumberFormat)
+    buildable: False
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/src
@@ -953,12 +997,12 @@ library hls-alternate-number-format-plugin
     , base                 >=4.12 && < 5
     , containers
     , extra
-    , ghcide               == 2.7.0.0
+    , ghcide               == 2.9.0.0
     , ghc-boot-th
     , hls-graph
-    , hls-plugin-api       == 2.7.0.0
+    , hls-plugin-api       == 2.9.0.0
     , lens
-    , lsp                  ^>=2.4
+    , lsp                  ^>=2.7
     , mtl
     , regex-tdfa
     , syb
@@ -971,6 +1015,8 @@ library hls-alternate-number-format-plugin
 
 test-suite hls-alternate-number-format-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(alternateNumberFormat)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/test
   other-modules:    Properties.Conversion
@@ -980,7 +1026,7 @@ test-suite hls-alternate-number-format-plugin-tests
     , base                 >=4.12 && < 5
     , filepath
     , haskell-language-server:hls-alternate-number-format-plugin
-    , hls-test-utils       == 2.7.0.0
+    , hls-test-utils       == 2.9.0.0
     , regex-tdfa
     , tasty-quickcheck
     , text
@@ -1006,13 +1052,15 @@ common qualifyImportedNames
 
 library hls-qualify-imported-names-plugin
   import:           defaults, pedantic, warnings
+  if !flag(qualifyImportedNames)
+    buildable: False
   exposed-modules:  Ide.Plugin.QualifyImportedNames
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/src
   build-depends:
     , base                  >=4.12 && <5
     , containers
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
     , lsp
     , text
@@ -1024,6 +1072,8 @@ library hls-qualify-imported-names-plugin
 
 test-suite hls-qualify-imported-names-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(qualifyImportedNames)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/test
   main-is:          Main.hs
@@ -1032,7 +1082,7 @@ test-suite hls-qualify-imported-names-plugin-tests
     , text
     , filepath
     , haskell-language-server:hls-qualify-imported-names-plugin
-    , hls-test-utils             == 2.7.0.0
+    , hls-test-utils             == 2.9.0.0
 
 -----------------------------
 -- code range plugin
@@ -1050,6 +1100,8 @@ common codeRange
 
 library hls-code-range-plugin
   import:           defaults, pedantic, warnings
+  if !flag(codeRange)
+    buildable: False
   exposed-modules:
     Ide.Plugin.CodeRange
     Ide.Plugin.CodeRange.Rules
@@ -1061,9 +1113,9 @@ library hls-code-range-plugin
     , containers
     , deepseq
     , extra
-    , ghcide           == 2.7.0.0
+    , ghcide           == 2.9.0.0
     , hashable
-    , hls-plugin-api   == 2.7.0.0
+    , hls-plugin-api   == 2.9.0.0
     , lens
     , lsp
     , mtl
@@ -1073,6 +1125,8 @@ library hls-code-range-plugin
 
 test-suite hls-code-range-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(codeRange)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-code-range-plugin/test
   main-is:          Main.hs
@@ -1084,7 +1138,7 @@ test-suite hls-code-range-plugin-tests
     , bytestring
     , filepath
     , haskell-language-server:hls-code-range-plugin
-    , hls-test-utils             == 2.7.0.0
+    , hls-test-utils             == 2.9.0.0
     , lens
     , lsp
     , lsp-test
@@ -1107,12 +1161,14 @@ common changeTypeSignature
 
 library hls-change-type-signature-plugin
   import:           defaults, pedantic, warnings
+  if !flag(changeTypeSignature)
+    buildable: False
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/src
   build-depends:
     , base             >=4.12 && < 5
-    , ghcide           == 2.7.0.0
-    , hls-plugin-api   == 2.7.0.0
+    , ghcide           == 2.9.0.0
+    , hls-plugin-api   == 2.9.0.0
     , lsp-types
     , regex-tdfa
     , syb
@@ -1128,6 +1184,8 @@ library hls-change-type-signature-plugin
 
 test-suite hls-change-type-signature-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(changeTypeSignature)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/test
   main-is:          Main.hs
@@ -1135,7 +1193,7 @@ test-suite hls-change-type-signature-plugin-tests
     , base                 >=4.12 && < 5
     , filepath
     , haskell-language-server:hls-change-type-signature-plugin
-    , hls-test-utils       == 2.7.0.0
+    , hls-test-utils       == 2.9.0.0
     , regex-tdfa
     , text
   default-extensions:
@@ -1158,6 +1216,8 @@ common gadt
 
 library hls-gadt-plugin
   import:           defaults, pedantic, warnings
+  if !flag(gadt)
+    buildable: False
   exposed-modules:  Ide.Plugin.GADT
   other-modules:    Ide.Plugin.GHC
   hs-source-dirs:   plugins/hls-gadt-plugin/src
@@ -1167,12 +1227,12 @@ library hls-gadt-plugin
     , containers
     , extra
     , ghc
-    , ghcide                 == 2.7.0.0
+    , ghcide                 == 2.9.0.0
     , ghc-exactprint
-    , hls-plugin-api         == 2.7.0.0
+    , hls-plugin-api         == 2.9.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
-    , lsp                    >=2.4
+    , lsp                    >=2.7
     , mtl
     , text
     , transformers
@@ -1181,6 +1241,8 @@ library hls-gadt-plugin
 
 test-suite hls-gadt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(gadt)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-gadt-plugin/test
   main-is:          Main.hs
@@ -1188,7 +1250,7 @@ test-suite hls-gadt-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-gadt-plugin
-    , hls-test-utils              == 2.7.0.0
+    , hls-test-utils              == 2.9.0.0
     , text
 
 -----------------------------
@@ -1207,6 +1269,8 @@ common explicitFixity
 
 library hls-explicit-fixity-plugin
   import:           defaults, pedantic, warnings
+  if !flag(explicitFixity)
+    buildable: False
   exposed-modules:  Ide.Plugin.ExplicitFixity
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
@@ -1214,16 +1278,18 @@ library hls-explicit-fixity-plugin
     , containers
     , deepseq
     , extra
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , hashable
-    , hls-plugin-api        == 2.7.0.0
-    , lsp                   >=2.4
+    , hls-plugin-api        == 2.9.0.0
+    , lsp                   >=2.7
     , text
 
   default-extensions: DataKinds
 
 test-suite hls-explicit-fixity-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(explicitFixity)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/test
   main-is:          Main.hs
@@ -1231,7 +1297,7 @@ test-suite hls-explicit-fixity-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-explicit-fixity-plugin
-    , hls-test-utils              == 2.7.0.0
+    , hls-test-utils              == 2.9.0.0
     , text
 
 -----------------------------
@@ -1250,11 +1316,13 @@ common explicitFields
 
 library hls-explicit-record-fields-plugin
   import:           defaults, pedantic, warnings
+  if !flag(explicitFields)
+    buildable: False
   exposed-modules:  Ide.Plugin.ExplicitFields
   build-depends:
     , base                  >=4.12 && <5
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lsp
     , lens
     , hls-graph
@@ -1270,6 +1338,8 @@ library hls-explicit-record-fields-plugin
 
 test-suite hls-explicit-record-fields-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(explicitFields)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/test
   main-is:          Main.hs
@@ -1278,7 +1348,7 @@ test-suite hls-explicit-record-fields-plugin-tests
     , filepath
     , text
     , haskell-language-server:hls-explicit-record-fields-plugin
-    , hls-test-utils              == 2.7.0.0
+    , hls-test-utils              == 2.9.0.0
 
 -----------------------------
 -- overloaded record dot plugin
@@ -1296,6 +1366,8 @@ common overloadedRecordDot
 
 library hls-overloaded-record-dot-plugin
   import:           defaults, pedantic, warnings
+  if !flag(overloadedRecordDot)
+    buildable: False
   exposed-modules:  Ide.Plugin.OverloadedRecordDot
   build-depends:
     , base                  >=4.16 && <5
@@ -1314,6 +1386,8 @@ library hls-overloaded-record-dot-plugin
 
 test-suite hls-overloaded-record-dot-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(overloadedRecordDot)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
   main-is:          Main.hs
@@ -1322,7 +1396,7 @@ test-suite hls-overloaded-record-dot-plugin-tests
     , filepath
     , text
     , haskell-language-server:hls-overloaded-record-dot-plugin
-    , hls-test-utils              == 2.7.0.0
+    , hls-test-utils              == 2.9.0.0
 
 
 -----------------------------
@@ -1335,26 +1409,31 @@ flag floskell
   manual:      True
 
 common floskell
-  if flag(floskell)
+  if flag(floskell) && impl(ghc < 9.10)
     build-depends: haskell-language-server:hls-floskell-plugin
     cpp-options: -Dhls_floskell
 
 library hls-floskell-plugin
   import:           defaults, pedantic, warnings
+  -- https://github.com/ennocramer/floskell/pull/82
+  if !(flag(floskell) && impl(ghc < 9.10))
+    buildable: False
   exposed-modules:  Ide.Plugin.Floskell
   hs-source-dirs:   plugins/hls-floskell-plugin/src
   build-depends:
     , base            >=4.12 && <5
     , floskell        ^>=0.11.0
-    , ghcide          == 2.7.0.0
-    , hls-plugin-api  == 2.7.0.0
-    , lsp-types       ^>=2.1
+    , ghcide          == 2.9.0.0
+    , hls-plugin-api  == 2.9.0.0
+    , lsp-types       ^>=2.3
     , mtl
     , text
 
 
 test-suite hls-floskell-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(floskell) && impl(ghc < 9.10))
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-floskell-plugin/test
   main-is:          Main.hs
@@ -1362,7 +1441,7 @@ test-suite hls-floskell-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-floskell-plugin
-    , hls-test-utils       == 2.7.0.0
+    , hls-test-utils       == 2.9.0.0
 
 -----------------------------
 -- fourmolu plugin
@@ -1380,28 +1459,35 @@ common fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
+  if !flag(fourmolu)
+    buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>= 0.14 || ^>= 0.15
+    , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16
     , ghc-boot-th
-    , ghcide          == 2.7.0.0
-    , hls-plugin-api  == 2.7.0.0
+    , ghcide          == 2.9.0.0
+    , hls-plugin-api  == 2.9.0.0
     , lens
     , lsp
     , mtl
     , process-extras  >= 0.7.1
     , text
     , transformers
-
+    , yaml
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(fourmolu)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
   main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
@@ -1410,7 +1496,7 @@ test-suite hls-fourmolu-plugin-tests
     , filepath
     , haskell-language-server:hls-fourmolu-plugin
     , hls-plugin-api
-    , hls-test-utils       == 2.7.0.0
+    , hls-test-utils       == 2.9.0.0
     , lsp-test
 
 -----------------------------
@@ -1429,6 +1515,8 @@ common ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
+  if !flag(ormolu)
+    buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
   build-depends:
@@ -1436,8 +1524,8 @@ library hls-ormolu-plugin
     , extra
     , filepath
     , ghc-boot-th
-    , ghcide          == 2.7.0.0
-    , hls-plugin-api  == 2.7.0.0
+    , ghcide          == 2.9.0.0
+    , hls-plugin-api  == 2.9.0.0
     , lsp
     , mtl
     , process-extras  >= 0.7.1
@@ -1448,9 +1536,14 @@ library hls-ormolu-plugin
 
 test-suite hls-ormolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(ormolu)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   build-tool-depends:
     ormolu:ormolu
   build-depends:
@@ -1459,7 +1552,7 @@ test-suite hls-ormolu-plugin-tests
     , filepath
     , haskell-language-server:hls-ormolu-plugin
     , hls-plugin-api
-    , hls-test-utils     == 2.7.0.0
+    , hls-test-utils     == 2.9.0.0
     , lsp-types
     , ormolu
 
@@ -1473,12 +1566,15 @@ flag stylishHaskell
   manual:      True
 
 common stylishHaskell
-  if flag(stylishHaskell)
+  if flag(stylishHaskell) && impl(ghc < 9.10)
     build-depends: haskell-language-server:hls-stylish-haskell-plugin
     cpp-options: -Dhls_stylishHaskell
 
 library hls-stylish-haskell-plugin
   import:           defaults, pedantic, warnings
+  -- https://github.com/haskell/stylish-haskell/issues/479
+  if !(flag(stylishHaskell) && impl(ghc < 9.10))
+    buildable: False
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
   build-depends:
@@ -1486,8 +1582,8 @@ library hls-stylish-haskell-plugin
     , directory
     , filepath
     , ghc-boot-th
-    , ghcide           == 2.7.0.0
-    , hls-plugin-api   == 2.7.0.0
+    , ghcide           == 2.9.0.0
+    , hls-plugin-api   == 2.9.0.0
     , lsp-types
     , mtl
     , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
@@ -1496,6 +1592,8 @@ library hls-stylish-haskell-plugin
 
 test-suite hls-stylish-haskell-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(stylishHaskell) && impl(ghc < 9.10))
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
   main-is:          Main.hs
@@ -1503,7 +1601,7 @@ test-suite hls-stylish-haskell-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-stylish-haskell-plugin
-    , hls-test-utils              == 2.7.0.0
+    , hls-test-utils              == 2.9.0.0
 
 -----------------------------
 -- refactor plugin
@@ -1521,6 +1619,8 @@ common refactor
 
 library hls-refactor-plugin
   import:           defaults, pedantic, warnings
+  if !flag(refactor)
+    buildable: False
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
                     Development.IDE.Plugin.CodeAction
@@ -1554,8 +1654,8 @@ library hls-refactor-plugin
     , bytestring
     , ghc-boot
     , regex-tdfa
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lsp
     , text
     , transformers
@@ -1563,21 +1663,23 @@ library hls-refactor-plugin
     , containers
     , ghc-exactprint < 1 || >= 1.4
     , extra
-    , retrie
     , syb
     , hls-graph
     , dlist
     , deepseq
     , mtl
     , lens
-    , data-default
     , time
     -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
     , regex-applicative
     , parser-combinators
+  if impl(ghc < 9.10)
+    build-depends: data-default
 
 test-suite hls-refactor-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(refactor)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-refactor-plugin/test
   main-is:          Main.hs
@@ -1585,25 +1687,23 @@ test-suite hls-refactor-plugin-tests
   ghc-options:      -O0
   build-depends:
     , base
-    , filepath
-    , haskell-language-server:hls-refactor-plugin
-    , hls-test-utils      == 2.7.0.0
-    , lens
-    , lsp-types
-    , text
-    , hls-plugin-api
-    , parser-combinators
     , data-default
-    , extra
-    , ghcide:{ghcide, ghcide-test-utils}
-    , shake
-    , hls-plugin-api
-    , lsp-test
     , directory
+    , extra
+    , filepath
+    , ghcide:ghcide
+    , haskell-language-server:hls-refactor-plugin
+    , hls-test-utils      == 2.9.0.0
+    , lens
+    , lsp-test
+    , lsp-types
+    , parser-combinators
     , regex-tdfa
-    , tasty-hunit
-    , tasty-expected-failure
+    , shake
     , tasty
+    , tasty-expected-failure
+    , tasty-hunit
+    , text
 
 -----------------------------
 -- semantic tokens plugin
@@ -1621,7 +1721,8 @@ common semanticTokens
 
 library hls-semantic-tokens-plugin
   import: defaults, pedantic, warnings
-  buildable: True
+  if !flag(semanticTokens)
+    buildable: False
   exposed-modules:
     Ide.Plugin.SemanticTokens
     Ide.Plugin.SemanticTokens.Types
@@ -1640,10 +1741,10 @@ library hls-semantic-tokens-plugin
     , extra
     , text-rope
     , mtl                   >= 2.2
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
+    , ghcide                == 2.9.0.0
+    , hls-plugin-api        == 2.9.0.0
     , lens
-    , lsp                    >=2.4
+    , lsp                    >=2.6
     , text
     , transformers
     , bytestring
@@ -1651,7 +1752,7 @@ library hls-semantic-tokens-plugin
     , array
     , deepseq
     , dlist
-    , hls-graph == 2.7.0.0
+    , hls-graph == 2.9.0.0
     , template-haskell
     , data-default
     , stm
@@ -1661,6 +1762,8 @@ library hls-semantic-tokens-plugin
 
 test-suite hls-semantic-tokens-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(semanticTokens)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-semantic-tokens-plugin/test
   main-is:          SemanticTokensTest.hs
@@ -1669,21 +1772,17 @@ test-suite hls-semantic-tokens-plugin-tests
     , aeson
     , base
     , containers
+    , data-default
     , filepath
+    , ghcide                == 2.9.0.0
     , haskell-language-server:hls-semantic-tokens-plugin
-    , hls-test-utils              == 2.7.0.0
-    , ghcide:ghcide-test-utils
-    , hls-plugin-api
+    , hls-plugin-api        == 2.9.0.0
+    , hls-test-utils        == 2.9.0.0
     , lens
     , lsp
-    , text-rope
     , lsp-test
     , text
-    , data-default
-    , ghcide                == 2.7.0.0
-    , hls-plugin-api        == 2.7.0.0
-    , data-default
-    , row-types
+    , text-rope
 
 -----------------------------
 -- notes plugin
@@ -1701,18 +1800,19 @@ common notes
 
 library hls-notes-plugin
   import: defaults, pedantic, warnings
-  buildable: True
+  if !flag(notes)
+    buildable: False
   exposed-modules:
     Ide.Plugin.Notes
   hs-source-dirs:     plugins/hls-notes-plugin/src
   build-depends:
     , base >=4.12 && <5
     , array
-    , ghcide == 2.7.0.0
-    , hls-graph == 2.7.0.0
-    , hls-plugin-api == 2.7.0.0
+    , ghcide == 2.9.0.0
+    , hls-graph == 2.9.0.0
+    , hls-plugin-api == 2.9.0.0
     , lens
-    , lsp >=2.4
+    , lsp >=2.7
     , mtl >= 2.2
     , regex-tdfa >= 1.3.1
     , text
@@ -1728,16 +1828,16 @@ library hls-notes-plugin
 
 test-suite hls-notes-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  if !flag(notes)
+    buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-notes-plugin/test
   main-is:          NotesTest.hs
   build-depends:
     , base
-    , directory
     , filepath
-    , ghcide:ghcide-test-utils
     , haskell-language-server:hls-notes-plugin
-    , hls-test-utils == 2.7.0.0
+    , hls-test-utils == 2.9.0.0
   default-extensions: OverloadedStrings
 
 ----------------------------
@@ -1798,10 +1898,10 @@ library
     , extra
     , filepath
     , ghc
-    , ghcide                == 2.7.0.0
+    , ghcide                == 2.9.0.0
     , githash               >=0.1.6.1
     , hie-bios
-    , hls-plugin-api        == 2.7.0.0
+    , hls-plugin-api        == 2.9.0.0
     , optparse-applicative
     , optparse-simple
     , prettyprinter         >= 1.7
@@ -1905,10 +2005,10 @@ test-suite func-test
     , deepseq
     , extra
     , filepath
-    , ghcide:{ghcide, ghcide-test-utils}
+    , ghcide:ghcide
     , hashable
     , hls-plugin-api
-    , hls-test-utils == 2.7.0.0
+    , hls-test-utils == 2.9.0.0
     , lens
     , lsp-test
     , lsp-types
@@ -1934,7 +2034,7 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Dhls_eval
 -- formatters
-  if flag(floskell)
+  if flag(floskell) && impl(ghc < 9.10)
     cpp-options: -Dhls_floskell
   if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
@@ -1953,7 +2053,7 @@ test-suite wrapper-test
   build-depends:
     , base       >=4.16 && <5
     , extra
-    , hls-test-utils              == 2.7.0.0
+    , hls-test-utils              == 2.9.0.0
     , process
 
   hs-source-dirs:     test/wrapper
@@ -1967,7 +2067,7 @@ benchmark benchmark
     main-is: Main.hs
     hs-source-dirs: bench
     build-tool-depends:
-        ghcide-bench:ghcide-bench,
+        haskell-language-server:ghcide-bench,
         hp2pretty:hp2pretty,
     default-extensions:
         LambdaCase
@@ -1982,7 +2082,7 @@ benchmark benchmark
       , directory
       , extra
       , filepath
-      , ghcide-bench
+      , haskell-language-server:ghcide-bench-lib
       , haskell-language-server
       , hls-plugin-api
       , lens
@@ -1991,3 +2091,192 @@ benchmark benchmark
       , shake-bench == 0.2.*
       , text
       , yaml
+
+
+test-suite ghcide-tests
+  import: warnings
+  type:               exitcode-stdio-1.0
+  default-language:   GHC2021
+  build-tool-depends:
+    , ghcide:ghcide
+    , ghcide:ghcide-test-preprocessor
+    , implicit-hie:gen-hie
+
+  build-depends:
+    , aeson
+    , base
+    , containers
+    , data-default
+    , directory
+    , enummapset
+    , extra
+    , filepath
+    , fuzzy
+    , ghcide
+    , hls-plugin-api
+    , lens
+    , list-t
+    , lsp
+    , lsp-test                ^>=0.17.1
+    , lsp-types
+    , monoid-subclasses
+    , mtl
+    , network-uri
+    , QuickCheck
+    , random
+    , regex-tdfa              ^>=1.3.1
+    , shake
+    , sqlite-simple
+    , stm
+    , stm-containers
+    , tasty
+    , tasty-expected-failure
+    , tasty-hunit             >=0.10
+    , tasty-quickcheck
+    , tasty-rerun
+    , text
+    , text-rope
+    , unordered-containers
+    , hls-test-utils == 2.9.0.0
+
+  if impl(ghc <9.3)
+    build-depends: ghc-typelits-knownnat
+
+  hs-source-dirs:     ghcide/test/exe
+  ghc-options:        -threaded -O0
+
+  main-is:            Main.hs
+  other-modules:
+    Config
+    AsyncTests
+    BootTests
+    ClientSettingsTests
+    CodeLensTests
+    CompletionTests
+    CPPTests
+    CradleTests
+    DependentFileTest
+    DiagnosticTests
+    ExceptionTests
+    FindDefinitionAndHoverTests
+    FuzzySearch
+    GarbageCollectionTests
+    HaddockTests
+    HieDbRetry
+    HighlightTests
+    IfaceTests
+    InitializeResponseTests
+    LogType
+    NonLspCommandLine
+    OpenCloseTest
+    OutlineTests
+    PluginSimpleTests
+    PositionMappingTests
+    PreprocessorTests
+    Progress
+    ReferenceTests
+    RootUriTests
+    SafeTests
+    SymlinkTests
+    THTests
+    UnitTests
+    WatchedFileTests
+
+  -- Tests that have been pulled out of the main file
+  default-extensions:
+    LambdaCase
+    OverloadedStrings
+    RecordWildCards
+    ViewPatterns
+
+
+executable ghcide-bench
+    default-language: GHC2021
+    build-depends:
+        aeson,
+        base,
+        bytestring,
+        containers,
+        data-default,
+        extra,
+        filepath,
+        hls-plugin-api,
+        hls-test-utils,
+        lens,
+        lsp-test,
+        lsp-types,
+        optparse-applicative,
+        process,
+        safe-exceptions,
+        hls-graph,
+        shake,
+        tasty-hunit >= 0.10,
+        text,
+        haskell-language-server:ghcide-bench-lib,
+    hs-source-dirs: ghcide-bench/exe
+    ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
+    main-is: Main.hs
+    default-extensions:
+        LambdaCase
+        OverloadedStrings
+        RecordWildCards
+        ViewPatterns
+
+library ghcide-bench-lib
+    default-language: GHC2021
+    hs-source-dirs: ghcide-bench/src
+    ghc-options: -Wall -Wno-name-shadowing
+    exposed-modules:
+        Experiments.Types
+        Experiments
+    build-depends:
+        aeson,
+        async,
+        base == 4.*,
+        binary,
+        bytestring,
+        deepseq,
+        directory,
+        extra,
+        filepath,
+        ghcide:{ghcide},
+        hashable,
+        lens,
+        lsp-test,
+        lsp-types,
+        optparse-applicative,
+        parser-combinators,
+        process,
+        safe-exceptions,
+        shake,
+        text,
+        hls-test-utils,
+        row-types
+    default-extensions:
+        LambdaCase
+        RecordWildCards
+        ViewPatterns
+
+
+test-suite ghcide-bench-test
+    type: exitcode-stdio-1.0
+    default-language: GHC2021
+    build-tool-depends:
+        ghcide:ghcide,
+    main-is: Main.hs
+    hs-source-dirs: ghcide-bench/test
+    ghc-options: -Wunused-packages
+    ghc-options: -threaded -Wall
+    build-depends:
+        base,
+        extra,
+        haskell-language-server:ghcide-bench-lib,
+        lsp-test ^>= 0.17,
+        tasty,
+        tasty-hunit >= 0.10,
+        tasty-rerun
+    default-extensions:
+        LambdaCase
+        OverloadedStrings
+        RecordWildCards
+        ViewPatterns

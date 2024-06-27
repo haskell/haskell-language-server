@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE OverloadedLabels      #-}
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -12,6 +11,7 @@ module Development.IDE.Plugin.Completions.Logic (
 , getCompletions
 , fromIdentInfo
 , getCompletionPrefix
+, getCompletionPrefixFromRope
 ) where
 
 import           Control.Applicative
@@ -23,7 +23,6 @@ import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
-import           Data.Row
 import           Prelude                                  hiding (mod)
 
 import           Data.Maybe                               (fromMaybe, isJust,
@@ -67,17 +66,13 @@ import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
                                                            sdocStyle)
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Plugins                              (defaultSDocContext,
-                                                           renderWithContext)
-#endif
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,5,0)
 import           Language.Haskell.Syntax.Basic
@@ -514,13 +509,8 @@ findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
-#if MIN_VERSION_ghc(9,3,0)
         extract ConDeclField{..}
             = map (foLabel . unLoc) cd_fld_names
-#else
-        extract ConDeclField{..}
-            = map (rdrNameFieldOcc . unLoc) cd_fld_names
-#endif
         -- XConDeclField
         extract _ = []
 findRecordCompl _ _ _ = []
@@ -530,7 +520,7 @@ toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
   removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
-      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= (\x -> x .! #snippetSupport))
+      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= view L.snippetSupport)
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
 toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}
@@ -898,7 +888,10 @@ mergeListsBy cmp all_lists = merge_lists all_lists
 
 -- |From the given cursor position, gets the prefix module or record for autocompletion
 getCompletionPrefix :: Position -> VFS.VirtualFile -> PosPrefixInfo
-getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
+getCompletionPrefix pos (VFS.VirtualFile _ _ ropetext) = getCompletionPrefixFromRope pos ropetext
+
+getCompletionPrefixFromRope :: Position -> Rope.Rope -> PosPrefixInfo
+getCompletionPrefixFromRope pos@(Position l c) ropetext =
       fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
         let headMaybe = listToMaybe
             lastMaybe = headMaybe . reverse

@@ -1,9 +1,13 @@
 
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module CompletionTests (tests) where
 
+import           Config
 import           Control.Lens                   ((^.))
 import qualified Control.Lens                   as Lens
 import           Control.Monad
@@ -11,10 +15,7 @@ import           Control.Monad.IO.Class         (liftIO)
 import           Data.Default
 import           Data.List.Extra
 import           Data.Maybe
-import           Data.Row
 import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
-import           Development.IDE.Test           (waitForTypecheck)
 import           Development.IDE.Types.Location
 import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Lens     as L
@@ -25,10 +26,12 @@ import           Language.LSP.Protocol.Types    hiding
                                                  SemanticTokensEdit (..),
                                                  mkRange)
 import           Language.LSP.Test
-import           System.FilePath
+import           Test.Hls                       (waitForTypecheck)
+import qualified Test.Hls.FileSystem            as FS
+import           Test.Hls.FileSystem            (file, text)
+import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           TestUtils
 
 
 tests :: TestTree
@@ -44,9 +47,19 @@ tests
     , testGroup "doc" completionDocTests
     ]
 
+testSessionEmpty :: TestName -> Session () -> TestTree
+testSessionEmpty name = testWithDummyPlugin name (mkIdeTestFs [FS.directCradle ["A.hs"]])
+
+testSessionEmptyWithCradle :: TestName -> T.Text -> Session () -> TestTree
+testSessionEmptyWithCradle name cradle = testWithDummyPlugin name (mkIdeTestFs [file "hie.yaml" (text cradle)])
+
+testSessionSingleFile :: TestName -> FilePath -> T.Text -> Session () -> TestTree
+testSessionSingleFile testName fp txt session =
+    testWithDummyPlugin testName (mkIdeTestFs [FS.directCradle [T.pack fp] , file fp (text txt)]) session
+
 completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
-completionTest name src pos expected = testSessionWait name $ do
-    docId <- createDoc "A.hs" "haskell" (T.unlines src)
+completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
+    docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
     compls <- getAndResolveCompletions docId pos
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
@@ -185,12 +198,12 @@ localCompletionTests = [
         [("abcd", CompletionItemKind_Function, "abcd", True, False, Nothing)
         ,("abcde", CompletionItemKind_Function, "abcde", True, False, Nothing)
         ],
-    testSessionWait "incomplete entries" $ do
+    testSessionEmpty "incomplete entries" $ do
         let src a = "data Data = " <> a
         doc <- createDoc "A.hs" "haskell" $ src "AAA"
         void $ waitForTypecheck doc
         let editA rhs =
-                changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ src rhs]
+                changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ src rhs]
         editA "AAAA"
         void $ waitForTypecheck doc
         editA "AAAAA"
@@ -203,7 +216,7 @@ localCompletionTests = [
 
 nonLocalCompletionTests :: [TestTree]
 nonLocalCompletionTests =
-  [ brokenForWinGhc $ completionTest
+  [ brokenForWinOldGhc $ completionTest
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
@@ -261,7 +274,11 @@ nonLocalCompletionTests =
       []
   ]
   where
-    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC92, GHC94, GHC96, GHC98]) "Windows has strange things in scope for some reason"
+    brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
+    brokenForWinOldGhc =
+      knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC94] "Windows (GHC == 9.4) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC96] "Windows (GHC == 9.6) has strange things in scope for some reason"
+      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC98] "Windows (GHC == 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
@@ -283,7 +300,7 @@ otherCompletionTests = [
       (Position 3 11)
       [("Integer", CompletionItemKind_Struct, "Integer", True, True, Nothing)],
 
-    testSession "duplicate record fields" $ do
+    testSessionEmpty "duplicate record fields" $ do
       void $
         createDoc "B.hs" "haskell" $
           T.unlines
@@ -304,22 +321,21 @@ otherCompletionTests = [
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
       liftIO $ take 1 compls' @?= ["member"],
 
-    testSessionWait "maxCompletions" $ do
+    testSessionEmpty "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
                 "a = Prelude."
             ]
         _ <- waitForDiagnostics
-        compls <- getCompletions  doc (Position 3 13)
+        compls <- getCompletions doc (Position 3 13)
         liftIO $ length compls @?= maxCompletions def
   ]
 
 packageCompletionTests :: [TestTree]
 packageCompletionTests =
-  [ testSession' "fromList" $ \dir -> do
-        liftIO $ writeFile (dir </> "hie.yaml")
-            "cradle: {direct: {arguments: [-hide-all-packages, -package, base, A]}}"
+  [ testSessionEmptyWithCradle "fromList" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, A]}}" $ do
+
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -337,9 +353,9 @@ packageCompletionTests =
           map ("Defined in "<>) (
               [ "'Data.List.NonEmpty"
               , "'GHC.Exts"
-              ] ++ if ghcVersion >= GHC94 then [ "'GHC.IsList" ] else [])
+              ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
 
-  , testSessionWait "Map" $ do
+  , testSessionEmptyWithCradle "Map" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, containers, A]}}" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -359,7 +375,7 @@ packageCompletionTests =
               , "'Data.Map.Lazy"
               , "'Data.Map.Strict"
               ]
-  , testSessionWait "no duplicates" $ do
+  , testSessionEmpty "no duplicates" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -381,7 +397,7 @@ packageCompletionTests =
                 ) compls
         liftIO $ length duplicate @?= 1
 
-  , testSessionWait "non-local before global" $ do
+  , testSessionEmpty "non-local before global" $ do
     -- non local completions are more specific
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
@@ -402,9 +418,7 @@ packageCompletionTests =
 
 projectCompletionTests :: [TestTree]
 projectCompletionTests =
-    [ testSession' "from hiedb" $ \dir-> do
-        liftIO $ writeFile (dir </> "hie.yaml")
-            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+    [ testSessionEmptyWithCradle "from hiedb" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
                "anidentifier = ()"
@@ -423,9 +437,7 @@ projectCompletionTests =
               , _label == "anidentifier"
               ]
         liftIO $ compls' @?= ["Defined in 'A"],
-      testSession' "auto complete project imports" $ \dir-> do
-        liftIO $ writeFile (dir </> "hie.yaml")
-            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}"
+      testSessionEmptyWithCradle "auto complete project imports" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}" $ do
         _ <- createDoc "ALocalModule.hs" "haskell" $ T.unlines
             [  "module ALocalModule (anidentifier) where",
                "anidentifier = ()"
@@ -440,9 +452,7 @@ projectCompletionTests =
         let item = head $ filter ((== "ALocalModule") . (^. L.label)) compls
         liftIO $ do
           item ^. L.label @?= "ALocalModule",
-      testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
-        liftIO $ writeFile (dir </> "hie.yaml")
-            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+      testSessionEmptyWithCradle "auto complete functions from qualified imports without alias" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
                "anidentifier = ()"
@@ -457,9 +467,8 @@ projectCompletionTests =
         let item = head compls
         liftIO $ do
           item ^. L.label @?= "anidentifier",
-      testSession' "auto complete functions from qualified imports with alias" $ \dir-> do
-        liftIO $ writeFile (dir </> "hie.yaml")
-            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+      testSessionEmptyWithCradle "auto complete functions from qualified imports with alias"
+                  "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
                "anidentifier = ()"
@@ -478,7 +487,7 @@ projectCompletionTests =
 
 completionDocTests :: [TestTree]
 completionDocTests =
-  [ testSession "local define" $ do
+  [ testSessionEmpty "local define" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = ()"
@@ -486,14 +495,14 @@ completionDocTests =
         ]
       let expected = "*Defined at line 2, column 1 in this module*\n"
       test doc (Position 2 8) "foo" Nothing [expected]
-  , testSession "local empty doc" $ do
+  , testSessionEmpty "local empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = ()"
         , "bar = fo"
         ]
       test doc (Position 2 8) "foo" Nothing ["*Defined at line 2, column 1 in this module*\n"]
-  , testSession "local single line doc without newline" $ do
+  , testSessionEmpty "local single line doc without newline" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |docdoc"
@@ -501,7 +510,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\n\n\ndocdoc\n"]
-  , testSession "local multi line doc with newline" $ do
+  , testSessionEmpty "local multi line doc with newline" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- | abcabc"
@@ -510,7 +519,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n\n\nabcabc\n"]
-  , testSession "local multi line doc without newline" $ do
+  , testSessionEmpty "local multi line doc without newline" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |     abcabc"
@@ -520,28 +529,28 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n\n\nabcabc \n\ndef\n"]
-  , testSession "extern empty doc" $ do
+  , testSessionEmpty "extern empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = od"
         ]
       let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
-  , brokenForMacGhc9 $ testSession "extern single line doc without '\\n'" $ do
+  ,  testSessionEmpty "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
-  , brokenForMacGhc9 $ testSession "extern mulit line doc" $ do
+  ,  testSessionEmpty "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n"
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
-  , testSession "extern defined doc" $ do
+  , testSessionEmpty "extern defined doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
@@ -550,8 +559,6 @@ completionDocTests =
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
-    brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC92, GHC94, GHC96]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos

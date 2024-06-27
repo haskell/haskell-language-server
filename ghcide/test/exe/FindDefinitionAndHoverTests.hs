@@ -1,56 +1,42 @@
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 module FindDefinitionAndHoverTests (tests) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class         (liftIO)
 import           Data.Foldable
 import           Data.Maybe
-import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
-import           Development.IDE.GHC.Util
-import           Development.IDE.Test           (expectDiagnostics,
-                                                 standardizeQuotes)
-import           Development.IDE.Types.Location
-import qualified Language.LSP.Protocol.Lens     as L
-import           Language.LSP.Protocol.Types    hiding
-                                                (SemanticTokenAbsolute (..),
-                                                 SemanticTokenRelative (..),
-                                                 SemanticTokensEdit (..),
-                                                 mkRange)
+import qualified Data.Text                  as T
+import qualified Language.LSP.Protocol.Lens as L
 import           Language.LSP.Test
-import           System.FilePath
-import           System.Info.Extra              (isWindows)
+import           System.Info.Extra          (isWindows)
 
-import           Control.Lens                   ((^.))
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           TestUtils
-import           Text.Regex.TDFA                ((=~))
+import           Config
+import           Control.Lens               ((^.))
+import           Development.IDE.Test       (expectDiagnostics,
+                                             standardizeQuotes)
+import           Test.Hls
+import           Test.Hls.FileSystem        (copyDir)
+import           Text.Regex.TDFA            ((=~))
 
 tests :: TestTree
 tests = let
-
   tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> String -> Session [Expect] -> String -> TestTree
-  tst (get, check) pos sfp targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
-
-    -- Dirty the cache to check that definitions work even in the presence of iface files
-    liftIO $ runInDir dir $ do
-      let fooPath = dir </> "Foo.hs"
-      fooSource <- liftIO $ readFileUtf8 fooPath
-      fooDoc <- createDoc fooPath "haskell" fooSource
-      _ <- getHover fooDoc $ Position 4 3
-      closeDoc fooDoc
-
-    doc <- openTestDataDoc (dir </> sfp)
-    waitForProgressDone
-    found <- get doc pos
-    check found targetRange
+  tst (get, check) pos sfp targetRange title =
+    testWithDummyPlugin title (mkIdeTestFs [copyDir "hover"]) $ do
+        doc <- openDoc sfp "haskell"
+        waitForProgressDone
+        _x <- waitForTypecheck doc
+        found <- get doc pos
+        check found targetRange
 
 
 
-  checkHover :: Maybe Hover -> Session [Expect] -> Session ()
+  checkHover :: (HasCallStack) => Maybe Hover -> Session [Expect] -> Session ()
   checkHover hover expectations = traverse_ check =<< expectations where
 
+    check :: (HasCallStack) => Expect -> Session ()
     check expected =
       case hover of
         Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
@@ -100,11 +86,11 @@ tests = let
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
     , testGroup "hover"      $ mapMaybe snd tests
-    , checkFileCompiles sourceFilePath $
+    , testGroup "hover compile" [checkFileCompiles sourceFilePath $
         expectDiagnostics
           [ ( "GotoHover.hs", [(DiagnosticSeverity_Error, (62, 7), "Found hole: _")])
           , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _")])
-          ]
+          ]]
     , testGroup "type-definition" typeDefinitionTests
     , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
 
@@ -117,8 +103,15 @@ tests = let
     , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
     ]
 
+  test :: (HasCallStack) => (TestTree -> a) -> (TestTree -> b) -> Position -> [Expect] -> String -> (a, b)
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
+  testM :: (HasCallStack) => (TestTree -> a)
+    -> (TestTree -> b)
+    -> Position
+    -> Session [Expect]
+    -> String
+    -> (a, b)
   testM runDef runHover look expect title =
     ( runDef   $ tst def   look sourceFilePath expect title
     , runHover $ tst hover look sourceFilePath expect title ) where
@@ -133,17 +126,17 @@ tests = let
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
-  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in ", "GHC.Types", "ghc-prim"]]
+  xtcL5  = Position  9 11  ;  xtc    = [ExpectHoverText ["Int", "Defined in ", "GHC.Types", "ghc-prim"]]
   tcL6   = Position 10 11  ;  tcData = [mkR   7  0    9 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:8:1"]]
   vvL16  = Position 20 12  ;  vv     = [mkR  20  4   20  6]
   opL16  = Position 20 15  ;  op     = [mkR  21  2   21  4]
   opL18  = Position 22 22  ;  opp    = [mkR  22 13   22 17]
   aL18   = Position 22 20  ;  apmp   = [mkR  22 10   22 11]
   b'L19  = Position 23 13  ;  bp     = [mkR  23  6   23  7]
-  xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["pack", ":: String -> Text", "Data.Text", "text"]]
+  xvL20  = Position 24  8  ;  xvMsg  = [ExpectHoverText ["pack", ":: String -> Text", "Data.Text", "text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
-  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ", "GHC.Num", "base"]]
+  eclL15 = Position 19  8  ;  ecls   = [ExpectHoverText ["Num", "Defined in ", if ghcVersion < GHC910 then "GHC.Num" else "GHC.Internal.Num", "base"]]
   dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
   dnbL30 = Position 34 23
   lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
@@ -166,7 +159,7 @@ tests = let
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
-  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 (if ghcVersion >= GHC94 then 5 else 0) 3 (if ghcVersion >= GHC94 then 8 else 14)]
+  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], if ghcVersion >= GHC94 && ghcVersion < GHC910 then mkL bar 3 5 3 8 else mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
@@ -181,8 +174,8 @@ tests = let
   , test  yes    yes    dcL7       tcDC          "data constructor record         #1029"
   , test  yes    yes    dcL12      tcDC          "data constructor plain"                -- https://github.com/haskell/ghcide/pull/121
   , test  yes    yes    tcL6       tcData        "type constructor                #1028" -- https://github.com/haskell/ghcide/pull/147
-  , test  broken yes    xtcL5      xtc           "type constructor external   #717,1028"
-  , test  broken yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    xtcL5      xtc           "type constructor external   #717,1028"
+  , test  yes    yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    vvL16      vv            "plain parameter"                       -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    aL18       apmp          "pattern match name"                    -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    opL16      op            "top-level operator               #713" -- https://github.com/haskell/ghcide/pull/120
@@ -190,7 +183,7 @@ tests = let
   , test  yes    yes    b'L19      bp            "name in backticks"                     -- https://github.com/haskell/ghcide/pull/120
   , test  yes    yes    clL23      cls           "class in instance declaration   #1027"
   , test  yes    yes    clL25      cls           "class in signature              #1027" -- https://github.com/haskell/ghcide/pull/147
-  , test  broken yes    eclL15     ecls          "external class in signature #717,1027"
+  , test  yes    yes    eclL15     ecls          "external class in signature #717,1027"
   , test  yes    yes    dnbL29     dnb           "do-notation   bind              #1073"
   , test  yes    yes    dnbL30     dnb           "do-notation lookup"
   , test  yes    yes    lcbL33     lcb           "listcomp   bind                 #1073"
@@ -228,8 +221,11 @@ tests = let
         no = const Nothing -- don't run this test at all
         --skip = const Nothing -- unreliable, don't run
 
+xfail :: TestTree -> String -> TestTree
+xfail = flip expectFailBecause
+
 checkFileCompiles :: FilePath -> Session () -> TestTree
 checkFileCompiles fp diag =
-  testSessionWithExtraFiles "hover" ("Does " ++ fp ++ " compile") $ \dir -> do
-    void (openTestDataDoc (dir </> fp))
+   testWithDummyPlugin ("hover: Does " ++ fp ++ " compile") (mkIdeTestFs [copyDir "hover"]) $ do
+    _ <- openDoc fp "haskell"
     diag

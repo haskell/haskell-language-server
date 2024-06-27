@@ -178,13 +178,13 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ormolu" in Ormolu.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_stylishHaskell
-      StylishHaskell.descriptor "stylish-haskell" :
+      let pId = "stylish-haskell" in StylishHaskell.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_retrie
-      Retrie.descriptor "retrie" :
+      let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :

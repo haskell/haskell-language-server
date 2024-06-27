@@ -4,11 +4,7 @@
 -- 'UnitEnv' and some DynFlags compat functions.
 module Development.IDE.GHC.Compat.Env (
     Env.HscEnv(hsc_FC, hsc_NC, hsc_IC, hsc_mod_graph
-#if MIN_VERSION_ghc(9,3,0)
               , hsc_type_env_vars
-#else
-              , hsc_type_env_var
-#endif
               ),
     Env.hsc_HPT,
     InteractiveContext(..),
@@ -19,9 +15,6 @@ module Development.IDE.GHC.Compat.Env (
     Env.hsc_logger,
     Env.hsc_tmpfs,
     Env.hsc_unit_env,
-#if !MIN_VERSION_ghc(9,3,0)
-    Env.hsc_unit_dbs,
-#endif
     Env.hsc_hooks,
     hscSetHooks,
     TmpFs,
@@ -32,7 +25,7 @@ module Development.IDE.GHC.Compat.Env (
     Home.mkHomeModule,
     -- * Provide backwards Compatible
     -- types and helper functions.
-    Logger(..),
+    Logger,
     UnitEnv,
     hscSetUnitEnv,
     hscSetFlags,
@@ -63,9 +56,8 @@ module Development.IDE.GHC.Compat.Env (
 
 import           GHC                 (setInteractiveDynFlags)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
 import           GHC.Driver.Backend  as Backend
+import           GHC.Driver.Env      (HscEnv, hscSetActiveUnitId)
 import qualified GHC.Driver.Env      as Env
 import           GHC.Driver.Hooks    (Hooks)
 import           GHC.Driver.Session
@@ -78,39 +70,12 @@ import           GHC.Unit.Types      (UnitId)
 import           GHC.Utils.Logger
 import           GHC.Utils.TmpFs
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env      (HscEnv, hsc_EPS)
-import qualified Data.Set            as S
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env      (HscEnv, hscSetActiveUnitId)
-#endif
-
-
-#if !MIN_VERSION_ghc(9,3,0)
-hscSetActiveUnitId :: UnitId -> HscEnv -> HscEnv
-hscSetActiveUnitId _ env = env
-
-reexportedModules :: HscEnv -> S.Set a
-reexportedModules _ = S.empty
-#endif
-
-#if MIN_VERSION_ghc(9,3,0)
 hsc_EPS :: HscEnv -> UnitEnv
 hsc_EPS = Env.hsc_unit_env
-#endif
 
-#if !MIN_VERSION_ghc(9,3,0)
-workingDirectory :: a -> Maybe b
-workingDirectory _ = Nothing
-
-setWorkingDirectory :: FilePath -> DynFlags -> DynFlags
-setWorkingDirectory = const id
-#else
 setWorkingDirectory :: FilePath -> DynFlags -> DynFlags
 setWorkingDirectory p d = d { workingDirectory =  Just p }
-#endif
 
 setHomeUnitId_ :: UnitId -> DynFlags -> DynFlags
 setHomeUnitId_ uid df = df { Session.homeUnitId_ = uid }

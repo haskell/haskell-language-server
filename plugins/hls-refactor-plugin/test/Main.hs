@@ -27,7 +27,6 @@ import           Development.IDE.Plugin.Completions.Types (extendImportCommandId
 import           Development.IDE.Test
 import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
-import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types              hiding
@@ -48,24 +47,21 @@ import           Text.Regex.TDFA                          ((=~))
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
+import qualified Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
-import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import qualified Test.AddArgument
 
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: IO (IdePlugins IdeState)
+refactorPlugin :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
 refactorPlugin = do
-  exactprintLog <- pluginTestRecorder
-  ghcideLog <- pluginTestRecorder
-  pure $ IdePlugins $
-      [ Refactor.iePluginDescriptor exactprintLog "ghcide-code-actions-imports-exports"
-      , Refactor.typeSigsPluginDescriptor exactprintLog "ghcide-code-actions-type-signatures"
-      , Refactor.bindingsPluginDescriptor exactprintLog "ghcide-code-actions-bindings"
-      , Refactor.fillHolePluginDescriptor exactprintLog "ghcide-code-actions-fill-holes"
-      , Refactor.extendImportPluginDescriptor exactprintLog "ghcide-completions-1"
-      ] ++ GhcIde.descriptors ghcideLog
+  mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
+      <> mkPluginTestDescriptor Refactor.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures"
+      <> mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings"
+      <> mkPluginTestDescriptor Refactor.fillHolePluginDescriptor "ghcide-code-actions-fill-holes"
+      <> mkPluginTestDescriptor Refactor.extendImportPluginDescriptor "ghcide-completions-1"
+
 
 tests :: TestTree
 tests =
@@ -646,7 +642,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x = x"
         ]
-        [ "func :: p -> p"
+        [ if ghcVersion >= GHC910 then "func :: t -> t" else "func :: p -> p"
         , "func x = x"
         ]
   , testUseTypeSignature "local signature"
@@ -666,9 +662,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func :: Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func :: t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+              "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -696,9 +695,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func::Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func::t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+               "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"
@@ -1008,6 +1010,76 @@ removeImportTests = testGroup "remove import actions"
             , "x = a -- Must use something from module A, but not (@.)"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove redundant record field import" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int"
+            , "}"
+            , "newA = A \"foo\" 42"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2),"
+            , "    newA"
+            , "  )"
+            , "x = a1 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a2) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1),"
+            , "    newA"
+            , "  )"
+            , "x = a1 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove multiple redundant record field imports" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int,"
+            , "  a3 :: Int,"
+            , "  a4 :: Int"
+            , "}"
+            , "newA = A \"foo\" 2 3 4"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2, a3, a4),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a1), A(a3), A(a4) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a2),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 extendImportTests :: TestTree
@@ -1275,8 +1347,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , brokenForGHC92 "On GHC 9.2, the error doesn't contain \"perhaps you want ...\" part from which import suggestion can be extracted." $
-          testSession "extend single line import in presence of extra parens" $ template
+        , testSession "extend single line import in presence of extra parens" $ template
             []
             ("Main.hs", T.unlines
                     [ "import Data.Monoid (First)"
@@ -1462,7 +1533,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -1501,6 +1572,30 @@ extendImportTests = testGroup "extend import actions"
                     , "f :: Foo"
                     , "f = undefined"
                     ])
+        , testSession "data constructor with two multiline import lists that can be extended with it" $ template
+            []
+            ("A.hs", T.unlines
+                [ "module A where"
+                , "import Prelude ("
+                , " )"
+                , "import Data.Maybe ("
+                , " )"
+                , "f = Nothing"
+                ])
+            (Range (Position 5 5) (Position 5 6))
+            [ "Add Maybe(..) to the import list of Data.Maybe"
+            , "Add Maybe(..) to the import list of Prelude"
+            , "Add Maybe(Nothing) to the import list of Data.Maybe"
+            , "Add Maybe(Nothing) to the import list of Prelude"
+            ]
+            (T.unlines
+                ["module A where"
+                , "import Prelude ("
+                , " )"
+                , "import Data.Maybe (Maybe (..)"
+                , " )"
+                , "f = Nothing"
+                ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x
@@ -2620,29 +2715,29 @@ fillTypedHoleTests = let
   , testSession "postfix hole uses postfix notation of infix operator" $ do
       let mkDoc x = T.unlines
               [ "module Testing where"
-              , "test :: Int -> Int -> Int"
-              , "test a1 a2 = " <> x <> " a1 a2"
+              , "test :: Int -> Maybe Int -> Maybe Int"
+              , "test a ma = " <> x <> " (a +) ma"
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
-      chosen <- pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
-      liftIO $ mkDoc "(+)" @=? modifiedCode
+      liftIO $ mkDoc "(<$>)" @=? modifiedCode
   , testSession "filling infix type hole uses infix operator" $ do
       let mkDoc x = T.unlines
               [ "module Testing where"
-              , "test :: Int -> Int -> Int"
-              , "test a1 a2 = a1 " <> x <> " a2"
+              , "test :: Int -> Maybe Int -> Maybe Int"
+              , "test a ma = (a +) " <> x <> " ma"
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
-      chosen <- pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
-      liftIO $ mkDoc "+" @=? modifiedCode
+      liftIO $ mkDoc "<$>" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -3092,6 +3187,7 @@ addSigActionTests = let
     , "(!!!) a b = a > b"       >:: "(!!!) :: Ord a => a -> a -> Bool"
     , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
     , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
+    , "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a\n  where Some a = Just a" >:: "pattern Some :: a -> Maybe a"
@@ -3125,7 +3221,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
@@ -3731,12 +3827,15 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir act = do
-  plugin <- refactorPlugin
-  runSessionWithServer' plugin def def lspTestCaps dir act
+runInDir dir act =
+    runSessionWithTestConfig def
+        { testDirLocation = Left dir
+        , testPluginDescriptor = refactorPlugin
+        , testConfigCaps = lspTestCaps }
+        $ const act
 
 lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+lspTestCaps = fullLatestClientCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
@@ -3750,6 +3849,3 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
-
-brokenForGHC92 :: String -> TestTree -> TestTree
-brokenForGHC92 = knownBrokenForGhcVersions [GHC92]

@@ -29,67 +29,44 @@
 
 
 module Main (main) where
--- import Test.QuickCheck.Instances ()
-import           Data.Function                            ((&))
-import           Ide.Logger             (Logger (Logger),
-                                                           LoggingColumn (DataColumn, PriorityColumn),
-                                                           Pretty (pretty),
-                                                           Priority (Debug),
-                                                           Recorder (Recorder, logger_),
-                                                           WithPriority (WithPriority, priority),
-                                                           cfilter,
-                                                           cmapWithPrio,
-                                                           makeDefaultStderrRecorder)
-import           GHC.Stack                                (emptyCallStack)
+
 import qualified HieDbRetry
 import           Test.Tasty
 import           Test.Tasty.Ingredients.Rerun
 
-import LogType ()
-import OpenCloseTest
-import InitializeResponseTests
-import CompletionTests
-import CPPTests
-import DiagnosticTests
-import CodeLensTests
-import OutlineTests
-import HighlightTests
-import FindDefinitionAndHoverTests
-import PluginSimpleTests
-import PreprocessorTests
-import THTests
-import SymlinkTests
-import SafeTests
-import UnitTests
-import HaddockTests
-import PositionMappingTests
-import WatchedFileTests
-import CradleTests
-import DependentFileTest
-import NonLspCommandLine
-import IfaceTests
-import BootTests
-import RootUriTests
-import AsyncTests
-import ClientSettingsTests
-import ReferenceTests
-import GarbageCollectionTests
-import ExceptionTests
+import           AsyncTests
+import           BootTests
+import           ClientSettingsTests
+import           CodeLensTests
+import           CompletionTests
+import           CPPTests
+import           CradleTests
+import           DependentFileTest
+import           DiagnosticTests
+import           ExceptionTests
+import           FindDefinitionAndHoverTests
+import           GarbageCollectionTests
+import           HaddockTests
+import           HighlightTests
+import           IfaceTests
+import           InitializeResponseTests
+import           LogType                      ()
+import           NonLspCommandLine
+import           OpenCloseTest
+import           OutlineTests
+import           PluginSimpleTests
+import           PositionMappingTests
+import           PreprocessorTests
+import           ReferenceTests
+import           RootUriTests
+import           SafeTests
+import           SymlinkTests
+import           THTests
+import           UnitTests
+import           WatchedFileTests
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
-
-  let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
-        docWithPriorityRecorder
-        & cfilter (\WithPriority{ priority } -> priority >= Debug)
-
-  -- exists so old-style logging works. intended to be phased out
-  let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
-
-  let recorder = docWithFilteredPriorityRecorder
-               & cmapWithPrio pretty
-
   -- We mess with env vars so run single-threaded.
   defaultMainWithRerun $ testGroup "ghcide"
     [ OpenCloseTest.tests
@@ -106,7 +83,7 @@ main = do
     , THTests.tests
     , SymlinkTests.tests
     , SafeTests.tests
-    , UnitTests.tests recorder logger
+    , UnitTests.tests
     , HaddockTests.tests
     , PositionMappingTests.tests
     , WatchedFileTests.tests
@@ -121,5 +98,5 @@ main = do
     , ReferenceTests.tests
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
-    , ExceptionTests.tests recorder logger
+    , ExceptionTests.tests
     ]
