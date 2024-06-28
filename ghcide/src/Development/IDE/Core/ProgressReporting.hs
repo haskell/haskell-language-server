@@ -56,9 +56,9 @@ data ProgressReportingNoTrace = ProgressReportingNoTrace
 
 data ProgressReporting = ProgressReporting
   {
-    inProgress       :: forall a. NormalizedFilePath -> IO a -> IO a,
+    inProgress             :: forall a. NormalizedFilePath -> IO a -> IO a,
     -- ^ see Note [ProgressReporting API and InProgressState]
-    progressReporter :: ProgressReportingNoTrace
+    progressReportingInner :: ProgressReportingNoTrace
   }
 
 class ProgressReportingClass a where
@@ -70,8 +70,8 @@ instance ProgressReportingClass ProgressReportingNoTrace where
     progressStop = progressStopI
 
 instance ProgressReportingClass ProgressReporting where
-    progressUpdate = progressUpdateI . progressReporter
-    progressStop = progressStopI . progressReporter
+    progressUpdate = progressUpdateI . progressReportingInner
+    progressStop = progressStopI . progressReportingInner
 
 {- Note [ProgressReporting API and InProgressState]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -96,7 +96,7 @@ noProgressReporting =
   return $
     ProgressReporting
       { inProgress = const id,
-        progressReporter = noProgressReportingNoTrace
+        progressReportingInner = noProgressReportingNoTrace
       }
 
 -- | State used in 'delayedProgressReporting'
@@ -181,7 +181,7 @@ progressReporting ::
 progressReporting Nothing _title _optProgressStyle = noProgressReporting
 progressReporting (Just lspEnv) title optProgressStyle = do
   inProgressState <- newInProgress
-  progressReporter <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
+  progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
                                 (readTVar $ doneVar inProgressState) (Just lspEnv) title optProgressStyle
   let
     inProgress :: NormalizedFilePath -> IO a -> IO a
