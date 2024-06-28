@@ -22,8 +22,8 @@ import           Control.Arrow                                (second)
 import           Control.Exception                            (bracket_)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (ix, (%~), (^.))
-import           Control.Monad                                (guard,
-                                                               void, when)
+import           Control.Monad                                (guard, void,
+                                                               when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..),
                                                                runExceptT)
@@ -45,8 +45,8 @@ import           Development.IDE.Core.Rules                   (IdeState,
 import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useNoFile_,
-                                                               use_, uses_)
+import           Development.IDE.Core.Shake                   (useNoFile_, use_,
+                                                               uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (OverridingBool (..))

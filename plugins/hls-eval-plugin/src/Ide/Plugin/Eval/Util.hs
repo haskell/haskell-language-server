@@ -34,9 +34,9 @@ import           System.Time.Extra                     (duration)
 import           UnliftIO.Exception                    (catchAny)
 
 #if !MIN_VERSION_ghc(9,8,0)
+import qualified Data.Text                             as T
 import           Development.IDE                       (printOutputable)
 import qualified Development.IDE.GHC.Compat.Core       as Core
-import qualified Data.Text                             as T
 #endif
 
 timed :: MonadIO m => (t -> Extra.Seconds -> m a) -> t -> m b -> m b
