@@ -36,8 +36,8 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, mbExpectedCod
 
     codeMatches d =
         case (mbExpectedCode, _code d) of
-          (Nothing, _) -> True
-          (Just expectedCode, Nothing) -> False
+          (Nothing, _)                         -> True
+          (Just expectedCode, Nothing)         -> False
           (Just expectedCode, Just actualCode) -> InR expectedCode == actualCode
 
     hasTag :: Maybe DiagnosticTag -> Maybe [DiagnosticTag] -> Bool

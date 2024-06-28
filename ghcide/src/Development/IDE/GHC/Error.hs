@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
@@ -41,10 +41,11 @@ import           Data.Maybe
 import           Data.String                       (fromString)
 import qualified Data.Text                         as T
 import           Data.Tuple.Extra                  (uncurry3)
-import           Development.IDE.GHC.Compat        (MsgEnvelope,
-                                                    errMsgSeverity, errMsgSpan, errMsgDiagnostic,
+import           Development.IDE.GHC.Compat        (GhcMessage, MsgEnvelope,
+                                                    errMsgDiagnostic,
+                                                    errMsgSeverity, errMsgSpan,
                                                     formatErrorWithQual,
-                                                    srcErrorMessages, GhcMessage)
+                                                    srcErrorMessages)
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat.Util   as Compat
 import           Development.IDE.GHC.Orphans       ()
