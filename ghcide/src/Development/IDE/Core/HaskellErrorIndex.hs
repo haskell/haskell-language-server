@@ -81,7 +81,7 @@ initHaskellErrorIndex recorder = do
 #endif
 
 heiGetError :: HaskellErrorIndex -> GhcMessage -> Maybe HEIError
-heiGetError (HaskellErrorIndex index) msg =
+heiGetError (HaskellErrorIndex index) msg
 #if MIN_VERSION_ghc(9,6,1)
   | Just code <- diagnosticCode (errMsgDiagnostic msg)
   = showGhcCode code `M.lookup` index
