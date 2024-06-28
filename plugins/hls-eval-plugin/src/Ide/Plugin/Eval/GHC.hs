@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- |GHC API utilities
 module Ide.Plugin.Eval.GHC (

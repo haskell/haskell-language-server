@@ -1,7 +1,7 @@
 -- "missing signature" is declared a fatal warning in the cabal file,
 -- but is ignored in this module.
 
-{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module IgnoreFatal where
 
