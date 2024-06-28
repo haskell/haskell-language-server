@@ -61,15 +61,15 @@ data ProgressReporting = ProgressReporting
     progressReportingInner :: ProgressReportingNoTrace
   }
 
-class ProgressReportingClass a where
+class ProgressReporter a where
     progressUpdate ::  a -> ProgressEvent -> IO ()
     progressStop :: a -> IO ()
 
-instance ProgressReportingClass ProgressReportingNoTrace where
+instance ProgressReporter ProgressReportingNoTrace where
     progressUpdate = progressUpdateI
     progressStop = progressStopI
 
-instance ProgressReportingClass ProgressReporting where
+instance ProgressReporter ProgressReporting where
     progressUpdate = progressUpdateI . progressReportingInner
     progressStop = progressStopI . progressReportingInner
 
