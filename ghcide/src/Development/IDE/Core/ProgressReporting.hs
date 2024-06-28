@@ -40,41 +40,36 @@ import           Language.LSP.Server            (ProgressAmount (..),
                                                  withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
-import           UnliftIO                       (Async, MonadUnliftIO, async,
-                                                 bracket, cancel)
+import           UnliftIO                       (Async, async, bracket, cancel)
 
 data ProgressEvent
   = ProgressNewStarted
   | ProgressCompleted
   | ProgressStarted
 
-data ProgressReportingNoTrace m = ProgressReportingNoTrace
-  { progressUpdateI :: ProgressEvent -> m (),
+data ProgressReportingNoTrace = ProgressReportingNoTrace
+  { progressUpdateI :: ProgressEvent -> IO (),
     progressStopI   :: IO ()
     -- ^ we are using IO here because creating and stopping the `ProgressReporting`
     -- is different from how we use it.
   }
 
-data ProgressReporting m = ProgressReporting
+data ProgressReporting = ProgressReporting
   {
-    inProgress             :: forall a. NormalizedFilePath -> m a -> m a,
+    inProgress             :: forall a. NormalizedFilePath -> IO a -> IO a,
     -- ^ see Note [ProgressReporting API and InProgressState]
-    progressReportingInner :: ProgressReportingNoTrace m
+    progressReportingInner :: ProgressReportingNoTrace
   }
 
 class ProgressReportingClass a where
-    type M a :: * -> *
-    progressUpdate ::  a -> ProgressEvent -> M a ()
+    progressUpdate ::  a -> ProgressEvent -> IO ()
     progressStop :: a -> IO ()
 
-instance ProgressReportingClass (ProgressReportingNoTrace m) where
-    type M (ProgressReportingNoTrace m) = m
+instance ProgressReportingClass ProgressReportingNoTrace where
     progressUpdate = progressUpdateI
     progressStop = progressStopI
 
-instance ProgressReportingClass (ProgressReporting m) where
-    type M (ProgressReporting m) = m
-    progressUpdate :: ProgressReporting m -> ProgressEvent -> M (ProgressReporting m) ()
+instance ProgressReportingClass ProgressReporting where
     progressUpdate = progressUpdateI . progressReportingInner
     progressStop = progressStopI . progressReportingInner
 
@@ -91,12 +86,12 @@ The progress of tasks can be tracked in two ways:
 The `inProgress` function is only useful when we are using `ProgressReporting`.
 -}
 
-noProgressReportingNoTrace :: (MonadUnliftIO m) => (ProgressReportingNoTrace m)
+noProgressReportingNoTrace :: ProgressReportingNoTrace
 noProgressReportingNoTrace = ProgressReportingNoTrace
       { progressUpdateI = const $ pure (),
         progressStopI = pure ()
       }
-noProgressReporting :: (MonadUnliftIO m) => IO (ProgressReporting m)
+noProgressReporting :: IO ProgressReporting
 noProgressReporting =
   return $
     ProgressReporting
@@ -141,14 +136,13 @@ newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
 recordProgress InProgressState {..} file shift = do
   (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
-  atomicallyNamed "recordProgress2" $ do
-    case (prev, new) of
-      (Nothing, 0) -> modifyTVar' doneVar (+ 1) >> modifyTVar' todoVar (+ 1)
-      (Nothing, _) -> modifyTVar' todoVar (+ 1)
-      (Just 0, 0)  -> pure ()
-      (Just 0, _)  -> modifyTVar' doneVar pred
-      (Just _, 0)  -> modifyTVar' doneVar (+ 1)
-      (Just _, _)  -> pure ()
+  atomicallyNamed "recordProgress2" $ case (prev, new) of
+    (Nothing, 0) -> modifyTVar' doneVar (+ 1) >> modifyTVar' todoVar (+ 1)
+    (Nothing, _) -> modifyTVar' todoVar (+ 1)
+    (Just 0, 0)  -> pure ()
+    (Just 0, _)  -> modifyTVar' doneVar pred
+    (Just _, 0)  -> modifyTVar' doneVar (+ 1)
+    (Just _, _)  -> pure ()
   where
     alterPrevAndNew = do
       prev <- Focus.lookup
@@ -162,13 +156,12 @@ recordProgress InProgressState {..} file shift = do
 -- It functions similarly to `progressReporting`, but it utilizes an external state for progress tracking.
 -- Refer to Note [ProgressReporting API and InProgressState] for more details.
 progressReportingNoTrace ::
-  (MonadUnliftIO m, MonadIO m) =>
   STM Int ->
   STM Int ->
   Maybe (LSP.LanguageContextEnv c) ->
   T.Text ->
   ProgressReportingStyle ->
-  IO (ProgressReportingNoTrace m)
+  IO ProgressReportingNoTrace
 progressReportingNoTrace _ _ Nothing _title _optProgressStyle = return noProgressReportingNoTrace
 progressReportingNoTrace todo done (Just lspEnv) title optProgressStyle = do
   progressState <- newVar NotStarted
@@ -181,19 +174,18 @@ progressReportingNoTrace todo done (Just lspEnv) title optProgressStyle = do
 -- It necessitates the active tracking of progress using the `inProgress` function.
 -- Refer to Note [ProgressReporting API and InProgressState] for more details.
 progressReporting ::
-  forall c m.
-  (MonadUnliftIO m, MonadIO m) =>
   Maybe (LSP.LanguageContextEnv c) ->
   T.Text ->
   ProgressReportingStyle ->
-  IO (ProgressReporting m)
+  IO ProgressReporting
 progressReporting Nothing _title _optProgressStyle = noProgressReporting
 progressReporting (Just lspEnv) title optProgressStyle = do
   inProgressState <- newInProgress
   progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
                                 (readTVar $ doneVar inProgressState) (Just lspEnv) title optProgressStyle
-  let inProgress :: forall a. NormalizedFilePath -> m a -> m a
-      inProgress = updateStateForFile inProgressState
+  let
+    inProgress :: NormalizedFilePath -> IO a -> IO a
+    inProgress = updateStateForFile inProgressState
   return ProgressReporting {..}
   where
     updateStateForFile inProgress file = UnliftIO.bracket (liftIO $ f succ) (const $ liftIO $ f pred) . const
@@ -202,7 +194,7 @@ progressReporting (Just lspEnv) title optProgressStyle = do
         -- Do not remove the eta-expansion without profiling a session with at
         -- least 1000 modifications.
 
-        f shift = recordProgress inProgress file shift
+        f = recordProgress inProgress file
 
 -- Kill this to complete the progress session
 progressCounter ::
