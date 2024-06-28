@@ -193,7 +193,7 @@ type instance RuleResult GetHlintDiagnostics = ()
 -- | This rule is recomputed when:
 -- | - A file has been edited via
 -- |    - `getIdeas` -> `getParsedModule` in any case
--- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
+-- |    - `getIdeas` -> `getFileModTimeContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
 -- | - The hlint specific settings have changed, via `getHlintSettingsRule`
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
@@ -307,7 +307,7 @@ getIdeas recorder nfp = do
               then return Nothing
               else do
                      flags' <- setExtensions flags
-                     (_, contents) <- getFileContents nfp
+                     (_, contents) <- getFileModTimeContents nfp
                      let fp = fromNormalizedFilePath nfp
                      let contents' = T.unpack . Rope.toText <$> contents
                      Just <$> liftIO (parseModuleEx flags' fp contents')
@@ -521,7 +521,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
     let fp = fromNormalizedFilePath nfp
-    (_, fmap Rope.toText -> mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
+    (_, fmap Rope.toText -> mbOldContent) <- liftIO $ runAction' $ getFileModTimeContents nfp
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum

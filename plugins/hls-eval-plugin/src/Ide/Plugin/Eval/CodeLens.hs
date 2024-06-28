@@ -42,7 +42,7 @@ import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Data.Typeable                                (Typeable)
-import           Development.IDE.Core.FileStore               (getFileContents)
+import           Development.IDE.Core.FileStore               (getFileModTimeContents)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
 import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
@@ -304,8 +304,8 @@ moduleText state uri = do
     contents <-
         handleMaybeM (PluginInternalError "mdlText") $
             liftIO $
-                runAction "eval.getFileContents" state $
-                    maybe (pure Nothing) (fmap snd . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+                runAction "eval.getFileModTimeContents" state $
+                    maybe (pure Nothing) (fmap snd . getFileModTimeContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
     pure $ Rope.toText contents
 
 testsBySection :: [Section] -> [(Section, EvalId, Test)]

@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
-    getFileContents,
+    getFileModTimeContents,
     getVersionedTextDoc,
     setFileModified,
     setSomethingModified,
@@ -192,8 +192,8 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
-getFileContents f = do
+getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents f = do
     (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
       Just t -> pure t

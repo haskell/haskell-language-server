@@ -19,7 +19,7 @@ import qualified Data.HashSet                             as Set
 import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileStore           (getFileContents)
+import           Development.IDE.Core.FileStore           (getFileModTimeContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
@@ -167,7 +167,7 @@ getCompletionsLSP ide plId
                   ,_position=position
                   ,_context=completionContext} = ExceptT $ do
     contentsMaybe <-
-      liftIO $ runAction "Completion" ide $ maybe (pure Nothing) (fmap snd . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+      liftIO $ runAction "Completion" ide $ maybe (pure Nothing) (fmap snd . getFileModTimeContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
     fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path

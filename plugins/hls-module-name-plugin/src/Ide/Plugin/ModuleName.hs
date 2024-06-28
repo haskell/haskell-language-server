@@ -43,7 +43,7 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        realSrcSpanToRange,
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
-import           Development.IDE.Core.FileStore       (getFileContents)
+import           Development.IDE.Core.FileStore       (getFileModTimeContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
@@ -112,7 +112,7 @@ action recorder state uri = do
     nfp <- getNormalizedFilePathE  uri
     fp <- uriToFilePathE uri
 
-    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ fmap snd $ getFileContents nfp
+    contents <- liftIO $ runAction "ModuleName.getFileModTimeContents" state $ fmap snd $ getFileModTimeContents nfp
     let emptyModule = maybe True (T.null . T.strip . Rope.toText) contents
 
     correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp

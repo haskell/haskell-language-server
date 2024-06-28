@@ -99,7 +99,7 @@ import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists              hiding (Log,
                                                                LogShake)
-import           Development.IDE.Core.FileStore               (getFileContents,
+import           Development.IDE.Core.FileStore               (getFileModTimeContents,
                                                                getModTime)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
@@ -221,7 +221,7 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
-    (_, msource) <- getFileContents nfp
+    (_, msource) <- getFileModTimeContents nfp
     case msource of
         Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
         Just source -> pure $ T.encodeUtf8 $ Rope.toText source
@@ -862,7 +862,7 @@ getModSummaryRule displayTHWarning recorder = do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = hscSetFlags (modify_dflags $ hsc_dflags session') session'
-        (modTime, mFileContent) <- getFileContents f
+        (modTime, mFileContent) <- getFileModTimeContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp modTime (textToStringBuffer . Rope.toText <$> mFileContent)

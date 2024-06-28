@@ -41,7 +41,7 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
-import           Development.IDE.Core.FileStore                    (getFileContents)
+import           Development.IDE.Core.FileStore                    (getFileModTimeContents)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -123,7 +123,7 @@ import           GHC.Types.SrcLoc                                  (srcSpanToRea
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getFileContents" state $ maybe (pure Nothing) (fmap (fmap Rope.toText . snd) . getFileContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+  contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getFileModTimeContents" state $ maybe (pure Nothing) (fmap (fmap Rope.toText . snd) . getFileModTimeContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
