@@ -161,7 +161,7 @@ data IncludeDeclaration =
     YesIncludeDeclaration
     | NoExcludeDeclaration
 
-getReferences' :: SymbolLocation -> IncludeDeclaration -> Session ([Location])
+getReferences' :: SymbolLocation -> IncludeDeclaration -> Session [Location]
 getReferences' (file, l, c) includeDeclaration = do
     doc <- openDoc file "haskell"
     getReferences doc (Position l c) $ toBool includeDeclaration

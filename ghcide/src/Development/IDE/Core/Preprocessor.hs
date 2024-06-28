@@ -28,12 +28,9 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import qualified GHC.LanguageExtensions            as LangExt
+import           GHC.Utils.Logger                  (LogFlags (..))
 import           System.FilePath
 import           System.IO.Extra
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Utils.Logger                  (LogFlags (..))
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.

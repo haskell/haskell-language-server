@@ -7,7 +7,7 @@ module Development.IDE.GHC.Compat.ExactPrint
     , transformA
     ) where
 
-import           Language.Haskell.GHC.ExactPrint   as ExactPrint
+import           Language.Haskell.GHC.ExactPrint as ExactPrint
 
 printA :: (ExactPrint ast) => ast -> String
 printA ast = exactPrint ast
@@ -16,4 +16,4 @@ transformA
   :: Monad m => ast1 -> (ast1 -> TransformT m ast2) -> m ast2
 transformA ast f = do
   (ast',_ ,_) <- runTransformFromT 0 (f ast)
-  return $ ast'
+  return ast'

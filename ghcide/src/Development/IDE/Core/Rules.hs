@@ -167,13 +167,8 @@ import           System.Directory                             (doesFileExist)
 import           System.Info.Extra                            (isWindows)
 
 
-import           GHC.Fingerprint
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 import qualified Data.IntMap                                  as IM
-
+import           GHC.Fingerprint
 
 
 data Log

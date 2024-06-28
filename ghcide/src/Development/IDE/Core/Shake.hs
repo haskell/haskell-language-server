@@ -126,6 +126,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater,
                                                          initNameCache,
                                                          knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
@@ -174,10 +175,6 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 
 data Log
   = LogCreateHieDbExportsMapStart

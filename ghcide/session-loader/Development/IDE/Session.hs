@@ -99,15 +99,18 @@ import           Data.Foldable                       (for_)
 import           Data.HashMap.Strict                 (HashMap)
 import           Data.HashSet                        (HashSet)
 import qualified Data.HashSet                        as Set
+import qualified Data.Set                            as OS
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing        (withTrace)
 import           Development.IDE.Core.WorkerThread   (WorkerQueue,
                                                       awaitRunInThread,
                                                       withWorkerQueue)
+import qualified Development.IDE.GHC.Compat.Util     as Compat
 import           Development.IDE.Session.Diagnostics (renderCradleError)
 import           Development.IDE.Types.Shake         (WithHieDb,
                                                       WithHieDbShield (..),
                                                       toNoFileKey)
+import           GHC.Data.Graph.Directed
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -115,13 +118,6 @@ import           Ide.PluginUtils                     (toAbsolute)
 import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
-
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import qualified Data.Set                            as OS
-import qualified Development.IDE.GHC.Compat.Util     as Compat
-import           GHC.Data.Graph.Directed
 
 import           GHC.Data.Bag
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
@@ -832,7 +828,7 @@ checkHomeUnitsClosed' ue home_id_set
       where
         go rest this this_uis =
            plusUniqMap_C OS.union
-             (addToUniqMap_C OS.union external_depends this (OS.fromList $ this_deps))
+             (addToUniqMap_C OS.union external_depends this (OS.fromList this_deps))
              rest
            where
              external_depends = mapUniqMap (OS.fromList . unitDepends)
@@ -1154,7 +1150,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
                      -- This works because there won't be any dependencies on the
                      -- executable unit.
                      "main" ->
-                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack $ this_opts)
+                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack this_opts)
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in setHomeUnitId_ hashed_uid dflags'
                      _ -> dflags'
