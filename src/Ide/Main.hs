@@ -1,7 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE CPP               #-}
-{-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -18,7 +17,7 @@ import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Text.Lazy.Encoding       (decodeUtf8)
 import qualified Data.Text.Lazy.IO             as LT
-import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
+import           Development.IDE.Core.Rules    hiding (Log)
 import           Development.IDE.Core.Tracing  (withTelemetryRecorder)
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as IDEMain
