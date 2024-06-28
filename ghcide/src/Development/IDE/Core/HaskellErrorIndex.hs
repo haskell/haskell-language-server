@@ -1,4 +1,6 @@
 -- Retrieve the list of errors from the HaskellErrorIndex via its API
+{-# LANGUAGE CPP                   #-}
+
 module Development.IDE.Core.HaskellErrorIndex where
 
 import           Control.Exception                 (tryJust)
@@ -6,7 +8,11 @@ import           Data.Aeson                        (FromJSON (..), (.:), withObj
 import qualified Data.Map                          as M
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Diagnostics
-import           GHC.Types.Error                   (DiagnosticCode)
+import           GHC.Driver.Errors.Types           ( GhcMessage
+#if MIN_VERSION_ghc(9,6,1)
+                                                   , DiagnosticCode, diagnosticCode
+#endif
+                                                   )
 import           Ide.Logger                        (Recorder, Pretty (..), WithPriority, logWith, Priority (..), vcat)
 import           Language.LSP.Protocol.Types       (Uri (..), CodeDescription (..))
 import           Network.HTTP.Simple               (HttpException, JSONException, getResponseBody, httpJSON)
@@ -55,6 +61,7 @@ instance FromJSON HaskellErrorIndex where
 
 initHaskellErrorIndex :: Recorder (WithPriority Log) -> IO (Maybe HaskellErrorIndex)
 initHaskellErrorIndex recorder = do
+#if MIN_VERSION_ghc(9,6,1)
   res <- tryJust handleJSONError $ tryJust handleHttpError $ httpJSON "https://errors.haskell.org/api/errors.json"
   case res of
     Left jsonErr -> do
@@ -69,9 +76,20 @@ initHaskellErrorIndex recorder = do
     handleJSONError = Just
     handleHttpError :: HttpException -> Maybe HttpException
     handleHttpError = Just
+#else
+  pure Nothing
+#endif
 
-heiGetError :: HaskellErrorIndex -> DiagnosticCode -> Maybe HEIError
-heiGetError (HaskellErrorIndex index) code = showGhcCode code `M.lookup` index
+heiGetError :: HaskellErrorIndex -> GhcMessage -> Maybe HEIError
+heiGetError (HaskellErrorIndex index) msg =
+#if MIN_VERSION_ghc(9,6,1)
+  | Just code <- diagnosticCode (errMsgDiagnostic msg)
+  = showGhcCode code `M.lookup` index
+  | otherwise
+  = Nothing
+#else
+  Nothing
+#endif
 
 attachHeiErrorCodeDescription :: HEIError -> Diagnostic -> Diagnostic
 attachHeiErrorCodeDescription heiError diag =

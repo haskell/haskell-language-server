@@ -197,7 +197,9 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
             case etcm of
               Left errs -> return (errs, Nothing)
               Right tcm ->
-                let addReason diag = map (Just (diagnosticReason (errMsgDiagnostic diag)),) $ diagFromErrMsg sourceTypecheck (hsc_dflags hscEnv) diag
+                let addReason diag =
+                      map (Just (diagnosticReason (errMsgDiagnostic diag)),) $
+                        diagFromErrMsg sourceTypecheck (hsc_dflags hscEnv) diag
                     errorPipeline = map (unDefer . hideDiag dflags . tagDiag) . addReason
                     diags = concatMap errorPipeline $ Compat.getMessages $ tmrWarnings tcm
                     deferredError = any fst diags
@@ -1074,7 +1076,11 @@ parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
      PFailedWithErrorMessages msgs ->
+#if MIN_VERSION_ghc(9,6,1)
         throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
+#else
+        throwE $ diagFromSDocErrMsgs sourceParser dflags $ msgs dflags
+#endif
      POk pst rdr_module -> do
         let (warns, errs) = renderMessages $ getPsMessages pst
 
@@ -1088,9 +1094,17 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
+#if MIN_VERSION_ghc(9,6,1)
             throwE $ diagFromErrMsgs sourceParser dflags errs
+#else
+            throwE $ diagFromSDocErrMsgs sourceParser dflags errs
+#endif
 
+#if MIN_VERSION_ghc(9,6,1)
         let warnings = diagFromErrMsgs sourceParser dflags warns
+#else
+        let warnings = diagFromSDocErrMsgs sourceParser dflags warns
+#endif
         return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
@@ -1107,7 +1121,12 @@ parseFileContents env customPreprocessor filename ms = do
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
-     PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
+     PFailedWithErrorMessages msgs ->
+#if MIN_VERSION_ghc(9,6,1)
+       throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
+#else
+       throwE $ diagFromSDocErrMsgs sourceParser dflags $ msgs dflags
+#endif
      POk pst rdr_module ->
          let
              psMessages = getPsMessages pst
@@ -1141,7 +1160,11 @@ parseFileContents env customPreprocessor filename ms = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errors) $
+#if MIN_VERSION_ghc(9,6,1)
                  throwE $ diagFromErrMsgs sourceParser dflags errors
+#else
+                 throwE $ diagFromSDocErrMsgs sourceParser dflags errors
+#endif
 
 
                -- To get the list of extra source files, we take the list
@@ -1172,7 +1195,11 @@ parseFileContents env customPreprocessor filename ms = do
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
                let pm = ParsedModule ms parsed' srcs2
+#if MIN_VERSION_ghc(9,6,1)
                    warnings = diagFromErrMsgs sourceParser dflags warns
+#else
+                   warnings = diagFromSDocErrMsgs sourceParser dflags warns
+#endif
                pure (warnings ++ preproc_warning_file_diagnostics, pm)
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile

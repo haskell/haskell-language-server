@@ -158,7 +158,7 @@ import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
-import           GHC.Types.Error                        (diagnosticCode, errMsgDiagnostic)
+import           GHC.Types.Error                        (errMsgDiagnostic)
 import           GHC.TypeLits                           (KnownSymbol)
 import           HieDb.Types
 import           Ide.Logger                             hiding (Priority)
@@ -1378,8 +1378,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         attachHEI mbHei diag
             | Just hei <- mbHei
             , SomeStructuredMessage msg <- fdStructuredMessage diag
-            , Just code <- diagnosticCode (errMsgDiagnostic msg)
-            , Just heiError <- hei `heiGetError` code
+            , Just heiError <- hei `heiGetError` errMsgDiagnostic msg
             = pure $ diag & fdLspDiagnosticL %~ attachHeiErrorCodeDescription heiError
             | otherwise
             = pure diag
