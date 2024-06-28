@@ -1,15 +1,21 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
+
 module Development.IDE.Core.ProgressReporting
   ( ProgressEvent (..),
     ProgressReporting (..),
+    ProgressReportingNoTrace,
     noProgressReporting,
     progressReporting,
-    progressReportingOutsideState,
+    progressReportingNoTrace,
     -- utilities, reexported for use in Core.Shake
     mRunLspT,
     mRunLspTCallback,
     -- for tests
     recordProgress,
     InProgressState (..),
+    progressStop,
+    progressUpdate
   )
 where
 
@@ -42,14 +48,36 @@ data ProgressEvent
   | ProgressCompleted
   | ProgressStarted
 
-data ProgressReporting m = ProgressReporting
-  { progressUpdate :: ProgressEvent -> m (),
-    inProgress     :: forall a. NormalizedFilePath -> m a -> m a,
-    -- ^ see Note [ProgressReporting API and InProgressState]
-    progressStop   :: IO ()
+data ProgressReportingNoTrace m = ProgressReportingNoTrace
+  { progressUpdateI :: ProgressEvent -> m (),
+    progressStopI   :: IO ()
     -- ^ we are using IO here because creating and stopping the `ProgressReporting`
     -- is different from how we use it.
   }
+
+data ProgressReporting m = ProgressReporting
+  {
+    inProgress             :: forall a. NormalizedFilePath -> m a -> m a,
+    -- ^ see Note [ProgressReporting API and InProgressState]
+    progressReportingInner :: ProgressReportingNoTrace m
+  }
+
+
+class ProgressReportingClass a where
+    type M a :: * -> *
+    progressUpdate ::  a -> ProgressEvent -> M a ()
+    progressStop :: a -> IO ()
+
+instance ProgressReportingClass (ProgressReportingNoTrace m) where
+    type M (ProgressReportingNoTrace m) = m
+    progressUpdate = progressUpdateI
+    progressStop = progressStopI
+
+instance ProgressReportingClass (ProgressReporting m) where
+    type M (ProgressReporting m) = m
+    progressUpdate :: ProgressReporting m -> ProgressEvent -> M (ProgressReporting m) ()
+    progressUpdate = progressUpdateI . progressReportingInner
+    progressStop = progressStopI . progressReportingInner
 
 {- Note [ProgressReporting API and InProgressState]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -67,13 +95,17 @@ An alternative design could involve using GADTs to eliminate this discrepancy be
 `InProgressState` and `InProgressStateOutSide`.
 -}
 
+noProgressReportingNoTrace :: (MonadUnliftIO m) => (ProgressReportingNoTrace m)
+noProgressReportingNoTrace = ProgressReportingNoTrace
+      { progressUpdateI = const $ pure (),
+        progressStopI = pure ()
+      }
 noProgressReporting :: (MonadUnliftIO m) => IO (ProgressReporting m)
 noProgressReporting =
   return $
     ProgressReporting
-      { progressUpdate = const $ pure (),
-        inProgress = const id,
-        progressStop = pure ()
+      { inProgress = const id,
+        progressReportingInner = noProgressReportingNoTrace
       }
 
 -- | State used in 'delayedProgressReporting'
@@ -106,19 +138,12 @@ data InProgressState
         doneVar    :: TVar Int,
         currentVar :: STM.Map NormalizedFilePath Int
       }
-  | InProgressStateOutSide
-      -- we transform the outside state into STM Int for progress reporting purposes
-      { -- | Number of files to do
-        todo :: STM Int,
-        -- | Number of files done
-        done :: STM Int
-      }
+
 
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 
 recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
-recordProgress InProgressStateOutSide {} _ _ = return ()
 recordProgress InProgressState {..} file shift = do
   (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
   atomicallyNamed "recordProgress2" $ do
@@ -138,50 +163,45 @@ recordProgress InProgressState {..} file shift = do
     alter x = let x' = maybe (shift 0) shift x in Just x'
 
 
+-- | `progressReportingNoTrace` initiates a new progress reporting session.
+-- It functions similarly to `progressReporting`, but it utilizes an external state for progress tracking.
+-- Refer to Note [ProgressReporting API and InProgressState] for more details.
+progressReportingNoTrace ::
+  (MonadUnliftIO m, MonadIO m) =>
+  STM Int ->
+  STM Int ->
+  Maybe (LSP.LanguageContextEnv c) ->
+  T.Text ->
+  ProgressReportingStyle ->
+  IO (ProgressReportingNoTrace m)
+progressReportingNoTrace _ _ Nothing _title _optProgressStyle = return noProgressReportingNoTrace
+progressReportingNoTrace todo done (Just lspEnv) title optProgressStyle = do
+  progressState <- newVar NotStarted
+  let progressUpdateI event = liftIO $ updateStateVar $ Event event
+      progressStopI = updateStateVar StopProgress
+      updateStateVar = modifyVar_ progressState . updateState (progressCounter lspEnv title optProgressStyle todo done)
+  return ProgressReportingNoTrace {..}
+
 -- | `progressReporting` initiates a new progress reporting session.
 -- It necessitates the active tracking of progress using the `inProgress` function.
 -- Refer to Note [ProgressReporting API and InProgressState] for more details.
 progressReporting ::
+  forall c m.
   (MonadUnliftIO m, MonadIO m) =>
   Maybe (LSP.LanguageContextEnv c) ->
   T.Text ->
   ProgressReportingStyle ->
   IO (ProgressReporting m)
-progressReporting = progressReporting' newInProgress
-
--- | `progressReportingOutsideState` initiates a new progress reporting session.
--- It functions similarly to `progressReporting`, but it utilizes an external state for progress tracking.
--- Refer to Note [ProgressReporting API and InProgressState] for more details.
-progressReportingOutsideState ::
-  (MonadUnliftIO m, MonadIO m) =>
-  STM Int ->
-  STM Int ->
-  Maybe (LSP.LanguageContextEnv c) ->
-  T.Text ->
-  ProgressReportingStyle ->
-  IO (ProgressReporting m)
-progressReportingOutsideState todo done = progressReporting' (pure $ InProgressStateOutSide todo done)
-
-progressReporting' ::
-  (MonadUnliftIO m, MonadIO m) =>
-  IO InProgressState ->
-  Maybe (LSP.LanguageContextEnv c) ->
-  T.Text ->
-  ProgressReportingStyle ->
-  IO (ProgressReporting m)
-progressReporting' _newState Nothing _title _optProgressStyle = noProgressReporting
-progressReporting' newState (Just lspEnv) title optProgressStyle = do
-  inProgressState <- newState
-  progressState <- newVar NotStarted
-  let progressUpdate event = liftIO $ updateStateVar $ Event event
-      progressStop = updateStateVar StopProgress
-      updateStateVar = modifyVar_ progressState . updateState (lspShakeProgressNew inProgressState)
+progressReporting Nothing _title _optProgressStyle = noProgressReporting
+progressReporting (Just lspEnv) title optProgressStyle = do
+  inProgressState <- newInProgress
+  progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
+                                (readTVar $ doneVar inProgressState) (Just lspEnv) title optProgressStyle
+  let
+      inProgress :: forall a. NormalizedFilePath -> m a -> m a
       inProgress = updateStateForFile inProgressState
   return ProgressReporting {..}
   where
-    lspShakeProgressNew :: InProgressState -> IO ()
-    lspShakeProgressNew InProgressStateOutSide {..} = progressCounter lspEnv title optProgressStyle todo done
-    lspShakeProgressNew InProgressState {..} = progressCounter lspEnv title optProgressStyle (readTVar todoVar) (readTVar doneVar)
     updateStateForFile inProgress file = UnliftIO.bracket (liftIO $ f succ) (const $ liftIO $ f pred) . const
       where
         -- This functions are deliberately eta-expanded to avoid space leaks.

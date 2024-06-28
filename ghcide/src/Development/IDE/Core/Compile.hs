@@ -71,7 +71,8 @@ import           Data.Tuple.Extra                       (dupe)
 import           Debug.Trace
 import           Development.IDE.Core.FileStore         (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
-import           Development.IDE.Core.ProgressReporting (ProgressReporting (..))
+import           Development.IDE.Core.ProgressReporting (ProgressReporting (..),
+                                                         progressReportingNoTrace, progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing           (withTrace)

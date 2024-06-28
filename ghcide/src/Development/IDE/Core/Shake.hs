@@ -244,7 +244,7 @@ data HieDbWriter
   { indexQueue             :: IndexQueue
   , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted         :: TVar Int -- ^ to report progress
-  , indexProgressReporting :: ProgressReporting IO
+  , indexProgressReporting :: ProgressReportingNoTrace IO
   }
 
 -- | Actions to queue up on the index worker thread
@@ -676,7 +676,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         semanticTokensId <- newTVarIO 0
-        indexProgressReporting <- progressReportingOutsideState
+        indexProgressReporting <- progressReportingNoTrace
             (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
             (readTVar indexCompleted)
             lspEnv "Indexing" optProgressStyle
