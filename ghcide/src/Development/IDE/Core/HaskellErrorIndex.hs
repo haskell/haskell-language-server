@@ -1,21 +1,26 @@
 -- Retrieve the list of errors from the HaskellErrorIndex via its API
-{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Core.HaskellErrorIndex where
 
 import           Control.Exception                 (tryJust)
-import           Data.Aeson                        (FromJSON (..), (.:), withObject)
+import           Data.Aeson                        (FromJSON (..), withObject,
+                                                    (.:))
 import qualified Data.Map                          as M
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Diagnostics
-import           GHC.Driver.Errors.Types           ( GhcMessage
+import           GHC.Driver.Errors.Types           (GhcMessage)
 #if MIN_VERSION_ghc(9,6,1)
-                                                   , DiagnosticCode, diagnosticCode
+import           GHC.Types.Error                   (diagnosticCode)
 #endif
-                                                   )
-import           Ide.Logger                        (Recorder, Pretty (..), WithPriority, logWith, Priority (..), vcat)
-import           Language.LSP.Protocol.Types       (Uri (..), CodeDescription (..))
-import           Network.HTTP.Simple               (HttpException, JSONException, getResponseBody, httpJSON)
+import           Ide.Logger                        (Pretty (..), Priority (..),
+                                                    Recorder, WithPriority,
+                                                    logWith, vcat)
+import           Language.LSP.Protocol.Types       (CodeDescription (..),
+                                                    Uri (..))
+import           Network.HTTP.Simple               (HttpException,
+                                                    JSONException,
+                                                    getResponseBody, httpJSON)
 
 data Log
   = LogHaskellErrorIndexInitialized
@@ -41,7 +46,7 @@ newtype HaskellErrorIndex = HaskellErrorIndex (M.Map T.Text HEIError)
   deriving (Show, Eq, Ord)
 
 data HEIError = HEIError
-  { code :: T.Text
+  { code  :: T.Text
   , route :: T.Text
   }
   deriving (Show, Eq, Ord)
@@ -60,8 +65,8 @@ instance FromJSON HaskellErrorIndex where
   parseJSON = fmap errorsToIndex <$> parseJSON
 
 initHaskellErrorIndex :: Recorder (WithPriority Log) -> IO (Maybe HaskellErrorIndex)
-initHaskellErrorIndex recorder = do
 #if MIN_VERSION_ghc(9,6,1)
+initHaskellErrorIndex recorder = do
   res <- tryJust handleJSONError $ tryJust handleHttpError $ httpJSON "https://errors.haskell.org/api/errors.json"
   case res of
     Left jsonErr -> do
@@ -77,13 +82,13 @@ initHaskellErrorIndex recorder = do
     handleHttpError :: HttpException -> Maybe HttpException
     handleHttpError = Just
 #else
-  pure Nothing
+initHaskellErrorIndex recorder = pure Nothing
 #endif
 
 heiGetError :: HaskellErrorIndex -> GhcMessage -> Maybe HEIError
 heiGetError (HaskellErrorIndex index) msg
 #if MIN_VERSION_ghc(9,6,1)
-  | Just code <- diagnosticCode (errMsgDiagnostic msg)
+  | Just code <- diagnosticCode msg
   = showGhcCode code `M.lookup` index
   | otherwise
   = Nothing
