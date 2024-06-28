@@ -10,10 +10,13 @@ module Development.IDE.Core.WorkerThread
     (withWorkerQueue, awaitRunInThread)
  where
 
-import           Control.Concurrent.Async  (withAsync)
+import           Control.Concurrent.Async  (AsyncCancelled (AsyncCancelled),
+                                            withAsync)
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
+import           Control.Exception         (Exception (fromException),
+                                            SomeException, throwIO, try)
 import           Control.Monad             (forever)
 import           Control.Monad.Cont        (ContT (ContT))
 
@@ -49,6 +52,13 @@ awaitRunInThread q act = do
     -- use barrier to wait for the result
     barrier <- newBarrier
     atomically $ writeTQueue q $ do
-        res <- act
-        signalBarrier barrier res
-    waitBarrier barrier
+        resultOrException <- try act
+        case resultOrException of
+            Left e -> case fromException e of
+                Just AsyncCancelled -> throwIO e  -- Rethrow if it's an AsyncCancelled exception
+                Nothing             -> signalBarrier barrier resultOrException  -- Handle other exceptions as before
+            Right _ -> signalBarrier barrier resultOrException
+    resultOrException <- waitBarrier barrier
+    case resultOrException of
+        Left e  -> throwIO (e :: SomeException)
+        Right r -> return r
