@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
+{-# OPTIONS_GHC -Wwarn #-}
 
 -- | Expression execution
 module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, propSetup, testCheck, asStatements,myExecStmt) where
