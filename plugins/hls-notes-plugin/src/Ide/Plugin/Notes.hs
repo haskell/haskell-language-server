@@ -79,7 +79,7 @@ jumpToNote state _ param
         let Position l c = param ^. L.position
         contents <-
             err "Error getting file contents"
-            =<< liftIO (runAction "notes.getfileContents" state (fmap snd (getFileModTimeContents nfp)))
+            =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
         line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
             (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
         let noteOpt = listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line

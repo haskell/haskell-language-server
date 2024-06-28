@@ -99,7 +99,8 @@ import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists              hiding (Log,
                                                                LogShake)
-import           Development.IDE.Core.FileStore               (getFileModTimeContents,
+import           Development.IDE.Core.FileStore               (getFileContents,
+                                                               getFileModTimeContents,
                                                                getModTime)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
@@ -221,7 +222,7 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
-    (_, msource) <- getFileModTimeContents nfp
+    msource <- getFileContents nfp
     case msource of
         Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
         Just source -> pure $ T.encodeUtf8 $ Rope.toText source

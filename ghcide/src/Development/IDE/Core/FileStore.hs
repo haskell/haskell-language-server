@@ -4,6 +4,8 @@
 
 module Development.IDE.Core.FileStore(
     getFileModTimeContents,
+    getFileContents,
+    getUriContents,
     getVersionedTextDoc,
     setFileModified,
     setSomethingModified,
@@ -205,6 +207,13 @@ getFileModTimeContents f = do
             posix <- getModTime $ fromNormalizedFilePath f
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
+
+getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
+getFileContents f = snd <$> use_ GetFileContents f
+
+getUriContents :: NormalizedUri -> Action (Maybe Rope)
+getUriContents uri =
+    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
 
 -- | Given a text document identifier, annotate it with the latest version.
 --

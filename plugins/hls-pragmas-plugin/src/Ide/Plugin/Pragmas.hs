@@ -79,7 +79,7 @@ mkCodeActionProvider mkSuggest state _plId
     -- ghc session to get some dynflags even if module isn't parsed
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
       runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
-    (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileModTimeContents normalizedFilePath
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
     parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
@@ -197,7 +197,7 @@ completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion ide _ complParams = do
     let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
         position@(Position ln col) = complParams ^. L.position
-    contents <- liftIO $ runAction "Pragmas.GetFileContents" ide $ maybe (pure Nothing) (fmap snd . getFileModTimeContents) $ LSP.uriToNormalizedFilePath $ toNormalizedUri uri
+    contents <- liftIO $ runAction "Pragmas.GetUriContents" ide $ getUriContents $ toNormalizedUri uri
     fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
             pure $ result $ getCompletionPrefixFromRope position cnts

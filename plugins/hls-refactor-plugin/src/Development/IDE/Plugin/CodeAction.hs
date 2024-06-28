@@ -41,7 +41,7 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
-import           Development.IDE.Core.FileStore                    (getFileModTimeContents)
+import           Development.IDE.Core.FileStore                    (getUriContents)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -123,14 +123,15 @@ import           GHC.Types.SrcLoc                                  (srcSpanToRea
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getFileModTimeContents" state $ maybe (pure Nothing) (fmap (fmap Rope.toText . snd) . getFileModTimeContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+  contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
-      actions = caRemoveRedundantImports parsedModule contents allDiags range uri
-               <> caRemoveInvalidExports parsedModule contents allDiags range uri
+      textContents = fmap Rope.toText contents
+      actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
+               <> caRemoveInvalidExports parsedModule textContents allDiags range uri
     pure $ InL actions
 
 -------------------------------------------------------------------------------------------------

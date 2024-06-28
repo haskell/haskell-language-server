@@ -64,8 +64,8 @@ insertPragmaIfNotPresent :: (MonadIO m)
 insertPragmaIfNotPresent state nfp pragma = do
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GhcSession" state
         $ useWithStaleE GhcSession nfp
-    (_, fileContents) <- liftIO $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
-        $ getFileModTimeContents nfp
+    fileContents <- liftIO $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
+        $ getFileContents nfp
     (pm, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
         $ useWithStaleE GetParsedModuleWithComments nfp
     let exts = getExtensions pm

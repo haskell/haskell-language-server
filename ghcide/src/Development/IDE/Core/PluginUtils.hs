@@ -189,7 +189,7 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
     provider m ide _pid params
       | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
-        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ fmap snd $ getFileModTimeContents nfp
+        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nfp
         case contentsMaybe of
           Just contents -> do
             let (typ, mtoken) = case m of

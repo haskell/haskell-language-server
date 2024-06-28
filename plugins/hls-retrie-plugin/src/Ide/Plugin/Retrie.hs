@@ -779,8 +779,8 @@ getCPPmodule recorder state session t = do
           return (fixities, parsed)
 
     contents <- do
-      (_, mbContentsVFS) <-
-        runAction "Retrie.GetFileContents" state $ getFileModTimeContents nt
+      mbContentsVFS <-
+        runAction "Retrie.GetFileContents" state $ getFileContents nt
       case mbContentsVFS of
         Just contents -> return $ Rope.toText contents
         Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)

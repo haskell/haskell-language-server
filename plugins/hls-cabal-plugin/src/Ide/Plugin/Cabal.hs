@@ -321,7 +321,7 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let (TextDocumentIdentifier uri) = complParams ^. JL.textDocument
       position = complParams ^. JL.position
-  mContents <- liftIO $ runAction "cabal-plugin.getFileModTimeContents" ide $ maybe (pure Nothing) (fmap snd . getFileModTimeContents) $ uriToNormalizedFilePath $ toNormalizedUri uri
+  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
   case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
