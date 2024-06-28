@@ -194,8 +194,7 @@ progressReporting (Just lspEnv) title optProgressStyle = do
   inProgressState <- newInProgress
   progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
                                 (readTVar $ doneVar inProgressState) (Just lspEnv) title optProgressStyle
-  let
-      inProgress :: forall a. NormalizedFilePath -> m a -> m a
+  let inProgress :: forall a. NormalizedFilePath -> m a -> m a
       inProgress = updateStateForFile inProgressState
   return ProgressReporting {..}
   where
