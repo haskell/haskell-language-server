@@ -48,8 +48,8 @@ data ProgressEvent
   | ProgressStarted
 
 data ProgressReporting = ProgressReporting
-  { progressUpdateI :: ProgressEvent -> IO (),
-    progressStopI   :: IO ()
+  { _progressUpdate :: ProgressEvent -> IO (),
+    _progressStop   :: IO ()
     -- ^ we are using IO here because creating and stopping the `ProgressReporting`
     -- is different from how we use it.
   }
@@ -66,12 +66,12 @@ class ProgressReporter a where
     progressStop :: a -> IO ()
 
 instance ProgressReporter ProgressReporting where
-    progressUpdate = progressUpdateI
-    progressStop = progressStopI
+    progressUpdate = _progressUpdate
+    progressStop = _progressStop
 
 instance ProgressReporter PerFileProgressReporting where
-    progressUpdate = progressUpdateI . progressReportingInner
-    progressStop = progressStopI . progressReportingInner
+    progressUpdate = _progressUpdate . progressReportingInner
+    progressStop = _progressStop . progressReportingInner
 
 {- Note [ProgressReporting API and InProgressState]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -88,8 +88,8 @@ The `inProgress` function is only useful when we are using `ProgressReporting`.
 
 noProgressReporting :: ProgressReporting
 noProgressReporting = ProgressReporting
-      { progressUpdateI = const $ pure (),
-        progressStopI = pure ()
+      { _progressUpdate = const $ pure (),
+        _progressStop = pure ()
       }
 noPerFileProgressReporting :: IO PerFileProgressReporting
 noPerFileProgressReporting =
@@ -165,8 +165,8 @@ progressReportingNoTrace ::
 progressReportingNoTrace _ _ Nothing _title _optProgressStyle = return noProgressReporting
 progressReportingNoTrace todo done (Just lspEnv) title optProgressStyle = do
   progressState <- newVar NotStarted
-  let progressUpdateI event = liftIO $ updateStateVar $ Event event
-      progressStopI = updateStateVar StopProgress
+  let _progressUpdate event = liftIO $ updateStateVar $ Event event
+      _progressStop = updateStateVar StopProgress
       updateStateVar = modifyVar_ progressState . updateState (progressCounter lspEnv title optProgressStyle todo done)
   return ProgressReporting {..}
 
