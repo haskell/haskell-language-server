@@ -6,6 +6,8 @@
 -- MR to add this function: https://gitlab.haskell.org/ghc/ghc/-/merge_requests/12891
 -- ============================================================================
 
+{-# LANGUAGE CPP   #-}
+
 module Development.IDE.GHC.Compat.Driver
     ( hscTypecheckRenameWithDiagnostics
     ) where
@@ -37,11 +39,21 @@ import GHC.Data.FastString
 import GHC.Data.Maybe
 import Control.Monad
 
+#if !MIN_VERSION_ghc(9,6,1)
+import Development.IDE.GHC.Compat.Core (hscTypecheckRename)
+import GHC.Utils.Error (emptyMessages)
+#endif
+
 hscTypecheckRenameWithDiagnostics :: HscEnv -> ModSummary -> HsParsedModule
                    -> IO ((TcGblEnv, RenamedStuff), Messages GhcMessage)
-hscTypecheckRenameWithDiagnostics hsc_env mod_summary rdr_module = runHsc' hsc_env $
-    hsc_typecheck True mod_summary (Just rdr_module)
+hscTypecheckRenameWithDiagnostics hsc_env mod_summary rdr_module =
+#if MIN_VERSION_ghc(9,6,1)
+    runHsc' hsc_env $ hsc_typecheck True mod_summary (Just rdr_module)
+#else
+    (,emptyMessages) <$> hscTypecheckRename hsc_env mod_summary rdr_module
+#endif
 
+#if MIN_VERSION_ghc(9,6,1)
 -- ============================================================================
 -- DO NOT EDIT - Refer to top of file
 -- ============================================================================
@@ -128,3 +140,4 @@ hscSimpleIface :: HscEnv
                -> IO (ModIface, ModDetails)
 hscSimpleIface hsc_env mb_core_program tc_result summary
     = runHsc hsc_env $ hscSimpleIface' mb_core_program tc_result summary
+#endif

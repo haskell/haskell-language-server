@@ -19,7 +19,9 @@ module Development.IDE.Types.Diagnostics (
   ideErrorFromLspDiag,
   showDiagnostics,
   showDiagnosticsColored,
+#if MIN_VERSION_ghc(9,6,1)
   showGhcCode,
+#endif
   IdeResultNoDiagnosticsEarlyCutoff,
   attachReason,
   attachedReason) where
@@ -35,7 +37,11 @@ import qualified Data.Text                      as T
 import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope, WarningFlag, wWarningFlags, flagSpecFlag, flagSpecName)
 import           Development.IDE.Types.Location
 import           GHC.Generics
-import           GHC.Types.Error                (diagnosticCode, DiagnosticCode (..), errMsgDiagnostic, DiagnosticReason(..), diagnosticReason)
+import           GHC.Types.Error                ( errMsgDiagnostic, DiagnosticReason(..), diagnosticReason
+#if MIN_VERSION_ghc(9,6,1)
+                                                , diagnosticCode, DiagnosticCode (..)
+#endif
+                                                )
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP
