@@ -45,7 +45,8 @@ withWorkerQueue workerAction = ContT $ \mainAction -> do
                 workerAction l
 
 -- | 'awaitRunInThread' queues up an 'IO' action to be run by a worker thread,
--- and then blocks until the result is computed.
+-- and then blocks until the result is computed. If the action throws an
+-- non-async exception, it is rethrown in the calling thread.
 awaitRunInThread :: TQueue (IO ()) -> IO result -> IO result
 awaitRunInThread q act = do
     -- Take an action from TQueue, run it and
