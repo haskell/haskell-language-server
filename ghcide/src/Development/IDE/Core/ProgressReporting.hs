@@ -62,7 +62,6 @@ data ProgressReporting m = ProgressReporting
     progressReportingInner :: ProgressReportingNoTrace m
   }
 
-
 class ProgressReportingClass a where
     type M a :: * -> *
     progressUpdate ::  a -> ProgressEvent -> M a ()
@@ -135,7 +134,6 @@ data InProgressState
         doneVar    :: TVar Int,
         currentVar :: STM.Map NormalizedFilePath Int
       }
-
 
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
