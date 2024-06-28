@@ -40,12 +40,12 @@ import           Development.IDE.Import.FindImports           (ArtifactsLocation
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
+import           GHC.Driver.Errors.Types                      (WarningMessages)
 import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
 import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
-import GHC.Driver.Errors.Types (WarningMessages)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)

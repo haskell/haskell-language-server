@@ -6,42 +6,43 @@
 -- MR to add this function: https://gitlab.haskell.org/ghc/ghc/-/merge_requests/12891
 -- ============================================================================
 
-{-# LANGUAGE CPP   #-}
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.GHC.Compat.Driver
     ( hscTypecheckRenameWithDiagnostics
     ) where
 
-import GHC.Driver.Main
-import GHC.Driver.Session
-import GHC.Driver.Env
-import GHC.Driver.Errors.Types
-import GHC.Hs
-import GHC.Hs.Dump
-import GHC.Iface.Ext.Ast    ( mkHieFile )
-import GHC.Iface.Ext.Types  ( getAsts, hie_asts, hie_module )
-import GHC.Iface.Ext.Binary ( readHieFile, writeHieFile , hie_file_result)
-import GHC.Iface.Ext.Debug  ( diffFile, validateScopes )
-import GHC.Core
-import GHC.Tc.Module
-import GHC.Tc.Utils.Monad
-import GHC.Unit
-import GHC.Unit.Module.ModDetails
-import GHC.Unit.Module.ModIface
-import GHC.Unit.Module.ModSummary
-import GHC.Types.SourceFile
-import GHC.Types.SrcLoc
-import GHC.Utils.Panic.Plain
-import GHC.Utils.Error
-import GHC.Utils.Outputable
-import GHC.Utils.Logger
-import GHC.Data.FastString
-import GHC.Data.Maybe
-import Control.Monad
+import           Control.Monad
+import           GHC.Core
+import           GHC.Data.FastString
+import           GHC.Data.Maybe
+import           GHC.Driver.Env
+import           GHC.Driver.Errors.Types
+import           GHC.Driver.Main
+import           GHC.Driver.Session
+import           GHC.Hs
+import           GHC.Hs.Dump
+import           GHC.Iface.Ext.Ast               (mkHieFile)
+import           GHC.Iface.Ext.Binary            (hie_file_result, readHieFile,
+                                                  writeHieFile)
+import           GHC.Iface.Ext.Debug             (diffFile, validateScopes)
+import           GHC.Iface.Ext.Types             (getAsts, hie_asts, hie_module)
+import           GHC.Tc.Module
+import           GHC.Tc.Utils.Monad
+import           GHC.Types.SourceFile
+import           GHC.Types.SrcLoc
+import           GHC.Unit
+import           GHC.Unit.Module.ModDetails
+import           GHC.Unit.Module.ModIface
+import           GHC.Unit.Module.ModSummary
+import           GHC.Utils.Error
+import           GHC.Utils.Logger
+import           GHC.Utils.Outputable
+import           GHC.Utils.Panic.Plain
 
 #if !MIN_VERSION_ghc(9,6,1)
-import Development.IDE.GHC.Compat.Core (hscTypecheckRename)
-import GHC.Utils.Error (emptyMessages)
+import           Development.IDE.GHC.Compat.Core (hscTypecheckRename)
+import           GHC.Utils.Error                 (emptyMessages)
 #endif
 
 hscTypecheckRenameWithDiagnostics :: HscEnv -> ModSummary -> HsParsedModule
@@ -78,7 +79,7 @@ hsc_typecheck keep_rn mod_summary mb_rdr_module = do
         else
          do hpm <- case mb_rdr_module of
                     Just hpm -> return hpm
-                    Nothing -> hscParse' mod_summary
+                    Nothing  -> hscParse' mod_summary
             tc_result0 <- tcRnModule' mod_summary keep_rn' hpm
             if hsc_src == HsigFile
                 then do (iface, _) <- liftIO $ hscSimpleIface hsc_env Nothing tc_result0 mod_summary

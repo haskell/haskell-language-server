@@ -15,10 +15,10 @@ module Ide.Plugin.Pragmas
   , AppearWhere(..)
   ) where
 
-import qualified Data.Aeson as JSON
 import           Control.Lens                             hiding (List)
 import           Control.Monad.IO.Class                   (MonadIO (liftIO))
 import           Control.Monad.Trans.Class                (lift)
+import qualified Data.Aeson                               as JSON
 import           Data.Char                                (isAlphaNum)
 import           Data.List.Extra                          (nubOrdOn)
 import qualified Data.Map                                 as M

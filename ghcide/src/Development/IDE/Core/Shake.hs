@@ -82,7 +82,7 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
-import           Control.Lens                           ((&), (?~), (%~), over)
+import           Control.Lens                           (over, (%~), (&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
