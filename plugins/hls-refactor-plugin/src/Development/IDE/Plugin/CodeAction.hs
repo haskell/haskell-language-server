@@ -96,8 +96,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
-                                                                    uriToFilePath,
-                                                                    uriToNormalizedFilePath)
+                                                                    uriToFilePath)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
