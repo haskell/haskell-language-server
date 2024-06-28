@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.Cabal (descriptor, Log (..)) where
+module Ide.Plugin.Cabal (descriptor, haskellFilesDescriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -53,6 +53,8 @@ import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
 
+import Debug.Trace
+
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
   | LogShake Shake.Log
@@ -87,6 +89,18 @@ instance Pretty Log where
         <+> pretty position
     LogCompletions logs -> pretty logs
 
+
+haskellFilesDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+haskellFilesDescriptor recorder plId =
+  (defaultPluginDescriptor plId "Provides the cabal-add code action in haskell files")
+    { pluginHandlers =
+        mconcat
+          [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
+          ]
+    , pluginRules = pure () -- TODO: change to haskell files only (?)
+    , pluginNotificationHandlers = mempty
+    }
+
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
   (defaultCabalPluginDescriptor plId "Provides a variety of IDE features in cabal files")
@@ -94,6 +108,7 @@ descriptor recorder plId =
     , pluginHandlers =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
+          -- , mkPluginHandler LSP.SMethod_TextDocumentCodeAction cabalAddCodeAction
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
@@ -308,6 +323,12 @@ gotoDefinition ideState _ msgParam = do
       uri = msgParam ^. JL.textDocument . JL.uri
       isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
       isSectionArgName _ _ = False
+
+cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+cabalAddCodeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
+    let diags = context ^. JL.diagnostics
+    traceShowM ("cabalAddCodeAction diags ", diags)
+    pure $ InL []
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
