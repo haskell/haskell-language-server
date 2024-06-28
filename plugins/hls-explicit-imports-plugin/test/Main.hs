@@ -115,7 +115,9 @@ codeActionAllGoldenTest fp l c = goldenWithImportActions " code action" fp codeA
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
 codeActionBreakFile :: FilePath -> Int -> Int -> TestTree
-codeActionBreakFile fp l c = goldenWithImportActions " code action" fp codeActionNoResolveCaps $ \doc -> do
+-- If use `codeActionNoResolveCaps` instead of `codeActionNoInlayHintsCaps` here,
+-- we will get a puzzling error: https://github.com/haskell/haskell-language-server/pull/4235#issuecomment-2189048997
+codeActionBreakFile fp l c = goldenWithImportActions " code action" fp codeActionNoInlayHintsCaps $ \doc -> do
   _ <- getCodeLenses doc
   changeDoc doc [edit]
   actions <- getCodeActions doc (pointRange l c)
