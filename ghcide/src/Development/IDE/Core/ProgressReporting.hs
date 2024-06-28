@@ -83,16 +83,13 @@ instance ProgressReportingClass (ProgressReporting m) where
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The progress of tasks can be tracked in two ways:
 
-1. `InProgressState`: This is an internal state that actively tracks the progress.
+1. `ProgressReporting`: we have an internal state that actively tracks the progress.
    Changes to the progress are made directly to this state.
 
-2. `InProgressStateOutSide`: This is an external state that tracks the progress.
+2. `ProgressReportingNoTrace`: there is an external state that tracks the progress.
    The external state is converted into an STM Int for the purpose of reporting progress.
 
-The `inProgress` function is only useful when we are using `InProgressState`.
-
-An alternative design could involve using GADTs to eliminate this discrepancy between
-`InProgressState` and `InProgressStateOutSide`.
+The `inProgress` function is only useful when we are using `ProgressReporting`.
 -}
 
 noProgressReportingNoTrace :: (MonadUnliftIO m) => (ProgressReportingNoTrace m)
