@@ -7,10 +7,12 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2024-06-13T17:12:34Z
+index-state: 2024-07-20T00:00:00Z
 
 tests: True
 test-show-details: direct
+
+benchmarks: True
 
 write-ghc-environment-files: never
 
@@ -40,12 +42,6 @@ constraints:
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
 
-
-
 if impl(ghc >= 9.9)
-  allow-newer:
-    haddock-library:base,
-    haddock-library:containers,
+  -- https://github.com/haskell/haskell-language-server/issues/4324
   benchmarks: False
-else
-  benchmarks: True

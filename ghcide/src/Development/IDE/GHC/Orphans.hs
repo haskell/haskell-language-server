@@ -17,20 +17,17 @@ import           Data.Hashable
 import           Data.String                       (IsString (fromString))
 import           Data.Text                         (unpack)
 
+import           Data.Bifunctor                    (Bifunctor (..))
 import           GHC.ByteCode.Types
 import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer             as SB
-import           GHC.Types.SrcLoc
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           Data.Bifunctor                    (Bifunctor (..))
 import           GHC.Parser.Annotation
+import           GHC.Types.SrcLoc
 
 import           GHC.Types.PkgQual
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo

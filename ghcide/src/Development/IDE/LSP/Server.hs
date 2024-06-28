@@ -41,7 +41,7 @@ requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params
       trace x = otTracedHandler "Request" (show _method) $ \sp -> do
         traceWithSpan sp _params
         x
-  writeChan chan $ ReactorRequest (_id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
+  writeChan chan $ ReactorRequest _id (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
 notificationHandler
   :: forall m c. PluginMethod Notification m =>

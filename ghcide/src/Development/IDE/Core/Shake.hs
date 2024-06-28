@@ -126,6 +126,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater,
                                                          initNameCache,
                                                          knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
@@ -172,10 +173,6 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -242,11 +239,10 @@ instance Pretty Log where
 -- a worker thread.
 data HieDbWriter
   = HieDbWriter
-  { indexQueue         :: IndexQueue
-  , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
-  , indexCompleted     :: TVar Int -- ^ to report progress
-  , indexProgressToken :: Var (Maybe LSP.ProgressToken)
-  -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
+  { indexQueue             :: IndexQueue
+  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted         :: TVar Int -- ^ to report progress
+  , indexProgressReporting :: ProgressReporting IO
   }
 
 -- | Actions to queue up on the index worker thread
@@ -296,7 +292,7 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumulation to the current version.
-    ,progress :: ProgressReporting
+    ,progress :: ProgressReporting Action
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
@@ -678,7 +674,10 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         semanticTokensId <- newTVarIO 0
-        indexProgressToken <- newVar Nothing
+        indexProgressReporting <- progressReportingOutsideState
+            (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
+            (readTVar indexCompleted)
+            lspEnv "Indexing" optProgressStyle
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
@@ -691,7 +690,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
 
         progress <-
             if reportProgress
-                then progressReporting lspEnv optProgressStyle
+                then progressReporting lspEnv "Processing" optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
@@ -756,6 +755,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
+    progressStop $ indexProgressReporting $ hiedbWriter shakeExtras
     stopMonitoring
 
 

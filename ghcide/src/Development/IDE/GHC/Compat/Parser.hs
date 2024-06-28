@@ -34,12 +34,8 @@ import           GHC                             (EpaCommentTok (..),
                                                   pm_mod_summary,
                                                   pm_parsed_source)
 import qualified GHC
-import           GHC.Hs                          (hpm_module, hpm_src_files)
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 import qualified GHC.Driver.Config.Parser        as Config
+import           GHC.Hs                          (hpm_module, hpm_src_files)
 
 
 

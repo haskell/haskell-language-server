@@ -61,7 +61,7 @@ withTelemetryRecorder k = withSpan "Logger" $ \sp ->
 -- | Returns a logger that produces telemetry events in a single span.
 telemetryLogRecorder :: SpanInFlight -> Recorder (WithPriority (Doc a))
 telemetryLogRecorder sp = Recorder $ \WithPriority {..} ->
-  liftIO $ addEvent sp (fromString $ show priority) (encodeUtf8 $ trim $ renderStrict $ layoutCompact $ payload)
+  liftIO $ addEvent sp (fromString $ show priority) (encodeUtf8 $ trim $ renderStrict $ layoutCompact payload)
   where
     -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
     trim = T.take (fromIntegral(maxBound :: Word16) - 10)
