@@ -1,9 +1,9 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE CPP #-}
 
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
@@ -28,20 +28,22 @@ module Development.IDE.Types.Diagnostics (
 
 import           Control.DeepSeq
 import           Control.Lens
-import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Lens as JSON
+import qualified Data.Aeson                     as JSON
+import qualified Data.Aeson.Lens                as JSON
 import           Data.ByteString                (ByteString)
 import           Data.List
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope, WarningFlag, wWarningFlags, flagSpecFlag, flagSpecName)
+import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope,
+                                                 WarningFlag, flagSpecFlag,
+                                                 flagSpecName, wWarningFlags)
 import           Development.IDE.Types.Location
 import           GHC.Generics
-import           GHC.Types.Error                ( errMsgDiagnostic, DiagnosticReason(..), diagnosticReason
-#if MIN_VERSION_ghc(9,6,1)
-                                                , diagnosticCode, DiagnosticCode (..)
-#endif
-                                                )
+import           GHC.Types.Error                (DiagnosticCode (..),
+                                                 DiagnosticReason (..),
+                                                 diagnosticCode,
+                                                 diagnosticReason,
+                                                 errMsgDiagnostic)
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP
@@ -80,7 +82,7 @@ ideErrorFromLspDiag lspDiag fdFilePath origMsg =
   let fdShouldShowDiagnostic = ShowDiag
       fdStructuredMessage =
         case origMsg of
-          Nothing -> NoStructuredMessage
+          Nothing  -> NoStructuredMessage
           Just msg -> SomeStructuredMessage msg
       fdLspDiagnostic = (attachReason (fmap (diagnosticReason . errMsgDiagnostic) origMsg) lspDiag)
 #if MIN_VERSION_ghc(9,6,1)
@@ -161,22 +163,22 @@ data StructuredMessage
   deriving (Generic)
 
 instance Show StructuredMessage where
-  show NoStructuredMessage = "NoStructuredMessage"
+  show NoStructuredMessage      = "NoStructuredMessage"
   show SomeStructuredMessage {} = "SomeStructuredMessage"
 
 instance Eq StructuredMessage where
-  (==) NoStructuredMessage NoStructuredMessage = True
+  (==) NoStructuredMessage NoStructuredMessage           = True
   (==) SomeStructuredMessage {} SomeStructuredMessage {} = True
-  (==) _ _ = False
+  (==) _ _                                               = False
 
 instance Ord StructuredMessage where
-  compare NoStructuredMessage NoStructuredMessage = EQ
+  compare NoStructuredMessage NoStructuredMessage           = EQ
   compare SomeStructuredMessage {} SomeStructuredMessage {} = EQ
-  compare NoStructuredMessage SomeStructuredMessage {} = GT
-  compare SomeStructuredMessage {} NoStructuredMessage = LT
+  compare NoStructuredMessage SomeStructuredMessage {}      = GT
+  compare SomeStructuredMessage {} NoStructuredMessage      = LT
 
 instance NFData StructuredMessage where
-  rnf NoStructuredMessage = ()
+  rnf NoStructuredMessage      = ()
   rnf SomeStructuredMessage {} = ()
 
 -- | Human readable diagnostics for a specific file.
@@ -189,14 +191,14 @@ instance NFData StructuredMessage where
 --   StructuredMessage.
 --
 data FileDiagnostic = FileDiagnostic
-  { fdFilePath :: NormalizedFilePath
+  { fdFilePath             :: NormalizedFilePath
   , fdShouldShowDiagnostic :: ShowDiagnostic
-  , fdLspDiagnostic :: Diagnostic
+  , fdLspDiagnostic        :: Diagnostic
     -- | The optional GhcMessage inside of this StructuredMessage is ignored for
     -- Eq, Ord, Show, and NFData instances. This is fine because this field
     -- should only ever be metadata and should never be used to distinguish
     -- between FileDiagnostics.
-  , fdStructuredMessage :: StructuredMessage
+  , fdStructuredMessage    :: StructuredMessage
   }
   deriving (Eq, Ord, Show, Generic)
 
@@ -233,8 +235,8 @@ prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagn
         , slabel_ "Severity:" $ pretty $ show sev
         , slabel_ "Code:    " $ case _code of
                                   Just (InR text) -> pretty text
-                                  Just (InL i) -> pretty i
-                                  Nothing -> "<none>"
+                                  Just (InL i)    -> pretty i
+                                  Nothing         -> "<none>"
         , slabel_ "Message: "
             $ case sev of
               LSP.DiagnosticSeverity_Error       -> annotate $ color Red

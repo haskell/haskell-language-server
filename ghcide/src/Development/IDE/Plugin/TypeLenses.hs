@@ -26,11 +26,12 @@ import           Data.List                            (find)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (catMaybes, maybeToList)
 import qualified Data.Text                            as T
-import           Development.IDE                      (GhcSession (..),
+import           Development.IDE                      (FileDiagnostic (..),
+                                                       GhcSession (..),
                                                        HscEnvEq (hscEnv),
                                                        RuleResult, Rules, Uri,
                                                        define, srcSpanToRange,
-                                                       usePropertyAction, FileDiagnostic (..))
+                                                       usePropertyAction)
 import           Development.IDE.Core.Compile         (TcModuleResult (..))
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,

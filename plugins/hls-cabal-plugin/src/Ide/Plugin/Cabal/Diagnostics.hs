@@ -11,21 +11,22 @@ module Ide.Plugin.Cabal.Diagnostics
 )
 where
 
-import           Control.Lens                ((.~), (&))
-import qualified Data.Text                   as T
-import           Development.IDE             (FileDiagnostic,
-                                              ShowDiagnostic (ShowDiag))
-import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL, ideErrorWithSource)
-import           Distribution.Fields         (showPError, showPWarning)
-import qualified Distribution.Parsec         as Syntax
-import           Ide.PluginUtils             (extendNextLine)
-import           Language.LSP.Protocol.Types (Diagnostic (..),
-                                              DiagnosticSeverity (..),
-                                              NormalizedFilePath,
-                                              Position (Position),
-                                              Range (Range),
-                                              fromNormalizedFilePath)
-import           Language.LSP.Protocol.Lens   (range)
+import           Control.Lens                      ((&), (.~))
+import qualified Data.Text                         as T
+import           Development.IDE                   (FileDiagnostic,
+                                                    ShowDiagnostic (ShowDiag))
+import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL,
+                                                    ideErrorWithSource)
+import           Distribution.Fields               (showPError, showPWarning)
+import qualified Distribution.Parsec               as Syntax
+import           Ide.PluginUtils                   (extendNextLine)
+import           Language.LSP.Protocol.Lens        (range)
+import           Language.LSP.Protocol.Types       (Diagnostic (..),
+                                                    DiagnosticSeverity (..),
+                                                    NormalizedFilePath,
+                                                    Position (Position),
+                                                    Range (Range),
+                                                    fromNormalizedFilePath)
 
 -- | Produce a diagnostic for a fatal Cabal parser error.
 fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic

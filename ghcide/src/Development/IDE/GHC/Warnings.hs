@@ -6,12 +6,12 @@
 module Development.IDE.GHC.Warnings(withWarnings) where
 
 import           Control.Concurrent.Strict
-import           Control.Lens (over)
+import           Control.Lens                      (over)
 import qualified Data.Text                         as T
 
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Types.Diagnostics
 import           Development.IDE.GHC.Error
+import           Development.IDE.Types.Diagnostics
 
 {-
  NOTE on withWarnings and its dangers
