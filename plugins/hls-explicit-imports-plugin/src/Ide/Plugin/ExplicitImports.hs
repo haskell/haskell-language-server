@@ -148,7 +148,7 @@ lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_
     -- Code lens are not provided when the client supports inlay hints,
     -- otherwise it will be provided as a fallback
     if isInlayHintsSupported state
-    then do pure $ InL []
+    then pure $ InL []
     else do
         nfp <- getNormalizedFilePathE _uri
         (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
@@ -192,7 +192,7 @@ lensResolveProvider _ _ _ _ _ rd = do
 -- There is currently no need to resolve inlay hints,
 -- as no tooltips or commands are provided in the label.
 inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
-inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} = do
+inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} =
     if isInlayHintsSupported state
     then do
         nfp <- getNormalizedFilePathE _uri
@@ -205,7 +205,7 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
         pure $ InL inlayHints
     -- When the client does not support inlay hints, fallback to the code lens,
     -- so this is Null
-    else do pure $ InR Null
+    else pure $ InR Null
   where
     -- The appropriate and intended position for the hint hints to begin
     -- is the end of the range for the code lens.
@@ -226,7 +226,7 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                 }
     mkLabel :: ImportEdit -> T.Text
     mkLabel (ImportEdit{ieResType, ieText}) =
-      let title ExplicitImport = abbreviateImportTitle . T.dropWhile (/= '(') $ ieText
+      let title ExplicitImport = abbreviateImportTitleWithoutModule ieText
           title RefineImport   = "Refine imports to " <> T.intercalate ", " (T.lines ieText)
       in title ieResType
 
