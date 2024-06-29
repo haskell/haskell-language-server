@@ -26,6 +26,7 @@ module Development.IDE.Types.Diagnostics (
   attachReason,
   attachedReason) where
 
+import           Control.Applicative            ((<|>))
 import           Control.DeepSeq
 import           Control.Lens
 import qualified Data.Aeson                     as JSON
@@ -78,19 +79,31 @@ ideErrorFromLspDiag
   -> NormalizedFilePath
   -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
-ideErrorFromLspDiag lspDiag fdFilePath origMsg =
+ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
   let fdShouldShowDiagnostic = ShowDiag
       fdStructuredMessage =
-        case origMsg of
+        case mbOrigMsg of
           Nothing  -> NoStructuredMessage
           Just msg -> SomeStructuredMessage msg
-      fdLspDiagnostic = (attachReason (fmap (diagnosticReason . errMsgDiagnostic) origMsg) lspDiag)
-#if MIN_VERSION_ghc(9,6,1)
-        { _code = fmap (InR . showGhcCode) . diagnosticCode . errMsgDiagnostic =<< origMsg
-        }
-#endif
+      fdLspDiagnostic =
+        lspDiag
+          & attachReason (fmap (diagnosticReason . errMsgDiagnostic) mbOrigMsg)
+          & setGhcCode mbOrigMsg
   in
   FileDiagnostic {..}
+
+setGhcCode :: Maybe (MsgEnvelope GhcMessage) -> LSP.Diagnostic -> LSP.Diagnostic
+#if MIN_VERSION_ghc(9,6,1)
+setGhcCode mbOrigMsg diag =
+  let mbGhcCode = do
+          origMsg <- mbOrigMsg
+          code <- diagnosticCode (errMsgDiagnostic origMsg)
+          pure (InR (showGhcCode code))
+  in
+  diag { _code = mbGhcCode <|> _code diag }
+#else
+setGhcCode _ diag = diag
+#endif
 
 #if MIN_VERSION_ghc(9,10,1)
 -- DiagnosticCode only got a show instance in 9.10.1
