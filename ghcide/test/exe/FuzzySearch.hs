@@ -73,7 +73,7 @@ dictionary = unsafePerformIO $ do
     then map pack . words <$> readFile dictionaryPath
     else pure []
 
-referenceImplementation ::
+referenceImplementation :: forall s t.
   (T.TextualMonoid s) =>
   -- | Pattern in lowercase except for first character
   s ->
