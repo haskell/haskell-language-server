@@ -54,12 +54,9 @@ awaitRunInThread q act = do
     barrier <- newBarrier
     atomically $ writeTQueue q $ do
         resultOrException <- try act
-        let result
-                -- Rethrow if it's an AsyncCancelled exception
-                -- we need to do this because we can handled the exit of the worker thread
-                | Left e <- resultOrException, Just AsyncCancelled <- fromException e = throwIO e
-                | otherwise = signalBarrier barrier resultOrException
-        result
+        case resultOrException of
+            Left e@(fromException -> Just AsyncCancelled) -> throwIO e
+            _ -> signalBarrier barrier resultOrException
     resultOrException <- waitBarrier barrier
     case resultOrException of
         Left e  -> throwIO (e :: SomeException)
