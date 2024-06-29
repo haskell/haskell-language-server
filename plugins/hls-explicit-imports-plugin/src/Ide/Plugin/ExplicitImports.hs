@@ -220,7 +220,7 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                 , _kind = Just InlayHintKind_Type -- for type annotations
                 , _textEdits = fmap singleton $ toTEdit pm ie
                 , _tooltip = Nothing
-                , _paddingLeft = Just True
+                , _paddingLeft = Just True -- show an extra space before the inlay hint
                 , _paddingRight = Nothing
                 , _data_ = Nothing
                 }
