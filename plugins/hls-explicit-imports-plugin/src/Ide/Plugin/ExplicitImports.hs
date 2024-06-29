@@ -16,7 +16,7 @@ module Ide.Plugin.ExplicitImports
   ) where
 
 import           Control.DeepSeq
-import           Control.Lens                         ((&), (?~))
+import           Control.Lens                         (_Just, (&), (?~), (^?))
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
@@ -30,7 +30,8 @@ import qualified Data.IntMap                          as IM (IntMap, elems,
 import           Data.IORef                           (readIORef)
 import           Data.List                            (singleton)
 import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (isNothing, mapMaybe)
+import           Data.Maybe                           (isJust, isNothing,
+                                                       mapMaybe)
 import qualified Data.Set                             as S
 import           Data.String                          (fromString)
 import qualified Data.Text                            as T
@@ -55,11 +56,11 @@ import qualified Ide.Plugin.RangeMap                  as RM (RangeMap,
 import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types
+import           Language.LSP.Protocol.Lens           (HasInlayHint (inlayHint),
+                                                       HasTextDocument (textDocument))
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types          as LSP
-import qualified Language.LSP.Server                  as LSP
 
 -- This plugin is named explicit-imports for historical reasons. Besides
 -- providing code actions and lenses to make imports explicit it also provides
@@ -111,12 +112,10 @@ descriptorForModules recorder modFilter plId =
         <> codeActionHandlers
     }
 
-isInlayHintsSupported :: Applicative f => IdeState -> f Bool
-isInlayHintsSupported ideState = do
+isInlayHintsSupported :: IdeState -> Bool
+isInlayHintsSupported ideState =
   let clientCaps = Shake.clientCapabilities $ shakeExtras ideState
-  pure $ case clientCaps of
-    LSP.ClientCapabilities{_textDocument = Just LSP.TextDocumentClientCapabilities{_inlayHint = Just _}} -> True
-    _ -> False
+   in isJust $ clientCaps ^? textDocument . _Just . inlayHint . _Just
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
@@ -148,8 +147,7 @@ lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Met
 lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
     -- Code lens are not provided when the client supports inlay hints,
     -- otherwise it will be provided as a fallback
-    isIHSupported <- liftIO $ isInlayHintsSupported state
-    if isIHSupported
+    if isInlayHintsSupported state
     then do pure $ InL []
     else do
         nfp <- getNormalizedFilePathE _uri
@@ -195,8 +193,7 @@ lensResolveProvider _ _ _ _ _ rd = do
 -- as no tooltips or commands are provided in the label.
 inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} = do
-    isIHSupported <- liftIO $ isInlayHintsSupported state
-    if isIHSupported
+    if isInlayHintsSupported state
     then do
         nfp <- getNormalizedFilePathE _uri
         (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
