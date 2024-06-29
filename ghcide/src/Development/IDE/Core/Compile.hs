@@ -38,7 +38,6 @@ module Development.IDE.Core.Compile
   , shareUsages
   ) where
 
-import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats           hiding (orElse)
 import           Control.DeepSeq                        (NFData (..), force,
                                                          rnf)
@@ -72,8 +71,7 @@ import           Data.Tuple.Extra                       (dupe)
 import           Debug.Trace
 import           Development.IDE.Core.FileStore         (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
-import           Development.IDE.Core.ProgressReporting (ProgressReporting (..),
-                                                         progressReportingOutsideState)
+import           Development.IDE.Core.ProgressReporting (ProgressReporting (..))
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing           (withTrace)
