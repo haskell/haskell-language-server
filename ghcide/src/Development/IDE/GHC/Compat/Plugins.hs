@@ -52,12 +52,12 @@ initializePlugins :: HscEnv -> IO HscEnv
 initializePlugins env = do
     Loader.initializePlugins env
 
--- | Plugins aren't stored in ModSummary anymore since GHC 9.2, but this
--- function still returns it for compatibility with 8.10
-initPlugins :: HscEnv -> ModSummary -> IO (ModSummary, HscEnv)
+-- | Plugins aren't stored in ModSummary anymore since GHC 9.2, so this
+-- function not returns ModSummary
+initPlugins :: HscEnv -> ModSummary -> IO HscEnv
 initPlugins session modSummary = do
     session1 <- initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return (modSummary{ms_hspp_opts = hsc_dflags session1}, session1)
+    return session1
 
 hsc_static_plugins :: HscEnv -> [StaticPlugin]
 hsc_static_plugins = staticPlugins . Env.hsc_plugins
