@@ -65,6 +65,7 @@ replaceAt t i c =
 dictionaryPath :: FilePath
 dictionaryPath = "/usr/share/dict/words"
 
+{-# ANN dictionary "HLint: ignore Avoid restricted function" #-}
 {-# NOINLINE dictionary #-}
 dictionary :: [Text]
 dictionary = unsafePerformIO $ do
