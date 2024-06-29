@@ -1,9 +1,8 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
-{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
--- |Debug utilities
+-- | Debug utilities
 module Ide.Plugin.Eval.Util (
     timed,
     isLiterate,
@@ -15,38 +14,30 @@ module Ide.Plugin.Eval.Util (
 
 import           Control.Exception                     (SomeException, evaluate,
                                                         fromException)
-import           Control.Monad.Error.Class             (MonadError (throwError))
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Class             (MonadTrans (lift))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
 import           Data.Aeson                            (Value)
-import           Data.Bifunctor                        (second)
 import           Data.String                           (IsString (fromString))
-import qualified Data.Text                             as T
-import           Development.IDE                       (IdeState,
-                                                        printOutputable)
-import qualified Development.IDE.Core.PluginUtils      as PluginUtils
-import qualified Development.IDE.GHC.Compat.Core       as Core
-import qualified Development.IDE.GHC.Compat.Core       as SrcLoc
 import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Compat.Util       (MonadCatch, bagToList,
                                                         catch)
-import           GHC.Exts                              (toList)
-import           GHC.Stack                             (HasCallStack, callStack,
-                                                        srcLocFile,
-                                                        srcLocStartCol,
-                                                        srcLocStartLine)
 import           Ide.Plugin.Error
 import           Ide.Types                             (HandlerM,
                                                         pluginSendRequest)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 import           System.FilePath                       (takeExtension)
 import qualified System.Time.Extra                     as Extra
-import           System.Time.Extra                     (duration, showDuration)
+import           System.Time.Extra                     (duration)
 import           UnliftIO.Exception                    (catchAny)
+
+#if !MIN_VERSION_ghc(9,8,0)
+import qualified Data.Text                             as T
+import           Development.IDE                       (printOutputable)
+import qualified Development.IDE.GHC.Compat.Core       as Core
+#endif
 
 timed :: MonadIO m => (t -> Extra.Seconds -> m a) -> t -> m b -> m b
 timed out name op = do
@@ -107,6 +98,6 @@ prettyWarnings = unlines . map prettyWarn
 
 prettyWarn :: Core.Warn -> String
 prettyWarn Core.Warn{..} =
-    T.unpack (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
-    <> "    " <> SrcLoc.unLoc warnMsg
+    T.unpack (printOutputable $ Core.getLoc warnMsg) <> ": warning:\n"
+    <> "    " <> Core.unLoc warnMsg
 #endif
