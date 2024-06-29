@@ -223,7 +223,7 @@ mkInlayHint pos label textEdit =
   InlayHint
   { _position = pos
   , _label = InL label
-  , _kind = Just InlayHintKind_Type
+  , _kind = Nothing
   , _textEdits = Just [textEdit]
   , _tooltip = Nothing
   , _paddingLeft = Just True
