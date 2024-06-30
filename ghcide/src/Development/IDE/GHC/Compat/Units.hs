@@ -52,10 +52,17 @@ import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 import           Prelude                               hiding (mod)
 
+import           Control.Monad
+import qualified Data.List.NonEmpty                    as NE
+import qualified Data.Map.Strict                       as Map
+import qualified GHC
 import qualified GHC.Data.ShortText                    as ST
+import qualified GHC.Driver.Session                    as DynFlags
+import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
 import           GHC.Types.Unique.Set
 import           GHC.Unit.External
 import qualified GHC.Unit.Finder                       as GHC
+import           GHC.Unit.Home.ModInfo
 import qualified GHC.Unit.Info                         as UnitInfo
 import           GHC.Unit.State                        (LookupResult, UnitInfo,
                                                         UnitInfoMap,
@@ -67,17 +74,6 @@ import           GHC.Unit.State                        (LookupResult, UnitInfo,
                                                         unitPackageVersion)
 import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           Control.Monad
-import qualified Data.List.NonEmpty                    as NE
-import qualified Data.Map.Strict                       as Map
-import qualified GHC
-import qualified GHC.Driver.Session                    as DynFlags
-import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
-import           GHC.Unit.Home.ModInfo
 
 
 type PreloadUnitClosure = UniqSet UnitId
@@ -91,7 +87,7 @@ createUnitEnvFromFlags unitDflags =
     newInternalUnitEnv dflags = mkHomeUnitEnv dflags emptyHomePackageTable Nothing
     unitEnvList = NE.map (\dflags -> (homeUnitId_ dflags, newInternalUnitEnv dflags)) unitDflags
   in
-    unitEnv_new (Map.fromList (NE.toList (unitEnvList)))
+    unitEnv_new (Map.fromList (NE.toList unitEnvList))
 
 initUnits :: [DynFlags] -> HscEnv -> IO HscEnv
 initUnits unitDflags env = do

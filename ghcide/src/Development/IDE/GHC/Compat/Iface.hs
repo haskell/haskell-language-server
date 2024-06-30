@@ -9,12 +9,11 @@ module Development.IDE.GHC.Compat.Iface (
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 import           GHC
+import           GHC.Driver.Session                    (targetProfile)
 import qualified GHC.Iface.Load                        as Iface
 import           GHC.Unit.Finder.Types                 (FindResult)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import           GHC.Driver.Session                    (targetProfile)
 
 #if MIN_VERSION_ghc(9,7,0)
 import           GHC.Iface.Errors.Ppr                  (missingInterfaceErrorDiagnostic)
