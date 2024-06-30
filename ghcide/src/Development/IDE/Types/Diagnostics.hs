@@ -40,11 +40,17 @@ import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope,
                                                  flagSpecName, wWarningFlags)
 import           Development.IDE.Types.Location
 import           GHC.Generics
+#if MIN_VERSION_ghc(9,6,1)
 import           GHC.Types.Error                (DiagnosticCode (..),
                                                  DiagnosticReason (..),
                                                  diagnosticCode,
                                                  diagnosticReason,
                                                  errMsgDiagnostic)
+#else
+import           GHC.Types.Error                (DiagnosticReason (..),
+                                                 diagnosticReason,
+                                                 errMsgDiagnostic)
+#endif
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP
