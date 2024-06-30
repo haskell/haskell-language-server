@@ -835,11 +835,12 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
 #if MIN_VERSION_ghc(9,8,0)
-      pat multiple _ _ _ = T.concat [ ".*Defaulting the type variable "
+      pat multiple at _ _ = T.concat [ ".*Defaulting the type variable "
                                        , ".*to type ‘([^ ]+)’ "
                                        , "in the following constraint"
                                        , if multiple then "s" else " "
                                        , ".*arising from the literal ‘(.+)’"
+                                       , if at then ".+at ([^ ]*)" else ""
                                        ]
 #else
 #if MIN_VERSION_ghc(9,4,0)
