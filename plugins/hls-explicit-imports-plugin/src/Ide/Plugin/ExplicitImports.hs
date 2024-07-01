@@ -148,6 +148,7 @@ lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_
     -- Code lens are not provided when the client supports inlay hints,
     -- otherwise it will be provided as a fallback
     if isInlayHintsSupported state
+    -- `[]` is no different from `null`, we chose to use all `[]` to indicate "no information"
     then pure $ InL []
     else do
         nfp <- getNormalizedFilePathE _uri
@@ -204,8 +205,8 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                          , Just ie <- [forResolve IM.!? int]]
         pure $ InL inlayHints
     -- When the client does not support inlay hints, fallback to the code lens,
-    -- so this is Null
-    else pure $ InR Null
+    -- so there is nothing to response here, return `[]` to indicate "no information"
+    else pure $ InL []
   where
     -- The appropriate and intended position for the hint hints to begin
     -- is the end of the range for the code lens.
