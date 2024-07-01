@@ -14,24 +14,16 @@ import           Language.LSP.Protocol.Types (CodeAction (CodeAction),
 import           Text.Regex.TDFA
 
 
-missingDependenciesAction
-  :: Int
-  -> Uri
-  -> Diagnostic
-  -> [CodeAction]
+missingDependenciesAction :: Int -> Uri -> Diagnostic -> [CodeAction]
 missingDependenciesAction maxCompletions uri diag =
   mkCodeAction <$> missingDependenciesSuggestion maxCompletions (_message diag)
   where
     mkCodeAction suggestedDep =
       let
         title = "Add dependency " <> suggestedDep
-      in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing (Nothing) Nothing Nothing
+      in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Nothing) Nothing
 
-missingDependenciesSuggestion
-  :: Int
-  -> T.Text
-  -> [T.Text]
-
+missingDependenciesSuggestion :: Int -> T.Text -> [T.Text]
 missingDependenciesSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
     regex :: T.Text
@@ -45,3 +37,11 @@ hiddenPackageAction
   -> Diagnostic
   -> [CodeAction]
 hiddenPackageAction = undefined
+
+hiddenPackageSuggestion :: Int -> T.Text -> [T.Text]
+hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
+  where
+    regex :: T.Text
+    regex = "It is a member of the package '.*'\nwhich is unusable due to missing dependencies:[\n ]*([:word:-.]*)"
+    getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
+    getMatch (_, _, _, results) = results
