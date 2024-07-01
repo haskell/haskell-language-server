@@ -45,6 +45,7 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
+import qualified GHC.Runtime.Loader                as Loader
 import qualified GHC.Types.Error                       as Error
 import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
@@ -233,7 +234,7 @@ setupDynFlagsForGHCiLike env dflags = do
                 `gopt_set` Opt_IgnoreOptimChanges
                 `gopt_set` Opt_IgnoreHpcChanges
                 `gopt_unset` Opt_DiagnosticsShowCaret
-    initializePlugins (hscSetFlags dflags4 env)
+    Loader.initializePlugins (hscSetFlags dflags4 env)
 
 adjustToRange :: Uri -> Range -> WorkspaceEdit -> WorkspaceEdit
 adjustToRange uri ran (WorkspaceEdit mhult mlt x) =

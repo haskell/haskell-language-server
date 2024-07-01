@@ -4,8 +4,6 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-{-# OPTIONS_GHC -Wwarn -fno-warn-type-defaults #-}
-
 {- | Keep the module name in sync with its file path.
 
 Provide CodeLenses to:

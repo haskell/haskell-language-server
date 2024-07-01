@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ViewPatterns              #-}
-{-# OPTIONS_GHC -fno-warn-type-defaults -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 {- |
 A plugin inspired by the REPLoid feature of <https://github.com/jyp/dante Dante>, <https://www.haskell.org/haddock/doc/html/ch03s08.html#idm140354810775744 Haddock>'s Examples and Properties and <https://hackage.haskell.org/package/doctest Doctest>.
@@ -18,13 +18,12 @@ module Ide.Plugin.Eval.CodeLens (
 ) where
 
 import           Control.Applicative                          (Alternative ((<|>)))
-import           Control.Arrow                                (second, (>>>))
-import           Control.Exception                            (bracket_, try)
+import           Control.Arrow                                (second)
+import           Control.Exception                            (bracket_)
 import qualified Control.Exception                            as E
-import           Control.Lens                                 (_1, _3, ix, (%~),
-                                                               (<&>), (^.))
-import           Control.Monad                                (guard, join,
-                                                               void, when)
+import           Control.Lens                                 (ix, (%~), (^.))
+import           Control.Monad                                (guard, void,
+                                                               when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..),
                                                                runExceptT)
@@ -46,25 +45,18 @@ import           Development.IDE.Core.FileStore               (getUriContents)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
 import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
-                                                               NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (shakeExtras,
-                                                               useNoFile_,
-                                                               useWithStale_,
-                                                               use_, uses_)
+import           Development.IDE.Core.Shake                   (useNoFile_, use_,
+                                                               uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
-import           Development.IDE.GHC.Compat.Util              (GhcException,
-                                                               OverridingBool (..),
-                                                               bagToList)
+import           Development.IDE.GHC.Compat.Util              (OverridingBool (..))
 import           Development.IDE.GHC.Util                     (evalGhcEnv,
-                                                               modifyDynFlags,
-                                                               printOutputable)
+                                                               modifyDynFlags)
 import           Development.IDE.Import.DependencyInformation (transitiveDeps,
                                                                transitiveModuleDeps)
-import           Development.IDE.Types.Location               (toNormalizedFilePath',
-                                                               uriToFilePath')
+import           Development.IDE.Types.Location               (toNormalizedFilePath')
 import           GHC                                          (ClsInst,
                                                                ExecOptions (execLineNumber, execSourceFile),
                                                                FamInst,
@@ -89,15 +81,12 @@ import           Development.IDE.Core.RuleTypes               (GetLinkable (GetL
                                                                ModSummaryResult (msrModSummary))
 import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
 import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
-import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcSpan (getLoc),
-                                                                         unLoc)
+import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
-import           Control.Concurrent.STM.Stats                 (atomically)
 import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Graph                        (ShakeOptions (shakeExtra))
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 import           Ide.Logger                                   (Priority (..),
@@ -105,7 +94,6 @@ import           Ide.Logger                                   (Priority (..),
                                                                WithPriority,
                                                                logWith)
 import           Ide.Plugin.Error                             (PluginError (PluginInternalError),
-                                                               handleMaybe,
                                                                handleMaybeM)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
@@ -119,8 +107,7 @@ import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
 import           Ide.Plugin.Eval.GHC                          (addImport,
                                                                addPackages,
                                                                hasPackage,
-                                                               setSessionAndInteractiveDynFlags,
-                                                               showDynFlags)
+                                                               setSessionAndInteractiveDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
 import           Ide.Plugin.Eval.Rules                        (queueForEvaluation,
