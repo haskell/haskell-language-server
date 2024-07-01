@@ -25,10 +25,12 @@ import           Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..),
                                                     cabalPositionToLSPPosition)
 import           Ide.Plugin.Cabal.Orphans          ()
 import           Ide.Types                         (PluginMethodHandler)
-import qualified Language.LSP.Protocol.Message     as LSP
+import           Language.LSP.Protocol.Message     (Method (..))
 import qualified Language.LSP.Protocol.Types       as LSP
+import           Language.LSP.Protocol.Types       (DocumentSymbol (..))
 
-moduleOutline :: PluginMethodHandler IdeState LSP.Method_TextDocumentDocumentSymbol
+
+moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocumentIdentifier uri} =
   case LSP.uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
@@ -43,7 +45,7 @@ moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocum
 -- | Creates a DocumentSumbol object for the
 --   cabal AST, without displaying fieldLines and
 --   displaying Section name and SectionArgs in one line
-documentSymbolForField :: Field Position -> Maybe LSP.DocumentSymbol
+documentSymbolForField :: Field Position -> Maybe DocumentSymbol
 documentSymbolForField (Field (Name pos fieldName) _) =
   Just
     (defDocumentSymbol range)
@@ -89,8 +91,8 @@ addNameLengthToLSPRange (LSP.Range pos1 (LSP.Position line char)) name =
     pos1
     (LSP.Position line (char + fromIntegral (T.length name)))
 
-defDocumentSymbol :: LSP.Range -> LSP.DocumentSymbol
-defDocumentSymbol range = LSP.DocumentSymbol {..}
+defDocumentSymbol :: LSP.Range -> DocumentSymbol
+defDocumentSymbol range = DocumentSymbol {..}
   where
     _detail = Nothing
     _deprecated = Nothing
