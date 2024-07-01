@@ -15,7 +15,7 @@ import           Control.Concurrent.Async  (AsyncCancelled (AsyncCancelled),
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
-import           Control.Exception         (Exception (fromException),
+import           Control.Exception.Safe    (Exception (fromException),
                                             SomeException, throwIO, try)
 import           Control.Monad             (forever)
 import           Control.Monad.Cont        (ContT (ContT))
@@ -52,11 +52,7 @@ awaitRunInThread q act = do
     -- Take an action from TQueue, run it and
     -- use barrier to wait for the result
     barrier <- newBarrier
-    atomically $ writeTQueue q $ do
-        resultOrException <- try act
-        case resultOrException of
-            Left e@(fromException -> Just AsyncCancelled) -> throwIO e
-            _ -> signalBarrier barrier resultOrException
+    atomically $ writeTQueue q $ try act >>= signalBarrier barrier
     resultOrException <- waitBarrier barrier
     case resultOrException of
         Left e  -> throwIO (e :: SomeException)
