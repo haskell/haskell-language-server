@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Cabal.Outline where
@@ -26,8 +25,8 @@ import           Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..),
 import           Ide.Plugin.Cabal.Orphans          ()
 import           Ide.Types                         (PluginMethodHandler)
 import           Language.LSP.Protocol.Message     (Method (..))
-import qualified Language.LSP.Protocol.Types       as LSP
 import           Language.LSP.Protocol.Types       (DocumentSymbol (..))
+import qualified Language.LSP.Protocol.Types       as LSP
 
 
 moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
@@ -49,18 +48,18 @@ documentSymbolForField :: Field Position -> Maybe DocumentSymbol
 documentSymbolForField (Field (Name pos fieldName) _) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = decodeUtf8 fieldName,
-        LSP._kind = LSP.SymbolKind_Field,
-        LSP._children = Nothing
+      { _name = decodeUtf8 fieldName,
+        _kind = LSP.SymbolKind_Field,
+        _children = Nothing
       }
   where
     range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 fieldName
 documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
   Just
     (defDocumentSymbol range)
-      { LSP._name = joinedName,
-        LSP._kind = LSP.SymbolKind_Object,
-        LSP._children =
+      { _name = joinedName,
+        _kind = LSP.SymbolKind_Object,
+        _children =
           Just
             (mapMaybe documentSymbolForField fields)
       }
@@ -92,13 +91,13 @@ addNameLengthToLSPRange (LSP.Range pos1 (LSP.Position line char)) name =
     (LSP.Position line (char + fromIntegral (T.length name)))
 
 defDocumentSymbol :: LSP.Range -> DocumentSymbol
-defDocumentSymbol range = DocumentSymbol {..}
-  where
-    _detail = Nothing
-    _deprecated = Nothing
-    _name = ""
-    _kind = LSP.SymbolKind_File
-    _range = range
-    _selectionRange = range
-    _children = Nothing
-    _tags = Nothing
+defDocumentSymbol range = DocumentSymbol
+  { _detail = Nothing
+  , _deprecated = Nothing
+  , _name = ""
+  , _kind = LSP.SymbolKind_File
+  , _range = range
+  , _selectionRange = range
+  , _children = Nothing
+  , _tags = Nothing
+  }
