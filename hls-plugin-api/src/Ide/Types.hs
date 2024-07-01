@@ -260,6 +260,7 @@ data PluginConfig =
       , plcCallHierarchyOn  :: !Bool
       , plcCodeActionsOn    :: !Bool
       , plcCodeLensOn       :: !Bool
+      , plcInlayHintsOn     :: !Bool
       , plcDiagnosticsOn    :: !Bool
       , plcHoverOn          :: !Bool
       , plcSymbolsOn        :: !Bool
@@ -277,6 +278,7 @@ instance Default PluginConfig where
       , plcCallHierarchyOn  = True
       , plcCodeActionsOn    = True
       , plcCodeLensOn       = True
+      , plcInlayHintsOn     = True
       , plcDiagnosticsOn    = True
       , plcHoverOn          = True
       , plcSymbolsOn        = True
@@ -289,12 +291,13 @@ instance Default PluginConfig where
       }
 
 instance ToJSON PluginConfig where
-    toJSON (PluginConfig g ch ca cl d h s c rn sr fr st cfg) = r
+    toJSON (PluginConfig g ch ca ih cl d h s c rn sr fr st cfg) = r
       where
         r = object [ "globalOn"         .= g
                    , "callHierarchyOn"  .= ch
                    , "codeActionsOn"    .= ca
                    , "codeLensOn"       .= cl
+                   , "inlayHintsOn"     .= ih
                    , "diagnosticsOn"    .= d
                    , "hoverOn"          .= h
                    , "symbolsOn"        .= s
@@ -512,10 +515,10 @@ instance PluginMethod Request Method_WorkspaceSymbol where
   handlesRequest _ _ _ _ = HandlesRequest
 
 instance PluginMethod Request Method_TextDocumentInlayHint where
-  handlesRequest _ _ _ _ = HandlesRequest
+  handlesRequest = pluginEnabledWithFeature plcInlayHintsOn
 
 instance PluginMethod Request Method_InlayHintResolve where
-  handlesRequest _ _ _ _ = HandlesRequest
+  handlesRequest = pluginEnabledResolve plcInlayHintsOn
 
 instance PluginMethod Request Method_TextDocumentCodeLens where
   handlesRequest = pluginEnabledWithFeature plcCodeLensOn

@@ -63,19 +63,20 @@ parsePlugins (IdePlugins plugins) = A.withObject "Config.plugins" $ \o -> do
 -- ---------------------------------------------------------------------
 
 parsePluginConfig :: PluginConfig -> Value -> A.Parser PluginConfig
-parsePluginConfig def = A.withObject "PluginConfig" $ \o  -> PluginConfig
+parsePluginConfig def = A.withObject "PluginConfig" $ \o -> PluginConfig
       <$> o .:? "globalOn"         .!= plcGlobalOn def
       <*> o .:? "callHierarchyOn"  .!= plcCallHierarchyOn def
       <*> o .:? "semanticTokensOn" .!= plcSemanticTokensOn def
       <*> o .:? "codeActionsOn"    .!= plcCodeActionsOn def
       <*> o .:? "codeLensOn"       .!= plcCodeLensOn    def
+      <*> o .:? "inlayHintsOn"     .!= plcInlayHintsOn  def
       <*> o .:? "diagnosticsOn"    .!= plcDiagnosticsOn def -- AZ
       <*> o .:? "hoverOn"          .!= plcHoverOn       def
       <*> o .:? "symbolsOn"        .!= plcSymbolsOn     def
       <*> o .:? "completionOn"     .!= plcCompletionOn  def
       <*> o .:? "renameOn"         .!= plcRenameOn      def
       <*> o .:? "selectionRangeOn" .!= plcSelectionRangeOn def
-      <*> o .:? "foldingRangeOn" .!= plcFoldingRangeOn def
+      <*> o .:? "foldingRangeOn"   .!= plcFoldingRangeOn def
       <*> o .:? "config"           .!= plcConfig        def
 
 -- ---------------------------------------------------------------------
