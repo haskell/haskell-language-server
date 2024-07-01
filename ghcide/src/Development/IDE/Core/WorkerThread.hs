@@ -7,15 +7,22 @@ Description : This module provides an API for managing worker threads in the IDE
 see Note [Serializing runs in separate thread]
 -}
 module Development.IDE.Core.WorkerThread
-    (withWorkerQueue, awaitRunInThread)
+    (withWorkerQueue
+    , awaitRunInThread
+    , withWorkerQueueOfOne
+    , WorkerQueue
+    , writeWorkerQueue
+    , waitUntilWorkerQueueEmpty)
  where
 
 import           Control.Concurrent.Async  (withAsync)
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
-import           Control.Monad             (forever)
+import           Control.Exception         (finally)
+import           Control.Monad             (forever, unless)
 import           Control.Monad.Cont        (ContT (ContT))
+import           Control.Monad.IO.Class    (liftIO)
 
 {-
 Note [Serializing runs in separate thread]
@@ -28,27 +35,75 @@ Originally we used various ways to implement this, but it was hard to maintain a
 Moreover, we can not stop these threads uniformly when we are shutting down the server.
 -}
 
--- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
+data WorkerQueue a = WorkerQueueOfOne (TMVar a) | WorkerQueueOfMany (TQueue a)
+
+-- | peekWorkerQueue returns the next action in the queue without removing it.
+peekWorkerQueue :: WorkerQueue a -> STM a
+peekWorkerQueue (WorkerQueueOfOne tVar)    = readTMVar tVar
+peekWorkerQueue (WorkerQueueOfMany tQueue) = peekTQueue tQueue
+
+-- | readWorkerQueue returns the next action in the queue and removes it.
+readWorkerQueue :: WorkerQueue a -> STM a
+readWorkerQueue (WorkerQueueOfOne tVar)    = takeTMVar tVar
+readWorkerQueue (WorkerQueueOfMany tQueue) = readTQueue tQueue
+
+writeWorkerQueue :: WorkerQueue a -> a -> STM ()
+writeWorkerQueue (WorkerQueueOfOne tVar) action    = putTMVar tVar action
+writeWorkerQueue (WorkerQueueOfMany tQueue) action = writeTQueue tQueue action
+
+-- | waitUntilWorkerQueueEmpty blocks until the worker queue is empty.
+waitUntilWorkerQueueEmpty :: WorkerQueue a -> STM ()
+waitUntilWorkerQueueEmpty (WorkerQueueOfOne tVar) = do
+    isEmpty <- isEmptyTMVar tVar
+    unless isEmpty retry
+waitUntilWorkerQueueEmpty (WorkerQueueOfMany queue) = do
+    isEmpty <- isEmptyTQueue queue
+    unless isEmpty retry
+
+newWorkerQueue :: STM (WorkerQueue a)
+newWorkerQueue = WorkerQueueOfMany <$> newTQueue
+
+newWorkerQueueOfOne :: STM (WorkerQueue a)
+newWorkerQueueOfOne = WorkerQueueOfOne <$> newEmptyTMVar
+
+-- | 'withWorkerQueue' creates a new 'WorkerQueue', and launches a worker
 -- thread which polls the queue for requests and runs the given worker
 -- function on them.
-withWorkerQueue :: (t -> IO a) -> ContT () IO (TQueue t)
-withWorkerQueue workerAction = ContT $ \mainAction -> do
-    q <- newTQueueIO
+withWorkerQueue :: (t -> IO a) -> ContT () IO (WorkerQueue t)
+withWorkerQueue workerAction = do
+    q <- liftIO $ atomically newWorkerQueue
+    runWorkerQueue q workerAction
+
+-- | 'withWorkerQueueOfOne' creates a new 'WorkerQueue' that only allows one action to be queued at a time.
+-- and one action can only be queued after the previous action has been done.
+-- this is useful when we want to cancel the action waiting to be enqueue if it's thread is cancelled.
+-- e.g. session loading in session loader. When a shake session is restarted
+-- , we want to cancel the previous pending session loading.
+-- since the hls-graph can handle the retrying of the session loading.
+withWorkerQueueOfOne :: (t -> IO a) -> ContT () IO (WorkerQueue t)
+withWorkerQueueOfOne workerAction = do
+    q <- liftIO $ atomically newWorkerQueueOfOne
+    runWorkerQueue q workerAction
+
+runWorkerQueue :: WorkerQueue t -> (t -> IO a) -> ContT () IO (WorkerQueue t)
+runWorkerQueue q workerAction = ContT $ \mainAction -> do
     withAsync (writerThread q) $ \_ -> mainAction q
     where
         writerThread q =
             forever $ do
-                l <- atomically $ readTQueue q
-                workerAction l
+                -- peek the action from the queue, run it and then remove it from the queue
+                l <- atomically $ peekWorkerQueue q
+                workerAction l `finally` atomically (readWorkerQueue q)
+
 
 -- | 'awaitRunInThread' queues up an 'IO' action to be run by a worker thread,
 -- and then blocks until the result is computed.
-awaitRunInThread :: TQueue (IO ()) -> IO result -> IO result
+awaitRunInThread :: WorkerQueue (IO ()) -> IO result -> IO result
 awaitRunInThread q act = do
     -- Take an action from TQueue, run it and
     -- use barrier to wait for the result
     barrier <- newBarrier
-    atomically $ writeTQueue q $ do
+    atomically $ writeWorkerQueue q $ do
         res <- act
         signalBarrier barrier res
     waitBarrier barrier

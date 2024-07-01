@@ -22,7 +22,6 @@ module Development.IDE.Core.FileStore(
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically)
-import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -40,6 +39,7 @@ import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
+import           Development.IDE.Core.WorkerThread            (writeWorkerQueue)
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -247,7 +247,7 @@ typecheckParentsAction recorder nfp = do
 setSomethingModified :: VFSModified -> IdeState -> String -> IO [Key] -> IO ()
 setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
-    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+    atomically $ writeWorkerQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
     void $ restartShakeSession (shakeExtras state) vfs reason [] actionBetweenSession
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool

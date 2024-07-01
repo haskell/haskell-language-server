@@ -75,6 +75,7 @@ import           Development.IDE.Core.ProgressReporting (progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing           (withTrace)
+import           Development.IDE.Core.WorkerThread (writeWorkerQueue)
 import           Development.IDE.GHC.Compat             hiding (assert,
                                                          loadInterface,
                                                          parseHeader,
@@ -84,6 +85,7 @@ import           Development.IDE.GHC.Compat             hiding (assert,
 import qualified Development.IDE.GHC.Compat             as Compat
 import qualified Development.IDE.GHC.Compat             as GHC
 import qualified Development.IDE.GHC.Compat.Util        as Util
+import           Development.IDE.Core.ProgressReporting (ProgressReporting (..), progressReportingOutsideState)
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans            ()
@@ -796,7 +798,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
       modifyTVar' indexPending $ HashMap.insert srcPath hash
-      writeTQueue indexQueue $ \withHieDb -> do
+      writeWorkerQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
