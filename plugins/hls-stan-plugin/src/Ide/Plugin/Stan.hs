@@ -2,46 +2,52 @@
 {-# LANGUAGE PatternSynonyms #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
-import           Compat.HieTypes             (HieFile (..))
-import           Control.DeepSeq             (NFData)
-import           Control.Monad               (void)
-import           Control.Monad.IO.Class      (liftIO)
-import           Data.Foldable               (toList)
-import           Data.Hashable               (Hashable)
-import qualified Data.HashMap.Strict         as HM
-import           Data.Maybe                  (mapMaybe)
-import qualified Data.Text                   as T
+import           Compat.HieTypes                   (HieFile (..))
+import           Control.DeepSeq                   (NFData)
+import           Control.Monad                     (void)
+import           Control.Monad.IO.Class            (liftIO)
+import           Data.Foldable                     (toList)
+import           Data.Hashable                     (Hashable)
+import qualified Data.HashMap.Strict               as HM
+import           Data.Maybe                        (mapMaybe)
+import qualified Data.Text                         as T
 import           Development.IDE
-import           Development.IDE.Core.Rules  (getHieFile)
-import qualified Development.IDE.Core.Shake  as Shake
-import           GHC.Generics                (Generic)
-import           Ide.Plugin.Config           (PluginConfig (..))
-import           Ide.Types                   (PluginDescriptor (..), PluginId,
-                                              configHasDiagnostics,
-                                              configInitialGenericConfig,
-                                              defaultConfigDescriptor,
-                                              defaultPluginDescriptor)
-import qualified Language.LSP.Protocol.Types as LSP
-import           Stan                        (createCabalExtensionsMap,
-                                              getStanConfig)
-import           Stan.Analysis               (Analysis (..), runAnalysis)
-import           Stan.Category               (Category (..))
-import           Stan.Cli                    (StanArgs (..))
-import           Stan.Config                 (Config, ConfigP (..), applyConfig)
-import           Stan.Config.Pretty          (prettyConfigCli)
-import           Stan.Core.Id                (Id (..))
-import           Stan.EnvVars                (EnvVars (..), envVarsToText)
-import           Stan.Inspection             (Inspection (..))
-import           Stan.Inspection.All         (inspectionsIds, inspectionsMap)
-import           Stan.Observation            (Observation (..))
-import           Stan.Report.Settings        (OutputSettings (..),
-                                              ToggleSolution (..),
-                                              Verbosity (..))
-import           Stan.Toml                   (usedTomlFiles)
-import           System.Directory            (makeRelativeToCurrentDirectory)
-import           Trial                       (Fatality, Trial (..), fiasco,
-                                              pattern FiascoL, pattern ResultL,
-                                              prettyTrial, prettyTrialWith)
+import           Development.IDE.Core.Rules        (getHieFile)
+import qualified Development.IDE.Core.Shake        as Shake
+import           Development.IDE.Types.Diagnostics
+import           GHC.Generics                      (Generic)
+import           Ide.Plugin.Config                 (PluginConfig (..))
+import           Ide.Types                         (PluginDescriptor (..),
+                                                    PluginId,
+                                                    configHasDiagnostics,
+                                                    configInitialGenericConfig,
+                                                    defaultConfigDescriptor,
+                                                    defaultPluginDescriptor)
+import qualified Language.LSP.Protocol.Types       as LSP
+import           Stan                              (createCabalExtensionsMap,
+                                                    getStanConfig)
+import           Stan.Analysis                     (Analysis (..), runAnalysis)
+import           Stan.Category                     (Category (..))
+import           Stan.Cli                          (StanArgs (..))
+import           Stan.Config                       (Config, ConfigP (..),
+                                                    applyConfig)
+import           Stan.Config.Pretty                (prettyConfigCli)
+import           Stan.Core.Id                      (Id (..))
+import           Stan.EnvVars                      (EnvVars (..), envVarsToText)
+import           Stan.Inspection                   (Inspection (..))
+import           Stan.Inspection.All               (inspectionsIds,
+                                                    inspectionsMap)
+import           Stan.Observation                  (Observation (..))
+import           Stan.Report.Settings              (OutputSettings (..),
+                                                    ToggleSolution (..),
+                                                    Verbosity (..))
+import           Stan.Toml                         (usedTomlFiles)
+import           System.Directory                  (makeRelativeToCurrentDirectory)
+import           Trial                             (Fatality, Trial (..),
+                                                    fiasco, pattern FiascoL,
+                                                    pattern ResultL,
+                                                    prettyTrial,
+                                                    prettyTrialWith)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc)
@@ -187,17 +193,18 @@ rules recorder plId = do
                 "Possible solutions:"
               ]
                 ++ map ("  - " <>) (inspectionSolution inspection)
-        return ( file,
-          ShowDiag,
-          LSP.Diagnostic
-            { _range = realSrcSpanToRange observationSrcSpan,
-              _severity = Just LSP.DiagnosticSeverity_Hint,
-              _code = Just (LSP.InR $ unId (inspectionId inspection)),
-              _source = Just "stan",
-              _message = message,
-              _relatedInformation = Nothing,
-              _tags = Nothing,
-              _codeDescription = Nothing,
-              _data_ = Nothing
-            }
-          )
+        return $
+          ideErrorFromLspDiag
+            LSP.Diagnostic
+              { _range = realSrcSpanToRange observationSrcSpan,
+                _severity = Just LSP.DiagnosticSeverity_Hint,
+                _code = Just (LSP.InR $ unId (inspectionId inspection)),
+                _source = Just "stan",
+                _message = message,
+                _relatedInformation = Nothing,
+                _tags = Nothing,
+                _codeDescription = Nothing,
+                _data_ = Nothing
+              }
+            file
+            Nothing

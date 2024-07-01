@@ -64,6 +64,7 @@ import           Development.IDE.Plugin.Plugins.FillHole           (suggestFillH
 import           Development.IDE.Plugin.Plugins.FillTypeWildcard   (suggestFillTypeWildcard)
 import           Development.IDE.Plugin.Plugins.ImportUtils
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
+import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
@@ -126,7 +127,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   liftIO $ do
     let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
+    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       actions = caRemoveRedundantImports parsedModule text allDiags range uri
@@ -1993,12 +1994,15 @@ smallerRangesForBindingExport lies b =
     b' = wrapOperatorInParens $ unqualify b
 #if MIN_VERSION_ghc(9,9,0)
     ranges' (L _ (IEThingWith _ thing _  inners _))
-#else
-    ranges' (L _ (IEThingWith _ thing _  inners))
-#endif
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+#else
+    ranges' (L _ (IEThingWith _ thing _  inners))
+      | T.unpack (printOutputable thing) == b' = []
+      | otherwise =
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+#endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
