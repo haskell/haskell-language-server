@@ -25,6 +25,7 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
 import           Data.Char                            (isSpace)
+import           Data.Functor                         ((<&>))
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
@@ -198,11 +199,12 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     then do
         nfp <- getNormalizedFilePathE _uri
         (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
-        let inlayHints = [ generateInlayHints newRange ie pm
+        let inlayHints = [ inlayHint
                          | (range, int) <- forLens
                          , Just newRange <- [toCurrentRange pm range]
                          , isSubrangeOf newRange visibleRange
-                         , Just ie <- [forResolve IM.!? int]]
+                         , Just ie <- [forResolve IM.!? int]
+                         , Just inlayHint <- [generateInlayHints newRange ie pm]]
         pure $ InL inlayHints
     -- When the client does not support inlay hints, fallback to the code lens,
     -- so there is nothing to response here, return `[]` to indicate "no information"
@@ -214,10 +216,10 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     --   |--- range ----|-- IH ---|
     --                  |^-_paddingLeft
     --                  ^-_position
-    generateInlayHints :: Range -> ImportEdit -> PositionMapping -> InlayHint
-    generateInlayHints (Range _ end) ie pm =
+    generateInlayHints :: Range -> ImportEdit -> PositionMapping -> Maybe InlayHint
+    generateInlayHints (Range _ end) ie pm = mkLabel ie <&> \label ->
       InlayHint { _position = end
-                , _label = InL $ mkLabel ie
+                , _label = InL label
                 , _kind = Nothing -- neither a type nor a parameter
                 , _textEdits = fmap singleton $ toTEdit pm ie
                 , _tooltip = Just $ InL "Make this import explicit" -- simple enough, no need to resolve
@@ -225,10 +227,10 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
                 , _paddingRight = Nothing
                 , _data_ = Nothing
                 }
-    mkLabel :: ImportEdit -> T.Text
+    mkLabel :: ImportEdit -> Maybe T.Text
     mkLabel (ImportEdit{ieResType, ieText}) =
-      let title ExplicitImport = abbreviateImportTitleWithoutModule ieText
-          title RefineImport   = "Refine imports to " <> T.intercalate ", " (T.lines ieText)
+      let title ExplicitImport = Just $ abbreviateImportTitleWithoutModule ieText
+          title RefineImport   = Nothing -- does not provide imports statements that can be refined via inlay hints
       in title ieResType
 
 
