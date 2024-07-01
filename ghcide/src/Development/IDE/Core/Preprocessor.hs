@@ -28,6 +28,7 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import qualified GHC.LanguageExtensions            as LangExt
+import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Utils.Logger                  (LogFlags (..))
 import           System.FilePath
 import           System.IO.Extra
@@ -149,7 +150,7 @@ parsePragmasIntoHscEnv env fp contents = catchSrcErrors dflags0 "pragmas" $ do
     evaluate $ rnf opts
 
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
-    hsc_env' <- initializePlugins (hscSetFlags dflags env)
+    hsc_env' <- Loader.initializePlugins (hscSetFlags dflags env)
     return (map unLoc opts, hscSetFlags (disableWarningsAsErrors $ hsc_dflags hsc_env') hsc_env')
   where dflags0 = hsc_dflags env
 

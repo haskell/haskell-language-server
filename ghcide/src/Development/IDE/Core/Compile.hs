@@ -109,6 +109,7 @@ import           System.IO.Extra                        (fixIO,
 
 import qualified Data.Set                               as Set
 import qualified GHC                                    as G
+import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
@@ -174,15 +175,15 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
         initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
-                                      (initPlugins hsc modSummary)
+                                      (Loader.initializePlugins (hscSetFlags (ms_hspp_opts modSummary) hsc))
         case initialized of
           Left errs -> return (errs, Nothing)
-          Right (modSummary', hscEnv) -> do
+          Right hscEnv -> do
             (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hscEnv)
                    -- TODO: maybe settings ms_hspp_opts is unnecessary?
-                  mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
+                  mod_summary'' = modSummary { ms_hspp_opts = hsc_dflags session}
                 in
                   catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
                     tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
@@ -981,7 +982,7 @@ getModSummaryFromImports env fp _modTime mContents = do
 
     let modl = mkHomeModule (hscHomeUnit ppEnv) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary2 =
+        msrModSummary =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1002,8 +1003,8 @@ getModSummaryFromImports env fp _modTime mContents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
-    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins ppEnv msrModSummary2
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
