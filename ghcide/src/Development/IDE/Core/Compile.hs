@@ -109,6 +109,7 @@ import           System.IO.Extra                        (fixIO,
 
 import qualified Data.Set                               as Set
 import qualified GHC                                    as G
+import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
@@ -174,10 +175,10 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
         initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
-                                      (initPlugins hsc modSummary)
+                                      (Loader.initializePlugins (hscSetFlags (ms_hspp_opts modSummary) hsc))
         case initialized of
           Left errs -> return (errs, Nothing)
-          Right (hscEnv) -> do
+          Right hscEnv -> do
             (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hscEnv)
@@ -1003,7 +1004,7 @@ getModSummaryFromImports env fp _modTime mContents = do
                 }
 
     msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
-    msrHscEnv <- liftIO $ initPlugins ppEnv msrModSummary
+    msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
