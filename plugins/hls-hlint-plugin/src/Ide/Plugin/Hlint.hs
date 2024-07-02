@@ -118,7 +118,12 @@ import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
+import qualified Development.IDE.Types.Options                      as Options
+import           GHC.TypeLits                                       (KnownSymbol)
+import qualified Language.LSP.Protocol.Message                      as LSP
+import qualified Language.LSP.Server                                as LSP
 import           Text.Regex.TDFA.Text                               ()
+
 -- ---------------------------------------------------------------------
 
 data Log
@@ -134,7 +139,7 @@ instance Pretty Log where
     LogShake log -> pretty log
     LogApplying fp res -> "Applying hint(s) for" <+> viaShow fp <> ":" <+> viaShow res
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
-    LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
+    LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <> line <> indent 4 (pretty exts)
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
     LogResolve msg -> pretty msg
 
@@ -183,12 +188,12 @@ instance NFData   GetHlintDiagnostics
 type instance RuleResult GetHlintDiagnostics = ()
 
 -- | Hlint rules to generate file diagnostics based on hlint hints
--- | This rule is recomputed when:
--- | - A file has been edited via
--- |    - `getIdeas` -> `getParsedModule` in any case
--- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
--- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
--- | - The hlint specific settings have changed, via `getHlintSettingsRule`
+-- This rule is recomputed when:
+-- - A file has been edited via
+--    - `getIdeas` -> `getParsedModule` in any case
+--    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
+-- - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
+-- - The hlint specific settings have changed, via `getHlintSettingsRule`
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
@@ -202,8 +207,16 @@ rules recorder plugin = do
     liftIO $ argsSettings flags
 
   action $ do
-    files <- getFilesOfInterestUntracked
-    void $ uses GetHlintDiagnostics $ Map.keys files
+    files <- Map.keys <$> getFilesOfInterestUntracked
+    Shake.ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- Shake.getShakeExtras
+    let signal :: KnownSymbol s => Proxy s -> Action ()
+        signal msg = when testing $ liftIO $ Shake.mRunLspT lspEnv $
+            LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
+            toJSON $ map fromNormalizedFilePath files
+
+    signal (Proxy @"kick/start/hlint")
+    void $ uses GetHlintDiagnostics files
+    signal (Proxy @"kick/done/hlint")
 
   where
 
