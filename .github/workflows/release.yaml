@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8", "9.2.8"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -136,7 +136,7 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
-          - ghc: 9.6.5
+          - ghc: 9.6.6
             platform:
               { image: "rockylinux:8"
               , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
@@ -222,7 +222,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8" ]
+        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8", "9.2.8" ]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -282,7 +282,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -327,7 +327,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -372,7 +372,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.5", "9.4.8", "9.2.8"]
+        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8", "9.2.8"]
     steps:
       - name: install windows deps
         shell: pwsh
