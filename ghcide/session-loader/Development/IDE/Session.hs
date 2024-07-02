@@ -876,28 +876,22 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
     hscEnv' <- -- Set up a multi component session with the other units on GHC 9.4
               Compat.initUnits dfs hsc_env
 
-#if MIN_VERSION_ghc(9,6,1)
     let closure_errs = maybeToList $ checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
         closure_err_to_multi_err err =
             ideErrorWithSource
                 (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
                 (T.pack (Compat.printWithoutUniques (singleMessage err)))
+#if MIN_VERSION_ghc(9,6,1)
                 (Just (fmap GhcDriverMessage err))
+#else
+                Nothing
+#endif
         multi_errs = map closure_err_to_multi_err closure_errs
         bad_units = OS.fromList $ concat $ do
             x <- map errMsgDiagnostic closure_errs
             DriverHomePackagesNotClosed us <- pure x
             pure us
         isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
-#else
-    let closure_errs = maybeToList $ checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
-        multi_errs = map (\diag -> ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp (T.pack (Compat.printWithoutUniques (singleMessage diag))) Nothing) closure_errs
-        bad_units = OS.fromList $ concat $ do
-            x <- map errMsgDiagnostic closure_errs
-            DriverHomePackagesNotClosed us <- pure x
-            pure us
-        isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
-#endif
     -- Whenever we spin up a session on Linux, dynamically load libm.so.6
     -- in. We need this in case the binary is statically linked, in which
     -- case the interactive session will fail when trying to load
