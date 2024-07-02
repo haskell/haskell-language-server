@@ -539,8 +539,7 @@ filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
     then Just res
     else Nothing
   where importedNames = S.fromList $ map (ieName . unLoc) names
-        res = flip Map.filter avails $ \a ->
-                any (any (`S.member` importedNames) . getAvailNames) a
+        res = Map.filter (any (any (`S.member` importedNames) . getAvailNames)) avails
         allFilteredAvailsNames = S.fromList
           $ concatMap getAvailNames
           $ mconcat

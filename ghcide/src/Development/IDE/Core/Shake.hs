@@ -126,6 +126,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater,
                                                          initNameCache,
                                                          knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
@@ -173,11 +174,8 @@ import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
+import           UnliftIO                               (MonadUnliftIO (withRunInIO))
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           Development.IDE.GHC.Compat             (NameCacheUpdater)
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -247,7 +245,7 @@ data HieDbWriter
   { indexQueue             :: IndexQueue
   , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted         :: TVar Int -- ^ to report progress
-  , indexProgressReporting :: ProgressReporting IO
+  , indexProgressReporting :: ProgressReporting
   }
 
 -- | Actions to queue up on the index worker thread
@@ -297,7 +295,7 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumulation to the current version.
-    ,progress :: ProgressReporting Action
+    ,progress :: PerFileProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
@@ -679,7 +677,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         semanticTokensId <- newTVarIO 0
-        indexProgressReporting <- progressReportingOutsideState
+        indexProgressReporting <- progressReportingNoTrace
             (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
             (readTVar indexCompleted)
             lspEnv "Indexing" optProgressStyle
@@ -696,7 +694,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         progress <-
             if reportProgress
                 then progressReporting lspEnv "Processing" optProgressStyle
-                else noProgressReporting
+                else noPerFileProgressReporting
         actionQueue <- newQueue
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
@@ -1219,7 +1217,8 @@ defineEarlyCutoff'
 defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
-    (if optSkipProgress options key then id else inProgress progress file) $ do
+    let trans g x =  withRunInIO $ \run -> g (run x)
+    (if optSkipProgress options key then id else trans (inProgress progress file)) $ do
         val <- case mbOld of
             Just old | mode == RunDependenciesSame -> do
                 mbValue <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
