@@ -5,7 +5,7 @@ module Outline (
     outlineTests
 ) where
 
-import           Ide.Plugin.Cabal.Outline (defDocumentSymbol)
+import qualified Language.LSP.Protocol.Types       as LSP
 import           Test.Hls
 import           Utils
 
@@ -72,3 +72,15 @@ outlineTests =
                                       _kind = SymbolKind_Field,
                                       _children = Nothing
                                     }
+
+defDocumentSymbol :: LSP.Range -> DocumentSymbol
+defDocumentSymbol range = DocumentSymbol
+  { _detail = Nothing
+  , _deprecated = Nothing
+  , _name = ""
+  , _kind = LSP.SymbolKind_File
+  , _range = range
+  , _selectionRange = range
+  , _children = Nothing
+  , _tags = Nothing
+  }
