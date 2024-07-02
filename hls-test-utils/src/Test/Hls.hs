@@ -129,6 +129,7 @@ import           System.Directory                         (canonicalizePath,
 import           System.Environment                       (lookupEnv, setEnv)
 import           System.FilePath
 import           System.IO.Extra                          (newTempDirWithin)
+import           System.IO.Temp                           (createTempDirectory)
 import           System.IO.Unsafe                         (unsafePerformIO)
 import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
@@ -556,9 +557,9 @@ setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
   tmpDirRoot <- getTemporaryDirectory
   let testRoot = tmpDirRoot </> "hls-test-root"
-      testCacheDir = testRoot </> ".cache"
-  createDirectoryIfMissing True testCacheDir
-  setEnv "XDG_CACHE_HOME" testCacheDir
+  createDirectoryIfMissing True testRoot
+  tempCacheDir <- createTempDirectory testRoot ".cache"
+  setEnv "XDG_CACHE_HOME" tempCacheDir
   pure testRoot
 
 goldenWithHaskellDocFormatter
