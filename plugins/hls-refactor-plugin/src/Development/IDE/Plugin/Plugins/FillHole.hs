@@ -5,22 +5,26 @@ module Development.IDE.Plugin.Plugins.FillHole
 import           Control.Monad                             (guard)
 import           Data.Char
 import qualified Data.Text                                 as T
+import           Development.IDE.GHC.Util                  (textInRange)
 import           Development.IDE.Plugin.Plugins.Diagnostic
 import           Language.LSP.Protocol.Types               (Diagnostic (..),
                                                             TextEdit (TextEdit))
 import           Text.Regex.TDFA                           (MatchResult (..),
                                                             (=~))
 
-suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillHole Diagnostic{_range=_range,..}
+suggestFillHole :: Maybe T.Text -> Diagnostic -> [(T.Text, TextEdit)]
+suggestFillHole contents Diagnostic{_range=_range,..}
     | Just holeName <- extractHoleName _message
     , (holeFits, refFits) <- processHoleSuggestions (T.lines _message) =
-      let isInfixHole = _message =~ addBackticks holeName :: Bool in
+      let isInfixHole = textInDiagnosticRange =~ addBackticks holeName :: Bool in
         map (proposeHoleFit holeName False isInfixHole) holeFits
         ++ map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
     where
       extractHoleName = fmap (headOrThrow "impossible") . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
+      textInDiagnosticRange = case contents of
+        Nothing   -> ""
+        Just text -> textInRange _range text
       addBackticks text = "`" <> text <> "`"
       addParens text = "(" <> text <> ")"
       proposeHoleFit holeName parenthise isInfixHole name =
