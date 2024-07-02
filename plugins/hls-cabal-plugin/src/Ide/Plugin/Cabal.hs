@@ -40,6 +40,7 @@ import qualified Ide.Plugin.Cabal.Completion.Types           as Types
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                    ()
+import           Ide.Plugin.Cabal.Outline
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
@@ -89,6 +90,7 @@ descriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
+          , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
           ]
     , pluginNotificationHandlers =
         mconcat

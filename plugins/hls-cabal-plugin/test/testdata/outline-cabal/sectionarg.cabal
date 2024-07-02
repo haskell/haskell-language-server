@@ -1,0 +1,2 @@
+  if os(windows)
+    build-depends: Win32

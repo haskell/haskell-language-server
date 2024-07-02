@@ -244,6 +244,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.LicenseSuggest
     Ide.Plugin.Cabal.Orphans
+    Ide.Plugin.Cabal.Outline
     Ide.Plugin.Cabal.Parse
 
 
@@ -281,6 +282,7 @@ test-suite hls-cabal-plugin-tests
     Completer
     Context
     Utils
+    Outline
   build-depends:
     , base
     , bytestring
