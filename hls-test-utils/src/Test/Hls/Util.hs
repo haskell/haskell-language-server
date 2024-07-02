@@ -7,6 +7,7 @@ module Test.Hls.Util
   (  -- * Test Capabilities
       codeActionResolveCaps
     , codeActionNoResolveCaps
+    , codeActionNoInlayHintsCaps
     , codeActionSupportCaps
     , expectCodeAction
     -- * Environment specifications
@@ -107,6 +108,12 @@ codeActionNoResolveCaps :: ClientCapabilities
 codeActionNoResolveCaps = Test.fullLatestClientCaps
                           & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport) .~ Nothing
                           & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ False
+
+codeActionNoInlayHintsCaps :: ClientCapabilities
+codeActionNoInlayHintsCaps = Test.fullLatestClientCaps
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport) .~ Nothing
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ False
+                          & (L.textDocument . _Just . L.inlayHint) .~ Nothing
 -- ---------------------------------------------------------------------
 -- Environment specification for ignoring tests
 -- ---------------------------------------------------------------------

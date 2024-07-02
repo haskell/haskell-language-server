@@ -260,6 +260,7 @@ data PluginConfig =
       , plcCallHierarchyOn  :: !Bool
       , plcCodeActionsOn    :: !Bool
       , plcCodeLensOn       :: !Bool
+      , plcInlayHintsOn     :: !Bool
       , plcDiagnosticsOn    :: !Bool
       , plcHoverOn          :: !Bool
       , plcSymbolsOn        :: !Bool
@@ -277,6 +278,7 @@ instance Default PluginConfig where
       , plcCallHierarchyOn  = True
       , plcCodeActionsOn    = True
       , plcCodeLensOn       = True
+      , plcInlayHintsOn     = True
       , plcDiagnosticsOn    = True
       , plcHoverOn          = True
       , plcSymbolsOn        = True
@@ -289,12 +291,13 @@ instance Default PluginConfig where
       }
 
 instance ToJSON PluginConfig where
-    toJSON (PluginConfig g ch ca cl d h s c rn sr fr st cfg) = r
+    toJSON (PluginConfig g ch ca ih cl d h s c rn sr fr st cfg) = r
       where
         r = object [ "globalOn"         .= g
                    , "callHierarchyOn"  .= ch
                    , "codeActionsOn"    .= ca
                    , "codeLensOn"       .= cl
+                   , "inlayHintsOn"     .= ih
                    , "diagnosticsOn"    .= d
                    , "hoverOn"          .= h
                    , "symbolsOn"        .= s
@@ -510,6 +513,12 @@ instance PluginMethod Request Method_TextDocumentReferences where
 instance PluginMethod Request Method_WorkspaceSymbol where
   -- Unconditionally enabled, but should it really be?
   handlesRequest _ _ _ _ = HandlesRequest
+
+instance PluginMethod Request Method_TextDocumentInlayHint where
+  handlesRequest = pluginEnabledWithFeature plcInlayHintsOn
+
+instance PluginMethod Request Method_InlayHintResolve where
+  handlesRequest = pluginEnabledResolve plcInlayHintsOn
 
 instance PluginMethod Request Method_TextDocumentCodeLens where
   handlesRequest = pluginEnabledWithFeature plcCodeLensOn
@@ -809,6 +818,9 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
 
 instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
   combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentInlayHint where
+  combineResponses _ _ _ _ x = sconcat x
 
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
