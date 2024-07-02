@@ -11,7 +11,8 @@
         "cabal": {
             "codeActionsOn": true,
             "completionOn": true,
-            "diagnosticsOn": true
+            "diagnosticsOn": true,
+            "symbolsOn": true
         },
         "cabal-fmt": {
             "config": {
