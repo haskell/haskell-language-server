@@ -66,7 +66,6 @@ parsePluginConfig :: PluginConfig -> Value -> A.Parser PluginConfig
 parsePluginConfig def = A.withObject "PluginConfig" $ \o -> PluginConfig
       <$> o .:? "globalOn"         .!= plcGlobalOn def
       <*> o .:? "callHierarchyOn"  .!= plcCallHierarchyOn def
-      <*> o .:? "semanticTokensOn" .!= plcSemanticTokensOn def
       <*> o .:? "codeActionsOn"    .!= plcCodeActionsOn def
       <*> o .:? "codeLensOn"       .!= plcCodeLensOn    def
       <*> o .:? "inlayHintsOn"     .!= plcInlayHintsOn  def
@@ -77,6 +76,7 @@ parsePluginConfig def = A.withObject "PluginConfig" $ \o -> PluginConfig
       <*> o .:? "renameOn"         .!= plcRenameOn      def
       <*> o .:? "selectionRangeOn" .!= plcSelectionRangeOn def
       <*> o .:? "foldingRangeOn"   .!= plcFoldingRangeOn def
+      <*> o .:? "semanticTokensOn" .!= plcSemanticTokensOn def
       <*> o .:? "config"           .!= plcConfig        def
 
 -- ---------------------------------------------------------------------
