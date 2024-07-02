@@ -1576,7 +1576,6 @@ library hls-stylish-haskell-plugin
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
   build-depends:
     , base             >=4.12 && <5
-    , directory
     , filepath
     , ghc-boot-th
     , ghcide           == 2.9.0.0

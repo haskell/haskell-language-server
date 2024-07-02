@@ -45,3 +45,8 @@ constraints:
 if impl(ghc >= 9.9)
   -- https://github.com/haskell/haskell-language-server/issues/4324
   benchmarks: False
+else
+  source-repository-package
+    type: git
+    location: https://github.com/jhrcek/stylish-haskell.git
+    tag: 0b1f3bb50d25c7c30171d080643bc8badbe1883c
