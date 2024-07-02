@@ -29,6 +29,7 @@ import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
+import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -109,7 +110,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
             let newName = mkTcOcc $ T.unpack newNameText
                 filesRefs = collectWith locToUri refs
                 getFileEdit (uri, locations) = do
-                    verTxtDocId <- lift $ pluginGetVersionedTextDoc (TextDocumentIdentifier uri)
+                    verTxtDocId <- liftIO $ runAction "rename: getVersionedTextDoc" state $ getVersionedTextDoc (TextDocumentIdentifier uri)
                     getSrcEdit state verTxtDocId (replaceRefs newName locations)
             fileEdits <- mapM getFileEdit filesRefs
             pure $ InL $ fold fileEdits

@@ -23,7 +23,6 @@ import           Control.Arrow                                     (second,
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans
 import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
 import           Control.Monad.Trans.Maybe
 import           Data.Char
@@ -41,6 +40,8 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
+import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
+import           Development.IDE.Core.FileStore                    (getUriContents)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -96,7 +97,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
-import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
@@ -122,15 +122,15 @@ import           GHC.Types.SrcLoc                                  (srcSpanToRea
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
+  contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
-    let text = virtualFileText <$> contents
-        mbFile = toNormalizedFilePath' <$> uriToFilePath uri
+    let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
-      actions = caRemoveRedundantImports parsedModule text allDiags range uri
-               <> caRemoveInvalidExports parsedModule text allDiags range uri
+      textContents = fmap Rope.toText contents
+      actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
+               <> caRemoveInvalidExports parsedModule textContents allDiags range uri
     pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
@@ -249,7 +249,7 @@ extendImportHandler' ideState ExtendImport {..}
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
+            t <- liftMaybe $ snd <$> newImportToEdit n ps (Rope.toText (fromMaybe mempty contents))
             return (nfp, WorkspaceEdit {_changes=Just (M.singleton doc [t]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
@@ -1991,11 +1991,19 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens $ unqualify b
+    ranges'
+        ( L
+            _
+            ( IEThingWith
+                _
+                thing
+                _
+                inners
 #if MIN_VERSION_ghc(9,9,0)
-    ranges' (L _ (IEThingWith _ thing _  inners _))
-#else
-    ranges' (L _ (IEThingWith _ thing _  inners))
+                _
 #endif
+            )
+        )
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']

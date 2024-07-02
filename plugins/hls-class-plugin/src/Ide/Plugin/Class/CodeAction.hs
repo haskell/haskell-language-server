@@ -24,6 +24,7 @@ import qualified Data.Set                             as Set
 import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.Compile         (sourceTypecheck)
+import           Development.IDE.Core.FileStore       (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat
@@ -80,7 +81,7 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
-    verTxtDocId <- lift $ pluginGetVersionedTextDoc docId
+    verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
     pure $ InL actions

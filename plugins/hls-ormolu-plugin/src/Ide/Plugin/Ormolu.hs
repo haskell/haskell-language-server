@@ -10,36 +10,37 @@ module Ide.Plugin.Ormolu
   )
 where
 
-import           Control.Exception               (Handler (..), IOException,
-                                                  SomeException (..), catches,
-                                                  handle)
-import           Control.Monad.Except            (runExceptT, throwError)
+import           Control.Exception                (Handler (..), IOException,
+                                                   SomeException (..), catches,
+                                                   handle)
+import           Control.Monad.Except             (runExceptT, throwError)
 import           Control.Monad.Extra
 import           Control.Monad.Trans
-import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT)
-import           Data.Functor                    ((<&>))
-import           Data.List                       (intercalate)
-import           Data.Maybe                      (catMaybes)
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Development.IDE                 hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat      (hsc_dflags, moduleNameString)
-import qualified Development.IDE.GHC.Compat      as D
-import qualified Development.IDE.GHC.Compat.Util as S
+import           Control.Monad.Trans.Except       (ExceptT (..), mapExceptT)
+import           Data.Functor                     ((<&>))
+import           Data.List                        (intercalate)
+import           Data.Maybe                       (catMaybes)
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
+import           Development.IDE.GHC.Compat       (hsc_dflags, moduleNameString)
+import qualified Development.IDE.GHC.Compat       as D
+import qualified Development.IDE.GHC.Compat.Util  as S
 import           GHC.LanguageExtensions.Type
-import           Ide.Plugin.Error                (PluginError (PluginInternalError))
+import           Ide.Plugin.Error                 (PluginError (PluginInternalError))
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
-import           Ide.Types                       hiding (Config)
-import qualified Ide.Types                       as Types
+import           Ide.Types                        hiding (Config)
+import qualified Ide.Types                        as Types
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server             hiding (defaultConfig)
+import           Language.LSP.Server              hiding (defaultConfig)
 import           Ormolu
 import           System.Exit
 import           System.FilePath
-import           System.Process.Run              (cwd, proc)
-import           System.Process.Text             (readCreateProcessWithExitCode)
-import           Text.Read                       (readMaybe)
+import           System.Process.Run               (cwd, proc)
+import           System.Process.Text              (readCreateProcessWithExitCode)
+import           Text.Read                        (readMaybe)
 
 -- ---------------------------------------------------------------------
 

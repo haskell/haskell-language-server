@@ -39,7 +39,9 @@ import           Data.Maybe                                   (catMaybes)
 import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
+import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Data.Typeable                                (Typeable)
+import           Development.IDE.Core.FileStore               (getUriContents)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
 import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
@@ -120,7 +122,6 @@ import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.VFS                             (virtualFileText)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -189,7 +190,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
             let nfp = toNormalizedFilePath' fp
-            mdlText <- moduleText _uri
+            mdlText <- moduleText st _uri
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
@@ -284,12 +285,15 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: Uri -> ExceptT PluginError (HandlerM config) Text
-moduleText uri =
-    handleMaybeM (PluginInternalError "mdlText") $
-      (virtualFileText <$>)
-          <$> pluginGetVirtualFile
-              (toNormalizedUri uri)
+moduleText :: IdeState -> Uri -> ExceptT PluginError (HandlerM config) Text
+moduleText state uri = do
+    contents <-
+        handleMaybeM (PluginInternalError "mdlText") $
+            liftIO $
+                runAction "eval.getUriContents" state $
+                    getUriContents $
+                        toNormalizedUri uri
+    pure $ Rope.toText contents
 
 testsBySection :: [Section] -> [(Section, EvalId, Test)]
 testsBySection sections =
