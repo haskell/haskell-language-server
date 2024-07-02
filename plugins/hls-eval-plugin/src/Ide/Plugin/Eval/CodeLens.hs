@@ -122,7 +122,6 @@ import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.VFS                             (virtualFileText)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
