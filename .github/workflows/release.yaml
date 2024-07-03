@@ -102,7 +102,7 @@ jobs:
                     , ADD_CABAL_ARGS: "--enable-split-sections"
                     },
                     { image: "centos:7"
-                    , installCmd: "yum -y install epel-release && yum install -y"
+                    , installCmd: "sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && yum -y install epel-release && yum install -y"
                     , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
                     , DISTRO: "CentOS"
                     , ARTIFACT: "x86_64-linux-centos7"
@@ -459,7 +459,7 @@ jobs:
             DISTRO: Fedora
             ARTIFACT: "x86_64-linux-fedora33"
           - image: centos:7
-            installCmd: yum -y install epel-release && yum install -y
+            installCmd: sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && yum -y install epel-release && yum install -y
             toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree
             DISTRO: CentOS
             ARTIFACT: "x86_64-linux-centos7"
@@ -754,7 +754,7 @@ jobs:
             DISTRO: Fedora
             ARTIFACT: "x86_64-linux-fedora33"
           - image: centos:7
-            installCmd: yum -y install epel-release && yum install -y
+            installCmd: sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && yum -y install epel-release && yum install -y
             toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree
             DISTRO: CentOS
             ARTIFACT: "x86_64-linux-centos7"
