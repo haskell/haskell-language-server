@@ -1039,10 +1039,9 @@ usePropertyByPathAction path plId p = do
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
-    ms <- tmrModSummary <$> use_ TypeCheck f
-    HiFileResult{hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
-    let obj_file  = ml_obj_file (ms_location ms)
-        core_file = ml_core_file (ms_location ms)
+    HiFileResult{hirModSummary, hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
+    let obj_file  = ml_obj_file (ms_location hirModSummary)
+        core_file = ml_core_file (ms_location hirModSummary)
     case hirCoreFp of
       Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
       Just (bin_core, fileHash) -> do
@@ -1055,7 +1054,7 @@ getLinkableRule recorder =
         core_t <- liftIO $ getModTime core_file
         (warns, hmi) <- case linkableType of
           -- Bytecode needs to be regenerated from the core file
-          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (posixSecondsToUTCTime core_t)
+          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core (posixSecondsToUTCTime core_t)
           -- Object code can be read from the disk
           ObjectLinkable -> do
             -- object file is up to date if it is newer than the core file
@@ -1068,8 +1067,8 @@ getLinkableRule recorder =
               else pure Nothing
             case mobj_time of
               Just obj_t
-                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ LM (posixSecondsToUTCTime obj_t) (ms_mod ms) [DotO obj_file]))
-              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (error "object doesn't have time")
+                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ LM (posixSecondsToUTCTime obj_t) (ms_mod hirModSummary) [DotO obj_file]))
+              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core (error "object doesn't have time")
         -- Record the linkable so we know not to unload it, and unload old versions
         whenJust ((homeModInfoByteCode =<< hmi) <|> (homeModInfoObject =<< hmi)) $ \(LM time mod _) -> do
             compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
