@@ -126,6 +126,7 @@ import           GHC.Driver.Config.CoreToStg.Prep
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                          (toList)
 import           GHC.Unit.Module.Warnings
+import Development.IDE.Core.WorkerThread (awaitRunInThread)
 #else
 import           Development.IDE.Core.FileStore         (shareFilePath)
 #endif
@@ -195,6 +196,7 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
               Right tcm -> return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
+
 
 -- | Install hooks to capture the splices as well as the runtime module dependencies
 captureSplicesAndDeps :: TypecheckHelpers -> HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, ModuleEnv BS.ByteString)
@@ -432,6 +434,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
 
+  traceM $ "[TRACE] Generating hi file for " ++ show (moduleName $ ms_mod ms)
   (details, guts) <- do
         -- write core file
         -- give variables unique OccNames
@@ -724,11 +727,13 @@ addRelativeImport fp modu dflags = dflags
 -- | Also resets the interface store
 atomicFileWrite :: ShakeExtras -> FilePath -> (FilePath -> IO a) -> IO a
 atomicFileWrite se targetPath write = do
+  -- awaitRunInThread (restartQueue se) $ do
+  traceM $ "[TRACE] Writing file: " <> targetPath
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
   (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)) >> pure x)
-    `onException` cleanUp
+    `onException` (cleanUp >> throwIO (userError "atomicFileWrite: write failed"))
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
 generateHieAsts hscEnv tcm =

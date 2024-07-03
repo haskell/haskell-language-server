@@ -169,6 +169,7 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
+import Debug.Trace (traceM)
 
 
 data Log
@@ -1039,10 +1040,13 @@ usePropertyByPathAction path plId p = do
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary f
+    -- ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary f
+    tmr <- use_ TypeCheck f
+    let ms = tmrModSummary tmr
     HiFileResult{hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
     let obj_file  = ml_obj_file (ms_location ms)
         core_file = ml_core_file (ms_location ms)
+    traceM $ "GetLinkable core_file " ++ show core_file
     case hirCoreFp of
       Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
       Just (bin_core, fileHash) -> do
