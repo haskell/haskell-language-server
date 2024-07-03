@@ -125,7 +125,6 @@ import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
-import Debug.Trace (traceM)
 
 data Log
   = LogSettingInitialDynFlags
@@ -531,10 +530,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                   -- See Note [Avoiding bad interface files]
                   let hscComponents = sort $ map show uids
                       cacheDirOpts = hscComponents ++ componentOptions opts
-                  let opts_hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack cacheDirOpts)
-                  traceM $ "Setting cache dirs for " ++ show rawComponentUnitId ++ " " ++ opts_hash ++ " " ++ show cacheDirOpts
                   cacheDirs <- liftIO $ getCacheDirs prefix cacheDirOpts
-
                   processed_df <- setCacheDirs recorder cacheDirs df2
                   -- The final component information, mostly the same but the DynFlags don't
                   -- contain any packages which are also loaded
