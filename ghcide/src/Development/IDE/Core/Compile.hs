@@ -94,7 +94,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC                                    (ForeignHValue,
                                                          GetDocsFailure (..),
-                                                         parsedSource)
+                                                         parsedSource, ModLocation (..))
 import qualified GHC.LanguageExtensions                 as LangExt
 import           GHC.Serialized
 import           HieDb                                  hiding (withHieDb)
@@ -1021,7 +1021,17 @@ getModSummaryFromImports env fp _modTime mContents = do
             return $! Util.fingerprintFingerprints $
                     [ Util.fingerprintString fp
                     , fingerPrintImports
+                    , modLocationFingerprint ms_location
                     ] ++ map Util.fingerprintString opts
+
+        modLocationFingerprint :: ModLocation -> Util.Fingerprint
+        modLocationFingerprint ModLocation{..} = Util.fingerprintFingerprints $
+            Util.fingerprintString <$> [ fromMaybe "" ml_hs_file
+                                         , ml_hi_file
+                                         , ml_dyn_hi_file
+                                         , ml_obj_file
+                                         , ml_dyn_obj_file
+                                         , ml_hie_file]
 
 
 -- | Parse only the module header
