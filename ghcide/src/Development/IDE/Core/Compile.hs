@@ -1033,7 +1033,6 @@ getModSummaryFromImports env fp _modTime mContents = do
                                          , ml_dyn_obj_file
                                          , ml_hie_file]
 
-
 -- | Parse only the module header
 parseHeader
        :: Monad m
