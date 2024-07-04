@@ -12,6 +12,7 @@ import           Language.LSP.Protocol.Types (CodeAction (CodeAction),
                                               CodeActionKind (CodeActionKind_QuickFix),
                                               Diagnostic (..), Uri)
 import           Text.Regex.TDFA
+import           Distribution.Client.Add
 
 
 missingDependenciesAction :: Int -> Uri -> Diagnostic -> [CodeAction]
