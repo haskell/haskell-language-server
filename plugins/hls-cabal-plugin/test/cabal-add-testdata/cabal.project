@@ -1,1 +1,1 @@
-packages: ./hidden-package
+packages: hidden-package missing-dependencies
