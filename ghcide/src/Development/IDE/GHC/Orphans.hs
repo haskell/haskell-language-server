@@ -17,26 +17,17 @@ import           Data.Hashable
 import           Data.String                       (IsString (fromString))
 import           Data.Text                         (unpack)
 
+import           Data.Bifunctor                    (Bifunctor (..))
 import           GHC.ByteCode.Types
 import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer             as SB
+import           GHC.Parser.Annotation
 import           GHC.Types.SrcLoc
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Types.Unique                  (getKey)
-import           GHC.Unit.Module.Graph             (ModuleGraph)
-#endif
-
-import           Data.Bifunctor                    (Bifunctor (..))
-import           GHC.Parser.Annotation
-
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 
-#endif
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo
@@ -88,9 +79,6 @@ instance NFData SB.StringBuffer where rnf = rwhnf
 instance Show Module where
     show = moduleNameString . moduleName
 
-#if !MIN_VERSION_ghc(9,3,0)
-instance Outputable a => Show (GenLocated SrcSpan a) where show = unpack . printOutputable
-#endif
 
 #if !MIN_VERSION_ghc(9,5,0)
 instance (NFData l, NFData e) => NFData (GenLocated l e) where
@@ -109,13 +97,18 @@ instance NFData ModSummary where
 instance Ord FastString where
     compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)
 
+
+#if MIN_VERSION_ghc(9,9,0)
+instance NFData (EpAnn a) where
+  rnf = rwhnf
+#else
 instance NFData (SrcSpanAnn' a) where
     rnf = rwhnf
+deriving instance Functor SrcSpanAnn'
+#endif
 
 instance Bifunctor GenLocated where
     bimap f g (L l x) = L (f l) (g x)
-
-deriving instance Functor SrcSpanAnn'
 
 instance NFData ParsedModule where
     rnf = rwhnf
@@ -126,12 +119,6 @@ instance Show HieFile where
 instance NFData HieFile where
     rnf = rwhnf
 
-#if !MIN_VERSION_ghc(9,3,0)
-deriving instance Eq SourceModified
-deriving instance Show SourceModified
-instance NFData SourceModified where
-    rnf = rwhnf
-#endif
 
 instance Hashable ModuleName where
     hashWithSalt salt = hashWithSalt salt . show
@@ -217,7 +204,6 @@ instance NFData ModuleGraph where rnf = rwhnf
 instance NFData HomeModInfo where
   rnf (HomeModInfo iface dets link) = rwhnf iface `seq` rnf dets `seq` rnf link
 
-#if MIN_VERSION_ghc(9,3,0)
 instance NFData PkgQual where
   rnf NoPkgQual      = ()
   rnf (ThisPkg uid)  = rnf uid
@@ -228,7 +214,6 @@ instance NFData UnitId where
 
 instance NFData NodeKey where
   rnf = rwhnf
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
 instance NFData HomeModLinkable where

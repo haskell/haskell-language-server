@@ -5,7 +5,6 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitState
     UnitState,
     initUnits,
-    oldInitUnits,
     unitState,
     getUnitName,
     explicitUnits,
@@ -53,10 +52,17 @@ import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 import           Prelude                               hiding (mod)
 
+import           Control.Monad
+import qualified Data.List.NonEmpty                    as NE
+import qualified Data.Map.Strict                       as Map
+import qualified GHC
 import qualified GHC.Data.ShortText                    as ST
+import qualified GHC.Driver.Session                    as DynFlags
+import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
 import           GHC.Types.Unique.Set
 import           GHC.Unit.External
 import qualified GHC.Unit.Finder                       as GHC
+import           GHC.Unit.Home.ModInfo
 import qualified GHC.Unit.Info                         as UnitInfo
 import           GHC.Unit.State                        (LookupResult, UnitInfo,
                                                         UnitInfoMap,
@@ -69,40 +75,19 @@ import           GHC.Unit.State                        (LookupResult, UnitInfo,
 import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Data.FastString
-import           GHC.Unit.Env
-import           GHC.Unit.Finder                       hiding
-                                                       (findImportedModule)
-import qualified GHC.Unit.Types                        as Unit
-#endif
-
-#if MIN_VERSION_ghc(9,3,0)
-import           Control.Monad
-import qualified Data.List.NonEmpty                    as NE
-import qualified Data.Map.Strict                       as Map
-import qualified GHC
-import qualified GHC.Driver.Session                    as DynFlags
-import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
-import           GHC.Unit.Home.ModInfo
-#endif
-
 
 type PreloadUnitClosure = UniqSet UnitId
 
 unitState :: HscEnv -> UnitState
 unitState = ue_units . hsc_unit_env
 
-#if MIN_VERSION_ghc(9,3,0)
 createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> HomeUnitGraph
 createUnitEnvFromFlags unitDflags =
   let
     newInternalUnitEnv dflags = mkHomeUnitEnv dflags emptyHomePackageTable Nothing
     unitEnvList = NE.map (\dflags -> (homeUnitId_ dflags, newInternalUnitEnv dflags)) unitDflags
   in
-    unitEnv_new (Map.fromList (NE.toList (unitEnvList)))
+    unitEnv_new (Map.fromList (NE.toList unitEnvList))
 
 initUnits :: [DynFlags] -> HscEnv -> IO HscEnv
 initUnits unitDflags env = do
@@ -135,25 +120,11 @@ initUnits unitDflags env = do
         , ue_eps             = ue_eps (hsc_unit_env env)
         }
   pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
-#else
-initUnits :: [DynFlags] -> HscEnv -> IO HscEnv
-initUnits _df env = pure env -- Can't do anything here, oldInitUnits should already be called
-#endif
 
-
--- | oldInitUnits only needs to modify DynFlags for GHC <9.2
--- For GHC >= 9.2, we need to set the hsc_unit_env also, that is
--- done later by initUnits
-oldInitUnits :: DynFlags -> IO DynFlags
-oldInitUnits = pure
 
 explicitUnits :: UnitState -> [Unit]
 explicitUnits ue =
-#if MIN_VERSION_ghc(9,3,0)
   map fst $ State.explicitUnits ue
-#else
-  State.explicitUnits ue
-#endif
 
 listVisibleModuleNames :: HscEnv -> [ModuleName]
 listVisibleModuleNames env =
@@ -166,11 +137,7 @@ getUnitName env i =
 lookupModuleWithSuggestions
   :: HscEnv
   -> ModuleName
-#if MIN_VERSION_ghc(9,3,0)
   -> GHC.PkgQual
-#else
-  -> Maybe FastString
-#endif
   -> LookupResult
 lookupModuleWithSuggestions env modname mpkg =
   State.lookupModuleWithSuggestions (unitState env) modname mpkg
@@ -204,10 +171,6 @@ defUnitId              = Definite
 installedModule :: unit -> ModuleName -> GenModule unit
 installedModule        = Module
 
-#if !MIN_VERSION_ghc(9,3,0)
-moduleUnitId :: Module -> UnitId
-moduleUnitId = Unit.toUnitId . Unit.moduleUnit
-#endif
 
 filterInplaceUnits :: [UnitId] -> [PackageFlag] -> ([UnitId], [PackageFlag])
 filterInplaceUnits us packageFlags =
@@ -225,11 +188,7 @@ showSDocForUser' env = showSDocForUser (hsc_dflags env) (unitState env)
 
 findImportedModule :: HscEnv -> ModuleName -> IO (Maybe Module)
 findImportedModule env mn = do
-#if MIN_VERSION_ghc(9,3,0)
     res <- GHC.findImportedModule env mn NoPkgQual
-#else
-    res <- GHC.findImportedModule env mn Nothing
-#endif
     case res of
         Found _ mod -> pure . pure $ mod
         _           -> pure Nothing

@@ -13,11 +13,6 @@
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
--- On 9.4 we get a new redundant constraint warning, but deleting the
--- constraint breaks the build on earlier versions. Rather than apply
--- lots of CPP, we just disable the warning until later.
-{-# OPTIONS_GHC -Wno-redundant-constraints   #-}
-
 #ifdef GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib_parser(x,y,z)
 #else
@@ -108,7 +103,6 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                        hiding
                                                                     (Null)
 import qualified Language.LSP.Protocol.Types                        as LSP
-import           Language.LSP.Server                                (getVersionedTextDoc)
 
 import qualified Development.IDE.Core.Shake                         as Shake
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
@@ -367,7 +361,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
-    verTxtDocId <- lift $ getVersionedTextDoc documentId
+    verTxtDocId <- lift $ pluginGetVersionedTextDoc documentId
     liftIO $ fmap (InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 

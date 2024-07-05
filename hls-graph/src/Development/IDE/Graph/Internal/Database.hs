@@ -2,6 +2,7 @@
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -27,7 +28,6 @@ import           Data.Dynamic
 import           Data.Either
 import           Data.Foldable                        (for_, traverse_)
 import           Data.IORef.Extra
-import           Data.List.NonEmpty                   (unzip)
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
@@ -41,6 +41,12 @@ import qualified ListT
 import qualified StmContainers.Map                    as SMap
 import           System.IO.Unsafe
 import           System.Time.Extra                    (duration, sleep)
+
+#if MIN_VERSION_base(4,19,0)
+import           Data.Functor                         (unzip)
+#else
+import           Data.List.NonEmpty                   (unzip)
+#endif
 
 
 newDatabase :: Dynamic -> TheRules -> IO Database

@@ -17,7 +17,6 @@ import           Language.LSP.Protocol.Types     hiding
                                                   mkRange)
 import           Language.LSP.Test
 import           System.FilePath                 ((</>))
-import           Test.Hls.FileSystem             (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

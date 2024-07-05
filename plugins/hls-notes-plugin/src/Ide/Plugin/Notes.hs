@@ -25,7 +25,6 @@ import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition),
                                                    SMethod (SMethod_TextDocumentDefinition))
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Server              as LSP
 import           Language.LSP.VFS                 (VirtualFile (..))
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
@@ -81,7 +80,7 @@ jumpToNote state _ param
     = do
         let Position l c = param ^. L.position
         contents <- fmap _file_text . err "Error getting file contents"
-            =<< lift (LSP.getVirtualFile uriOrig)
+            =<< lift (pluginGetVirtualFile uriOrig)
         line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
             (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
         let noteOpt = listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line

@@ -34,7 +34,7 @@ import           Test.Hls                        (FromServerMessage' (..),
                                                   SMethod (..),
                                                   TCustomMessage (..),
                                                   TNotificationMessage (..))
-import           Test.Hls.FileSystem             (copyDir, toAbsFp)
+import           Test.Hls.FileSystem             (copyDir)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
@@ -161,7 +161,7 @@ data IncludeDeclaration =
     YesIncludeDeclaration
     | NoExcludeDeclaration
 
-getReferences' :: SymbolLocation -> IncludeDeclaration -> Session ([Location])
+getReferences' :: SymbolLocation -> IncludeDeclaration -> Session [Location]
 getReferences' (file, l, c) includeDeclaration = do
     doc <- openDoc file "haskell"
     getReferences doc (Position l c) $ toBool includeDeclaration

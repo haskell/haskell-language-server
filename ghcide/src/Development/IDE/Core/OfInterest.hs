@@ -141,7 +141,7 @@ kick = do
                 toJSON $ map fromNormalizedFilePath files
 
     signal (Proxy @"kick/start")
-    liftIO $ progressUpdate progress KickStarted
+    liftIO $ progressUpdate progress ProgressNewStarted
 
     -- Update the exports map
     results <- uses GenerateCore files
@@ -152,7 +152,7 @@ kick = do
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
-    liftIO $ progressUpdate progress KickCompleted
+    liftIO $ progressUpdate progress ProgressCompleted
 
     GarbageCollectVar var <- getIdeGlobalAction
     garbageCollectionScheduled <- liftIO $ readVar var

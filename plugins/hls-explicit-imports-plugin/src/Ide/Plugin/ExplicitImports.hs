@@ -52,7 +52,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 
 -- This plugin is named explicit-imports for historical reasons. Besides
 -- providing code actions and lenses to make imports explicit it also provides
@@ -63,7 +62,7 @@ importCommandId = "ImportLensCommand"
 
 data Log
   = LogShake Shake.Log
-  | LogWAEResponseError ResponseError
+  | LogWAEResponseError (TResponseError Method_WorkspaceApplyEdit)
   | forall a. (Pretty a) => LogResolve a
 
 
@@ -107,9 +106,9 @@ descriptorForModules recorder modFilter plId =
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
 runImportCommand recorder ideState _ eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
-  _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
+  _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
-  where logErrors (Left re@(ResponseError{})) = do
+  where logErrors (Left re) = do
           logWith recorder Error (LogWAEResponseError re)
           pure ()
         logErrors (Right _) = pure ()
@@ -212,7 +211,7 @@ codeActionResolveProvider _ ideState _ ca _ rd = do
     pure $ ca & L.edit ?~ wedit
 --------------------------------------------------------------------------------
 
-resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (LspT Config IO) WorkspaceEdit
+resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (HandlerM Config) WorkspaceEdit
 -- Providing the edit for the command, or the resolve for the code action is
 -- completely generic, as all we need is the unique id and the text edit.
 resolveWTextEdit ideState (ResolveOne uri int) = do
@@ -361,7 +360,11 @@ extractMinimalImports ::
 extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
   -- extract the original imports and the typechecking environment
   let tcEnv = tmrTypechecked
+#if MIN_VERSION_ghc(9,9,0)
+      (_, imports, _, _, _) = tmrRenamed
+#else
       (_, imports, _, _) = tmrRenamed
+#endif
       ParsedModule {pm_parsed_source = L loc _} = tmrParsed
       emss = exportedModuleStrings tmrParsed
   Just srcSpan <- pure $ realSpan loc
@@ -461,11 +464,8 @@ filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
     then Just res
     else Nothing
   where importedNames = S.fromList $ map (ieName . unLoc) names
-        res = flip Map.filter avails $ \a ->
-                any (`S.member` importedNames)
-                  $ concatMap
-                      getAvailNames
-                      a
+        res = Map.filter (any (any (`S.member` importedNames) . getAvailNames)) avails
+
         allFilteredAvailsNames = S.fromList
           $ concatMap getAvailNames
           $ mconcat

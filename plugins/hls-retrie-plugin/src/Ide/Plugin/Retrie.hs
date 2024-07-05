@@ -98,10 +98,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
-import           Language.LSP.Server                  (ProgressCancellable (Cancellable),
-                                                       sendNotification,
-                                                       sendRequest,
-                                                       withIndefiniteProgress)
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule,
                                                        Fixity (Fixity),
@@ -130,9 +127,7 @@ import           Retrie.SYB                           (everything, extQ,
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
-#endif
 
 data Log
   = LogParsingModule FilePath
@@ -174,7 +169,7 @@ data RunRetrieParams = RunRetrieParams
 
 runRetrieCmd :: Recorder (WithPriority Log) ->  CommandFunction IdeState RunRetrieParams
 runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  withIndefiniteProgress description token Cancellable $ \_updater -> do
+  pluginWithIndefiniteProgress description token Cancellable $ \_updater -> do
     _ <- runExceptT $ do
         nfp <- getNormalizedFilePathE uri
         (session, _) <-
@@ -192,12 +187,12 @@ runRetrieCmd recorder state token RunRetrieParams{originatingFile = uri, ..} = E
                 nfp
                 restrictToOriginatingFile
         unless (null errors) $
-            lift $ sendNotification SMethod_WindowShowMessage $
+            lift $ pluginSendNotification SMethod_WindowShowMessage $
                     ShowMessageParams MessageType_Warning $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
     return $ Right $ InR Null
 
@@ -222,7 +217,7 @@ runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
         useE GetAnnotatedParsedSource nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
-    inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
+    inlineRewrite <- liftIO $ constructInlineFromIdentifer (unsafeMkA astSrc 0) fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
@@ -238,7 +233,7 @@ runRetrieInlineThisCmd recorder state _token RunRetrieInlineThisParams{..} = do
                 ourReplacement = [ r
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
-            _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit
+            _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
             return $ InR Null
 
@@ -348,7 +343,11 @@ getBinds nfp = do
   -- so that we can include adding the required imports in the retrie command
   let rn = tmrRenamed tm
   case rn of
+#if MIN_VERSION_ghc(9,9,0)
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _, _) -> do
+#else
     (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _) -> do
+#endif
       topLevelBinds <- case hs_valds of
         ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
         XValBindsLR (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn) ->
@@ -734,16 +733,17 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclAs = toMod <$> ideclAsString
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 
-#if MIN_VERSION_ghc(9,3,0)
     ideclPkgQual = NoRawPkgQual
-#else
-    ideclPkgQual = Nothing
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
-      { ideclAnn = GHCGHC.EpAnnNotUsed
+      { ideclAnn =
+#if MIN_VERSION_ghc(9,9,0)
+        GHCGHC.noAnn
+#else
+        GHCGHC.EpAnnNotUsed
+#endif
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
       }

@@ -3,17 +3,22 @@
 
 module CradleTests (tests) where
 
+import           Config                          (checkDefs, mkL, runInDir,
+                                                  runWithExtraFiles,
+                                                  testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
+import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      (GhcVersion (..))
 import           Development.IDE.GHC.Util
+import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           Development.IDE.Test            (expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   isReferenceReady,
                                                   waitForAction)
 import           Development.IDE.Types.Location
+import           GHC.TypeLits                    (symbolVal)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
@@ -24,12 +29,8 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
--- import Test.QuickCheck.Instances ()
-import           Config
-import           Control.Lens                    ((^.))
-import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
-import           GHC.TypeLits                    (symbolVal)
-import           Test.Hls                        (ignoreForGhcVersions)
+import           Test.Hls.Util                   (EnvSpec (..), OS (..),
+                                                  ignoreInEnv)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -40,11 +41,9 @@ tests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "multi"   (multiTests "multi")
-    ,ignoreForGhcVersions [GHC92] "multiple units not supported on 9.2"
-       $ testGroup "multi-unit" (multiTests "multi-unit")
+    ,testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
-    ,ignoreForGhcVersions [GHC92] "multiple units not supported on 9.2"
-      $ testGroup "multi-unit-rexport" [multiRexportTest]
+    ,testGroup "multi-unit-rexport" [multiRexportTest]
     ]
 
 loadCradleOnlyonce :: TestTree
@@ -172,7 +171,8 @@ simpleMultiTest3 variant =
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
 simpleMultiDefTest :: FilePath -> TestTree
-simpleMultiDefTest variant = testCase (multiTestName variant "def-test") $ runWithExtraFiles variant $ \dir -> do
+simpleMultiDefTest variant = ignoreForWindows $ testCase testName $
+    runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- liftIO $ runInDir dir $ do
@@ -187,6 +187,11 @@ simpleMultiDefTest variant = testCase (multiTestName variant "def-test") $ runWi
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
+  where
+    testName = multiTestName variant "def-test"
+    ignoreForWindows
+        | testName == "simple-multi-def-test" = ignoreInEnv [HostOS Windows] "Test is flaky on Windows, see #4270"
+        | otherwise = id
 
 multiRexportTest :: TestTree
 multiRexportTest =

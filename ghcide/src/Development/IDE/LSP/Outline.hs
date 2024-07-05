@@ -19,21 +19,17 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
-import           Development.IDE.Types.Location
 import           Development.IDE.GHC.Util       (printOutputable)
+import           Development.IDE.Types.Location
 import           Ide.Types
-import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types    (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
                                                  SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
-                                                 type (|?) (InL, InR), uriToFilePath)
-import          Language.LSP.Protocol.Message
+                                                 type (|?) (InL, InR),
+                                                 uriToFilePath)
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if !MIN_VERSION_ghc(9,3,0)
-import qualified Data.Text                      as T
-#endif
 
 moduleOutline
   :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
@@ -118,21 +114,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
         , L (locA -> RealSrcSpan l' _) n <- cs
         , let l'' = case con of
                 L (locA -> RealSrcSpan l''' _) _ -> l'''
-                _ -> l'
+                _                                -> l'
         ]
     }
   where
     cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
-#if MIN_VERSION_ghc(9,3,0)
     cvtFld (L (locA -> RealSrcSpan l' _) n) = Just $ (defDocumentSymbol l' :: DocumentSymbol)
-#else
-    cvtFld (L (RealSrcSpan l' _) n) = Just $ (defDocumentSymbol l' :: DocumentSymbol)
-#endif
-#if MIN_VERSION_ghc(9,3,0)
                 { _name = printOutputable (unLoc (foLabel n))
-#else
-                { _name = printOutputable (unLoc (rdrNameFieldOcc n))
-#endif
                 , _kind = SymbolKind_Field
                 }
     cvtFld _  = Nothing
@@ -148,23 +136,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_ins
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
-#if MIN_VERSION_ghc(9,3,0)
-        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix (feqn_pats)
-#else
-        printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
-                (map printOutputable feqn_pats)
-#endif
+        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix feqn_pats
     , _kind = SymbolKind_Interface
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
-#if MIN_VERSION_ghc(9,3,0)
-        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix (feqn_pats)
-#else
-        printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
-                (map printOutputable feqn_pats)
-#endif
+        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix feqn_pats
     , _kind = SymbolKind_Interface
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
@@ -267,16 +245,16 @@ hsConDeclsBinders cons
     get_flds_h98 :: HsConDeclH98Details GhcPs
                  -> [LFieldOcc GhcPs]
     get_flds_h98 (RecCon flds) = get_flds (reLoc flds)
-    get_flds_h98 _ = []
+    get_flds_h98 _             = []
 
     get_flds_gadt :: HsConDeclGADTDetails GhcPs
                   -> [LFieldOcc GhcPs]
-#if MIN_VERSION_ghc(9,3,0)
-    get_flds_gadt (RecConGADT flds _) = get_flds (reLoc flds)
+#if MIN_VERSION_ghc(9,9,0)
+    get_flds_gadt (RecConGADT _ flds) = get_flds (reLoc flds)
 #else
-    get_flds_gadt (RecConGADT flds) = get_flds (reLoc flds)
+    get_flds_gadt (RecConGADT flds _) = get_flds (reLoc flds)
 #endif
-    get_flds_gadt _ = []
+    get_flds_gadt _                   = []
 
     get_flds :: Located [LConDeclField GhcPs]
              -> [LFieldOcc GhcPs]

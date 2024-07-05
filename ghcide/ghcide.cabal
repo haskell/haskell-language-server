@@ -2,7 +2,7 @@ cabal-version:      3.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.8.0.0
+version:            2.9.0.1
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.8.2 || ==9.6.5 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -62,7 +62,7 @@ library
     , deepseq
     , dependent-map
     , dependent-sum
-    , Diff                         ^>=0.4.0
+    , Diff                         ^>=0.5
     , directory
     , dlist
     , enummapset
@@ -74,8 +74,6 @@ library
     , ghc                          >=9.2
     , ghc-boot
     , ghc-boot-th
-    , ghc-check                    >=0.5.0.8
-    , ghc-paths
     , ghc-trace-events
     , Glob
     , haddock-library              >=1.8      && <1.12
@@ -83,13 +81,13 @@ library
     , hie-bios                     ^>=0.14.0
     , hie-compat                   ^>=0.3.0.0
     , hiedb                        ^>= 0.6.0.0
-    , hls-graph                    == 2.8.0.0
-    , hls-plugin-api               == 2.8.0.0
+    , hls-graph                    == 2.9.0.1
+    , hls-plugin-api               == 2.9.0.1
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.6.0.0
-    , lsp-types                    ^>=2.2.0.0
+    , lsp                          ^>=2.7
+    , lsp-types                    ^>=2.3
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
@@ -148,6 +146,7 @@ library
     Development.IDE.Core.Shake
     Development.IDE.Core.Tracing
     Development.IDE.Core.UseStale
+    Development.IDE.Core.WorkerThread
     Development.IDE.GHC.Compat
     Development.IDE.GHC.Compat.Core
     Development.IDE.GHC.Compat.CmdLine
@@ -204,7 +203,6 @@ library
     Development.IDE.Core.FileExists
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
-    Development.IDE.Session.VersionCheck
     Development.IDE.Types.Action
 
   if flag(pedantic)

@@ -133,7 +133,11 @@ data BindInfo = BindInfo
 getInstanceBindLensRule :: Recorder (WithPriority Log) -> Rules ()
 getInstanceBindLensRule recorder = do
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetInstanceBindLens nfp -> runMaybeT $ do
+#if MIN_VERSION_ghc(9,9,0)
+        tmr@(tmrRenamed ->  (hs_tyclds -> tycls, _, _, _, _)) <- useMT TypeCheck nfp
+#else
         tmr@(tmrRenamed ->  (hs_tyclds -> tycls, _, _, _)) <- useMT TypeCheck nfp
+#endif
         (InstanceBindTypeSigsResult allBinds) <- useMT GetInstanceBindTypeSigs nfp
 
         let -- declared instance methods without signatures

@@ -98,20 +98,9 @@ module Development.IDE.GHC.Compat(
     extract_cons,
     recDotDot,
 
-#if !MIN_VERSION_ghc(9,3,0)
-    Dependencies(dep_mods),
-    NameCacheUpdater(NCU),
-    extendModSummaryNoDeps,
-    emsModSummary,
-    nonDetNameEnvElts,
-    nonDetOccEnvElts,
-    upNameCache,
-#endif
 
-#if MIN_VERSION_ghc(9,3,0)
     Dependencies(dep_direct_mods),
     NameCacheUpdater,
-#endif
 
 #if MIN_VERSION_ghc(9,5,0)
     XModulePs(..),
@@ -133,6 +122,7 @@ import           Compat.HieTypes                         hiding
                                                          (nodeAnnotations)
 import qualified Compat.HieTypes                         as GHC (nodeAnnotations)
 import           Compat.HieUtils
+import           Control.Applicative                     ((<|>))
 import qualified Data.ByteString                         as BS
 import           Data.Coerce                             (coerce)
 import           Data.List                               (foldl')
@@ -179,6 +169,7 @@ import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
+import           GHC.Driver.Config.Stg.Pipeline
 import           GHC.Driver.Env                          as Env
 import           GHC.Iface.Env
 import           GHC.Linker.Loader                       (loadDecls, loadExpr)
@@ -191,23 +182,11 @@ import           GHC.Types.IPE
 import           GHC.Types.SrcLoc                        (combineRealSrcSpans)
 import           GHC.Unit.Home.ModInfo                   (HomePackageTable,
                                                           lookupHpt)
+import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
+                                                          Usage (..))
 import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if !MIN_VERSION_ghc(9,3,0)
-import           Data.IORef
-import           GHC.Runtime.Interpreter
-import           GHC.Unit.Module.Deps                    (Dependencies (dep_mods),
-                                                          Usage (..))
-import           GHC.Unit.Module.ModSummary
-#endif
-
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Config.Stg.Pipeline
-import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
-                                                          Usage (..))
-#endif
 
 #if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Core.Lint                           (lintInteractiveExpr)
@@ -233,35 +212,19 @@ nonDetFoldOccEnv :: (a -> b -> b) -> b -> OccEnv a -> b
 nonDetFoldOccEnv = foldOccEnv
 #endif
 
-#if !MIN_VERSION_ghc(9,3,0)
-nonDetOccEnvElts :: OccEnv a -> [a]
-nonDetOccEnvElts = occEnvElts
-#endif
 
 type ModIfaceAnnotation = Annotation
 
-#if !MIN_VERSION_ghc(9,3,0)
-nonDetNameEnvElts :: NameEnv a -> [a]
-nonDetNameEnvElts = nameEnvElts
-#endif
 
 myCoreToStgExpr :: Logger -> DynFlags -> InteractiveContext
-#if MIN_VERSION_ghc(9,3,0)
             -> Bool
-#endif
                 -> Module -> ModLocation -> CoreExpr
                 -> IO ( Id
-#if MIN_VERSION_ghc(9,3,0)
                       ,[CgStgTopBinding] -- output program
-#else
-                      ,[StgTopBinding] -- output program
-#endif
                       , InfoTableProvMap
                       , CollectedCCs )
 myCoreToStgExpr logger dflags ictxt
-#if MIN_VERSION_ghc(9,3,0)
                 for_bytecode
-#endif
                 this_mod ml prepd_expr = do
     {- Create a temporary binding (just because myCoreToStg needs a
        binding for the stg2stg step) -}
@@ -277,30 +240,20 @@ myCoreToStgExpr logger dflags ictxt
        myCoreToStg logger
                    dflags
                    ictxt
-#if MIN_VERSION_ghc(9,3,0)
                    for_bytecode
-#endif
                    this_mod
                    ml
                    [NonRec bco_tmp_id prepd_expr]
     return (bco_tmp_id, stg_binds, prov_map, collected_ccs)
 
 myCoreToStg :: Logger -> DynFlags -> InteractiveContext
-#if MIN_VERSION_ghc(9,3,0)
             -> Bool
-#endif
             -> Module -> ModLocation -> CoreProgram
-#if MIN_VERSION_ghc(9,3,0)
             -> IO ( [CgStgTopBinding] -- output program
-#else
-            -> IO ( [StgTopBinding] -- output program
-#endif
                   , InfoTableProvMap
                   , CollectedCCs )  -- CAF cost centre info (declared and used)
 myCoreToStg logger dflags ictxt
-#if MIN_VERSION_ghc(9,3,0)
             for_bytecode
-#endif
             this_mod ml prepd_binds = do
     let (stg_binds, denv, cost_centre_info)
          = {-# SCC "Core2Stg" #-}
@@ -320,7 +273,6 @@ myCoreToStg logger dflags ictxt
     stg_binds2
 #endif
         <- {-# SCC "Stg2Stg" #-}
-#if MIN_VERSION_ghc(9,3,0)
            stg2stg logger
 #if MIN_VERSION_ghc(9,5,0)
                    (interactiveInScope ictxt)
@@ -328,20 +280,17 @@ myCoreToStg logger dflags ictxt
                    ictxt
 #endif
                    (initStgPipelineOpts dflags for_bytecode) this_mod stg_binds
-#else
-           stg2stg logger dflags ictxt this_mod stg_binds
-#endif
 
     return (stg_binds2, denv, cost_centre_info)
 
-
+#if MIN_VERSION_ghc(9,9,0)
+reLocA :: (HasLoc (GenLocated a e), HasAnnotation b)
+      => GenLocated a e -> GenLocated b e
+reLocA = reLoc
+#endif
 
 getDependentMods :: ModIface -> [ModuleName]
-#if MIN_VERSION_ghc(9,3,0)
 getDependentMods = map (gwib_mod . snd) . S.toList . dep_direct_mods . mi_deps
-#else
-getDependentMods = map gwib_mod . dep_mods . mi_deps
-#endif
 
 simplifyExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
 #if MIN_VERSION_ghc(9,5,0)
@@ -361,50 +310,18 @@ corePrepExpr _ = GHC.corePrepExpr
 
 renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
 renderMessages msgs =
-#if MIN_VERSION_ghc(9,3,0)
   let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
   in (renderMsgs psWarnings, renderMsgs psErrors)
-#else
-  msgs
-#endif
 
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
 pattern PFailedWithErrorMessages msgs
-#if MIN_VERSION_ghc(9,3,0)
      <- PFailed (const . fmap (fmap renderDiagnosticMessageWithHints) . getMessages . getPsErrorMessages -> msgs)
-#else
-     <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
-#endif
 {-# COMPLETE POk, PFailedWithErrorMessages #-}
 
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
 
-#if MIN_VERSION_ghc(9,3,0)
 type NameCacheUpdater = NameCache
-#else
-
-lookupNameCache :: Module -> OccName -> NameCache -> (NameCache, Name)
--- Lookup up the (Module,OccName) in the NameCache
--- If you find it, return it; if not, allocate a fresh original name and extend
--- the NameCache.
--- Reason: this may the first occurrence of (say) Foo.bar we have encountered.
--- If we need to explore its value we will load Foo.hi; but meanwhile all we
--- need is a Name for it.
-lookupNameCache mod occ name_cache =
-  case lookupOrigNameCache (nsNames name_cache) mod occ of {
-    Just name -> (name_cache, name);
-    Nothing   ->
-        case takeUniqFromSupply (nsUniqs name_cache) of {
-          (uniq, us) ->
-              let
-                name      = mkExternalName uniq mod occ noSrcSpan
-                new_cache = extendNameCache (nsNames name_cache) mod occ name
-              in (name_cache{ nsUniqs = us, nsNames = new_cache }, name) }}
-
-upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
-upNameCache = updNameCache
-#endif
 
 mkHieFile' :: ModSummary
            -> [Avail.AvailInfo]
@@ -434,7 +351,7 @@ setHieDir _f d = d { hieDir = Just _f}
 dontWriteHieFiles :: DynFlags -> DynFlags
 dontWriteHieFiles d = gopt_unset d Opt_WriteHie
 
-setUpTypedHoles ::DynFlags -> DynFlags
+setUpTypedHoles :: DynFlags -> DynFlags
 setUpTypedHoles df
   = flip gopt_unset Opt_AbstractRefHoleFits    -- too spammy
   $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
@@ -447,9 +364,13 @@ setUpTypedHoles df
   $ flip gopt_unset Opt_SortValidHoleFits
   $ flip gopt_unset Opt_UnclutterValidHoleFits
   $ df
-  { refLevelHoleFits = Just 1   -- becomes slow at higher levels
-  , maxRefHoleFits   = Just 10  -- quantity does not impact speed
-  , maxValidHoleFits = Nothing  -- quantity does not impact speed
+  { refLevelHoleFits = refLevelHoleFits df <|> Just 1   -- becomes slow at higher levels
+
+   -- Sometimes GHC can emit a lot of hole fits, this causes editors to be slow
+   -- or just crash, we limit the hole fits to 10. The number was chosen
+   -- arbirtarily by the author.
+  , maxRefHoleFits   = maxRefHoleFits df <|> Just 10
+  , maxValidHoleFits = maxValidHoleFits df <|> Just 10
   }
 
 
@@ -506,24 +427,24 @@ generatedNodeInfo :: HieAST a -> Maybe (NodeInfo a)
 generatedNodeInfo = Map.lookup GeneratedInfo . getSourcedNodeInfo . sourcedNodeInfo
 
 data GhcVersion
-  = GHC92
-  | GHC94
+  = GHC94
   | GHC96
   | GHC98
-  deriving (Eq, Ord, Show)
+  | GHC910
+  deriving (Eq, Ord, Show, Enum)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,10,0,0)
+ghcVersion = GHC910
+#elif MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
 ghcVersion = GHC98
 #elif MIN_VERSION_GLASGOW_HASKELL(9,6,0,0)
 ghcVersion = GHC96
 #elif MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
 ghcVersion = GHC94
-#elif MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
-ghcVersion = GHC92
 #endif
 
 simpleNodeInfoCompat :: FastStringCompat -> FastStringCompat -> NodeInfo a
@@ -556,16 +477,7 @@ loadModulesHome
     -> HscEnv
     -> HscEnv
 loadModulesHome mod_infos e =
-#if MIN_VERSION_ghc(9,3,0)
   hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
-#else
-  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
-  in e { hsc_HPT = new_modules
-       , hsc_type_env_var = Nothing
-       }
-    where
-      mod_name = moduleName . mi_module . hm_iface
-#endif
 
 recDotDot :: HsRecFields (GhcPass p) arg -> Maybe Int
 recDotDot x =

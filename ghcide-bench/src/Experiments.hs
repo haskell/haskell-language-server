@@ -557,7 +557,7 @@ runBenchmarksFun dir allBenchmarks = do
             ]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
-      fullCaps
+      fullLatestClientCaps
         & (L.window . _Just) .~ WindowClientCapabilities (Just True) Nothing Nothing
         & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (ClientCodeActionResolveOptions ["edit"])
         & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
@@ -842,19 +842,19 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
         not . null <$> getCompletions doc pos
 
 
-getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
 
-getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
 
-getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
 
-getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
 
-getRebuildsCount :: Session (Either ResponseError Int)
+getRebuildsCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getRebuildsCount = tryCallTestPlugin GetRebuildsCount
 
 -- Copy&paste from ghcide/test/Development.IDE.Test
@@ -862,7 +862,7 @@ getStoredKeys :: Session [Text]
 getStoredKeys = callTestPlugin GetStoredKeys
 
 -- Copy&paste from ghcide/test/Development.IDE.Test
-tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 tryCallTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
@@ -878,5 +878,5 @@ callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     res <- tryCallTestPlugin cmd
     case res of
-        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
-        Right a                      -> pure a
+        Left (TResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                       -> pure a

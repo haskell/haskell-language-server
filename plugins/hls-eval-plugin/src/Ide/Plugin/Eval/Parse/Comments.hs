@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -24,7 +25,7 @@ import           Data.Function                            ((&))
 import           Data.Functor                             ((<&>))
 import           Data.Functor.Identity
 import           Data.List.NonEmpty                       (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty                       as NE
+import qualified Data.List.NonEmpty                       as NE hiding (unzip)
 import           Data.Map.Strict                          (Map)
 import qualified Data.Map.Strict                          as Map
 import qualified Data.Text                                as T
@@ -39,6 +40,12 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char                     (alphaNumChar, char,
                                                            eol, hspace,
                                                            letterChar)
+
+#if MIN_VERSION_base(4,19,0)
+import qualified Data.Functor                             as NE (unzip)
+#else
+import qualified Data.List.NonEmpty                       as NE (unzip)
+#endif
 
 {-
 We build parsers combining the following three kinds of them:

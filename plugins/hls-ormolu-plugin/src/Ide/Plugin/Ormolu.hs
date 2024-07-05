@@ -63,7 +63,7 @@ properties =
 -- ---------------------------------------------------------------------
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
+provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
   fileOpts <-
       maybe [] (fromDyn . hsc_dflags . hscEnv)
           <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)
@@ -117,7 +117,7 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefini
 
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 
-   ret :: Either SomeException T.Text -> ExceptT PluginError (LspM Types.Config) ([TextEdit] |? Null)
+   ret :: Either SomeException T.Text -> ExceptT PluginError (HandlerM Types.Config) ([TextEdit] |? Null)
    ret (Left err)  = throwError $ PluginInternalError . T.pack $ "ormoluCmd: " ++ show err
    ret (Right new) = pure $ InL $ makeDiffTextEdit contents new
 
