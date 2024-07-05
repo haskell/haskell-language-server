@@ -26,9 +26,10 @@ main = defaultTestRunner $ testGroup "import-actions"
   [testGroup
     "Refine Imports"
     [ codeActionGoldenTest "RefineWithOverride" 3 1
-    , codeLensGoldenTest isRefineImports "RefineUsualCase" 1
-    , codeLensGoldenTest isRefineImports "RefineQualified" 0
-    , codeLensGoldenTest isRefineImports "RefineQualifiedExplicit" 0
+    -- Although the client has inlay hints caps, refine is always provided by the code lens
+    , codeLensGoldenTest codeActionNoResolveCaps isRefineImports "RefineUsualCase" 1
+    , codeLensGoldenTest codeActionNoResolveCaps isRefineImports "RefineQualified" 0
+    , codeLensGoldenTest codeActionNoResolveCaps isRefineImports "RefineQualifiedExplicit" 0
     ],
   testGroup
     "Make imports explicit"
@@ -44,7 +45,9 @@ main = defaultTestRunner $ testGroup "import-actions"
         [mkInlayHint (Position 3 16) "( b1 )"
                      (TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitB ( b1 )")]
     , inlayHintsTestWithoutCap "ExplicitOnlyThis" 3 $ (@=?) []
-    , codeLensGoldenTest notRefineImports "ExplicitUsualCase" 0
+    -- Only when the client does not support inlay hints, explicit will be provided by code lens
+    , codeLensGoldenTest codeActionNoInlayHintsCaps notRefineImports "ExplicitUsualCase" 0
+    , expectFail $ codeLensGoldenTest codeActionNoResolveCaps notRefineImports "ExplicitUsualCase" 0
     , codeActionBreakFile "ExplicitBreakFile" 4 0
     , inlayHintsTestWithCap "ExplicitBreakFile" 3 $ (@=?)
         [mkInlayHint (Position 3 16) "( a1 )"
@@ -183,8 +186,8 @@ caTitle _                         = Nothing
 
 -- code lens tests
 
-codeLensGoldenTest :: (CodeLens -> Bool) -> FilePath -> Int -> TestTree
-codeLensGoldenTest predicate fp i = goldenWithImportActions " code lens" fp codeActionNoInlayHintsCaps $ \doc -> do
+codeLensGoldenTest :: ClientCapabilities -> (CodeLens -> Bool) -> FilePath -> Int -> TestTree
+codeLensGoldenTest caps predicate fp i = goldenWithImportActions " code lens" fp caps $ \doc -> do
   codeLenses <- getCodeLenses doc
   resolvedCodeLenses <- for codeLenses resolveCodeLens
   (CodeLens {_command = Just c}) <- pure (filter predicate resolvedCodeLenses !! i)

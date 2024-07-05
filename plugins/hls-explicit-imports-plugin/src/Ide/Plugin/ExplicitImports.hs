@@ -146,18 +146,18 @@ runImportCommand _ _ _ rd = do
 -- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
-    -- Code lens are not provided when the client supports inlay hints,
-    -- otherwise it will be provided as a fallback
-    if isInlayHintsSupported state
-    -- `[]` is no different from `null`, we chose to use all `[]` to indicate "no information"
-    then pure $ InL []
-    else do
-        nfp <- getNormalizedFilePathE _uri
-        (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
-        let lens = [ generateLens _uri newRange int
-                    | (range, int) <- forLens
-                    , Just newRange <- [toCurrentRange pm range]]
-        pure $ InL lens
+    nfp <- getNormalizedFilePathE _uri
+    (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+    let lens = [ generateLens _uri newRange int
+               -- provide ExplicitImport only if the client does not support inlay hints
+               | not (isInlayHintsSupported state)
+               , (range, (int, ExplicitImport)) <- forLens
+               , Just newRange <- [toCurrentRange pm range]] <>
+               -- RefineImport is always provided because inlay hints cannot
+               [ generateLens _uri newRange int
+               | (range, (int, RefineImport)) <- forLens
+               , Just newRange <- [toCurrentRange pm range]]
+    pure $ InL lens
   where -- because these are non resolved lenses we only need the range and a
         -- unique id to later resolve them with. These are for both refine
         -- import lenses and for explicit import lenses.
@@ -200,14 +200,15 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
         nfp <- getNormalizedFilePathE _uri
         (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
         let inlayHints = [ inlayHint
-                         | (range, int) <- forLens
+                         | (range, (int, _)) <- forLens
                          , Just newRange <- [toCurrentRange pm range]
                          , isSubrangeOf newRange visibleRange
                          , Just ie <- [forResolve IM.!? int]
                          , Just inlayHint <- [generateInlayHints newRange ie pm]]
         pure $ InL inlayHints
     -- When the client does not support inlay hints, fallback to the code lens,
-    -- so there is nothing to response here, return `[]` to indicate "no information"
+    -- so there is nothing to response here.
+    -- `[]` is no different from `null`, we chose to use all `[]` to indicate "no information"
     else pure $ InL []
   where
     -- The appropriate and intended position for the hint hints to begin
@@ -325,7 +326,7 @@ data ImportActionsResult = ImportActionsResult
   { -- |For providing the code lenses we need to have a range, and a unique id
     -- that is later resolved to the new text for each import. It is stored in
     -- a list, because we always need to provide all the code lens in a file.
-    forLens        :: [(Range, Int)]
+    forLens        :: [(Range, (Int, ResultType))]
     -- |For the code actions we have the same data as for the code lenses, but
     -- we store it in a RangeMap, because that allows us to filter on a specific
     -- range with better performance, and code actions are almost always only
@@ -417,7 +418,7 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
                                 pure (u,  rt)
   let rangeAndUnique =  [ ImportAction r u rt | (u, (r, (_, rt))) <- uniqueAndRangeAndText ]
   pure ImportActionsResult
-                      { forLens = (\ImportAction{..} -> (iaRange, iaUniqueId)) <$> rangeAndUnique
+                      { forLens = (\ImportAction{..} -> (iaRange, (iaUniqueId, iaResType))) <$> rangeAndUnique
                       , forCodeActions = RM.fromList iaRange rangeAndUnique
                       , forResolve =  IM.fromList ((\(u, (r, (te, ty))) -> (u, ImportEdit r te ty)) <$> uniqueAndRangeAndText) }
 
