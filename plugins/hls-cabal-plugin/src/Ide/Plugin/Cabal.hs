@@ -99,6 +99,7 @@ haskellFilesDescriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
           ]
+    , pluginCommands = [PluginCommand CabalAdd.cabalAddNameCommand "add a dependency to a cabal file" CabalAdd.command]
     , pluginRules = pure () -- TODO: change to haskell files only (?)
     , pluginNotificationHandlers = mempty
     }
@@ -328,10 +329,8 @@ gotoDefinition ideState _ msgParam = do
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.cabalAdd" state getClientConfigAction
-  -- traceShowM ("cabalAddCodeAction maxCompls", maxCompls, "diags", diags)
   let suggest d = CabalAdd.missingDependenciesSuggestion maxCompls (Diagnostics._message d)
-  -- traceShowM ("CabalAdd.missingDependenciesAction", map suggest diags)
-  pure $ InL $ diags >>= (fmap InR . CabalAdd.missingDependenciesAction maxCompls uri)
+  pure $ InL $ diags >>= (fmap InR . CabalAdd.missingDependenciesAction plId maxCompls uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

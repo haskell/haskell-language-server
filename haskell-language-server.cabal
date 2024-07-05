@@ -272,6 +272,7 @@ library hls-cabal-plugin
     , unordered-containers  >=0.2.10.0
     , containers
     , cabal-add
+    , process
 
   hs-source-dirs:   plugins/hls-cabal-plugin/src
 
