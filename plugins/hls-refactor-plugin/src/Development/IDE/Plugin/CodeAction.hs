@@ -1982,14 +1982,18 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens $ unqualify b
+
 #if MIN_VERSION_ghc(9,9,0)
     ranges' (L _ (IEThingWith _ thing _  inners _))
-#else
-    ranges' (L _ (IEThingWith _ thing _  inners))
-#endif
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+#else
+    ranges' (L _ (IEThingWith _ thing _  inners))
+      | T.unpack (printOutputable thing) == b' = []
+      | otherwise =
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+#endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
