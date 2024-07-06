@@ -29,6 +29,8 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
+import           Test.Hls.Util                   (EnvSpec (..), OS (..),
+                                                  ignoreInEnv)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -169,7 +171,8 @@ simpleMultiTest3 variant =
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
 simpleMultiDefTest :: FilePath -> TestTree
-simpleMultiDefTest variant = testCase (multiTestName variant "def-test") $ runWithExtraFiles variant $ \dir -> do
+simpleMultiDefTest variant = ignoreForWindows $ testCase testName $
+    runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- liftIO $ runInDir dir $ do
@@ -184,6 +187,11 @@ simpleMultiDefTest variant = testCase (multiTestName variant "def-test") $ runWi
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
+  where
+    testName = multiTestName variant "def-test"
+    ignoreForWindows
+        | testName == "simple-multi-def-test" = ignoreInEnv [HostOS Windows] "Test is flaky on Windows, see #4270"
+        | otherwise = id
 
 multiRexportTest :: TestTree
 multiRexportTest =

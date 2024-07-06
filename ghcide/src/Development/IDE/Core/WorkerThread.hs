@@ -10,10 +10,13 @@ module Development.IDE.Core.WorkerThread
     (withWorkerQueue, awaitRunInThread)
  where
 
-import           Control.Concurrent.Async  (withAsync)
+import           Control.Concurrent.Async  (AsyncCancelled (AsyncCancelled),
+                                            withAsync)
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
+import           Control.Exception.Safe    (Exception (fromException),
+                                            SomeException, throwIO, try)
 import           Control.Monad             (forever)
 import           Control.Monad.Cont        (ContT (ContT))
 
@@ -42,13 +45,15 @@ withWorkerQueue workerAction = ContT $ \mainAction -> do
                 workerAction l
 
 -- | 'awaitRunInThread' queues up an 'IO' action to be run by a worker thread,
--- and then blocks until the result is computed.
+-- and then blocks until the result is computed. If the action throws an
+-- non-async exception, it is rethrown in the calling thread.
 awaitRunInThread :: TQueue (IO ()) -> IO result -> IO result
 awaitRunInThread q act = do
     -- Take an action from TQueue, run it and
     -- use barrier to wait for the result
     barrier <- newBarrier
-    atomically $ writeTQueue q $ do
-        res <- act
-        signalBarrier barrier res
-    waitBarrier barrier
+    atomically $ writeTQueue q $ try act >>= signalBarrier barrier
+    resultOrException <- waitBarrier barrier
+    case resultOrException of
+        Left e  -> throwIO (e :: SomeException)
+        Right r -> return r
