@@ -20,7 +20,8 @@ Support status (see the support policy below for more details):
 | 9.10.1       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
 | 9.8.2        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
 | 9.8.1        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | full support                                                                |
-| 9.6.5        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
+| 9.6.6        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
+| 9.6.5        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.1)   | full support                                                                |
 | 9.6.4        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | full support                                                                |
 | 9.6.3        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | full support                                                                |
 | 9.6.2        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated                                                                  |

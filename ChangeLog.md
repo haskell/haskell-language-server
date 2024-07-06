@@ -1,5 +1,9 @@
 # Changelog for haskell-language-server
 
+## 2.9.0.1
+
+- Bindists for GHC 9.6.6
+
 ## 2.9.0.0
 
 - Bindists for GHC 9.10.1 by @wz1000, @jhrcek, @michaelpj
