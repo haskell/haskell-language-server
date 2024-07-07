@@ -525,11 +525,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
                   -- components in this HscEnv
-                  let (df2, uids) = (rawComponentDynFlags, [])
+                  let df2 = rawComponentDynFlags
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
-                  let hscComponents = sort $ map show uids
-                      cacheDirOpts = hscComponents ++ componentOptions opts
+                  let cacheDirOpts = componentOptions opts
                   cacheDirs <- liftIO $ getCacheDirs prefix cacheDirOpts
                   processed_df <- setCacheDirs recorder cacheDirs df2
                   -- The final component information, mostly the same but the DynFlags don't
@@ -538,7 +537,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                   pure $ ComponentInfo
                            { componentUnitId = rawComponentUnitId
                            , componentDynFlags = processed_df
-                           , componentInternalUnits = uids
                            , componentTargets = rawComponentTargets
                            , componentFP = rawComponentFP
                            , componentCOptions = rawComponentCOptions
@@ -1017,10 +1015,6 @@ data ComponentInfo = ComponentInfo
   -- | Processed DynFlags. Does not contain inplace packages such as local
   -- libraries. Can be used to actually load this Component.
   , componentDynFlags       :: DynFlags
-  -- | Internal units, such as local libraries, that this component
-  -- is loaded with. These have been extracted from the original
-  -- ComponentOptions.
-  , componentInternalUnits  :: [UnitId]
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
