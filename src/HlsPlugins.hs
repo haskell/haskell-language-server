@@ -85,6 +85,10 @@ import qualified Ide.Plugin.GADT                   as GADT
 import qualified Ide.Plugin.ExplicitFixity         as ExplicitFixity
 #endif
 
+#if inlayHints
+import qualified Ide.Plugin.InlayHints             as InlayHints
+#endif
+
 #if explicitFields
 import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 #endif
@@ -237,6 +241,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if explicitFixity
       let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId :
+#endif
+#if inlayHints
+      let pId = "inlay-hints" in InlayHints.descriptor (pluginRecorder pId) pId :
 #endif
 #if explicitFields
       let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId :
