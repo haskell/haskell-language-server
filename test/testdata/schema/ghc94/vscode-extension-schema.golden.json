@@ -213,6 +213,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.importLens.inlayHintsOn": {
+        "default": true,
+        "description": "Enables importLens inlay hints",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.moduleName.globalOn": {
         "default": true,
         "description": "Enables moduleName plugin",
