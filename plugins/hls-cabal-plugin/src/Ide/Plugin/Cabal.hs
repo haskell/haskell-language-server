@@ -11,7 +11,6 @@ import           Control.DeepSeq
 import           Control.Lens                                ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe                   (runMaybeT)
 import qualified Data.ByteString                             as BS
 import           Data.Hashable
@@ -20,6 +19,7 @@ import qualified Data.HashMap.Strict                         as HashMap
 import qualified Data.List.NonEmpty                          as NE
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text.Encoding                          as Encoding
+import qualified Data.Text.Utf16.Rope.Mixed                  as Rope
 import           Data.Typeable
 import           Development.IDE                             as D
 import           Development.IDE.Core.Shake                  (restartShakeSession)
@@ -162,7 +162,7 @@ cabalRules recorder plId = do
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 sources
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
             liftIO $ BS.readFile $ fromNormalizedFilePath file
 
@@ -191,7 +191,7 @@ cabalRules recorder plId = do
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 sources
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
             liftIO $ BS.readFile $ fromNormalizedFilePath file
 
@@ -321,8 +321,8 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let (TextDocumentIdentifier uri) = complParams ^. JL.textDocument
       position = complParams ^. JL.position
-  mVf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
-  case (,) <$> mVf <*> uriToFilePath' uri of
+  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
+  case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
@@ -331,7 +331,7 @@ completion recorder ide _ complParams = do
         Nothing ->
           pure . InR $ InR Null
         Just (fields, _) -> do
-          let pref = Ghcide.getCompletionPrefix position cnts
+          let pref = Ghcide.getCompletionPrefixFromRope position cnts
           let res = produceCompletions pref path fields
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null

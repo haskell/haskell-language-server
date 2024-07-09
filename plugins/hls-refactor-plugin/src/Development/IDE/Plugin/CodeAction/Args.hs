@@ -24,6 +24,7 @@ import           Data.IORef.Extra
 import qualified Data.Map                                     as Map
 import           Data.Maybe                                   (fromMaybe)
 import qualified Data.Text                                    as T
+import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.Shake
@@ -69,7 +70,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
   caaContents <-
     onceIO $
       runRule GetFileContents <&> \case
-        Just (_, txt) -> txt
+        Just (_, mbContents) -> fmap Rope.toText mbContents
         Nothing       -> Nothing
   caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
   caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource

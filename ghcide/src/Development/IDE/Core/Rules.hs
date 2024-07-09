@@ -91,6 +91,7 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
+import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Data.Time                                    (UTCTime (..))
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
@@ -99,6 +100,7 @@ import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists              hiding (Log,
                                                                LogShake)
 import           Development.IDE.Core.FileStore               (getFileContents,
+                                                               getFileModTimeContents,
                                                                getModTime)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
@@ -220,10 +222,10 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
-    (_, msource) <- getFileContents nfp
+    msource <- getFileContents nfp
     case msource of
         Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
-        Just source -> pure $ T.encodeUtf8 source
+        Just source -> pure $ T.encodeUtf8 $ Rope.toText source
 
 -- | Parse the contents of a haskell file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
@@ -861,10 +863,10 @@ getModSummaryRule displayTHWarning recorder = do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = hscSetFlags (modify_dflags $ hsc_dflags session') session'
-        (modTime, mFileContent) <- getFileContents f
+        (modTime, mFileContent) <- getFileModTimeContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
-                getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
+                getModSummaryFromImports session fp modTime (textToStringBuffer . Rope.toText <$> mFileContent)
         case modS of
             Right res -> do
                 -- Check for Template Haskell

@@ -42,6 +42,7 @@ import           Data.Monoid                          (First (First))
 import           Data.String                          (IsString)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.Actions         (lookupMod)
 import           Development.IDE.Core.PluginUtils
@@ -778,10 +779,10 @@ getCPPmodule recorder state session t = do
           return (fixities, parsed)
 
     contents <- do
-      (_, mbContentsVFS) <-
+      mbContentsVFS <-
         runAction "Retrie.GetFileContents" state $ getFileContents nt
       case mbContentsVFS of
-        Just contents -> return contents
+        Just contents -> return $ Rope.toText contents
         Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
     if any (T.isPrefixOf "#if" . T.toLower) (T.lines contents)
       then do

@@ -38,6 +38,7 @@ import           Data.Maybe                            (fromMaybe, listToMaybe,
                                                         mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE
+import           Development.IDE.Core.FileStore            (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
@@ -475,7 +476,7 @@ fromSearchResult _        = Nothing
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction state plId (CodeActionParams _ _ docId ran _) = do
-    verTxtDocId <- lift $ pluginGetVersionedTextDoc docId
+    verTxtDocId <- liftIO $ runAction "splice.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri

@@ -35,7 +35,7 @@ import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
 
 import           Data.ByteString                              (ByteString)
-import           Data.Text                                    (Text)
+import           Data.Text.Utf16.Rope.Mixed                   (Rope)
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
@@ -275,7 +275,7 @@ type instance RuleResult GetModIfaceFromDiskAndIndex = HiFileResult
 type instance RuleResult GetModIface = HiFileResult
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
-type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
+type instance RuleResult GetFileContents = (FileVersion, Maybe Rope)
 
 type instance RuleResult GetFileExists = Bool
 
