@@ -25,7 +25,6 @@ import           Data.List.NonEmpty                    (NonEmpty ((:|)),
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
-import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
@@ -34,6 +33,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
