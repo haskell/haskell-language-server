@@ -329,8 +329,12 @@ gotoDefinition ideState _ msgParam = do
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.cabalAdd" state getClientConfigAction
-  let suggest d = CabalAdd.missingDependenciesSuggestion maxCompls (Diagnostics._message d)
-  pure $ InL $ diags >>= (fmap InR . CabalAdd.missingDependenciesAction plId maxCompls uri)
+  let mbUriPath = uriToFilePath uri
+  case mbUriPath of
+    Nothing -> pure $ InL []
+    Just uriPath -> do
+      cabalFiles <- liftIO $ CabalAdd.findResponsibleCabalFile uriPath
+      pure $ InL $ diags >>= (\diag -> fmap InR (CabalAdd.missingDependenciesAction plId maxCompls uri diag cabalFiles))
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

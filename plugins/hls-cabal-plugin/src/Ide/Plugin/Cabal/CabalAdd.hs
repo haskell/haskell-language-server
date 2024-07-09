@@ -2,7 +2,8 @@
 {-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 module Ide.Plugin.Cabal.CabalAdd
-( missingDependenciesAction
+(  findResponsibleCabalFile
+ , missingDependenciesAction
  , missingDependenciesSuggestion
  , hiddenPackageAction
  , cabalAddNameCommand
@@ -19,33 +20,55 @@ import           Ide.PluginUtils             (mkLspCommand)
 import           Ide.Types                   (CommandFunction,
                                               CommandId (CommandId), PluginId)
 import           Language.LSP.Protocol.Types (CodeAction (CodeAction),
+                                              CodeActionDisabled (CodeActionDisabled),
                                               CodeActionKind (CodeActionKind_QuickFix),
-                                              Command (..), Diagnostic (..),
-                                              Null (Null), Uri, type (|?) (InR))
+                                              Diagnostic (..), Null (Null),
+                                              Uri (..), type (|?) (InR))
+import           System.Directory            (listDirectory)
+import           System.FilePath             (dropFileName, splitPath,
+                                              takeExtension, (</>))
 import           System.Process              (readProcess)
 import           Text.Regex.TDFA
 
-missingDependenciesAction :: PluginId -> Int -> Uri -> Diagnostic -> [CodeAction]
-missingDependenciesAction plId maxCompletions uri diag =
-  mkCodeAction <$> missingDependenciesSuggestion maxCompletions (_message diag)
+findResponsibleCabalFile :: FilePath -> IO [FilePath]
+findResponsibleCabalFile uriPath = do
+  contents <- mapM listDirectory allDirPaths
+  let filesWithPaths = concat $ zipWith (\path content -> map (path </>) content) allDirPaths contents
+  let cabalFiles = filter (\c -> takeExtension c == ".cabal") filesWithPaths
+  pure $ reverse cabalFiles -- sorted from closest to the uriPath
+  where dirPath = dropFileName uriPath
+        allDirPaths = scanl1 (</>) (splitPath dirPath)
+
+
+-- | Gives a code action that calls the command,
+--   if a suggestion for a missing dependency is found.
+--   Disabled action if no cabal files given.
+missingDependenciesAction :: PluginId -> Int -> Uri -> Diagnostic -> [FilePath] -> [CodeAction]
+missingDependenciesAction plId maxCompletions uri diag cabalFiles =
+  case cabalFiles of
+    [] -> [CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
+                                             (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing]
+    (cabalFile:_) -> mkCodeAction cabalFile <$> missingDependenciesSuggestion maxCompletions (_message diag)
   where
-    mkCodeAction suggestedDep =
+    mkCodeAction cabalFile suggestedDep =
       let
-        title = "Add dependency " <> suggestedDep
-        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" (Nothing)
+        title = "Add dependency " <> suggestedDep <> " at " <> (T.pack $ show cabalFile)
+        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" (Nothing) -- TODO: add cabal-add CL arguments
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
+-- | Gives a mentioned number of hidden packages given
+--   a specific error message
 missingDependenciesSuggestion :: Int -> T.Text -> [T.Text]
 missingDependenciesSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
-    regex :: T.Text
+    regex :: T.Text -- TODO: Support multiple packages suggestion
     regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package \8216(.*)\8217"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results
 
 hiddenPackageAction
-  :: Int -- ^ Maximum number of suggestions to return
-  -> Uri -- ^ File for which the diagnostic was generated
+  :: Int
+  -> Uri
   -> Diagnostic
   -> [CodeAction]
 hiddenPackageAction = undefined
@@ -61,7 +84,8 @@ hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg
 cabalAddNameCommand :: IsString p => p
 cabalAddNameCommand = "cabalAdd"
 
+-- | Registering a cabal-add as a HLS command
 command :: CommandFunction IdeState Uri
 command state _ uri = do
   void $ liftIO $ readProcess "cabal-add" [] []
-  pure $ InR Null
+  pure $ InR Null -- TODO: return cabal-add output (?)
