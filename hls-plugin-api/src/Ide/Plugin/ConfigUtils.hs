@@ -88,6 +88,7 @@ pluginsToDefaultConfig IdePlugins {..} =
         handlersToGenericDefaultConfig PluginConfig{..} (IdeMethod m DSum.:=> _) = case m of
           SMethod_TextDocumentCodeAction           -> ["codeActionsOn" A..= plcCodeActionsOn]
           SMethod_TextDocumentCodeLens             -> ["codeLensOn" A..= plcCodeLensOn]
+          SMethod_TextDocumentInlayHint            -> ["inlayHintsOn" A..= plcInlayHintsOn]
           SMethod_TextDocumentRename               -> ["renameOn" A..= plcRenameOn]
           SMethod_TextDocumentHover                -> ["hoverOn" A..= plcHoverOn]
           SMethod_TextDocumentDocumentSymbol       -> ["symbolsOn" A..= plcSymbolsOn]
@@ -120,6 +121,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         handlersToGenericSchema PluginConfig{..} (IdeMethod m DSum.:=> _) = case m of
           SMethod_TextDocumentCodeAction           -> [toKey' "codeActionsOn" A..= schemaEntry "code actions" plcCodeActionsOn]
           SMethod_TextDocumentCodeLens             -> [toKey' "codeLensOn" A..= schemaEntry "code lenses" plcCodeLensOn]
+          SMethod_TextDocumentInlayHint            -> [toKey' "inlayHintsOn" A..= schemaEntry "inlay hints" plcInlayHintsOn]
           SMethod_TextDocumentRename               -> [toKey' "renameOn" A..= schemaEntry "rename" plcRenameOn]
           SMethod_TextDocumentHover                -> [toKey' "hoverOn" A..= schemaEntry "hover" plcHoverOn]
           SMethod_TextDocumentDocumentSymbol       -> [toKey' "symbolsOn" A..= schemaEntry "symbols" plcSymbolsOn]
