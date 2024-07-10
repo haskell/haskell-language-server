@@ -94,5 +94,5 @@ cabalAddNameCommand = "cabalAdd"
 command :: CommandFunction IdeState Uri
 command state _ uri = do
   traceShowM ("uri ", uri)
-  void $ liftIO $ readProcess "cabal-add" [] []
+  void $ liftIO $ readProcess "/home/george-manjaro/.cabal/bin/cabal-add" [] []
   pure $ InR Null -- TODO: return cabal-add output (?)
