@@ -29,6 +29,7 @@ import           Development.IDE.Graph
 import           Control.Concurrent.STM.Stats             (atomically,
                                                            modifyTVar')
 import           Data.Aeson                               (toJSON)
+import qualified Data.Aeson                               as Aeson
 import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes)
 import           Development.IDE.Core.ProgressReporting
@@ -49,7 +50,6 @@ import           Ide.Logger                               (Pretty (pretty),
                                                            logWith)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
-import qualified Data.Aeson as Aeson
 
 data Log = LogShake Shake.Log
   deriving Show
