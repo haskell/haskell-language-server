@@ -452,7 +452,7 @@ applyHintGoldenTest testCaseName goldenFilename point hintName = do
 
 goldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenTest testCaseName goldenFilename point hintText =
-  setupGoldenHlintTest testCaseName goldenFilename $ \document -> do
+  setupGoldenHlintTest testCaseName goldenFilename codeActionNoResolveCaps $ \document -> do
     _ <- hlintCaptureKick -- document
     actions <- getCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
@@ -463,16 +463,15 @@ goldenTest testCaseName goldenFilename point hintText =
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
 
-setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-setupGoldenHlintTest testName path =
+setupGoldenHlintTest :: TestName -> FilePath -> ClientCapabilities -> (TextDocumentIdentifier -> Session ()) -> TestTree
+setupGoldenHlintTest testName path config =
     goldenWithTestConfig def
-    { testConfigCaps = codeActionNoResolveCaps
+    { testConfigCaps = config
     , testShiftRoot = True
     , testPluginDescriptor = hlintPlugin
-    , testDirLocation = Left testDir
-    }
-    testName testDir path "expected" "hs"
-
+    , testDirLocation = Right tree
+    } testName tree path "expected" "hs"
+  where tree = (mkVirtualFileTree testDir (directProject (path <.> "hs")))
 
 ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
@@ -484,13 +483,9 @@ applyHintGoldenResolveTest testCaseName goldenFilename point hintName = do
 
 goldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenResolveTest testCaseName goldenFilename point hintText =
-  setupGoldenHlintResolveTest testCaseName goldenFilename $ \document -> do
+  setupGoldenHlintTest testCaseName goldenFilename codeActionResolveCaps $ \document -> do
     _ <- hlintCaptureKick -- document
     actions <- getAndResolveCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
       Just (InR codeAction) -> executeCodeAction codeAction
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
-
-setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-setupGoldenHlintResolveTest testName path =
-  goldenWithHaskellAndCapsInTmpDir def codeActionResolveCaps hlintPlugin testName (mkVirtualFileTree testDir (directProject (path <.> "hs"))) path "expected" "hs"

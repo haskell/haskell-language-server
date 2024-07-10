@@ -235,14 +235,14 @@ goldenWithTestConfig
   :: Pretty b
   => TestConfig b
   -> TestName
-  -> FilePath
+  -> VirtualFileTree
   -> FilePath
   -> FilePath
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithTestConfig config title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+goldenWithTestConfig config title tree path desc ext act =
+  goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
   $ runSessionWithTestConfig config $ const
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
