@@ -49,7 +49,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -110,19 +109,18 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
             let newName = mkTcOcc $ T.unpack newNameText
                 filesRefs = collectWith locToUri refs
                 getFileEdit (uri, locations) = do
-                    verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
+                    verTxtDocId <- lift $ pluginGetVersionedTextDoc (TextDocumentIdentifier uri)
                     getSrcEdit state verTxtDocId (replaceRefs newName locations)
             fileEdits <- mapM getFileEdit filesRefs
             pure $ InL $ fold fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
-    (MonadLsp config m) =>
     IdeState ->
     NormalizedFilePath ->
     HashSet Location ->
     [Name] ->
-    ExceptT PluginError m ()
+    ExceptT PluginError (HandlerM config) ()
 failWhenImportOrExport state nfp refLocs names = do
     pm <- runActionE "Rename.GetParsedModule" state
          (useE GetParsedModule nfp)
@@ -140,17 +138,16 @@ failWhenImportOrExport state nfp refLocs names = do
 
 -- | Apply a function to a `ParsedSource` for a given `Uri` to compute a `WorkspaceEdit`.
 getSrcEdit ::
-    (MonadLsp config m) =>
     IdeState ->
     VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    ExceptT PluginError m WorkspaceEdit
+    ExceptT PluginError (HandlerM config) WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
-    ccs <- lift getClientCapabilities
+    ccs <- lift pluginGetClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
-    let ps = astA annAst
+    let ps = annAst
         src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
     pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions

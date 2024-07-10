@@ -19,15 +19,12 @@ import           GHC.Utils.Outputable
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.Error
-#endif
 
 putLogHook :: Logger -> HscEnv -> HscEnv
 putLogHook logger env =
   env { hsc_logger = logger }
 
-#if MIN_VERSION_ghc(9,3,0)
 type LogActionCompat = LogFlags -> Maybe DiagnosticReason -> Maybe Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()
 
 -- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
@@ -41,11 +38,3 @@ logActionCompat logAction logFlags (MCDiagnostic severity wr) loc = logAction lo
 #endif
 logActionCompat logAction logFlags _cls loc = logAction logFlags Nothing Nothing loc alwaysQualify
 
-#else
-type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()
-
--- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
-logActionCompat :: LogActionCompat -> LogAction
-logActionCompat logAction dynFlags wr severity loc = logAction dynFlags wr severity loc alwaysQualify
-
-#endif

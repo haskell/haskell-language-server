@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE OverloadedStrings        #-}
 
@@ -62,15 +63,23 @@ codeActionUnitTests =
         "Code Action Tests"
         [ testCase "Unknown format" $ do
             -- the message has the wrong format
-            licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= []
+            licenseErrorSuggestion maxCompletions "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= []
         , testCase "BSD-3-Clause" $ do
-            take 2 (licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?")
-                @?= [("BSD3", "BSD-3-Clause"), ("BSD3", "BSD-3-Clause-LBNL")]
+            take 2 (licenseErrorSuggestion maxCompletions "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?")
+                @?=
+-- Cabal-syntax 3.12.0.0 added bunch of new licenses, so now more licenses match "BSD3" pattern
+#if MIN_VERSION_Cabal_syntax(3,12,0)
+                    [("BSD3", "BSD-4.3RENO"), ("BSD3", "BSD-3-Clause")]
+#else
+                    [("BSD3", "BSD-3-Clause"), ("BSD3", "BSD-3-Clause-LBNL")]
+#endif
         , testCase "MiT" $ do
             -- contains no suggestion
-            take 2 (licenseErrorSuggestion "Unknown SPDX license identifier: 'MiT'")
+            take 2 (licenseErrorSuggestion maxCompletions "Unknown SPDX license identifier: 'MiT'")
                 @?= [("MiT", "MIT"), ("MiT", "MIT-0")]
         ]
+  where
+    maxCompletions = 100
 
 -- ------------------------ ------------------------------------------------
 -- Integration Tests

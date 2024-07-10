@@ -31,7 +31,6 @@ import           LogType                           (Log (..))
 import           Test.Hls                          (TestConfig (testDisableDefaultPlugin, testPluginDescriptor),
                                                     runSessionWithTestConfig,
                                                     testCheckProject,
-                                                    testConfigSession,
                                                     waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.HUnit

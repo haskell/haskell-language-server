@@ -18,7 +18,6 @@ import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra               hiding (withTempDir)
-import           Test.Hls.FileSystem           (toAbsFp)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

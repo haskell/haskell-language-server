@@ -642,7 +642,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x = x"
         ]
-        [ "func :: p -> p"
+        [ if ghcVersion >= GHC910 then "func :: t -> t" else "func :: p -> p"
         , "func x = x"
         ]
   , testUseTypeSignature "local signature"
@@ -662,9 +662,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func :: Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func :: t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func :: a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+              "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -692,9 +695,12 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-        [ if ghcVersion >= GHC98
-          then "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
-          else "func::Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC910 then
+              "func::t -> t -> t"
+          else if ghcVersion >= GHC98 then
+              "func::a -> a -> a" -- since 9.8 GHC no longer does type defaulting (see https://gitlab.haskell.org/ghc/ghc/-/issues/24522)
+          else
+               "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"
@@ -1004,6 +1010,76 @@ removeImportTests = testGroup "remove import actions"
             , "x = a -- Must use something from module A, but not (@.)"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove redundant record field import" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int"
+            , "}"
+            , "newA = A \"foo\" 42"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2),"
+            , "    newA"
+            , "  )"
+            , "x = a1 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a2) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1),"
+            , "    newA"
+            , "  )"
+            , "x = a1 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove multiple redundant record field imports" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A {"
+            , "  a1 :: String,"
+            , "  a2 :: Int,"
+            , "  a3 :: Int,"
+            , "  a4 :: Int"
+            , "}"
+            , "newA = A \"foo\" 2 3 4"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a1, a2, a3, a4),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle "Remove A(a1), A(a3), A(a4) from import" =<< getCodeActions docB (R 2 0 5 3)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "  ( A (a2),"
+            , "    newA"
+            , "  )"
+            , "x = a2 newA"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 extendImportTests :: TestTree
@@ -1271,8 +1347,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , brokenForGHC92 "On GHC 9.2, the error doesn't contain \"perhaps you want ...\" part from which import suggestion can be extracted." $
-          testSession "extend single line import in presence of extra parens" $ template
+        , testSession "extend single line import in presence of extra parens" $ template
             []
             ("Main.hs", T.unlines
                     [ "import Data.Monoid (First)"
@@ -1458,7 +1533,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -3146,7 +3221,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
+    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
@@ -3774,6 +3849,3 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
-
-brokenForGHC92 :: String -> TestTree -> TestTree
-brokenForGHC92 = knownBrokenForGhcVersions [GHC92]
