@@ -46,10 +46,8 @@ import           Ide.Plugin.Cabal.Orphans                    ()
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
-import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server                         (getVirtualFile)
 import qualified Language.LSP.Server                         as LSP
 import qualified Language.LSP.VFS                            as VFS
 
