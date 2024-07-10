@@ -26,9 +26,11 @@ import           Language.LSP.Protocol.Types (CodeAction (CodeAction),
                                               Uri (..), type (|?) (InR))
 import           System.Directory            (listDirectory)
 import           System.FilePath             (dropFileName, splitPath,
-                                              takeExtension, (</>))
+                                              takeExtension, (</>), takeFileName)
 import           System.Process              (readProcess)
 import           Text.Regex.TDFA
+import Data.Aeson.Types                      (toJSON)
+import Debug.Trace
 
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
 findResponsibleCabalFile uriPath = do
@@ -52,8 +54,12 @@ missingDependenciesAction plId maxCompletions uri diag cabalFiles =
   where
     mkCodeAction cabalFile suggestedDep =
       let
-        title = "Add dependency " <> suggestedDep <> " at " <> (T.pack $ show cabalFile)
-        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" (Nothing) -- TODO: add cabal-add CL arguments
+        cabalName = T.pack $ takeFileName cabalFile
+        title = "Add dependency " <> suggestedDep <> " at " <> cabalName <> " " <> (T.pack $ show args)
+        -- args = Just [toJSON suggestedDep, toJSON ("--project-file " <> cabalFile)]
+        args = Just [toJSON suggestedDep]
+
+        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" args -- TODO: add cabal-add CL arguments
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
 -- | Gives a mentioned number of hidden packages given
@@ -87,5 +93,6 @@ cabalAddNameCommand = "cabalAdd"
 -- | Registering a cabal-add as a HLS command
 command :: CommandFunction IdeState Uri
 command state _ uri = do
+  traceShowM ("uri ", uri)
   void $ liftIO $ readProcess "cabal-add" [] []
   pure $ InR Null -- TODO: return cabal-add output (?)
