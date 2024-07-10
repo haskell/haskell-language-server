@@ -22,16 +22,16 @@
         "description": "Enables cabal code actions",
         "scope": "resource",
         "type": "boolean"
-        },
-    "haskell.plugin.cabal.symbolsOn": {
-        "default": true,
-        "description": "Enables cabal symbols",
-        "scope": "resource",
-        "type": "boolean"
     },
     "haskell.plugin.cabal.completionOn": {
         "default": true,
         "description": "Enables cabal completions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.cabal.symbolsOn": {
+        "default": true,
+        "description": "Enables cabal symbols",
         "scope": "resource",
         "type": "boolean"
     },
