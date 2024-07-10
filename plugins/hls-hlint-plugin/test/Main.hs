@@ -237,7 +237,7 @@ suggestionsTests =
         liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
 
     , testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
-        doc <- openDoc "UnusedExtension.hs" "haskell"
+        _ <- openDoc "UnusedExtension.hs" "haskell"
         diags@(unusedExt:_) <- hlintCaptureKick -- doc
 
         liftIO $ do
