@@ -9,24 +9,24 @@ module Ide.Plugin.Cabal.Outline where
 
 import           Control.Monad.IO.Class
 import           Data.Maybe
-import qualified Data.Text                         as T
-import           Data.Text.Encoding                (decodeUtf8)
+import qualified Data.Text                               as T
+import           Data.Text.Encoding                      (decodeUtf8)
 import           Development.IDE.Core.Rules
-import           Development.IDE.Core.Shake        (IdeState (shakeExtras),
-                                                    runIdeAction,
-                                                    useWithStaleFast)
-import           Development.IDE.Types.Location    (toNormalizedFilePath')
-import           Distribution.Fields.Field         (Field (Field, Section),
-                                                    Name (Name),
-                                                    SectionArg (SecArgName, SecArgOther, SecArgStr))
-import           Distribution.Parsec.Position      (Position)
-import           Ide.Plugin.Cabal.Completion.Types (ParseCabalFields (..),
-                                                    cabalPositionToLSPPosition)
-import           Ide.Plugin.Cabal.Orphans          ()
-import           Ide.Types                         (PluginMethodHandler)
-import           Language.LSP.Protocol.Message     (Method (..))
-import           Language.LSP.Protocol.Types       (DocumentSymbol (..))
-import qualified Language.LSP.Protocol.Types       as LSP
+import           Development.IDE.Core.Shake              (IdeState (shakeExtras),
+                                                          runIdeAction,
+                                                          useWithStaleFast)
+import           Development.IDE.Types.Location          (toNormalizedFilePath')
+import           Distribution.Fields.Field               (Field (Field, Section),
+                                                          Name (Name))
+import           Distribution.Parsec.Position            (Position)
+import           Ide.Plugin.Cabal.Completion.CabalFields (onelineSectionArgs)
+import           Ide.Plugin.Cabal.Completion.Types       (ParseCabalFields (..),
+                                                          cabalPositionToLSPPosition)
+import           Ide.Plugin.Cabal.Orphans                ()
+import           Ide.Types                               (PluginMethodHandler)
+import           Language.LSP.Protocol.Message           (Method (..))
+import           Language.LSP.Protocol.Types             (DocumentSymbol (..))
+import qualified Language.LSP.Protocol.Types             as LSP
 
 
 moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
@@ -41,9 +41,35 @@ moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocum
         Nothing -> pure $ LSP.InL []
     Nothing -> pure $ LSP.InL []
 
--- | Creates a DocumentSumbol object for the
---   cabal AST, without displaying fieldLines and
---   displaying Section name and SectionArgs in one line
+-- | Creates a @DocumentSymbol@ object for the
+--   cabal AST, without displaying @fieldLines@ and
+--   displaying @Section Name@ and @SectionArgs@ in one line.
+--
+--   @fieldLines@ are leaves of a cabal AST, so they are omitted
+--   in the outline. Sections have to be displayed in one line, because
+--   the AST representation looks unnatural. See examples:
+--
+-- *  part of a cabal file:
+--
+-- >   if impl(ghc >= 9.8)
+-- >      ghc-options: -Wall
+--
+-- * AST representation:
+--
+-- >   if
+-- >      impl
+-- >      (
+-- >      ghc >= 9.8
+-- >      )
+-- >
+-- >      ghc-options:
+-- >        -Wall
+--
+-- * resulting @DocumentSymbol@:
+--
+-- >   if impl(ghc >= 9.8)
+-- >      ghc-options:
+-- >
 documentSymbolForField :: Field Position -> Maybe DocumentSymbol
 documentSymbolForField (Field (Name pos fieldName) _) =
   Just
@@ -64,18 +90,8 @@ documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
             (mapMaybe documentSymbolForField fields)
       }
   where
-    joinedName = decodeUtf8 fieldName <> " " <> joinedNameForSectionArgs sectionArgs
+    joinedName = decodeUtf8 fieldName <> " " <> onelineSectionArgs sectionArgs
     range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` joinedName
-
-joinedNameForSectionArgs :: [SectionArg Position] -> T.Text
-joinedNameForSectionArgs sectionArgs = joinedName
-  where
-    joinedName = T.unwords $ map getName sectionArgs
-
-    getName :: SectionArg Position -> T.Text
-    getName (SecArgName _ identifier)  = decodeUtf8 identifier
-    getName (SecArgStr _ quotedString) = decodeUtf8 quotedString
-    getName (SecArgOther _ string)     = decodeUtf8 string
 
 -- | Creates a single point LSP range
 --   using cabal position

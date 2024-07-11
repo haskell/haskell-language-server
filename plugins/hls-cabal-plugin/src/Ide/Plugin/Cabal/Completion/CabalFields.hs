@@ -1,4 +1,4 @@
-module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, findFieldSection, getOptionalSectionName, getAnnotation, getFieldName) where
+module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, findFieldSection, getOptionalSectionName, getAnnotation, getFieldName, onelineSectionArgs) where
 
 import           Data.List.NonEmpty                (NonEmpty)
 import qualified Data.List.NonEmpty                as NE
@@ -66,3 +66,19 @@ getOptionalSectionName (x:xs) = case x of
     Syntax.SecArgName _ name -> Just (T.decodeUtf8 name)
     _                        -> getOptionalSectionName xs
 
+
+-- | Makes a single text line out of multiple
+--   @SectionArg@s. Allowes to display conditions,
+--   flags, etc in one line, which is easier to read.
+--
+--   For example, @flag@ @(@ @pedantic@ @)@ will be joined in
+--   one line, instead of four @SectionArg@s separately.
+onelineSectionArgs :: [Syntax.SectionArg Syntax.Position] -> T.Text
+onelineSectionArgs sectionArgs = joinedName
+  where
+    joinedName = T.unwords $ map getName sectionArgs
+
+    getName :: Syntax.SectionArg Syntax.Position -> T.Text
+    getName (Syntax.SecArgName _ identifier)  = T.decodeUtf8 identifier
+    getName (Syntax.SecArgStr _ quotedString) = T.decodeUtf8 quotedString
+    getName (Syntax.SecArgOther _ string)     = T.decodeUtf8 string
