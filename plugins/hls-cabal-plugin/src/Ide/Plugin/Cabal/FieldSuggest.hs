@@ -22,14 +22,14 @@ import           Language.LSP.Protocol.Types (CodeAction (..),
                                               WorkspaceEdit (..))
 import           Text.Regex.TDFA
 
--- | Generate all code action for given file, error field in position and suggestions
+-- | Generate all code actions for given file, erroneous/unknown field and suggestions
 fieldErrorAction
   :: Uri
   -- ^ File for which the diagnostic was generated
   -> T.Text
-  -- ^ Original field
+  -- ^ Original (unknown) field
   -> [T.Text]
-  -- ^ Suggestions
+  -- ^ Suggestions for the given file
   -> Range
   -- ^ Location of diagnostic
   -> [CodeAction]
@@ -38,8 +38,8 @@ fieldErrorAction uri original suggestions range =
   where
     mkCodeAction suggestion =
       let
-        -- Range returned by cabal here represents fragment from start of
-        -- offending identifier to end of line, we modify it to the end of identifier
+        -- Range returned by cabal here represents fragment from start of offending identifier
+        -- to end of line, we modify this range to be to the end of the identifier
         adjustRange (Range rangeFrom@(Position lineNr col) _) =
           Range rangeFrom (Position lineNr (col + fromIntegral (T.length original)))
         title = "Replace with " <> suggestion'
@@ -51,7 +51,7 @@ fieldErrorAction uri original suggestions range =
         suggestion' = T.dropEnd 1 suggestion
 
 -- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
---   if it represents an "Unknown field"- error with incorrect identifier
+--   if it represents an "Unknown field"-error with incorrect identifier
 --   then return the incorrect identifier together with original diagnostics.
 fieldErrorName ::
   Diagnostic ->

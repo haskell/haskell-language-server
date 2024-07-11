@@ -10,7 +10,6 @@ extra-doc-files:
 
 -- Default warnings in HLS
 common warnings
-  -- Common sections are currently not supported. So, ignore!
   ghc-options: -Wall
                -Wredundant-constraints
                -Wunused-packages

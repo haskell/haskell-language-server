@@ -242,10 +242,13 @@ licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifie
 
 -- | CodeActions for correcting field names with typos in them.
 --
--- Provides CodeActions that fix typos in field names, in both stanzas and top-level field names.
+-- Provides CodeActions that fix typos in both stanzas and top-level field names.
 -- The suggestions are computed based on the completion context, where we "move" a fake cursor
 -- to the end of the field name and trigger cabal file completions. The completions are then
 -- suggested to the user.
+--
+-- TODO: Relying on completions here often does not produce the desired results, we should
+-- use some sort of fuzzy matching in the future, see issue #4357.
 fieldSuggestCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   vfileM <- lift (pluginGetVirtualFile $ toNormalizedUri uri)
