@@ -68,7 +68,7 @@ getOptionalSectionName (x:xs) = case x of
 
 
 -- | Makes a single text line out of multiple
---   @SectionArg@s. Allowes to display conditions,
+--   @SectionArg@s. Allows to display conditions,
 --   flags, etc in one line, which is easier to read.
 --
 --   For example, @flag@ @(@ @pedantic@ @)@ will be joined in
