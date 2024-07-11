@@ -1,6 +1,9 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass #-}
+
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
  , missingDependenciesAction
@@ -29,8 +32,9 @@ import           System.FilePath             (dropFileName, splitPath,
                                               takeExtension, (</>), takeFileName)
 import           System.Process              (readProcess)
 import           Text.Regex.TDFA
-import Data.Aeson.Types                      (toJSON)
+import Data.Aeson.Types                      (toJSON, FromJSON, ToJSON)
 import Debug.Trace
+import Distribution.Compat.Prelude (Generic)
 
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
 findResponsibleCabalFile uriPath = do
@@ -55,11 +59,9 @@ missingDependenciesAction plId maxCompletions uri diag cabalFiles =
     mkCodeAction cabalFile suggestedDep =
       let
         cabalName = T.pack $ takeFileName cabalFile
-        title = "Add dependency " <> suggestedDep <> " at " <> cabalName <> " " <> (T.pack $ show args)
-        -- args = Just [toJSON suggestedDep, toJSON ("--project-file " <> cabalFile)]
-        args = Just [toJSON suggestedDep]
-
-        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" args -- TODO: add cabal-add CL arguments
+        params = CabalAddCommandParams {cabalPath = cabalFile, dependency = suggestedDep}
+        title = "Add dependency " <> suggestedDep <> " at " <> cabalName <> " " <> (T.pack $ show params)
+        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" (Just [toJSON params]) -- TODO: add cabal-add CL arguments
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
 -- | Gives a mentioned number of hidden packages given
@@ -90,9 +92,17 @@ hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg
 cabalAddNameCommand :: IsString p => p
 cabalAddNameCommand = "cabalAdd"
 
+data CabalAddCommandParams =
+     CabalAddCommandParams { cabalPath :: FilePath
+                           , dependency :: T.Text
+                           }
+  deriving (Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
 -- | Registering a cabal-add as a HLS command
-command :: CommandFunction IdeState Uri
-command state _ uri = do
-  traceShowM ("uri ", uri)
+command :: CommandFunction IdeState CabalAddCommandParams
+command _ _ (CabalAddCommandParams {cabalPath = path, dependency = dep}) = do
+  traceShowM ("cabalPath ", path)
+  traceShowM ("dependency ", dep)
   void $ liftIO $ readProcess "/home/george-manjaro/.cabal/bin/cabal-add" [] []
   pure $ InR Null -- TODO: return cabal-add output (?)
