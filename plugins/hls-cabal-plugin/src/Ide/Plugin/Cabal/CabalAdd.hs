@@ -50,6 +50,10 @@ import           System.FilePath                        (dropFileName,
                                                          takeExtension, (</>))
 import           Text.Regex.TDFA
 
+
+-- | Given a path to a haskell file, finds all cabal files paths
+--   sorted from the closest to the farthest.
+--   Gives all found paths all the way to the root directory.
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
 findResponsibleCabalFile uriPath = do
   contents <- mapM listDirectory allDirPaths
@@ -119,6 +123,9 @@ command _ _ (CabalAddCommandParams {cabalPath = path, dependency = dep, version 
   void $ liftIO $ addDependency path (fromList [T.unpack specifiedDep])
   pure $ InR Null
 
+-- | Gives cabal file's contents or throws error.
+--   Inspired by @readCabalFile@ in cabal-add,
+--   Distribution.Client.Main
 readCabalFile :: FilePath -> IO ByteString
 readCabalFile fileName = do
   cabalFileExists <- doesFileExist fileName
@@ -126,6 +133,12 @@ readCabalFile fileName = do
     then snd . patchQuirks <$> B.readFile fileName
     else error ("Failed to read cabal file at " <> fileName)
 
+-- | Constructs prerequisets for the @executeConfig@
+--   and runs it, given path to the cabal file and
+--   a dependency message.
+--
+--   Inspired by @main@ in cabal-add,
+--   Distribution.Client.Main
 addDependency :: FilePath -> NonEmpty String -> IO ()
 addDependency cabalFilePath dependency = do
   let rcnfComponent = Nothing
