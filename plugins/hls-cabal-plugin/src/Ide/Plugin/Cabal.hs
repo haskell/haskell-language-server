@@ -99,7 +99,7 @@ haskellFilesDescriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
           ]
-    , pluginCommands = [PluginCommand CabalAdd.cabalAddNameCommand "add a dependency to a cabal file" CabalAdd.command]
+    , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" CabalAdd.command]
     , pluginRules = pure () -- TODO: change to haskell files only (?)
     , pluginNotificationHandlers = mempty
     }

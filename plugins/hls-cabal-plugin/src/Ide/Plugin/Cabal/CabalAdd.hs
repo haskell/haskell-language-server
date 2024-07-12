@@ -3,13 +3,15 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
  , missingDependenciesAction
  , missingDependenciesSuggestion
  , hiddenPackageAction
- , cabalAddNameCommand
+ , cabalAddCommand
  , command
 )
 where
@@ -27,7 +29,9 @@ import           Language.LSP.Protocol.Types (CodeAction (CodeAction),
                                               CodeActionKind (CodeActionKind_QuickFix),
                                               Diagnostic (..), Null (Null),
                                               Uri (..), type (|?) (InR))
-import           System.Directory            (listDirectory)
+import           System.Directory            (listDirectory, doesFileExist)
+import Distribution.PackageDescription.Quirks (patchQuirks)
+
 import           System.FilePath             (dropFileName, splitPath,
                                               takeExtension, (</>), takeFileName)
 import           System.Process              (readProcess)
@@ -35,6 +39,17 @@ import           Text.Regex.TDFA
 import Data.Aeson.Types                      (toJSON, FromJSON, ToJSON)
 import Debug.Trace
 import Distribution.Compat.Prelude (Generic)
+import Data.List.NonEmpty (NonEmpty (..), fromList)
+import Distribution.Client.Add as Add
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 qualified as B
+import Data.Maybe (fromJust)
+import Distribution.PackageDescription (
+  ComponentName,
+  GenericPackageDescription,
+  packageDescription,
+  specVersion,
+ )
 
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
 findResponsibleCabalFile uriPath = do
@@ -61,7 +76,7 @@ missingDependenciesAction plId maxCompletions uri diag cabalFiles =
         cabalName = T.pack $ takeFileName cabalFile
         params = CabalAddCommandParams {cabalPath = cabalFile, dependency = suggestedDep}
         title = "Add dependency " <> suggestedDep <> " at " <> cabalName <> " " <> (T.pack $ show params)
-        command = mkLspCommand plId (CommandId cabalAddNameCommand) "Execute Code Action" (Just [toJSON params]) -- TODO: add cabal-add CL arguments
+        command = mkLspCommand plId (CommandId cabalAddCommand) "Execute Code Action" (Just [toJSON params]) -- TODO: add cabal-add CL arguments
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
 -- | Gives a mentioned number of hidden packages given
@@ -70,7 +85,7 @@ missingDependenciesSuggestion :: Int -> T.Text -> [T.Text]
 missingDependenciesSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
     regex :: T.Text -- TODO: Support multiple packages suggestion
-    regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package \8216(.*)\8217"
+    regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package \8216([a-z]+)[-]?[0-9\\.]*\8217"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results
 
@@ -89,8 +104,8 @@ hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results
 
-cabalAddNameCommand :: IsString p => p
-cabalAddNameCommand = "cabalAdd"
+cabalAddCommand :: IsString p => p
+cabalAddCommand = "cabalAdd"
 
 data CabalAddCommandParams =
      CabalAddCommandParams { cabalPath :: FilePath
@@ -99,10 +114,44 @@ data CabalAddCommandParams =
   deriving (Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
--- | Registering a cabal-add as a HLS command
 command :: CommandFunction IdeState CabalAddCommandParams
 command _ _ (CabalAddCommandParams {cabalPath = path, dependency = dep}) = do
   traceShowM ("cabalPath ", path)
   traceShowM ("dependency ", dep)
-  void $ liftIO $ readProcess "/home/george-manjaro/.cabal/bin/cabal-add" [] []
-  pure $ InR Null -- TODO: return cabal-add output (?)
+  void $ liftIO $ addDependency path (fromList [T.unpack dep])
+  pure $ InR Null
+
+data RawConfig = RawConfig
+  { rcnfCabalFile :: !FilePath
+  , rcnfComponent :: !(Maybe String)
+  , rcnfDependencies :: !(NonEmpty String)
+  }
+  deriving (Show)
+
+readCabalFile :: FilePath -> IO (Maybe ByteString)
+readCabalFile fileName = do
+  cabalFileExists <- doesFileExist fileName
+  if cabalFileExists
+    then Just . snd . patchQuirks <$> B.readFile fileName
+    else pure Nothing
+
+addDependency :: FilePath -> NonEmpty String -> IO ()
+addDependency cabalFilePath dependency = do
+  let rcnfComponent = Nothing -- Just "component?"
+
+  cnfOrigContents <- fromJust <$> readCabalFile cabalFilePath
+  let inputs :: Either _ _ = do
+        (fields, packDescr) <- parseCabalFile cabalFilePath cnfOrigContents
+        --                                    ^ cabal path  ^ cabal raw contents
+        let specVer = specVersion $ packageDescription packDescr
+        cmp <- resolveComponent cabalFilePath (fields, packDescr) rcnfComponent
+        deps <- traverse (validateDependency specVer) dependency
+        pure (fields, packDescr, cmp, deps)
+
+  (cnfFields, origPackDescr, cnfComponent, cnfDependencies) <- case inputs of
+    Left err -> error err
+    Right pair -> pure pair
+
+  case executeConfig (validateChanges origPackDescr) (Config {..}) of
+    Nothing -> error $ "Cannot extend build-depends in " ++ cabalFilePath
+    Just r -> B.writeFile cabalFilePath r
