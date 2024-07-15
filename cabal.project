@@ -6,7 +6,11 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
-         ./cabal-add
+
+source-repository-package
+    type: git
+    location: https://github.com/Bodigrim/cabal-add.git
+    tag: master
 
 index-state: 2024-06-29T00:00:00Z
 
