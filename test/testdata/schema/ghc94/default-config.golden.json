@@ -94,7 +94,8 @@
         },
         "importLens": {
             "codeActionsOn": true,
-            "codeLensOn": true
+            "codeLensOn": true,
+            "inlayHintsOn": true
         },
         "moduleName": {
             "globalOn": true

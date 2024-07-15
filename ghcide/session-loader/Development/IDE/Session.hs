@@ -100,14 +100,17 @@ import           Data.Foldable                       (for_)
 import           Data.HashMap.Strict                 (HashMap)
 import           Data.HashSet                        (HashSet)
 import qualified Data.HashSet                        as Set
+import qualified Data.Set                            as OS
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing        (withTrace)
 import           Development.IDE.Core.WorkerThread   (awaitRunInThread,
                                                       withWorkerQueue)
+import qualified Development.IDE.GHC.Compat.Util     as Compat
 import           Development.IDE.Session.Diagnostics (renderCradleError)
 import           Development.IDE.Types.Shake         (WithHieDb,
                                                       WithHieDbShield (..),
                                                       toNoFileKey)
+import           GHC.Data.Graph.Directed
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -115,13 +118,6 @@ import           Ide.PluginUtils                     (toAbsolute)
 import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
-
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-import qualified Data.Set                            as OS
-import qualified Development.IDE.GHC.Compat.Util     as Compat
-import           GHC.Data.Graph.Directed
 
 import           GHC.Data.Bag
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
@@ -527,22 +523,17 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                   _inplace = map rawComponentUnitId $ NE.toList all_deps
 
               all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
-                  -- Remove all inplace dependencies from package flags for
-                  -- components in this HscEnv
-                  let (df2, uids) = (rawComponentDynFlags, [])
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
-                  let hscComponents = sort $ map show uids
-                      cacheDirOpts = hscComponents ++ componentOptions opts
+                  let cacheDirOpts = componentOptions opts
                   cacheDirs <- liftIO $ getCacheDirs prefix cacheDirOpts
-                  processed_df <- setCacheDirs recorder cacheDirs df2
+                  processed_df <- setCacheDirs recorder cacheDirs rawComponentDynFlags
                   -- The final component information, mostly the same but the DynFlags don't
                   -- contain any packages which are also loaded
                   -- into the same component.
                   pure $ ComponentInfo
                            { componentUnitId = rawComponentUnitId
                            , componentDynFlags = processed_df
-                           , componentInternalUnits = uids
                            , componentTargets = rawComponentTargets
                            , componentFP = rawComponentFP
                            , componentCOptions = rawComponentCOptions
@@ -832,7 +823,7 @@ checkHomeUnitsClosed' ue home_id_set
       where
         go rest this this_uis =
            plusUniqMap_C OS.union
-             (addToUniqMap_C OS.union external_depends this (OS.fromList $ this_deps))
+             (addToUniqMap_C OS.union external_depends this (OS.fromList this_deps))
              rest
            where
              external_depends = mapUniqMap (OS.fromList . unitDepends)
@@ -1021,10 +1012,6 @@ data ComponentInfo = ComponentInfo
   -- | Processed DynFlags. Does not contain inplace packages such as local
   -- libraries. Can be used to actually load this Component.
   , componentDynFlags       :: DynFlags
-  -- | Internal units, such as local libraries, that this component
-  -- is loaded with. These have been extracted from the original
-  -- ComponentOptions.
-  , componentInternalUnits  :: [UnitId]
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
@@ -1154,7 +1141,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
                      -- This works because there won't be any dependencies on the
                      -- executable unit.
                      "main" ->
-                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack $ this_opts)
+                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack this_opts)
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in setHomeUnitId_ hashed_uid dflags'
                      _ -> dflags'

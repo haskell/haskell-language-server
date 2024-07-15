@@ -487,12 +487,15 @@ import qualified GHC.Utils.Panic.Plain       as Plain
 import           Data.Foldable               (toList)
 import           GHC.Core.Multiplicity       (scaledThing)
 import           GHC.Data.Bag
+import qualified GHC.Data.Strict             as Strict
+import qualified GHC.Driver.Config.Finder    as GHC
+import qualified GHC.Driver.Config.Tidy      as GHC
 import           GHC.Driver.Env
-import           GHC.Hs                       (HsModule (..))
-#if !MIN_VERSION_ghc(9,9,0)
-import           GHC.Hs                       (SrcSpanAnn')
-#endif
-import           GHC.Hs.Decls                 hiding (FunDep)
+import           GHC.Driver.Env              as GHCi
+import           GHC.Driver.Env.KnotVars
+import           GHC.Driver.Errors.Types
+import           GHC.Hs                      (HsModule (..))
+import           GHC.Hs.Decls                hiding (FunDep)
 import           GHC.Hs.Doc
 import           GHC.Hs.Expr
 import           GHC.Hs.Extension
@@ -516,37 +519,34 @@ import           GHC.Types.SourceText
 import           GHC.Types.Target            (Target (..), TargetId (..))
 import           GHC.Types.TyThing
 import           GHC.Types.TyThing.Ppr
+import           GHC.Types.Unique
+import           GHC.Types.Unique.Map
+import           GHC.Unit.Env
 import           GHC.Unit.Finder             hiding (mkHomeModLocation)
+import qualified GHC.Unit.Finder             as GHC
+import           GHC.Unit.Finder.Types
 import           GHC.Unit.Home.ModInfo
+import           GHC.Unit.Module.Graph
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
                                               ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary  (ModSummary (..))
+import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
+import           GHC.Utils.Panic
+import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 
-import qualified GHC.Data.Strict             as Strict
-import qualified GHC.Driver.Config.Finder    as GHC
-import qualified GHC.Driver.Config.Tidy      as GHC
-import           GHC.Driver.Env              as GHCi
-import           GHC.Driver.Env.KnotVars
-import           GHC.Driver.Errors.Types
-import           GHC.Types.Unique
-import           GHC.Types.Unique.Map
-import           GHC.Unit.Env
-import qualified GHC.Unit.Finder             as GHC
-import           GHC.Unit.Finder.Types
-import           GHC.Unit.Module.Graph
-import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
-import           GHC.Utils.Panic
-import           GHC.Utils.TmpFs
-
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
+#endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
