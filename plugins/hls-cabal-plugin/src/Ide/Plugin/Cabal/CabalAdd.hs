@@ -49,6 +49,7 @@ import           System.FilePath                        (dropFileName,
                                                          splitPath,
                                                          takeExtension, (</>))
 import           Text.Regex.TDFA
+import System.IO.Unsafe (unsafeInterleaveIO)
 
 
 -- | Given a path to a haskell file, finds all cabal files paths
@@ -56,7 +57,7 @@ import           Text.Regex.TDFA
 --   Gives all found paths all the way to the root directory.
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
 findResponsibleCabalFile uriPath = do
-  contents <- mapM listDirectory allDirPaths
+  contents <- mapM (unsafeInterleaveIO . listDirectory) allDirPaths
   let filesWithPaths = concat $ zipWith (\path content -> map (path </>) content) allDirPaths contents
   let cabalFiles = filter (\c -> takeExtension c == ".cabal") filesWithPaths
   pure $ reverse cabalFiles -- sorted from closest to the uriPath
@@ -90,7 +91,7 @@ missingDependenciesSuggestion :: Int -> T.Text -> [(T.Text, T.Text)]
 missingDependenciesSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
     regex :: T.Text -- TODO: Support multiple packages suggestion
-    regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package \8216([a-z]+)[-]?([0-9\\.]*)\8217"
+    regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package [\8216\\']([a-z]+)[-]?([0-9\\.]*)[\8217\\']"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [(T.Text, T.Text)]
     getMatch (_, _, _, []) = []
     getMatch (_, _, _, [dependency]) = [(dependency, T.empty)]
