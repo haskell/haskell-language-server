@@ -4,13 +4,10 @@ module Outline (
   outlineTests,
 ) where
 
-import Language.LSP.Protocol.Types (
-  DocumentSymbol (..),
-  Position (..),
-  Range (..),
- )
-import Test.Hls qualified as T
-import Utils
+import           Language.LSP.Protocol.Types (DocumentSymbol (..),
+                                              Position (..), Range (..))
+import qualified Test.Hls                    as T
+import           Utils
 
 testSymbols :: (T.HasCallStack) => T.TestName -> FilePath -> [DocumentSymbol] -> T.TestTree
 testSymbols testName path expectedSymbols =
