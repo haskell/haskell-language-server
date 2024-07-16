@@ -1344,6 +1344,7 @@ test-suite hls-explicit-record-fields-plugin-tests
     , base
     , filepath
     , text
+    , ghcide
     , haskell-language-server:hls-explicit-record-fields-plugin
     , hls-test-utils              == 2.9.0.1
 
