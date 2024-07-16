@@ -242,6 +242,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Completions
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
+    Ide.Plugin.Cabal.FieldSuggest
     Ide.Plugin.Cabal.LicenseSuggest
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Parse
@@ -285,6 +286,7 @@ test-suite hls-cabal-plugin-tests
     , base
     , bytestring
     , Cabal-syntax          >= 3.7
+    , extra
     , filepath
     , ghcide
     , haskell-language-server:hls-cabal-plugin

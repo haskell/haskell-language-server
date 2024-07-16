@@ -1,0 +1,36 @@
+cabal-version: 3.0
+name: FieldSuggestions
+version: 0.1.0
+licens:            BSD-3-Clause
+
+buil-type: Simple
+
+extra-doc-fils:
+    ChangeLog
+
+-- Default warnings in HLS
+common warnings
+  ghc-option: -Wall
+               -Wredundant-constraints
+               -Wunused-packages
+               -Wno-name-shadowing
+               -Wno-unticked-promoted-constructors
+
+source-repository head
+  type:     git
+  loc: fake
+
+library
+    default-lang: Haskell2010
+    -- Import isn't supported right now.
+    impor: warnings
+    build-dep: base
+
+executable my-exe
+    mains: Main.hs
+
+test-suite Test
+    type: exitcode-stdio-1.0
+    main-is: Test.hs
+    hs-source-drs:
+
