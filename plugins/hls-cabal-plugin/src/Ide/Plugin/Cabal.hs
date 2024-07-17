@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellFilesDescriptor, Log (..)) where
 
@@ -334,7 +335,8 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
     Nothing -> pure $ InL []
     Just uriPath -> do
       cabalFiles <- liftIO $ CabalAdd.findResponsibleCabalFile uriPath
-      pure $ InL $ diags >>= (\diag -> fmap InR (CabalAdd.missingDependenciesAction plId maxCompls uri diag cabalFiles))
+      actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction plId maxCompls uri diag cabalFiles) diags
+      pure $ InL $ fmap InR (concat actions)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
