@@ -274,6 +274,7 @@ library hls-cabal-plugin
     , cabal-add
     , process
     , aeson
+    , Cabal
 
   hs-source-dirs:   plugins/hls-cabal-plugin/src
 

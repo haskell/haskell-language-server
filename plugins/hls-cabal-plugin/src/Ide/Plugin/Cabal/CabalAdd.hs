@@ -16,7 +16,7 @@ module Ide.Plugin.Cabal.CabalAdd
 )
 where
 
-import           Control.Monad                          (void)
+import           Control.Monad                          (void, filterM)
 import           Control.Monad.IO.Class                 (liftIO)
 import           Data.String                            (IsString)
 import qualified Data.Text                              as T
@@ -44,13 +44,18 @@ import           Data.List.NonEmpty                     (NonEmpty (..),
 import           Distribution.Client.Add                as Add
 import           Distribution.Compat.Prelude            (Generic)
 import           Distribution.PackageDescription        (packageDescription,
-                                                         specVersion)
+                                                         specVersion, GenericPackageDescription (GenericPackageDescription), showComponentName, componentNameRaw)
 import           System.FilePath                        (dropFileName,
                                                          splitPath,
-                                                         takeExtension, (</>))
+                                                         takeExtension, (</>), takeFileName, dropExtension)
 import           Text.Regex.TDFA
-import System.IO.Unsafe (unsafeInterleaveIO)
-
+import           System.IO.Unsafe                       (unsafeInterleaveIO)
+import System.Directory (doesFileExist)
+import Distribution.Simple.BuildTarget                  (readBuildTargets, buildTargetComponentName)
+import Distribution.Verbosity (normal)
+import Debug.Trace
+import Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import Distribution.Types.ComponentName (componentNameStanza)
 
 -- | Given a path to a haskell file, finds all cabal files paths
 --   sorted from the closest to the farthest.
@@ -58,8 +63,9 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
 findResponsibleCabalFile uriPath = do
   contents <- mapM (unsafeInterleaveIO . listDirectory) allDirPaths
-  let filesWithPaths = concat $ zipWith (\path content -> map (path </>) content) allDirPaths contents
-  let cabalFiles = filter (\c -> takeExtension c == ".cabal") filesWithPaths
+  let objectWithPaths = concat $ zipWith (\path content -> map (path </>) content) allDirPaths contents
+  let objectCabalExtension = filter (\c -> takeExtension c == ".cabal") objectWithPaths
+  cabalFiles <- filterM (\c -> doesFileExist c) objectCabalExtension
   pure $ reverse cabalFiles -- sorted from closest to the uriPath
   where dirPath = dropFileName uriPath
         allDirPaths = scanl1 (</>) (splitPath dirPath)
@@ -142,11 +148,21 @@ readCabalFile fileName = do
 --   Distribution.Client.Main
 addDependency :: FilePath -> NonEmpty String -> IO ()
 addDependency cabalFilePath dependency = do
-  let rcnfComponent = Nothing
+
   cnfOrigContents <- readCabalFile cabalFilePath
+
+  (fields, packDescr) <- case parseCabalFile cabalFilePath cnfOrigContents of
+    Left err   -> error err
+    Right pair -> pure pair
+
+  let cabalName = dropExtension $ takeFileName cabalFilePath
+  buildTargets <- readBuildTargets normal (flattenPackageDescription packDescr) [cabalName]
+
   let inputs = do
-        (fields, packDescr) <- parseCabalFile cabalFilePath cnfOrigContents
-        --                                    ^ cabal path  ^ cabal raw contents
+        let rcnfComponent = case buildTargets of
+                []         -> Nothing
+                (target:_) -> Just $ componentNameRaw $ buildTargetComponentName target
+
         let specVer = specVersion $ packageDescription packDescr
         cmp <- resolveComponent cabalFilePath (fields, packDescr) rcnfComponent
         deps <- traverse (validateDependency specVer) dependency
