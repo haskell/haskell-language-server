@@ -16,47 +16,53 @@ module Ide.Plugin.Cabal.CabalAdd
 )
 where
 
-import           Control.Monad                          (void, filterM)
-import           Control.Monad.IO.Class                 (liftIO)
-import           Data.String                            (IsString)
-import qualified Data.Text                              as T
-import           Development.IDE                        (IdeState)
-import           Distribution.PackageDescription.Quirks (patchQuirks)
-import           Ide.PluginUtils                        (mkLspCommand)
-import           Ide.Types                              (CommandFunction,
-                                                         CommandId (CommandId),
-                                                         PluginId)
-import           Language.LSP.Protocol.Types            (CodeAction (CodeAction),
-                                                         CodeActionDisabled (CodeActionDisabled),
-                                                         CodeActionKind (CodeActionKind_QuickFix),
-                                                         Diagnostic (..),
-                                                         Null (Null), Uri (..),
-                                                         type (|?) (InR), uriToFilePath)
-import           System.Directory                       (doesFileExist,
-                                                         listDirectory)
+import           Control.Monad                                 (filterM, void)
+import           Control.Monad.IO.Class                        (liftIO)
+import           Data.String                                   (IsString)
+import qualified Data.Text                                     as T
+import           Development.IDE                               (IdeState)
+import           Distribution.PackageDescription.Quirks        (patchQuirks)
+import           Ide.PluginUtils                               (mkLspCommand)
+import           Ide.Types                                     (CommandFunction,
+                                                                CommandId (CommandId),
+                                                                PluginId)
+import           Language.LSP.Protocol.Types                   (CodeAction (CodeAction),
+                                                                CodeActionDisabled (CodeActionDisabled),
+                                                                CodeActionKind (CodeActionKind_QuickFix),
+                                                                Diagnostic (..),
+                                                                Null (Null),
+                                                                Uri (..),
+                                                                type (|?) (InR),
+                                                                uriToFilePath)
+import           System.Directory                              (doesFileExist,
+                                                                listDirectory)
 
-import           Data.Aeson.Types                       (FromJSON, ToJSON,
-                                                         toJSON)
-import           Data.ByteString                        (ByteString)
-import qualified Data.ByteString.Char8                  as B
-import           Data.List.NonEmpty                     (NonEmpty (..),
-                                                         fromList)
-import           Distribution.Client.Add                as Add
-import           Distribution.Compat.Prelude            (Generic)
-import           Distribution.PackageDescription        (packageDescription,
-                                                         specVersion, GenericPackageDescription (GenericPackageDescription), showComponentName, componentNameRaw)
-import           System.FilePath                        (dropFileName,
-                                                         splitPath,
-                                                         takeExtension, (</>), takeFileName, dropExtension, makeRelative)
+import           Data.Aeson.Types                              (FromJSON,
+                                                                ToJSON, toJSON)
+import           Data.ByteString                               (ByteString)
+import qualified Data.ByteString.Char8                         as B
+import           Data.List.NonEmpty                            (NonEmpty (..),
+                                                                fromList)
+import           Data.Maybe                                    (fromJust)
+import           Distribution.Client.Add                       as Add
+import           Distribution.Compat.Prelude                   (Generic)
+import           Distribution.PackageDescription               (packageDescription,
+                                                                specVersion)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import           Distribution.Pretty                           (pretty)
+import           Distribution.Simple.BuildTarget               (BuildTarget,
+                                                                buildTargetComponentName,
+                                                                readBuildTargets)
+import           Distribution.Verbosity                        (silent,
+                                                                verboseNoStderr)
+import           System.FilePath                               (dropFileName,
+                                                                makeRelative,
+                                                                splitPath,
+                                                                takeExtension,
+                                                                (</>))
+import           System.IO.Unsafe                              (unsafeInterleaveIO)
+import           Text.PrettyPrint                              (render)
 import           Text.Regex.TDFA
-import           System.IO.Unsafe                       (unsafeInterleaveIO)
-import System.Directory (doesFileExist)
-import Distribution.Simple.BuildTarget                  (readBuildTargets, buildTargetComponentName, BuildTarget)
-import Distribution.Verbosity (normal, silent, verboseNoStderr)
-import Debug.Trace
-import Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import Distribution.Types.ComponentName (componentNameStanza, ComponentName)
-import Data.Maybe (fromJust)
 
 -- | Given a path to a haskell file, finds all cabal files paths
 --   sorted from the closest to the farthest.
@@ -75,6 +81,7 @@ findResponsibleCabalFile uriPath = do
 -- | Gives a code action that calls the command,
 --   if a suggestion for a missing dependency is found.
 --   Disabled action if no cabal files given.
+--   Conducts IO action on a cabal file to find build targets.
 hiddenPackageAction :: PluginId -> Int -> Uri -> Diagnostic -> [FilePath] -> IO [CodeAction]
 hiddenPackageAction plId maxCompletions uri diag cabalFiles =
   case cabalFiles of
@@ -82,19 +89,18 @@ hiddenPackageAction plId maxCompletions uri diag cabalFiles =
                                              (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing]
     (cabalFile:_) -> do
         buildTargets <- liftIO $ getBuildTargets cabalFile (fromJust $ uriToFilePath uri)
-
         case buildTargets of
           [] -> pure $ mkCodeAction cabalFile Nothing <$> hiddenPackageSuggestion maxCompletions (_message diag)
           targets -> pure $ concat [mkCodeAction cabalFile (Just $ buildTargetToStringRepr target) <$>
                               hiddenPackageSuggestion maxCompletions (_message diag) | target <- targets]
   where
-    buildTargetToStringRepr target = componentNameStanza $ buildTargetComponentName target
+    buildTargetToStringRepr target = render $ pretty $ buildTargetComponentName target
     mkCodeAction cabalFile target (suggestedDep, suggestedVersion) =
       let
         versionTitle = if T.null suggestedVersion then T.empty else "  version " <> suggestedVersion
         targetTitle = case target of
           Nothing -> T.empty
-          Just t -> "  target " <> T.pack t
+          Just t  -> "  target " <> T.pack t
         title = "Add dependency " <> suggestedDep <> versionTitle <> targetTitle
 
         version = if T.null suggestedVersion then Nothing else Just suggestedVersion
@@ -121,10 +127,10 @@ cabalAddCommand :: IsString p => p
 cabalAddCommand = "cabalAdd"
 
 data CabalAddCommandParams =
-     CabalAddCommandParams { cabalPath  :: FilePath
+     CabalAddCommandParams { cabalPath   :: FilePath
                            , buildTarget :: Maybe String
-                           , dependency :: T.Text
-                           , version    :: Maybe T.Text
+                           , dependency  :: T.Text
+                           , version     :: Maybe T.Text
                            }
   deriving (Generic, Show)
   deriving anyclass (FromJSON, ToJSON)

@@ -3,7 +3,6 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE PartialTypeSignatures #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellFilesDescriptor, Log (..)) where
 
@@ -55,7 +54,6 @@ import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
 
 import qualified Data.Text                                   ()
-import           Debug.Trace
 import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
 
 data Log

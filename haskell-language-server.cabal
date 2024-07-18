@@ -275,6 +275,7 @@ library hls-cabal-plugin
     , process
     , aeson
     , Cabal
+    , pretty
 
   hs-source-dirs:   plugins/hls-cabal-plugin/src
 
