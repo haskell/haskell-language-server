@@ -20,7 +20,7 @@ import           Control.Monad                                 (filterM, void)
 import           Control.Monad.IO.Class                        (liftIO)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
-import           Development.IDE                               (IdeState)
+import           Development.IDE                               (IdeState, runIdeAction)
 import           Distribution.PackageDescription.Quirks        (patchQuirks)
 import           Ide.PluginUtils                               (mkLspCommand)
 import           Ide.Types                                     (CommandFunction,
@@ -47,7 +47,7 @@ import           Data.Maybe                                    (fromJust)
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
 import           Distribution.PackageDescription               (packageDescription,
-                                                                specVersion)
+                                                                specVersion, GenericPackageDescription)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Pretty                           (pretty)
 import           Distribution.Simple.BuildTarget               (BuildTarget,
@@ -68,13 +68,13 @@ import           Text.Regex.TDFA
 --   sorted from the closest to the farthest.
 --   Gives all found paths all the way to the root directory.
 findResponsibleCabalFile :: FilePath -> IO [FilePath]
-findResponsibleCabalFile uriPath = do
+findResponsibleCabalFile haskellFilePath = do
   contents <- mapM (unsafeInterleaveIO . listDirectory) allDirPaths
   let objectWithPaths = concat $ zipWith (\path content -> map (path </>) content) allDirPaths contents
   let objectCabalExtension = filter (\c -> takeExtension c == ".cabal") objectWithPaths
   cabalFiles <- filterM (\c -> doesFileExist c) objectCabalExtension
-  pure $ reverse cabalFiles -- sorted from closest to the uriPath
-  where dirPath = dropFileName uriPath
+  pure $ reverse cabalFiles -- sorted from closest to the haskellFilePath
+  where dirPath = dropFileName haskellFilePath
         allDirPaths = scanl1 (</>) (splitPath dirPath)
 
 
@@ -82,20 +82,16 @@ findResponsibleCabalFile uriPath = do
 --   if a suggestion for a missing dependency is found.
 --   Disabled action if no cabal files given.
 --   Conducts IO action on a cabal file to find build targets.
-hiddenPackageAction :: PluginId -> Int -> Uri -> Diagnostic -> [FilePath] -> IO [CodeAction]
-hiddenPackageAction plId maxCompletions uri diag cabalFiles =
-  case cabalFiles of
-    [] -> pure [CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
-                                             (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing]
-    (cabalFile:_) -> do
-        buildTargets <- liftIO $ getBuildTargets cabalFile (fromJust $ uriToFilePath uri)
-        case buildTargets of
-          [] -> pure $ mkCodeAction cabalFile Nothing <$> hiddenPackageSuggestion maxCompletions (_message diag)
-          targets -> pure $ concat [mkCodeAction cabalFile (Just $ buildTargetToStringRepr target) <$>
-                              hiddenPackageSuggestion maxCompletions (_message diag) | target <- targets]
+hiddenPackageAction :: PluginId -> Int -> Diagnostic -> FilePath -> FilePath -> GenericPackageDescription -> IO [CodeAction]
+hiddenPackageAction plId maxCompletions diag haskellFilePath cabalFilePath gpd = do
+    buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
+    case buildTargets of
+      [] -> pure $ mkCodeAction cabalFilePath Nothing <$> hiddenPackageSuggestion maxCompletions (_message diag)
+      targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
+                          hiddenPackageSuggestion maxCompletions (_message diag) | target <- targets]
   where
     buildTargetToStringRepr target = render $ pretty $ buildTargetComponentName target
-    mkCodeAction cabalFile target (suggestedDep, suggestedVersion) =
+    mkCodeAction cabalFilePath target (suggestedDep, suggestedVersion) =
       let
         versionTitle = if T.null suggestedVersion then T.empty else "  version " <> suggestedVersion
         targetTitle = case target of
@@ -105,7 +101,7 @@ hiddenPackageAction plId maxCompletions uri diag cabalFiles =
 
         version = if T.null suggestedVersion then Nothing else Just suggestedVersion
 
-        params = CabalAddCommandParams {cabalPath = cabalFile, buildTarget = target, dependency = suggestedDep, version=version}
+        params = CabalAddCommandParams {cabalPath = cabalFilePath, buildTarget = target, dependency = suggestedDep, version=version}
         command = mkLspCommand plId (CommandId cabalAddCommand) "Execute Code Action" (Just [toJSON params])
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
@@ -153,15 +149,10 @@ readCabalFile fileName = do
     then snd . patchQuirks <$> B.readFile fileName
     else error ("Failed to read cabal file at " <> fileName)
 
-getBuildTargets :: FilePath -> FilePath -> IO [BuildTarget]
-getBuildTargets cabalFilePath haskellFilePath = do
-  cabalContents <- readCabalFile cabalFilePath
-  (_, packDescr) <- case parseCabalFile cabalFilePath cabalContents of
-    Left err   -> error err
-    Right pair -> pure pair
-
+getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
+getBuildTargets gpd cabalFilePath haskellFilePath = do
   let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
-  readBuildTargets (verboseNoStderr silent) (flattenPackageDescription packDescr) [haskellFileRelativePath]
+  readBuildTargets (verboseNoStderr silent) (flattenPackageDescription gpd) [haskellFileRelativePath]
 
 
 -- | Constructs prerequisets for the @executeConfig@

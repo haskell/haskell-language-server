@@ -55,6 +55,8 @@ import qualified Language.LSP.VFS                            as VFS
 
 import qualified Data.Text                                   ()
 import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
+import Debug.Trace
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -328,13 +330,24 @@ gotoDefinition ideState _ msgParam = do
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.cabalAdd" state getClientConfigAction
-  let mbUriPath = uriToFilePath uri
-  case mbUriPath of
+
+  let mbHaskellFilePath = uriToFilePath uri
+  case mbHaskellFilePath of
     Nothing -> pure $ InL []
-    Just uriPath -> do
-      cabalFiles <- liftIO $ CabalAdd.findResponsibleCabalFile uriPath
-      actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction plId maxCompls uri diag cabalFiles) diags
-      pure $ InL $ fmap InR (concat actions)
+    Just haskellFilePath -> do
+      cabalFiles <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
+      case cabalFiles of
+        [] -> pure $ InL $ fmap InR [noCabalFileAction]
+        (cabalFilePath:_) -> do
+          mGPD <- liftIO $ runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras state) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath (head cabalFiles)
+          case mGPD of
+            Nothing -> pure $ InL []
+            Just (gpd, _) -> do
+              actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction plId maxCompls diag haskellFilePath cabalFilePath gpd) diags
+              pure $ InL $ fmap InR (concat actions)
+  where
+    noCabalFileAction = CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
+                                     (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
