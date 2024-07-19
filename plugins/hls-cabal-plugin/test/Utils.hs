@@ -49,6 +49,9 @@ runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
 
+runCabalGoldenSession :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+runCabalGoldenSession title subdir fp act = goldenWithCabalDoc def cabalPlugin title testDataDir (subdir </> fp) "golden" "cabal" act
+
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-cabal-plugin" </> "test" </> "testdata"
 

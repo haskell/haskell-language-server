@@ -9,9 +9,12 @@ module Main (
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
+import           Control.Lens.Fold               ((^?))
 import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
+import           Data.List.Extra                 (nubOrdOn)
+import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
 import qualified Data.Text                       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
@@ -30,6 +33,7 @@ main = do
             , pluginTests
             , completerTests
             , contextTests
+            , codeActionTests
             ]
 
 -- ------------------------------------------------------------------------
@@ -141,59 +145,83 @@ pluginTests =
                         unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
                         unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
             ]
-        , testGroup
-            "Code Actions"
-            [ runCabalTestCaseSession "BSD-3" "" $ do
-                doc <- openDoc "licenseCodeAction.cabal" "cabal"
-                -- diags <- waitForDiagnosticsFromSource doc "cabal"
-                diags <- cabalCaptureKick
-                reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
-                liftIO $ do
-                    length diags @?= 1
-                    reduceDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
-                    reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Error
-                [codeAction] <- getLicenseAction "BSD-3-Clause" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
-                executeCodeAction codeAction
-                contents <- documentContents doc
-                liftIO $
-                    contents
-                        @?= Text.unlines
-                            [ "cabal-version:      3.0"
-                            , "name:               licenseCodeAction"
-                            , "version:            0.1.0.0"
-                            , "license:            BSD-3-Clause"
-                            , ""
-                            , "library"
-                            , "    build-depends:    base"
-                            , "    default-language: Haskell2010"
-                            ]
-            , runCabalTestCaseSession "Apache-2.0" "" $ do
-                doc <- openDoc "licenseCodeAction2.cabal" "cabal"
-                -- diags <- waitForDiagnosticsFromSource doc "cabal"
-                diags <- cabalCaptureKick
-                -- test if it supports typos in license name, here 'apahe'
-                reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'APAHE'"]
-                liftIO $ do
-                    length diags @?= 1
-                    reduceDiag ^. L.range @?= Range (Position 3 25) (Position 4 0)
-                    reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Error
-                [codeAction] <- getLicenseAction "Apache-2.0" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
-                executeCodeAction codeAction
-                contents <- documentContents doc
-                liftIO $
-                    contents
-                        @?= Text.unlines
-                            [ "cabal-version:      3.0"
-                            , "name:               licenseCodeAction2"
-                            , "version:            0.1.0.0"
-                            , "license:            Apache-2.0"
-                            , ""
-                            , "library"
-                            , "    build-depends:    base"
-                            , "    default-language: Haskell2010"
-                            ]
-            ]
         ]
+-- ----------------------------------------------------------------------------
+-- Code Action Tests
+-- ----------------------------------------------------------------------------
+
+codeActionTests :: TestTree
+codeActionTests = testGroup "Code Actions"
+    [ runCabalTestCaseSession "BSD-3" "" $ do
+        doc <- openDoc "licenseCodeAction.cabal" "cabal"
+        diags <- waitForDiagnosticsFromSource doc "cabal"
+        reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
+        liftIO $ do
+            length diags @?= 1
+            reduceDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Error
+        [codeAction] <- getLicenseAction "BSD-3-Clause" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
+        executeCodeAction codeAction
+        contents <- documentContents doc
+        liftIO $
+            contents
+                @?= Text.unlines
+                    [ "cabal-version:      3.0"
+                    , "name:               licenseCodeAction"
+                    , "version:            0.1.0.0"
+                    , "license:            BSD-3-Clause"
+                    , ""
+                    , "library"
+                    , "    build-depends:    base"
+                    , "    default-language: Haskell2010"
+                    ]
+    , runCabalTestCaseSession "Apache-2.0" "" $ do
+        doc <- openDoc "licenseCodeAction2.cabal" "cabal"
+        diags <- waitForDiagnosticsFromSource doc "cabal"
+        -- test if it supports typos in license name, here 'apahe'
+        reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'APAHE'"]
+        liftIO $ do
+            length diags @?= 1
+            reduceDiag ^. L.range @?= Range (Position 3 25) (Position 4 0)
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Error
+        [codeAction] <- getLicenseAction "Apache-2.0" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
+        executeCodeAction codeAction
+        contents <- documentContents doc
+        liftIO $
+            contents
+                @?= Text.unlines
+                    [ "cabal-version:      3.0"
+                    , "name:               licenseCodeAction2"
+                    , "version:            0.1.0.0"
+                    , "license:            Apache-2.0"
+                    , ""
+                    , "library"
+                    , "    build-depends:    base"
+                    , "    default-language: Haskell2010"
+                    ]
+    , runCabalGoldenSession "Code Actions - Can fix field names" "code-actions" "FieldSuggestions" $ \doc -> do
+        _ <- waitForDiagnosticsFrom doc
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
+        -- Filter out the code actions we want to invoke.
+        -- We only want to invoke Code Actions with certain titles, and
+        -- we want to invoke them only once, not once for each cursor request.
+        -- 'getAllCodeActions' iterates over each cursor position and requests code actions.
+        let selectedCas = nubOrdOn (^. L.title) $ filter
+                (\ca -> (ca ^. L.title) `elem`
+                    [ "Replace with license"
+                    , "Replace with build-type"
+                    , "Replace with extra-doc-files"
+                    , "Replace with ghc-options"
+                    , "Replace with location"
+                    , "Replace with default-language"
+                    , "Replace with import"
+                    , "Replace with build-depends"
+                    , "Replace with main-is"
+                    , "Replace with hs-source-dirs"
+                    ]) cas
+        mapM_ executeCodeAction selectedCas
+        pure ()
+    ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
     getLicenseAction license codeActions = do
