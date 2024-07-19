@@ -27,7 +27,6 @@ import           Development.IDE.Core.Shake                  (restartShakeSessio
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (Key, alwaysRerun)
 import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
-import qualified Development.IDE.Plugin.Completions.Types    as Ghcide
 import qualified Development.IDE.Types.Options               as Options
 import           Development.IDE.Types.Shake                 (toKey)
 import qualified Distribution.Fields                         as Syntax
