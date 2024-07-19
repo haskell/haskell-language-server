@@ -119,9 +119,6 @@ import           System.Environment                                 (setEnv,
 #endif
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import qualified Development.IDE.Types.Options                      as Options
-import           GHC.TypeLits                                       (KnownSymbol)
-import qualified Language.LSP.Protocol.Message                      as LSP
-import qualified Language.LSP.Server                                as LSP
 import           Text.Regex.TDFA.Text                               ()
 
 -- ---------------------------------------------------------------------
