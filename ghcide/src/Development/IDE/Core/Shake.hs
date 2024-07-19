@@ -73,7 +73,8 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeysOlderThan,
     Log(..),
     VFSModified(..), getClientConfigAction,
-    ThreadQueue(..)
+    ThreadQueue(..),
+    kickSignal
     ) where
 
 import           Control.Concurrent.Async
@@ -123,6 +124,9 @@ import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
+import qualified Language.LSP.Protocol.Message          as LSP
+import qualified Language.LSP.Server                    as LSP
+
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
@@ -152,6 +156,7 @@ import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
+import           GHC.TypeLits                           (KnownSymbol)
 import           HieDb.Types
 import           Ide.Logger                             hiding (Priority)
 import qualified Ide.Logger                             as Logger
@@ -1443,3 +1448,11 @@ updatePositionMappingHelper ver changes mappingForUri = snd $
         EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addOldDelta delta acc in (new, (delta, acc)))
             zeroMapping
             (EM.insert ver (mkDelta changes, zeroMapping) mappingForUri)
+
+-- | sends a signal whenever shake session is run/restarted
+-- being used in cabal and hlint plugin tests to know when its time
+-- to look for file diagnostics
+kickSignal :: KnownSymbol s => Bool -> Maybe (LSP.LanguageContextEnv c) -> [NormalizedFilePath] -> Proxy s -> Action ()
+kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
+  LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
+  toJSON $ map fromNormalizedFilePath files

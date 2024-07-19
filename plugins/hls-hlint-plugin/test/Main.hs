@@ -90,8 +90,7 @@ suggestionsTests =
   testGroup "hlint suggestions" [
     testCase "provides 3.8 code actions including apply all" $ runHlintSession "" $ do
         doc <- openDoc "Base.hs" "haskell"
-        -- _ <- waitForTypecheck doc
-        diags@(reduceDiag:_) <- hlintCaptureKick -- doc
+        diags@(reduceDiag:_) <- hlintCaptureKick
 
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
@@ -129,7 +128,7 @@ suggestionsTests =
             , testShiftRoot = True} $ const $ do
         doc <- openDoc "Base.hs" "haskell"
 
-        _ <- hlintCaptureKick -- doc
+        _ <- hlintCaptureKick
 
         cars <- getAllCodeActions doc
         etaReduce <- liftIO $ inspectCommand cars ["Eta reduce"]
@@ -222,7 +221,7 @@ suggestionsTests =
 
     , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
         doc <- openDoc "TwoHints.hs" "haskell"
-        _ <- hlintCaptureKick -- doc
+        _ <- hlintCaptureKick
 
         firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 0 0)
         secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 1 0)
@@ -238,7 +237,7 @@ suggestionsTests =
 
     , testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
         _ <- openDoc "UnusedExtension.hs" "haskell"
-        diags@(unusedExt:_) <- hlintCaptureKick -- doc
+        diags@(unusedExt:_) <- hlintCaptureKick
 
         liftIO $ do
             length diags @?= 1
@@ -246,15 +245,10 @@ suggestionsTests =
 
     , testCase "[#1279] hlint should not activate extensions like PatternSynonyms" $ runHlintSession ""  $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
-
-        -- waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         testNoHlintDiagnostics doc
     , testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
         doc <- openDoc "StrictData.hs" "haskell"
-
-        -- waitForAllProgressDone
-
         testNoHlintDiagnostics doc
     ]
     where
@@ -335,7 +329,7 @@ configTests = testGroup "hlint plugin config" [
         let config' = hlintConfigWithFlags ["--with-group=generalise"]
         setHlsConfig config'
 
-        diags' <- hlintCaptureKick -- doc
+        diags' <- hlintCaptureKick
         d <- liftIO $ inspectDiagnostic diags' ["Use <>"]
 
         liftIO $ do
@@ -453,7 +447,7 @@ applyHintGoldenTest testCaseName goldenFilename point hintName = do
 goldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenTest testCaseName goldenFilename point hintText =
   setupGoldenHlintTest testCaseName goldenFilename codeActionNoResolveCaps $ \document -> do
-    _ <- hlintCaptureKick -- document
+    _ <- hlintCaptureKick
     actions <- getCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
       Just (InR codeAction) -> do
@@ -471,7 +465,7 @@ setupGoldenHlintTest testName path config =
     , testPluginDescriptor = hlintPlugin
     , testDirLocation = Right tree
     } testName tree path "expected" "hs"
-  where tree = (mkVirtualFileTree testDir (directProject (path <.> "hs")))
+  where tree = mkVirtualFileTree testDir (directProject (path <.> "hs"))
 
 ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
@@ -484,7 +478,7 @@ applyHintGoldenResolveTest testCaseName goldenFilename point hintName = do
 goldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenResolveTest testCaseName goldenFilename point hintText =
   setupGoldenHlintTest testCaseName goldenFilename codeActionResolveCaps $ \document -> do
-    _ <- hlintCaptureKick -- document
+    _ <- hlintCaptureKick
     actions <- getAndResolveCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
       Just (InR codeAction) -> executeCodeAction codeAction

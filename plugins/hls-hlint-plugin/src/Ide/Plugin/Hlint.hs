@@ -209,14 +209,9 @@ rules recorder plugin = do
   action $ do
     files <- Map.keys <$> getFilesOfInterestUntracked
     Shake.ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- Shake.getShakeExtras
-    let signal :: KnownSymbol s => Proxy s -> Action ()
-        signal msg = when testing $ liftIO $ Shake.mRunLspT lspEnv $
-            LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
-            toJSON $ map fromNormalizedFilePath files
-
-    signal (Proxy @"kick/start/hlint")
+    Shake.kickSignal testing lspEnv files (Proxy @"kick/start/hlint")
     void $ uses GetHlintDiagnostics files
-    signal (Proxy @"kick/done/hlint")
+    Shake.kickSignal testing lspEnv files (Proxy @"kick/done/hlint")
 
   where
 

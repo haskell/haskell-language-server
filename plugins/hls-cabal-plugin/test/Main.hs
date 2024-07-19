@@ -96,7 +96,6 @@ pluginTests =
             "Diagnostics"
             [ runCabalTestCaseSession "Publishes Diagnostics on Error" "" $ do
                 _ <- openDoc "invalid.cabal" "cabal"
-                -- diags <- waitForDiagnosticsFromSource doc "cabal"
                 diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
@@ -105,7 +104,6 @@ pluginTests =
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
             , runCabalTestCaseSession "Clears diagnostics" "" $ do
                 doc <- openDoc "invalid.cabal" "cabal"
-                -- diags <- waitForDiagnosticsFrom doc
                 diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
@@ -113,7 +111,6 @@ pluginTests =
                     unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
                 _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
-                -- newDiags <- waitForDiagnosticsFrom doc
                 newDiags <- cabalCaptureKick
                 liftIO $ newDiags @?= []
             , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do

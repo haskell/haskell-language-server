@@ -13,7 +13,6 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe                   (runMaybeT)
-import           Data.Aeson.Types                            (ToJSON (..))
 import qualified Data.ByteString                             as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                         (HashMap)
@@ -34,7 +33,6 @@ import           Development.IDE.Types.Shake                 (toKey)
 import qualified Distribution.Fields                         as Syntax
 import qualified Distribution.Parsec.Position                as Syntax
 import           GHC.Generics
-import           GHC.TypeLits                                (KnownSymbol)
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
 import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
@@ -50,7 +48,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Server                         as LSP
 import qualified Language.LSP.VFS                            as VFS
 
 data Log
@@ -235,13 +232,9 @@ kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
   Shake.ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- Shake.getShakeExtras
-  let signal :: KnownSymbol s => Proxy s -> Action ()
-      signal msg = when testing $ liftIO $ Shake.mRunLspT lspEnv $
-        LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
-        toJSON $ map fromNormalizedFilePath files
-  signal (Proxy @"kick/start/cabal")
+  Shake.kickSignal testing lspEnv files (Proxy @"kick/start/cabal")
   void $ uses Types.ParseCabalFile files
-  signal(Proxy @"kick/done/cabal")
+  Shake.kickSignal testing lspEnv files (Proxy @"kick/done/cabal")
 
 -- ----------------------------------------------------------------
 -- Code Actions

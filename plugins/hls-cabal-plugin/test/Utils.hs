@@ -55,6 +55,9 @@ runCabalGoldenSession title subdir fp act = goldenWithCabalDoc def cabalPlugin t
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-cabal-plugin" </> "test" </> "testdata"
 
+-- | these functions are used to detect cabal kicks
+-- and look at diagnostics for cabal files
+-- kicks are run everytime there is a shake session run/restart
 cabalKickDone :: Session ()
 cabalKickDone = kick (Proxy @"kick/done/cabal") >>= guard . not . null
 
