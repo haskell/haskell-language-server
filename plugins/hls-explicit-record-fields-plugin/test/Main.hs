@@ -38,10 +38,10 @@ test = testGroup "explicit-fields"
     ]
   , testGroup "inlay hints"
     [ mkInlayHintsTest "Construction" 16 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "Construction" 16 12
-        foo <- mkLabelPart' "foo"
-        bar <- mkLabelPart' "bar"
-        baz <- mkLabelPart' "baz"
+        let mkLabelPart' = mkLabelPart "Construction"
+        foo <- mkLabelPart' 13 6 "foo"
+        bar <- mkLabelPart' 14 6 "bar"
+        baz <- mkLabelPart' 15 6 "baz"
         (@?=) ih
           [defInlayHint { _position = Position 16 14
                         , _label = InR [ foo, commaPart
@@ -55,8 +55,8 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "HsExpanded1" 17 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "HsExpanded1" 17 17
-        foo <- mkLabelPart' "foo"
+        let mkLabelPart' = mkLabelPart "HsExpanded1"
+        foo <- mkLabelPart' 11 4 "foo"
         (@?=) ih
           [defInlayHint { _position = Position 17 19
                         , _label = InR [ foo ]
@@ -65,8 +65,8 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "HsExpanded2" 23 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "HsExpanded2" 23 19
-        bar <- mkLabelPart' "bar"
+        let mkLabelPart' = mkLabelPart "HsExpanded2"
+        bar <- mkLabelPart' 14 4 "bar"
         (@?=) ih
           [defInlayHint { _position = Position 23 21
                         , _label = InR [ bar ]
@@ -75,9 +75,9 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "Mixed" 14 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "Mixed" 14 34
-        baz <- mkLabelPart' "baz"
-        quux <- mkLabelPart' "quux"
+        let mkLabelPart' = mkLabelPart "Mixed"
+        baz <- mkLabelPart' 9 4 "baz"
+        quux <- mkLabelPart' 10 4 "quux"
         (@?=) ih
           [defInlayHint { _position = Position 14 36
                         , _label = InR [ baz, commaPart
@@ -88,10 +88,10 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "Unused" 12 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "Unused" 12 17
-        foo <- mkLabelPart' "foo"
-        bar <- mkLabelPart' "bar"
-        baz <- mkLabelPart' "baz"
+        let mkLabelPart' = mkLabelPart "Unused"
+        foo <- mkLabelPart' 6 4 "foo"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
         (@?=) ih
           [defInlayHint { _position = Position 12 19
                         , _label = InR [ foo, commaPart
@@ -105,10 +105,10 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "Unused2" 12 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "Unused2" 12 17
-        foo <- mkLabelPart' "foo"
-        bar <- mkLabelPart' "bar"
-        baz <- mkLabelPart' "baz"
+        let mkLabelPart' = mkLabelPart "Unused2"
+        foo <- mkLabelPart' 6 4 "foo"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
         (@?=) ih
           [defInlayHint { _position = Position 12 19
                         , _label = InR [ foo, commaPart
@@ -122,10 +122,10 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "WildcardOnly" 12 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "WildcardOnly" 12 17
-        foo <- mkLabelPart' "foo"
-        bar <- mkLabelPart' "bar"
-        baz <- mkLabelPart' "baz"
+        let mkLabelPart' = mkLabelPart "WildcardOnly"
+        foo <- mkLabelPart' 6 4 "foo"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
         (@?=) ih
           [defInlayHint { _position = Position 12 19
                         , _label = InR [ foo, commaPart
@@ -139,9 +139,9 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "WithExplicitBind" 12 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "WithExplicitBind" 12 29
-        bar <- mkLabelPart' "bar"
-        baz <- mkLabelPart' "baz"
+        let mkLabelPart' = mkLabelPart "WithExplicitBind"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
         (@?=) ih
           [defInlayHint { _position = Position 12 31
                         , _label = InR [ bar, commaPart
@@ -154,9 +154,9 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "WithPun" 13 $ \ih -> do
-        let mkLabelPart' = mkLabelPart "WithPun" 13 22
-        bar <- mkLabelPart' "bar"
-        baz <- mkLabelPart' "baz"
+        let mkLabelPart' = mkLabelPart "WithPun"
+        bar <- mkLabelPart' 8 4 "bar"
+        baz <- mkLabelPart' 9 4 "baz"
         (@?=) ih
           [defInlayHint { _position = Position 13 24
                         , _label = InR [ bar, commaPart
@@ -227,9 +227,9 @@ defInlayHint =
   }
 
 mkLabelPart :: FilePath -> UInt -> UInt -> Text -> IO InlayHintLabelPart
-mkLabelPart fp dotline dotstart value = do
+mkLabelPart fp line start value = do
   uri' <- uri
-  pure $ InlayHintLabelPart { _location = Just (location uri' dotline dotstart)
+  pure $ InlayHintLabelPart { _location = Just (location uri' line start)
                             , _value    = value
                             , _tooltip  = Nothing
                             , _command  = Nothing
@@ -237,7 +237,7 @@ mkLabelPart fp dotline dotstart value = do
   where
     toUri = fromNormalizedUri . filePathToUri' . toNormalizedFilePath'
     uri = canonicalizeUri $ toUri (testDataDir </> (fp ++ ".hs"))
-    location uri line char = Location uri (Range (Position line char) (Position line (char + 2)))
+    location uri line char = Location uri (Range (Position line char) (Position line (char + (fromIntegral $ T.length value))))
 
 commaPart :: InlayHintLabelPart
 commaPart =
