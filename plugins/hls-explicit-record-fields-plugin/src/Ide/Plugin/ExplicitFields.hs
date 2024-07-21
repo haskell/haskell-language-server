@@ -26,14 +26,16 @@ import           Data.Unique                          (hashUnique, newUnique)
 
 import           Control.Monad                        (replicateM)
 import           Data.Aeson                           (ToJSON (toJSON))
-import           Data.List                            (intersperse)
+import           Data.List                            (find, intersperse)
+import qualified Data.Text                            as T
 import           Development.IDE                      (IdeState,
                                                        Location (Location),
                                                        Pretty (..),
-                                                       Range (_end),
+                                                       Range (Range, _end, _start),
                                                        Recorder (..), Rules,
                                                        WithPriority (..),
                                                        defineNoDiagnostics,
+                                                       getDefinition, printName,
                                                        realSrcSpanToRange,
                                                        shakeExtras,
                                                        srcSpanToRange, viaShow)
@@ -42,20 +44,27 @@ import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
 import qualified Development.IDE.Core.Shake           as Shake
-import           Development.IDE.GHC.Compat           (HsConDetails (RecCon),
-                                                       HsExpr (XExpr),
-                                                       HsRecFields (..), LPat,
-                                                       Outputable, getLoc,
+import           Development.IDE.GHC.Compat           (FieldOcc (FieldOcc),
+                                                       GhcPass, GhcTc,
+                                                       HasSrcSpan (getLoc),
+                                                       HsConDetails (RecCon),
+                                                       HsExpr (HsVar, XExpr),
+                                                       HsFieldBind (hfbLHS),
+                                                       HsRecFields (..),
+                                                       Identifier, LPat,
+                                                       NamedThing (getName),
+                                                       Outputable,
+                                                       TcGblEnv (tcg_binds),
+                                                       Var (varName),
+                                                       XXExprGhcTc (..),
                                                        recDotDot, unLoc)
 import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns),
-                                                       GhcPass,
                                                        HsExpr (RecordCon, rcon_flds),
                                                        HsRecField, LHsExpr,
-                                                       LocatedA, Name,
-                                                       Pass (..), Pat (..),
+                                                       LocatedA, Name, Pat (..),
                                                        RealSrcSpan, UniqFM,
                                                        conPatDetails, emptyUFM,
-                                                       hfbPun, hfbRHS, hs_valds,
+                                                       hfbPun, hfbRHS,
                                                        lookupUFM,
                                                        mapConPatDetail, mapLoc,
                                                        pattern RealSrcSpan,
@@ -95,14 +104,11 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
-                                                       isSubrangeOf,
                                                        type (|?) (InL, InR))
 
 
 #if __GLASGOW_HASKELL__ < 910
 import           Development.IDE.GHC.Compat           (HsExpansion (HsExpanded))
-#else
-import           Development.IDE.GHC.Compat           (XXExprGhcRn (..))
 #endif
 
 data Log
@@ -174,43 +180,44 @@ inlayHintProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdent
   pragma <- getFirstPragma pId state nfp
   runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
     (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
-    let records = [ record
+    let -- Get all records with dotdot in current nfp
+        records = [ record
                   | Just range <- [toCurrentRange pm visibleRange]
-                  , uid <- filterByRange' range crCodeActions
-                  , Just record <- [IntMap.lookup uid crCodeActionResolve]
-                  ]
-        -- TODO: definition location?
-        -- locations = [ getDefinition nfp pos
-        --             | record <- records
-        --             , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record
-        --             ]
-    -- defnLocsList <- liftIO $ runIdeAction "" (shakeExtras state) (sequence locations)
-    pure $ InL $ mapMaybe (mkInlayHints crr pragma) records
+                  , uid <- RangeMap.flippedFilterByRange range crCodeActions
+                  , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
+        -- Get the definition of each dotdot of record
+        locations = [ getDefinition nfp pos
+                    | record <- records
+                    , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
+    defnLocsList <- liftIO $ Shake.runIdeAction "ExplicitFields.getDefinition" (shakeExtras state) (sequence locations)
+    pure $ InL $ mapMaybe (mkInlayHints crr pragma) (zip defnLocsList records)
    where
-     mkInlayHints :: CollectRecordsResult -> NextPragmaInfo -> RecordInfo -> Maybe InlayHint
-     mkInlayHints CRR {enabledExtensions, nameMap} pragma record =
+     mkInlayHints :: CollectRecordsResult -> NextPragmaInfo -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
+     mkInlayHints CRR {enabledExtensions, nameMap} pragma (defnLocs, record) =
        let range = recordInfoToDotDotRange record
            textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
                     <> maybeToList (pragmaEdit enabledExtensions pragma)
-           values = renderRecordInfoAsLabelValue record
+           names = renderRecordInfoAsLabelName record
        in do
-         range' <- range
-         values' <- values
-         let -- valueWithLoc = zip values' (sequence defnLocs)
-             loc = Location uri range'
-             label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart (map (, Just loc) values')
-         pure $ InlayHint { _position = _end range'
+         end <- fmap _end range
+         names' <- names
+         defnLocs' <- defnLocs
+         let excludeDotDot (Location _ (Range _ pos)) = pos /= end
+             -- find location from dotdot definitions that name equal to label name
+             findLocation t = fmap fst . find (either (const False) ((==) t) . snd) . filter (excludeDotDot . fst)
+             valueWithLoc = [ (T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
+             -- use `, ` to separate labels with definition location
+             label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart valueWithLoc
+         pure $ InlayHint { _position = end -- at the end of dotdot
                           , _label = InR label
                           , _kind = Nothing -- neither a type nor a parameter
-                          , _textEdits = Just textEdits
-                          , _tooltip = Just $ InL (mkTitle enabledExtensions)
+                          , _textEdits = Just textEdits -- same as CodeAction
+                          , _tooltip = Just $ InL (mkTitle enabledExtensions) -- same as CodeAction
                           , _paddingLeft = Just True -- padding after dotdot
                           , _paddingRight = Nothing
                           , _data_ = Nothing
                           }
-     filterByRange' range = map snd . filter (flip isSubrangeOf range . fst) . RangeMap.unRangeMap
      mkInlayHintLabelPart (value, loc) = InlayHintLabelPart value Nothing loc Nothing
-
 
 mkTitle :: [Extension] -> Text
 mkTitle exts = "Expand record wildcard"
@@ -249,11 +256,7 @@ collectRecordsRule recorder =
     toRangeAndUnique (uid, recordInfo) = (recordInfoToRange recordInfo, uid)
 
 getRecords :: TcModuleResult -> [RecordInfo]
-#if __GLASGOW_HASKELL__ < 910
-getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) = collectRecords valBinds
-#else
-getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_, _)) = collectRecords valBinds
-#endif
+getRecords (tcg_binds . tmrTypechecked -> valBinds) = collectRecords valBinds
 
 collectNamesRule :: Rules ()
 collectNamesRule = defineNoDiagnostics mempty $ \CollectNames nfp -> runMaybeT $ do
@@ -318,8 +321,8 @@ instance Show CollectNamesResult where
 type instance RuleResult CollectNames = CollectNamesResult
 
 data RecordInfo
-  = RecordInfoPat RealSrcSpan (Pat (GhcPass 'Renamed))
-  | RecordInfoCon RealSrcSpan (HsExpr (GhcPass 'Renamed))
+  = RecordInfoPat RealSrcSpan (Pat GhcTc)
+  | RecordInfoCon RealSrcSpan (HsExpr GhcTc)
   deriving (Generic)
 
 instance Pretty RecordInfo where
@@ -339,9 +342,9 @@ renderRecordInfoAsTextEdit :: UniqFM Name [Name] -> RecordInfo -> Maybe TextEdit
 renderRecordInfoAsTextEdit names (RecordInfoPat ss pat) = TextEdit (realSrcSpanToRange ss) <$> showRecordPat names pat
 renderRecordInfoAsTextEdit _ (RecordInfoCon ss expr) = TextEdit (realSrcSpanToRange ss) <$> showRecordCon expr
 
-renderRecordInfoAsLabelValue :: RecordInfo -> Maybe [Text]
-renderRecordInfoAsLabelValue (RecordInfoPat _ pat)  = showRecordPatFlds pat
-renderRecordInfoAsLabelValue (RecordInfoCon _ expr) = showRecordConFlds expr
+renderRecordInfoAsLabelName :: RecordInfo -> Maybe [Name]
+renderRecordInfoAsLabelName (RecordInfoPat _ pat)  = showRecordPatFlds pat
+renderRecordInfoAsLabelName (RecordInfoCon _ expr) = showRecordConFlds expr
 
 
 -- | Checks if a 'Name' is referenced in the given map of names. The
@@ -362,11 +365,11 @@ filterReferenced getName names = filter (\x -> maybe True (`referencedIn` names)
 
 
 preprocessRecordPat
-  :: p ~ GhcPass 'Renamed
+  :: p ~ GhcTc
   => UniqFM Name [Name]
   -> HsRecFields p (LPat p)
   -> HsRecFields p (LPat p)
-preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
+preprocessRecordPat = preprocessRecord (fmap varName . getFieldName . unLoc)
   where getFieldName x = case unLoc (hfbRHS x) of
           VarPat _ x' -> Just $ unLoc x'
           _           -> Nothing
@@ -427,13 +430,13 @@ processRecordFlds flds = flds { rec_dotdot = Nothing , rec_flds = puns' }
     puns' = map (mapLoc (\fld -> fld { hfbPun = True })) puns
 
 
-showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => UniqFM Name [Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
+showRecordPat :: Outputable (Pat GhcTc) => UniqFM Name [Name] -> Pat GhcTc -> Maybe Text
 showRecordPat names = fmap printOutputable . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
 
-showRecordPatFlds :: Pat (GhcPass 'Renamed) -> Maybe [Text]
-showRecordPatFlds (ConPat _ _ args) = fmap (fmap printOutputable . rec_flds) (m args)
+showRecordPatFlds :: Pat GhcTc -> Maybe [Name]
+showRecordPatFlds (ConPat _ _ args) = fmap (fmap ((\case FieldOcc x _ -> getName x) . unLoc . hfbLHS . unLoc) . rec_flds) (m args)
   where
     m (RecCon flds) = Just $ processRecordFlds flds
     m _             = Nothing
@@ -445,8 +448,11 @@ showRecordCon expr@(RecordCon _ _ flds) =
     expr { rcon_flds = preprocessRecordCon flds }
 showRecordCon _ = Nothing
 
-showRecordConFlds :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe [Text]
-showRecordConFlds (RecordCon _ _ flds) = Just $ fmap printOutputable (rec_flds $ processRecordFlds flds)
+showRecordConFlds :: p ~ GhcTc => HsExpr p -> Maybe [Name]
+showRecordConFlds (RecordCon _ _ flds) = mapM (m . unLoc . hfbRHS . unLoc) (rec_flds $ processRecordFlds flds)
+  where
+    m (HsVar _ lidp) = Just $ getName lidp
+    m _              = Nothing
 showRecordConFlds _ = Nothing
 
 
@@ -466,7 +472,7 @@ collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` get
 collectNames :: GenericQ (UniqFM Name [Name])
 collectNames = everything (plusUFM_C (<>)) (emptyUFM `mkQ` (\x -> unitUFM x [x]))
 
-getRecCons :: LHsExpr (GhcPass 'Renamed) -> ([RecordInfo], Bool)
+getRecCons :: LHsExpr GhcTc -> ([RecordInfo], Bool)
 -- When we stumble upon an occurrence of HsExpanded, we only want to follow a
 -- single branch. We do this here, by explicitly returning occurrences from
 -- traversing the original branch, and returning True, which keeps syb from
@@ -475,25 +481,23 @@ getRecCons :: LHsExpr (GhcPass 'Renamed) -> ([RecordInfo], Bool)
 -- branch
 
 #if __GLASGOW_HASKELL__ >= 910
-getRecCons (unLoc -> XExpr (ExpandedThingRn a _)) = (collectRecords a, True)
+getRecCons (unLoc -> XExpr (ExpandedThingTc a _)) = (collectRecords a, True)
 #else
-getRecCons (unLoc -> XExpr (HsExpanded a _)) = (collectRecords a, True)
+getRecCons (unLoc -> XExpr (ExpansionExpr (HsExpanded _ a))) = (collectRecords a, True)
 #endif
 getRecCons e@(unLoc -> RecordCon _ _ flds)
   | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where
-    mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> [RecordInfo]
+    mkRecInfo :: LHsExpr GhcTc -> [RecordInfo]
     mkRecInfo expr =
       [ RecordInfoCon realSpan' (unLoc expr) | RealSrcSpan realSpan' _ <- [ getLoc expr ]]
 getRecCons _ = ([], False)
 
-getRecPatterns :: LPat (GhcPass 'Renamed) -> ([RecordInfo], Bool)
+getRecPatterns :: LPat GhcTc -> ([RecordInfo], Bool)
 getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
   | isJust (rec_dotdot flds) = (mkRecInfo conPat, False)
   where
-    mkRecInfo :: LPat (GhcPass 'Renamed) -> [RecordInfo]
+    mkRecInfo :: LPat GhcTc -> [RecordInfo]
     mkRecInfo pat =
       [ RecordInfoPat realSpan' (unLoc pat) | RealSrcSpan realSpan' _ <- [ getLoc pat ]]
 getRecPatterns _ = ([], False)
-
-
