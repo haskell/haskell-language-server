@@ -93,7 +93,7 @@ initialise recorder defaultConfig plugins mainRule lspEnv debouncer options with
             ofInterestRules (cmapWithPrio LogOfInterest recorder)
             fileExistsRules (cmapWithPrio LogFileExists recorder) lspEnv
             mainRule)
-        rootDir
+
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()

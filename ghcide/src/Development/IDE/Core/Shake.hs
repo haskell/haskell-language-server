@@ -649,14 +649,11 @@ shakeOpen :: Recorder (WithPriority Log)
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
-          -> FilePath
-          -- ^ Root directory, this one might be picking up from `LanguageContextEnv`'s `resRootPath`
-          -- , see Note [Root Directory]
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting
-  withHieDb threadQueue opts monitoring rules rootDir = mdo
+  withHieDb threadQueue opts monitoring rules = mdo
     -- see Note [Serializing runs in separate thread]
     let indexQueue = tIndexQueue threadQueue
         restartQueue = tRestartQueue threadQueue
