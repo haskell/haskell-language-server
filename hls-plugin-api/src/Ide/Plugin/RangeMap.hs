@@ -13,6 +13,7 @@ module Ide.Plugin.RangeMap
     fromList,
     fromList',
     filterByRange,
+    flippedFilterByRange,
   ) where
 
 import           Development.IDE.Graph.Classes            (NFData)
@@ -65,6 +66,14 @@ filterByRange :: Range -> RangeMap a -> [a]
 filterByRange range = map snd . IM.dominators (rangeToInterval range) . unRangeMap
 #else
 filterByRange range = map snd . filter (isSubrangeOf range . fst) . unRangeMap
+#endif
+
+-- | Flipped filter a 'RangeMap' by a given 'Range'.
+flippedFilterByRange :: Range -> RangeMap a -> [a]
+#ifdef USE_FINGERTREE
+flippedFilterByRange range = map snd . IM.intersections (rangeToInterval range) . unRangeMap
+#else
+flippedFilterByRange range = map snd . filter (flip isSubrangeOf range . fst) . unRangeMap
 #endif
 
 #ifdef USE_FINGERTREE
