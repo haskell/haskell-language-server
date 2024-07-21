@@ -98,24 +98,30 @@ toCurrentLocations mapping file = mapMaybeM go
         nUri = toNormalizedUri uri
 
 -- | Goto Definition.
-getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
+getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (HAR _ hf _ _ _, mapping) <- useWithStaleFastMT GetHieAst file
     (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
-    locations <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
-    MaybeT $ Just <$> toCurrentLocations mapping file locations
+    locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
+    MaybeT $ do
+      let (locations, names) = unzip locationsWithIdentifier
+      curLocations <- toCurrentLocations mapping file locations
+      pure (Just $ zip curLocations names)
 
-getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
+getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getTypeDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (hf, mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    locations <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
-    MaybeT $ Just <$> toCurrentLocations mapping file locations
+    locationsWithIdentifier <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
+    MaybeT $ do
+      let (locations, names) = unzip locationsWithIdentifier
+      curLocations <- toCurrentLocations mapping file locations
+      pure (Just $ zip curLocations names)
 
 highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
