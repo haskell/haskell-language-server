@@ -27,13 +27,10 @@ import           Ide.Types                                     (CommandFunction,
                                                                 CommandId (CommandId),
                                                                 PluginId)
 import           Language.LSP.Protocol.Types                   (CodeAction (CodeAction),
-                                                                CodeActionDisabled (CodeActionDisabled),
                                                                 CodeActionKind (CodeActionKind_QuickFix),
                                                                 Diagnostic (..),
                                                                 Null (Null),
-                                                                Uri (..),
-                                                                type (|?) (InR),
-                                                                uriToFilePath)
+                                                                type (|?) (InR))
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
 
@@ -43,7 +40,6 @@ import           Data.ByteString                               (ByteString)
 import qualified Data.ByteString.Char8                         as B
 import           Data.List.NonEmpty                            (NonEmpty (..),
                                                                 fromList)
-import           Data.Maybe                                    (fromJust)
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
 import           Distribution.PackageDescription               (packageDescription,
@@ -60,22 +56,28 @@ import           System.FilePath                               (dropFileName,
                                                                 splitPath,
                                                                 takeExtension,
                                                                 (</>))
-import           System.IO.Unsafe                              (unsafeInterleaveIO)
 import           Text.PrettyPrint                              (render)
 import           Text.Regex.TDFA
+import Distribution.Simple.Utils (safeHead)
 
--- | Given a path to a haskell file, finds all cabal files paths
---   sorted from the closest to the farthest.
---   Gives all found paths all the way to the root directory.
-findResponsibleCabalFile :: FilePath -> IO [FilePath]
+
+-- | Given a path to a haskell file, returns the closest cabal file.
+--   If cabal file wasn't found, dives Nothing.
+findResponsibleCabalFile :: FilePath -> IO (Maybe FilePath)
 findResponsibleCabalFile haskellFilePath = do
-  contents <- mapM (unsafeInterleaveIO . listDirectory) allDirPaths
-  let objectWithPaths = concat $ zipWith (\path content -> map (path </>) content) allDirPaths contents
-  let objectCabalExtension = filter (\c -> takeExtension c == ".cabal") objectWithPaths
-  cabalFiles <- filterM (\c -> doesFileExist c) objectCabalExtension
-  pure $ reverse cabalFiles -- sorted from closest to the haskellFilePath
-  where dirPath = dropFileName haskellFilePath
-        allDirPaths = scanl1 (</>) (splitPath dirPath)
+  let dirPath = dropFileName haskellFilePath
+      allDirPaths = reverse $ scanl1 (</>) (splitPath dirPath) -- sorted from most to least specific
+  go allDirPaths
+  where
+    go [] = pure Nothing
+    go (path:ps) = do
+      objects <- listDirectory path
+      let objectsWithPaths = map (\obj -> path <> obj) objects
+          objectsCabalExtension = filter (\c -> takeExtension c == ".cabal") objectsWithPaths
+      cabalFiles <- filterM (\c -> doesFileExist c) objectsCabalExtension
+      case safeHead cabalFiles of
+        Nothing -> go ps
+        Just cabalFile -> pure $ Just cabalFile
 
 
 -- | Gives a code action that calls the command,

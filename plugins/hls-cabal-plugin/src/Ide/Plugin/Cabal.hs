@@ -335,11 +335,11 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
   case mbHaskellFilePath of
     Nothing -> pure $ InL []
     Just haskellFilePath -> do
-      cabalFiles <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
-      case cabalFiles of
-        [] -> pure $ InL $ fmap InR [noCabalFileAction]
-        (cabalFilePath:_) -> do
-          mGPD <- liftIO $ runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras state) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath (head cabalFiles)
+      mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
+      case mbCabalFile of
+        Nothing -> pure $ InL $ fmap InR [noCabalFileAction]
+        Just cabalFilePath -> do
+          mGPD <- liftIO $ runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras state) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath cabalFilePath
           case mGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
