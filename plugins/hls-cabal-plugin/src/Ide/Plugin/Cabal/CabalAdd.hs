@@ -20,7 +20,7 @@ import           Control.Monad                                 (filterM, void)
 import           Control.Monad.IO.Class                        (liftIO)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
-import           Development.IDE                               (IdeState, runIdeAction)
+import           Development.IDE                               (IdeState (shakeExtras), runIdeAction, useWithStale)
 import           Distribution.PackageDescription.Quirks        (patchQuirks)
 import           Ide.PluginUtils                               (mkLspCommand)
 import           Ide.Types                                     (CommandFunction,
@@ -30,7 +30,7 @@ import           Language.LSP.Protocol.Types                   (CodeAction (Code
                                                                 CodeActionKind (CodeActionKind_QuickFix),
                                                                 Diagnostic (..),
                                                                 Null (Null),
-                                                                type (|?) (InR))
+                                                                type (|?) (InR), toNormalizedFilePath)
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
 
@@ -43,7 +43,7 @@ import           Data.List.NonEmpty                            (NonEmpty (..),
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
 import           Distribution.PackageDescription               (packageDescription,
-                                                                specVersion, GenericPackageDescription)
+                                                                specVersion, GenericPackageDescription (GenericPackageDescription))
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Pretty                           (pretty)
 import           Distribution.Simple.BuildTarget               (BuildTarget,
@@ -59,7 +59,14 @@ import           System.FilePath                               (dropFileName,
 import           Text.PrettyPrint                              (render)
 import           Text.Regex.TDFA
 import Distribution.Simple.Utils (safeHead)
+import Development.IDE.Core.Rules (runAction)
+import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalFields (..),
+                                                              ParseCabalFile (..))
 
+import Development.IDE.Core.RuleTypes (GetFileContents(..))
+import Data.Text.Encoding (encodeUtf8)
+import Ide.Plugin.Cabal.Orphans ()
+import Distribution.Fields.Field (fieldAnn)
 
 -- | Given a path to a haskell file, returns the closest cabal file.
 --   If cabal file wasn't found, dives Nothing.
@@ -134,11 +141,11 @@ data CabalAddCommandParams =
   deriving anyclass (FromJSON, ToJSON)
 
 command :: CommandFunction IdeState CabalAddCommandParams
-command _ _ (CabalAddCommandParams {cabalPath = path, buildTarget = target, dependency = dep, version = mbVer}) = do
+command state _ (CabalAddCommandParams {cabalPath = path, buildTarget = target, dependency = dep, version = mbVer}) = do
   let specifiedDep = case mbVer of
         Nothing  -> dep
         Just ver -> dep <> " ^>=" <> ver
-  void $ liftIO $ addDependency path target (fromList [T.unpack specifiedDep])
+  void $ liftIO $ addDependency state path target (fromList [T.unpack specifiedDep])
   pure $ InR Null
 
 -- | Gives cabal file's contents or throws error.
@@ -162,14 +169,29 @@ getBuildTargets gpd cabalFilePath haskellFilePath = do
 --
 --   Inspired by @main@ in cabal-add,
 --   Distribution.Client.Main
-addDependency :: FilePath -> Maybe String -> NonEmpty String -> IO ()
-addDependency cabalFilePath buildTarget dependency = do
+addDependency :: IdeState -> FilePath -> Maybe String -> NonEmpty String -> IO ()
+addDependency state cabalFilePath buildTarget dependency = do
+  (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
+        contents <- useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
+        inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
+        inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+        let mbCnfOrigContents = case snd . fst <$> contents of
+                    Just (Just txt) -> Just $ encodeUtf8 txt
+                    _ -> Nothing
+        let mbFields = fst <$> inFields
+        let mbPackDescr :: Maybe GenericPackageDescription = fst <$> inPackDescr
+        pure (mbCnfOrigContents, mbFields, mbPackDescr)
 
-  cnfOrigContents <- readCabalFile cabalFilePath
-
-  (fields, packDescr) <- case parseCabalFile cabalFilePath cnfOrigContents of
-    Left err   -> error err
-    Right pair -> pure pair
+  (cnfOrigContents, fields, packDescr) <- liftIO $ do
+    cnfOrigContents <- case mbCnfOrigContents of
+          (Just cnfOrigContents) -> pure cnfOrigContents
+          Nothing -> readCabalFile cabalFilePath
+    let (fields, packDescr) = case (mbFields, mbPackDescr) of
+          (Just fields, Just packDescr) -> (fields, packDescr)
+          (_, _) -> case parseCabalFile cabalFilePath cnfOrigContents of
+                        Left err   -> error err
+                        Right (_ ,gpd) -> pure gpd
+    pure (cnfOrigContents, fields, packDescr)
 
   let inputs = do
         let rcnfComponent = buildTarget
