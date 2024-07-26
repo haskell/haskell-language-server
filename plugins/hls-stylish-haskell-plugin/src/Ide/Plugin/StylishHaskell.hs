@@ -11,8 +11,13 @@ where
 
 import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class
+import           Data.ByteString                  as B
+import           Data.List                        (inits, nub)
+import           Data.Maybe
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
+import           Data.Yaml
+import           Debug.Trace
 import           Development.IDE                  hiding (getExtensions,
                                                    pluginHandlers)
 import           Development.IDE.Core.PluginUtils
@@ -26,7 +31,10 @@ import           Ide.Types                        hiding (Config)
 import           Language.Haskell.Stylish
 import           Language.LSP.Protocol.Types      as LSP
 import           System.Directory
+
 import           System.FilePath
+
+
 
 data Log
   = LogLanguageExtensionFromDynFlags
@@ -61,7 +69,7 @@ provider recorder ide _token typ contents fp _opts = do
     Right new -> pure $ LSP.InL [TextEdit range new]
   where
     getMergedConfig dyn config
-      | null (configLanguageExtensions config)
+      | Prelude.null (configLanguageExtensions config)
       = do
           logWith recorder Info LogLanguageExtensionFromDynFlags
           pure
@@ -70,19 +78,61 @@ provider recorder ide _token typ contents fp _opts = do
       | otherwise
       = pure config
 
-    getExtensions = map showExtension . Util.toList . extensionFlags
+    getExtensions = Prelude.map showExtension . Util.toList . extensionFlags
 
     showExtension Cpp   = "CPP"
     showExtension other = show other
+
+-- | taken and refactored from stylish-haskell which uses getCurrentDirectory
+-- https://hackage.haskell.org/package/stylish-haskell-0.14.6.0/docs/src/Language.Haskell.Stylish.Config.html#configFilePath
+-- https://github.com/haskell/haskell-language-server/issues/4234#issuecomment-2191571281
+ancestors :: FilePath -> [FilePath]
+ancestors = Prelude.map joinPath . Prelude.reverse . Prelude.dropWhile Prelude.null . Data.List.inits . splitPath
+
+configFileName :: String
+configFileName = ".stylish-haskell.yaml"
+
+configFilePathMT :: Verbose -> FilePath -> IO (Maybe FilePath)
+configFilePathMT verbose currentDir              = do
+    configPath <- getXdgDirectory XdgConfig "stylish-haskell"
+    home       <- getHomeDirectory
+    search verbose $
+        [d </> configFileName | d <- ancestors currentDir] ++
+        [configPath </> "config.yaml", home </> configFileName]
+
+search :: Verbose -> [FilePath] -> IO (Maybe FilePath)
+search _ []             = return Nothing
+search verbose (f : fs) = do
+    -- TODO Maybe catch an error here, dir might be unreadable
+    exists <- doesFileExist f
+    verbose $ f ++ if exists then " exists" else " does not exist"
+    if exists then return (Just f) else search verbose fs
+
+loadConfigMT :: Verbose -> FilePath -> IO Config
+loadConfigMT verbose currentDir = do
+    mbFp <- configFilePathMT verbose currentDir
+    verbose $ "Loading configuration at " ++ fromMaybe "<embedded>" mbFp
+    bytes <- maybe (return defaultConfigBytes) B.readFile mbFp
+    case decodeEither' bytes of
+        Left exception -> error $ prettyPrintParseException exception
+        Right config -> do
+          -- | TODO
+          cabalLanguageExtensions <- pure []
+
+          return $ config
+            { configLanguageExtensions = nub $
+              configLanguageExtensions config
+            }
+    where toStr (ext, True)  = show ext
+          toStr (ext, False) = "No" ++ show ext
+
+
 
 -- | Recursively search in every directory of the given filepath for .stylish-haskell.yaml.
 -- If no such file has been found, return default config.
 loadConfigFrom :: FilePath -> IO Config
 loadConfigFrom file = do
-  currDir <- getCurrentDirectory
-  setCurrentDirectory (takeDirectory file)
-  config <- loadConfig (makeVerbose False) Nothing
-  setCurrentDirectory currDir
+  config <- loadConfigMT (makeVerbose True) (takeDirectory file)
   pure config
 
 -- | Run stylish-haskell on the given text with the given configuration.

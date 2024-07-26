@@ -1578,6 +1578,7 @@ library hls-stylish-haskell-plugin
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
   build-depends:
     , base             >=4.12 && <5
+    , bytestring
     , directory
     , filepath
     , ghc-boot-th
@@ -1587,6 +1588,7 @@ library hls-stylish-haskell-plugin
     , mtl
     , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
     , text
+    , yaml
 
 
 test-suite hls-stylish-haskell-plugin-tests
