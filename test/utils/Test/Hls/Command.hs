@@ -1,32 +1,34 @@
 module Test.Hls.Command
-  ( hlsCommand,
-    hlsCommandExamplePlugin,
-    hlsCommandVomit,
-    logFilePath,
+  ( hlsExeCommand
+  , hlsLspCommand
+  , hlsWrapperLspCommand
+  , hlsWrapperExeCommand
   )
 where
 
 import           Data.Maybe         (fromMaybe)
 import           System.Environment (lookupEnv)
 import           System.IO.Unsafe   (unsafePerformIO)
-import           Test.Hls
-
-logFilePath :: String
-logFilePath = "hls-" ++ show ghcVersion ++ ".log"
 
 -- | The command to execute the version of hls for the current compiler.
 --
 -- Both @stack test@ and @cabal new-test@ setup the environment so @hls@ is
 -- on PATH. Cabal seems to respond to @build-tool-depends@ specifically while
 -- stack just puts all project executables on PATH.
-hlsCommand :: String
-{-# NOINLINE hlsCommand #-}
-hlsCommand = unsafePerformIO $ do
+hlsExeCommand :: String
+{-# NOINLINE hlsExeCommand #-}
+hlsExeCommand = unsafePerformIO $ do
   testExe <- fromMaybe "haskell-language-server" <$> lookupEnv "HLS_TEST_EXE"
-  pure $ testExe ++ " --lsp -d -j4"
+  pure testExe
 
-hlsCommandVomit :: String
-hlsCommandVomit = hlsCommand ++ " --vomit"
+hlsLspCommand :: String
+hlsLspCommand = hlsExeCommand ++ " --lsp --test -d -j4"
 
-hlsCommandExamplePlugin :: String
-hlsCommandExamplePlugin = hlsCommand ++ " --example"
+hlsWrapperLspCommand :: String
+hlsWrapperLspCommand = hlsWrapperExeCommand ++ " --lsp --test -d -j4"
+
+hlsWrapperExeCommand :: String
+{-# NOINLINE hlsWrapperExeCommand #-}
+hlsWrapperExeCommand = unsafePerformIO $ do
+  testExe <- fromMaybe "haskell-language-server-wrapper" <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
+  pure testExe

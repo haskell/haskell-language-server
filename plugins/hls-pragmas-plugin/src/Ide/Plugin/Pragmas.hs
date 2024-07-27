@@ -2,42 +2,62 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
-  ( descriptor
+  ( suggestPragmaDescriptor
+  , completionDescriptor
+  , suggestDisableWarningDescriptor
   -- For testing
   , validPragmas
+  , AppearWhere(..)
   ) where
 
-import           Control.Lens                       hiding (List)
-import           Control.Monad.IO.Class             (MonadIO (liftIO))
-import qualified Data.HashMap.Strict                as H
-import           Data.List.Extra                    (nubOrdOn)
-import           Data.Maybe                         (catMaybes)
-import qualified Data.Text                          as T
-import           Development.IDE
+import           Control.Lens                             hiding (List)
+import           Control.Monad.IO.Class                   (MonadIO (liftIO))
+import           Control.Monad.Trans.Class                (lift)
+import           Data.Char                                (isAlphaNum)
+import           Data.List.Extra                          (nubOrdOn)
+import qualified Data.Map                                 as M
+import           Data.Maybe                               (mapMaybe)
+import qualified Data.Text                                as T
+import           Development.IDE                          hiding (line)
+import           Development.IDE.Core.Compile             (sourceParser,
+                                                           sourceTypecheck)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Plugin.Completions (ghcideCompletionsPluginPriority)
-import qualified Development.IDE.Spans.Pragmas      as Pragmas
+import           Development.IDE.Plugin.Completions       (ghcideCompletionsPluginPriority)
+import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefix)
+import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
+import qualified Development.IDE.Spans.Pragmas            as Pragmas
+import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Server                as LSP
-import qualified Language.LSP.Types                 as J
-import qualified Language.LSP.Types.Lens            as J
-import qualified Language.LSP.VFS                   as VFS
-import qualified Text.Fuzzy                         as Fuzzy
+import qualified Language.LSP.Protocol.Lens               as L
+import qualified Language.LSP.Protocol.Message            as LSP
+import qualified Language.LSP.Protocol.Types              as LSP
+import qualified Text.Fuzzy                               as Fuzzy
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction codeActionProvider
-                  <> mkPluginHandler J.STextDocumentCompletion completion
+suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestPragmaDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to add missing LANGUAGE pragmas")
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestPragmaProvider
+  , pluginPriority = defaultPluginPriority + 1000
+  }
+
+completionDescriptor :: PluginId -> PluginDescriptor IdeState
+completionDescriptor plId = (defaultPluginDescriptor plId "Provides completion of LANGAUGE pragmas")
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
+  }
+
+suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to disable warnings")
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestDisableWarningProvider
+    -- #3636 Suggestions to disable warnings should appear last.
+  , pluginPriority = 0
   }
 
 -- ---------------------------------------------------------------------
@@ -47,32 +67,34 @@ type PragmaEdit = (T.Text, Pragma)
 data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
-codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
-codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
-  | let J.TextDocumentIdentifier{ _uri = uri } = docId
-  , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
-      -- ghc session to get some dynflags even if module isn't parsed
-      ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
-      (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-      parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
-      let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+suggestPragmaProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+suggestPragmaProvider = mkCodeActionProvider suggest
 
-      case ghcSession of
-        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
-          let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-              pedits = nubOrdOn snd . concat $ suggest parsedModuleDynFlags <$> diags
-          in
-            pure $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> pedits
-        Nothing -> pure $ Right $ List []
-  | otherwise = pure $ Right $ List []
+suggestDisableWarningProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
+
+mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+mkCodeActionProvider mkSuggest state _plId
+  (LSP.CodeActionParams _ _ LSP.TextDocumentIdentifier{ _uri = uri } _ (LSP.CodeActionContext diags _monly _)) = do
+    normalizedFilePath <- getNormalizedFilePathE uri
+    -- ghc session to get some dynflags even if module isn't parsed
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
+    (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+    let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+        nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
+        pedits = nubOrdOn snd $ concatMap (mkSuggest parsedModuleDynFlags) diags
+    pure  $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
+
 
 
 -- | Add a Pragma to the given URI at the top of the file.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-pragmaEditToAction :: Uri -> Pragmas.NextPragmaInfo -> PragmaEdit -> (J.Command J.|? J.CodeAction)
+pragmaEditToAction :: Uri -> Pragmas.NextPragmaInfo -> PragmaEdit -> (LSP.Command LSP.|? LSP.CodeAction)
 pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } (title, p) =
-  J.InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
+  LSP.InR $ LSP.CodeAction title (Just LSP.CodeActionKind_QuickFix) (Just []) Nothing Nothing (Just edit) Nothing Nothing
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
@@ -82,33 +104,31 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
     -- edits in reverse order than lsp (tried in both coc.nvim and vscode)
     textEdits =
       if | Just (Pragmas.LineSplitTextEdits insertTextEdit deleteTextEdit) <- lineSplitTextEdits
-         , let J.TextEdit{ _range, _newText } = insertTextEdit ->
-             [J.TextEdit _range (render p <> _newText), deleteTextEdit]
-         | otherwise -> [J.TextEdit pragmaInsertRange (render p)]
+         , let LSP.TextEdit{ _range, _newText } = insertTextEdit ->
+             [LSP.TextEdit _range (render p <> _newText), deleteTextEdit]
+         | otherwise -> [LSP.TextEdit pragmaInsertRange (render p)]
 
     edit =
-      J.WorkspaceEdit
-        (Just $ H.singleton uri (J.List textEdits))
+      LSP.WorkspaceEdit
+        (Just $ M.singleton uri textEdits)
         Nothing
         Nothing
 
 suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
 suggest dflags diag =
   suggestAddPragma dflags diag
-    ++ suggestDisableWarning diag
 
 -- ---------------------------------------------------------------------
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning Diagnostic {_code}
-  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code
+  | Just (LSP.InR (T.stripPrefix "-W" -> Just w)) <- _code
   , w `notElem` warningBlacklist =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
 
 -- Don't suggest disabling type errors as a solution to all type errors
 warningBlacklist :: [T.Text]
--- warningBlacklist = []
 warningBlacklist = ["deferred-type-errors"]
 
 -- ---------------------------------------------------------------------
@@ -116,18 +136,20 @@ warningBlacklist = ["deferred-type-errors"]
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 suggestAddPragma :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
-suggestAddPragma mDynflags Diagnostic {_message} = genPragma _message
+suggestAddPragma mDynflags Diagnostic {_message, _source}
+    | _source == Just sourceTypecheck || _source == Just sourceParser = genPragma _message
   where
     genPragma target =
       [("Add \"" <> r <> "\"", LangExt r) | r <- findPragma target, r `notElem` disabled]
     disabled
       | Just dynFlags <- mDynflags =
         -- GHC does not export 'OnOff', so we have to view it as string
-        catMaybes $ T.stripPrefix "Off " . printOutputable <$> extensions dynFlags
+        mapMaybe (T.stripPrefix "Off " . printOutputable) (extensions dynFlags)
       | otherwise =
         -- When the module failed to parse, we don't have access to its
         -- dynFlags. In that case, simply don't disable any pragmas.
         []
+suggestAddPragma _ _ = []
 
 -- | Find all Pragmas are an infix of the search term.
 findPragma :: T.Text -> [T.Text]
@@ -165,42 +187,61 @@ allPragmas =
     -- Language Version Extensions
   , "Haskell98"
   , "Haskell2010"
-#if MIN_VERSION_ghc(9,2,0)
   , "GHC2021"
-#endif
   ]
 
 -- ---------------------------------------------------------------------
 flags :: [T.Text]
-flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
+flags = map T.pack $ flagsForCompletion False
 
-completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
+completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion _ide _ complParams = do
-    let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
-        position = complParams ^. J.position
-    contents <- LSP.getVirtualFile $ toNormalizedUri uri
-    fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
+    let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
+        position@(Position ln col) = complParams ^. L.position
+    contents <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
+    fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            result <$> VFS.getCompletionPrefix position cnts
+            pure $ result $ getCompletionPrefix position cnts
             where
-                result (Just pfix)
+                result pfix
                     | "{-# language" `T.isPrefixOf` line
-                    = J.List $ map buildCompletion
-                        (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
+                    = map mkLanguagePragmaCompl $
+                        Fuzzy.simpleFilter word allPragmas
                     | "{-# options_ghc" `T.isPrefixOf` line
-                    = J.List $ map buildCompletion
-                        (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
+                    = let optionPrefix = getGhcOptionPrefix pfix
+                          prefixLength = fromIntegral $ T.length optionPrefix
+                          prefixRange = LSP.Range (Position ln (col - prefixLength)) position
+                      in map (mkGhcOptionCompl prefixRange) $ Fuzzy.simpleFilter optionPrefix flags
                     | "{-#" `T.isPrefixOf` line
-                    = J.List $ [ mkPragmaCompl (a <> suffix) b c
-                                | (a, b, c, w) <- validPragmas, w == NewLine ]
+                    = [ mkPragmaCompl (a <> suffix) b c
+                      | (a, b, c, w) <- validPragmas, w == NewLine
+                      ]
+                    | -- Do not suggest any pragmas under any of these conditions:
+                      -- 1. Current line is an import
+                      -- 2. There is a module name right before the current word.
+                      --    Something like `Text.la` shouldn't suggest adding the
+                      --    'LANGUAGE' pragma.
+                      -- 3. The user has not typed anything yet.
+                      "import" `T.isPrefixOf` line || not (T.null module_) || T.null word
+                    = []
                     | otherwise
-                    = J.List $ [ mkPragmaCompl (prefix <> a <> suffix) b c
-                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b]
+                    = [ mkPragmaCompl (prefix <> pragmaTemplate <> suffix) matcher detail
+                      | (pragmaTemplate, matcher, detail, appearWhere) <- validPragmas
+                      , case appearWhere of
+                            -- Only suggest a pragma that needs its own line if the whole line
+                            -- fuzzily matches the pragma
+                            NewLine   -> Fuzzy.test line matcher
+                            -- Only suggest a pragma that appears in the middle of a line when
+                            -- the current word is not the only thing in the line and the
+                            -- current word fuzzily matches the pragma
+                            CanInline -> line /= word && Fuzzy.test word matcher
+                      ]
                     where
-                        line = T.toLower $ VFS.fullLine pfix
-                        word = VFS.prefixText pfix
-                        -- Not completely correct, may fail if more than one "{-#" exist
-                        -- , we can ignore it since it rarely happen.
+                        line = T.toLower $ fullLine pfix
+                        module_ = prefixScope pfix
+                        word = prefixText pfix
+                        -- Not completely correct, may fail if more than one "{-#" exists.
+                        -- We can ignore it since it rarely happens.
                         prefix
                             | "{-# "  `T.isInfixOf` line = ""
                             | "{-#"   `T.isInfixOf` line = " "
@@ -211,8 +252,7 @@ completion _ide _ complParams = do
                             | "-}"   `T.isSuffixOf` line = " #"
                             | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
-                result Nothing = J.List []
-        _ -> return $ J.List []
+        _ -> return []
 
 -----------------------------------------------------------------------
 
@@ -249,25 +289,38 @@ validPragmas =
   , ("INCOHERENT"                     , "INCOHERENT"       , "{-# INCOHERENT #-}"       , CanInline)
   ]
 
-mkPragmaCompl :: T.Text -> T.Text -> T.Text -> J.CompletionItem
+mkPragmaCompl :: T.Text -> T.Text -> T.Text -> LSP.CompletionItem
 mkPragmaCompl insertText label detail =
-  J.CompletionItem label (Just J.CiKeyword) Nothing (Just detail)
-    Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just J.Snippet)
-    Nothing Nothing Nothing Nothing Nothing Nothing
-
-
-stripLeading :: Char -> String -> String
-stripLeading _ [] = []
-stripLeading c (s:ss)
-  | s == c = ss
-  | otherwise = s:ss
-
-
-buildCompletion :: T.Text -> J.CompletionItem
-buildCompletion label =
-  J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
+  LSP.CompletionItem label Nothing (Just LSP.CompletionItemKind_Keyword) Nothing (Just detail)
+    Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just LSP.InsertTextFormat_Snippet)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
 
+mkLanguagePragmaCompl :: T.Text -> LSP.CompletionItem
+mkLanguagePragmaCompl label =
+  LSP.CompletionItem label Nothing (Just LSP.CompletionItemKind_Keyword) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
+mkGhcOptionCompl :: Range -> T.Text -> LSP.CompletionItem
+mkGhcOptionCompl editRange completedFlag =
+  LSP.CompletionItem completedFlag Nothing (Just LSP.CompletionItemKind_Keyword) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing (Just insertCompleteFlag) Nothing Nothing Nothing Nothing Nothing
+  where
+    insertCompleteFlag = LSP.InL $ LSP.TextEdit editRange completedFlag
 
+-- The prefix extraction logic of getCompletionPrefix
+-- doesn't consider '-' part of prefix which breaks completion
+-- of flags like "-ddump-xyz". For OPTIONS_GHC completion we need the whole thing
+-- to be considered completion prefix, but `prefixText posPrefixInfo` would return"xyz" in this case
+getGhcOptionPrefix :: PosPrefixInfo -> T.Text
+getGhcOptionPrefix PosPrefixInfo {cursorPos = Position _ col, fullLine}=
+  T.takeWhileEnd isGhcOptionChar beforePos
+  where
+    beforePos = T.take (fromIntegral col) fullLine
+
+    -- Is this character contained in some GHC flag? Based on:
+    -- >>> nub . sort . concat $ GHC.Driver.Session.flagsForCompletion False
+    -- "#-.01234589=ABCDEFGHIJKLMNOPQRSTUVWX_abcdefghijklmnopqrstuvwxyz"
+    isGhcOptionChar :: Char -> Bool
+    isGhcOptionChar c = isAlphaNum c || c `elem` ("#-.=_" :: String)

@@ -18,18 +18,13 @@ import           System.Environment
 import           System.Process
 
 main = do
-  callCommand "git fetch --tags"
-  tags <- filter (isPrefixOf "1.") . lines <$>
-    readProcess "git" ["tag", "--list", "--sort=v:refname"] ""
-
-  lastDateStr <- last . lines <$> readProcess "git" ["show", "-s", "--format=%cI", "-1", last tags] ""
+  args <- getArgs
+  let (githubReq,tag) = case args of
+        token:tag:_ -> (github (OAuth $ BS.pack token), tag)
+  prs <- githubReq $ pullRequestsForR "haskell" "haskell-language-server" stateClosed FetchAll
+  lastDateStr <- last . lines <$> readProcess "git" ["show", "-s", "--format=%cI", "-1", tag] ""
   lastDate <- zonedTimeToUTC <$> iso8601ParseM lastDateStr
 
-  args <- getArgs
-  let githubReq = case args of
-                    []      -> github'
-                    token:_ -> github (OAuth $ BS.pack token)
-  prs <- githubReq $ pullRequestsForR "haskell" "haskell-language-server" stateClosed FetchAll
   let prsAfterLastTag = either (error . show)
                         (foldMap (\pr -> [pr | inRange pr]))
                         prs
@@ -39,5 +34,5 @@ main = do
 
   forM_ prsAfterLastTag $ \SimplePullRequest{..} ->
     putStrLn $ T.unpack $ "- " <> simplePullRequestTitle <>
-      "\n([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> "](" <> getUrl simplePullRequestHtmlUrl <> "))" <>
+      "\n  ([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> "](" <> getUrl simplePullRequestHtmlUrl <> "))" <>
       " by @" <> untagName (simpleUserLogin simplePullRequestUser)

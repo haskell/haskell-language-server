@@ -8,16 +8,15 @@ module Development.IDE
 
 import           Development.IDE.Core.Actions          as X (getAtPoint,
                                                              getDefinition,
-                                                             getTypeDefinition,
-                                                             useE, useNoFileE,
-                                                             usesE)
+                                                             getTypeDefinition)
 import           Development.IDE.Core.FileExists       as X (getFileExists)
 import           Development.IDE.Core.FileStore        as X (getFileContents)
 import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
                                                              isWorkspaceFile)
 import           Development.IDE.Core.OfInterest       as X (getFilesOfInterestUntracked)
 import           Development.IDE.Core.Rules            as X (getClientConfigAction,
-                                                             getParsedModule)
+                                                             getParsedModule,
+                                                             usePropertyAction)
 import           Development.IDE.Core.RuleTypes        as X
 import           Development.IDE.Core.Service          as X (runAction)
 import           Development.IDE.Core.Shake            as X (FastResult (..),
@@ -31,8 +30,8 @@ import           Development.IDE.Core.Shake            as X (FastResult (..),
                                                              defineEarlyCutoff,
                                                              defineNoDiagnostics,
                                                              getClientConfig,
-                                                             getPluginConfig,
-                                                             ideLogger,
+                                                             getPluginConfigAction,
+                                                             ideLogger, rootDir,
                                                              runIdeAction,
                                                              shakeExtras, use,
                                                              useNoFile,
@@ -51,7 +50,6 @@ import           Development.IDE.Graph                 as X (Action, RuleResult,
 import           Development.IDE.Plugin                as X
 import           Development.IDE.Types.Diagnostics     as X
 import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
-                                                             hscEnv,
-                                                             hscEnvWithImportPaths)
+                                                             hscEnv)
 import           Development.IDE.Types.Location        as X
-import           Development.IDE.Types.Logger          as X
+import           Ide.Logger                            as X

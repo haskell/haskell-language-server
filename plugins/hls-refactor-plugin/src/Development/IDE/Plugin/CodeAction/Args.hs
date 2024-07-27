@@ -13,35 +13,33 @@ module Development.IDE.Plugin.CodeAction.Args
 where
 
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
+import           Control.Monad.Except                         (ExceptT (..),
+                                                               runExceptT)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Either                                  (fromRight,
                                                                partitionEithers)
-import qualified Data.HashMap.Strict                          as Map
+import           Data.Functor                                 ((<&>))
 import           Data.IORef.Extra
+import qualified Data.Map                                     as Map
 import           Data.Maybe                                   (fromMaybe)
 import qualified Data.Text                                    as T
 import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint
-#if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)
-#endif
-import           Control.Monad.Except                         (ExceptT (..),
-                                                               runExceptT)
 import           Development.IDE.Plugin.TypeLenses            (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
                                                                GlobalBindingTypeSigsResult)
 import           Development.IDE.Spans.LocalBindings          (Bindings)
 import           Development.IDE.Types.Exports                (ExportsMap)
 import           Development.IDE.Types.Options                (IdeOptions)
-import           Ide.Plugin.Config                            (Config)
+import           Ide.Plugin.Error                             (PluginError)
 import           Ide.Types
-import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 
 type CodeActionTitle = T.Text
 
@@ -49,13 +47,12 @@ type CodeActionPreferred = Bool
 
 type GhcideCodeActionResult = [(CodeActionTitle, Maybe CodeActionKind, Maybe CodeActionPreferred, [TextEdit])]
 
-type GhcideCodeAction = ExceptT ResponseError (ReaderT CodeActionArgs IO) GhcideCodeActionResult
+type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCodeActionResult
 
 -------------------------------------------------------------------------------------------------
 
-{-# ANN runGhcideCodeAction ("HLint: ignore Move guards forward" :: String) #-}
-runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
-runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = List diags}) codeAction = do
+runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
+runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
   caaGhcSession <- onceIO $ runRule GhcSession
@@ -71,47 +68,42 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
   caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
   caaContents <-
     onceIO $
-      runRule GetFileContents >>= \case
-        Just (_, txt) -> pure txt
-        _             -> pure Nothing
+      runRule GetFileContents <&> \case
+        Just (_, txt) -> txt
+        Nothing       -> Nothing
   caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
-#if !MIN_VERSION_ghc(9,3,0)
   caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
-#endif
   caaTmr <- onceIO $ runRule TypeCheck
   caaHar <- onceIO $ runRule GetHieAst
   caaBindings <- onceIO $ runRule GetBindings
   caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
   results <- liftIO $
-
       sequence
-        [ runReaderT (runExceptT codeAction) caa
-          | caaDiagnostic <- diags,
-            let caa = CodeActionArgs {..}
+        [ runReaderT (runExceptT codeAction) CodeActionArgs {..}
+          | caaDiagnostic <- diags
         ]
-  let (errs, successes) = partitionEithers results
+  let (_errs, successes) = partitionEithers results
   pure $ concat successes
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title kind isPreferred diags edit =
-  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing Nothing
+  InR $ CodeAction title kind (Just diags) isPreferred Nothing (Just edit) Nothing Nothing
 
-mkGhcideCAPlugin :: GhcideCodeAction -> PluginId -> PluginDescriptor IdeState
-mkGhcideCAPlugin codeAction plId =
-  (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeAction $
-        \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = List diags}) -> do
-          results <- runGhcideCodeAction state params codeAction
+mkGhcideCAPlugin :: GhcideCodeAction -> PluginId -> T.Text -> PluginDescriptor IdeState
+mkGhcideCAPlugin codeAction plId desc =
+  (defaultPluginDescriptor plId desc)
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction $
+        \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = diags}) -> do
+          results <- lift $ runGhcideCodeAction state params codeAction
           pure $
-            Right $
-              List
+              InL
                 [ mkCA title kind isPreferred diags edit
                   | (title, kind, isPreferred, tedit) <- results,
-                    let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
+                    let edit = WorkspaceEdit (Just $ Map.singleton uri tedit) Nothing Nothing
                 ]
     }
 
-mkGhcideCAsPlugin :: [GhcideCodeAction] -> PluginId -> PluginDescriptor IdeState
+mkGhcideCAsPlugin :: [GhcideCodeAction] -> PluginId -> T.Text -> PluginDescriptor IdeState
 mkGhcideCAsPlugin codeActions = mkGhcideCAPlugin $ mconcat codeActions
 
 -------------------------------------------------------------------------------------------------
@@ -122,19 +114,12 @@ class ToTextEdit a where
 instance ToTextEdit TextEdit where
   toTextEdit _ = pure . pure
 
-#if !MIN_VERSION_ghc(9,3,0)
 instance ToTextEdit Rewrite where
   toTextEdit CodeActionArgs {..} rw = fmap (fromMaybe []) $
     runMaybeT $ do
       df <- MaybeT caaDf
-#if !MIN_VERSION_ghc(9,2,0)
-      ps <- MaybeT caaAnnSource
-      let r = rewriteToEdit df (annsA ps) rw
-#else
       let r = rewriteToEdit df rw
-#endif
       pure $ fromRight [] r
-#endif
 
 instance ToTextEdit a => ToTextEdit [a] where
   toTextEdit caa = foldMap (toTextEdit caa)
@@ -154,11 +139,7 @@ data CodeActionArgs = CodeActionArgs
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
-#if MIN_VERSION_ghc(9,3,0)
     caaAnnSource    :: IO (Maybe ParsedSource),
-#else
-    caaAnnSource    :: IO (Maybe (Annotated ParsedSource)),
-#endif
     caaTmr          :: IO (Maybe TcModuleResult),
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
@@ -199,17 +180,17 @@ instance ToCodeAction a => ToCodeAction [a] where
 instance ToCodeAction a => ToCodeAction (Maybe a) where
   toCodeAction = maybe (pure []) toCodeAction
 
-instance ToCodeAction a => ToCodeAction (Either ResponseError a) where
+instance ToCodeAction a => ToCodeAction (Either PluginError a) where
   toCodeAction = either (\err -> ExceptT $ ReaderT $ \_ -> pure $ Left err) toCodeAction
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, a) where
-  toCodeAction (title, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionQuickFix,Nothing,) <$> toTextEdit caa te
+  toCodeAction (title, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionKind_QuickFix,Nothing,) <$> toTextEdit caa te
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, a) where
   toCodeAction (title, kind, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just kind,Nothing,) <$> toTextEdit caa te
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionPreferred, a) where
-  toCodeAction (title, isPreferred, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionQuickFix,Just isPreferred,) <$> toTextEdit caa te
+  toCodeAction (title, isPreferred, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionKind_QuickFix,Just isPreferred,) <$> toTextEdit caa te
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, CodeActionPreferred, a) where
   toCodeAction (title, kind, isPreferred, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just kind,Just isPreferred,) <$> toTextEdit caa te
@@ -232,17 +213,7 @@ toCodeAction3 get f = ExceptT . ReaderT $ \caa -> get caa >>= flip runReaderT ca
 
 -- | this instance returns a delta AST, useful for exactprint transforms
 instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
-#if !MIN_VERSION_ghc(9,3,0)
-  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaAnnSource = x} ->
-    x >>= \case
-      Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . astA $ s
-      _      -> pure $ Right []
-#else
-  toCodeAction f = ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->
-    x >>= \case
-      Just s -> flip runReaderT caa . toCodeAction . f . pm_parsed_source $ s
-      _      -> pure []
-#endif
+  toCodeAction = toCodeAction2 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (ExportsMap -> r) where
   toCodeAction = toCodeAction3 caaExportsMap
@@ -271,13 +242,8 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
-#if !MIN_VERSION_ghc(9,3,0)
-instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
+instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
-
-instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
-  toCodeAction = toCodeAction2 caaAnnSource
-#endif
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr

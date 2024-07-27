@@ -1,6 +1,5 @@
-{-# LANGUAGE DeriveGeneric    #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns     #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE ViewPatterns #-}
 module Ide.Plugin.Conversion (
     alternateFormat
     , hexRegex
@@ -21,7 +20,6 @@ module Ide.Plugin.Conversion (
     , ExtensionNeeded(..)
 ) where
 
-import           Data.Char                     (toUpper)
 import           Data.List                     (delete)
 import           Data.List.Extra               (enumerate, upper)
 import           Data.Maybe                    (mapMaybe)
@@ -161,20 +159,23 @@ toBase conv header n
   | n < 0 = '-' : header <> upper (conv (abs n) "")
   | otherwise = header <> upper (conv n "")
 
-toOctal :: (Integral a, Show a) => a -> String
+#if MIN_VERSION_base(4,17,0)
+toOctal, toBinary, toHex :: Integral a => a -> String
+#else
+toOctal, toBinary, toHex:: (Integral a, Show a) => a -> String
+#endif
+
+toBinary = toBase showBin_ "0b"
+  where
+    -- this is not defined in base < 4.16
+    showBin_ = showIntAtBase 2 intToDigit
+
 toOctal = toBase showOct "0o"
+
+toHex = toBase showHex "0x"
 
 toDecimal :: Integral a => a -> String
 toDecimal = toBase showInt ""
-
-toBinary :: (Integral a, Show a) => a -> String
-toBinary = toBase showBin "0b"
-  where
-    -- this is not defined in versions of Base < 4.16-ish
-    showBin = showIntAtBase 2 intToDigit
-
-toHex :: (Integral a, Show a) => a  -> String
-toHex = toBase showHex "0x"
 
 toFloatDecimal :: RealFloat a => a -> String
 toFloatDecimal val = showFFloat Nothing val ""

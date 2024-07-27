@@ -1,7 +1,6 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports -Wno-orphans #-}
+{-# LANGUAGE CPP        #-}
+{-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- |GHC API utilities
 module Ide.Plugin.Eval.GHC (
@@ -11,6 +10,7 @@ module Ide.Plugin.Eval.GHC (
     addPackages,
     modifyFlags,
     showDynFlags,
+    setSessionAndInteractiveDynFlags,
 ) where
 
 import           Data.List                       (isPrefixOf)
@@ -24,6 +24,11 @@ import           Development.IDE.GHC.Util        (printOutputable)
 
 import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.Plugin.Eval.Util            (gStrictTry)
+
+import           GHC                             (setTopSessionDynFlags,
+                                                  setUnitDynFlags)
+import           GHC.Driver.Env
+import           GHC.Driver.Session              (getDynFlags)
 
 {- $setup
 >>> import GHC
@@ -164,3 +169,12 @@ showDynFlags df =
 
 vList :: [String] -> SDoc
 vList = vcat . map text
+
+setSessionAndInteractiveDynFlags :: DynFlags -> Ghc ()
+setSessionAndInteractiveDynFlags df = do
+    _ <- setUnitDynFlags (homeUnitId_ df) df
+    modifySession (hscUpdateLoggerFlags . hscSetActiveUnitId (homeUnitId_ df))
+    df' <- getDynFlags
+    setTopSessionDynFlags df'
+    sessDyns <- getSessionDynFlags
+    setInteractiveDynFlags sessDyns

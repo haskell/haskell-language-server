@@ -4,34 +4,29 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PolyKinds             #-}
 
 module Test.AddArgument (tests) where
 
-import           Data.List.Extra
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
-import           Language.LSP.Test
-import           Language.LSP.Types                hiding
-                                                   (SemanticTokenAbsolute (length, line),
-                                                    SemanticTokenRelative (length),
-                                                    SemanticTokensEdit (_start),
+import           Language.LSP.Protocol.Types       hiding
+                                                   (SemanticTokensEdit (_start),
                                                     mkRange)
+import           Language.LSP.Test
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
 
 import           Test.Hls
+import qualified Test.Hls.FileSystem               as FS
 
 import qualified Development.IDE.Plugin.CodeAction as Refactor
+import           System.FilePath                   ((<.>))
 
 tests :: TestTree
 tests =
   testGroup
     "add argument"
-#if !MIN_VERSION_ghc(9,2,1)
-    []
-#else
     [ mkGoldenAddArgTest' "Hole" (r 0 0 0 50) "_new_def",
       mkGoldenAddArgTest "NoTypeSuggestion" (r 0 0 0 50),
       mkGoldenAddArgTest "MultipleDeclAlts" (r 0 0 0 50),
@@ -39,7 +34,9 @@ tests =
       mkGoldenAddArgTest "AddArgWithSigAndDocs" (r 8 0 8 50),
       mkGoldenAddArgTest "AddArgFromLet" (r 2 0 2 50),
       mkGoldenAddArgTest "AddArgFromWhere" (r 3 0 3 50),
-      mkGoldenAddArgTest "AddArgFromWhereComments" (r 3 0 3 50),
+      -- TODO can we make this work for GHC 9.10?
+      knownBrokenForGhcVersions [GHC910] "In GHC 9.10 end-of-line comment annotation is in different place" $
+          mkGoldenAddArgTest "AddArgFromWhereComments" (r 3 0 3 50),
       mkGoldenAddArgTest "AddArgWithTypeSynSig" (r 2 0 2 50),
       mkGoldenAddArgTest "AddArgWithTypeSynSigContravariant" (r 2 0 2 50),
       mkGoldenAddArgTest "AddArgWithLambda" (r 1 0 1 50),
@@ -58,17 +55,19 @@ mkGoldenAddArgTest' :: FilePath -> Range -> T.Text -> TestTree
 mkGoldenAddArgTest' testFileName range varName = do
     let action docB = do
           _ <- waitForDiagnostics
+          let matchAction a = case a of
+                InR CodeAction {_title = t} -> "Add" `T.isPrefixOf` t
+                _                           -> False
           InR action@CodeAction {_title = actionTitle} : _ <-
-            filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-              <$> getCodeActions docB range
+            filter matchAction <$> getCodeActions docB range
           liftIO $ actionTitle @?= ("Add argument ‘" <> varName <> "’ to function")
           executeCodeAction action
-    goldenWithHaskellDoc
+    goldenWithHaskellDocInTmpDir
+      def
       (mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings")
       (testFileName <> " (golden)")
-      "test/data/golden/add-arg"
+      (FS.mkVirtualFileTree "plugins/hls-refactor-plugin/test/data/golden/add-arg" (FS.directProject $ testFileName <.> "hs"))
       testFileName
       "expected"
       "hs"
       action
-#endif

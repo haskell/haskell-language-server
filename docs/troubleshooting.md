@@ -165,6 +165,10 @@ The server log will show which cradle is being chosen.
 
 Using an explicit `hie.yaml` to configure the cradle can resolve the problem, see the [configuration page](./configuration.md#configuring-your-project-build).
 
+### Multi Cradle: No prefixes matched
+The error message `Multi Cradle: No prefixes matched` usually means that implicit configuration failed.
+In that case, you must use [explicit configuration](./configuration.md#configuring-your-project-build).
+
 ### Static binaries
 
 Static binaries use the GHC linker for dynamically loading dependencies when typechecking Template Haskell code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker).
@@ -185,7 +189,7 @@ stack install haskell-language-server
 You also can leverage `ghcup compile hls`:
 
 ```bash
-ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
+ghcup compile hls -v 2.9.0.0 --ghc 9.6.5
 ```
 
 ### Preprocessors

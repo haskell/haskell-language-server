@@ -1,398 +1,265 @@
-cabal-version:      3.0
+cabal-version:      3.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.8.0.0
+version:            2.9.0.1
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
 maintainer:         Ghcide contributors
 copyright:          Digital Asset and Ghcide contributors 2018-2020
 synopsis:           The core of an IDE
-description:
-    A library for building Haskell IDE's on top of the GHC API.
-homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
+description:        A library for building Haskell IDE's on top of the GHC API.
+homepage:
+  https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
+
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.5
-extra-source-files: README.md CHANGELOG.md
-                    test/data/**/*.project
-                    test/data/**/*.cabal
-                    test/data/**/*.yaml
-                    test/data/**/*.hs
-                    test/data/**/*.hs-boot
+tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8
+extra-source-files:
+  CHANGELOG.md
+  README.md
+  test/data/**/*.cabal
+  test/data/**/*.hs
+  test/data/**/*.hs-boot
+  test/data/**/*.project
+  test/data/**/*.yaml
 
 source-repository head
-    type:     git
-    location: https://github.com/haskell/haskell-language-server.git
+  type:     git
+  location: https://github.com/haskell/haskell-language-server.git
 
-flag ghc-patched-unboxed-bytecode
-    description: The GHC version we link against supports unboxed sums and tuples in bytecode
-    default:     False
-    manual:      True
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
 
-flag ekg
-    description: Enable EKG monitoring of the build graph and other metrics on port 8999
-    default:     False
-    manual:      True
+common warnings
+  ghc-options:
+    -Werror=incomplete-patterns
+    -Wall
+    -Wincomplete-uni-patterns
+    -Wunused-packages
+    -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
+    -fno-ignore-asserts
 
 library
-    default-language:   Haskell2010
-    build-depends:
-        aeson,
-        aeson-pretty,
-        array,
-        async,
-        base == 4.*,
-        binary,
-        bytestring,
-        case-insensitive,
-        co-log-core,
-        containers,
-        data-default,
-        deepseq,
-        directory,
-        dependent-map,
-        dependent-sum,
-        dlist,
-        exceptions,
-        extra >= 1.7.4,
-        enummapset,
-        filepath,
-        fingertree,
-        focus,
-        ghc-trace-events,
-        Glob,
-        haddock-library >= 1.8 && < 1.12,
-        hashable,
-        hie-compat ^>= 0.3.0.0,
-        hls-plugin-api ^>= 1.5,
-        lens,
-        list-t,
-        hiedb == 0.4.2.*,
-        lsp-types ^>= 1.6.0.0,
-        lsp ^>= 1.6.0.0 ,
-        mtl,
-        optparse-applicative,
-        parallel,
-        prettyprinter-ansi-terminal,
-        prettyprinter >= 1.6,
-        random,
-        regex-tdfa >= 1.3.1.0,
-        text-rope,
-        safe-exceptions,
-        hls-graph ^>= 1.8,
-        sorted-list,
-        sqlite-simple,
-        stm,
-        stm-containers,
-        syb,
-        text,
-        time,
-        transformers,
-        unordered-containers >= 0.2.10.0,
-        vector,
-        hslogger,
-        Diff ^>=0.4.0,
-        vector,
-        opentelemetry >=0.6.1,
-        unliftio >= 0.2.6,
-        unliftio-core,
-        ghc-boot-th,
-        ghc-boot,
-        ghc >= 8.10,
-        ghc-check >=0.5.0.8,
-        ghc-paths,
-        cryptohash-sha1 >=0.11.100 && <0.12,
-        hie-bios ^>= 0.11.0,
-        implicit-hie-cradle ^>= 0.3.0.5 || ^>= 0.5,
-        base16-bytestring >=0.1.1 && <1.1
-    if os(windows)
-      build-depends:
-        Win32
-    else
-      build-depends:
-        unix
+  import: warnings
+  default-language:   GHC2021
+  build-depends:
+    , aeson
+    , array
+    , async
+    , base                         >=4.16     && <5
+    , base16-bytestring            >=0.1.1    && <1.1
+    , binary
+    , bytestring
+    , case-insensitive
+    , co-log-core
+    , containers
+    , cryptohash-sha1              >=0.11.100 && <0.12
+    , data-default
+    , deepseq
+    , dependent-map
+    , dependent-sum
+    , Diff                         ^>=0.5
+    , directory
+    , dlist
+    , enummapset
+    , exceptions
+    , extra                        >=1.7.14
+    , filepath
+    , fingertree
+    , focus                        >=1.0.3.2
+    , ghc                          >=9.2
+    , ghc-boot
+    , ghc-boot-th
+    , ghc-trace-events
+    , Glob
+    , haddock-library              >=1.8      && <1.12
+    , hashable
+    , hie-bios                     ^>=0.14.0
+    , hie-compat                   ^>=0.3.0.0
+    , hiedb                        ^>= 0.6.0.0
+    , hls-graph                    == 2.9.0.1
+    , hls-plugin-api               == 2.9.0.1
+    , implicit-hie                 >= 0.1.4.0 && < 0.1.5
+    , lens
+    , list-t
+    , lsp                          ^>=2.7
+    , lsp-types                    ^>=2.3
+    , mtl
+    , opentelemetry                >=0.6.1
+    , optparse-applicative
+    , parallel
+    , prettyprinter                >=1.7
+    , prettyprinter-ansi-terminal
+    , random
+    , regex-tdfa                   >=1.3.1.0
+    , safe-exceptions
+    , sorted-list
+    , sqlite-simple
+    , stm
+    , stm-containers
+    , syb
+    , text
+    , text-rope
+    , time
+    , transformers
+    , unliftio                     >=0.2.6
+    , unliftio-core
+    , unordered-containers         >=0.2.10.0
+    , vector
 
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        DeriveFoldable
-        DeriveTraversable
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        OverloadedStrings
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-        DataKinds
-        TypeOperators
-        KindSignatures
+  if os(windows)
+    build-depends: Win32
 
-    hs-source-dirs:
-        src
-        session-loader
-    exposed-modules:
-        Control.Concurrent.Strict
-        Generics.SYB.GHC
-        Development.IDE
-        Development.IDE.Main
-        Development.IDE.Core.Actions
-        Development.IDE.Main.HeapStats
-        Development.IDE.Core.Debouncer
-        Development.IDE.Core.FileStore
-        Development.IDE.Core.FileUtils
-        Development.IDE.Core.IdeConfiguration
-        Development.IDE.Core.OfInterest
-        Development.IDE.Core.PositionMapping
-        Development.IDE.Core.Preprocessor
-        Development.IDE.Core.ProgressReporting
-        Development.IDE.Core.Rules
-        Development.IDE.Core.RuleTypes
-        Development.IDE.Core.Service
-        Development.IDE.Core.Shake
-        Development.IDE.Core.Tracing
-        Development.IDE.Core.UseStale
-        Development.IDE.GHC.Compat
-        Development.IDE.GHC.Compat.Core
-        Development.IDE.GHC.Compat.Env
-        Development.IDE.GHC.Compat.Iface
-        Development.IDE.GHC.Compat.Logger
-        Development.IDE.GHC.Compat.Outputable
-        Development.IDE.GHC.Compat.Parser
-        Development.IDE.GHC.Compat.Plugins
-        Development.IDE.GHC.Compat.Units
-        Development.IDE.GHC.Compat.Util
-        Development.IDE.Core.Compile
-        Development.IDE.GHC.CoreFile
-        Development.IDE.GHC.Error
-        Development.IDE.GHC.Orphans
-        Development.IDE.GHC.Util
-        Development.IDE.Import.DependencyInformation
-        Development.IDE.Import.FindImports
-        Development.IDE.Monitoring.EKG
-        Development.IDE.LSP.HoverDefinition
-        Development.IDE.LSP.LanguageServer
-        Development.IDE.LSP.Notifications
-        Development.IDE.LSP.Outline
-        Development.IDE.LSP.Server
-        Development.IDE.Session
-        Development.IDE.Spans.Common
-        Development.IDE.Spans.Documentation
-        Development.IDE.Spans.AtPoint
-        Development.IDE.Spans.LocalBindings
-        Development.IDE.Spans.Pragmas
-        Development.IDE.Types.Diagnostics
-        Development.IDE.Types.Exports
-        Development.IDE.Types.HscEnvEq
-        Development.IDE.Types.KnownTargets
-        Development.IDE.Types.Location
-        Development.IDE.Types.Logger
-        Development.IDE.Types.Monitoring
-        Development.IDE.Monitoring.OpenTelemetry
-        Development.IDE.Types.Options
-        Development.IDE.Types.Shake
-        Development.IDE.Plugin
-        Development.IDE.Plugin.Completions
-        Development.IDE.Plugin.Completions.Types
-        Development.IDE.Plugin.HLS
-        Development.IDE.Plugin.HLS.GhcIde
-        Development.IDE.Plugin.Test
-        Development.IDE.Plugin.TypeLenses
-        Text.Fuzzy.Parallel
+  else
+    build-depends: unix
 
-    other-modules:
-        Development.IDE.Core.FileExists
-        Development.IDE.GHC.CPP
-        Development.IDE.GHC.Warnings
-        Development.IDE.Plugin.Completions.Logic
-        Development.IDE.Session.VersionCheck
-        Development.IDE.Types.Action
+  default-extensions:
+    DataKinds
+    ExplicitNamespaces
+    LambdaCase
+    OverloadedStrings
+    RecordWildCards
+    ViewPatterns
 
+  hs-source-dirs:     src session-loader
+  exposed-modules:
+    Control.Concurrent.Strict
+    Development.IDE
+    Development.IDE.Core.Actions
+    Development.IDE.Core.Compile
+    Development.IDE.Core.Debouncer
+    Development.IDE.Core.FileStore
+    Development.IDE.Core.FileUtils
+    Development.IDE.Core.IdeConfiguration
+    Development.IDE.Core.OfInterest
+    Development.IDE.Core.PluginUtils
+    Development.IDE.Core.PositionMapping
+    Development.IDE.Core.Preprocessor
+    Development.IDE.Core.ProgressReporting
+    Development.IDE.Core.Rules
+    Development.IDE.Core.RuleTypes
+    Development.IDE.Core.Service
+    Development.IDE.Core.Shake
+    Development.IDE.Core.Tracing
+    Development.IDE.Core.UseStale
+    Development.IDE.Core.WorkerThread
+    Development.IDE.GHC.Compat
+    Development.IDE.GHC.Compat.Core
+    Development.IDE.GHC.Compat.CmdLine
+    Development.IDE.GHC.Compat.Env
+    Development.IDE.GHC.Compat.Iface
+    Development.IDE.GHC.Compat.Logger
+    Development.IDE.GHC.Compat.Outputable
+    Development.IDE.GHC.Compat.Parser
+    Development.IDE.GHC.Compat.Plugins
+    Development.IDE.GHC.Compat.Units
+    Development.IDE.GHC.Compat.Util
+    Development.IDE.GHC.CoreFile
+    Development.IDE.GHC.Error
+    Development.IDE.GHC.Orphans
+    Development.IDE.GHC.Util
+    Development.IDE.Import.DependencyInformation
+    Development.IDE.Import.FindImports
+    Development.IDE.LSP.HoverDefinition
+    Development.IDE.LSP.LanguageServer
+    Development.IDE.LSP.Notifications
+    Development.IDE.LSP.Outline
+    Development.IDE.LSP.Server
+    Development.IDE.Main
+    Development.IDE.Main.HeapStats
+    Development.IDE.Monitoring.OpenTelemetry
+    Development.IDE.Plugin
+    Development.IDE.Plugin.Completions
+    Development.IDE.Plugin.Completions.Types
+    Development.IDE.Plugin.Completions.Logic
+    Development.IDE.Plugin.HLS
+    Development.IDE.Plugin.HLS.GhcIde
+    Development.IDE.Plugin.Test
+    Development.IDE.Plugin.TypeLenses
+    Development.IDE.Session
+    Development.IDE.Session.Diagnostics
+    Development.IDE.Session.Implicit
+    Development.IDE.Spans.AtPoint
+    Development.IDE.Spans.Common
+    Development.IDE.Spans.Documentation
+    Development.IDE.Spans.LocalBindings
+    Development.IDE.Spans.Pragmas
+    Development.IDE.Types.Diagnostics
+    Development.IDE.Types.Exports
+    Development.IDE.Types.HscEnvEq
+    Development.IDE.Types.KnownTargets
+    Development.IDE.Types.Location
+    Development.IDE.Types.Monitoring
+    Development.IDE.Types.Options
+    Development.IDE.Types.Shake
+    Generics.SYB.GHC
+    Text.Fuzzy.Parallel
+
+  other-modules:
+    Development.IDE.Core.FileExists
+    Development.IDE.GHC.CPP
+    Development.IDE.GHC.Warnings
+    Development.IDE.Types.Action
+
+  if flag(pedantic)
     ghc-options:
-                -Wall
-                -Wno-name-shadowing
-                -Wincomplete-uni-patterns
-                -Wno-unticked-promoted-constructors
-                -fno-ignore-asserts
-
-    if flag(ghc-patched-unboxed-bytecode)
-      cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
-
-    if impl(ghc < 8.10)
-      exposed-modules:
-        Development.IDE.GHC.Compat.CPP
-
-    if impl(ghc >= 9)
-        ghc-options: -Wunused-packages
-
-    if flag(ekg)
-        build-depends:
-            ekg-wai,
-            ekg-core,
-        cpp-options:   -DMONITORING_EKG
+      -Werror
 
 flag test-exe
-    description: Build the ghcide-test-preprocessor executable
-    default: True
+  description: Build the ghcide-test-preprocessor executable
+  default:     True
 
 executable ghcide-test-preprocessor
-    default-language: Haskell2010
-    hs-source-dirs: test/preprocessor
-    ghc-options: -Wall -Wno-name-shadowing
-    main-is: Main.hs
-    build-depends:
-        base == 4.*
+  import: warnings
+  default-language:   GHC2021
+  hs-source-dirs:   test/preprocessor
+  main-is:          Main.hs
+  build-depends:    base >=4 && <5
 
-    if !flag(test-exe)
-        buildable: False
+  if !flag(test-exe)
+    buildable: False
 
 flag executable
-    description: Build the ghcide executable
-    default: True
+  description: Build the ghcide executable
+  default:     True
 
 executable ghcide
-    default-language:   Haskell2010
-    hs-source-dirs:     exe
-    ghc-options:
-                -threaded
-                -Wall
-                -Wincomplete-uni-patterns
-                -Wno-name-shadowing
-                -- allow user RTS overrides
-                -rtsopts
-                -- disable idle GC
-                -- increase nursery size
-                -- Enable collection of heap statistics
-                "-with-rtsopts=-I0 -A128M -T"
-    main-is: Main.hs
-    build-depends:
-        base == 4.*,
-        data-default,
-        extra,
-        gitrev,
-        lsp,
-        lsp-types,
-        hls-plugin-api,
-        ghcide,
-        optparse-applicative,
-    other-modules:
-        Arguments
-        Paths_ghcide
-    autogen-modules:
-        Paths_ghcide
-
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        OverloadedStrings
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-
-    if !flag(executable)
-        buildable: False
-    if flag(ekg)
-        build-depends:
-            ekg-wai,
-            ekg-core,
-        cpp-options:   -DMONITORING_EKG
-    if impl(ghc >= 9)
-        ghc-options: -Wunused-packages
+  import: warnings
+  default-language:   GHC2021
+  hs-source-dirs:     exe
+  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T"
 
 
-test-suite ghcide-tests
-    type: exitcode-stdio-1.0
-    default-language: Haskell2010
-    build-tool-depends:
-        ghcide:ghcide,
-        ghcide:ghcide-test-preprocessor,
-        implicit-hie:gen-hie
-    build-depends:
-        aeson,
-        async,
-        base,
-        containers,
-        data-default,
-        directory,
-        extra,
-        filepath,
-        fuzzy,
-        --------------------------------------------------------------
-        -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
-        -- which require depending on ghc. So the tests need to depend
-        -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
-        -- better solution can be found, but this is a quick solution
-        -- which works for now.
-        ghc,
-        --------------------------------------------------------------
-        ghcide,
-        lsp,
-        lsp-types,
-        hls-plugin-api,
-        lens,
-        list-t,
-        lsp-test ^>= 0.14,
-        monoid-subclasses,
-        network-uri,
-        QuickCheck,
-        random,
-        regex-tdfa ^>= 1.3.1,
-        shake,
-        sqlite-simple,
-        stm,
-        stm-containers,
-        tasty,
-        tasty-expected-failure,
-        tasty-hunit >= 0.10,
-        tasty-quickcheck,
-        tasty-rerun,
-        text,
-        text-rope,
-        unordered-containers,
-    if impl(ghc < 9.2)
-      build-depends:
-          record-dot-preprocessor,
-          record-hasfield
-    if impl(ghc < 9.3)
-       build-depends:  ghc-typelits-knownnat
-    if impl(ghc >= 9)
-        ghc-options: -Wunused-packages
-    hs-source-dirs: test/cabal test/exe test/src
-    ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
-    main-is: Main.hs
-    other-modules:
-        Development.IDE.Test.Runfiles
-        FuzzySearch
-        Progress
-        HieDbRetry
-        Development.IDE.Test
-        Development.IDE.Test.Diagnostic
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        OverloadedStrings
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
+  -- allow user RTS overrides
+  -- disable idle GC
+  -- increase nursery size
+  -- Enable collection of heap statistics
+  main-is:            Main.hs
+  build-depends:
+    , base                  >=4.16 && <5
+    , data-default
+    , extra
+    , ghcide
+    , gitrev
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , optparse-applicative
+
+  other-modules:
+    Arguments
+    Paths_ghcide
+
+  autogen-modules:    Paths_ghcide
+  default-extensions:
+    LambdaCase
+    OverloadedStrings
+    RecordWildCards
+    ViewPatterns
+
+  if !flag(executable)
+    buildable: False

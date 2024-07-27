@@ -2,7 +2,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -17,7 +16,7 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import           Control.Exception                            (assert)
+import qualified Control.Exception                            as E
 import           Control.Lens
 import           Data.Aeson.Types                             (Value)
 import           Data.Hashable
@@ -42,7 +41,9 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
-import           Language.LSP.Types                           (Int32,
+import           Ide.Logger                                   (Pretty (..),
+                                                               viaShow)
+import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
 
 data LinkableType = ObjectLinkable | BCOLinkable
@@ -68,11 +69,6 @@ type instance RuleResult GetParsedModule = ParsedModule
 -- | The parse tree for the file using GetFileContents,
 -- all comments included using Opt_KeepRawTokenStream
 type instance RuleResult GetParsedModuleWithComments = ParsedModule
-
--- | The dependency information produced by following the imports recursively.
--- This rule will succeed even if there is an error, e.g., a module could not be located,
--- a module could not be parsed or an import cycle.
-type instance RuleResult GetDependencyInformation = DependencyInformation
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
@@ -155,7 +151,7 @@ data TcModuleResult = TcModuleResult
     , tmrTypechecked     :: TcGblEnv
     , tmrTopLevelSplices :: Splices
     -- ^ Typechecked splice information
-    , tmrDeferredError    :: !Bool
+    , tmrDeferredError   :: !Bool
     -- ^ Did we defer any type errors for this module?
     , tmrRuntimeModules  :: !(ModuleEnv ByteString)
         -- ^ Which modules did we need at runtime while compiling this file?
@@ -192,9 +188,9 @@ hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> maybe "" snd hirCoreFp
 
 mkHiFileResult :: ModSummary -> ModIface -> ModDetails -> ModuleEnv ByteString -> Maybe (CoreFile, ByteString) -> HiFileResult
 mkHiFileResult hirModSummary hirModIface hirModDetails hirRuntimeModules hirCoreFp =
-    assert (case hirCoreFp of Just (CoreFile{cf_iface_hash}, _)
-                                -> getModuleHash hirModIface == cf_iface_hash
-                              _ -> True)
+    E.assert (case hirCoreFp of
+                   Just (CoreFile{cf_iface_hash}, _) -> getModuleHash hirModIface == cf_iface_hash
+                   _ -> True)
     HiFileResult{..}
   where
     hirIfaceFp = fingerprintToBS . getModuleHash $ hirModIface -- will always be two bytes
@@ -243,14 +239,14 @@ type instance RuleResult GetHieAst = HieAstResult
 -- | A IntervalMap telling us what is in scope at each point
 type instance RuleResult GetBindings = Bindings
 
-data DocAndKindMap = DKMap {getDocMap :: !DocMap, getKindMap :: !KindMap}
-instance NFData DocAndKindMap where
+data DocAndTyThingMap = DKMap {getDocMap :: !DocMap, getTyThingMap :: !TyThingMap}
+instance NFData DocAndTyThingMap where
     rnf (DKMap a b) = rwhnf a `seq` rwhnf b
 
-instance Show DocAndKindMap where
+instance Show DocAndTyThingMap where
     show = const "docmap"
 
-type instance RuleResult GetDocMap = DocAndKindMap
+type instance RuleResult GetDocMap = DocAndTyThingMap
 
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq
@@ -262,8 +258,8 @@ type instance RuleResult GhcSessionDeps = HscEnvEq
 -- | Resolve the imports in a module to the file path of a module in the same package
 type instance RuleResult GetLocatedImports = [(Located ModuleName, Maybe ArtifactsLocation)]
 
--- | This rule is used to report import cycles. It depends on GetDependencyInformation.
--- We cannot report the cycles directly from GetDependencyInformation since
+-- | This rule is used to report import cycles. It depends on GetModuleGraph.
+-- We cannot report the cycles directly from GetModuleGraph since
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
 
@@ -346,6 +342,9 @@ data FileOfInterestStatus
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus
 
+instance Pretty FileOfInterestStatus where
+    pretty = viaShow
+
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable IsFileOfInterestResult
@@ -357,6 +356,12 @@ data ModSummaryResult = ModSummaryResult
   { msrModSummary  :: !ModSummary
   , msrImports     :: [LImportDecl GhcPs]
   , msrFingerprint :: !Fingerprint
+  , msrHscEnv      :: !HscEnv
+  -- ^ HscEnv for this particular ModSummary.
+  -- Contains initialised plugins, parsed options, etc...
+  --
+  -- Implicit assumption: DynFlags in 'msrModSummary' are the same as
+  -- the DynFlags in 'msrHscEnv'.
   }
 
 instance Show ModSummaryResult where
@@ -394,11 +399,6 @@ data NeedsCompilation = NeedsCompilation
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable NeedsCompilation
 instance NFData   NeedsCompilation
-
-data GetDependencyInformation = GetDependencyInformation
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetDependencyInformation
-instance NFData   GetDependencyInformation
 
 data GetModuleGraph = GetModuleGraph
     deriving (Eq, Show, Typeable, Generic)
@@ -479,7 +479,8 @@ data GetModSummary = GetModSummary
 instance Hashable GetModSummary
 instance NFData   GetModSummary
 
--- | Get the vscode client settings stored in the ide state
+-- See Note [Client configuration in Rules]
+-- | Get the client config stored in the ide state
 data GetClientSettings = GetClientSettings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetClientSettings
@@ -514,3 +515,34 @@ instance NFData   GhcSessionIO
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
     ''Splices
+
+{- Note [Client configuration in Rules]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The LSP client configuration is stored by `lsp` for us, and is accesible in
+handlers through the LspT monad.
+
+This is all well and good, but what if we want to write a Rule that depends
+on the configuration? For example, we might have a plugin that provides
+diagnostics - if the configuration changes to turn off that plugin, then
+we need to invalidate the Rule producing the diagnostics so that they go
+away. More broadly, any time we define a Rule that really depends on the
+configuration, such that the dependency needs to be tracked and the Rule
+invalidated when the configuration changes, we have a problem.
+
+The solution is that we have to mirror the configuration into the state
+that our build system knows about. That means that:
+- We have a parallel record of the state in 'IdeConfiguration'
+- We install a callback so that when the config changes we can update the
+'IdeConfiguration' and mark the rule as dirty.
+
+Then we can define a Rule that gets the configuration, and build Actions
+on top of that that behave properly. However, these should really only
+be used if you need the dependency tracking - for normal usage in handlers
+the config can simply be accessed directly from LspT.
+
+TODO(michaelpj): this is me writing down what I think the logic is, but
+it doesn't make much sense to me. In particular, we *can* get the LspT
+in an Action. So I don't know why we need to store it twice. We would
+still need to invalidate the Rule otherwise we won't know it's changed,
+though. See https://github.com/haskell/ghcide/pull/731 for some context.
+-}

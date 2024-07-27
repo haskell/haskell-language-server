@@ -12,7 +12,7 @@ module Development.IDE.Spans.Common (
 , spanDocToMarkdown
 , spanDocToMarkdownForTest
 , DocMap
-, KindMap
+, TyThingMap
 ) where
 
 import           Control.DeepSeq
@@ -31,10 +31,14 @@ import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types  as H
 
 type DocMap = NameEnv SpanDoc
-type KindMap = NameEnv TyThing
+type TyThingMap = NameEnv TyThing
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
+#if MIN_VERSION_ghc(9,5,0)
+unqualIEWrapName :: IEWrappedName GhcPs -> T.Text
+#else
 unqualIEWrapName :: IEWrappedName RdrName -> T.Text
+#endif
 unqualIEWrapName = printOutputable . rdrNameOcc . ieWrappedName
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
@@ -50,13 +54,8 @@ safeTyThingId (AConLike (RealDataCon dataCon)) = Just (dataConWrapId dataCon)
 safeTyThingId _                                = Nothing
 
 -- Possible documentation for an element in the code
-#if MIN_VERSION_ghc(9,3,0)
 data SpanDoc
   = SpanDocString [HsDocString] SpanDocUris
-#else
-data SpanDoc
-  = SpanDocString HsDocString SpanDocUris
-#endif
   | SpanDocText   [T.Text] SpanDocUris
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
@@ -93,11 +92,7 @@ spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown = \case
     (SpanDocString docs uris) ->
         let doc = T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $
-#if MIN_VERSION_ghc(9,3,0)
                       renderHsDocStrings docs
-#else
-                      unpackHDS docs
-#endif
         in  go [doc] uris
     (SpanDocText txt uris) -> go txt uris
   where

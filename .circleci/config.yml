@@ -1,7 +1,5 @@
 defaults: &defaults
   working_directory: ~/build
-  docker:
-    - image: alanz/haskell-hie-ci
   resource_class: large
   steps:
     - checkout
@@ -34,25 +32,10 @@ defaults: &defaults
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
 
     - run:
-        name: Stack upgrade
+        name: Build
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack upgrade
-          fi
-
-    - run:
-        name: Stack setup
-        command: |
-          if [[ -z "$SKIP_CI" ]]; then
-            stack -j4 --stack-yaml=${STACK_FILE} setup
-          fi
-
-    - run:
-        name: Build (we need the exe for tests)
-        # need j1, else ghc-lib-parser triggers OOM
-        command: |
-          if [[ -z "$SKIP_CI" ]]; then
-            stack -j4 --stack-yaml=${STACK_FILE} install --no-terminal
+            stack -j4 --stack-yaml=${STACK_FILE} install --system-ghc --no-terminal
           fi
         no_output_timeout: 30m
 
@@ -60,7 +43,7 @@ defaults: &defaults
         name: Build Testsuite without running it
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack -j4 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+            stack -j4 --stack-yaml=${STACK_FILE} build --system-ghc --test --no-run-tests --no-terminal
           fi
         no_output_timeout: 30m
 
@@ -70,25 +53,28 @@ defaults: &defaults
 
     - save_cache:
         key: v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
-        paths: &cache_paths
+        paths:
           - ~/.stack
 
 version: 2
 jobs:
-  stackage-lts19:
+  stackage-lts22:
+    docker:
+      - image: haskell:9.6.5-slim-buster
     environment:
-      - STACK_FILE: "stack-lts19.yaml"
+      - STACK_FILE: "stack-lts22.yaml"
     <<: *defaults
 
   stackage-nightly:
+    docker:
+      - image: haskell:9.8.2-slim-buster
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
-
 
 workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - stackage-lts19
+      - stackage-lts22
       - stackage-nightly

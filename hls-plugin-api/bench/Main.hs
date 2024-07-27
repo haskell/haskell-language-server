@@ -2,17 +2,17 @@
 -- vs RangeMap-based "in-range filtering" approaches
 module Main (main) where
 
-import           Control.DeepSeq        (force)
-import           Control.Exception      (evaluate)
-import           Control.Monad          (replicateM)
+import           Control.DeepSeq             (force)
+import           Control.Exception           (evaluate)
+import           Control.Monad               (replicateM)
 import qualified Criterion
 import qualified Criterion.Main
-import           Data.Random            (RVar)
-import qualified Data.Random            as Fu
-import qualified Ide.Plugin.RangeMap    as RangeMap
-import           Language.LSP.Types     (Position (..), Range (..), UInt,
-                                         isSubrangeOf)
-import qualified System.Random.Stateful as Random
+import           Data.Random                 (RVar)
+import qualified Data.Random                 as Fu
+import qualified Ide.Plugin.RangeMap         as RangeMap
+import           Language.LSP.Protocol.Types (Position (..), Range (..), UInt,
+                                              isSubrangeOf)
+import qualified System.Random.Stateful      as Random
 
 
 genRangeList :: Int -> RVar [Range]

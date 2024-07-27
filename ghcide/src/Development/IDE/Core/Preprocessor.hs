@@ -10,6 +10,7 @@ import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util   as Util
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
+import qualified Development.IDE.GHC.Util          as Util
 
 import           Control.DeepSeq                   (NFData (rnf))
 import           Control.Exception                 (evaluate)
@@ -27,39 +28,41 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import qualified GHC.LanguageExtensions            as LangExt
+import qualified GHC.Runtime.Loader                as Loader
+import           GHC.Utils.Logger                  (LogFlags (..))
 import           System.FilePath
 import           System.IO.Extra
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Utils.Logger                  (LogFlags (..))
-import           GHC.Utils.Outputable              (renderWithContext)
-#endif
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
-preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], DynFlags)
-preprocessor env0 filename mbContents = do
+preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv, Util.Fingerprint)
+preprocessor env filename mbContents = do
     -- Perform unlit
     (isOnDisk, contents) <-
         if isLiterate filename then do
-            newcontent <- liftIO $ runLhs env0 filename mbContents
+            newcontent <- liftIO $ runLhs env filename mbContents
             return (False, newcontent)
         else do
             contents <- liftIO $ maybe (Util.hGetStringBuffer filename) return mbContents
             let isOnDisk = isNothing mbContents
             return (isOnDisk, contents)
 
+    -- Compute the source hash before the preprocessor because this is
+    -- how GHC does it.
+    !src_hash <- liftIO $ Util.fingerprintFromStringBuffer contents
+
     -- Perform cpp
-    (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env0 filename contents
-    let env1 = hscSetFlags dflags env0
-    let logger = hsc_logger env1
-    (isOnDisk, contents, opts, dflags) <-
+    (opts, pEnv) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
+    let dflags = hsc_dflags pEnv
+    let logger = hsc_logger pEnv
+    (newIsOnDisk, newContents, newOpts, newEnv) <-
         if not $ xopt LangExt.Cpp dflags then
-            return (isOnDisk, contents, opts, dflags)
+            return (isOnDisk, contents, opts, pEnv)
         else do
             cppLogs <- liftIO $ newIORef []
             let newLogger = pushLogHook (const (logActionCompat $ logAction cppLogs)) logger
-            contents <- ExceptT
-                        $ (Right <$> (runCpp (putLogHook newLogger env1) filename
+            con <- ExceptT
+                        $ (Right <$> (runCpp (putLogHook newLogger pEnv) filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
                             ( \(e :: Util.GhcException) -> do
@@ -68,25 +71,21 @@ preprocessor env0 filename mbContents = do
                                   []    -> throw e
                                   diags -> return $ Left diags
                             )
-            (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env1 filename contents
-            return (False, contents, opts, dflags)
+            (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv pEnv filename con
+            return (False, con, options, hscEnv)
 
     -- Perform preprocessor
     if not $ gopt Opt_Pp dflags then
-        return (contents, opts, dflags)
+        return (newContents, newOpts, newEnv, src_hash)
     else do
-        contents <- liftIO $ runPreprocessor env1 filename $ if isOnDisk then Nothing else Just contents
-        (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env1 filename contents
-        return (contents, opts, dflags)
+        con <- liftIO $ runPreprocessor newEnv filename $ if newIsOnDisk then Nothing else Just newContents
+        (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv newEnv filename con
+        return (con, options, hscEnv, src_hash)
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
-#if MIN_VERSION_ghc(9,3,0)
-      let log = CPPLog (fromMaybe SevWarning severity) srcSpan $ T.pack $ renderWithContext (log_default_user_context dflags) msg
-#else
-      let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
-#endif
-      modifyIORef cppLogs (log :)
+      let cppLog = CPPLog (fromMaybe SevWarning severity) srcSpan $ T.pack $ renderWithContext (log_default_user_context dflags) msg
+      modifyIORef cppLogs (cppLog :)
 
 
 
@@ -113,12 +112,12 @@ diagsFromCPPLogs filename logs =
     -- informational log messages and attaches them to the initial log message.
     go :: [CPPDiag] -> [CPPLog] -> [CPPDiag]
     go acc [] = reverse $ map (\d -> d {cdMessage = reverse $ cdMessage d}) acc
-    go acc (CPPLog sev (RealSrcSpan span _) msg : logs) =
-      let diag = CPPDiag (realSrcSpanToRange span) (toDSeverity sev) [msg]
-       in go (diag : acc) logs
-    go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : logs) =
-      go (diag {cdMessage = msg : cdMessage diag} : diags) logs
-    go [] (CPPLog _sev (UnhelpfulSpan _) _msg : logs) = go [] logs
+    go acc (CPPLog sev (RealSrcSpan rSpan _) msg : gLogs) =
+      let diag = CPPDiag (realSrcSpanToRange rSpan) (toDSeverity sev) [msg]
+       in go (diag : acc) gLogs
+    go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : gLogs) =
+      go (diag {cdMessage = msg : cdMessage diag} : diags) gLogs
+    go [] (CPPLog _sev (UnhelpfulSpan _) _msg : gLogs) = go [] gLogs
     cppDiagToDiagnostic :: CPPDiag -> Diagnostic
     cppDiagToDiagnostic d =
       Diagnostic
@@ -128,7 +127,9 @@ diagsFromCPPLogs filename logs =
           _source = Just "CPP",
           _message = T.unlines $ cdMessage d,
           _relatedInformation = Nothing,
-          _tags = Nothing
+          _tags = Nothing,
+          _codeDescription = Nothing,
+          _data_ = Nothing
         }
 
 
@@ -137,24 +138,20 @@ isLiterate x = takeExtension x `elem` [".lhs",".lhs-boot"]
 
 
 -- | This reads the pragma information directly from the provided buffer.
-parsePragmasIntoDynFlags
+parsePragmasIntoHscEnv
     :: HscEnv
     -> FilePath
     -> Util.StringBuffer
-    -> IO (Either [FileDiagnostic] ([String], DynFlags))
-parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
-#if MIN_VERSION_ghc(9,3,0)
+    -> IO (Either [FileDiagnostic] ([String], HscEnv))
+parsePragmasIntoHscEnv env fp contents = catchSrcErrors dflags0 "pragmas" $ do
     let (_warns,opts) = getOptions (initParserOpts dflags0) contents fp
-#else
-    let opts = getOptions dflags0 contents fp
-#endif
 
     -- Force bits that might keep the dflags and stringBuffer alive unnecessarily
     evaluate $ rnf opts
 
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
-    hsc_env' <- initializePlugins (hscSetFlags dflags env)
-    return (map unLoc opts, disableWarningsAsErrors (hsc_dflags hsc_env'))
+    hsc_env' <- Loader.initializePlugins (hscSetFlags dflags env)
+    return (map unLoc opts, hscSetFlags (disableWarningsAsErrors $ hsc_dflags hsc_env') hsc_env')
   where dflags0 = hsc_dflags env
 
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
@@ -189,17 +186,17 @@ runLhs env filename contents = withTempDir $ \dir -> do
 
 -- | Run CPP on a file
 runCpp :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
-runCpp env0 filename contents = withTempDir $ \dir -> do
+runCpp env0 filename mbContents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
     let dflags1 = addOptP "-D__GHCIDE__" (hsc_dflags env0)
     let env1 = hscSetFlags dflags1 env0
 
-    case contents of
+    case mbContents of
         Nothing -> do
             -- Happy case, file is not modified, so run CPP on it in-place
             -- which also makes things like relative #include files work
             -- and means location information is correct
-            doCpp env1 True filename out
+            doCpp env1 filename out
             liftIO $ Util.hGetStringBuffer out
 
         Just contents -> do
@@ -213,26 +210,26 @@ runCpp env0 filename contents = withTempDir $ \dir -> do
             let inp = dir </> "___GHCIDE_MAGIC___"
             withBinaryFile inp WriteMode $ \h ->
                 hPutStringBuffer h contents
-            doCpp env2 True inp out
+            doCpp env2 inp out
 
             -- Fix up the filename in lines like:
             -- # 1 "C:/Temp/extra-dir-914611385186/___GHCIDE_MAGIC___"
             let tweak x
-                    | Just x <- stripPrefix "# " x
-                    , "___GHCIDE_MAGIC___" `isInfixOf` x
-                    , let num = takeWhile (not . isSpace) x
+                    | Just y <- stripPrefix "# " x
+                    , "___GHCIDE_MAGIC___" `isInfixOf` y
+                    , let num = takeWhile (not . isSpace) y
                     -- important to use /, and never \ for paths, even on Windows, since then C escapes them
                     -- and GHC gets all confused
-                        = "# " <> num <> " \"" <> map (\x -> if isPathSeparator x then '/' else x) filename <> "\""
+                        = "# " <> num <> " \"" <> map (\z -> if isPathSeparator z then '/' else z) filename <> "\""
                     | otherwise = x
             Util.stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 
 
 -- | Run a preprocessor on a file
 runPreprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
-runPreprocessor env filename contents = withTempDir $ \dir -> do
+runPreprocessor env filename mbContents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
-    inp <- case contents of
+    inp <- case mbContents of
         Nothing -> return filename
         Just contents -> do
             let inp = dir </> takeFileName filename <.> "hs"

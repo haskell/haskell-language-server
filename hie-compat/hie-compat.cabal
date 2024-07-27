@@ -1,6 +1,6 @@
 cabal-version:       1.22
 name:                hie-compat
-version:             0.3.0.0
+version:             0.3.1.2
 synopsis:            HIE files for GHC 8.8 and other HIE file backports
 license:             Apache-2.0
 description:
@@ -21,23 +21,12 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
-flag ghc-lib
-  description: build against ghc-lib instead of the ghc package
-  default: False
-  manual: True
-
 library
-  default-language:    Haskell2010
+  default-language:    GHC2021
   build-depends:
-     base < 4.18, array, bytestring, containers, directory, filepath, transformers
-  if flag(ghc-lib) && impl(ghc < 9)
-    build-depends: ghc-lib < 9.0
-  else
-    build-depends: ghc, ghc-boot
-  if (impl(ghc >= 9.0) && impl(ghc < 9.1))
-    ghc-options: -Wall -Wno-name-shadowing
-  else
-    ghc-options: -Wall -Wno-name-shadowing
+     base < 4.21, array, bytestring, containers, directory, filepath, transformers
+  build-depends: ghc >= 8.10, ghc-boot
+  ghc-options: -Wall -Wno-name-shadowing
 
   exposed-modules:
     Compat.HieAst
@@ -46,11 +35,5 @@ library
     Compat.HieDebug
     Compat.HieUtils
 
-  if (impl(ghc > 8.9) && impl(ghc < 8.11))
-    hs-source-dirs: src-ghc810 src-reexport
-  if (impl(ghc >= 9.0) && impl(ghc < 9.1) || flag(ghc-lib))
-    hs-source-dirs: src-ghc90 src-reexport-ghc9
-  if (impl(ghc >= 9.2) && impl(ghc < 9.3))
-    hs-source-dirs: src-ghc92 src-reexport-ghc9
-  if (impl(ghc >= 9.4) && impl(ghc < 9.5))
+  if (impl(ghc >= 9.4))
     hs-source-dirs: src-reexport-ghc92

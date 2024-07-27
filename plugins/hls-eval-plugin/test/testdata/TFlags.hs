@@ -1,6 +1,8 @@
 -- Support for language options
 
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Haskell2010 #-}
+
 module TFlags where
 
 -- Language options set in the module source (ScopedTypeVariables)

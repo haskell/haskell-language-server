@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Import.DependencyInformation
   ( DependencyInformation(..)
@@ -10,8 +11,9 @@ module Development.IDE.Import.DependencyInformation
   , TransitiveDependencies(..)
   , FilePathId(..)
   , NamedModuleDep(..)
-  , ShowableModuleName(..)
-  , PathIdMap
+  , ShowableModule(..)
+  , ShowableModuleEnv(..)
+  , PathIdMap (..)
   , emptyPathIdMap
   , getPathId
   , lookupPathToId
@@ -23,7 +25,7 @@ module Development.IDE.Import.DependencyInformation
   , transitiveDeps
   , transitiveReverseDependencies
   , immediateReverseDependencies
-
+  , lookupModuleFile
   , BootIdMap
   , insertBootId
   ) where
@@ -32,7 +34,7 @@ import           Control.DeepSeq
 import           Data.Bifunctor
 import           Data.Coerce
 import           Data.Either
-import           Data.Graph
+import           Data.Graph                         hiding (edges, path)
 import           Data.HashMap.Strict                (HashMap)
 import qualified Data.HashMap.Strict                as HMS
 import           Data.IntMap                        (IntMap)
@@ -45,14 +47,14 @@ import           Data.List.NonEmpty                 (NonEmpty (..), nonEmpty)
 import qualified Data.List.NonEmpty                 as NonEmpty
 import           Data.Maybe
 import           Data.Tuple.Extra                   hiding (first, second)
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans        ()
-import           GHC.Generics                       (Generic)
-
 import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           GHC.Generics                       (Generic)
+import           Prelude                            hiding (mod)
 
-import           GHC
 
 -- | The imports for a given module.
 newtype ModuleImports = ModuleImports
@@ -90,21 +92,21 @@ getPathId path m@PathIdMap{..} =
     case HMS.lookup (artifactFilePath path) pathToIdMap of
         Nothing ->
             let !newId = FilePathId nextFreshId
-            in (newId, insertPathId path newId m)
-        Just id -> (id, m)
+            in (newId, insertPathId newId )
+        Just fileId -> (fileId, m)
   where
-    insertPathId :: ArtifactsLocation -> FilePathId -> PathIdMap -> PathIdMap
-    insertPathId path id PathIdMap{..} =
+    insertPathId :: FilePathId ->  PathIdMap
+    insertPathId fileId =
         PathIdMap
-            (IntMap.insert (getFilePathId id) path idToPathMap)
-            (HMS.insert (artifactFilePath path) id pathToIdMap)
+            (IntMap.insert (getFilePathId fileId) path idToPathMap)
+            (HMS.insert (artifactFilePath path) fileId pathToIdMap)
             (succ nextFreshId)
 
 insertImport :: FilePathId -> Either ModuleParseError ModuleImports -> RawDependencyInformation -> RawDependencyInformation
 insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.insert k v (rawImports rawDepInfo) }
 
-pathToId :: PathIdMap -> NormalizedFilePath -> FilePathId
-pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.! path
+pathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
+pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.!? path
 
 lookupPathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
 lookupPathToId PathIdMap{pathToIdMap} path = HMS.lookup path pathToIdMap
@@ -113,7 +115,7 @@ idToPath :: PathIdMap -> FilePathId -> NormalizedFilePath
 idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap filePathId
 
 idToModLocation :: PathIdMap -> FilePathId -> ArtifactsLocation
-idToModLocation PathIdMap{idToPathMap} (FilePathId id) = idToPathMap IntMap.! id
+idToModLocation PathIdMap{idToPathMap} (FilePathId i) = idToPathMap IntMap.! i
 
 type BootIdMap = FilePathIdMap FilePathId
 
@@ -128,15 +130,14 @@ data RawDependencyInformation = RawDependencyInformation
     -- corresponding hs file. It is used when topologically sorting as we
     -- need to add edges between .hs-boot and .hs so that the .hs files
     -- appear later in the sort.
-    , rawBootMap   :: !BootIdMap
-    , rawModuleNameMap :: !(FilePathIdMap ShowableModuleName)
+    , rawModuleMap :: !(FilePathIdMap ShowableModule)
     } deriving Show
 
 data DependencyInformation =
   DependencyInformation
     { depErrorNodes        :: !(FilePathIdMap (NonEmpty NodeError))
     -- ^ Nodes that cannot be processed correctly.
-    , depModuleNames       :: !(FilePathIdMap ShowableModuleName)
+    , depModules           :: !(FilePathIdMap ShowableModule)
     , depModuleDeps        :: !(FilePathIdMap FilePathIdSet)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
@@ -146,13 +147,24 @@ data DependencyInformation =
     -- ^ Map from FilePath to FilePathId
     , depBootMap           :: !BootIdMap
     -- ^ Map from hs-boot file to the corresponding hs file
+    , depModuleFiles       :: !(ShowableModuleEnv FilePathId)
+    -- ^ Map from Module to the corresponding non-boot hs file
+    , depModuleGraph       :: !ModuleGraph
     } deriving (Show, Generic)
 
-newtype ShowableModuleName =
-  ShowableModuleName {showableModuleName :: ModuleName}
+newtype ShowableModule =
+  ShowableModule {showableModule :: Module}
   deriving NFData
 
-instance Show ShowableModuleName where show = moduleNameString . showableModuleName
+newtype ShowableModuleEnv a =
+  ShowableModuleEnv {showableModuleEnv :: ModuleEnv a}
+
+instance Show a => Show (ShowableModuleEnv a) where
+  show (ShowableModuleEnv x) = show (moduleEnvToList x)
+instance NFData a => NFData (ShowableModuleEnv a) where
+  rnf = rwhnf
+
+instance Show ShowableModule where show = moduleNameString . moduleName . showableModule
 
 reachableModules :: DependencyInformation -> [NormalizedFilePath]
 reachableModules DependencyInformation{..} =
@@ -215,15 +227,17 @@ instance Semigroup NodeResult where
    SuccessNode _ <> ErrorNode errs   = ErrorNode errs
    SuccessNode a <> SuccessNode _    = SuccessNode a
 
-processDependencyInformation :: RawDependencyInformation -> DependencyInformation
-processDependencyInformation RawDependencyInformation{..} =
+processDependencyInformation :: RawDependencyInformation -> BootIdMap -> ModuleGraph -> DependencyInformation
+processDependencyInformation RawDependencyInformation{..} rawBootMap mg =
   DependencyInformation
     { depErrorNodes = IntMap.fromList errorNodes
     , depModuleDeps = moduleDeps
     , depReverseModuleDeps = reverseModuleDeps
-    , depModuleNames = rawModuleNameMap
+    , depModules = rawModuleMap
     , depPathIdMap = rawPathIdMap
     , depBootMap = rawBootMap
+    , depModuleFiles = ShowableModuleEnv reverseModuleMap
+    , depModuleGraph = mg
     }
   where resultGraph = buildResultGraph rawImports
         (errorNodes, successNodes) = partitionNodeResults $ IntMap.toList resultGraph
@@ -240,6 +254,7 @@ processDependencyInformation RawDependencyInformation{..} =
           foldr (\(p, cs) res ->
             let new = IntMap.fromList (map (, IntSet.singleton (coerce p)) (coerce cs))
             in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
+        reverseModuleMap = mkModuleEnv $ map (\(i,sm) -> (showableModule sm, FilePathId i)) $ IntMap.toList rawModuleMap
 
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
@@ -258,9 +273,9 @@ buildResultGraph g = propagatedErrors
         errorsForCycle files =
           IntMap.fromListWith (<>) $ coerce $ concatMap (cycleErrorsForFile files) files
         cycleErrorsForFile :: [FilePathId] -> FilePathId -> [(FilePathId,NodeResult)]
-        cycleErrorsForFile cycle f =
-          let entryPoints = mapMaybe (findImport f) cycle
-          in map (\imp -> (f, ErrorNode (PartOfCycle imp cycle :| []))) entryPoints
+        cycleErrorsForFile cycles' f =
+          let entryPoints = mapMaybe (findImport f) cycles'
+          in map (\imp -> (f, ErrorNode (PartOfCycle imp cycles' :| []))) entryPoints
         otherErrors = IntMap.map otherErrorsForFile g
         otherErrorsForFile :: Either ModuleParseError ModuleImports -> NodeResult
         otherErrorsForFile (Left err) = ErrorNode (ParseError err :| [])
@@ -328,7 +343,7 @@ immediateReverseDependencies file DependencyInformation{..} = do
 -- | returns all transitive dependencies in topological order.
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do
-  let !fileId = pathToId depPathIdMap file
+  !fileId <- pathToId depPathIdMap file
   reachableVs <-
       -- Delete the starting node
       IntSet.delete (getFilePathId fileId) .
@@ -350,6 +365,10 @@ transitiveDeps DependencyInformation{..} file = do
     boot_edge f = [getFilePathId f' | Just f' <- [IntMap.lookup f depBootMap]]
 
     vs = topSort g
+
+lookupModuleFile :: Module -> DependencyInformation -> Maybe NormalizedFilePath
+lookupModuleFile mod DependencyInformation{..}
+  = idToPath depPathIdMap <$> lookupModuleEnv (showableModuleEnv depModuleFiles) mod
 
 newtype TransitiveDependencies = TransitiveDependencies
   { transitiveModuleDeps :: [NormalizedFilePath]

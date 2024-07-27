@@ -1,6 +1,5 @@
 module FuzzySearch (tests) where
 
-import           Control.Monad              (guard)
 import           Data.Char                  (toLower)
 import           Data.Maybe                 (catMaybes)
 import qualified Data.Monoid.Textual        as T
@@ -8,12 +7,10 @@ import           Data.Text                  (Text, inits, pack)
 import qualified Data.Text                  as Text
 import           Prelude                    hiding (filter)
 import           System.Directory           (doesFileExist)
-import           System.Info.Extra          (isWindows)
 import           System.IO.Unsafe           (unsafePerformIO)
 import           Test.QuickCheck
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
-import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck      (testProperty)
 import qualified Text.Fuzzy                 as Fuzzy
 import           Text.Fuzzy                 (Fuzzy (..))

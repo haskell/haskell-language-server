@@ -1,43 +1,26 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.GHC.Dump(showAstDataHtml) where
-import           Data.Data                             hiding (Fixity)
-import           Development.IDE.GHC.Compat            hiding (NameAnn)
-import           Development.IDE.GHC.Compat.ExactPrint
-import           GHC.Hs.Dump
-#if MIN_VERSION_ghc(9,2,1)
 import qualified Data.ByteString                       as B
+import           Data.Data                             hiding (Fixity)
+import           Development.IDE.GHC.Compat            hiding (LocatedA,
+                                                        NameAnn)
+import           Development.IDE.GHC.Compat.ExactPrint (ExactPrint, exactPrint)
 import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
-import           GHC.Hs
-#endif
-#if MIN_VERSION_ghc(9,0,1)
-import           GHC.Plugins
-#else
-import           GhcPlugins
-#endif
+import           GHC.Hs                                hiding (AnnLet)
+import           GHC.Hs.Dump
+import           GHC.Plugins                           hiding (AnnLet)
 import           Prelude                               hiding ((<>))
 
 -- | Show a GHC syntax tree in HTML.
-#if MIN_VERSION_ghc(9,2,1)
-showAstDataHtml :: (Data a, ExactPrint a, Outputable a) => a -> SDoc
-#else
-showAstDataHtml :: (Data a, Outputable a) => a -> SDoc
-#endif
+showAstDataHtml :: (Data a, ExactPrint a) => a -> SDoc
 showAstDataHtml a0 = html $
     header $$
     body (tag' [("id",text (show @String "myUL"))] "ul" $ vcat
         [
-#if MIN_VERSION_ghc(9,2,1)
             li (pre $ text (exactPrint a0)),
             li (showAstDataHtml' a0),
             li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan NoBlankEpAnnotations a0)
-#else
-            li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan
-#if MIN_VERSION_ghc(9,3,0)
-                                                 NoBlankEpAnnotations
-#endif
-                                                 a0)
-#endif
         ])
   where
     tag = tag' []
@@ -49,18 +32,14 @@ showAstDataHtml a0 = html $
     li = tag "li"
     caret x = tag' [("class", text "caret")] "span" "" <+> x
     nested foo cts
-#if MIN_VERSION_ghc(9,2,1) && !MIN_VERSION_ghc(9,3,0)
-      | cts == empty = foo
-#endif
       | otherwise = foo $$ (caret $ ul cts)
     body cts = tag "body" $ cts $$ tag "script" (text js)
     header = tag "head" $ tag "style" $ text css
     html = tag "html"
     pre = tag "pre"
-#if MIN_VERSION_ghc(9,2,1)
     showAstDataHtml' :: Data a => a -> SDoc
     showAstDataHtml' =
-      (generic
+      generic
               `ext1Q` list
               `extQ` string `extQ` fastString `extQ` srcSpan `extQ` realSrcSpan
               `extQ` annotation
@@ -79,7 +58,9 @@ showAstDataHtml a0 = html $
               `extQ` sourceText
               `extQ` deltaPos
               `extQ` epaAnchor
+#if !MIN_VERSION_ghc(9,9,0)
               `extQ` anchorOp
+#endif
               `extQ` bytestring
               `extQ` name `extQ` occName `extQ` moduleName `extQ` var
               `extQ` dataCon
@@ -91,7 +72,6 @@ showAstDataHtml a0 = html $
               `extQ` srcSpanAnnP
               `extQ` srcSpanAnnC
               `extQ` srcSpanAnnN
-              )
 
       where generic :: Data a => a -> SDoc
             generic t = nested (text $ showConstr (toConstr t))
@@ -141,15 +121,27 @@ showAstDataHtml a0 = html $
 
             sourceText :: SourceText -> SDoc
             sourceText NoSourceText     = text "NoSourceText"
+#if MIN_VERSION_ghc(9,7,0)
+            sourceText (SourceText src) = text "SourceText" <+> ftext src
+#else
             sourceText (SourceText src) = text "SourceText" <+> text src
+#endif
 
             epaAnchor :: EpaLocation -> SDoc
+#if MIN_VERSION_ghc(9,9,0)
+            epaAnchor (EpaSpan s) = parens $ text "EpaSpan" <+> srcSpan s
+#elif MIN_VERSION_ghc(9,5,0)
+            epaAnchor (EpaSpan r _)  = text "EpaSpan" <+> realSrcSpan r
+#else
             epaAnchor (EpaSpan r)  = text "EpaSpan" <+> realSrcSpan r
+#endif
             epaAnchor (EpaDelta d cs) = text "EpaDelta" <+> deltaPos d <+> showAstDataHtml' cs
 
+#if !MIN_VERSION_ghc(9,9,0)
             anchorOp :: AnchorOperation -> SDoc
             anchorOp UnchangedAnchor  = "UnchangedAnchor"
             anchorOp (MovedAnchor dp) = "MovedAnchor " <> deltaPos dp
+#endif
 
             deltaPos :: DeltaPos -> SDoc
             deltaPos (SameLine c) = text "SameLine" <+> ppr c
@@ -167,15 +159,15 @@ showAstDataHtml a0 = html $
 
             srcSpan :: SrcSpan -> SDoc
             srcSpan ss = char ' ' <>
-                             (hang (ppr ss) 1
+                             hang (ppr ss) 1
                                    -- TODO: show annotations here
-                                   (text ""))
+                                   (text "")
 
             realSrcSpan :: RealSrcSpan -> SDoc
             realSrcSpan ss = braces $ char ' ' <>
-                             (hang (ppr ss) 1
+                             hang (ppr ss) 1
                                    -- TODO: show annotations here
-                                   (text ""))
+                                   (text "")
 
             addEpAnn :: AddEpAnn -> SDoc
             addEpAnn (AddEpAnn a s) = text "AddEpAnn" <+> ppr a <+> epaAnchor s
@@ -212,7 +204,7 @@ showAstDataHtml a0 = html $
 
             located :: (Data a, Data b) => GenLocated a b -> SDoc
             located (L ss a)
-              = nested "L" $ (li (showAstDataHtml' ss) $$ li (showAstDataHtml' a))
+              = nested "L" (li (showAstDataHtml' ss) $$ li (showAstDataHtml' a))
 
             -- -------------------------
 
@@ -231,8 +223,13 @@ showAstDataHtml a0 = html $
             annotationEpAnnHsCase :: EpAnn EpAnnHsCase -> SDoc
             annotationEpAnnHsCase = annotation' (text "EpAnn EpAnnHsCase")
 
+#if MIN_VERSION_ghc(9,4,0)
+            annotationEpAnnHsLet :: EpAnn NoEpAnns -> SDoc
+            annotationEpAnnHsLet = annotation' (text "EpAnn NoEpAnns")
+#else
             annotationEpAnnHsLet :: EpAnn AnnsLet -> SDoc
             annotationEpAnnHsLet = annotation' (text "EpAnn AnnsLet")
+#endif
 
             annotationAnnList :: EpAnn AnnList -> SDoc
             annotationAnnList = annotation' (text "EpAnn AnnList")
@@ -249,13 +246,37 @@ showAstDataHtml a0 = html $
             annotationEpaLocation :: EpAnn EpaLocation -> SDoc
             annotationEpaLocation = annotation' (text "EpAnn EpaLocation")
 
-            annotation' :: forall a .(Data a, Typeable a)
-                       => SDoc -> EpAnn a -> SDoc
-            annotation' tag anns = nested (text $ showConstr (toConstr anns))
+            annotation' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
+            annotation' _tag anns = nested (text $ showConstr (toConstr anns))
               (vcat (map li $ gmapQ showAstDataHtml' anns))
 
             -- -------------------------
 
+#if MIN_VERSION_ghc(9,9,0)
+            srcSpanAnnA :: EpAnn AnnListItem -> SDoc
+            srcSpanAnnA = locatedAnn'' (text "SrcSpanAnnA")
+
+            srcSpanAnnL :: EpAnn AnnList -> SDoc
+            srcSpanAnnL = locatedAnn'' (text "SrcSpanAnnL")
+
+            srcSpanAnnP :: EpAnn AnnPragma -> SDoc
+            srcSpanAnnP = locatedAnn'' (text "SrcSpanAnnP")
+
+            srcSpanAnnC :: EpAnn AnnContext -> SDoc
+            srcSpanAnnC = locatedAnn'' (text "SrcSpanAnnC")
+
+            srcSpanAnnN :: EpAnn NameAnn -> SDoc
+            srcSpanAnnN = locatedAnn'' (text "SrcSpanAnnN")
+
+            locatedAnn'' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
+            locatedAnn'' tag ss = parens $
+              case cast ss of
+                Just (ann :: EpAnn a) ->
+                      text (showConstr (toConstr ann))
+                                          $$ vcat (gmapQ showAstDataHtml' ann)
+                Nothing -> text "locatedAnn:unmatched" <+> tag
+                           <+> (parens $ text (showConstr (toConstr ss)))
+#else
             srcSpanAnnA :: SrcSpanAnn' (EpAnn AnnListItem) -> SDoc
             srcSpanAnnA = locatedAnn'' (text "SrcSpanAnnA")
 
@@ -271,16 +292,16 @@ showAstDataHtml a0 = html $
             srcSpanAnnN :: SrcSpanAnn' (EpAnn NameAnn) -> SDoc
             srcSpanAnnN = locatedAnn'' (text "SrcSpanAnnN")
 
-            locatedAnn'' :: forall a. (Typeable a, Data a)
+            locatedAnn'' :: forall a. Data a
               => SDoc -> SrcSpanAnn' a -> SDoc
             locatedAnn'' tag ss =
               case cast ss of
                 Just ((SrcSpanAnn ann s) :: SrcSpanAnn' a) ->
-                      nested "SrcSpanAnn" $ (
+                      nested "SrcSpanAnn" (
                                  li(showAstDataHtml' ann)
                               $$ li(srcSpan s))
                 Nothing -> text "locatedAnn:unmatched" <+> tag
-                           <+> (text (showConstr (toConstr ss)))
+                           <+> text (showConstr (toConstr ss))
 #endif
 
 

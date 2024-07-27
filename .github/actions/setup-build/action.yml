@@ -7,7 +7,7 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.8.1.0"
+    default: "3.10.2.0"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
@@ -23,7 +23,15 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: haskell/actions/setup@v2
+    - name: Workaround runner image issue
+      if: runner.os == 'Linux'
+      # https://github.com/actions/runner-images/issues/7061
+      run: |
+        sudo mkdir -p /usr/local/.ghcup
+        sudo chown -R $USER /usr/local/.ghcup
+      shell: bash
+
+    - uses: haskell-actions/setup@v2.7.5
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -40,12 +48,6 @@ runs:
       name: (Linux,macOS) Platform config
       run: |
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-      shell: bash
-
-    - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
-      name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
-      run: |
-        echo -e 'package floskell\n  ghc-options: -O0' >> cabal.project.local
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,

@@ -4,103 +4,44 @@ packages:
          ./shake-bench
          ./hls-graph
          ./ghcide
-         ./ghcide-bench
-         ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
-         ./plugins/hls-cabal-plugin
-         ./plugins/hls-cabal-fmt-plugin
-         ./plugins/hls-tactics-plugin
-         ./plugins/hls-brittany-plugin
-         ./plugins/hls-stylish-haskell-plugin
-         ./plugins/hls-fourmolu-plugin
-         ./plugins/hls-class-plugin
-         ./plugins/hls-eval-plugin
-         ./plugins/hls-explicit-imports-plugin
-         ./plugins/hls-refine-imports-plugin
-         ./plugins/hls-hlint-plugin
-         ./plugins/hls-rename-plugin
-         ./plugins/hls-retrie-plugin
-         ./plugins/hls-haddock-comments-plugin
-         ./plugins/hls-splice-plugin
-         ./plugins/hls-floskell-plugin
-         ./plugins/hls-pragmas-plugin
-         ./plugins/hls-module-name-plugin
-         ./plugins/hls-ormolu-plugin
-         ./plugins/hls-call-hierarchy-plugin
-         ./plugins/hls-alternate-number-format-plugin
-         ./plugins/hls-qualify-imported-names-plugin
-         ./plugins/hls-code-range-plugin
-         ./plugins/hls-change-type-signature-plugin
-         ./plugins/hls-stan-plugin
-         ./plugins/hls-gadt-plugin
-         ./plugins/hls-explicit-fixity-plugin
-         ./plugins/hls-explicit-record-fields-plugin
-         ./plugins/hls-refactor-plugin
 
--- Standard location for temporary packages needed for particular environments
--- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
--- See https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml
-optional-packages: vendored/*/*.cabal
+index-state: 2024-06-29T00:00:00Z
 
-tests: true
+tests: True
+test-show-details: direct
 
-package *
-  ghc-options: -haddock
-  test-show-details: direct
+benchmarks: True
 
 write-ghc-environment-files: never
 
-index-state: 2022-10-07T12:19:15Z
+-- Many of our tests only work single-threaded, and the only way to
+-- ensure tasty runs everything purely single-threaded is to pass
+-- this at the top-level
+test-options: -j1
+
+-- Make sure dependencies are build with haddock so we get
+-- haddock shown on hover
+package *
+  ghc-options: -haddock
 
 constraints:
-  -- For GHC 9.4, older versions of entropy fail to build on Windows
-  entropy >= 0.4.1.10,
-  -- For GHC 9.4
-  basement >= 0.0.15,
-  -- For GHC 9.4
-  hw-prim >= 0.6.3.2,
-  hyphenation +embed,
-  -- remove this when hlint sets ghc-lib to true by default
-  -- https://github.com/ndmitchell/hlint/issues/1376
-  hlint +ghc-lib,
+  -- C++ is hard to distribute, especially on older GHCs
+  -- See https://github.com/haskell/haskell-language-server/issues/3822
+  text -simdutf,
+  ghc-check -ghc-check-use-package-abis,
   ghc-lib-parser-ex -auto,
-  stylish-haskell +ghc-lib
+  -- This is only present in some versions, and it's on by default since
+  -- 0.14.5.0, but there are some versions we allow that need this
+  -- setting
+  stylish-haskell +ghc-lib,
+  -- Centos 7 comes with an old gcc version that doesn't know about
+  -- the flag '-fopen-simd', which blocked the release 2.2.0.0.
+  -- We want to be able to benefit from the performance optimisations
+  -- in the future, thus: TODO: remove this flag.
+  bitvec -simd,
 
--- This is benign and won't affect our ability to release to Hackage,
--- because we only depend on `ekg-json` when a non-default flag
--- is turned on.
--- DELETE MARKER FOR CI
--- centos7 has an old version of git which cabal doesn't
--- support. We delete these lines in gitlab ci to workaround
--- this issue, as this is not necessary to build our binaries.
-source-repository-package
-  type:git
-  location: https://github.com/pepeiborra/ekg-json
-  tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
-  -- https://github.com/tibbe/ekg-json/pull/12
--- END DELETE
-
-allow-newer:
-  -- ghc-9.4
-  Chart-diagrams:lens,
-  Chart:lens,
-  co-log-core:base,
-  constraints-extras:base,
-  constraints-extras:template-haskell,
-  dependent-sum:some,
-  diagrams-contrib:base,
-  diagrams-contrib:lens,
-  diagrams-postscript:base,
-  diagrams-postscript:lens,
-  diagrams-svg:base,
-  diagrams-svg:lens,
-  ekg-json:base,
-  ghc-paths:Cabal,
-  haddock-library:base,
-  monoid-extras:base,
-  monoid-subclasses:vector,
-  svg-builder:base,
-  uuid:time,
-  vector-space:base,
-  ekg-wai:time,
+if impl(ghc >= 9.9)
+  -- https://github.com/haskell/haskell-language-server/issues/4324
+  benchmarks: False

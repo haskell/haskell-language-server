@@ -1,9 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -23,16 +21,15 @@ import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists  (fileExistsRules)
 import           Development.IDE.Core.OfInterest  hiding (Log, LogShake)
 import           Development.IDE.Graph
-import           Development.IDE.Types.Logger     as Logger (Logger,
-                                                             Pretty (pretty),
+import           Development.IDE.Types.Options    (IdeOptions (..))
+import           Ide.Logger                       as Logger (Pretty (pretty),
                                                              Priority (Debug),
                                                              Recorder,
                                                              WithPriority,
                                                              cmapWithPrio)
-import           Development.IDE.Types.Options    (IdeOptions (..))
 import           Ide.Plugin.Config
+import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.Server              as LSP
-import qualified Language.LSP.Types               as LSP
 
 import           Control.Monad
 import qualified Development.IDE.Core.FileExists  as FileExists
@@ -52,9 +49,10 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake log      -> pretty log
-    LogOfInterest log -> pretty log
-    LogFileExists log -> pretty log
+    LogShake msg      -> pretty msg
+    LogOfInterest msg -> pretty msg
+    LogFileExists msg -> pretty msg
+
 
 ------------------------------------------------------------
 -- Exposed API
@@ -65,14 +63,14 @@ initialise :: Recorder (WithPriority Log)
            -> IdePlugins IdeState
            -> Rules ()
            -> Maybe (LSP.LanguageContextEnv Config)
-           -> Logger
            -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> WithHieDb
-           -> IndexQueue
+           -> ThreadQueue
            -> Monitoring
+           -> FilePath -- ^ Root directory see Note [Root Directory]
            -> IO IdeState
-initialise recorder defaultConfig plugins mainRule lspEnv logger debouncer options withHieDb hiedbChan metrics = do
+initialise recorder defaultConfig plugins mainRule lspEnv debouncer options withHieDb hiedbChan metrics rootDir = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
@@ -82,7 +80,6 @@ initialise recorder defaultConfig plugins mainRule lspEnv logger debouncer optio
         lspEnv
         defaultConfig
         plugins
-        logger
         debouncer
         shakeProfiling
         (optReportProgress options)
@@ -91,11 +88,12 @@ initialise recorder defaultConfig plugins mainRule lspEnv logger debouncer optio
         hiedbChan
         (optShakeOptions options)
         metrics
-          $ do
+        (do
             addIdeGlobal $ GlobalIdeOptions options
             ofInterestRules (cmapWithPrio LogOfInterest recorder)
             fileExistsRules (cmapWithPrio LogFileExists recorder) lspEnv
-            mainRule
+            mainRule)
+        rootDir
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()

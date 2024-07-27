@@ -1,0 +1,8 @@
+4:13-16 TTypeFamily "Foo"
+4:17-18 TTypeVariable "a"
+5:3-6 TTypeFamily "Foo"
+5:7-10 TTypeConstructor "Int"
+5:13-16 TTypeConstructor "Int"
+6:3-6 TTypeFamily "Foo"
+6:7-8 TTypeVariable "a"
+6:11-17 TTypeSynonym "String"

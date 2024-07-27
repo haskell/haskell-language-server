@@ -1,74 +1,78 @@
 {-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MagicHash             #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 
-module Ide.Plugin.Splice
-    ( descriptor,
-    )
-where
+module Ide.Plugin.Splice (descriptor) where
 
-import           Control.Applicative             (Alternative ((<|>)))
-import           Control.Arrow
-import           Control.Exception
-import qualified Control.Foldl                   as L
-import           Control.Lens                    (Identity (..), ix, view, (%~),
-                                                  (<&>), (^.))
-import           Control.Monad
-import           Control.Monad.Extra             (eitherM)
-import qualified Control.Monad.Fail              as Fail
-import           Control.Monad.IO.Unlift
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
+import           Control.Applicative                   (Alternative ((<|>)))
+import           Control.Arrow                         (Arrow (first))
+import           Control.Exception                     (SomeException)
+import qualified Control.Foldl                         as L
+import           Control.Lens                          (Identity (..), ix, view,
+                                                        (%~), (<&>), (^.))
+import           Control.Monad                         (forM, guard, unless)
+import           Control.Monad.Error.Class             (MonadError (throwError))
+import           Control.Monad.Extra                   (eitherM)
+import qualified Control.Monad.Fail                    as Fail
+import           Control.Monad.IO.Unlift               (MonadIO (..),
+                                                        askRunInIO)
+import           Control.Monad.Trans.Class             (MonadTrans (lift))
+import           Control.Monad.Trans.Except            (ExceptT (..),
+                                                        runExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson
-import           Data.Foldable                   (Foldable (foldl'))
+import           Data.Aeson                            hiding (Null)
+import qualified Data.Bifunctor                        as B (first)
 import           Data.Function
 import           Data.Generics
-import qualified Data.Kind                       as Kinds
-import           Data.List                       (sortOn)
-import           Data.Maybe                      (fromMaybe, listToMaybe,
-                                                  mapMaybe)
-import qualified Data.Text                       as T
+import qualified Data.Kind                             as Kinds
+import           Data.List                             (sortOn)
+import           Data.Maybe                            (fromMaybe, listToMaybe,
+                                                        mapMaybe)
+import qualified Data.Text                             as T
 import           Development.IDE
-import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import qualified Development.IDE.GHC.Compat.Util as Util
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
-#if __GLASGOW_HASKELL__ >= 902
-import           GHC.Parser.Annotation (SrcSpanAnn'(..))
-import qualified GHC.Types.Error as Error
-#endif
+import qualified GHC.Runtime.Loader                as Loader
+import qualified GHC.Types.Error                       as Error
+import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
-import           Language.LSP.Server
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens         as J
+import qualified Language.LSP.Protocol.Lens            as J
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.Foldable                         (Foldable (foldl'))
+#endif
+
+#if MIN_VERSION_ghc(9,4,1)
+import           GHC.Data.Bag                          (Bag)
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Parser.Annotation                 (EpAnn (..))
+#else
+import           GHC.Parser.Annotation                 (SrcSpanAnn' (..))
+#endif
+
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
-    (defaultPluginDescriptor plId)
+    (defaultPluginDescriptor plId "Provides a code action to evaluate a TemplateHaskell splice")
         { pluginCommands = commands
-        , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
+        , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeAction
         }
 
 commands :: [PluginCommand IdeState]
@@ -89,28 +93,27 @@ expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
     CommandFunction IdeState ExpandSpliceParams
-expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
-    clientCapabilities <- getClientCapabilities
+expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
+    clientCapabilities <- pluginGetClientCapabilities
     rio <- askRunInIO
     let reportEditor :: ReportEditor
-        reportEditor msgTy msgs = liftIO $ rio $ sendNotification SWindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
+        reportEditor msgTy msgs = liftIO $ rio $ pluginSendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
+        expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
         expandManually fp = do
             mresl <-
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
             (TcModuleResult {..}, _) <-
                 maybe
-                (throwE "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
+                (throwError $ PluginInternalError "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
                 )
                 pure mresl
             reportEditor
-                MtWarning
+                MessageType_Warning
                 [ "Expansion in type-checking phase failed;"
                 , "trying to expand manually, but note that it is less rigorous."
                 ]
-            pm <-
-                liftIO $
-                    runAction "expandTHSplice.fallback.GetParsedModule" ideState $
-                        use_ GetParsedModule fp
+            pm <- runActionE "expandTHSplice.fallback.GetParsedModule" ideState $
+                        useE GetParsedModule fp
             (ps, hscEnv, _dflags) <- setupHscEnv ideState fp pm
 
             manualCalcEdit
@@ -146,10 +149,10 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                         transform
                             dflags
                             clientCapabilities
-                            uri
+                            verTxtDocId
                             (graft (RealSrcSpan spliceSpan Nothing) expanded)
                             ps
-            maybe (throwE "No splice information found") (either throwE pure) $
+            maybe (throwError $ PluginInternalError "No splice information found") (either (throwError . PluginInternalError . T.pack) pure) $
                 case spliceContext of
                     Expr -> graftSpliceWith exprSuperSpans
                     Pat ->
@@ -162,16 +165,16 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                             transform
                                 dflags
                                 clientCapabilities
-                                uri
+                                verTxtDocId
                                 (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
                                 ps
                                 <&>
                                 -- FIXME: Why ghc-exactprint sweeps preceding comments?
-                                adjustToRange uri range
+                                adjustToRange (verTxtDocId ^. J.uri) range
 
     res <- liftIO $ runMaybeT $ do
 
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
+            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
             eedits <-
                 ( lift . runExceptT . withTypeChecked fp
                         =<< MaybeT
@@ -182,17 +185,17 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
             case eedits of
                 Left err -> do
                     reportEditor
-                        MtError
-                        ["Error during expanding splice: " <> T.pack err]
-                    pure (Left $ responseError $ T.pack err)
+                        MessageType_Error
+                        [T.pack $ "Error during expanding splice: " <> show (pretty err)]
+                    pure (Left err)
                 Right edits ->
                     pure (Right edits)
     case res of
-      Nothing -> pure $ Right Null
+      Nothing -> pure $ Right $ InR Null
       Just (Left err) -> pure $ Left err
       Just (Right edit) -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-        pure $ Right Null
+        _ <- pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        pure $ Right $ InR Null
 
     where
         range = realSrcSpanToRange spliceSpan
@@ -203,14 +206,12 @@ setupHscEnv
     :: IdeState
     -> NormalizedFilePath
     -> ParsedModule
-    -> ExceptT String IO (Annotated ParsedSource, HscEnv, DynFlags)
+    -> ExceptT PluginError IO (ParsedSource, HscEnv, DynFlags)
 setupHscEnv ideState fp pm = do
-    hscEnvEq <-
-        liftIO $
-            runAction "expandTHSplice.fallback.ghcSessionDeps" ideState $
-                use_ GhcSessionDeps fp
+    hscEnvEq <- runActionE "expandTHSplice.fallback.ghcSessionDeps" ideState $
+                    useE GhcSessionDeps fp
     let ps = annotateParsedSource pm
-        hscEnv0 = hscEnvWithImportPaths hscEnvEq
+        hscEnv0 = hscEnv hscEnvEq
         modSum = pm_mod_summary pm
     hscEnv <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
     pure (ps, hscEnv, hsc_dflags hscEnv)
@@ -221,10 +222,10 @@ setupDynFlagsForGHCiLike env dflags = do
         platform = targetPlatform dflags3
         dflags3a = setWays hostFullWays dflags3
         dflags3b =
-            foldl gopt_set dflags3a $
+            foldl' gopt_set dflags3a $
                 concatMap (wayGeneralFlags platform) hostFullWays
         dflags3c =
-            foldl gopt_unset dflags3b $
+            foldl' gopt_unset dflags3b $
                 concatMap (wayUnsetGeneralFlags platform) hostFullWays
         dflags4 =
             dflags3c
@@ -232,7 +233,7 @@ setupDynFlagsForGHCiLike env dflags = do
                 `gopt_set` Opt_IgnoreOptimChanges
                 `gopt_set` Opt_IgnoreHpcChanges
                 `gopt_unset` Opt_DiagnosticsShowCaret
-    initializePlugins (hscSetFlags dflags4 env)
+    Loader.initializePlugins (hscSetFlags dflags4 env)
 
 adjustToRange :: Uri -> Range -> WorkspaceEdit -> WorkspaceEdit
 adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
@@ -243,7 +244,7 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
             let minStart =
                     case L.fold (L.premap (view J.range) L.minimum) eds of
                         Nothing -> error "impossible"
-                        Just v -> v
+                        Just v  -> v
             in adjustLine minStart <$> eds
 
         adjustATextEdits :: Traversable f => f (TextEdit |? AnnotatedTextEdit) -> f (TextEdit |? AnnotatedTextEdit)
@@ -271,12 +272,12 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
 -- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
 -- earlier it will just be a plain `SrcSpan`.
 {-# COMPLETE AsSrcSpan #-}
-#if __GLASGOW_HASKELL__ >= 902
+#if MIN_VERSION_ghc(9,9,0)
+pattern AsSrcSpan :: SrcSpan -> EpAnn ann
+pattern AsSrcSpan locA <- (getLoc -> locA)
+#else
 pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
 pattern AsSrcSpan locA <- SrcSpanAnn {locA}
-#else
-pattern AsSrcSpan :: SrcSpan -> SrcSpan
-pattern AsSrcSpan loc <- loc
 #endif
 
 findSubSpansDesc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
@@ -292,24 +293,56 @@ data SpliceClass where
     OneToOneAST :: HasSplice AnnListItem ast => Proxy# ast -> SpliceClass
     IsHsDecl :: SpliceClass
 
+#if MIN_VERSION_ghc(9,5,0)
+data HsSpliceCompat pass
+  = UntypedSplice (HsUntypedSplice pass)
+  | TypedSplice (LHsExpr pass)
+#endif
+
+
 class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast where
     type SpliceOf ast :: Kinds.Type -> Kinds.Type
-    type SpliceOf ast = HsSplice
     matchSplice :: Proxy# ast -> ast GhcPs -> Maybe (SpliceOf ast GhcPs)
     expandSplice :: Proxy# ast -> SpliceOf ast GhcPs -> RnM (Either (ast GhcPs) (ast GhcRn), FreeVars)
 
 instance HasSplice AnnListItem HsExpr where
+#if MIN_VERSION_ghc(9,5,0)
+    type SpliceOf HsExpr = HsSpliceCompat
+    matchSplice _ (HsUntypedSplice _ spl) = Just (UntypedSplice spl)
+    matchSplice _ (HsTypedSplice _ spl)   = Just (TypedSplice spl)
+#else
+    type SpliceOf HsExpr = HsSplice
     matchSplice _ (HsSpliceE _ spl) = Just spl
+#endif
     matchSplice _ _                 = Nothing
+#if MIN_VERSION_ghc(9,5,0)
+    expandSplice _ (UntypedSplice e) = fmap (first Right) $ rnUntypedSpliceExpr e
+    expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice e
+#else
     expandSplice _ = fmap (first Right) . rnSpliceExpr
+#endif
 
 instance HasSplice AnnListItem Pat where
+#if MIN_VERSION_ghc(9,5,0)
+    type SpliceOf Pat = HsUntypedSplice
+#else
+    type SpliceOf Pat = HsSplice
+#endif
     matchSplice _ (SplicePat _ spl) = Just spl
     matchSplice _ _                 = Nothing
-    expandSplice _ = rnSplicePat
+    expandSplice _ =
+#if MIN_VERSION_ghc(9,5,0)
+      fmap (first (Left . unLoc . utsplice_result . snd )) .
+#endif
+      rnSplicePat
 
 
 instance HasSplice AnnListItem HsType where
+#if MIN_VERSION_ghc(9,5,0)
+    type SpliceOf HsType = HsUntypedSplice
+#else
+    type SpliceOf HsType = HsSplice
+#endif
     matchSplice _ (HsSpliceTy _ spl) = Just spl
     matchSplice _ _                  = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceType
@@ -327,26 +360,26 @@ manualCalcEdit ::
     ClientCapabilities ->
     ReportEditor ->
     Range ->
-    Annotated ParsedSource ->
+    ParsedSource ->
     HscEnv ->
     TcGblEnv ->
     RealSrcSpan ->
     ExpandStyle ->
     ExpandSpliceParams ->
-    ExceptT String IO WorkspaceEdit
+    ExceptT PluginError IO WorkspaceEdit
 manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..} = do
     (warns, resl) <-
         ExceptT $ do
             (msgs, eresl) <-
                 initTcWithGbl hscEnv typechkd srcSpan $
                     case classifyAST spliceContext of
-                        IsHsDecl -> fmap (fmap $ adjustToRange uri ran) $
-                            flip (transformM dflags clientCapabilities uri) ps $
+                        IsHsDecl -> fmap (fmap $ adjustToRange (verTxtDocId ^. J.uri) ran) $
+                            flip (transformM dflags clientCapabilities verTxtDocId) ps $
                                 graftDeclsWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
                                             eitherM (fail . show) pure
-                                                $ lift
+                                                $ TransformT $ lift
                                                     ( lift $
                                                         Util.try @_ @SomeException $
                                                             (fst <$> rnTopSpliceDecls spl)
@@ -354,39 +387,60 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                         pure $ Just eExpr
                                     _ -> pure Nothing
                         OneToOneAST astP ->
-                            flip (transformM dflags clientCapabilities uri) ps $
+                            flip (transformM dflags clientCapabilities verTxtDocId) ps $
                                 graftWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
                                             eitherM (fail . show) pure
-                                                $ lift
+                                                $ TransformT $ lift
                                                     ( lift $
                                                         Util.try @_ @SomeException $
                                                             (fst <$> expandSplice astP spl)
                                                     )
                                         Just <$> case eExpr of
-                                            Left x -> pure $ L _spn x
+                                            Left x  -> pure $ L _spn x
                                             Right y -> unRenamedE dflags y
                                     _ -> pure Nothing
             let (warns, errs) =
-#if __GLASGOW_HASKELL__ >= 902
                                 (Error.getWarningMessages msgs, Error.getErrorMessages msgs)
-#else
-                                msgs
-#endif
-            pure $ (warns,) <$> fromMaybe (Left $ show errs) eresl
+            pure $ (warns,) <$> maybe (throwError $ PluginInternalError $ T.pack $ showErrors errs)
+                                    (B.first (PluginInternalError . T.pack)) eresl
 
     unless
         (null warns)
         $ reportEditor
-            MtWarning
+            MessageType_Warning
             [ "Warning during expanding: "
             , ""
-            , T.pack (show warns)
+            , T.pack (showErrors warns)
             ]
     pure resl
     where
         dflags = hsc_dflags hscEnv
+
+#if MIN_VERSION_ghc(9,4,1)
+        showErrors = showBag
+#else
+        showErrors = show
+#endif
+
+#if MIN_VERSION_ghc(9,4,1)
+showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
+showBag = show . fmap (fmap toDiagnosticMessage)
+
+toDiagnosticMessage :: forall a. Error.Diagnostic a => a -> Error.DiagnosticMessage
+toDiagnosticMessage message =
+    Error.DiagnosticMessage
+        { diagMessage = Error.diagnosticMessage
+#if MIN_VERSION_ghc(9,5,0)
+                          (Error.defaultDiagnosticOpts @a)
+#endif
+                          message
+
+        , diagReason  = Error.diagnosticReason  message
+        , diagHints   = Error.diagnosticHints   message
+        }
+#endif
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 unRenamedE ::
@@ -397,15 +451,17 @@ unRenamedE ::
     TransformT m (LocatedAn l (ast GhcPs))
 unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
-#if __GLASGOW_HASKELL__ >= 902
     expr' <-
-#else
-    (_anns, expr') <-
-#endif
-        either (fail . show) pure $
+        either (fail . showErrors) pure $
         parseAST @_ @(ast GhcPs) dflags uniq $
             showSDoc dflags $ ppr expr
     pure expr'
+  where
+#if MIN_VERSION_ghc(9,4,1)
+    showErrors = showBag . Error.getMessages
+#else
+    showErrors = show
+#endif
 
 data SearchResult r =
     Continue | Stop | Here r
@@ -417,9 +473,10 @@ fromSearchResult _        = Nothing
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
-codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
-    fmap (maybe (Right $ List []) Right) $
+codeAction :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
+codeAction state plId (CodeActionParams _ _ docId ran _) = do
+    verTxtDocId <- lift $ pluginGetVersionedTextDoc docId
+    liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
             ParsedModule {..} <-
@@ -430,13 +487,13 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
             mcmds <- forM mouterSplice $
                 \(spliceSpan, spliceContext) ->
                     forM expandStyles $ \(_, (title, cmdId)) -> do
-                        let params = ExpandSpliceParams {uri = theUri, ..}
+                        let params = ExpandSpliceParams {verTxtDocId, ..}
                             act = mkLspCommand plId cmdId title (Just [toJSON params])
                         pure $
                             InR $
-                                CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing Nothing Nothing (Just act) Nothing
+                                CodeAction title (Just CodeActionKind_RefactorRewrite) Nothing Nothing Nothing Nothing (Just act) Nothing
 
-            pure $ maybe mempty List mcmds
+            pure $ InL $ fromMaybe mempty mcmds
     where
         theUri = docId ^. J.uri
         detectSplice ::
@@ -452,16 +509,17 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                     (L (AsSrcSpan l@(RealSrcSpan spLoc _)) expr :: LHsExpr GhcPs)
                         | spanIsRelevant l ->
                             case expr of
-                                HsSpliceE {} -> Here (spLoc, Expr)
-                                _            -> Continue
+#if MIN_VERSION_ghc(9,5,0)
+                                HsTypedSplice{}   -> Here (spLoc, Expr)
+                                HsUntypedSplice{} -> Here (spLoc, Expr)
+#else
+                                HsSpliceE {}      -> Here (spLoc, Expr)
+#endif
+                                _                 -> Continue
                     _ -> Stop
                 )
                 `extQ` \case
-#if __GLASGOW_HASKELL__ == 808
-                    (dL @(Pat GhcPs) -> L l@(RealSrcSpan spLoc _) pat :: Located (Pat GhcPs))
-#else
                     (L (AsSrcSpan l@(RealSrcSpan spLoc _)) pat :: LPat GhcPs)
-#endif
                         | spanIsRelevant l ->
                             case pat of
                                 SplicePat{} -> Here (spLoc, Pat)

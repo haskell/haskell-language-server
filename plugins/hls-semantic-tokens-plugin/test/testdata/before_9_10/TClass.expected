@@ -1,0 +1,5 @@
+4:7-10 TClass "Foo"
+4:11-12 TTypeVariable "a"
+5:3-6 TClassMethod "foo"
+5:10-11 TTypeVariable "a"
+5:15-18 TTypeConstructor "Int"

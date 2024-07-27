@@ -15,12 +15,12 @@ jobs:
     - name: 'Installing'
       uses: rwe/actions-hlint-setup@v1
       with:
-        version: '3.5'
+        version: '3.8'
 
     - name: 'Checking code'
       uses: rwe/actions-hlint-run@v2
       with:
-        hlint-bin: "hlint --with-group=extra"
+        hlint-bin: "hlint --with-group=extra --ignore-glob=**/testdata/** --ignore-glob=**/test/data/**"
         fail-on: error
         path: .
 

@@ -1,12 +1,7 @@
-{-# LANGUAGE DeriveAnyClass            #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE InstanceSigs              #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TemplateHaskell           #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Ide.Plugin.CodeRange.Rules
     ( CodeRange (..)
@@ -53,8 +48,9 @@ import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
                                                      PreProcessEnv (..),
                                                      isCustomNode,
                                                      preProcessAST)
-import           Language.LSP.Types                 (FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion))
-import           Language.LSP.Types.Lens            (HasEnd (end),
+import           Language.LSP.Protocol.Types        (FoldingRangeKind (FoldingRangeKind_Comment, FoldingRangeKind_Imports, FoldingRangeKind_Region))
+
+import           Language.LSP.Protocol.Lens         (HasEnd (end),
                                                      HasStart (start))
 import           Prelude                            hiding (log)
 
@@ -195,6 +191,6 @@ handleError recorder action' = do
 -- | Maps type CodeRangeKind to FoldingRangeKind
 crkToFrk :: CodeRangeKind -> FoldingRangeKind
 crkToFrk crk = case crk of
-        CodeKindComment -> FoldingRangeComment
-        CodeKindImports -> FoldingRangeImports
-        CodeKindRegion  -> FoldingRangeRegion
+        CodeKindComment -> FoldingRangeKind_Comment
+        CodeKindImports -> FoldingRangeKind_Imports
+        CodeKindRegion  -> FoldingRangeKind_Region

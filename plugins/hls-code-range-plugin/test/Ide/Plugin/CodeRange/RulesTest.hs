@@ -3,11 +3,10 @@
 module Ide.Plugin.CodeRange.RulesTest (testTree) where
 
 import           Control.Monad.Trans.Writer.CPS
-import           Data.Bifunctor                 (Bifunctor (first, second))
+import           Data.Bifunctor                 (Bifunctor (second))
 import qualified Data.Vector                    as V
 import           Ide.Plugin.CodeRange.Rules
 import           Test.Hls
-import           Test.Tasty.HUnit
 
 testTree :: TestTree
 testTree =
@@ -78,3 +77,4 @@ instance Eq LogEq where
     LogEq LogNoAST == LogEq LogNoAST = True
     LogEq (LogFoundInterleaving left right) == LogEq (LogFoundInterleaving left' right') =
         left == left' && right == right'
+    LogEq _ == LogEq _ = False

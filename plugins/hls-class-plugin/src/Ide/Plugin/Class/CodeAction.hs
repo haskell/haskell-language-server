@@ -5,148 +5,148 @@
 
 module Ide.Plugin.Class.CodeAction where
 
-import           Control.Applicative                  (liftA2)
 import           Control.Lens                         hiding (List, use)
+import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT, throwE)
+import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson
+import           Data.Aeson                           hiding (Null)
+import           Data.Bifunctor                       (second)
 import           Data.Either.Extra                    (rights)
 import           Data.List
+import           Data.List.Extra                      (nubOrdOn)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (isNothing, listToMaybe,
                                                        mapMaybe)
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as T
 import           Development.IDE
+import           Development.IDE.Core.Compile         (sourceTypecheck)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint        (pointCommand)
-import           GHC.LanguageExtensions.Type
 import           Ide.Plugin.Class.ExactPrint
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import qualified Ide.Plugin.Config
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens              as J
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
-addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
-    caps <- getClientCapabilities
-    pluginResponse $ do
-        nfp <- getNormalizedFilePath uri
-        pm <- handleMaybeM "Unable to GetParsedModule"
-            $ liftIO
-            $ runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
-            $ use GetParsedModule nfp
-        (hsc_dflags . hscEnv -> df) <- handleMaybeM "Unable to GhcSessionDeps"
-            $ liftIO
-            $ runAction "classplugin.addMethodPlaceholders.GhcSessionDeps" state
-            $ use GhcSessionDeps nfp
-        (old, new) <- handleMaybeM "Unable to makeEditText"
-            $ liftIO $ runMaybeT
-            $ makeEditText pm df param
-        pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
-        let edit =
-                if withSig
-                then mergeEdit (workspaceEdit caps old new) pragmaInsertion
-                else workspaceEdit caps old new
+addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
+    caps <- lift pluginGetClientCapabilities
+    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
+        $ useE GetParsedModule nfp
+    (hsc_dflags . hscEnv -> df) <- runActionE "classplugin.addMethodPlaceholders.GhcSessionDeps" state
+        $ useE GhcSessionDeps nfp
+    (old, new) <- handleMaybeM (PluginInternalError "Unable to makeEditText")
+        $ liftIO $ runMaybeT
+        $ makeEditText pm df param
+    pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
+    let edit =
+            if withSig
+            then mergeEdit (workspaceEdit caps old new) pragmaInsertion
+            else workspaceEdit caps old new
 
-        void $ lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+    void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
-        pure Null
+    pure $ InR Null
     where
         toTextDocumentEdit edit =
-            TextDocumentEdit (VersionedTextDocumentIdentifier uri (Just 0)) (List [InL edit])
+            TextDocumentEdit (verTxtDocId ^.re _versionedTextDocumentIdentifier) [InL edit]
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
             { _documentChanges =
-                (\(List x) -> List $ x ++ map (InL . toTextDocumentEdit) edits)
+                (\x -> x ++ map (InL . toTextDocumentEdit) edits)
                     <$> _documentChanges
             , ..
             }
 
         workspaceEdit caps old new
-            = diffText caps (uri, old) new IncludeDeletions
+            = diffText caps (verTxtDocId, old) new IncludeDeletions
 
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    actions <- join <$> mapM (mkActions nfp) methodDiags
-    pure $ List actions
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
+codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
+    verTxtDocId <- lift $ pluginGetVersionedTextDoc docId
+    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
+    pure $ InL actions
     where
-        uri = docId ^. J.uri
-        List diags = context ^. J.diagnostics
+        diags = context ^. L.diagnostics
 
-        ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
-        methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
+        ghcDiags = filter (\d -> d ^. L.source == Just sourceTypecheck) diags
+        methodDiags = filter (\d -> isClassMethodWarning (d ^. L.message)) ghcDiags
 
         mkActions
             :: NormalizedFilePath
+            -> VersionedTextDocumentIdentifier
             -> Diagnostic
-            -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
-        mkActions docPath diag = do
-            (HAR {hieAst = ast}, pmap) <- handleMaybeM "Unable to GetHieAst"
-                . liftIO
-                . runAction "classplugin.findClassIdentifier.GetHieAst" state
-                $ useWithStale GetHieAst docPath
-            instancePosition <- handleMaybe "No range" $
-                              fromCurrentRange pmap range ^? _Just . J.start
-                              & fmap (J.character -~ 1)
+            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]
+        mkActions docPath verTxtDocId diag = do
+            (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
+                $ useWithStaleE GetHieAst docPath
+            instancePosition <- handleMaybe (PluginInvalidUserState "fromCurrentRange") $
+                              fromCurrentRange pmap range ^? _Just . L.start
+                              & fmap (L.character -~ 1)
             ident <- findClassIdentifier ast instancePosition
             cls <- findClassFromIdentifier docPath ident
-            InstanceBindTypeSigsResult sigs <- handleMaybeM "Unable to GetInstanceBindTypeSigs"
-                $ liftIO
-                $ runAction "classplugin.codeAction.GetInstanceBindTypeSigs" state
-                $ use GetInstanceBindTypeSigs docPath
+            InstanceBindTypeSigsResult sigs <- runActionE "classplugin.codeAction.GetInstanceBindTypeSigs" state
+                $ useE GetInstanceBindTypeSigs docPath
+            (tmrTypechecked -> gblEnv ) <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
+            (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
             implemented <- findImplementedMethods ast instancePosition
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
                 $ concatMap mkAction
-                $ fmap (filter (\(bind, _) -> bind `notElem` implemented))
-                $ minDefToMethodGroups range sigs
-                $ classMinimalDef cls
+                $ nubOrdOn snd
+                $ filter ((/=) mempty . snd)
+                $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
+                $ mkMethodGroups hsc gblEnv range sigs cls
             where
-                range = diag ^. J.range
+                range = diag ^. L.range
 
-                mkAction :: [(T.Text, T.Text)] -> [Command |? CodeAction]
-                mkAction methodGroup
+                mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
+                mkMethodGroups hsc gblEnv range sigs cls = minimalDef <> [allClassMethods]
+                    where
+                        minimalDef = minDefToMethodGroups hsc gblEnv range sigs $ classMinimalDef cls
+                        allClassMethods = ("all missing methods", makeMethodDefinitions hsc gblEnv range sigs)
+
+                mkAction :: MethodGroup -> [Command |? CodeAction]
+                mkAction (name, methods)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
-                                (Just $ mkCmdParams methodGroup False)
+                                (Just $ mkCmdParams methods False)
                       , mkCodeAction titleWithSig
                             $ mkLspCommand plId codeActionCommandId titleWithSig
-                                (Just $ mkCmdParams methodGroup True)
+                                (Just $ mkCmdParams methods True)
                       ]
                     where
-                        title = mkTitle $ fst <$> methodGroup
-                        titleWithSig = mkTitleWithSig $ fst <$> methodGroup
+                        title = "Add placeholders for " <> name
+                        titleWithSig = title <> " with signature(s)"
 
-                mkTitle methodGroup
-                    = "Add placeholders for "
-                        <> mconcat (intersperse ", " (fmap (\m -> "'" <> m <> "'") methodGroup))
-
-                mkTitleWithSig methodGroup = mkTitle methodGroup <> " with signature(s)"
-
+                mkCmdParams :: [(T.Text, T.Text)] -> Bool -> [Value]
                 mkCmdParams methodGroup withSig =
-                    [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig)]
+                    [toJSON (AddMinimalMethodsParams verTxtDocId range methodGroup withSig)]
 
                 mkCodeAction title cmd
                     = InR
                     $ CodeAction
                         title
-                        (Just CodeActionQuickFix)
-                        (Just (List []))
+                        (Just CodeActionKind_QuickFix)
+                        (Just [])
                         Nothing
                         Nothing
                         Nothing
@@ -154,18 +154,18 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         Nothing
 
         findClassIdentifier hf instancePosition =
-            handleMaybe "No Identifier found"
+            handleMaybe (PluginInternalError "No Identifier found")
                 $ listToMaybe
                 $ mapMaybe listToMaybe
                 $ pointCommand hf instancePosition
-                    ( (Map.keys . Map.filter isClassNodeIdentifier . getNodeIds)
+                    ( (Map.keys . Map.filterWithKey isClassNodeIdentifier . getNodeIds)
                         <=< nodeChildren
                     )
 
         findImplementedMethods
             :: HieASTs a
             -> Position
-            -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [T.Text]
+            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [T.Text]
         findImplementedMethods asts instancePosition = do
             pure
                 $ concat
@@ -182,15 +182,11 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             in valBindIds <> concatMap findInstanceValBindIdentifiers (nodeChildren ast)
 
         findClassFromIdentifier docPath (Right name) = do
-            (hscEnv -> hscenv, _) <- handleMaybeM "Unable to GhcSessionDeps"
-                . liftIO
-                . runAction "classplugin.findClassFromIdentifier.GhcSessionDeps" state
-                $ useWithStale GhcSessionDeps docPath
-            (tmrTypechecked -> thisMod, _) <- handleMaybeM "Unable to TypeCheck"
-                . liftIO
-                . runAction "classplugin.findClassFromIdentifier.TypeCheck" state
-                $ useWithStale TypeCheck docPath
-            handleMaybeM "TcEnv"
+            (hscEnv -> hscenv, _) <- runActionE "classplugin.findClassFromIdentifier.GhcSessionDeps" state
+                $ useWithStaleE GhcSessionDeps docPath
+            (tmrTypechecked -> thisMod, _) <- runActionE "classplugin.findClassFromIdentifier.TypeCheck" state
+                $ useWithStaleE TypeCheck docPath
+            handleMaybeM (PluginInternalError "initTcWithGbl failed")
                 . liftIO
                 . fmap snd
                 . initTcWithGbl hscenv thisMod ghostSpan $ do
@@ -199,10 +195,12 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         AGlobal (AConLike (RealDataCon con))
                             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
                         _ -> fail "Ide.Plugin.Class.findClassFromIdentifier"
-        findClassFromIdentifier _ (Left _) = throwE "Ide.Plugin.Class.findClassIdentifier"
+        findClassFromIdentifier _ (Left _) = throwError (PluginInternalError "Ide.Plugin.Class.findClassIdentifier")
 
-isClassNodeIdentifier :: IdentifierDetails a -> Bool
-isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` identInfo ident
+-- see https://hackage.haskell.org/package/ghc-9.8.1/docs/src/GHC.Types.Name.Occurrence.html#mkClassDataConOcc
+isClassNodeIdentifier :: Identifier -> IdentifierDetails a -> Bool
+isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occName i = (isNothing . identType) ident && Use `Set.member` identInfo ident
+isClassNodeIdentifier _ _ = False
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
@@ -211,15 +209,37 @@ isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
 isInstanceValBind _                          = False
 
--- Return (name text, signature text)
-minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [[(T.Text, T.Text)]]
-minDefToMethodGroups range sigs = go
+type MethodSignature = T.Text
+type MethodName = T.Text
+type MethodDefinition = (MethodName, MethodSignature)
+type MethodGroup = (T.Text, [MethodDefinition])
+
+makeMethodDefinition :: HscEnv -> TcGblEnv -> InstanceBindTypeSig -> MethodDefinition
+makeMethodDefinition hsc gblEnv sig = (name, signature)
     where
-        go (Var mn)   = [[ (T.pack . occNameString . occName $ mn, bindRendered sig)
-                        | sig <- sigs
-                        , inRange range (getSrcSpan $ bindName sig)
-                        , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
-                        ]]
+        name = T.drop (T.length bindingPrefix) (printOutputable  (bindName sig))
+        signature = prettyBindingNameString (printOutputable (bindName sig)) <> " :: " <> T.pack (showDoc hsc gblEnv (bindType sig))
+
+makeMethodDefinitions :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> [MethodDefinition]
+makeMethodDefinitions hsc gblEnv range sigs =
+    [ makeMethodDefinition hsc gblEnv sig
+    | sig <- sigs
+    , inRange range (getSrcSpan $ bindName sig)
+    ]
+
+signatureToName :: InstanceBindTypeSig -> T.Text
+signatureToName sig = T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
+
+-- Return [groupName text, [(methodName text, signature text)]]
+minDefToMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
+minDefToMethodGroups hsc gblEnv range sigs minDef = makeMethodGroup <$> go minDef
+    where
+        makeMethodGroup methodDefinitions =
+            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
+            in  (name, methodDefinitions)
+
+        go (Var mn)   = pure $ makeMethodDefinitions hsc gblEnv range $ filter ((==) (printOutputable mn) . signatureToName) sigs
         go (Or ms)    = concatMap (go . unLoc) ms
-        go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
+        go (And ms)   = foldr (liftA2 (<>) . go . unLoc) [[]] ms
         go (Parens m) = go (unLoc m)
+

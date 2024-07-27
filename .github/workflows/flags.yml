@@ -18,10 +18,15 @@ jobs:
   pre_job:
     runs-on: ubuntu-latest
     outputs:
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v3
+      - id: ghcs
+        run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
           paths_ignore: '[ "**/docs/**"
@@ -44,31 +49,41 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: [ "9.2.5"
-             , "9.0.2"
-             , "8.10.7"
-             ]
-        os: [ "ubuntu-latest"
-            ]
+        ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
+        os:
+          - ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
+        with:
+
+            # By default, the `pull_request` event has a `GITHUB_SHA` env variable
+            # set to the "last merge commit on the GITHUB_REF branch" (see
+            # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request).
+            # But we want to check out the latest commit on the branch whether or
+            # not it is a merge commit, so this is how we do that.
+            ref: "${{ github.event.pull_request.head.sha }}"
 
       - uses: ./.github/actions/setup-build
         with:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
 
-      - name: Build `hls-graph` with flags
-        run: cabal v2-build hls-graph --flags="embed-files stm-stats"
+      # The purpose of this job is to ensure that the build works even with flags
+      # in their non-default settings. Below we:
+      # - enable flags that are off by default
+      # - disable flags that are on by default
+      - name: Configue non-default flags for all components
+        run: |
+          cabal configure \
+              --constraint "haskell-language-server +pedantic" \
+              --constraint "hls-graph +embed-files +pedantic +stm-stats" \
+              --constraint "ghcide +ekg +executable +test-exe" \
+              --constraint "hls-plugin-api +pedantic -use-fingertree"
+          cat cabal.project.local
 
-      - name: Build `ghcide` with flags
-        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe ekg"
-
-      # we have to clean up warnings for 9.0 and 9.2 before enable -Wall
-      - if: matrix.ghc != '9.0.2' && matrix.ghc != '9.2.5'
-        name: Build with pedantic (-WError)
-        run: cabal v2-build --flags="pedantic"
+      - name: Build everything with non-default flags
+        run: cabal build all
 
   flags_post_job:
     if: always()

@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 module Properties.Conversion where
 
 import           Ide.Plugin.Conversion
@@ -7,32 +6,37 @@ import           Test.Tasty.QuickCheck (testProperty)
 import           Text.Regex.TDFA       ((=~))
 
 conversions :: TestTree
-conversions = testGroup "Conversions" $ map (uncurry testProperty) [("Match NumDecimal", prop_regexMatchesNumDecimal)
+conversions = testGroup "Conversions" $
+    map (uncurry testProperty)
+    [ ("Match NumDecimal", prop_regexMatchesNumDecimal)
     , ("Match Hex", prop_regexMatchesHex)
     , ("Match Octal", prop_regexMatchesOctal)
     , ("Match Binary", prop_regexMatchesBinary)
-    ] <> map (uncurry testProperty) [("Match HexFloat", prop_regexMatchesHexFloat @Double)
+    ]
+    <>
+    map (uncurry testProperty)
+    [ ("Match HexFloat", prop_regexMatchesHexFloat)
     , ("Match FloatDecimal", prop_regexMatchesFloatDecimal)
     , ("Match FloatExpDecimal", prop_regexMatchesFloatExpDecimal)
     ]
 
 prop_regexMatchesNumDecimal :: Integer -> Bool
-prop_regexMatchesNumDecimal = (=~ numDecimalRegex) . toFloatExpDecimal . fromInteger
+prop_regexMatchesNumDecimal = (=~ numDecimalRegex) . toFloatExpDecimal @Double . fromInteger
 
-prop_regexMatchesHex :: (Integral a, Show a) => a -> Bool
+prop_regexMatchesHex :: Integer -> Bool
 prop_regexMatchesHex = (=~ hexRegex ) . toHex
 
-prop_regexMatchesOctal :: (Integral a, Show a) => a -> Bool
+prop_regexMatchesOctal :: Integer -> Bool
 prop_regexMatchesOctal = (=~ octalRegex) . toOctal
 
-prop_regexMatchesBinary :: (Integral a, Show a) => a -> Bool
+prop_regexMatchesBinary :: Integer -> Bool
 prop_regexMatchesBinary = (=~ binaryRegex) . toBinary
 
-prop_regexMatchesHexFloat :: (RealFloat a) =>  a -> Bool
+prop_regexMatchesHexFloat :: Double -> Bool
 prop_regexMatchesHexFloat = (=~ hexFloatRegex) . toHexFloat
 
-prop_regexMatchesFloatDecimal :: (RealFloat a) =>  a -> Bool
+prop_regexMatchesFloatDecimal :: Double -> Bool
 prop_regexMatchesFloatDecimal = (=~ decimalRegex ) . toFloatDecimal
 
-prop_regexMatchesFloatExpDecimal :: (RealFloat a) =>  a -> Bool
+prop_regexMatchesFloatExpDecimal :: Double -> Bool
 prop_regexMatchesFloatExpDecimal = (=~ numDecimalRegex ) . toFloatExpDecimal

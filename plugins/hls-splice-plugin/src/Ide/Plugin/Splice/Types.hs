@@ -1,20 +1,21 @@
 {-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
 module Ide.Plugin.Splice.Types where
 
-import           Data.Aeson                 (FromJSON, ToJSON)
-import qualified Data.Text                  as T
-import           Development.IDE            (Uri)
-import           Development.IDE.GHC.Compat (RealSrcSpan)
-import           GHC.Generics               (Generic)
-import           Ide.Types                  (CommandId)
+import           Data.Aeson                  (FromJSON, ToJSON)
+import qualified Data.Text                   as T
+ -- This import is needed for the ToJSON/FromJSON instances of RealSrcSpan
+import           Development.IDE             ()
+import           Development.IDE.GHC.Compat  (RealSrcSpan)
+import           GHC.Generics                (Generic)
+import           Ide.Types                   (CommandId)
+import           Language.LSP.Protocol.Types (VersionedTextDocumentIdentifier)
 
 -- | Parameter for the addMethods PluginCommand.
 data ExpandSpliceParams = ExpandSpliceParams
-    { uri           :: Uri
+    { verTxtDocId   :: VersionedTextDocumentIdentifier
     , spliceSpan    :: RealSrcSpan
     , spliceContext :: SpliceContext
     }

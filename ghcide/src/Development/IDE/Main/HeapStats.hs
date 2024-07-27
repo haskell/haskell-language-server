@@ -1,4 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
 -- | Logging utilities for reporting heap statistics
 module Development.IDE.Main.HeapStats ( withHeapStats, Log(..)) where
 
@@ -6,11 +5,11 @@ import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.Word
-import           Development.IDE.Types.Logger (Pretty (pretty), Priority (Info),
-                                               Recorder, WithPriority, hsep,
-                                               logWith, (<+>))
 import           GHC.Stats
-import           Text.Printf                  (printf)
+import           Ide.Logger               (Pretty (pretty), Priority (Info),
+                                           Recorder, WithPriority, hsep,
+                                           logWith, (<+>))
+import           Text.Printf              (printf)
 
 data Log
   = LogHeapStatsPeriod !Int
@@ -19,7 +18,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty log = case log of
+  pretty = \case
     LogHeapStatsPeriod period ->
       "Logging heap statistics every" <+> pretty (toFormattedSeconds period)
     LogHeapStatsDisabled ->

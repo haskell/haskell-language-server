@@ -1,0 +1,6 @@
+3:1-2 TVariable "x"
+3:7-9 TClass "Eq"
+3:10-11 TTypeVariable "a"
+3:16-17 TTypeVariable "a"
+4:1-2 TVariable "x"
+4:5-14 TVariable "undefined"

@@ -6,7 +6,7 @@ import           Control.Monad                             (guard)
 import           Data.Char
 import qualified Data.Text                                 as T
 import           Development.IDE.Plugin.Plugins.Diagnostic
-import           Language.LSP.Types                        (Diagnostic (..),
+import           Language.LSP.Protocol.Types               (Diagnostic (..),
                                                             TextEdit (TextEdit))
 import           Text.Regex.TDFA                           (MatchResult (..),
                                                             (=~))
@@ -69,7 +69,8 @@ processHoleSuggestions mm = (holeSuggestions, refSuggestions)
             (mrAfter . (=~ t " *Valid (hole fits|substitutions) include"))
             validHolesSection
       let holeFit = T.strip $ T.takeWhile (/= ':') holeFitLine
-      guard (not $ T.null holeFit)
+      guard $ not $ holeFit =~ t "Some hole fits suppressed"
+      guard $ not $ T.null holeFit
       return holeFit
     refSuggestions = do -- @[]
       -- get the text indented under Valid refinement hole fits

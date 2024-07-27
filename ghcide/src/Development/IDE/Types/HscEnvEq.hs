@@ -1,48 +1,34 @@
 module Development.IDE.Types.HscEnvEq
 (   HscEnvEq,
     hscEnv, newHscEnvEq,
-    hscEnvWithImportPaths,
-    newHscEnvEqPreserveImportPaths,
-    newHscEnvEqWithImportPaths,
-    envImportPaths,
+    updateHscEnvEq,
     envPackageExports,
     envVisibleModuleNames,
-    deps
 ) where
 
 
 import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
-import           Control.DeepSeq                 (force)
+import           Control.DeepSeq                 (force, rwhnf)
 import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Data.Either                     (fromRight)
-import           Data.Set                        (Set)
-import qualified Data.Set                        as Set
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat      hiding (newUnique)
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
 import           OpenTelemetry.Eventlog          (withSpan)
-import           System.Directory                (makeAbsolute)
-import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
---   if they are created with the same call to 'newHscEnvEq'.
+--   if they are created with the same call to 'newHscEnvEq' or
+--   'updateHscEnvEq'.
 data HscEnvEq = HscEnvEq
     { envUnique             :: !Unique
     , hscEnv                :: !HscEnv
-    , deps                  :: [(UnitId, DynFlags)]
-               -- ^ In memory components for this HscEnv
-               -- This is only used at the moment for the import dirs in
-               -- the DynFlags
-    , envImportPaths        :: Maybe (Set FilePath)
-        -- ^ If Just, import dirs originally configured in this env
-        --   If Nothing, the env import dirs are unaltered
     , envPackageExports     :: IO ExportsMap
     , envVisibleModuleNames :: IO (Maybe [ModuleName])
         -- ^ 'listVisibleModuleNames' is a pure function,
@@ -51,21 +37,14 @@ data HscEnvEq = HscEnvEq
         -- If Nothing, 'listVisibleModuleNames' panic
     }
 
+updateHscEnvEq :: HscEnvEq -> HscEnv -> IO HscEnvEq
+updateHscEnvEq oldHscEnvEq newHscEnv = do
+  let update newUnique = oldHscEnvEq { envUnique = newUnique, hscEnv = newHscEnv }
+  update <$> Unique.newUnique
+
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq cradlePath hscEnv0 deps = do
-    let relativeToCradle = (takeDirectory cradlePath </>)
-        hscEnv = removeImportPaths hscEnv0
-
-    -- Make Absolute since targets are also absolute
-    importPathsCanon <-
-      mapM makeAbsolute $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
-
-    newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
-
-newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
-
+newHscEnvEq :: HscEnv -> IO HscEnvEq
+newHscEnvEq hscEnv = do
     let dflags = hsc_dflags hscEnv
 
     envUnique <- Unique.newUnique
@@ -84,7 +63,7 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                         -- When module is re-exported from another package,
                         -- the origin module is represented by value in Just
                         Just otherPkgMod -> otherPkgMod
-                        Nothing          -> mkModule (unitInfoId pkg) modName
+                        Nothing          -> mkModule (mkUnit pkg) modName
                 ]
 
             doOne m = do
@@ -106,23 +85,6 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
 
     return HscEnvEq{..}
 
--- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEqPreserveImportPaths
-    :: HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqPreserveImportPaths = newHscEnvEqWithImportPaths Nothing
-
--- | Unwrap the 'HscEnv' with the original import paths.
---   Used only for locating imports
-hscEnvWithImportPaths :: HscEnvEq -> HscEnv
-hscEnvWithImportPaths HscEnvEq{..}
-    | Just imps <- envImportPaths
-    = hscSetFlags (setImportPaths (Set.toList imps) (hsc_dflags hscEnv)) hscEnv
-    | otherwise
-    = hscEnv
-
-removeImportPaths :: HscEnv -> HscEnv
-removeImportPaths hsc = hscSetFlags (setImportPaths [] (hsc_dflags hsc)) hsc
-
 instance Show HscEnvEq where
   show HscEnvEq{envUnique} = "HscEnvEq " ++ show (Unique.hashUnique envUnique)
 
@@ -130,9 +92,9 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b c d _ _) =
+  rnf (HscEnvEq a b _ _) =
       -- deliberately skip the package exports map and visible module names
-      rnf (Unique.hashUnique a) `seq` b `seq` c `seq` rnf d
+      rnf (Unique.hashUnique a) `seq` rwhnf b
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique

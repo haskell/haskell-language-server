@@ -1,0 +1,6 @@
+1:8-20 TModule "TFunctionLet"
+3:1-2 TVariable "y"
+3:6-9 TTypeConstructor "Int"
+4:1-2 TVariable "y"
+4:9-10 TFunction "f"
+4:11-12 TVariable "x"

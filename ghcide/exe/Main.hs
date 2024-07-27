@@ -1,29 +1,24 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main(main) where
 
 import           Arguments                                (Arguments (..),
                                                            getArguments)
-import           Control.Monad.Extra                      (unless)
 import           Control.Monad.IO.Class                   (liftIO)
 import           Data.Default                             (def)
 import           Data.Function                            ((&))
 import           Data.Version                             (showVersion)
 import           Development.GitRev                       (gitHash)
-import           Development.IDE                          (action)
-import           Development.IDE.Core.OfInterest          (kick)
 import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
-import           Development.IDE.Core.Tracing             (withTelemetryLogger)
+import           Development.IDE.Core.Tracing             (withTelemetryRecorder)
 import qualified Development.IDE.Main                     as IDEMain
-import qualified Development.IDE.Monitoring.EKG           as EKG
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
-import           Development.IDE.Types.Logger             (Logger (Logger),
-                                                           LoggingColumn (DataColumn, PriorityColumn),
+import           Development.IDE.Types.Options
+import           Ide.Logger                               (LoggingColumn (..),
                                                            Pretty (pretty),
                                                            Priority (Debug, Error, Info),
                                                            WithPriority (WithPriority, priority),
@@ -33,16 +28,14 @@ import           Development.IDE.Types.Logger             (Logger (Logger),
                                                            layoutPretty,
                                                            makeDefaultStderrRecorder,
                                                            renderStrict)
-import qualified Development.IDE.Types.Logger             as Logger
-import           Development.IDE.Types.Options
-import           GHC.Stack                                (emptyCallStack)
+import qualified Ide.Logger                               as Logger
 import           Ide.Plugin.Config                        (Config (checkParents, checkProject))
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types                                (PluginDescriptor (pluginNotificationHandlers),
                                                            defaultPluginDescriptor,
                                                            mkPluginNotificationHandler)
+import           Language.LSP.Protocol.Message            as LSP
 import           Language.LSP.Server                      as LSP
-import           Language.LSP.Types                       as LSP
 import           Paths_ghcide                             (version)
 import qualified System.Directory.Extra                   as IO
 import           System.Environment                       (getExecutablePath)
@@ -73,11 +66,11 @@ ghcideVersion = do
              <> gitHashSection
 
 main :: IO ()
-main = withTelemetryLogger $ \telemetryLogger -> do
+main = withTelemetryRecorder $ \telemetryRecorder -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
       cmapWithPrio pretty
-      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Info
+      <$> makeDefaultStderrRecorder (Just [ThreadIdColumn, PriorityColumn, DataColumn])
 
     let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
@@ -94,14 +87,14 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
     let minPriority = if argsVerbose then Debug else Info
 
-    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) minPriority
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
 
     (lspLogRecorder, cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
     (lspMessageRecorder, cb2) <- Logger.withBacklog Logger.lspClientMessageRecorder
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
-    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
-          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SInitialized $ \_ _ _ _ -> do
+    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
               env <- LSP.getLspEnv
               liftIO $ (cb1 <> cb2) env
           }
@@ -111,32 +104,24 @@ main = withTelemetryLogger $ \telemetryLogger -> do
           (lspLogRecorder & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
                           & cfilter (\WithPriority{ priority } -> priority >= minPriority)) <>
           (lspMessageRecorder & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
-                              & cfilter (\WithPriority{ priority } -> priority >= Error))
-
-    -- exists so old-style logging works. intended to be phased out
-    let logger = Logger $ \p m -> Logger.logger_ docWithFilteredPriorityRecorder (WithPriority p emptyCallStack (pretty m))
+                              & cfilter (\WithPriority{ priority } -> priority >= Error)) <>
+          telemetryRecorder
 
     let recorder = docWithFilteredPriorityRecorder
                  & cmapWithPrio pretty
 
     let arguments =
           if argsTesting
-          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) logger
-          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) argsCwd hlsPlugins
+          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) argsCwd hlsPlugins
 
     IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
-        { IDEMain.argsProjectRoot = Just argsCwd
+        { IDEMain.argsProjectRoot = argsCwd
         , IDEMain.argCommand = argsCommand
-        , IDEMain.argsLogger = IDEMain.argsLogger arguments <> pure telemetryLogger
         , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins arguments <> pluginDescToIdePlugins [lspRecorderPlugin]
 
         , IDEMain.argsRules = do
-            -- install the main and ghcide-plugin rules
             mainRule (cmapWithPrio LogRules recorder) def
-            -- install the kick action, which triggers a typecheck on every
-            -- Shake database restart, i.e. on every user edit.
-            unless argsDisableKick $
-                action kick
 
         , IDEMain.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
@@ -149,5 +134,5 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                 , optRunSubset = not argsConservativeChangeTracking
                 , optVerifyCoreFile = argsVerifyCoreFile
                 }
-        , IDEMain.argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger argsMonitoringPort
+        , IDEMain.argsMonitoring = OpenTelemetry.monitoring
         }

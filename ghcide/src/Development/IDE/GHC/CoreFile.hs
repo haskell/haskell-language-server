@@ -1,6 +1,5 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | CoreFiles let us serialize Core to a file in order to later recover it
 -- without reparsing or retypechecking
@@ -10,7 +9,8 @@ module Development.IDE.GHC.CoreFile
   , typecheckCoreFile
   , readBinCoreFile
   , writeBinCoreFile
-  , getImplicitBinds) where
+  , getImplicitBinds
+  , occNamePrefixes) where
 
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -18,42 +18,21 @@ import           Data.Foldable
 import           Data.IORef
 import           Data.List                       (isPrefixOf)
 import           Data.Maybe
-import           GHC.Fingerprint
-
+import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat
-
-#if MIN_VERSION_ghc(9,0,0)
+import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.Core
 import           GHC.CoreToIface
+import           GHC.Fingerprint
 import           GHC.Iface.Binary
 import           GHC.Iface.Env
 import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
-import           GHC.Utils.Binary
-
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.TypeEnv
-#else
-import           GHC.Driver.Types
-#endif
+import           GHC.Utils.Binary
+import           Prelude                         hiding (mod)
 
-#else
-import           Binary
-import           BinFingerprint                  (fingerprintBinMem)
-import           BinIface
-import           CoreSyn
-import           HscTypes
-import           IdInfo
-import           IfaceEnv
-import           MkId
-import           TcIface
-import           ToIface
-import           Unique
-import           Var
-#endif
-
-import qualified Development.IDE.GHC.Compat.Util as Util
 
 -- | Initial ram buffer to allocate for writing interface files
 initBinMemSize :: Int
@@ -113,11 +92,7 @@ writeBinCoreFile core_path fat_iface = do
     bh <- openBinMem initBinMemSize
 
     let quietTrace =
-#if MIN_VERSION_ghc(9,2,0)
           QuietBinIFace
-#else
-          (const $ pure ())
-#endif
 
     putWithUserData quietTrace bh fat_iface
 
@@ -134,16 +109,21 @@ codeGutsToCoreFile
   :: Fingerprint -- ^ Hash of the interface this was generated from
   -> CgGuts
   -> CoreFile
-codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind cg_module) $ filter isNotImplictBind cg_binds) hash
+#if MIN_VERSION_ghc(9,5,0)
+-- In GHC 9.6, implicit binds are tidied and part of core binds
+codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) cg_binds) hash
+#else
+codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) $ filter isNotImplictBind cg_binds) hash
 
 -- | Implicit binds can be generated from the interface and are not tidied,
 -- so we must filter them out
 isNotImplictBind :: CoreBind -> Bool
-isNotImplictBind bind = any (not . isImplicitId) $ bindBindings bind
+isNotImplictBind bind = not . all isImplicitId $ bindBindings bind
 
 bindBindings :: CoreBind -> [Var]
 bindBindings (NonRec b _) = [b]
 bindBindings (Rec bnds)   = map fst bnds
+#endif
 
 getImplicitBinds :: TyCon -> [CoreBind]
 getImplicitBinds tc = cls_binds ++ getTyConImplicitBinds tc
@@ -161,23 +141,23 @@ getClassImplicitBinds cls
     | (op, val_index) <- classAllSelIds cls `zip` [0..] ]
 
 get_defn :: Id -> CoreBind
-get_defn id = NonRec id (unfoldingTemplate (realIdUnfolding id))
+get_defn identifier = NonRec identifier (unfoldingTemplate (realIdUnfolding identifier))
 
-toIfaceTopBndr :: Module -> Id -> IfaceId
-toIfaceTopBndr mod id
-  = IfaceId (mangleDeclName mod $ getName id)
-            (toIfaceType (idType id))
-            (toIfaceIdDetails (idDetails id))
-            (toIfaceIdInfo (idInfo id))
+toIfaceTopBndr1 :: Module -> Id -> IfaceId
+toIfaceTopBndr1 mod identifier
+  = IfaceId (mangleDeclName mod $ getName identifier)
+            (toIfaceType (idType identifier))
+            (toIfaceIdDetails (idDetails identifier))
+            (toIfaceIdInfo (idInfo identifier))
 
-toIfaceTopBind :: Module -> Bind Id -> TopIfaceBinding IfaceId
-toIfaceTopBind mod (NonRec b r) = TopIfaceNonRec (toIfaceTopBndr mod b) (toIfaceExpr r)
-toIfaceTopBind mod (Rec prs)    = TopIfaceRec [(toIfaceTopBndr mod b, toIfaceExpr r) | (b,r) <- prs]
+toIfaceTopBind1 :: Module -> Bind Id -> TopIfaceBinding IfaceId
+toIfaceTopBind1 mod (NonRec b r) = TopIfaceNonRec (toIfaceTopBndr1 mod b) (toIfaceExpr r)
+toIfaceTopBind1 mod (Rec prs)    = TopIfaceRec [(toIfaceTopBndr1 mod b, toIfaceExpr r) | (b,r) <- prs]
 
 typecheckCoreFile :: Module -> IORef TypeEnv -> CoreFile -> IfG CoreProgram
 typecheckCoreFile this_mod type_var (CoreFile prepd_binding _) =
   initIfaceLcl this_mod (text "typecheckCoreFile") NotBoot $ do
-    tcTopIfaceBindings type_var prepd_binding
+    tcTopIfaceBindings1 type_var prepd_binding
 
 -- | Internal names can't be serialized, so we mange them
 -- to an external name and restore at deserialization time
@@ -199,11 +179,11 @@ isGhcideModule mod = "GHCIDEINTERNAL" `isPrefixOf` (moduleNameString $ moduleNam
 isGhcideName :: Name -> Bool
 isGhcideName = isGhcideModule . nameModule
 
-tcTopIfaceBindings :: IORef TypeEnv -> [TopIfaceBinding IfaceId]
+tcTopIfaceBindings1 :: IORef TypeEnv -> [TopIfaceBinding IfaceId]
           -> IfL [CoreBind]
-tcTopIfaceBindings ty_var ver_decls
+tcTopIfaceBindings1 ty_var ver_decls
    = do
-     int <- mapM (traverse $ tcIfaceId) ver_decls
+     int <- mapM (traverse tcIfaceId) ver_decls
      let all_ids = concatMap toList int
      liftIO $ modifyIORef ty_var (flip extendTypeEnvList $ map AnId all_ids)
      extendIfaceIdEnv all_ids $ mapM tc_iface_bindings int
@@ -217,14 +197,57 @@ tcIfaceId = fmap getIfaceId . tcIfaceDecl False <=< unmangle_decl_name
         name' <- newIfaceName (mkVarOcc $ getOccString name)
         pure $ ifid{ ifName = name' }
       | otherwise = pure ifid
+    unmangle_decl_name _ifid = error "tcIfaceId: got non IfaceId: "
     -- invariant: 'IfaceId' is always a 'IfaceId' constructor
-    getIfaceId (AnId id) = id
-    getIfaceId _         = error "tcIfaceId: got non Id"
+    getIfaceId (AnId identifier) = identifier
+    getIfaceId _                 = error "tcIfaceId: got non Id"
 
 tc_iface_bindings :: TopIfaceBinding Id -> IfL CoreBind
 tc_iface_bindings (TopIfaceNonRec v e) = do
   e' <- tcIfaceExpr e
   pure $ NonRec v e'
 tc_iface_bindings (TopIfaceRec vs) = do
-  vs' <- traverse (\(v, e) -> (,) <$> pure v <*> tcIfaceExpr e) vs
+  vs' <- traverse (\(v, e) -> (v,) <$> tcIfaceExpr e) vs
   pure $ Rec vs'
+
+-- | Prefixes that can occur in a GHC OccName
+occNamePrefixes :: [T.Text]
+occNamePrefixes =
+  [
+    -- long ones
+    "$con2tag_"
+  , "$tag2con_"
+  , "$maxtag_"
+
+  -- four chars
+  , "$sel:"
+  , "$tc'"
+
+  -- three chars
+  , "$dm"
+  , "$co"
+  , "$tc"
+  , "$cp"
+  , "$fx"
+
+  -- two chars
+  , "$W"
+  , "$w"
+  , "$m"
+  , "$b"
+  , "$c"
+  , "$d"
+  , "$i"
+  , "$s"
+  , "$f"
+  , "$r"
+  , "C:"
+  , "N:"
+  , "D:"
+  , "$p"
+  , "$L"
+  , "$f"
+  , "$t"
+  , "$c"
+  , "$m"
+  ]

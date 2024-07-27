@@ -6,23 +6,26 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
--- See Note [Constraints]
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+
 
 module Ide.Plugin.Properties
   ( PropertyType (..),
     ToHsType,
+    NotElem,
     MetaData (..),
     PropertyKey (..),
     SPropertyKey (..),
     KeyNameProxy (..),
+    KeyNamePath (..),
     Properties,
     HasProperty,
+    HasPropertyByPath,
     emptyProperties,
     defineNumberProperty,
     defineIntegerProperty,
@@ -31,26 +34,29 @@ module Ide.Plugin.Properties
     defineObjectProperty,
     defineArrayProperty,
     defineEnumProperty,
+    definePropertiesProperty,
     toDefaultJSON,
     toVSCodeExtensionSchema,
     usePropertyEither,
     useProperty,
+    usePropertyByPathEither,
+    usePropertyByPath,
     (&),
   )
 where
 
+import           Control.Arrow        (first)
 import qualified Data.Aeson           as A
 import qualified Data.Aeson.Types     as A
 import           Data.Either          (fromRight)
 import           Data.Function        ((&))
 import           Data.Kind            (Constraint, Type)
-import qualified Data.Map.Strict      as Map
 import           Data.Proxy           (Proxy (..))
 import           Data.String          (IsString (fromString))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
-import           Unsafe.Coerce        (unsafeCoerce)
+
 
 -- | Types properties may have
 data PropertyType
@@ -61,6 +67,7 @@ data PropertyType
   | TObject Type
   | TArray Type
   | TEnum Type
+  | TProperties [PropertyKey] -- ^ A typed TObject, defined in a recursive manner
 
 type family ToHsType (t :: PropertyType) where
   ToHsType 'TNumber = Double -- in js, there are no distinct types for integers and floating-point values
@@ -70,13 +77,14 @@ type family ToHsType (t :: PropertyType) where
   ToHsType ('TObject a) = a
   ToHsType ('TArray a) = [a]
   ToHsType ('TEnum a) = a
+  ToHsType ('TProperties _) = A.Object
 
 -- ---------------------------------------------------------------------
 
 -- | Metadata of a property
 data MetaData (t :: PropertyType) where
   MetaData ::
-    (IsTEnum t ~ 'False) =>
+    (IsTEnum t ~ 'False, IsProperties t ~ 'False) =>
     { defaultValue :: ToHsType t,
       description :: T.Text
     } ->
@@ -89,6 +97,15 @@ data MetaData (t :: PropertyType) where
       enumDescriptions :: [T.Text]
     } ->
     MetaData t
+  PropertiesMetaData ::
+    (t ~ TProperties rs) =>
+    {
+      defaultValue :: ToHsType t
+      , description :: T.Text
+      , childrenProperties :: Properties rs
+    } ->
+    MetaData t
+
 
 -- | Used at type level for name-type mapping in 'Properties'
 data PropertyKey = PropertyKey Symbol PropertyType
@@ -102,6 +119,7 @@ data SPropertyKey (k :: PropertyKey) where
   SObject :: (A.ToJSON a, A.FromJSON a) => Proxy a -> SPropertyKey ('PropertyKey s ('TObject a))
   SArray :: (A.ToJSON a, A.FromJSON a) => Proxy a -> SPropertyKey ('PropertyKey s ('TArray a))
   SEnum :: (A.ToJSON a, A.FromJSON a, Eq a, Show a) => Proxy a -> SPropertyKey ('PropertyKey s ('TEnum a))
+  SProperties :: SPropertyKey ('PropertyKey s ('TProperties pp))
 
 -- | Existential wrapper of 'SPropertyKey', with an extra 'MetaData'
 data SomePropertyKeyWithMetaData
@@ -110,11 +128,14 @@ data SomePropertyKeyWithMetaData
     SomePropertyKeyWithMetaData (SPropertyKey k) (MetaData t)
 
 -- | 'Properties' is a partial implementation of json schema, without supporting union types and validation.
--- In hls, it defines a set of properties which used in dedicated configuration of a plugin.
+-- In hls, it defines a set of properties used in dedicated configuration of a plugin.
 -- A property is an immediate child of the json object in each plugin's "config" section.
 -- It was designed to be compatible with vscode's settings UI.
 -- Use 'emptyProperties' and 'useProperty' to create and consume 'Properties'.
-newtype Properties (r :: [PropertyKey]) = Properties (Map.Map String SomePropertyKeyWithMetaData)
+data Properties (r :: [PropertyKey]) where
+    ConsProperties :: (k ~ 'PropertyKey s t, KnownSymbol s, NotElem s ks)
+        => KeyNameProxy s -> (SPropertyKey k) -> (MetaData t) -> Properties ks -> Properties (k : ks)
+    EmptyProperties :: Properties '[]
 
 -- | A proxy type in order to allow overloaded labels as properties' names at the call site
 data KeyNameProxy (s :: Symbol) = KnownSymbol s => KeyNameProxy
@@ -122,15 +143,60 @@ data KeyNameProxy (s :: Symbol) = KnownSymbol s => KeyNameProxy
 instance (KnownSymbol s', s ~ s') => IsLabel s (KeyNameProxy s') where
   fromLabel = KeyNameProxy
 
+data NonEmptyList a =
+    a :| NonEmptyList a | NE a
+
+-- | a path to a property in a json object
+data KeyNamePath (r :: NonEmptyList Symbol) where
+   SingleKey :: KeyNameProxy s -> KeyNamePath (NE s)
+   ConsKeysPath :: KeyNameProxy s1 -> KeyNamePath ss -> KeyNamePath (s1 :| ss)
+
+class ParsePropertyPath (rs :: [PropertyKey]) (r :: NonEmptyList Symbol) where
+    usePropertyByPathEither :: KeyNamePath r -> Properties rs -> A.Object -> Either String (ToHsType (FindByKeyPath r rs))
+    useDefault :: KeyNamePath r -> Properties rs -> ToHsType (FindByKeyPath r rs)
+    usePropertyByPath :: KeyNamePath r -> Properties rs -> A.Object -> ToHsType (FindByKeyPath r rs)
+    usePropertyByPath p ps x = fromRight (useDefault p ps) $ usePropertyByPathEither p ps x
+
+instance (HasProperty s k t r) => ParsePropertyPath r (NE s) where
+    usePropertyByPathEither (SingleKey kn) sm x = parseProperty kn (find kn sm) x
+    useDefault (SingleKey kn) sm = defaultValue metadata
+        where (_, metadata) = find kn sm
+
+instance ( ToHsType (FindByKeyPath ss r2) ~ ToHsType (FindByKeyPath (s :| ss) r)
+          ,HasProperty s ('PropertyKey s ('TProperties r2)) t2 r
+          , ParsePropertyPath r2 ss)
+          => ParsePropertyPath r (s :| ss) where
+    usePropertyByPathEither (ConsKeysPath kn p) sm x = do
+        let (key, meta) = find kn sm
+        interMedia <- parseProperty kn (key, meta) x
+        case meta of
+            PropertiesMetaData {..}
+                -> usePropertyByPathEither p childrenProperties interMedia
+    useDefault (ConsKeysPath kn p) sm = case find kn sm of
+            (_, PropertiesMetaData {..}) -> useDefault p childrenProperties
+
 -- ---------------------------------------------------------------------
+
+type family IsProperties (t :: PropertyType) :: Bool where
+  IsProperties ('TProperties pp) = 'True
+  IsProperties _ = 'False
 
 type family IsTEnum (t :: PropertyType) :: Bool where
   IsTEnum ('TEnum _) = 'True
   IsTEnum _ = 'False
 
+type family FindByKeyPath (ne :: NonEmptyList Symbol) (r :: [PropertyKey]) :: PropertyType where
+  FindByKeyPath (s :| xs) ('PropertyKey s ('TProperties rs) ': _) = FindByKeyPath xs rs
+  FindByKeyPath (s :| xs) (_ ': ys) = FindByKeyPath (s :| xs) ys
+  FindByKeyPath (NE s) ys = FindByKeyName s ys
+
 type family FindByKeyName (s :: Symbol) (r :: [PropertyKey]) :: PropertyType where
   FindByKeyName s ('PropertyKey s t ': _) = t
   FindByKeyName s (_ ': xs) = FindByKeyName s xs
+
+type family IsPropertySymbol (s :: Symbol) (r :: PropertyKey) :: Bool where
+    IsPropertySymbol s ('PropertyKey s _) = 'True
+    IsPropertySymbol s _ = 'False
 
 type family Elem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
   Elem s ('PropertyKey s _ ': _) = ()
@@ -142,8 +208,21 @@ type family NotElem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
   NotElem s (_ ': xs) = NotElem s xs
   NotElem s '[] = ()
 
+
 -- | In row @r@, there is a 'PropertyKey' @k@, which has name @s@ and carries haskell type @t@
-type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ t, KnownSymbol s)
+type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyPath (NE s) r ~ t, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
+-- similar to HasProperty, but the path is given as a type-level list of symbols
+type HasPropertyByPath props path t = (t ~ FindByKeyPath path props, ParsePropertyPath props path)
+class FindPropertyMeta (s :: Symbol) (r :: [PropertyKey]) t where
+   findSomePropertyKeyWithMetaData :: KeyNameProxy s -> Properties r -> (SPropertyKey ('PropertyKey s t), MetaData t)
+instance (FindPropertyMetaIf (IsPropertySymbol symbol k) symbol k ks t) => FindPropertyMeta symbol (k : ks) t where
+  findSomePropertyKeyWithMetaData = findSomePropertyKeyWithMetaDataIf
+class (bool ~ IsPropertySymbol symbol k) => FindPropertyMetaIf bool symbol k ks t where
+  findSomePropertyKeyWithMetaDataIf :: KeyNameProxy symbol -> Properties (k : ks) -> (SPropertyKey ('PropertyKey symbol t), MetaData t)
+instance (k ~ 'PropertyKey s t) => FindPropertyMetaIf 'True s k ks t where
+  findSomePropertyKeyWithMetaDataIf _ (ConsProperties _ k m _) = (k, m)
+instance ('False ~ IsPropertySymbol s k, FindPropertyMeta s ks t) => FindPropertyMetaIf 'False s k ks t where
+  findSomePropertyKeyWithMetaDataIf s (ConsProperties _ _ _ ks) = findSomePropertyKeyWithMetaData s ks
 
 -- ---------------------------------------------------------------------
 
@@ -164,7 +243,7 @@ type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ 
 -- @
 
 emptyProperties :: Properties '[]
-emptyProperties = Properties Map.empty
+emptyProperties = EmptyProperties
 
 insert ::
   (k ~ 'PropertyKey s t, NotElem s r, KnownSymbol s) =>
@@ -173,30 +252,14 @@ insert ::
   MetaData t ->
   Properties r ->
   Properties (k ': r)
-insert kn key metadata (Properties old) =
-  Properties
-    ( Map.insert
-        (symbolVal kn)
-        (SomePropertyKeyWithMetaData key metadata)
-        old
-    )
+insert = ConsProperties
 
 find ::
   (HasProperty s k t r) =>
   KeyNameProxy s ->
   Properties r ->
   (SPropertyKey k, MetaData t)
-find kn (Properties p) = case p Map.! symbolVal kn of
-  (SomePropertyKeyWithMetaData sing metadata) ->
-    -- Note [Constraints]
-    -- It's safe to use unsafeCoerce here:
-    --   Since each property name is unique that the redefinition will be prevented by predication on the type level list,
-    --   the value we get from the name-indexed map must be exactly the singleton and metadata corresponding to the type.
-    -- We drop this information at type level: some of the above type families return '() :: Constraint',
-    -- so GHC will consider them as redundant.
-    -- But we encode it using semantically identical 'Map' at term level,
-    -- which avoids inducting on the list by defining a new type class.
-    unsafeCoerce (sing, metadata)
+find = findSomePropertyKeyWithMetaData
 
 -- ---------------------------------------------------------------------
 
@@ -227,6 +290,7 @@ parseProperty ::
   A.Object ->
   Either String (ToHsType t)
 parseProperty kn k x = case k of
+  (SProperties, _) -> parseEither
   (SNumber, _) -> parseEither
   (SInteger, _) -> parseEither
   (SString, _) -> parseEither
@@ -346,11 +410,24 @@ defineEnumProperty ::
 defineEnumProperty kn description enums defaultValue =
   insert kn (SEnum Proxy) $ EnumMetaData defaultValue description (fst <$> enums) (snd <$> enums)
 
+definePropertiesProperty ::
+  (KnownSymbol s, NotElem s r) =>
+  KeyNameProxy s ->
+  T.Text ->
+  Properties childrenProps ->
+  Properties r ->
+  Properties ('PropertyKey s ('TProperties childrenProps) : r)
+definePropertiesProperty kn description ps rs =
+    insert kn SProperties (PropertiesMetaData mempty description ps) rs
+
 -- ---------------------------------------------------------------------
 
 -- | Converts a properties definition into kv pairs with default values from 'MetaData'
 toDefaultJSON :: Properties r -> [A.Pair]
-toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
+toDefaultJSON pr = case pr of
+    EmptyProperties -> []
+    ConsProperties keyNameProxy k m xs ->
+        toEntry (symbolVal keyNameProxy) (SomePropertyKeyWithMetaData k m) : toDefaultJSON xs
   where
     toEntry :: String -> SomePropertyKeyWithMetaData -> A.Pair
     toEntry s = \case
@@ -368,58 +445,68 @@ toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
         fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData (SEnum _) EnumMetaData {..}) ->
         fromString s A..= defaultValue
+      (SomePropertyKeyWithMetaData SProperties  PropertiesMetaData {..}) ->
+        fromString s A..= A.object (toDefaultJSON childrenProperties)
 
 -- | Converts a properties definition into kv pairs as vscode schema
 toVSCodeExtensionSchema :: T.Text -> Properties r -> [A.Pair]
-toVSCodeExtensionSchema prefix (Properties p) =
-  [fromString (T.unpack prefix <> k) A..= toEntry v | (k, v) <- Map.toList p]
+toVSCodeExtensionSchema prefix p = [fromString (T.unpack prefix <> fromString k) A..= v | (k, v) <- toVSCodeExtensionSchema' p]
+toVSCodeExtensionSchema' :: Properties r -> [(String, A.Value)]
+toVSCodeExtensionSchema' ps = case ps of
+    EmptyProperties -> []
+    ConsProperties (keyNameProxy :: KeyNameProxy s) (k :: SPropertyKey k) (m :: MetaData t) xs ->
+          [(symbolVal keyNameProxy <> maybe "" ((<>) ".") k1, v)
+            | (k1, v) <- toEntry (SomePropertyKeyWithMetaData k m) ]
+          ++ toVSCodeExtensionSchema' xs
   where
-    toEntry :: SomePropertyKeyWithMetaData -> A.Value
+    wrapEmpty :: A.Value -> [(Maybe String, A.Value)]
+    wrapEmpty v = [(Nothing, v)]
+    toEntry :: SomePropertyKeyWithMetaData -> [(Maybe String, A.Value)]
     toEntry = \case
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "number",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
       (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "integer",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
       (SomePropertyKeyWithMetaData SString MetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "string",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
       (SomePropertyKeyWithMetaData SBoolean MetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "boolean",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
       (SomePropertyKeyWithMetaData (SObject _) MetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "object",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
       (SomePropertyKeyWithMetaData (SArray _) MetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "array",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
       (SomePropertyKeyWithMetaData (SEnum _) EnumMetaData {..}) ->
-        A.object
+        wrapEmpty $ A.object
           [ "type" A..= A.String "string",
             "description" A..= description,
             "enum" A..= enumValues,
@@ -427,3 +514,5 @@ toVSCodeExtensionSchema prefix (Properties p) =
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
+      (SomePropertyKeyWithMetaData SProperties PropertiesMetaData {..}) ->
+        map (first Just) $ toVSCodeExtensionSchema' childrenProperties

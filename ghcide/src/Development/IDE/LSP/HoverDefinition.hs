@@ -1,13 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 
 -- | Display information on hover.
 module Development.IDE.LSP.HoverDefinition
-    (
+    ( Log(..)
     -- * For haskell-language-server
-    hover
+    , hover
     , gotoDefinition
     , gotoTypeDefinition
     , documentHighlight
@@ -15,45 +14,58 @@ module Development.IDE.LSP.HoverDefinition
     , wsSymbols
     ) where
 
+import           Control.Monad.Except           (ExceptT)
 import           Control.Monad.IO.Class
+import           Data.Maybe                     (fromMaybe)
 import           Development.IDE.Core.Actions
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.Shake
+import qualified Development.IDE.Core.Rules     as Shake
+import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
+                                                 runIdeAction)
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
-import qualified Language.LSP.Server            as LSP
-import           Language.LSP.Types
+import           Ide.Logger
+import           Ide.Plugin.Error
+import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 
 import qualified Data.Text                      as T
 
-gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentDefinition))
-hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Maybe Hover))
-gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentTypeDefinition))
-documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (List DocumentHighlight))
-gotoDefinition = request "Definition" getDefinition (InR $ InL $ List []) (InR . InL . List)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InL $ List []) (InR . InL . List)
-hover          = request "Hover"      getAtPoint     Nothing      foundHover
-documentHighlight = request "DocumentHighlight" highlightAtPoint (List []) List
 
-references :: IdeState -> ReferenceParams -> LSP.LspM c (Either ResponseError (List Location))
-references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO $
-  case uriToFilePath' uri of
-    Just path -> do
-      let filePath = toNormalizedFilePath' path
-      logDebug (ideLogger ide) $
-        "References request at position " <> T.pack (showPosition pos) <>
-        " in file: " <> T.pack path
-      Right . List <$> (runAction "references" ide $ refsAtPoint filePath pos)
-    Nothing -> pure $ Left $ ResponseError InvalidParams ("Invalid URI " <> T.pack (show uri)) Nothing
+data Log
+  = LogWorkspaceSymbolRequest !T.Text
+  | LogRequest !T.Text !Position !NormalizedFilePath
+  deriving (Show)
 
-wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError (List SymbolInformation))
-wsSymbols ide (WorkspaceSymbolParams _ _ query) = liftIO $ do
-  logDebug (ideLogger ide) $ "Workspace symbols request: " <> query
-  runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ Right . maybe (List []) List <$> workspaceSymbols query
+instance Pretty Log where
+  pretty = \case
+    LogWorkspaceSymbolRequest query -> "Workspace symbols request:" <+> pretty query
+    LogRequest label pos nfp ->
+      pretty label <+> "request at position" <+> pretty (showPosition pos) <+>
+        "in file:" <+> pretty (fromNormalizedFilePath nfp)
 
-foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
+gotoDefinition     :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentDefinition)
+hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (Hover |? Null)
+gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
+documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
+gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
+gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)
+hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
+documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
+
+references :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentReferences
+references recorder ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
+  nfp <- getNormalizedFilePathE uri
+  liftIO $ logWith recorder Debug $ LogRequest "References" pos nfp
+  InL <$> (liftIO $ Shake.runAction "references" ide $ refsAtPoint nfp pos)
+
+wsSymbols :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_WorkspaceSymbol
+wsSymbols recorder ide _ (WorkspaceSymbolParams _ _ query) = liftIO $ do
+  logWith recorder Debug $ LogWorkspaceSymbolRequest query
+  runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ InL . fromMaybe [] <$> workspaceSymbols query
+
+foundHover :: (Maybe Range, [T.Text]) -> Hover |? Null
 foundHover (mbRange, contents) =
-  Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
+  InL $ Hover (InL $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator contents) mbRange
 
 -- | Respond to and log a hover or go-to-definition request
 request
@@ -61,19 +73,18 @@ request
   -> (NormalizedFilePath -> Position -> IdeAction (Maybe a))
   -> b
   -> (a -> b)
+  -> Recorder (WithPriority Log)
   -> IdeState
   -> TextDocumentPositionParams
-  -> LSP.LspM c (Either ResponseError b)
-request label getResults notFound found ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
+  -> ExceptT PluginError (HandlerM c) b
+request label getResults notFound found recorder ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
     mbResult <- case uriToFilePath' uri of
-        Just path -> logAndRunRequest label getResults ide pos path
+        Just path -> logAndRunRequest recorder label getResults ide pos path
         Nothing   -> pure Nothing
-    pure $ Right $ maybe notFound found mbResult
+    pure $ maybe notFound found mbResult
 
-logAndRunRequest :: T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> String -> IO b
-logAndRunRequest label getResults ide pos path = do
+logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> String -> IO b
+logAndRunRequest recorder label getResults ide pos path = do
   let filePath = toNormalizedFilePath' path
-  logDebug (ideLogger ide) $
-    label <> " request at position " <> T.pack (showPosition pos) <>
-    " in file: " <> T.pack path
+  logWith recorder Debug $ LogRequest label pos filePath
   runIdeAction (T.unpack label) (shakeExtras ide) (getResults filePath pos)

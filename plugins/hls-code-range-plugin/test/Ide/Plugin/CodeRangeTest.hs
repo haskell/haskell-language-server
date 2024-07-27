@@ -6,7 +6,6 @@ import qualified Data.Vector                as V
 import           Ide.Plugin.CodeRange
 import           Ide.Plugin.CodeRange.Rules
 import           Test.Hls
-import           Test.Tasty.HUnit
 
 testTree :: TestTree
 testTree =
@@ -73,17 +72,17 @@ testTree =
                     (mkCodeRange (Position 1 1) (Position 5 10) [
                         mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindRegion
                     ] CodeKindRegion)
-                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion)],
+                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeKind_Region) Nothing],
                 testCase "Test Code Kind Comment" $ check
                     (mkCodeRange (Position 1 1) (Position 5 10) [
                         mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindComment
                     ] CodeKindRegion)
-                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeComment)],
+                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeKind_Comment) Nothing],
                 testCase "Test Code Kind Import" $ check
                     (mkCodeRange (Position 1 1) (Position 5 10) [
                         mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindImports
                     ] CodeKindRegion)
-                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeImports)],
+                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeKind_Imports) Nothing],
 
                 -- Test for Code Portions with children
                 testCase "Test Children" $ check
@@ -93,9 +92,9 @@ testTree =
                         ] CodeKindRegion,
                         mkCodeRange (Position 3 7) (Position 5 10) [] CodeKindRegion
                     ] CodeKindRegion)
-                    [ FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
-                        FoldingRange 1 (Just 3) 1 (Just 5) (Just FoldingRangeRegion),
-                        FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)
+                    [ FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeKind_Region) Nothing,
+                        FoldingRange 1 (Just 3) 1 (Just 5) (Just FoldingRangeKind_Region) Nothing,
+                        FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeKind_Region) Nothing
                     ]
             ],
 
@@ -109,10 +108,10 @@ testTree =
             -- General tests
             testCase "Test General Code Block" $ check
                 (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
-                (Just (FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion))),
+                (Just (FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeKind_Region) Nothing)),
             -- If a range has the same start and end line it need not be folded so Nothing is expected
             testCase "Test Same Start Line" $ check
                 (mkCodeRange (Position 1 1) (Position 1 10) [] CodeKindRegion)
-                (Just (FoldingRange 1 (Just 1) 1 (Just 10) (Just FoldingRangeRegion)))
+                (Just (FoldingRange 1 (Just 1) 1 (Just 10) (Just FoldingRangeKind_Region) Nothing))
         ]
     ]

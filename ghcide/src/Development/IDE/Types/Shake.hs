@@ -1,20 +1,18 @@
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE PatternSynonyms           #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE PatternSynonyms    #-}
+{-# LANGUAGE TypeFamilies       #-}
 module Development.IDE.Types.Shake
   ( Q (..),
     A (..),
     Value (..),
     ValueWithDiagnostics (..),
     Values,
-    Key (..),
+    Key,
     BadDependency (..),
     ShakeValue(..),
     currentValue,
     isBadDependency,
-  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType,WithHieDb)
+  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType,WithHieDb,WithHieDbShield(..))
 where
 
 import           Control.DeepSeq
@@ -26,7 +24,8 @@ import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes       (FileVersion)
-import           Development.IDE.Graph                (Key (..), RuleResult, newKey)
+import           Development.IDE.Graph                (Key, RuleResult, newKey,
+                                                       pattern Key)
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
@@ -42,6 +41,9 @@ import           Unsafe.Coerce                        (unsafeCoerce)
 -- | Intended to represent HieDb calls wrapped with (currently) retry
 -- functionality
 type WithHieDb = forall a. (HieDb -> IO a) -> IO a
+
+-- used to smuggle RankNType WithHieDb through dbMVar
+newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 data Value v
     = Succeeded (Maybe FileVersion) v

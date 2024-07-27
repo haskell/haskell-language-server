@@ -6,6 +6,7 @@ module Development.IDE.Core.FileUtils(
 
 
 import           Data.Time.Clock.POSIX
+
 #ifdef mingw32_HOST_OS
 import qualified System.Directory      as Dir
 #else

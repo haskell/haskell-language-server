@@ -1,31 +1,41 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE GADTs                    #-}
-{-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE NamedFieldPuns           #-}
-{-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE PolyKinds                #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedLists       #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
     module Test.Tasty.ExpectedFailure,
     module Test.Hls.Util,
-    module Language.LSP.Types,
+    module Language.LSP.Protocol.Types,
+    module Language.LSP.Protocol.Message,
     module Language.LSP.Test,
     module Control.Monad.IO.Class,
     module Control.Applicative.Combinators,
     defaultTestRunner,
     goldenGitDiff,
     goldenWithHaskellDoc,
+    goldenWithHaskellDocInTmpDir,
+    goldenWithHaskellAndCaps,
+    goldenWithHaskellAndCapsInTmpDir,
     goldenWithCabalDoc,
     goldenWithHaskellDocFormatter,
+    goldenWithHaskellDocFormatterInTmpDir,
     goldenWithCabalDocFormatter,
+    goldenWithCabalDocFormatterInTmpDir,
+    goldenWithTestConfig,
     def,
     -- * Running HLS for integration tests
     runSessionWithServer,
-    runSessionWithServerAndCaps,
-    runSessionWithServerFormatter,
-    runSessionWithCabalServerFormatter,
-    runSessionWithServer',
+    runSessionWithServerInTmpDir,
+    runSessionWithTestConfig,
+    -- * Running parameterised tests for a set of test configurations
+    parameterisedCursorTest,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -33,15 +43,17 @@ module Test.Hls
     waitForProgressDone,
     waitForAllProgressDone,
     waitForBuildQueue,
+    waitForProgressBegin,
     waitForTypecheck,
     waitForAction,
-    sendConfigurationChanged,
+    hlsConfigToClientConfig,
+    setHlsConfig,
     getLastBuildKeys,
     waitForKickDone,
     waitForKickStart,
     -- * Plugin descriptor helper functions for tests
     PluginTestDescriptor,
-    pluginTestRecorder,
+    hlsPluginTestRecorder,
     mkPluginTestDescriptor,
     mkPluginTestDescriptor',
     -- * Re-export logger types
@@ -49,81 +61,110 @@ module Test.Hls
     WithPriority(..),
     Recorder,
     Priority(..),
+    TestConfig(..),
     )
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Async        (async, cancel, wait)
+import           Control.Concurrent.Async                 (async, cancel, wait)
 import           Control.Concurrent.Extra
-import           Control.Exception.Base
-import           Control.Monad                   (guard, unless, void)
-import           Control.Monad.Extra             (forM)
+import           Control.Exception.Safe
+import           Control.Lens.Extras                      (is)
+import           Control.Monad                            (guard, unless, void)
+import           Control.Monad.Extra                      (forM)
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Result (Success),
-                                                  Value (Null), fromJSON,
-                                                  toJSON)
-import qualified Data.Aeson                      as A
-import           Data.ByteString.Lazy            (ByteString)
-import           Data.Default                    (def)
-import qualified Data.Map                        as M
-import           Data.Maybe                      (fromMaybe)
-import qualified Data.Text                       as T
-import qualified Data.Text.Lazy                  as TL
-import qualified Data.Text.Lazy.Encoding         as TL
-import           Development.IDE                 (IdeState)
-import           Development.IDE.Main            hiding (Log)
-import qualified Development.IDE.Main            as Ghcide
-import qualified Development.IDE.Main            as IDEMain
-import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
-                                                  WaitForIdeRuleResult (ideResultSuccess))
-import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
-                                                  Pretty (pretty),
-                                                  Priority (Debug),
-                                                  Recorder (Recorder, logger_),
-                                                  WithPriority (WithPriority, priority),
-                                                  cfilter, cmapWithPrio,
-                                                  makeDefaultStderrRecorder)
+import           Data.Aeson                               (Result (Success),
+                                                           Value (Null),
+                                                           fromJSON, toJSON)
+import qualified Data.Aeson                               as A
+import           Data.ByteString.Lazy                     (ByteString)
+import           Data.Default                             (Default, def)
+import qualified Data.Map                                 as M
+import           Data.Maybe                               (fromMaybe)
+import           Data.Proxy                               (Proxy (Proxy))
+import qualified Data.Text                                as T
+import qualified Data.Text.Lazy                           as TL
+import qualified Data.Text.Lazy.Encoding                  as TL
+import           Development.IDE                          (IdeState,
+                                                           LoggingColumn (ThreadIdColumn),
+                                                           defaultLayoutOptions,
+                                                           layoutPretty,
+                                                           renderStrict)
+import           Development.IDE.Main                     hiding (Log)
+import qualified Development.IDE.Main                     as IDEMain
+import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo)
+import           Development.IDE.Plugin.Test              (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
+                                                           WaitForIdeRuleResult (ideResultSuccess))
+import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
-import           GHC.Stack                       (emptyCallStack)
-import           Ide.Plugin.Config               (Config, PluginConfig,
-                                                  cabalFormattingProvider,
-                                                  formattingProvider, plugins)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc,
-                                                  pluginDescToIdePlugins)
+import           GHC.TypeLits
+import           Ide.Logger                               (Pretty (pretty),
+                                                           Priority (..),
+                                                           Recorder,
+                                                           WithPriority (WithPriority, priority),
+                                                           cfilter,
+                                                           cmapWithPrio,
+                                                           defaultLoggingColumns,
+                                                           logWith,
+                                                           makeDefaultStderrRecorder,
+                                                           (<+>))
+import qualified Ide.Logger                               as Logger
+import           Ide.PluginUtils                          (idePluginsToPluginDesc,
+                                                           pluginDescToIdePlugins)
 import           Ide.Types
+import           Language.LSP.Protocol.Capabilities
+import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Message            as LSP
+import           Language.LSP.Protocol.Types              hiding (Null)
+import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities (ClientCapabilities)
-import           Prelude                         hiding (log)
-import           System.Directory                (getCurrentDirectory,
-                                                  setCurrentDirectory)
-import           System.Environment              (lookupEnv)
+import           Prelude                                  hiding (log)
+import           System.Directory                         (canonicalizePath,
+                                                           createDirectoryIfMissing,
+                                                           getCurrentDirectory,
+                                                           getTemporaryDirectory,
+                                                           makeAbsolute,
+                                                           setCurrentDirectory)
+import           System.Environment                       (lookupEnv, setEnv)
 import           System.FilePath
-import           System.IO.Unsafe                (unsafePerformIO)
-import           System.Process.Extra            (createPipe)
+import           System.IO.Extra                          (newTempDirWithin)
+import           System.IO.Unsafe                         (unsafePerformIO)
+import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
+import qualified Test.Hls.FileSystem                      as FS
+import           Test.Hls.FileSystem
 import           Test.Hls.Util
-import           Test.Tasty                      hiding (Timeout)
+import           Test.Tasty                               hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners              (NumThreads (..))
 
-newtype Log = LogIDEMain IDEMain.Log
+data Log
+  = LogIDEMain IDEMain.Log
+  | LogTestHarness LogTestHarness
 
 instance Pretty Log where
   pretty = \case
-    LogIDEMain log -> pretty log
+    LogIDEMain log     -> pretty log
+    LogTestHarness log -> pretty log
+
+data LogTestHarness
+  = LogTestDir FilePath
+  | LogCleanup
+  | LogNoCleanup
+
+
+instance Pretty LogTestHarness where
+  pretty = \case
+    LogTestDir dir -> "Test Project located in directory:" <+> pretty dir
+    LogCleanup     -> "Cleaned up temporary directory"
+    LogNoCleanup   -> "No cleanup of temporary directory"
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithRerun . adjustOption (const $ NumThreads 1) . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -133,31 +174,7 @@ goldenGitDiff name = goldenVsStringDiff name gitDiff
 
 goldenWithHaskellDoc
   :: Pretty b
-  => PluginTestDescriptor b
-  -> TestName
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> (TextDocumentIdentifier -> Session ())
-  -> TestTree
-goldenWithHaskellDoc = goldenWithDoc "haskell"
-
-goldenWithCabalDoc
-  :: Pretty b
-  => PluginTestDescriptor b
-  -> TestName
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> (TextDocumentIdentifier -> Session ())
-  -> TestTree
-goldenWithCabalDoc = goldenWithDoc "cabal"
-
-goldenWithDoc
-  :: Pretty b
-  => T.Text
+  => Config
   -> PluginTestDescriptor b
   -> TestName
   -> FilePath
@@ -166,22 +183,211 @@ goldenWithDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithDoc fileType plugin title testDataDir path desc ext act =
+goldenWithHaskellDoc = goldenWithDoc LanguageKind_Haskell
+
+goldenWithHaskellDocInTmpDir
+  :: Pretty b
+  => Config
+  -> PluginTestDescriptor b
+  -> TestName
+  -> VirtualFileTree
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDocInTmpDir = goldenWithDocInTmpDir LanguageKind_Haskell
+
+goldenWithHaskellAndCaps
+  :: Pretty b
+  => Config
+  -> ClientCapabilities
+  -> PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellAndCaps config clientCaps plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServer plugin testDataDir
+  $ runSessionWithTestConfig def {
+    testDirLocation = Left testDataDir,
+    testConfigCaps = clientCaps,
+    testLspConfig = config,
+    testPluginDescriptor = plugin
+  }
+  $ const
+--   runSessionWithServerAndCaps config plugin clientCaps testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
-    doc <- openDoc (path <.> ext) fileType
+    doc <- openDoc (path <.> ext) "haskell"
     void waitForBuildQueue
     act doc
     documentContents doc
+
+goldenWithTestConfig
+  :: Pretty b
+  => TestConfig b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithTestConfig config title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithTestConfig config $ const
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
+
+goldenWithHaskellAndCapsInTmpDir
+  :: Pretty b
+  => Config
+  -> ClientCapabilities
+  -> PluginTestDescriptor b
+  -> TestName
+  -> VirtualFileTree
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellAndCapsInTmpDir config clientCaps plugin title tree path desc ext act =
+  goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
+  $
+  runSessionWithTestConfig def {
+    testDirLocation = Right tree,
+    testConfigCaps = clientCaps,
+    testLspConfig = config,
+    testPluginDescriptor = plugin
+  } $ const
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
+
+goldenWithCabalDoc
+  :: Pretty b
+  => Config
+  -> PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithCabalDoc = goldenWithDoc (LanguageKind_Custom "cabal")
+
+goldenWithDoc
+  :: Pretty b
+  => LanguageKind
+  -> Config
+  -> PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithDoc languageKind config plugin title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer config plugin testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) languageKind
+    void waitForBuildQueue
+    act doc
+    documentContents doc
+
+goldenWithDocInTmpDir
+  :: Pretty b
+  => LanguageKind
+  -> Config
+  -> PluginTestDescriptor b
+  -> TestName
+  -> VirtualFileTree
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
+  goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
+  $ runSessionWithServerInTmpDir config plugin tree
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) languageKind
+    void waitForBuildQueue
+    act doc
+    documentContents doc
+
+-- | A parameterised test is similar to a normal test case but allows to run
+-- the same test case multiple times with different inputs.
+-- A 'parameterisedCursorTest' allows to define a test case based on an input file
+-- that specifies one or many cursor positions via the identification value '^'.
+--
+-- For example:
+--
+-- @
+--  parameterisedCursorTest "Cursor Test" [trimming|
+--       foo = 2
+--        ^
+--       bar = 3
+--       baz = foo + bar
+--         ^
+--       |]
+--       ["foo", "baz"]
+--       (\input cursor -> findFunctionNameUnderCursor input cursor)
+-- @
+--
+-- Assuming a fitting implementation for 'findFunctionNameUnderCursor'.
+--
+-- This test definition will run the test case 'findFunctionNameUnderCursor' for
+-- each cursor position, each in its own isolated 'testCase'.
+-- Cursor positions are identified via the character '^', which points to the
+-- above line as the actual cursor position.
+-- Lines containing '^' characters, are removed from the final text, that is
+-- passed to the testing function.
+--
+-- TODO: Many Haskell and Cabal source may contain '^' characters for good reasons.
+-- We likely need a way to change the character for certain test cases in the future.
+--
+-- The quasi quoter 'trimming' is very helpful to define such tests, as it additionally
+-- allows to interpolate haskell values and functions. We reexport this quasi quoter
+-- for easier usage.
+parameterisedCursorTest :: (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
+parameterisedCursorTest title content expectations act
+  | lenPrefs /= lenExpected = error $ "parameterisedCursorTest: Expected " <> show lenExpected <> " cursors but found: " <> show lenPrefs
+  | otherwise = testGroup title $
+      map singleTest testCaseSpec
+  where
+    lenPrefs = length prefInfos
+    lenExpected = length expectations
+    (cleanText, prefInfos) = extractCursorPositions content
+
+    testCaseSpec = zip [1 ::Int ..] (zip expectations prefInfos)
+
+    singleTest (n, (expected, info)) = testCase (title <> " " <> show n) $ do
+      actual <- act cleanText info
+      assertEqual (mkParameterisedLabel info) expected actual
 
 -- ------------------------------------------------------------
 -- Helper function for initialising plugins under test
 -- ------------------------------------------------------------
 
 -- | Plugin under test where a fitting recorder is injected.
-type PluginTestDescriptor b = Recorder (WithPriority b) -> PluginDescriptor IdeState
+type PluginTestDescriptor b = Recorder (WithPriority b) -> IdePlugins IdeState
 
 -- | Wrap a plugin you want to test, and inject a fitting recorder as required.
 --
@@ -202,7 +408,7 @@ mkPluginTestDescriptor
   :: (Recorder (WithPriority b) -> PluginId -> PluginDescriptor IdeState)
   -> PluginId
   -> PluginTestDescriptor b
-mkPluginTestDescriptor pluginDesc plId recorder = pluginDesc recorder plId
+mkPluginTestDescriptor pluginDesc plId recorder = IdePlugins [pluginDesc recorder plId]
 
 -- | Wrap a plugin you want to test.
 --
@@ -212,11 +418,30 @@ mkPluginTestDescriptor'
   :: (PluginId -> PluginDescriptor IdeState)
   -> PluginId
   -> PluginTestDescriptor b
-mkPluginTestDescriptor' pluginDesc plId _recorder = pluginDesc plId
+mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
--- | Initialise a recorder that can be instructed to write to stderr by
--- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR=1" before
--- running the tests.
+-- | Initialize a recorder that can be instructed to write to stderr by
+-- setting one of the environment variables:
+--
+-- * HLS_TEST_HARNESS_STDERR=1
+-- * HLS_TEST_LOG_STDERR=1
+--
+-- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+-- under test.
+hlsHelperTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
+hlsHelperTestRecorder = initializeTestRecorder ["HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
+
+
+-- | Initialize a recorder that can be instructed to write to stderr by
+-- setting one of the environment variables:
+--
+-- * HLS_TEST_PLUGIN_LOG_STDERR=1
+-- * HLS_TEST_LOG_STDERR=1
+--
+-- before running the tests.
+--
+-- "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+-- under test.
 --
 -- On the cli, use for example:
 --
@@ -229,12 +454,10 @@ mkPluginTestDescriptor' pluginDesc plId _recorder = pluginDesc plId
 -- @
 --   HLS_TEST_LOG_STDERR=1 cabal test <test-suite-of-plugin>
 -- @
-pluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
-pluginTestRecorder = do
-  (recorder, _) <- initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
-  pure recorder
+hlsPluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
+hlsPluginTestRecorder = initializeTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
--- | Generic recorder initialisation for plugins and the HLS server for test-cases.
+-- | Generic recorder initialization for plugins and the HLS server for test-cases.
 --
 -- The created recorder writes to stderr if any of the given environment variables
 -- have been set to a value different to @0@.
@@ -243,52 +466,105 @@ pluginTestRecorder = do
 --
 -- We have to return the base logger function for HLS server logging initialisation.
 -- See 'runSessionWithServer'' for details.
-initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a), WithPriority (Doc ann) -> IO ())
-initialiseTestRecorder envVars = do
-    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
+initializeTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a))
+initializeTestRecorder envVars = do
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just $ ThreadIdColumn : defaultLoggingColumns)
+    -- lspClientLogRecorder
     -- There are potentially multiple environment variables that enable this logger
-    definedEnvVars <- forM envVars (\var -> fromMaybe "0" <$> lookupEnv var)
+    definedEnvVars <- forM envVars (fmap (fromMaybe "0") . lookupEnv)
     let logStdErr = any (/= "0") definedEnvVars
 
         docWithFilteredPriorityRecorder =
           if logStdErr then cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
           else mempty
 
-        Recorder {logger_} = docWithFilteredPriorityRecorder
-
-    pure (cmapWithPrio pretty docWithFilteredPriorityRecorder, logger_)
+    pure (cmapWithPrio pretty docWithFilteredPriorityRecorder)
 
 -- ------------------------------------------------------------
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
 
-runSessionWithServer :: Pretty b => PluginTestDescriptor b -> FilePath -> Session a -> IO a
-runSessionWithServer plugin fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' [plugin recorder] def def fullCaps fp act
+runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
+runSessionWithServerInTmpDir config plugin tree act =
+    runSessionWithTestConfig def
+    {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
+    (const act)
 
-runSessionWithServerAndCaps :: Pretty b => PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
-runSessionWithServerAndCaps plugin caps fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer' [plugin recorder] def def caps fp act
+runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
+runWithLockInTempDir tree act = withLock lockForTempDirs $ do
+    testRoot <- setupTestEnvironment
+    helperRecorder <- hlsHelperTestRecorder
+    -- Do not clean up the temporary directory if this variable is set to anything but '0'.
+    -- Aids debugging.
+    cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
+    let runTestInDir action = case cleanupTempDir of
+            Just val | val /= "0" -> do
+                (tempDir, _) <- newTempDirWithin testRoot
+                a <- action tempDir
+                logWith helperRecorder Debug LogNoCleanup
+                pure a
 
-runSessionWithServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithServerFormatter plugin formatter conf fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer'
-    [plugin recorder]
-    def
-      { formattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
-      }
-    def
-    fullCaps
-    fp
-    act
+            _ -> do
+                (tempDir, cleanup) <- newTempDirWithin testRoot
+                a <- action tempDir `finally` cleanup
+                logWith helperRecorder Debug LogCleanup
+                pure a
+    runTestInDir $ \tmpDir' -> do
+        -- we canonicalize the path, so that we do not need to do
+        -- cannibalization during the test when we compare two paths
+        tmpDir <- canonicalizePath tmpDir'
+        logWith helperRecorder Info $ LogTestDir tmpDir
+        fs <- FS.materialiseVFT tmpDir tree
+        act fs
+
+runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
+runSessionWithServer config plugin fp act =
+    runSessionWithTestConfig def {
+        testLspConfig=config
+        , testPluginDescriptor=plugin
+        , testDirLocation = Left fp
+        } (const act)
+
+
+instance Default (TestConfig b) where
+  def = TestConfig {
+    testDirLocation = Right $ VirtualFileTree [] "",
+    testClientRoot = Nothing,
+    testServerRoot = Nothing,
+    testShiftRoot = False,
+    testDisableKick = False,
+    testDisableDefaultPlugin = False,
+    testPluginDescriptor = mempty,
+    testLspConfig = def,
+    testConfigSession = def,
+    testConfigCaps = fullLatestClientCaps,
+    testCheckProject = False
+  }
+
+-- | Setup the test environment for isolated tests.
+--
+-- This creates a directory in the temporary directory that will be
+-- reused for running isolated tests.
+-- It returns the root to the testing directory that tests should use.
+-- This directory is not fully cleaned between reruns.
+-- However, it is totally safe to delete the directory between runs.
+--
+-- Additionally, this overwrites the 'XDG_CACHE_HOME' variable to isolate
+-- the tests from existing caches. 'hie-bios' and 'ghcide' honour the
+-- 'XDG_CACHE_HOME' environment variable and generate their caches there.
+setupTestEnvironment :: IO FilePath
+setupTestEnvironment = do
+  tmpDirRoot <- getTemporaryDirectory
+  let testRoot = tmpDirRoot </> "hls-test-root"
+      testCacheDir = testRoot </> ".cache"
+  createDirectoryIfMissing True testCacheDir
+  setEnv "XDG_CACHE_HOME" testCacheDir
+  pure testRoot
 
 goldenWithHaskellDocFormatter
   :: Pretty b
-  => PluginTestDescriptor b -- ^ Formatter plugin to be used
+  => Config
+  -> PluginTestDescriptor b -- ^ Formatter plugin to be used
   -> String -- ^ Name of the formatter to be used
   -> PluginConfig
   -> TestName -- ^ Title of the test
@@ -298,9 +574,10 @@ goldenWithHaskellDocFormatter
   -> FilePath -- ^ Extension of the output file
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServerFormatter plugin formatter conf testDataDir
+goldenWithHaskellDocFormatter config plugin formatter conf title testDataDir path desc ext act =
+  let config' = config { formattingProvider = T.pack formatter , plugins = M.singleton (PluginId $ T.pack formatter) conf }
+  in goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer config' plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -310,7 +587,8 @@ goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc 
 
 goldenWithCabalDocFormatter
   :: Pretty b
-  => PluginTestDescriptor b -- ^ Formatter plugin to be used
+  => Config
+  -> PluginTestDescriptor b -- ^ Formatter plugin to be used
   -> String -- ^ Name of the formatter to be used
   -> PluginConfig
   -> TestName -- ^ Title of the test
@@ -320,9 +598,10 @@ goldenWithCabalDocFormatter
   -> FilePath -- ^ Extension of the output file
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithCabalDocFormatter plugin formatter conf title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithCabalServerFormatter plugin formatter conf testDataDir
+goldenWithCabalDocFormatter config plugin formatter conf title testDataDir path desc ext act =
+  let config' = config { cabalFormattingProvider = T.pack formatter , plugins = M.singleton (PluginId $ T.pack formatter) conf }
+  in goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer config' plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "cabal"
@@ -330,18 +609,53 @@ goldenWithCabalDocFormatter plugin formatter conf title testDataDir path desc ex
     act doc
     documentContents doc
 
-runSessionWithCabalServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithCabalServerFormatter plugin formatter conf fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer'
-    [plugin recorder]
-    def
-      { cabalFormattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
-      }
-    def
-    fullCaps
-    fp act
+goldenWithHaskellDocFormatterInTmpDir
+  :: Pretty b
+  => Config
+  -> PluginTestDescriptor b -- ^ Formatter plugin to be used
+  -> String -- ^ Name of the formatter to be used
+  -> PluginConfig
+  -> TestName -- ^ Title of the test
+  -> VirtualFileTree -- ^ Virtual representation of the test project
+  -> FilePath -- ^ Path to the testdata to be used within the directory
+  -> FilePath -- ^ Additional suffix to be appended to the output file
+  -> FilePath -- ^ Extension of the output file
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDocFormatterInTmpDir config plugin formatter conf title tree path desc ext act =
+  let config' = config { formattingProvider = T.pack formatter , plugins = M.singleton (PluginId $ T.pack formatter) conf }
+  in goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
+  $ runSessionWithServerInTmpDir config' plugin tree
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
+
+goldenWithCabalDocFormatterInTmpDir
+  :: Pretty b
+  => Config
+  -> PluginTestDescriptor b -- ^ Formatter plugin to be used
+  -> String -- ^ Name of the formatter to be used
+  -> PluginConfig
+  -> TestName -- ^ Title of the test
+  -> VirtualFileTree -- ^ Virtual representation of the test project
+  -> FilePath -- ^ Path to the testdata to be used within the directory
+  -> FilePath -- ^ Additional suffix to be appended to the output file
+  -> FilePath -- ^ Extension of the output file
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithCabalDocFormatterInTmpDir config plugin formatter conf title tree path desc ext act =
+  let config' = config { cabalFormattingProvider = T.pack formatter , plugins = M.singleton (PluginId $ T.pack formatter) conf }
+  in goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
+  $ runSessionWithServerInTmpDir config' plugin tree
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "cabal"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
 
 -- | Restore cwd after running an action
 keepCurrentDirectory :: IO a -> IO a
@@ -352,64 +666,99 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
--- | Host a server, and run a test session on it
--- Note: cwd will be shifted into @root@ in @Session a@
-runSessionWithServer' ::
-  -- | Plugins to load on the server.
-  --
-  -- For improved logging, make sure these plugins have been initalised with
-  -- the recorder produced by @pluginTestRecorder@.
-  [PluginDescriptor IdeState] ->
-  -- | lsp config for the server
-  Config ->
-  -- | config for the test session
-  SessionConfig ->
-  ClientCapabilities ->
-  FilePath ->
-  Session a ->
-  IO a
-runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
+
+{-# NOINLINE lockForTempDirs #-}
+-- | Never run in parallel
+lockForTempDirs :: Lock
+lockForTempDirs = unsafePerformIO newLock
+
+data TestConfig b = TestConfig
+  {
+    testDirLocation          :: Either FilePath VirtualFileTree
+    -- ^ Client capabilities
+    -- ^ The file tree to use for the test, either a directory or a virtual file tree
+    -- if using a virtual file tree,
+    -- Creates a temporary directory, and materializes the VirtualFileTree
+    -- in the temporary directory.
+    --
+    -- To debug test cases and verify the file system is correctly set up,
+    -- you should set the environment variable 'HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1'.
+    -- Further, we log the temporary directory location on startup. To view
+    -- the logs, set the environment variable 'HLS_TEST_HARNESS_STDERR=1'.
+    -- Example invocation to debug test cases:
+    --
+    -- @
+    --   HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1 HLS_TEST_HARNESS_STDERR=1 cabal test <plugin-name>
+    -- @
+    --
+    -- Don't forget to use 'TASTY_PATTERN' to debug only a subset of tests.
+    --
+    -- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
+  , testShiftRoot            :: Bool
+    -- ^ Whether to shift the current directory to the root of the project
+  , testClientRoot           :: Maybe FilePath
+    -- ^ Specify the root of (the client or LSP context),
+    -- if Nothing it is the same as the testDirLocation
+    -- if Just, it is subdirectory of the testDirLocation
+  , testServerRoot           :: Maybe FilePath
+    -- ^ Specify root of the server, in exe, it can be specify in command line --cwd,
+    -- or just the server start directory
+    -- if Nothing it is the same as the testDirLocation
+    -- if Just, it is subdirectory of the testDirLocation
+  , testDisableKick          :: Bool
+    -- ^ Whether to disable the kick action
+  , testDisableDefaultPlugin :: Bool
+    -- ^ Whether to disable the default plugin comes with ghcide
+  , testCheckProject         :: Bool
+    -- ^ Whether to typecheck check the project after the session is loaded
+  , testPluginDescriptor     :: PluginTestDescriptor b
+    -- ^ Plugin to load on the server.
+  , testLspConfig            :: Config
+    -- ^ lsp config for the server
+  , testConfigSession        :: SessionConfig
+    -- ^ config for the test session
+  , testConfigCaps           :: ClientCapabilities
+    -- ^ Client capabilities
+  }
+
+
+wrapClientLogger :: Pretty a => Recorder (WithPriority a) ->
+    IO (Recorder (WithPriority a), LSP.LanguageContextEnv Config -> IO ())
+wrapClientLogger logger = do
+    (lspLogRecorder', cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
+    let lspLogRecorder = cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions. pretty) lspLogRecorder'
+    return (lspLogRecorder <> logger, cb1)
+
+-- | Host a server, and run a test session on it.
+-- For setting custom timeout, set the environment variable 'LSP_TIMEOUT'
+-- * LSP_TIMEOUT=10 cabal test
+-- For more detail of the test configuration, see 'TestConfig'
+runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
+runSessionWithTestConfig TestConfig{..} session =
+    runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
+    let serverRoot = fromMaybe root testServerRoot
+    let clientRoot = fromMaybe root testClientRoot
 
-    -- Allow three environment variables, because "LSP_TEST_LOG_STDERR" has been used before,
-    -- (thus, backwards compatibility) and "HLS_TEST_SERVER_LOG_STDERR" because it
-    -- uses a more descriptive name.
-    -- It is also in better accordance with 'pluginTestRecorder' which uses "HLS_TEST_PLUGIN_LOG_STDERR".
-    -- At last, "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
-    -- under test.
-    (recorder, logger_) <- initialiseTestRecorder
-      ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+    (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
+    (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
+    -- This plugin just installs a handler for the `initialized` notification, which then
+    -- picks up the LSP environment and feeds it to our recorders
+    let lspRecorderPlugin = pluginDescToIdePlugins [(defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
+              env <- LSP.getLspEnv
+              liftIO $ (cb1 <> cb2) env
+          }]
 
-    let
-        -- exists until old logging style is phased out
-        logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
-
-        arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
-
-        hlsPlugins =
-            plugins
-            ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-            ++ idePluginsToPluginDesc argsHlsPlugins
-        ideOptions config ghcSession =
-            let defIdeOptions = argsIdeOptions config ghcSession
-            in defIdeOptions
-                    { optTesting = IdeTesting True
-                    , optCheckProject = pure False
-                    }
-
+    let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
+    timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
+    let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
+        arguments = testingArgs serverRoot recorderIde plugins
     server <- async $
-        Ghcide.defaultMain (cmapWithPrio LogIDEMain recorder)
-            arguments
-                { argsHandleIn = pure inR
-                , argsHandleOut = pure outW
-                , argsDefaultHlsConfig = conf
-                , argsLogger = argsLogger
-                , argsIdeOptions = ideOptions
-                , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins
-                }
-
-    x <- runSessionWithHandles inW outR sconf caps root s
+        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
+            arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
+    result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
     hClose inW
     timeout 3 (wait server) >>= \case
         Just () -> pure ()
@@ -417,12 +766,49 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
             putStrLn "Server does not exit in 3s, canceling the async task..."
             (t, _) <- duration $ cancel server
             putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
-    pure x
+    pure result
+
+    where
+        shiftRoot shiftTarget f  =
+            if testShiftRoot
+                then withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
+                else f
+        runSessionInVFS (Left testConfigRoot) act = do
+            root <- makeAbsolute testConfigRoot
+            act root
+        runSessionInVFS (Right vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
+        testingArgs prjRoot recorderIde plugins =
+            let
+                arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
+                argsHlsPlugins' = if testDisableDefaultPlugin
+                                then plugins
+                                else argsHlsPlugins
+                hlsPlugins = pluginDescToIdePlugins $ idePluginsToPluginDesc argsHlsPlugins'
+                    ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+                ideOptions config sessionLoader = (argsIdeOptions config sessionLoader){
+                    optTesting = IdeTesting True
+                    , optCheckProject = pure testCheckProject
+                    }
+            in
+                arguments
+                { argsHlsPlugins = hlsPlugins
+                , argsIdeOptions = ideOptions
+                , argsLspOptions = argsLspOptions { LSP.optProgressStartDelay = 0, LSP.optProgressUpdateDelay = 0 }
+                , argsDefaultHlsConfig = testLspConfig
+                , argsProjectRoot = prjRoot
+                , argsDisableKick = testDisableKick
+                }
+
+-- | Wait for the next progress begin step
+waitForProgressBegin :: Session ()
+waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressBegin v-> Just ()
+  _ -> Nothing
 
 -- | Wait for the next progress end step
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v-> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -432,7 +818,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -440,38 +826,48 @@ waitForAllProgressDone = loop
 -- | Wait for the build queue to be empty
 waitForBuildQueue :: Session Seconds
 waitForBuildQueue = do
-    let m = SCustomMethod "test"
+    let m = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest m (toJSON WaitForShakeQueue)
     (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
     case resp of
-        ResponseMessage{_result=Right Null} -> return td
+        TResponseMessage{_result=Right Null} -> return td
         -- assume a ghcide binary lacking the WaitForShakeQueue method
-        _                                   -> return 0
+        _                                    -> return 0
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 callTestPlugin cmd = do
-    let cm = SCustomMethod "test"
+    let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
-    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err -> Left $ ResponseError InternalError (T.pack err) Nothing
+        A.Error err -> Left $ TResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
         A.Success a -> pure a
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) WaitForIdeRuleResult)
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
+waitForTypecheck :: TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Bool)
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 
-getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
-sendConfigurationChanged :: Value -> Session ()
-sendConfigurationChanged config =
-  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
+hlsConfigToClientConfig :: Config -> A.Object
+hlsConfigToClientConfig config = [("haskell", toJSON config)]
+
+-- | Set the HLS client configuration, and wait for the server to update to use it.
+-- Note that this will only work if we are not ignoring configuration requests, you
+-- may need to call @setIgnoringConfigurationRequests False@ first.
+setHlsConfig :: Config -> Session ()
+setHlsConfig config = do
+  setConfig $ hlsConfigToClientConfig config
+  -- wait until we get the workspace/configuration request from the server, so
+  -- we know things are settling. This only works if we're not skipping config
+  -- requests!
+  skipManyTill anyMessage (void configurationRequest)
 
 waitForKickDone :: Session ()
 waitForKickDone = void $ skipManyTill anyMessage nonTrivialKickDone
@@ -480,14 +876,14 @@ waitForKickStart :: Session ()
 waitForKickStart = void $ skipManyTill anyMessage nonTrivialKickStart
 
 nonTrivialKickDone :: Session ()
-nonTrivialKickDone = kick "done" >>= guard . not . null
+nonTrivialKickDone = kick (Proxy @"kick/done") >>= guard . not . null
 
 nonTrivialKickStart :: Session ()
-nonTrivialKickStart = kick "start" >>= guard . not . null
+nonTrivialKickStart = kick (Proxy @"kick/start") >>= guard . not . null
 
-kick :: T.Text -> Session [FilePath]
-kick msg = do
-  NotMess NotificationMessage{_params} <- customNotification $ "kick/" <> msg
+kick :: KnownSymbol k => Proxy k -> Session [FilePath]
+kick proxyMsg = do
+  NotMess TNotificationMessage{_params} <- customNotification proxyMsg
   case fromJSON _params of
     Success x -> return x
     other     -> error $ "Failed to parse kick/done details: " <> show other

@@ -45,3 +45,6 @@ result-doc
 
 out/
 store/
+gh-release-artifacts/
+
+.hls/

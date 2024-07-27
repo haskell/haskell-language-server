@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeOperators     #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Main where
@@ -35,20 +34,14 @@ tests = testGroup "GADT"
     , runTest "ConstructorContext" "ConstructorContext" 2 0 2 38
     , runTest "Context" "Context" 2 0 4 41
     , runTest "Pragma" "Pragma" 2 0 3 29
-    , onlyWorkForGhcVersions (==GHC92) "Single deriving has different output on ghc9.2" $
-        runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
-    , knownBrokenForGhcVersions [GHC92] "Single deriving has different output on ghc9.2" $
-        runTest "SingleDeriving" "SingleDeriving" 2 0 3 14
-    , onlyWorkForGhcVersions (==GHC92) "only ghc-9.2 enabled GADTs pragma implicitly" $
-        gadtPragmaTest "ghc-9.2 don't need to insert GADTs pragma" False
-    , knownBrokenForGhcVersions [GHC92] "ghc-9.2 has enabled GADTs pragma implicitly" $
-        gadtPragmaTest "insert pragma" True
+    , runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
+    , gadtPragmaTest "ghc-9.2 don't need to insert GADTs pragma" False
     ]
 
 gadtPragmaTest :: TestName -> Bool -> TestTree
 gadtPragmaTest title hasGADT = testCase title
     $ withCanonicalTempDir
-    $ \dir -> runSessionWithServer gadtPlugin dir $ do
+    $ \dir -> runSessionWithServer def gadtPlugin dir $ do
         doc <- createDoc "A.hs" "haskell" (T.unlines ["module A where", "data Foo = Bar"])
         _ <- waitForProgressDone
         (act:_) <- findGADTAction <$> getCodeActions doc (Range (Position 1 0) (Position 1 1))
@@ -61,7 +54,7 @@ gadtPragmaTest title hasGADT = testCase title
 
 runTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
 runTest title fp x1 y1 x2 y2 =
-    goldenWithHaskellDoc gadtPlugin title testDataDir fp "expected" "hs" $ \doc -> do
+    goldenWithHaskellDoc def gadtPlugin title testDataDir fp "expected" "hs" $ \doc -> do
         _ <- waitForProgressDone
         (act:_) <- findGADTAction <$> getCodeActions doc (Range (Position x1 y1) (Position x2 y2))
         executeCodeAction act
@@ -74,8 +67,8 @@ isGADTCodeAction :: CodeAction -> Bool
 isGADTCodeAction CodeAction{..} = case _kind of
     Nothing -> False
     Just kind -> case kind of
-        CodeActionRefactorRewrite -> True
-        _                         -> False
+        CodeActionKind_RefactorRewrite -> True
+        _                              -> False
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-gadt-plugin" </> "test" </> "testdata"

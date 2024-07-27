@@ -1,11 +1,8 @@
-{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TemplateHaskell    #-}
-{-# LANGUAGE TupleSections      #-}
 
 module Ide.Plugin.Eval.Parse.Comments where
 
@@ -28,24 +25,27 @@ import           Data.Function                            ((&))
 import           Data.Functor                             ((<&>))
 import           Data.Functor.Identity
 import           Data.List.NonEmpty                       (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty                       as NE
+import qualified Data.List.NonEmpty                       as NE hiding (unzip)
 import           Data.Map.Strict                          (Map)
 import qualified Data.Map.Strict                          as Map
 import qualified Data.Text                                as T
 import           Data.Void                                (Void)
-import           Development.IDE                          (Position,
-                                                           Range (Range))
-import           Development.IDE.Types.Location           (Position (..))
 import           GHC.Generics                             hiding (UInt, to)
 import           Ide.Plugin.Eval.Types
-import           Language.LSP.Types                       (UInt)
-import           Language.LSP.Types.Lens                  (character, end, line,
-                                                           start)
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Types
+
 import qualified Text.Megaparsec                          as P
 import           Text.Megaparsec
 import           Text.Megaparsec.Char                     (alphaNumChar, char,
                                                            eol, hspace,
                                                            letterChar)
+
+#if MIN_VERSION_base(4,19,0)
+import qualified Data.Functor                             as NE (unzip)
+#else
+import qualified Data.List.NonEmpty                       as NE (unzip)
+#endif
 
 {-
 We build parsers combining the following three kinds of them:
@@ -64,7 +64,7 @@ We build parsers combining the following three kinds of them:
 -}
 
 -- | Line parser
-type LineParser a = forall m. Monad m => ParsecT Void String m a
+type LineParser a = forall m. ParsecT Void String m a
 
 -- | Line comment group parser
 type LineGroupParser = Parsec Void [(Range, RawLineComment)]
@@ -73,7 +73,7 @@ data BlockEnv = BlockEnv
     { isLhs      :: Bool
     , blockRange :: Range
     }
-    deriving (Read, Show, Eq, Ord)
+    deriving (Show, Eq, Ord)
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
@@ -109,7 +109,7 @@ data CommentFlavour = Vanilla | HaddockNext | HaddockPrev | Named String
 
 -- | Single line or block comments?
 data CommentStyle = Line | Block Range
-    deriving (Read, Show, Eq, Ord, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 makePrisms ''CommentStyle
 
@@ -124,12 +124,12 @@ commentsToSections isLHS Comments {..} =
                 ( \lcs ->
                     let theRan =
                             Range
-                                (view start $ fst $ NE.head lcs)
-                                (view end $ fst $ NE.last lcs)
+                                (view L.start $ fst $ NE.head lcs)
+                                (view L.end $ fst $ NE.last lcs)
                      in case parseMaybe lineGroupP $ NE.toList lcs of
                             Nothing -> mempty
                             Just (mls, rs) ->
-                                ( maybe mempty (uncurry Map.singleton) ((theRan,) <$> mls)
+                                ( maybe mempty (Map.singleton theRan) mls
                                 , -- orders setup sections in ascending order
                                   if null rs
                                     then mempty
@@ -147,8 +147,8 @@ commentsToSections isLHS Comments {..} =
                         -- non-zero base indentation level!
                         ( \pos _ ->
                             if isLHS
-                                then pos ^. start . character == 2
-                                else pos ^. start . character == 0
+                                then pos ^. L.start . L.character == 2
+                                else pos ^. L.start . L.character == 0
                         )
                         lineComments
         (blockSeed, blockSetupSeeds) =
@@ -205,7 +205,7 @@ parseBlockMaybe isLhs blockRange p i =
                 st
                     { statePosState =
                         (statePosState st)
-                            { pstateSourcePos = positionToSourcePos $ blockRange ^. start
+                            { pstateSourcePos = positionToSourcePos $ blockRange ^. L.start
                             }
                     }
             p
@@ -308,7 +308,7 @@ blockProp = do
     AProp ran prop <$> resultBlockP
 
 withRange ::
-    (TraversableStream s, Stream s, Monad m, Ord v, Traversable t) =>
+    (TraversableStream s, Ord v, Traversable t) =>
     ParsecT v s m (t (a, Position)) ->
     ParsecT v s m (Range, t a)
 withRange p = do
@@ -330,8 +330,8 @@ positionToSourcePos :: Position -> SourcePos
 positionToSourcePos pos =
     P.SourcePos
         { sourceName = "<block comment>"
-        , sourceLine = P.mkPos $ fromIntegral $ 1 + pos ^. line
-        , sourceColumn = P.mkPos $ fromIntegral $ 1 + pos ^. character
+        , sourceLine = P.mkPos $ fromIntegral $ 1 + pos ^. L.line
+        , sourceColumn = P.mkPos $ fromIntegral $ 1 + pos ^. L.character
         }
 
 sourcePosToPosition :: SourcePos -> Position
@@ -420,7 +420,7 @@ exampleLinesGP =
 
 convexHullRange :: NonEmpty Range -> Range
 convexHullRange nes =
-    Range (NE.head nes ^. start) (NE.last nes ^. end)
+    Range (NE.head nes ^. L.start) (NE.last nes ^. L.end)
 
 exampleLineGP :: LineGroupParser (Range, ExampleLine)
 exampleLineGP =
@@ -568,5 +568,5 @@ contiguousGroupOn toLineCol = foldr step []
 groupLineComments ::
     Map Range a -> [NonEmpty (Range, a)]
 groupLineComments =
-    contiguousGroupOn (fst >>> view start >>> view line &&& view character)
+    contiguousGroupOn (fst >>> view L.start >>> view L.line &&& view L.character)
         . Map.toList

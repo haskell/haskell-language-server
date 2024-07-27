@@ -1,33 +1,33 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
-{-# OPTIONS_GHC -Wwarn -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wwarn #-}
 
 -- | Expression execution
-module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
+module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, propSetup, testCheck, asStatements,myExecStmt) where
 
-import           Control.Lens                   ((^.))
+import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
-import           Data.Algorithm.Diff            (Diff, PolyDiff (..), getDiff)
-import qualified Data.List.NonEmpty             as NE
-import           Data.String                    (IsString)
-import qualified Data.Text                      as T
+import           Data.Algorithm.Diff         (Diff, PolyDiff (..), getDiff)
+import qualified Data.List.NonEmpty          as NE
+import           Data.String                 (IsString)
+import qualified Data.Text                   as T
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Types.Location (Position (..), Range (..))
-import           GHC                            (ExecOptions, ExecResult (..),
-                                                 execStmt)
-import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
-                                                 Located (..),
-                                                 Section (sectionLanguage),
-                                                 Test (..), Txt, locate,
-                                                 locate0)
-import           Language.LSP.Types.Lens        (line, start)
-import           System.IO.Extra                (newTempFile, readFile')
+import           GHC                         (ExecOptions, ExecResult (..),
+                                              execStmt)
+import           Ide.Plugin.Eval.Types       (Language (Plain), Loc,
+                                              Located (..),
+                                              Section (sectionLanguage),
+                                              Test (..), Txt, locate, locate0)
+import qualified Language.LSP.Protocol.Lens  as L
+import           Language.LSP.Protocol.Types (Position (Position),
+                                              Range (Range))
+import           System.IO.Extra             (newTempFile, readFile')
 
 -- | Return the ranges of the expression and result parts of the given test
 testRanges :: Test -> (Range, Range)
 testRanges tst =
-    let startLine = testRange tst ^. start.line
+    let startLine = testRange tst ^. L.start . L.line
         (fromIntegral -> exprLines, fromIntegral -> resultLines) = testLengths tst
         resLine = startLine + exprLines
      in ( Range
@@ -72,7 +72,7 @@ testLengths (Property _ r _) = (1, length r)
 type Statement = Loc String
 
 asStatements :: Test -> [Statement]
-asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. start.line) (asStmts lt)
+asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. L.start . L.line) (asStmts lt)
 
 asStmts :: Test -> [Txt]
 asStmts (Example e _ _) = NE.toList e
@@ -80,18 +80,12 @@ asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
 
--- |GHC declarations required for expression evaluation
-evalSetup :: Ghc ()
-evalSetup = do
-    preludeAsP <- parseImportDecl "import qualified Prelude as P"
-    context <- getContext
-    setContext (IIDecl preludeAsP : context)
 
 -- | A wrapper of 'InteractiveEval.execStmt', capturing the execution result
 myExecStmt :: String -> ExecOptions -> Ghc (Either String (Maybe String))
 myExecStmt stmt opts = do
     (temp, purge) <- liftIO newTempFile
-    evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile "<> show temp <> " (P.show x)")
+    evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile " <> show temp <> " (P.show x)")
     modifySession $ \hsc -> hsc {hsc_IC = setInteractivePrintName (hsc_IC hsc) evalPrint}
     result <- execStmt stmt opts >>= \case
               ExecComplete (Left err) _ -> pure $ Left $ show err

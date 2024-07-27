@@ -30,25 +30,6 @@ module Development.IDE.GHC.Util(
     getExtensions
     ) where
 
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Data.EnumSet
-import           GHC.Data.FastString
-import           GHC.Data.StringBuffer
-import           GHC.Driver.Env                    hiding (hscSetFlags)
-import           GHC.Driver.Monad
-import           GHC.Driver.Session                hiding (ExposePackage)
-import           GHC.Parser.Lexer
-import           GHC.Runtime.Context
-import           GHC.Types.Name.Occurrence
-import           GHC.Types.Name.Reader
-import           GHC.Types.SrcLoc
-import           GHC.Unit.Module.ModDetails
-import           GHC.Unit.Module.ModGuts
-import           GHC.Utils.Fingerprint
-import           GHC.Utils.Outputable
-#else
-import           Development.IDE.GHC.Compat.Util
-#endif
 import           Control.Concurrent
 import           Control.Exception                 as E
 import           Data.Binary.Put                   (Put, runPut)
@@ -56,40 +37,35 @@ import qualified Data.ByteString                   as BS
 import           Data.ByteString.Internal          (ByteString (..))
 import qualified Data.ByteString.Internal          as BS
 import qualified Data.ByteString.Lazy              as LBS
-import           Data.Data                         (Data)
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
 import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as T
 import qualified Data.Text.Encoding.Error          as T
-import           Data.Time.Clock.POSIX             (POSIXTime, getCurrentTime,
-                                                    utcTimeToPOSIXSeconds)
 import           Data.Typeable
-import qualified Data.Unique                       as U
-import           Debug.Trace
-import           Development.IDE.GHC.Compat        as GHC
+import           Development.IDE.GHC.Compat        as GHC hiding (unitState)
 import qualified Development.IDE.GHC.Compat.Parser as Compat
 import qualified Development.IDE.GHC.Compat.Units  as Compat
 import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
-import           GHC                               hiding (ParsedModule (..))
+import           GHC                               hiding (ParsedModule (..),
+                                                    parser)
 import           GHC.IO.BufferedIO                 (BufferedIO)
 import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
 import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals
 import           GHC.IO.Handle.Types
-import           GHC.Stack
 import           Ide.PluginUtils                   (unescape)
-import           System.Environment.Blank          (getEnvDefault)
 import           System.FilePath
-import           System.IO.Unsafe
-import           Text.Printf
 
-
+import           GHC.Data.EnumSet
+import           GHC.Data.FastString
+import           GHC.Data.StringBuffer
+import           GHC.Utils.Fingerprint
 ----------------------------------------------------------------------
 -- GHC setup
 
@@ -189,9 +165,9 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
 --   Will produce an 8 byte unreadable ByteString.
 fingerprintToBS :: Fingerprint -> BS.ByteString
 fingerprintToBS (Fingerprint a b) = BS.unsafeCreate 8 $ \ptr -> do
-    ptr <- pure $ castPtr ptr
-    pokeElemOff ptr 0 a
-    pokeElemOff ptr 1 b
+    let ptr' = castPtr ptr
+    pokeElemOff ptr' 0 a
+    pokeElemOff ptr' 1 b
 
 -- | Take the 'Fingerprint' of a 'StringBuffer'.
 fingerprintFromStringBuffer :: StringBuffer -> IO Fingerprint
@@ -256,11 +232,7 @@ dupHandleTo filepath h other_side
 
 -- | This is copied unmodified from GHC since it is not exposed.
 -- Note the beautiful inline comment!
-#if MIN_VERSION_ghc(9,0,0)
 dupHandle_ :: (RawIO dev, IODevice dev, BufferedIO dev, Typeable dev) => dev
-#else
-dupHandle_ :: (IODevice dev, BufferedIO dev, Typeable dev) => dev
-#endif
            -> FilePath
            -> Maybe (MVar Handle__)
            -> Handle__

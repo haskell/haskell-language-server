@@ -3,8 +3,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections   #-}
-{-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 
 module Ide.Arguments
   ( Arguments(..)
@@ -20,6 +18,7 @@ import           Data.Version
 import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
 import           GitHash                       (giHash, tGitInfoCwdTry)
+import           Ide.Logger                    (Priority (..))
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
@@ -38,15 +37,16 @@ data Arguments
   | PrintLibDir
 
 data GhcideArguments = GhcideArguments
-    {argsCommand            :: Command
-    ,argsCwd                :: Maybe FilePath
-    ,argsShakeProfiling     :: Maybe FilePath
-    ,argsTesting            :: Bool
-    ,argsExamplePlugin      :: Bool
-    -- These next two are for compatibility with existing hie clients, allowing
-    -- them to just change the name of the exe and still work.
-    , argsDebugOn           :: Bool
+    { argsCommand           :: Command
+    , argsCwd               :: Maybe FilePath
+    , argsShakeProfiling    :: Maybe FilePath
+    , argsTesting           :: Bool
+    , argsExamplePlugin     :: Bool
+    , argsLogLevel          :: Priority
     , argsLogFile           :: Maybe String
+    -- ^ the minimum log level to show
+    , argsLogStderr         :: Bool
+    , argsLogClient         :: Bool
     , argsThreads           :: Int
     , argsProjectGhcVersion :: Bool
     } deriving Show
@@ -122,17 +122,56 @@ arguments plugins = GhcideArguments
       <*> switch (long "example"
                   <> help "Include the Example Plugin. For Plugin devs only")
 
-      <*> switch
-           ( long "debug"
+      <*>
+        (option @Priority auto
+          (long "log-level"
+          <> help "Only show logs at or above this log level"
+          <> metavar "LOG_LEVEL"
+          <> value Info
+          <> showDefault
+          )
+        <|>
+        flag' Debug
+          (long "debug"
           <> short 'd'
-          <> help "Generate debug output"
-           )
-      <*> optional (strOption
+          <> help "Sets the log level to Debug, alias for '--log-level Debug'"
+          )
+        )
+      -- This option is a little inconsistent with the other log options, since
+      -- it's not a boolean and there is no way to turn it off. That's okay
+      -- since the default is off.
+      <*> (optional (strOption
+           ( long "log-file"
+          <> metavar "LOGFILE"
+          <> help "Send logs to a file"
+           )) <|> (optional (strOption
            ( long "logfile"
           <> short 'l'
           <> metavar "LOGFILE"
-          <> help "File to log to, defaults to stdout"
-           ))
+          <> help "Send logs to a file"
+          -- deprecated alias so users don't need to update their CLI calls
+          -- immediately
+          <> internal
+           )))
+          )
+      -- Boolean option so we can toggle the default in a consistent way
+      <*> option auto
+           ( long "log-stderr"
+          <> help "Send logs to stderr"
+          <> metavar "BOOL"
+          <> value True
+          <> showDefault
+           )
+      -- Boolean option so we can toggle the default in a consistent way
+      <*> option auto
+           ( long "log-client"
+          <> help "Send logs to the client using the window/logMessage LSP method"
+          <> metavar "BOOL"
+          -- This is off by default, since some clients will show duplicate logs
+          -- if we log both to stderr and the client
+          <> value False
+          <> showDefault
+           )
       <*> option auto
            (short 'j'
           <> help "Number of threads (0: automatic)"

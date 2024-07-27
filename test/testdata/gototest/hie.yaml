@@ -1,6 +1,0 @@
-cradle:
-  direct:
-    arguments:
-      - "-i src/"
-      - "Lib"
-      - "Lib2"

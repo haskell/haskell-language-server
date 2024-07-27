@@ -1,43 +1,40 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedLabels    #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
-#if MIN_VERSION_ghc(9,2,1)
-import           GHC.Parser.Annotation                 (AnnContext, AnnList,
-                                                        AnnParen, AnnPragma)
-#endif
-
+import           Compat.HieTypes
+import           Control.Lens                          ((^.))
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
+import           Control.Monad.Except                  (ExceptT, throwError)
+import           Control.Monad.IO.Class                (MonadIO, liftIO)
+import           Control.Monad.Trans.Class             (lift)
+import           Data.Either                           (rights)
+import           Data.Foldable                         (fold)
 import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.List.Extra                       hiding (length)
+import           Data.List.NonEmpty                    (NonEmpty ((:|)),
+                                                        groupWith)
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
+import qualified Data.Set                              as S
 import qualified Data.Text                             as T
-import           Development.IDE                       (Recorder, WithPriority)
-import           Development.IDE.Core.PositionMapping
+import           Development.IDE                       (Recorder, WithPriority,
+                                                        usePropertyAction)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import           Development.IDE.GHC.Compat.Parser
-import           Development.IDE.GHC.Compat.Units
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint        as E
@@ -45,69 +42,95 @@ import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
 import           HieDb.Query
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server
-import           Language.LSP.Types
+import qualified Language.LSP.Protocol.Lens            as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId)
-    { pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
-    , pluginConfigDescriptor = defaultConfigDescriptor
-        { configCustomConfig = mkCustomConfig properties }
-    }
+descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
+    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
+        { pluginHandlers = mconcat
+              [ mkPluginHandler SMethod_TextDocumentRename renameProvider
+              , mkPluginHandler SMethod_TextDocumentPrepareRename prepareRenameProvider
+              ]
+        , pluginConfigDescriptor = defaultConfigDescriptor
+            { configCustomConfig = mkCustomConfig properties }
+        }
 
-renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) =
-    pluginResponse $ do
-        nfp <- handleUriToNfp uri
-        directOldNames <- getNamesAtPos state nfp pos
-        directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
+prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
+prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
+    nfp <- getNormalizedFilePathE uri
+    namesUnderCursor <- getNamesAtPos state nfp pos
+    -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
+    -- and doesn't even allow you to create full rename request.
+    -- This handler deliberately approximates "things that definitely can't be renamed"
+    -- to mean "there is no Name at given position".
+    --
+    -- In particular it allows some cases through (e.g. cross-module renames),
+    -- so that the full rename handler can give more informative error about them.
+    let renameValid = not $ null namesUnderCursor
+    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
 
-        {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
-           indirect references through punned names. To find the transitive closure, we do a pass of
-           the direct references to find the references for any punned names.
-           See the `IndirectPuns` test for an example. -}
-        indirectOldNames <- concat . filter ((>1) . Prelude.length) <$>
-            mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
-        let oldNames = indirectOldNames ++ directOldNames
-        refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
+renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
+renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
+    nfp <- getNormalizedFilePathE uri
+    directOldNames <- getNamesAtPos state nfp pos
+    directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
-        -- Validate rename
-        crossModuleEnabled <- lift $ usePropertyLsp #crossModule pluginId properties
-        unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
-        when (any isBuiltInSyntax oldNames) $ throwE "Invalid rename of built-in syntax"
+    {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
+        indirect references through punned names. To find the transitive closure, we do a pass of
+        the direct references to find the references for any punned names.
+        See the `IndirectPuns` test for an example. -}
+    indirectOldNames <- concat . filter ((>1) . length) <$>
+        mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
+    let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
+           where
+             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
+             directFS = map (occNameFS . nameOccName) directOldNames
 
-        -- Perform rename
-        let newName = mkTcOcc $ T.unpack newNameText
-            filesRefs = collectWith locToUri refs
-            getFileEdit = flip $ getSrcEdit state . replaceRefs newName
-        fileEdits <- mapM (uncurry getFileEdit) filesRefs
-        pure $ foldl' (<>) mempty fileEdits
+    case oldNames of
+        -- There were no Names at given position (e.g. rename triggered within a comment or on a keyword)
+        [] -> throwError $ PluginInvalidParams "No symbol to rename at given position"
+        _  -> do
+            refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
+
+            -- Validate rename
+            crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
+            unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
+            when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
+
+            -- Perform rename
+            let newName = mkTcOcc $ T.unpack newNameText
+                filesRefs = collectWith locToUri refs
+                getFileEdit (uri, locations) = do
+                    verTxtDocId <- lift $ pluginGetVersionedTextDoc (TextDocumentIdentifier uri)
+                    getSrcEdit state verTxtDocId (replaceRefs newName locations)
+            fileEdits <- mapM getFileEdit filesRefs
+            pure $ InL $ fold fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
-    (MonadLsp config m) =>
     IdeState ->
     NormalizedFilePath ->
     HashSet Location ->
     [Name] ->
-    ExceptT String m ()
+    ExceptT PluginError (HandlerM config) ()
 failWhenImportOrExport state nfp refLocs names = do
-    pm <- handleMaybeM ("No parsed module for: " ++ show nfp) $ liftIO $ runAction
-        "Rename.GetParsedModule"
-        state
-        (use GetParsedModule nfp)
+    pm <- runActionE "Rename.GetParsedModule" state
+         (useE GetParsedModule nfp)
     let hsMod = unLoc $ pm_parsed_source pm
     case (unLoc <$> hsmodName hsMod, hsmodExports hsMod) of
         (mbModName, _) | not $ any (\n -> nameIsLocalOrFrom (replaceModName n mbModName) n) names
-            -> throwE "Renaming of an imported name is unsupported"
+            -> throwError $ PluginInternalError "Renaming of an imported name is unsupported"
         (_, Just (L _ exports)) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
-            -> throwE "Renaming of an exported name is unsupported"
-        (Just _, Nothing) -> throwE "Explicit export list required for renaming"
+            -> throwError $ PluginInternalError "Renaming of an exported name is unsupported"
+        (Just _, Nothing) -> throwError $ PluginInternalError "Explicit export list required for renaming"
         _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------
@@ -115,27 +138,19 @@ failWhenImportOrExport state nfp refLocs names = do
 
 -- | Apply a function to a `ParsedSource` for a given `Uri` to compute a `WorkspaceEdit`.
 getSrcEdit ::
-    (MonadLsp config m) =>
     IdeState ->
+    VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    Uri ->
-    ExceptT String m WorkspaceEdit
-getSrcEdit state updatePs uri = do
-    ccs <- lift getClientCapabilities
-    nfp <- handleUriToNfp uri
-    annAst <- handleMaybeM ("No parsed source for: " ++ show nfp) $ liftIO $ runAction
-        "Rename.GetAnnotatedParsedSource"
-        state
-        (use GetAnnotatedParsedSource nfp)
-    let (ps, anns) = (astA annAst, annsA annAst)
-#if !MIN_VERSION_ghc(9,2,1)
-    let src = T.pack $ exactPrint ps anns
-        res = T.pack $ exactPrint (updatePs ps) anns
-#else
-    let src = T.pack $ exactPrint ps
+    ExceptT PluginError (HandlerM config) WorkspaceEdit
+getSrcEdit state verTxtDocId updatePs = do
+    ccs <- lift pluginGetClientCapabilities
+    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
+        (useE GetAnnotatedParsedSource nfp)
+    let ps = annAst
+        src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
-#endif
-    pure $ diffText ccs (uri, src) res IncludeDeletions
+    pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
 
 -- | Replace names at every given `Location` (in a given `ParsedSource`) with a given new name.
 replaceRefs ::
@@ -143,29 +158,20 @@ replaceRefs ::
     HashSet Location ->
     ParsedSource ->
     ParsedSource
-#if MIN_VERSION_ghc(9,2,1)
 replaceRefs newName refs = everywhere $
     -- there has to be a better way...
     mkT (replaceLoc @AnnListItem) `extT`
     -- replaceLoc @AnnList `extT` -- not needed
-    -- replaceLoc @AnnParen `extT`   -- not needed
+    -- replaceLoc @AnnParen `extT` -- not needed
     -- replaceLoc @AnnPragma `extT` -- not needed
     -- replaceLoc @AnnContext `extT` -- not needed
     -- replaceLoc @NoEpAnns `extT` -- not needed
     replaceLoc @NameAnn
     where
-        replaceLoc :: forall an. Typeable an => LocatedAn an RdrName -> LocatedAn an RdrName
+        replaceLoc :: forall an. LocatedAn an RdrName -> LocatedAn an RdrName
         replaceLoc (L srcSpan oldRdrName)
             | isRef (locA srcSpan) = L srcSpan $ replace oldRdrName
         replaceLoc lOldRdrName = lOldRdrName
-#else
-replaceRefs newName refs = everywhere $ mkT replaceLoc
-    where
-        replaceLoc :: Located RdrName -> Located RdrName
-        replaceLoc (L srcSpan oldRdrName)
-            | isRef srcSpan = L srcSpan $ replace oldRdrName
-        replaceLoc lOldRdrName = lOldRdrName
-#endif
         replace :: RdrName -> RdrName
         replace (Qual modName _) = Qual modName newName
         replace _                = Unqual newName
@@ -182,7 +188,7 @@ refsAtName ::
     IdeState ->
     NormalizedFilePath ->
     Name ->
-    ExceptT String m [Location]
+    ExceptT PluginError m [Location]
 refsAtName state nfp name = do
     ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
     ast <- handleGetHieAst state nfp
@@ -199,45 +205,50 @@ refsAtName state nfp name = do
             )
     pure $ nameLocs name ast ++ dbRefs
 
-nameLocs :: Name -> (HieAstResult, PositionMapping) -> [Location]
-nameLocs name (HAR _ _ rm _ _, pm) =
-    mapMaybe (toCurrentLocation pm . realSrcSpanToLocation . fst)
-             (concat $ M.lookup (Right name) rm)
+nameLocs :: Name -> HieAstResult -> [Location]
+nameLocs name (HAR _ _ rm _ _) =
+    concatMap (map (realSrcSpanToLocation . fst))
+              (M.lookup (Right name) rm)
 
 ---------------------------------------------------------------------------------------------------
 -- Util
 
-getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT String m [Name]
+getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
-    (HAR{hieAst}, pm) <- handleGetHieAst state nfp
-    pure $ getNamesAtPoint hieAst pos pm
+    HAR{hieAst} <- handleGetHieAst state nfp
+    pure $ getNamesAtPoint' hieAst pos
 
 handleGetHieAst ::
     MonadIO m =>
     IdeState ->
     NormalizedFilePath ->
-    ExceptT String m (HieAstResult, PositionMapping)
-handleGetHieAst state nfp = handleMaybeM
-    ("No AST for file: " ++ show nfp)
-    (liftIO $ runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp)
+    ExceptT PluginError m HieAstResult
+handleGetHieAst state nfp =
+    -- We explicitly do not want to allow a stale version here - we only want to rename if
+    -- the module compiles, otherwise we can't guarantee that we'll rename everything,
+    -- which is bad (see https://github.com/haskell/haskell-language-server/issues/3799)
+    fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst nfp
 
-handleUriToNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
-handleUriToNfp uri = handleMaybe
-    ("No filepath for uri: " ++ show uri)
-    (toNormalizedFilePath <$> uriToFilePath uri)
+-- | We don't want to rename in code generated by GHC as this gives false positives.
+-- So we restrict the HIE file to remove all the generated code.
+removeGenerated :: HieAstResult -> HieAstResult
+removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
+  where
+    go :: HieASTs a -> HieASTs a
+    go hf =
+      HieASTs (fmap goAst (getAsts hf))
+    goAst (Node nsi sp xs) = Node (SourcedNodeInfo $ M.restrictKeys (getSourcedNodeInfo nsi) (S.singleton SourceInfo)) sp (map goAst xs)
 
--- head is safe since groups are non-empty
-collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
-collectWith f = map (\a -> (f $ head a, HS.fromList a)) . groupOn f . HS.toList
+collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
+collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS.toList
+
+-- | A variant 'getNamesAtPoint' that does not expect a 'PositionMapping'
+getNamesAtPoint' :: HieASTs a -> Position -> [Name]
+getNamesAtPoint' hf pos =
+  concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
 
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri
-
-nfpToUri :: NormalizedFilePath -> Uri
-nfpToUri = filePathToUri . fromNormalizedFilePath
-
-showName :: Name -> String
-showName = occNameString . getOccName
 
 unsafeSrcSpanToLoc :: SrcSpan -> Location
 unsafeSrcSpanToLoc srcSpan =
@@ -245,10 +256,8 @@ unsafeSrcSpanToLoc srcSpan =
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-locToFilePos :: Location -> (NormalizedFilePath, Position)
-locToFilePos (Location uri (Range pos _)) = (nfp, pos)
-    where
-        Just nfp = (uriToNormalizedFilePath . toNormalizedUri) uri
+locToFilePos :: Monad m => Location -> ExceptT PluginError m (NormalizedFilePath, Position)
+locToFilePos (Location uri (Range pos _)) = (,pos) <$> getNormalizedFilePathE uri
 
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =

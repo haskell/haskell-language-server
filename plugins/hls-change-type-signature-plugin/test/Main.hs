@@ -15,7 +15,7 @@ import           Test.Hls                       (CodeAction (..), Command,
                                                  Range (Range), Session,
                                                  TestName, TestTree,
                                                  TextDocumentIdentifier,
-                                                 assertFailure,
+                                                 assertFailure, def,
                                                  defaultTestRunner,
                                                  executeCodeAction,
                                                  getCodeActions,
@@ -25,8 +25,7 @@ import           Test.Hls                       (CodeAction (..), Command,
                                                  mkPluginTestDescriptor',
                                                  openDoc, runSessionWithServer,
                                                  testCase, testGroup, toEither,
-                                                 type (|?),
-                                                 waitForAllProgressDone,
+                                                 type (|?), waitForBuildQueue,
                                                  waitForDiagnostics, (@?=))
 import           Text.Regex.TDFA                ((=~))
 
@@ -40,7 +39,8 @@ test :: TestTree
 test = testGroup "changeTypeSignature" [
         testRegexes
         , codeActionTest "TExpectedActual" 4 11
-        , knownBrokenForGhcVersions [GHC92, GHC94] "Error Message in 9.2/9.4 does not provide enough info" $ codeActionTest "TRigidType" 4 14
+        , knownBrokenForGhcVersions [GHC94 .. GHC910] "Error Message in 9.2+ does not provide enough info" $
+            codeActionTest "TRigidType" 4 14
         , codeActionTest "TRigidType2" 4 6
         , codeActionTest "TLocalBinding" 7 22
         , codeActionTest "TLocalBindingShadow1" 11 8
@@ -88,15 +88,15 @@ testRegex921One = testGroup "Regex One" [
         regex = errorMessageRegexes !! 2
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-change-type-signature-plugin" </> "test" </> "testdata"
 
 goldenChangeSignature :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenChangeSignature fp = goldenWithHaskellDoc changeTypeSignaturePlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
+goldenChangeSignature fp = goldenWithHaskellDoc def changeTypeSignaturePlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
 
 codeActionTest :: FilePath -> Int -> Int -> TestTree
 codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
-    void $ waitForDiagnostics  -- code actions are triggered from Diagnostics
-    void $ waitForAllProgressDone  -- apparently some tests need this to get the CodeAction to show up
+    void waitForDiagnostics  -- code actions are triggered from Diagnostics
+    void waitForBuildQueue  -- apparently some tests need this to get the CodeAction to show up
     actions <- getCodeActions doc (pointRange line col)
     foundActions <- findChangeTypeActions actions
     liftIO $ length foundActions @?= 1
@@ -104,7 +104,7 @@ codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
 
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
 codeActionProperties fp locs assertions = testCase fp $ do
-    runSessionWithServer changeTypeSignaturePlugin testDataDir $ do
+    runSessionWithServer def changeTypeSignaturePlugin testDataDir $ do
         openDoc (fp <.> ".hs") "haskell" >>= codeActionsFromLocs >>= findChangeTypeActions >>= assertions
     where
         codeActionsFromLocs doc = concat <$> mapM (getCodeActions doc . uncurry pointRange) locs

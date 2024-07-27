@@ -17,6 +17,8 @@ module Development.IDE.GHC.Error
   , realSrcSpanToRange
   , realSrcLocToPosition
   , realSrcSpanToLocation
+  , realSrcSpanToCodePointRange
+  , realSrcLocToCodePointPosition
   , srcSpanToFilename
   , rangeToSrcSpan
   , rangeToRealSrcSpan
@@ -44,7 +46,9 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
-import           Language.LSP.Types                (isSubrangeOf)
+import           Language.LSP.Protocol.Types       (isSubrangeOf)
+import           Language.LSP.VFS                  (CodePointPosition (CodePointPosition),
+                                                    CodePointRange (CodePointRange))
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -57,6 +61,8 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFileP
     , _code     = Nothing
     , _relatedInformation = Nothing
     , _tags     = Nothing
+    , _codeDescription = Nothing
+    , _data_   = Nothing
     }
 
 -- | Produce a GHC-style error from a source span and a message.
@@ -83,6 +89,29 @@ realSrcSpanToRange real =
 realSrcLocToPosition :: RealSrcLoc -> Position
 realSrcLocToPosition real =
   Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
+
+-- Note [Unicode support]
+-- ~~~~~~~~~~~~~~~~~~~~~~
+-- the current situation is:
+-- LSP Positions use UTF-16 code units(Unicode may count as variable columns);
+-- GHC use Unicode code points(Unicode count as one column).
+-- To support unicode, ideally range should be in lsp standard,
+-- and codePoint should be in ghc standard.
+-- see https://github.com/haskell/lsp/pull/407
+
+-- | Convert a GHC SrcSpan to CodePointRange
+-- see Note [Unicode support]
+realSrcSpanToCodePointRange :: RealSrcSpan -> CodePointRange
+realSrcSpanToCodePointRange real =
+  CodePointRange
+    (realSrcLocToCodePointPosition $ Compat.realSrcSpanStart real)
+    (realSrcLocToCodePointPosition $ Compat.realSrcSpanEnd real)
+
+-- | Convert a GHC RealSrcLoc to CodePointPosition
+-- see Note [Unicode support]
+realSrcLocToCodePointPosition :: RealSrcLoc -> CodePointPosition
+realSrcLocToCodePointPosition real =
+  CodePointPosition (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
 
 -- | Extract a file name from a GHC SrcSpan (use message for unhelpful ones)
 -- FIXME This may not be an _absolute_ file name, needs fixing.
@@ -128,17 +157,9 @@ spanContainsRange srcSpan range = (range `isSubrangeOf`) <$> srcSpanToRange srcS
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
 toDSeverity :: GHC.Severity -> Maybe D.DiagnosticSeverity
-#if !MIN_VERSION_ghc(9,3,0)
-toDSeverity SevOutput      = Nothing
-toDSeverity SevInteractive = Nothing
-toDSeverity SevDump        = Nothing
-toDSeverity SevInfo        = Just DsInfo
-toDSeverity SevFatal       = Just DsError
-#else
-toDSeverity SevIgnore      = Nothing
-#endif
-toDSeverity SevWarning     = Just DsWarning
-toDSeverity SevError       = Just DsError
+toDSeverity SevIgnore  = Nothing
+toDSeverity SevWarning = Just DiagnosticSeverity_Warning
+toDSeverity SevError   = Just DiagnosticSeverity_Error
 
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given
@@ -173,20 +194,18 @@ realSpan = \case
 -- diagnostics
 catchSrcErrors :: DynFlags -> T.Text -> IO a -> IO (Either [FileDiagnostic] a)
 catchSrcErrors dflags fromWhere ghcM = do
-    Compat.handleGhcException (ghcExceptionToDiagnostics dflags) $
-      handleSourceError (sourceErrorToDiagnostics dflags) $
+    Compat.handleGhcException ghcExceptionToDiagnostics $
+      handleSourceError sourceErrorToDiagnostics $
       Right <$> ghcM
     where
-        ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
-        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags
-#if MIN_VERSION_ghc(9,3,0)
+        ghcExceptionToDiagnostics = return . Left . diagFromGhcException fromWhere dflags
+        sourceErrorToDiagnostics = return . Left . diagFromErrMsgs fromWhere dflags
                                         . fmap (fmap Compat.renderDiagnosticMessageWithHints) . Compat.getMessages
-#endif
                                         . srcErrorMessages
 
 
 diagFromGhcException :: T.Text -> DynFlags -> GhcException -> [FileDiagnostic]
-diagFromGhcException diagSource dflags exc = diagFromString diagSource DsError (noSpan "<Internal>") (showGHCE dflags exc)
+diagFromGhcException diagSource dflags exc = diagFromString diagSource DiagnosticSeverity_Error (noSpan "<Internal>") (showGHCE dflags exc)
 
 showGHCE :: DynFlags -> GhcException -> String
 showGHCE dflags exc = case exc of

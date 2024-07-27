@@ -50,14 +50,18 @@ env:
   cabalBuild: "v2-build --keep-going"
 
 jobs:
-
   pre_job:
     runs-on: ubuntu-latest
     outputs:
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v3
+      - id: ghcs
+        run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
           paths_ignore: '["**/docs/**"
@@ -80,41 +84,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # This list of GHC versions must fit to the list of GHC versions
-        # specified in 'test.yml'
-        ghc: [ "9.4.2"
-             , "9.4.1"
-             , "9.2.5"
-             , "9.2.4"
-             , "9.2.3"
-             , "9.0.2"
-             , "8.10.7"
-             ]
-        os: [ "ubuntu-latest"
-            , "macOS-latest"
-            , "windows-latest"
-            ]
-        exclude:
-          - os: windows-latest
-            ghc: '9.4.1'
-          # Exclude until https://github.com/haskell/actions/issues/129
-          # is resolved.
-          - os: windows-latest
-            ghc: '9.2.5'
-
+        ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-build
         with:
           ghc: ${{ matrix.ghc }}
-          os:  ${{ runner.os }}
+          os: ${{ runner.os }}
 
       # Download sources for feeding build sources cache
       # Fetching from github cache is faster than doing it from hackage
       # Sources does not change per ghc and ghc version son only doing it
       # for one matrix job (it is arbitrary)
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.6'
         name: Download sources
         run: |
           cabal $cabalBuild --only-download --enable-benchmarks --enable-tests
@@ -129,7 +116,7 @@ jobs:
       # We build ghcide with benchs and test enabled to include its dependencies in the cache
       # (including shake-bench)
       # Only for the same ghc and os used in the bench workflow, so we save cache space
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.6'
         name: Build ghcide benchmark
         run: |
           cabal $cabalBuild ghcide --enable-benchmarks --enable-tests

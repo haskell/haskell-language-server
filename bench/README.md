@@ -54,6 +54,9 @@ Targets:
   - bench-results/*/*/*/results.csv
   - bench-results/*/*/results.csv
   - bench-results/*/results.csv
+  - bench-results/*/*/*/resultDiff.csv
+  - bench-results/*/*/resultDiff.csv
+  - bench-results/*/resultDiff.csv
   - bench-results/*/*/*/*.svg
   - bench-results/*/*/*/*.diff.svg
   - bench-results/*/*/*.svg

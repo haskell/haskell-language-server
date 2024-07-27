@@ -2,37 +2,27 @@
 
 module FunctionalBadProject (tests) where
 
--- import           Control.Lens hiding (List)
--- import           Control.Monad.IO.Class
--- import qualified Data.Text as T
--- import           Language.LSP.Test hiding (message)
--- import           Language.LSP.Types as LSP
--- import           Language.LSP.Types.Lens as LSP hiding (contents, error )
+import           Control.Lens
+import qualified Data.Text                  as T
+import qualified Language.LSP.Protocol.Lens as L
 import           Test.Hls
+import           Test.Hls.Command
 
--- ---------------------------------------------------------------------
--- TODO: Currently this can not succeed, since such an error is thrown in "runActionWithContext" which
--- can produce diagnostics at the moment. Needs more investigation
--- TODO: @fendor: Add issue link here
---
+
 tests :: TestTree
-tests = testGroup "behaviour on malformed projects" [
-    testCase "no test executed" $ True @?= True
+tests = testGroup "behaviour on malformed projects"
+    [ testCase "Missing module diagnostic" $ do
+        runSession hlsLspCommand fullLatestClientCaps "test/testdata/missingModuleTest/missingModule/" $ do
+            doc <- openDoc "src/MyLib.hs" "haskell"
+            [diag] <- waitForDiagnosticsFrom doc
+            liftIO $ assertBool "missing module name" $ "MyLib" `T.isInfixOf` (diag ^. L.message)
+            liftIO $ assertBool "module missing context" $ "may not be listed" `T.isInfixOf` (diag ^. L.message)
+    , testCase "Missing module diagnostic - no matching prefix" $ do
+        runSession hlsLspCommand fullLatestClientCaps "test/testdata/missingModuleTest/noPrefixMatch/" $ do
+            doc <- openDoc "app/Other.hs" "haskell"
+            [diag] <- waitForDiagnosticsFrom doc
+            liftIO $ assertBool "missing module name" $
+                "Other" `T.isInfixOf` (diag ^. L.message)
+            liftIO $ assertBool  "hie-bios message" $
+                "Cabal" `T.isInfixOf` (diag ^. L.message)
     ]
-
-    -- testCase "deals with cabal file with unsatisfiable dependency" $
-    --     runSession hlsCommandExamplePlugin codeActionSupportCaps "test/testdata/badProjects/cabal" $ do
-    --         _doc <- openDoc "Foo.hs" "haskell"
-
-    --         diags@(d:_) <- waitForDiagnosticsSource "bios"
-    --         -- liftIO $ show diags @?= ""
-    --         -- liftIO $ putStrLn $ show diags
-    --         -- liftIO $ putStrLn "a"
-    --         liftIO $ do
-    --             length diags @?= 1
-    --             d ^. range @?= Range (Position 0 0) (Position 1 0)
-    --             d ^. severity @?= (Just DsError)
-    --             d ^. code @?= Nothing
-    --             d ^. source @?= Just "bios"
-    --             d ^. message @?=
-    --                 (T.pack "readCreateProcess: stack \"build\" \"--only-configure\" \".\" (exit 1): failed\n")

@@ -17,11 +17,12 @@ on:
 jobs:
   pre_job:
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'performance')
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
           paths_ignore: '[ "**/docs/**"
@@ -46,14 +47,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.7', '9.2.5']
-        os: [ubuntu-latest]
+        # benching the two latest GHCs we support now
+        # since benchmark are expansive.
+        # choosing the two latest are easier to maintain and more forward looking
+        # see discussion https://github.com/haskell/haskell-language-server/pull/4118
+        # also possible to add more GHCs if we performs better in the future.
+        ghc:
+          - '9.6'
+          - '9.8'
+        os:
+          - ubuntu-latest
 
     # This code is fitted to the strategy: assumes Linux is used ... etc,
     # change of the strategy may require changing the bootstrapping/run code
 
     steps:
     - uses: actions/checkout@v3
+      with:
+
+        # By default, the `pull_request` event has a `GITHUB_SHA` env variable
+        # set to the "last merge commit on the GITHUB_REF branch" (see
+        # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request).
+        # But we want to check out the latest commit on the branch whether or
+        # not it is a merge commit, so this is how we do that.
+        ref: "${{ github.event.pull_request.head.sha }}"
 
     - run: git fetch origin master # check the master branch for benchmarking
 
@@ -104,13 +121,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.7', '9.2.5']
+        ghc: ['9.6', '9.8']
         os: [ubuntu-latest]
-        cabal: ['3.6']
+        cabal: ['3.10']
         example: ['cabal', 'lsp-types']
 
     steps:
-    - uses: haskell/actions/setup@v2
+    - uses: haskell-actions/setup@v2.7.3
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
@@ -140,6 +157,9 @@ jobs:
     - name: Display results
       run: |
         column -s, -t < bench-results/unprofiled/${{ matrix.example }}/results.csv | tee bench-results/unprofiled/${{ matrix.example }}/results.txt
+        echo
+        echo "Performance Diff(comparing to its previous Version):"
+        column -s, -t < bench-results/unprofiled/${{ matrix.example }}/resultDiff.csv | tee bench-results/unprofiled/${{ matrix.example }}/resultDiff.txt
 
     - name: tar benchmarking artifacts
       run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz

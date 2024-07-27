@@ -154,10 +154,10 @@ Homebrew users can install `haskell-language-server` using the following command
 brew install haskell-language-server
 ```
 
-This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.10.7.
+This formula contains HLS binaries compiled with GHC versions available via Homebrew.
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 
-## Installation using nix
+## Installation using Nix
 
-You can read full instructions on how to install HLS with nix in [haskell4nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).
+You can read full instructions on how to install HLS with Nix in the [Nixpkgs manual](https://nixos.org/manual/nixpkgs/unstable/#haskell-language-server).

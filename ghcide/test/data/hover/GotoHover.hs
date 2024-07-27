@@ -64,3 +64,7 @@ hole = _
 
 hole2 :: a -> Maybe a
 hole2 = _
+
+-- A comment above a type defnition with a deriving clause
+data Example = Example
+  deriving (Eq)

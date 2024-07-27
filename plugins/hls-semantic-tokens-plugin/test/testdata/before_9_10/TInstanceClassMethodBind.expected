@@ -1,0 +1,7 @@
+4:6-9 TTypeConstructor "Foo"
+4:12-15 TDataConstructor "Foo"
+4:16-19 TTypeConstructor "Int"
+5:10-14 TClass "Show"
+5:15-18 TTypeConstructor "Foo"
+6:5-9 TClassMethod "show"
+6:12-21 TVariable "undefined"

@@ -4,10 +4,8 @@ The Haskell tooling dream is near, we need your help!
 
 ## How to contact the haskell ide team
 
-- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
-- Follow the [Haskell IDE team twitter account](https://twitter.com/IdeHaskell) for updates and help.
-- Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server. You can join the server via [this invitation](https://discord.gg/9spEdTNGrD).
-- Join the [haskell-tooling channel](https://matrix.to/#/#haskell-tooling:matrix.org) in [matrix](https://matrix.org/).
+- Join the [haskell-language-server channel](https://matrix.to/#/#haskell-language-server:matrix.org) in [matrix](https://matrix.org/) (primary communication channel).
+- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/) (secondary communication channel - all messages in this IRC channel are automatically bridged to the Matrix channel).
 - Visit [the project GitHub repo](https://github.com/haskell/haskell-language-server) to view the source code, or open issues or pull requests.
 
 ## Building
@@ -50,15 +48,10 @@ $ cabal build
 If you are using nix 2.4 style command (enabled by `experimental-features = nix-command`),
 you can use `nix develop` instead of `nix-shell` to enter the development shell. To enter the shell with specific GHC versions:
 
-* `nix develop` or `nix develop .#haskell-language-server-dev` - default GHC version
-* `nix develop .#haskell-language-server-901-dev` - GHC 9.0.1 (substitute GHC version as appropriate)
+* `nix develop` - default GHC version
+* `nix develop .#shell-ghc90` - GHC 9.0.1 (substitute GHC version as appropriate)
 
 If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
-
-To create binaries:
-
-* `nix build` or `nix build .#haskell-language-server` - default GHC version
-* `nix build .#haskell-language-server-901` - GHC 9.0.1 (substitute GHC version as appropriate)
 
 ## Testing
 
@@ -108,53 +101,73 @@ $ cabal run haskell-language-server:func-test -- -p "hlint enables"
 
 ## Using HLS on HLS code
 
-Project source code should load without `hie.yaml` setup.
+Refer to the [HLS project configuration guidelines](../configuration.md#configuring-your-project-build) as they also apply to the HLS project itself.
 
-In other cases:
-
-1. Check if `hie.yaml` (& `hie.yml`) files left from previous configurations.
-
-2. If the main project needs special configuration, note that other internal subprojects probably also would need configuration.
-
-To create an explicit configuration for all projects - use [implicit-hie](https://github.com/Avi-D-coder/implicit-hie) generator directly:
-
-```shell
-gen-hie > hie.yaml  # into the main HLS directory
-```
-
-that configuration should help.
-
-3. Inspect & tune configuration explicitly.
-
-[Configuring project build](../configuration.md#configuring-your-project-build) applies to HLS project source code loading just as to any other.
-
-Note: HLS may implicitly detect codebase as a Stack project (see [hie-bios implicit configuration documentation](https://github.com/haskell/hie-bios/blob/master/README.md#implicit-configuration)). To use Cabal, try creating an `hie.yaml` file:
+Note: HLS implicitly detects the HLS codebase as a Stack project (since there is a `stack.yaml` file).
+If you want HLS to use Cabal, create this `hie.yaml` file at the root of the project:
 
 ```yaml
 cradle:
   cabal:
 ```
 
-### Manually testing your hacked HLS
-If you want to test HLS while hacking on it, follow the steps below.
+## Manually testing your hacked HLS
+If you want to test HLS while hacking on it (you can even test it on HLS codebase itself, see previous section), you need to:
 
-To do once:
+1. (Once) Find the path to the hacked HLS you build
+2. (Once) Configure your editor to use it
+3. (Every time you change the HLS code) Rebuild HLS
+4. (Every time you change the HLS code) Restart the LSP workspace
 
-- Open some codebase on which you want to test your hacked HLS in your favorite editor (it can also be HLS codebase itself: see previous section for configuration)
-- Configure this editor to use your custom HLS executable
-  - With Cabal:
-    - On Unix systems: `cabal exec which haskell-language-server`
-    - On Windows: `cabal exec where haskell-language-server`
-  - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
+### Find the path to the hacked HLS you build
+Note that unless you change the GHC version or the HLS version between builds, the path should remain the same, this is why you need to set it only once.
 
-To do every time you change HLS code and want to test it:
+#### Using Cabal
+Run:
+```shell
+$ cabal build exe:haskell-language-server && cabal list-bin exe:haskell-language-server
+[..]
+<some long path>/haskell-language-server
+```
 
-- Build HLS
-  - With Cabal: `cabal build exe:haskell-language-server`
-  - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
-- Restart HLS
-  - With VS Code: `Haskell: Restart Haskell LSP Server`
-  - With Emacs: `lsp-workspace-restart`
+#### Using Stack
+Run:
+```shell
+$ echo $(pwd)/$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server
+[..]
+<some long path>/haskell-language-server
+```
+
+### Configure your editor to use it
+
+#### VS Code
+When using VS Code you can set up each project to use a specific HLS executable:
+
+- If it doesn't already exist in your project directory, create a directory called `.vscode`.
+- In the `.vscode` directory create a file called `settings.json` with the below contents.
+```json
+{
+    "haskell.serverExecutablePath": "/path/to/your/hacked/haskell-language-server"
+}
+```
+
+#### Emacs
+There are several ways to configure the HLS server path:
+- `M-x customize-group<RET>lsp-haskell<RET>Lsp Haskell Server Path`
+- Evaluate `(setq lsp-haskell-server-path "/path/to/your/hacked/haskell-language-server")`
+- Create a file `.dir-locals.el` with the following content:
+```lisp
+((haskell-mode . ((lsp-haskell-server-path . "/path/to/your/hacked/haskell-language-server"))))
+```
+
+### Rebuild HLS
+- With Stack: `stack build haskell-language-server:exe:haskell-language-server`
+- With Cabal: `cabal build exe:haskell-language-server`
+
+### Restart the LSP workspace
+
+- With VS Code: Press `Ctrl + Shift + p` and type `Haskell: Restart Haskell LSP Server`
+- With Emacs: `M-x lsp-workspace-restart`
 
 ## Style guidelines
 
@@ -178,24 +191,12 @@ pre-commit install
 
 - `test/testdata` and `test/data` are there as we want to test formatting plugins.
 - `hie-compat` is there as we want to keep its code as close to GHC as possible.
-- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
 
 ## Introduction tutorial
 
 See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 ## Measuring, benchmarking and tracing
-
-### Metrics
-
-When ghcide is built with the `ekg` flag, HLS opens a metrics server on port 8999 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
-
-- `ghcide.values_count` - count of build results in the store
-- `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)
-- `ghcide.build_count` - build count. A key is GC'ed if it is dirty and older than 100 builds
-- `ghcide.dirty_keys_count` - non transitive count of dirty build keys
-- `ghcide.indexing_pending_count` - count of items in the indexing queue
-- `ghcide.exports_map_count` - count of identifiers in the exports map.
 
 ### Benchmarks
 
@@ -207,7 +208,7 @@ Run the benchmarks with `cabal bench`.
 
 It should take around 25 minutes and the results will be stored in the `bench-results` folder. To interpret the results, see the comments in the `bench/Main.hs` module.
 
-More details in [bench/README](../../bench/README.md)
+More details in [bench/README](https://github.com/haskell/haskell-language-server/blob/master/bench/README.md)
 
 ### Tracing
 
@@ -219,7 +220,7 @@ Adding support for new editors is fairly easy if the editor already has good sup
 In that case, there will likely be an editor-specific support system for this (like `lsp-mode` for Emacs).
 This will typically provide instructions for how to support new languages.
 
-In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server) and
+In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](../configuration.md#configuring-haskell-language-server) and
 for them to configure how the server is started.
 
 ## Building the docs

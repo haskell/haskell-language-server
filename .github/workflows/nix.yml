@@ -18,10 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_skip_develop: ${{ steps.skip_check.outputs.should_skip }}
-      should_skip_build: ${{ steps.skip_check_no_nix.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
           paths_ignore: '[ "**/docs/**"
@@ -35,11 +34,6 @@ jobs:
                          , ".gitlab-ci.yaml"
                          , ".gitlab/**"
                          ]'
-      - id: skip_check_no_nix
-        uses: fkirc/skip-duplicate-actions@v5.3.0
-        with:
-          cancel_others: false
-          paths: '[ "**.nix" ]'
 
   # Enter the development shell and run `cabal build`
   develop:
@@ -55,72 +49,25 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: cachix/install-nix-action@v18
+    - uses: cachix/install-nix-action@V27
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v12
-      with:
-        name: haskell-language-server
-        # Disable pushing, we will do that in job `build`
-        skipPush: true
-    - run: |
-        nix develop --print-build-logs --command cabal update
-        nix develop --print-build-logs --command cabal build
-
-  # Build and then push HLS binaries with developmet shell to cachix
-  # This job runs when
-  #   1. PRs are merged to master (runs on master)
-  #   2. Nix files are changed (runs on PR)
-  build:
-    needs: pre_job
-    runs-on: ${{ matrix.os }}
-    env:
-      HAS_TOKEN: ${{ secrets.HLS_CACHIX_AUTH_TOKEN != '' }}
-    if: (needs.pre_job.outputs.should_skip_build != 'true' && needs.pre_job.outputs.should_skip_pr != 'true') || (github.repository_owner == 'haskell' && github.ref == 'refs/heads/master')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macOS-latest]
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - uses: cachix/install-nix-action@v18
-      with:
-        install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
-        install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
-        extra_nix_config: |
-          experimental-features = nix-command flakes
-        nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v12
+    - uses: cachix/cachix-action@v15
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-    - name: Build development shell
-      run: nix develop --print-build-logs --profile dev
-    - name: Build all development shell (without nix dependencies)
-      run: nix develop --print-build-logs .#all-simple-dev-shells --profile dev
-    # We only build nix dev shell for current GHC version because some are
-    # failing with different GHC version on darwin.
-    - name: Build development shell with nix dependencies for current GHC version
-      run: nix develop --print-build-logs .#all-nix-dev-shells --profile dev
-    - name: Push development shell
-      if: ${{ env.HAS_TOKEN == 'true' }}
-      run: cachix push haskell-language-server dev
-    - name: Build binaries
-      run: nix build --print-build-logs
-    - name: Build all binaries
-      run: nix build --print-build-logs .#all-haskell-language-server
-    - name: Push binaries
-      if: ${{ env.HAS_TOKEN == 'true' }}
-      run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
+    # Don't try and run the build (although that would be a good
+    # test), it takes a long time and we have sometimes had
+    # glibc incompatibilities with the runners
+    - run: |
+        nix develop --print-build-logs --command true
 
   nix_post_job:
     if: always()
     runs-on: ubuntu-latest
-    needs: [pre_job, develop, build]
+    needs: [pre_job, develop]
     steps:
       - run: |
           echo "jobs info: ${{ toJSON(needs) }}"

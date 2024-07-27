@@ -40,9 +40,17 @@ data ExamplePackage = ExamplePackage {packageName :: !String, packageVersion :: 
 
 data Example = Example
     { exampleName      :: !String
-    , exampleDetails   :: Either FilePath ExamplePackage
+    , exampleDetails   :: ExampleDetails
     , exampleModules   :: [FilePath]
     , exampleExtraArgs :: [String]}
+  deriving (Eq, Generic, Show)
+  deriving anyclass (Binary, Hashable, NFData)
+
+data ExampleDetails
+  = ExamplePath FilePath -- ^ directory where the package is located
+  | ExampleHackage ExamplePackage -- ^ package from hackage
+  | ExampleScript FilePath -- ^ location of the script we are running
+                  [String] -- ^ extra arguments for the script
   deriving (Eq, Generic, Show)
   deriving anyclass (Binary, Hashable, NFData)
 
@@ -55,24 +63,39 @@ instance FromJSON Example where
         path <- x .:? "path"
         case path of
             Just examplePath -> do
-                let exampleDetails = Left examplePath
+                script <- fromMaybe False <$> x.:? "script"
+                args <- fromMaybe [] <$> x .:? "script-args"
+                let exampleDetails
+                      | script = ExampleScript examplePath args
+                      | otherwise = ExamplePath examplePath
                 return Example{..}
             Nothing -> do
                 packageName <- x .: "package"
                 packageVersion <- x .: "version"
-                let exampleDetails = Right ExamplePackage{..}
+                let exampleDetails = ExampleHackage ExamplePackage{..}
                 return Example{..}
 
 exampleToOptions :: Example -> [String] -> [String]
-exampleToOptions Example{exampleDetails = Right ExamplePackage{..}, ..} extraArgs =
+exampleToOptions Example{exampleDetails = ExampleHackage ExamplePackage{..}, ..} extraArgs =
     ["--example-package-name", packageName
     ,"--example-package-version", showVersion packageVersion
+    ,"--example-name", exampleName
     ] ++
     ["--example-module=" <> m | m <- exampleModules
     ] ++
     ["--ghcide-options=" <> o | o <- exampleExtraArgs ++ extraArgs]
-exampleToOptions Example{exampleDetails = Left examplePath, ..} extraArgs =
+exampleToOptions Example{exampleDetails = ExamplePath examplePath, ..} extraArgs =
     ["--example-path", examplePath
+    ,"--example-name", exampleName
+    ] ++
+    ["--example-module=" <> m | m <- exampleModules
+    ] ++
+    ["--ghcide-options=" <> o | o <- exampleExtraArgs ++ extraArgs]
+exampleToOptions Example{exampleDetails = ExampleScript examplePath exampleArgs, ..} extraArgs =
+    ["--example-script", examplePath
+    ,"--example-name", exampleName
+    ] ++
+    ["--example-script-args=" <> o | o <- exampleArgs
     ] ++
     ["--example-module=" <> m | m <- exampleModules
     ] ++

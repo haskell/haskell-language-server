@@ -1,16 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE PackageImports            #-}
-{-# LANGUAGE PolyKinds                 #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE RecursiveDo               #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE RecursiveDo           #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -26,9 +22,9 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeSessionInit, shakeExtras, shakeDb,
+    IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets, Target(..), toKnownFiles,
+    KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -53,16 +49,15 @@ module Development.IDE.Core.Shake(
     getIdeOptionsIO,
     GlobalIdeOptions(..),
     HLS.getClientConfig,
-    getPluginConfig,
+    getPluginConfigAction,
     knownTargets,
-    setPriority,
     ideLogger,
     actionLogger,
     getVirtualFile,
     FileVersion(..),
-    Priority(..),
     updatePositionMapping,
-    deleteValue, recordDirtyKeys,
+    updatePositionMappingHelper,
+    deleteValue,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -77,7 +72,8 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
-    VFSModified(..)
+    VFSModified(..), getClientConfigAction,
+    ThreadQueue(..)
     ) where
 
 import           Control.Concurrent.Async
@@ -86,11 +82,14 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
+import           Control.Lens                           ((&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                             (toJSON)
+import           Data.Aeson                             (Result (Success),
+                                                         toJSON)
+import qualified Data.Aeson.Types                       as A
 import qualified Data.ByteString.Char8                  as BS
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
@@ -98,14 +97,13 @@ import           Data.Default
 import           Data.Dynamic
 import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (for_, toList)
+import           Data.Foldable                          (find, for_)
 import           Data.Functor                           ((<&>))
 import           Data.Functor.Identity
 import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
 import qualified Data.Map.Strict                        as Map
@@ -126,16 +124,14 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
-                                                         NameCacheUpdater (..),
+                                                         NameCacheUpdater,
                                                          initNameCache,
-                                                         knownKeyNames,
-                                                         mkSplitUniqSupply)
-#if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat             (upNameCache)
-#endif
+                                                         knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
-import           Development.IDE.Graph                  hiding (ShakeValue)
+import           Development.IDE.Graph                  hiding (ShakeValue,
+                                                         action)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
                                                          shakeGetBuildStep,
@@ -146,12 +142,10 @@ import           Development.IDE.Graph.Database         (ShakeDatabase,
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Exports
+import           Development.IDE.Types.Exports          hiding (exportsMapSize)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger           hiding (Priority)
-import qualified Development.IDE.Types.Logger           as Logger
 import           Development.IDE.Types.Monitoring       (Monitoring (..))
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
@@ -159,32 +153,46 @@ import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
+import           Ide.Logger                             hiding (Priority)
+import qualified Ide.Logger                             as Logger
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (IdePlugins, PluginId)
+import           Ide.Types                              (IdePlugins (IdePlugins),
+                                                         PluginDescriptor (pluginId),
+                                                         PluginId)
 import           Language.LSP.Diagnostics
+import qualified Language.LSP.Protocol.Lens             as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
-import           Language.LSP.Types
-import qualified Language.LSP.Types                     as LSP
-import           Language.LSP.Types.Capabilities
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
-import           OpenTelemetry.Eventlog
+import           OpenTelemetry.Eventlog                 hiding (addEvent)
+import qualified Prettyprinter                          as Pretty
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
+import           UnliftIO                               (MonadUnliftIO (withRunInIO))
+
 
 data Log
   = LogCreateHieDbExportsMapStart
   | LogCreateHieDbExportsMapFinish !Int
-  | LogBuildSessionRestart !String ![DelayedActionInternal] !(KeySet) !Seconds !(Maybe FilePath)
+  | LogBuildSessionRestart !String ![DelayedActionInternal] !KeySet !Seconds !(Maybe FilePath)
   | LogBuildSessionRestartTakingTooLong !Seconds
   | LogDelayedAction !(DelayedAction ()) !Seconds
   | LogBuildSessionFinish !(Maybe SomeException)
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
   | LogDefineEarlyCutoffRuleNoDiagHasDiag !FileDiagnostic
   | LogDefineEarlyCutoffRuleCustomNewnessHasDiag !FileDiagnostic
+  | LogCancelledAction !T.Text
+  | LogSessionInitialised
+  | LogLookupPersistentKey !T.Text
+  | LogShakeGarbageCollection !T.Text !Int !Seconds
+  -- * OfInterest Log messages
+  | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
   deriving Show
 
 instance Pretty Log where
@@ -201,10 +209,10 @@ instance Pretty Log where
         , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
     LogBuildSessionRestartTakingTooLong seconds ->
         "Build restart is taking too long (" <> pretty seconds <> " seconds)"
-    LogDelayedAction delayedAction duration ->
+    LogDelayedAction delayedAct seconds ->
       hsep
-        [ "Finished:" <+> pretty (actionName delayedAction)
-        , "Took:" <+> pretty (showDuration duration) ]
+        [ "Finished:" <+> pretty (actionName delayedAct)
+        , "Took:" <+> pretty (showDuration seconds) ]
     LogBuildSessionFinish e ->
       vcat
         [ "Finished build session"
@@ -218,17 +226,26 @@ instance Pretty Log where
     LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
       "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
       <+> pretty (showDiagnosticsColored [fileDiagnostic])
+    LogCancelledAction action ->
+        pretty action <+> "was cancelled"
+    LogSessionInitialised -> "Shake session initialized"
+    LogLookupPersistentKey key ->
+        "LOOKUP PERSISTENT FOR:" <+> pretty key
+    LogShakeGarbageCollection label number duration ->
+        pretty label <+> "of" <+> pretty number <+> "keys (took " <+> pretty (showDuration duration) <> ")"
+    LogSetFilesOfInterest ofInterest ->
+        "Set files of interst to" <> Pretty.line
+            <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
 -- a worker thread.
 data HieDbWriter
   = HieDbWriter
-  { indexQueue         :: IndexQueue
-  , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
-  , indexCompleted     :: TVar Int -- ^ to report progress
-  , indexProgressToken :: Var (Maybe LSP.ProgressToken)
-  -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
+  { indexQueue             :: IndexQueue
+  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted         :: TVar Int -- ^ to report progress
+  , indexProgressReporting :: ProgressReporting
   }
 
 -- | Actions to queue up on the index worker thread
@@ -236,12 +253,25 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+data ThreadQueue = ThreadQueue {
+    tIndexQueue     :: IndexQueue
+    , tRestartQueue :: TQueue (IO ())
+    , tLoaderQueue  :: TQueue (IO ())
+}
+
+-- Note [Semantic Tokens Cache Location]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- storing semantic tokens cache for each file in shakeExtras might
+-- not be ideal, since it most used in LSP request handlers
+-- instead of rules. We should consider moving it to a more
+-- appropriate place in the future if we find one, store it for now.
+
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     { --eventer :: LSP.FromServerMessage -> IO ()
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
-    ,logger :: Logger
+    ,shakeRecorder :: Recorder (WithPriority Log)
     ,idePlugins :: IdePlugins IdeState
     ,globals :: TVar (HMap.HashMap TypeRep Dynamic)
       -- ^ Registry of global state used by rules.
@@ -252,24 +282,29 @@ data ShakeExtras = ShakeExtras
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
+
+    ,semanticTokensCache:: STM.Map NormalizedFilePath SemanticTokens
+    -- ^ Cache of last response of semantic tokens for each file,
+    -- so we can compute deltas for semantic tokens(SMethod_TextDocumentSemanticTokensFullDelta).
+    -- putting semantic tokens cache and id in shakeExtras might not be ideal
+    -- see Note [Semantic Tokens Cache Location]
+    ,semanticTokensId :: TVar Int
+    -- ^ semanticTokensId is used to generate unique ids for each lsp response of semantic tokens.
     ,positionMapping :: STM.Map NormalizedUri (EnumMap Int32 (PositionDelta, PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
-    -- accumulation of all previous mappings.
-    ,progress :: ProgressReporting
+    -- accumulation to the current version.
+    ,progress :: PerFileProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
         :: VFSModified
         -> String
         -> [DelayedAction ()]
+        -> IO [Key]
         -> IO ()
-#if MIN_VERSION_ghc(9,3,0)
     ,ideNc :: NameCache
-#else
-    ,ideNc :: IORef NameCache
-#endif
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
@@ -292,6 +327,10 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
+    , restartQueue :: TQueue (IO ())
+      -- ^ Queue of restart actions to be run.
+    , loaderQueue :: TQueue (IO ())
+      -- ^ Queue of loader actions to be run.
     }
 
 type WithProgressFunc = forall a.
@@ -299,29 +338,49 @@ type WithProgressFunc = forall a.
 type WithIndefiniteProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> IO a -> IO a
 
-type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,TextDocumentVersion))
+type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
+    -- Will fail the action with a pattern match failure, but be caught
     Just x <- getShakeExtra @ShakeExtras
     return x
 
 getShakeExtrasRules :: Rules ShakeExtras
 getShakeExtrasRules = do
-    Just x <- getShakeExtraRules @ShakeExtras
-    return x
+    mExtras <- getShakeExtraRules @ShakeExtras
+    case mExtras of
+      Just x  -> return x
+      -- This will actually crash HLS
+      Nothing -> liftIO $ fail "missing ShakeExtras"
 
-getPluginConfig
-    :: LSP.MonadLsp Config m => PluginId -> m PluginConfig
-getPluginConfig plugin = do
-    config <- HLS.getClientConfig
+-- See Note [Client configuration in Rules]
+-- | Returns the client configuration, creating a build dependency.
+--   You should always use this function when accessing client configuration
+--   from build rules.
+getClientConfigAction :: Action Config
+getClientConfigAction = do
+  ShakeExtras{lspEnv, idePlugins} <- getShakeExtras
+  currentConfig <- (`LSP.runLspT` LSP.getConfig) `traverse` lspEnv
+  mbVal <- unhashed <$> useNoFile_ GetClientSettings
+  let defValue = fromMaybe def currentConfig
+  case A.parse (parseConfig idePlugins defValue) <$> mbVal of
+    Just (Success c) -> return c
+    _                -> return defValue
+
+getPluginConfigAction :: PluginId -> Action PluginConfig
+getPluginConfigAction plId = do
+    config <- getClientConfigAction
+    ShakeExtras{idePlugins = IdePlugins plugins} <- getShakeExtras
+    let plugin = fromMaybe (error $ "Plugin not found: " <> show plId) $
+                    find (\p -> pluginId p == plId) plugins
     return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
 -- This is called when we don't already have a result, or computing the rule failed.
 -- The result of this function will always be marked as 'stale', and a 'proper' rebuild of the rule will
 -- be queued if the rule hasn't run before.
-addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
+addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
   void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) (fmap (fmap (first3 toDyn)) . getVal)
@@ -336,7 +395,7 @@ getVirtualFile nf = do
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
-vfsSnapshot Nothing       = pure $ VFS mempty ""
+vfsSnapshot Nothing       = pure $ VFS mempty
 vfsSnapshot (Just lspEnv) = LSP.runLspT lspEnv LSP.getVirtualFiles
 
 
@@ -356,9 +415,9 @@ getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
     x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readTVarIO globals
     case x of
-        Just x
-            | Just x <- fromDynamic x -> pure x
-            | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep x) ++ ")"
+        Just y
+            | Just z <- fromDynamic y -> pure z
+            | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep y) ++ ")"
         Nothing -> errorIO $ "Internal error, getIdeGlobalExtras, no entry for " ++ show typ
 
 getIdeGlobalAction :: forall a . (HasCallStack, IsIdeGlobal a) => Action a
@@ -373,8 +432,8 @@ instance IsIdeGlobal GlobalIdeOptions
 getIdeOptions :: Action IdeOptions
 getIdeOptions = do
     GlobalIdeOptions x <- getIdeGlobalAction
-    env <- lspEnv <$> getShakeExtras
-    case env of
+    mbEnv <- lspEnv <$> getShakeExtras
+    case mbEnv of
         Nothing -> return x
         Just env -> do
             config <- liftIO $ LSP.runLspT env HLS.getClientConfig
@@ -398,7 +457,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           | otherwise = do
           pmap <- readTVarIO persistentKeys
           mv <- runMaybeT $ do
-            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP PERSISTENT FOR: " ++ show k
+            liftIO $ logWith (shakeRecorder s) Debug $ LogLookupPersistentKey (T.pack $ show k)
             f <- MaybeT $ pure $ lookupKeyMap (newKey k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
@@ -406,14 +465,14 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             Nothing -> atomicallyNamed "lastValueIO 1" $ do
                 STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
                 return Nothing
-            Just (v,del,ver) -> do
-                actual_version <- case ver of
+            Just (v,del,mbVer) -> do
+                actual_version <- case mbVer of
                   Just ver -> pure (Just $ VFSVersion ver)
                   Nothing -> (Just . ModificationTime <$> getModTime (fromNormalizedFilePath file))
                               `catch` (\(_ :: IOException) -> pure Nothing)
                 atomicallyNamed "lastValueIO 2" $ do
                   STM.focus (Focus.alter (alterValue $ Stale (Just del) actual_version (toDyn v))) (toKey k file) state
-                  Just . (v,) . addDelta del <$> mappingForVersion positionMapping file actual_version
+                  Just . (v,) . addOldDelta del <$> mappingForVersion positionMapping file actual_version
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -425,11 +484,11 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
 
     atomicallyNamed "lastValueIO 4"  (STM.lookup (toKey k file) state) >>= \case
       Nothing -> readPersistent
-      Just (ValueWithDiagnostics v _) -> case v of
+      Just (ValueWithDiagnostics value _) -> case value of
         Succeeded ver (fromDynamic -> Just v) ->
             atomicallyNamed "lastValueIO 5"  $ Just . (v,) <$> mappingForVersion positionMapping file ver
         Stale del ver (fromDynamic -> Just v) ->
-            atomicallyNamed "lastValueIO 6"  $ Just . (v,) . maybe id addDelta del <$> mappingForVersion positionMapping file ver
+            atomicallyNamed "lastValueIO 6"  $ Just . (v,) . maybe id addOldDelta del <$> mappingForVersion positionMapping file ver
         Failed p | not p -> readPersistent
         _ -> pure Nothing
 
@@ -465,6 +524,33 @@ newtype ShakeSession = ShakeSession
     -- ^ Closes the Shake session
   }
 
+-- Note [Root Directory]
+-- ~~~~~~~~~~~~~~~~~~~~~
+-- We keep track of the root directory explicitly, which is the directory of the project root.
+-- We might be setting it via these options with decreasing priority:
+--
+-- 1. from LSP workspace root, `resRootPath` in `LanguageContextEnv`.
+-- 2. command line (--cwd)
+-- 3. default to the current directory.
+--
+-- Using `getCurrentDirectory` makes it more difficult to run the tests, as we spawn one thread of HLS per test case.
+-- If we modify the global Variable CWD, via `setCurrentDirectory`, all other test threads are suddenly affected,
+-- forcing us to run all integration tests sequentially.
+--
+-- Also, there might be a race condition if we depend on the current directory, as some plugin might change it.
+-- e.g. stylish's `loadConfig`. https://github.com/haskell/haskell-language-server/issues/4234
+--
+-- But according to https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_workspaceFolders
+-- The root dir is deprecated, that means we should cleanup dependency on the project root(Or $CWD) thing gradually,
+-- so multi-workspaces can actually be supported when we use absolute path everywhere(might also need some high level design).
+-- That might not be possible unless we have everything adapted to it, like 'hlint' and 'evaluation of template haskell'.
+-- But we should still be working towards the goal.
+--
+-- We can drop it in the future once:
+-- 1. We can get rid all the usages of root directory in the codebase.
+-- 2. LSP version we support actually removes the root directory from the protocol.
+--
+
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
@@ -473,6 +559,8 @@ data IdeState = IdeState
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopMonitoring       :: IO ()
+    -- | See Note [Root Directory]
+    ,rootDir              :: FilePath
     }
 
 
@@ -501,26 +589,17 @@ setValues state key file val diags =
 
 
 -- | Delete the value stored for a given ide build key
+-- and return the key that was deleted.
 deleteValue
   :: Shake.ShakeValue k
   => ShakeExtras
   -> k
   -> NormalizedFilePath
-  -> STM ()
-deleteValue ShakeExtras{dirtyKeys, state} key file = do
+  -> STM [Key]
+deleteValue ShakeExtras{state} key file = do
     STM.delete (toKey key file) state
-    modifyTVar' dirtyKeys $ insertKeySet (toKey key file)
+    return [toKey key file]
 
-recordDirtyKeys
-  :: Shake.ShakeValue k
-  => ShakeExtras
-  -> k
-  -> [NormalizedFilePath]
-  -> STM (IO ())
-recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
-    modifyTVar' dirtyKeys $ \x -> foldl' (flip insertKeySet) x (toKey key <$> file)
-    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
-        addEvent (fromString $ unlines $ "dirty " <> show key : map fromNormalizedFilePath file)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
@@ -561,66 +640,68 @@ shakeOpen :: Recorder (WithPriority Log)
           -> Maybe (LSP.LanguageContextEnv Config)
           -> Config
           -> IdePlugins IdeState
-          -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
           -> IdeReportProgress
           -> IdeTesting
           -> WithHieDb
-          -> IndexQueue
+          -> ThreadQueue
           -> ShakeOptions
           -> Monitoring
           -> Rules ()
+          -> FilePath
+          -- ^ Root directory, this one might be picking up from `LanguageContextEnv`'s `resRootPath`
+          -- , see Note [Root Directory]
           -> IO IdeState
-shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
+shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
-  ideTesting@(IdeTesting testing)
-  withHieDb indexQueue opts monitoring rules = mdo
-    let log :: Logger.Priority -> Log -> IO ()
-        log = logWith recorder
+  ideTesting
+  withHieDb threadQueue opts monitoring rules rootDir = mdo
+    -- see Note [Serializing runs in separate thread]
+    let indexQueue = tIndexQueue threadQueue
+        restartQueue = tRestartQueue threadQueue
+        loaderQueue = tLoaderQueue threadQueue
 
-#if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
-#else
-    us <- mkSplitUniqSupply 'r'
-    ideNc <- newIORef (initNameCache us knownKeyNames)
-#endif
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
+        semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newTVarIO $ hashed HMap.empty
+        knownTargetsVar <- newTVarIO $ hashed emptyKnownTargets
         let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
-        indexProgressToken <- newVar Nothing
+        semanticTokensId <- newTVarIO 0
+        indexProgressReporting <- progressReportingNoTrace
+            (liftM2 (+) (length <$> readTVar indexPending) (readTVar indexCompleted))
+            (readTVar indexCompleted)
+            lspEnv "Indexing" optProgressStyle
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
         -- TODO: exceptions can be swallowed here?
         _ <- async $ do
-            log Debug LogCreateHieDbExportsMapStart
+            logWith recorder Debug LogCreateHieDbExportsMapStart
             em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
-            log Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
+            logWith recorder Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
-        progress <- do
-            let (before, after) = if testing then (0,0.1) else (0.1,0.1)
+        progress <-
             if reportProgress
-                then delayedProgressReporting before after lspEnv optProgressStyle
-                else noProgressReporting
+                then progressReporting lspEnv "Processing" optProgressStyle
+                else noPerFileProgressReporting
         actionQueue <- newQueue
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
-
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
-        pure ShakeExtras{..}
+        pure ShakeExtras{shakeRecorder = recorder, ..}
     shakeDb  <-
         shakeNewDatabase
             opts { shakeExtra = newShakeExtra shakeExtras }
@@ -639,7 +720,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
     let readValuesCounter = fromIntegral . countRelevantKeys checkParents <$> getStateKeys shakeExtras
         readDirtyKeys = fromIntegral . countRelevantKeys checkParents . toListKeySet <$> readTVarIO(dirtyKeys shakeExtras)
         readIndexPending = fromIntegral . HMap.size <$> readTVarIO (indexPending $ hiedbWriter shakeExtras)
-        readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readTVarIO (exportsMap shakeExtras)
+        readExportsMap = fromIntegral . ExportsMap.exportsMapSize <$> readTVarIO (exportsMap shakeExtras)
         readDatabaseCount = fromIntegral . countRelevantKeys checkParents . map fst <$> shakeGetDatabaseKeys shakeDb
         readDatabaseStep =  fromIntegral <$> shakeGetBuildStep shakeDb
 
@@ -661,13 +742,13 @@ getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
-shakeSessionInit recorder ide@IdeState{..} = do
+shakeSessionInit recorder IdeState{..} = do
     -- Take a snapshot of the VFS - it should be empty as we've received no notifications
     -- till now, but it can't hurt to be in sync with the `lsp` library.
     vfs <- vfsSnapshot (lspEnv shakeExtras)
     initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
-    logDebug (ideLogger ide) "Shake session initialized"
+    logWith recorder Debug LogSessionInitialised
 
 shakeShut :: IdeState -> IO ()
 shakeShut IdeState{..} = do
@@ -677,6 +758,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
+    progressStop $ indexProgressReporting $ hiedbWriter shakeExtras
     stopMonitoring
 
 
@@ -702,31 +784,36 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts =
-    withMVar'
-        shakeSession
-        (\runner -> do
-              let log = logWith recorder
-              (stopTime,()) <- duration $ logErrorAfter 10 recorder $ cancelShakeSession runner
-              res <- shakeDatabaseProfile shakeDb
-              backlog <- readTVarIO $ dirtyKeys shakeExtras
-              queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
+shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
+    void $ awaitRunInThread (restartQueue shakeExtras) $ do
+        withMVar'
+            shakeSession
+            (\runner -> do
+                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                keys <- ioActionBetweenShakeSession
+                -- it is every important to update the dirty keys after we enter the critical section
+                -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                res <- shakeDatabaseProfile shakeDb
+                backlog <- readTVarIO $ dirtyKeys shakeExtras
+                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              -- this log is required by tests
-              log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-        )
-        -- It is crucial to be masked here, otherwise we can get killed
-        -- between spawning the new thread and updating shakeSession.
-        -- See https://github.com/haskell/ghcide/issues/79
-        (\() -> do
-          (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
+                -- this log is required by tests
+                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+            )
+            -- It is crucial to be masked here, otherwise we can get killed
+            -- between spawning the new thread and updating shakeSession.
+            -- See https://github.com/haskell/ghcide/issues/79
+            (\() -> do
+            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
     where
-        logErrorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
-        logErrorAfter seconds recorder action = flip withAsync (const action) $ do
+        logErrorAfter :: Seconds -> IO () -> IO ()
+        logErrorAfter seconds action = flip withAsync (const action) $ do
             sleep seconds
             logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
@@ -736,16 +823,16 @@ shakeRestart recorder IdeState{..} vfs reason acts =
 --
 --   Appropriate for user actions other than edits.
 shakeEnqueue :: ShakeExtras -> DelayedAction a -> IO (IO a)
-shakeEnqueue ShakeExtras{actionQueue, logger} act = do
+shakeEnqueue ShakeExtras{actionQueue, shakeRecorder} act = do
     (b, dai) <- instantiateDelayedAction act
     atomicallyNamed "actionQueue - push" $ pushQueue dai actionQueue
-    let wait' b =
-            waitBarrier b `catches`
+    let wait' barrier =
+            waitBarrier barrier `catches`
               [ Handler(\BlockedIndefinitelyOnMVar ->
                     fail $ "internal bug: forever blocked on MVar for " <>
                             actionName act)
               , Handler (\e@AsyncCancelled -> do
-                  logPriority logger Debug $ T.pack $ actionName act <> " was cancelled"
+                  logWith shakeRecorder Debug $ LogCancelledAction (T.pack $ actionName act)
 
                   atomicallyNamed "actionQueue - abort" $ abortQueue dai actionQueue
                   throw e)
@@ -869,15 +956,14 @@ garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection
 garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
 garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
-    ShakeExtras{state, dirtyKeys, lspEnv, logger, ideTesting} <- getShakeExtras
+    ShakeExtras{state, dirtyKeys, lspEnv, shakeRecorder, ideTesting} <- getShakeExtras
     (n::Int, garbage) <- liftIO $
         foldM (removeDirtyKey dirtyKeys state) (0,[]) agedKeys
     t <- liftIO start
     when (n>0) $ liftIO $ do
-        logDebug logger $ T.pack $
-            label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
+        logWith shakeRecorder Debug $ LogShakeGarbageCollection (T.pack label) n t
     when (coerce ideTesting) $ liftIO $ mRunLspT lspEnv $
-        LSP.sendNotification (SCustomMethod "ghcide/GC")
+        LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/GC"))
                              (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
     return garbage
 
@@ -939,13 +1025,23 @@ useWithStale :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
 useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 
--- | Request a Rule result, it not available return the last computed result which may be stale.
---   Errors out if none available.
+-- |Request a Rule result, it not available return the last computed result
+--  which may be stale.
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
 useWithStale_ :: IdeRule k v
     => k -> NormalizedFilePath -> Action (v, PositionMapping)
 useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
--- | Plural version of 'useWithStale_'
+-- |Plural version of 'useWithStale_'
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers.
 usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f (v, PositionMapping))
 usesWithStale_ key files = do
     res <- usesWithStale key files
@@ -959,7 +1055,7 @@ usesWithStale_ key files = do
 --
 -- Run via 'runIdeAction'.
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
-    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
+    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad, Semigroup)
 
 runIdeAction :: String -> ShakeExtras -> IdeAction a -> IO a
 runIdeAction _herald s i = runReaderT (runIdeActionT i) s
@@ -968,13 +1064,8 @@ askShake :: IdeAction ShakeExtras
 askShake = ask
 
 
-#if MIN_VERSION_ghc(9,3,0)
 mkUpdater :: NameCache -> NameCacheUpdater
 mkUpdater = id
-#else
-mkUpdater :: IORef NameCache -> NameCacheUpdater
-mkUpdater ref = NCU (upNameCache ref)
-#endif
 
 -- | A (maybe) stale result now, and an up to date one later
 data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate :: IO (Maybe a)  }
@@ -994,7 +1085,7 @@ useWithStaleFast' key file = do
 
   -- Async trigger the key to be built anyway because we want to
   -- keep updating the value in the key.
-  wait <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
+  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
   r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key file
@@ -1005,23 +1096,35 @@ useWithStaleFast' key file = do
       res <- lastValueIO s key file
       case res of
         Nothing -> do
-          a <- wait
+          a <- waitValue
           pure $ FastResult ((,zeroMapping) <$> a) (pure a)
-        Just _ -> pure $ FastResult res wait
+        Just _ -> pure $ FastResult res waitValue
     -- Otherwise, use the computed value even if it's out of date.
     Just _ -> do
       res <- lastValueIO s key file
-      pure $ FastResult res wait
+      pure $ FastResult res waitValue
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key = use key emptyFilePath
 
+-- Requests a rule if available.
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
 use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
 use_ key file = runIdentity <$> uses_ key (Identity file)
 
 useNoFile_ :: IdeRule k v => k -> Action v
 useNoFile_ key = use_ key emptyFilePath
 
+-- |Plural version of `use_`
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
 uses_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f v)
 uses_ key files = do
     res <- uses key files
@@ -1097,12 +1200,12 @@ defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
 
 defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
 defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
+    if file == emptyFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
-    => (TextDocumentVersion -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
+    => (Maybe Int32 -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
@@ -1111,20 +1214,21 @@ defineEarlyCutoff'
     -> RunMode
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
-defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
+defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
-    (if optSkipProgress options key then id else inProgress progress file) $ do
-        val <- case old of
+    let trans g x =  withRunInIO $ \run -> g (run x)
+    (if optSkipProgress options key then id else trans (inProgress progress file)) $ do
+        val <- case mbOld of
             Just old | mode == RunDependenciesSame -> do
-                v <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
-                case v of
+                mbValue <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
+                case mbValue of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
                     Just (v@(Succeeded _ x), diags) -> do
                         ver <- estimateFileVersionUnsafely key (Just x) file
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
-                        return $ Just $ RunResult ChangedNothing old $ A v
+                        return $ Just $ RunResult ChangedNothing old (A v) $ return ()
                     _ -> return Nothing
             _ ->
                 -- assert that a "clean" rule is never a cache miss
@@ -1138,19 +1242,18 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (bs, (diags, res)) <- actionCatch
+                (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
-                ver <- estimateFileVersionUnsafely key res file
-                (bs, res) <- case res of
+                ver <- estimateFileVersionUnsafely key mbRes file
+                (bs, res) <- case mbRes of
                     Nothing -> do
-                        pure (toShakeValue ShakeStale bs, staleV)
-                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded ver v)
-                liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
+                        pure (toShakeValue ShakeStale mbBs, staleV)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult mbBs, Succeeded ver v)
                 doDiagnostics (vfsVersion =<< ver) diags
-                let eq = case (bs, fmap decodeShakeValue old) of
+                let eq = case (bs, fmap decodeShakeValue mbOld) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
                         (ShakeStale a, Just (ShakeStale b))   -> cmp a b
                         -- If we do not have a previous result
@@ -1158,18 +1261,19 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                         _                                     -> False
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
-                    (encodeShakeValue bs) $
-                    A res
-        liftIO $ atomicallyNamed "define - dirtyKeys" $ modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
+                    (encodeShakeValue bs)
+                    (A res) $ do
+                        -- this hook needs to be run in the same transaction as the key is marked clean
+                        -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                        setValues state key file res (Vector.fromList diags)
+                        modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
         return res
   where
     -- Highly unsafe helper to compute the version of a file
     -- without creating a dependency on the GetModificationTime rule
     -- (and without creating cycles in the build graph).
     estimateFileVersionUnsafely
-        :: forall k v
-         . IdeRule k v
-        => k
+        :: k
         -> Maybe v
         -> NormalizedFilePath
         -> Action (Maybe FileVersion)
@@ -1186,6 +1290,32 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
 
+-- Note [Housekeeping rule cache and dirty key outside of hls-graph]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Hls-graph contains its own internal running state for each key in the shakeDatabase.
+-- ShakeExtras contains `state` field (rule result cache) and `dirtyKeys` (keys that became
+-- dirty in between build sessions) that is not visible to the hls-graph
+-- Essentially, we need to keep the rule cache and dirty key and hls-graph's internal state
+-- in sync.
+
+-- 1. A dirty key collected in a session should not be removed from dirty keys in the same session.
+-- Since if we clean out the dirty key in the same session,
+--     1.1. we will lose the chance to dirty its reverse dependencies. Since it only happens during session restart.
+--     1.2. a key might be marked as dirty in ShakeExtras while it's being recomputed by hls-graph which could lead to it's premature removal from dirtyKeys.
+--          See issue https://github.com/haskell/haskell-language-server/issues/4093 for more details.
+
+-- 2. When a key is marked clean in the hls-graph's internal running
+-- state, the rule cache and dirty keys are updated in the same transaction.
+-- otherwise, some situations like the following can happen:
+-- thread 1: hls-graph session run a key
+-- thread 1: defineEarlyCutoff' run the action for the key
+-- thread 1: the action is done, rule cache and dirty key are updated
+-- thread 2: we restart the hls-graph session, thread 1 is killed, the
+--           hls-graph's internal state is not updated.
+-- This is problematic with early cut off because we are having a new rule cache matching the
+-- old hls-graph's internal state, which might case it's reverse dependency to skip the recomputation.
+-- See https://github.com/haskell/haskell-language-server/issues/4194 for more details.
+
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"
 traceA (A Stale{})     = "Stale"
@@ -1194,7 +1324,7 @@ traceA (A Succeeded{}) = "Success"
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
   -> NormalizedFilePath
-  -> TextDocumentVersion
+  -> Maybe Int32
   -> Key
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
@@ -1207,7 +1337,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         addTagUnsafe :: String -> String -> String -> a -> a
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
         update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
-        update addTagUnsafe new store = addTagUnsafe "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafe uri ver (renderKey k) new store
+        update addTagUnsafeMethod new store = addTagUnsafeMethod "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafeMethod uri ver (renderKey k) new store
         current = second diagsFromRule <$> current0
     addTag "version" (show ver)
     mask_ $ do
@@ -1217,26 +1347,25 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         -- publishDiagnosticsNotification.
         newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (addTagUnsafe "shown ") (map snd currentShown) diagnostics
         _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (addTagUnsafe "hidden ") (map snd currentHidden) hiddenDiagnostics
-        let uri = filePathToUri' fp
+        let uri' = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
-        registerEvent debouncer delay uri $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
+        registerEvent debouncer delay uri' $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
              join $ mask_ $ do
-                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
+                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $ do
                             liftIO $ tag "count" (show $ Prelude.length newDiags)
                             liftIO $ tag "key" (show k)
-                            LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
+                            LSP.sendNotification SMethod_TextDocumentPublishDiagnostics $
+                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) newDiags
                  return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
-            | coerce ideTesting = c
-                {_relatedInformation =
-                    Just $ List [
+            | coerce ideTesting = c & L.relatedInformation ?~
+                         [
                         DiagnosticRelatedInformation
                             (Location
                                 (filePathToUri $ fromNormalizedFilePath fp)
@@ -1244,22 +1373,14 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             )
                             (T.pack $ show k)
                             ]
-                }
             | otherwise = c
 
 
-newtype Priority = Priority Double
+ideLogger :: IdeState -> Recorder (WithPriority Log)
+ideLogger IdeState{shakeExtras=ShakeExtras{shakeRecorder}} = shakeRecorder
 
-setPriority :: Priority -> Action ()
-setPriority (Priority p) = reschedule p
-
-ideLogger :: IdeState -> Logger
-ideLogger IdeState{shakeExtras=ShakeExtras{logger}} = logger
-
-actionLogger :: Action Logger
-actionLogger = do
-    ShakeExtras{logger} <- getShakeExtras
-    return logger
+actionLogger :: Action (Recorder (WithPriority Log))
+actionLogger = shakeRecorder <$> getShakeExtras
 
 --------------------------------------------------------------------------------
 type STMDiagnosticStore = STM.Map NormalizedUri StoreItem
@@ -1271,7 +1392,7 @@ updateSTMDiagnostics ::
   (forall a. String -> String -> a -> a) ->
   STMDiagnosticStore ->
   NormalizedUri ->
-  TextDocumentVersion ->
+  Maybe Int32 ->
   DiagnosticsBySource ->
   STM [LSP.Diagnostic]
 updateSTMDiagnostics addTag store uri mv newDiagsBySource =
@@ -1288,7 +1409,7 @@ updateSTMDiagnostics addTag store uri mv newDiagsBySource =
 setStageDiagnostics
     :: (forall a. String -> String -> a -> a)
     -> NormalizedUri
-    -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
+    -> Maybe Int32 -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
     -> STMDiagnosticStore
@@ -1303,20 +1424,23 @@ getAllDiagnostics ::
 getAllDiagnostics =
     fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
-updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> STM ()
-updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) =
+updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
+updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =
     STM.focus (Focus.alter f) uri positionMapping
       where
         uri = toNormalizedUri _uri
-        f = Just . f' . fromMaybe mempty
-        f' mappingForUri = snd $
-                -- Very important to use mapAccum here so that the tails of
-                -- each mapping can be shared, otherwise quadratic space is
-                -- used which is evident in long running sessions.
-                EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
-                  zeroMapping
-                  (EM.insert actual_version (shared_change, zeroMapping) mappingForUri)
-        shared_change = mkDelta changes
-        actual_version = case _version of
-          Nothing -> error "Nothing version from server" -- This is a violation of the spec
-          Just v  -> v
+        f = Just . updatePositionMappingHelper _version changes . fromMaybe mempty
+
+
+updatePositionMappingHelper ::
+    Int32
+    -> [TextDocumentContentChangeEvent]
+    -> EnumMap Int32 (PositionDelta, PositionMapping)
+    -> EnumMap Int32 (PositionDelta, PositionMapping)
+updatePositionMappingHelper ver changes mappingForUri = snd $
+        -- Very important to use mapAccum here so that the tails of
+        -- each mapping can be shared, otherwise quadratic space is
+        -- used which is evident in long running sessions.
+        EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addOldDelta delta acc in (new, (delta, acc)))
+            zeroMapping
+            (EM.insert ver (mkDelta changes, zeroMapping) mappingForUri)

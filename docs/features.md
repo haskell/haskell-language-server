@@ -20,6 +20,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Code lenses](#code-lenses)                         | `textDocument/codeLens`                                                                           |
 | [Selection range](#selection-range)                 | `textDocument/selectionRange`                                                                     |
 | [Rename](#rename)                                   | `textDocument/rename`                                                                             |
+| [Semantic tokens](#semantic-tokens)                 | `textDocument/semanticTokens/full`                                                                |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [plugin support page](./support/plugin-support.md) for details.
@@ -80,6 +81,12 @@ Known limitations:
 
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
+## Jump to note definition
+
+Provided by: `hls-notes-plugin`
+
+Jump to the definition of a [GHC-style note](https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/coding-style#2-using-notes).
+
 ## Find references
 
 Provided by: `ghcide`
@@ -107,7 +114,6 @@ Format your code with various Haskell code formatters.
 
 | Formatter       | Provided by                  |
 | --------------- | ---------------------------- |
-| Brittany        | `hls-brittany-plugin`        |
 | Floskell        | `hls-floskell-plugin`        |
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
@@ -138,7 +144,7 @@ Provided by: `hls-call-hierarchy-plugin`
 
 Shows ingoing and outgoing calls for a function.
 
-![Call Hierarchy in VSCode](https://github.com/haskell/haskell-language-server/raw/2857eeece0398e1cd4b2ffb6069b05c4d2308b39/plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
+![Call Hierarchy in VSCode](../plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
 
 ## Highlight references
 
@@ -181,6 +187,14 @@ Code action kind: `quickfix.literals.style`
 
 Make import lists fully explicit (same as the code lens).
 
+### Refine import
+
+Provided by: `hls-explicit-imports-plugin`
+
+Code action kind: `quickfix.import.refine`
+
+Refines imports to more specific modules when names are re-exported (same as the code lens).
+
 ### Qualify imported names
 
 Provided by: `hls-qualify-imported-names-plugin`
@@ -191,15 +205,7 @@ Rewrites imported names to be qualified.
 
 ![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
 
-For usage see the ![readme](../plugins/hls-qualify-imported-names-plugin/README.md).
-
-### Refine import
-
-Provided by: `hls-refine-imports-plugin`
-
-Code action kind: `quickfix.import.refine`
-
-Refines imports to more specific modules when names are re-exported (same as the code lens).
+For usage see the [readme](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-qualify-imported-names-plugin/README.md).
 
 ### Add missing class methods
 
@@ -245,24 +251,6 @@ Converts numeric literals to different formats.
 
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
 
-### Add Haddock comments
-
-Provided by: `hls-haddock-comments-plugin`
-
-Code action kind: `quickfix`
-
-Adds Haddock comments for function arguments.
-
-### Wingman
-
-Status: Not supported on GHC 9.2
-
-Provided by: `hls-tactics-plugin`
-
-Provides a variety of code actions for interactive code development, see <https://haskellwingman.dev/> for more details.
-
-![Wingman Demo](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
-
 ### Change Type Signature
 
 Provided by: `hls-change-type-signature-plugin`
@@ -282,7 +270,7 @@ Known Limitations:
 
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)
 
-![Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
+[Link to Docs](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-change-type-signature-plugin/README.md)
 
 ### Add argument to function
 
@@ -302,7 +290,7 @@ Convert a datatype to GADT syntax.
 
 ![GADT Demo](../plugins/hls-gadt-plugin/gadt.gif)
 
-![Link to Docs](../plugins/hls-gadt-plugin/README.md)
+[Link to Docs](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-gadt-plugin/README.md)
 
 ### Expand record wildcard
 
@@ -336,7 +324,7 @@ Provided by: `hls-eval-plugin`
 
 Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
-![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
+![Eval Demo](../plugins/hls-eval-plugin/demo.gif)
 
 Known limitations:
 
@@ -355,7 +343,7 @@ Shows fully explicit import lists and rewrites them with a click (same as the co
 
 ### Refine import code lens
 
-Provided by: `hls-refine-imports-plugin`
+Provided by: `hls-explicit-imports-plugin`
 
 Shows refined imports and applies them with a click (same as the code action).
 
@@ -399,6 +387,22 @@ Known limitations:
 
 - Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects](https://github.com/haskell/haskell-language-server/issues/2193).
 
+## Semantic tokens
+
+Provided by: `hls-semantic-tokens-plugin`
+
+Provides semantic tokens for each token in the source code to support semantic highlighting.
+
+## Rewrite to overloaded record syntax
+
+Provided by: `hls-overloaded-record-dot-plugin`
+
+Code action kind: `refactor.rewrite`
+
+Rewrites record selectors to use overloaded dot syntax
+
+![Explicit Wildcard Demo](../plugins/hls-overloaded-record-dot-plugin/example.gif)
+
 ## Missing features
 
 The following features are supported by the LSP specification but not implemented in HLS.
@@ -409,7 +413,6 @@ Contributions welcome!
 | Signature help         | Unimplemented     | `textDocument/signatureHelp`                   |
 | Jump to declaration    | Unclear if useful | `textDocument/declaration`                     |
 | Jump to implementation | Unclear if useful | `textDocument/implementation`                  |
-| Semantic tokens        | Unimplemented     | `textDocument/semanticTokens`                  |
 | Linked editing         | Unimplemented     | `textDocument/linkedEditingRange`              |
 | Document links         | Unimplemented     | `textDocument/documentLink`                    |
 | Document color         | Unclear if useful | `textDocument/documentColor`                   |

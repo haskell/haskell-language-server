@@ -1,48 +1,38 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE PatternSynonyms            #-}
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE RecordWildCards    #-}
 
 module Development.IDE.Graph.Internal.Types where
 
-import           Control.Applicative
+import           Control.Concurrent.STM             (STM)
+import           Control.Monad                      ((>=>))
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
-import           Data.Aeson                    (FromJSON, ToJSON)
-import           Data.Bifunctor                (second)
-import qualified Data.ByteString               as BS
-import           Data.Coerce
+import           Data.Aeson                         (FromJSON, ToJSON)
+import           Data.Bifunctor                     (second)
+import qualified Data.ByteString                    as BS
 import           Data.Dynamic
-import qualified Data.HashMap.Strict           as Map
-import qualified Data.IntMap.Strict            as IM
-import           Data.IntMap                   (IntMap)
-import qualified Data.IntSet                   as IS
-import           Data.IntSet                   (IntSet)
-import qualified Data.Text                     as T
-import           Data.Text                     (Text)
+import           Data.Foldable                      (fold)
+import qualified Data.HashMap.Strict                as Map
 import           Data.IORef
-import           Data.List                     (intercalate)
+import           Data.List                          (intercalate)
 import           Data.Maybe
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
-import           GHC.Conc                      (TVar, atomically)
-import           GHC.Generics                  (Generic)
+import           Development.IDE.Graph.Internal.Key
+import           GHC.Conc                           (TVar, atomically)
+import           GHC.Generics                       (Generic)
 import qualified ListT
-import qualified StmContainers.Map             as SMap
-import           StmContainers.Map             (Map)
-import           System.Time.Extra             (Seconds)
-import           System.IO.Unsafe
-import           UnliftIO                      (MonadUnliftIO)
+import qualified StmContainers.Map                  as SMap
+import           StmContainers.Map                  (Map)
+import           System.Time.Extra                  (Seconds)
+import           UnliftIO                           (MonadUnliftIO)
 
+#if !MIN_VERSION_base(4,18,0)
+import           Control.Applicative                (liftA2)
+#endif
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a
 unwrapDynamic x = fromMaybe (error msg) $ fromDynamic x
@@ -54,8 +44,13 @@ unwrapDynamic x = fromMaybe (error msg) $ fromDynamic x
 
 type TheRules = Map.HashMap TypeRep Dynamic
 
+-- | A computation that defines all the rules that form part of the computation graph.
+--
+-- 'Rules' has access to 'IO' through 'MonadIO'. Use of 'IO' is at your own risk: if
+-- you write 'Rules' that throw exceptions, then you need to make sure to handle them
+-- yourself when you run the resulting 'Rules'.
 newtype Rules a = Rules (ReaderT SRules IO a)
-    deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail)
+    deriving newtype (Monad, Applicative, Functor, MonadIO)
 
 data SRules = SRules {
     rulesExtra   :: !Dynamic,
@@ -63,10 +58,15 @@ data SRules = SRules {
     rulesMap     :: !(IORef TheRules)
     }
 
-
 ---------------------------------------------------------------------
 -- ACTIONS
 
+-- | An action representing something that can be run as part of a 'Rule'.
+--
+-- 'Action's can be pure functions but also have access to 'IO' via 'MonadIO' and 'MonadUnliftIO.
+-- It should be assumed that actions throw exceptions, these can be caught with
+-- 'Development.IDE.Graph.Internal.Action.actionCatch'. In particular, it is
+-- permissible to use the 'MonadFail' instance, which will lead to an 'IOException'.
 newtype Action a = Action {fromAction :: ReaderT SAction IO a}
     deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask, MonadUnliftIO)
 
@@ -79,138 +79,22 @@ data SAction = SAction {
 getDatabase :: Action Database
 getDatabase = Action $ asks actionDatabase
 
+-- | waitForDatabaseRunningKeysAction waits for all keys in the database to finish running.
+waitForDatabaseRunningKeysAction :: Action ()
+waitForDatabaseRunningKeysAction = getDatabase >>= liftIO . waitForDatabaseRunningKeys
+
 ---------------------------------------------------------------------
 -- DATABASE
 
 data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 newtype Step = Step Int
-    deriving newtype (Eq,Ord,Hashable)
+    deriving newtype (Eq,Ord,Hashable,Show)
 
 ---------------------------------------------------------------------
 -- Keys
 
-data KeyValue = forall a . (Eq a, Typeable a, Hashable a, Show a) => KeyValue a Text
 
-newtype Key = UnsafeMkKey Int
-
-pattern Key a <- (lookupKeyValue -> KeyValue a _)
-
-data GlobalKeyValueMap = GlobalKeyValueMap !(Map.HashMap KeyValue Key) !(IntMap KeyValue) {-# UNPACK #-} !Int
-
-keyMap :: IORef GlobalKeyValueMap
-keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
-
-{-# NOINLINE keyMap #-}
-
-newKey :: (Eq a, Typeable a, Hashable a, Show a) => a -> Key
-newKey k = unsafePerformIO $ do
-  let !newKey = KeyValue k (T.pack (show k))
-  atomicModifyIORef' keyMap $ \km@(GlobalKeyValueMap hm im n) ->
-    let new_key = Map.lookup newKey hm
-    in case new_key of
-          Just v  -> (km, v)
-          Nothing ->
-            let !new_index = UnsafeMkKey n
-            in (GlobalKeyValueMap (Map.insert newKey new_index hm) (IM.insert n newKey im) (n+1), new_index)
-{-# NOINLINE newKey #-}
-
-lookupKeyValue :: Key -> KeyValue
-lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
-  GlobalKeyValueMap _ im _ <- readIORef keyMap
-  pure $! im IM.! x
-
-{-# NOINLINE lookupKeyValue #-}
-
-instance Eq Key where
-  UnsafeMkKey a == UnsafeMkKey b = a == b
-instance Hashable Key where
-  hashWithSalt i (UnsafeMkKey x) = hashWithSalt i x
-instance Show Key where
-  show (Key x) = show x
-
-instance Eq KeyValue where
-    KeyValue a _ == KeyValue b _ = Just a == cast b
-instance Hashable KeyValue where
-    hashWithSalt i (KeyValue x _) = hashWithSalt i (typeOf x, x)
-instance Show KeyValue where
-    show (KeyValue x t) = T.unpack t
-
-renderKey :: Key -> Text
-renderKey (lookupKeyValue -> KeyValue _ t) = t
-
-newtype KeySet = KeySet IntSet
-  deriving newtype (Eq, Ord, Semigroup, Monoid)
-
-instance Show KeySet where
-  showsPrec p (KeySet is)= showParen (p > 10) $
-      showString "fromList " . shows ks
-    where ks = coerce (IS.toList is) :: [Key]
-
-insertKeySet :: Key -> KeySet -> KeySet
-insertKeySet = coerce IS.insert
-
-memberKeySet :: Key -> KeySet -> Bool
-memberKeySet = coerce IS.member
-
-toListKeySet :: KeySet -> [Key]
-toListKeySet = coerce IS.toList
-
-nullKeySet :: KeySet -> Bool
-nullKeySet = coerce IS.null
-
-differenceKeySet :: KeySet -> KeySet -> KeySet
-differenceKeySet = coerce IS.difference
-
-deleteKeySet :: Key -> KeySet -> KeySet
-deleteKeySet = coerce IS.delete
-
-fromListKeySet :: [Key] -> KeySet
-fromListKeySet = coerce IS.fromList
-
-singletonKeySet :: Key -> KeySet
-singletonKeySet = coerce IS.singleton
-
-filterKeySet :: (Key -> Bool) -> KeySet -> KeySet
-filterKeySet = coerce IS.filter
-
-lengthKeySet :: KeySet -> Int
-lengthKeySet = coerce IS.size
-
-newtype KeyMap a = KeyMap (IntMap a)
-  deriving newtype (Eq, Ord, Semigroup, Monoid)
-
-instance Show a => Show (KeyMap a) where
-  showsPrec p (KeyMap im)= showParen (p > 10) $
-      showString "fromList " . shows ks
-    where ks = coerce (IM.toList im) :: [(Key,a)]
-
-mapKeyMap :: (a -> b) -> KeyMap a -> KeyMap b
-mapKeyMap f (KeyMap m) = KeyMap (IM.map f m)
-
-insertKeyMap :: Key -> a -> KeyMap a -> KeyMap a
-insertKeyMap (UnsafeMkKey k) v (KeyMap m) = KeyMap (IM.insert k v m)
-
-lookupKeyMap :: Key -> KeyMap a -> Maybe a
-lookupKeyMap (UnsafeMkKey k) (KeyMap m) = IM.lookup k m
-
-lookupDefaultKeyMap :: a -> Key -> KeyMap a -> a
-lookupDefaultKeyMap a (UnsafeMkKey k) (KeyMap m) = IM.findWithDefault a k m
-
-fromListKeyMap :: [(Key,a)] -> KeyMap a
-fromListKeyMap xs = KeyMap (IM.fromList (coerce xs))
-
-fromListWithKeyMap :: (a -> a -> a) -> [(Key,a)] -> KeyMap a
-fromListWithKeyMap f xs = KeyMap (IM.fromListWith f (coerce xs))
-
-toListKeyMap :: KeyMap a -> [(Key,a)]
-toListKeyMap (KeyMap m) = coerce (IM.toList m)
-
-elemsKeyMap :: KeyMap a -> [a]
-elemsKeyMap (KeyMap m) = IM.elems m
-
-restrictKeysKeyMap :: KeyMap a -> KeySet -> KeyMap a
-restrictKeysKeyMap (KeyMap m) (KeySet s) = KeyMap (IM.restrictKeys m s)
 
 
 newtype Value = Value Dynamic
@@ -230,6 +114,9 @@ data Database = Database {
     databaseStep   :: !(TVar Step),
     databaseValues :: !(Map Key KeyDetails)
     }
+
+waitForDatabaseRunningKeys :: Database -> IO ()
+waitForDatabaseRunningKeys = getDatabaseValues >=> mapM_ (waitRunning . snd)
 
 getDatabaseValues :: Database -> IO [(Key, Status)]
 getDatabaseValues = atomically
@@ -257,6 +144,10 @@ getResult (Clean re)           = Just re
 getResult (Dirty m_re)         = m_re
 getResult (Running _ _ _ m_re) = m_re -- watch out: this returns the previous result
 
+waitRunning :: Status -> IO ()
+waitRunning Running{..} = runningWait
+waitRunning _           = return ()
+
 data Result = Result {
     resultValue     :: !Value,
     resultBuilt     :: !Step, -- ^ the step when it was last recomputed
@@ -267,16 +158,20 @@ data Result = Result {
     resultData      :: !BS.ByteString
     }
 
-data ResultDeps = UnknownDeps | AlwaysRerunDeps !KeySet | ResultDeps !KeySet
+-- Notice, invariant to maintain:
+-- the ![KeySet] in ResultDeps need to be stored in reverse order,
+-- so that we can append to it efficiently, and we need the ordering
+-- so we can do a linear dependency refreshing in refreshDeps.
+data ResultDeps = UnknownDeps | AlwaysRerunDeps !KeySet | ResultDeps ![KeySet]
   deriving (Eq, Show)
 
 getResultDepsDefault :: KeySet -> ResultDeps -> KeySet
-getResultDepsDefault _ (ResultDeps ids)      = ids
+getResultDepsDefault _ (ResultDeps ids)      = fold ids
 getResultDepsDefault _ (AlwaysRerunDeps ids) = ids
 getResultDepsDefault def UnknownDeps         = def
 
 mapResultDeps :: (KeySet -> KeySet) -> ResultDeps -> ResultDeps
-mapResultDeps f (ResultDeps ids)      = ResultDeps $ f ids
+mapResultDeps f (ResultDeps ids)      = ResultDeps $ fmap f ids
 mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ f ids
 mapResultDeps _ UnknownDeps           = UnknownDeps
 
@@ -304,7 +199,6 @@ instance NFData RunMode where rnf x = x `seq` ()
 -- | How the output of a rule has changed.
 data RunChanged
     = ChangedNothing -- ^ Nothing has changed.
-    | ChangedStore -- ^ The stored value has changed, but in a way that should be considered identical (used rarely).
     | ChangedRecomputeSame -- ^ I recomputed the value and it was the same.
     | ChangedRecomputeDiff -- ^ I recomputed the value and it was different.
       deriving (Eq,Show,Generic)
@@ -320,10 +214,10 @@ data RunResult value = RunResult
         -- ^ The value to store in the Shake database.
     ,runValue   :: value
         -- ^ The value to return from 'Development.Shake.Rule.apply'.
+    ,runHook    :: STM ()
+        -- ^ The hook to run at the end of the build in the same transaction
+        -- when the key is marked as clean.
     } deriving Functor
-
-instance NFData value => NFData (RunResult value) where
-    rnf (RunResult x1 x2 x3) = rnf x1 `seq` x2 `seq` rnf x3
 
 ---------------------------------------------------------------------
 -- EXCEPTIONS

@@ -9,7 +9,6 @@ module Development.IDE.Types.Diagnostics (
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
-  List(..),
   ideErrorText,
   ideErrorWithSource,
   showDiagnostics,
@@ -17,20 +16,17 @@ module Development.IDE.Types.Diagnostics (
   IdeResultNoDiagnosticsEarlyCutoff) where
 
 import           Control.DeepSeq
-import           Data.Maybe                                as Maybe
-import qualified Data.Text                                 as T
-import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.Terminal (Color (..), color)
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
-import           Data.Text.Prettyprint.Doc.Render.Text
-import           Language.LSP.Diagnostics
-import           Language.LSP.Types                        as LSP (Diagnostic (..),
-                                                                   DiagnosticSeverity (..),
-                                                                   DiagnosticSource,
-                                                                   List (..))
-
-import           Data.ByteString                           (ByteString)
+import           Data.ByteString                (ByteString)
+import           Data.Maybe                     as Maybe
+import qualified Data.Text                      as T
 import           Development.IDE.Types.Location
+import           Language.LSP.Diagnostics
+import           Language.LSP.Protocol.Types    as LSP (Diagnostic (..),
+                                                        DiagnosticSeverity (..))
+import           Prettyprinter
+import           Prettyprinter.Render.Terminal  (Color (..), color)
+import qualified Prettyprinter.Render.Terminal  as Terminal
+import           Prettyprinter.Render.Text
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -49,10 +45,10 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText = ideErrorWithSource (Just "compiler") (Just DsError)
+ideErrorText = ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error)
 
 ideErrorWithSource
-  :: Maybe DiagnosticSource
+  :: Maybe T.Text
   -> Maybe DiagnosticSeverity
   -> a
   -> T.Text
@@ -64,7 +60,9 @@ ideErrorWithSource source sev fp msg = (fp, ShowDiag, LSP.Diagnostic {
     _source = source,
     _message = msg,
     _relatedInformation = Nothing,
-    _tags = Nothing
+    _tags = Nothing,
+    _codeDescription = Nothing,
+    _data_ = Nothing
     })
 
 -- | Defines whether a particular diagnostic should be reported
@@ -117,14 +115,14 @@ prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
         , slabel_ "Severity:" $ pretty $ show sev
         , slabel_ "Message: "
             $ case sev of
-              LSP.DsError   -> annotate $ color Red
-              LSP.DsWarning -> annotate $ color Yellow
-              LSP.DsInfo    -> annotate $ color Blue
-              LSP.DsHint    -> annotate $ color Magenta
+              LSP.DiagnosticSeverity_Error       -> annotate $ color Red
+              LSP.DiagnosticSeverity_Warning     -> annotate $ color Yellow
+              LSP.DiagnosticSeverity_Information -> annotate $ color Blue
+              LSP.DiagnosticSeverity_Hint        -> annotate $ color Magenta
             $ stringParagraphs _message
         ]
     where
-        sev = fromMaybe LSP.DsError _severity
+        sev = fromMaybe LSP.DiagnosticSeverity_Error _severity
 
 
 -- | Label a document.

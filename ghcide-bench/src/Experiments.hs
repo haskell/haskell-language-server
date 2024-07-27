@@ -1,10 +1,8 @@
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE ImplicitParams            #-}
-{-# LANGUAGE ImpredicativeTypes        #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE PolyKinds                 #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE ImplicitParams     #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
@@ -23,53 +21,67 @@ module Experiments
 , runBench
 , exampleToOptions
 ) where
-import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Concurrent.Async        (withAsync)
-import           Control.Exception.Safe          (IOException, handleAny, try)
-import           Control.Monad.Extra             (allM, forM, forM_, forever,
-                                                  unless, void, when, whenJust,
-                                                  (&&^))
-import           Control.Monad.Fail              (MonadFail)
+import           Control.Applicative.Combinators    (skipManyTill)
+import           Control.Concurrent.Async           (withAsync)
+import           Control.Exception.Safe             (IOException, handleAny,
+                                                     try)
+import           Control.Lens                       (_Just, (&), (.~), (^.),
+                                                     (^?))
+import           Control.Lens.Extras                (is)
+import           Control.Monad.Extra                (allM, forM, forM_, forever,
+                                                     unless, void, when,
+                                                     whenJust, (&&^))
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Value (Null),
-                                                  eitherDecodeStrict', toJSON)
-import qualified Data.Aeson                      as A
-import qualified Data.ByteString                 as BS
-import           Data.Either                     (fromRight)
+import           Data.Aeson                         (Value (Null),
+                                                     eitherDecodeStrict',
+                                                     toJSON)
+import qualified Data.Aeson                         as A
+import qualified Data.ByteString                    as BS
+import qualified Data.ByteString.Lazy               as BSL
+import           Data.Either                        (fromRight)
 import           Data.List
 import           Data.Maybe
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
+import           Data.Proxy
+import           Data.Text                          (Text)
+import qualified Data.Text                          as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
 import           Development.IDE.Test.Diagnostic
-import           Development.Shake               (CmdOption (Cwd, FileStdout),
-                                                  cmd_)
+import           Development.Shake                  (CmdOption (Cwd), cmd_)
 import           Experiments.Types
+import           Language.LSP.Protocol.Capabilities
+import qualified Language.LSP.Protocol.Lens         as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types        hiding (Null,
+                                                     SemanticTokenAbsolute (..))
+import qualified Language.LSP.Protocol.Types        as LSP
 import           Language.LSP.Test
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities
 import           Numeric.Natural
 import           Options.Applicative
 import           System.Directory
-import           System.Environment.Blank        (getEnv)
-import           System.FilePath                 ((<.>), (</>))
+import           System.Environment.Blank           (getEnv)
+import           System.FilePath                    ((<.>), (</>))
 import           System.IO
 import           System.Process
 import           System.Time.Extra
-import           Text.ParserCombinators.ReadP    (readP_to_S)
+import           Text.ParserCombinators.ReadP       (readP_to_S)
 import           Text.Printf
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
-    TextDocumentContentChangeEvent
-    { _range = Just (Range p p),
-      _rangeLength = Nothing,
-      _text = "a"
-    }
+    TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+        { _range = Range p p
+        , _rangeLength = Nothing
+        , _text = "a"
+        }
+
+headerEdit :: TextDocumentContentChangeEvent
+headerEdit =
+    TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+        { _range = Range (Position 0 0) (Position 0 0)
+        , _rangeLength = Nothing
+        , _text = "-- header comment \n"
+        }
 
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
@@ -90,9 +102,37 @@ allWithIdentifierPos f docs = case applicableDocs of
 
 experiments :: HasConfig => [Bench]
 experiments =
-    [ ---------------------------------------------------------------------------------------
+    [
+      bench "semanticTokens" $ \docs -> do
+        liftIO $ putStrLn "Starting semanticTokens"
+        r <- forM docs $ \DocumentPositions{..} -> do
+            changeDoc doc [charEdit stringLiteralP]
+            waitForProgressStart
+            waitForProgressDone
+            tks <- getSemanticTokens doc
+            case tks ^? LSP._L of
+                Just _  -> return True
+                Nothing -> return False
+        return $ and r,
+      ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "hover after edit" $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          isJust <$> getHover doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench
+        "hover after cradle edit"
+        (\docs -> do
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+             [ FileEvent hieYamlUri FileChangeType_Changed ]
+            flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        ),
       ---------------------------------------------------------------------------------------
       bench "edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} -> do
@@ -104,20 +144,24 @@ experiments =
         waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
-      bench "hover after edit" $ \docs -> do
-        forM_ docs $ \DocumentPositions{..} ->
-          changeDoc doc [charEdit stringLiteralP]
-        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-          isJust <$> getHover doc (fromJust identifierP),
+      bench "edit-header" $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} -> do
+          changeDoc doc [headerEdit]
+          -- wait for a fresh build start
+          waitForProgressStart
+        -- wait for the build to be finished
+        output "edit: waitForProgressDone"
+        waitForProgressDone
+        return True,
       ---------------------------------------------------------------------------------------
       bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
-        either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
+        hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition after edit" $ \docs -> do
           forM_ docs $ \DocumentPositions{..} ->
             changeDoc doc [charEdit stringLiteralP]
           flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-            either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
+            hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -138,30 +182,21 @@ experiments =
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      benchWithSetup
+      bench
         "code actions"
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} -> do
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
-                waitForProgressStart
-            waitForProgressDone
-        )
-        ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
-            forM identifierP $ \p ->
-              getCodeActions doc (Range p p))
+            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+              forM identifierP $ \p ->
+                getCodeActions doc (Range p p))
         ),
       ---------------------------------------------------------------------------------------
-      benchWithSetup
+      bench
         "code actions after edit"
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
-        )
-        ( \docs -> do
             forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
               waitForProgressStart
@@ -171,20 +206,13 @@ experiments =
                 getCodeActions doc (Range p p))
         ),
       ---------------------------------------------------------------------------------------
-      benchWithSetup
+      bench
         "code actions after cradle edit"
-        ( \docs -> do
-            forM_ docs $ \DocumentPositions{..} -> do
-                forM identifierP $ \p -> do
-                    changeDoc doc [charEdit p]
-                    waitForProgressStart
-            void waitForBuildQueue
-        )
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent hieYamlUri FcChanged ]
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+             [ FileEvent hieYamlUri FileChangeType_Changed ]
             waitForProgressStart
             waitForProgressStart
             waitForProgressStart -- the Session logic restarts a second time
@@ -195,21 +223,30 @@ experiments =
         ),
       ---------------------------------------------------------------------------------------
       bench
-        "hover after cradle edit"
-        (\docs -> do
-            hieYamlUri <- getDocUri "hie.yaml"
-            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent hieYamlUri FcChanged ]
-            flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        "code lens"
+        ( \docs -> not . null <$> forM docs (\DocumentPositions{..} ->
+            getCodeLenses doc)
+        ),
+      ---------------------------------------------------------------------------------------
+      bench
+        "code lens after edit"
+        ( \docs -> do
+            forM_ docs $ \DocumentPositions{..} -> do
+              changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
+            waitForProgressDone
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              getCodeLenses doc)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
-                  { _range = Just Range {_start = bottom, _end = bottom}
-                  , _rangeLength = Nothing, _text = t}
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
                 bottom = Position maxBound 0
                 t = T.unlines
                     [""
@@ -229,12 +266,76 @@ experiments =
             flip allM docs $ \DocumentPositions{..} -> do
                 bottom <- pred . length . T.lines <$> documentContents doc
                 diags <- getCurrentDiagnostics doc
-                case requireDiagnostic diags (DsError, (fromIntegral bottom, 8), "Found hole", Nothing) of
+                case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute single-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "-- >>> 1 + 2"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "eval execute multi-line code lens"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                  { _range = Range bottom bottom
+                  , _rangeLength = Nothing
+                  , _text = t
+                  }
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [ ""
+                    , "data T = A | B | C | D"
+                    , "  deriving (Show, Eq, Ord, Bounded, Enum)"
+                    , ""
+                    , "{-"
+                    , ">>> import Data.List (nub)"
+                    , ">>> xs = ([minBound..maxBound] ++ [minBound..maxBound] :: [T])"
+                    , ">>> nub xs"
+                    , "-}"
+                    ]
+            changeDoc doc [edit]
+        )
+        ( \docs -> do
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              lenses <- getCodeLenses doc
+              forM_ lenses $ \case
+                CodeLens { _command = Just cmd } -> do
+                  executeCommand cmd
+                  waitForProgressStart
+                  waitForProgressDone
+                _ -> return ()
+              )
         )
     ]
-
+    where hasDefinitions (InL (Definition (InL _)))  = True
+          hasDefinitions (InL (Definition (InR ls))) = not $ null ls
+          hasDefinitions (InR (InL ds))              = not $ null ds
+          hasDefinitions (InR (InR LSP.Null))        = False
 ---------------------------------------------------------------------------------------------
 
 examplesPath :: FilePath
@@ -265,23 +366,26 @@ configP =
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
-    <*> ( Example "name"
-               <$> (Right <$> packageP)
+    <*> ( Example
+               <$> exampleName
+               <*> (ExampleHackage <$> packageP)
                <*> (some moduleOption <|> pure ["src/Distribution/Simple.hs"])
                <*> pure []
-         <|>
-          Example "name"
-                <$> (Left <$> pathP)
-                <*> some moduleOption
-                <*> pure [])
+      <|> Example
+               <$> exampleName
+               <*> pathOrScriptP
+               <*> some moduleOption
+               <*> pure [])
     <*> switch (long "lsp-config" <> help "Read an LSP config payload from standard input")
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
+      exampleName = strOption (long "example-name" <> metavar "NAME")
 
       packageP = ExamplePackage
             <$> strOption (long "example-package-name" <> value "Cabal")
             <*> option versionP (long "example-package-version" <> value (makeVersion [3,6,0,0]))
-      pathP = strOption (long "example-path")
+      pathOrScriptP = ExamplePath   <$> strOption (long "example-path")
+                  <|> ExampleScript <$> strOption (long "example-script") <*> many (strOption (long "example-script-args" <> help "arguments for the example generation script"))
 
 versionP :: ReadM Version
 versionP = maybeReader $ extract . readP_to_S parseVersion
@@ -289,7 +393,7 @@ versionP = maybeReader $ extract . readP_to_S parseVersion
       extract parses = listToMaybe [ res | (res,"") <- parses]
 
 output :: (MonadIO m, HasConfig) => String -> m ()
-output = if quiet?config then (\_ -> pure ()) else liftIO . putStrLn
+output = if quiet ?config then (\_ -> pure ()) else liftIO . putStrLn
 
 ---------------------------------------------------------------------------------------
 
@@ -333,8 +437,8 @@ runBenchmarksFun dir allBenchmarks = do
       createDirectoryIfMissing True eventlogDir
 
   lspConfig <- if Experiments.Types.lspConfig ?config
-    then either error Just . eitherDecodeStrict' <$> BS.getContents
-    else return Nothing
+    then either error id . eitherDecodeStrict' <$> BS.getContents
+    else return mempty
 
   let conf = defaultConfig
         { logStdErr = verbose ?config,
@@ -453,7 +557,10 @@ runBenchmarksFun dir allBenchmarks = do
             ]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
-      fullCaps {_window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+      fullLatestClientCaps
+        & (L.window . _Just) .~ WindowClientCapabilities (Just True) Nothing Nothing
+        & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (ClientCodeActionResolveOptions ["edit"])
+        & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 showMs :: Seconds -> String
 showMs = printf "%.2f"
@@ -481,7 +588,7 @@ badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 0 0 0 False
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
     skipManyTill anyMessage $ satisfy $ \case
-      FromServerMess SWindowWorkDoneProgressCreate _ -> True
+      FromServerMess SMethod_WindowWorkDoneProgressCreate _ -> True
       _                                              -> False
 
 -- | Wait for all progress to be done
@@ -491,7 +598,7 @@ waitForProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -499,24 +606,22 @@ waitForProgressDone = loop
 -- | Wait for the build queue to be empty
 waitForBuildQueue :: Session Seconds
 waitForBuildQueue = do
-    let m = SCustomMethod "test"
+    let m = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest m (toJSON WaitForShakeQueue)
     (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
     case resp of
-        ResponseMessage{_result=Right Null} -> return td
+        TResponseMessage{_result=Right Null} -> return td
         -- assume a ghcide binary lacking the WaitForShakeQueue method
-        _                                   -> return 0
+        _                                    -> return 0
 
 runBench ::
   HasConfig =>
   (Session BenchRun -> IO BenchRun) ->
   Bench ->
   IO BenchRun
-runBench runSess b = handleAny (\e -> print e >> return badRun)
+runBench runSess Bench{..} = handleAny (\e -> print e >> return badRun)
   $ runSess
   $ do
-    case b of
-     Bench{..} -> do
       (startup, docs) <- duration $ do
         (d, docs) <- duration $ setupDocumentContents ?config
         output $ "Setting up document contents took " <> showDuration d
@@ -566,17 +671,39 @@ callCommandLogging cmd = do
     output cmd
     callCommand cmd
 
+simpleCabalCradleContent :: String
+simpleCabalCradleContent = "cradle:\n  cabal:\n"
+
+simpleStackCradleContent :: String
+simpleStackCradleContent = "cradle:\n  stack:\n"
+
+-- | Setup the benchmark
+-- we need to create a hie.yaml file for the examples
+-- or the hie.yaml file would be searched in the parent directories recursively
+-- implicit-hie is error prone for the example test `lsp-types-2.1.1.0`
+-- we are using the simpleCabalCradleContent for the hie.yaml file instead.
+-- it works if we have cabal > 3.2.
 setup :: HasConfig => IO SetupResult
 setup = do
---   when alreadyExists $ removeDirectoryRecursive examplesPath
   benchDir <- case exampleDetails(example ?config) of
-      Left examplePath -> do
+      ExamplePath examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
-          unless alreadyExists $
-                cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
+          unless alreadyExists $ writeFile hieYamlPath simpleCabalCradleContent
           return examplePath
-      Right ExamplePackage{..} -> do
+      ExampleScript examplePath' scriptArgs -> do
+          let exampleDir = examplesPath </> exampleName (example ?config)
+          alreadySetup <- doesDirectoryExist exampleDir
+          unless alreadySetup $ do
+            createDirectoryIfMissing True exampleDir
+            examplePath <- makeAbsolute examplePath'
+            cmd_ (Cwd exampleDir) examplePath scriptArgs
+            let hieYamlPath = exampleDir </> "hie.yaml"
+            alreadyExists <- doesFileExist hieYamlPath
+            unless alreadyExists $ writeFile hieYamlPath simpleCabalCradleContent
+
+          return exampleDir
+      ExampleHackage ExamplePackage{..} -> do
         let path = examplesPath </> package
             package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
@@ -587,7 +714,7 @@ setup = do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
                 callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 let hieYamlPath = path </> "hie.yaml"
-                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String)
+                writeFile hieYamlPath simpleCabalCradleContent
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
@@ -615,15 +742,15 @@ setup = do
                                 ,"compiler"]
                             ]
                         )
-
-                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String) ["--stack"::String]
+                writeFile hieYamlPath simpleStackCradleContent
         return path
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
-  let cleanUp = case exampleDetails(example ?config) of
-        Right _ -> removeDirectoryRecursive examplesPath
-        Left _  -> return ()
+  let cleanUp = case exampleDetails (example ?config) of
+        ExampleHackage _  -> removeDirectoryRecursive examplesPath
+        ExampleScript _ _ -> removeDirectoryRecursive examplesPath
+        ExamplePath _     -> return ()
 
       runBenchmarks = runBenchmarksFun benchDir
 
@@ -636,11 +763,12 @@ setupDocumentContents config =
 
         -- Setup the special positions used by the experiments
         lastLine <- fromIntegral . length . T.lines <$> documentContents doc
-        changeDoc doc [TextDocumentContentChangeEvent
-            { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
-            , _rangeLength = Nothing
-            , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
-            }]
+        changeDoc doc [TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
+                        { _range = Range (Position lastLine 0) (Position lastLine 0)
+                        , _rangeLength = Nothing
+                        , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
+                        }
+                      ]
         let
         -- Points to a string in the target file,
         -- convenient for hygienic edits
@@ -649,19 +777,19 @@ setupDocumentContents config =
         -- Find an identifier defined in another file in this project
         symbols <- getDocumentSymbols doc
         let endOfImports = case symbols of
-                Left symbols | Just x <- findEndOfImports symbols -> x
+                Right symbols | Just x <- findEndOfImports symbols -> x
                 _ -> error $ "symbols: " <> show symbols
         contents <- documentContents doc
         identifierP <- searchSymbol doc contents endOfImports
         return $ DocumentPositions{..}
 
 findEndOfImports :: [DocumentSymbol] -> Maybe Position
-findEndOfImports (DocumentSymbol{_kind = SkModule, _name = "imports", _range} : _) =
+findEndOfImports (DocumentSymbol{_kind = SymbolKind_Module, _name = "imports", _range} : _) =
     Just $ Position (succ $ _line $ _end _range) 4
-findEndOfImports [DocumentSymbol{_kind = SkFile, _children = Just (List cc)}] =
+findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just cc}] =
     findEndOfImports cc
 findEndOfImports (DocumentSymbol{_range} : _) =
-    Just $ _start _range
+    Just $ _range ^. L.start
 findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------
@@ -678,11 +806,11 @@ searchSymbol :: TextDocumentIdentifier -> T.Text -> Position -> Session (Maybe P
 searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
     -- this search is expensive, so we cache the result on disk
     let cachedPath = fromJust (uriToFilePath _uri) <.> "identifierPosition"
-    cachedRes <- liftIO $ try @_ @IOException $ read <$> readFile cachedPath
+    cachedRes <- liftIO $ try @_ @IOException $ A.decode . BSL.fromStrict <$> BS.readFile cachedPath
     case cachedRes of
         Left _ -> do
             result <- loop pos
-            liftIO $ writeFile cachedPath $ show result
+            liftIO $ BS.writeFile cachedPath $ BSL.toStrict $ A.encode result
             return result
         Right res ->
             return res
@@ -708,25 +836,25 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkDefinitions pos = do
         defs <- getDefinitions doc pos
         case defs of
-            (InL [Location uri _]) -> return $ uri /= _uri
-            _                      -> return False
+            (InL (Definition (InR [Location uri _]))) -> return $ uri /= _uri
+            _                                         -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos
 
 
-getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
 
-getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
 
-getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
 getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
 
-getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
 
-getRebuildsCount :: Session (Either ResponseError Int)
+getRebuildsCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getRebuildsCount = tryCallTestPlugin GetRebuildsCount
 
 -- Copy&paste from ghcide/test/Development.IDE.Test
@@ -734,11 +862,11 @@ getStoredKeys :: Session [Text]
 getStoredKeys = callTestPlugin GetStoredKeys
 
 -- Copy&paste from ghcide/test/Development.IDE.Test
-tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 tryCallTestPlugin cmd = do
-    let cm = SCustomMethod "test"
+    let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
-    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ case _result of
          Left e -> Left e
          Right json -> case A.fromJSON json of
@@ -750,5 +878,5 @@ callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     res <- tryCallTestPlugin cmd
     case res of
-        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
-        Right a                      -> pure a
+        Left (TResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                       -> pure a

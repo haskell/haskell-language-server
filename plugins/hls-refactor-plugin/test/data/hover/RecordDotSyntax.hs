@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 902
 {-# LANGUAGE OverloadedRecordDot, DuplicateRecordFields, NoFieldSelectors #-}
 
 module RecordDotSyntax ( module RecordDotSyntax) where
@@ -18,4 +16,3 @@ newtype MyChild = MyChild
 
 x = MyRecord { a = "Hello", b = 12, c = MyChild { z = "there" } }
 y = x.a ++ show x.b ++ x.c.z
-#endif

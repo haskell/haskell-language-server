@@ -1,9 +1,5 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE ViewPatterns #-}
 module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)
@@ -13,11 +9,14 @@ module Ide.Plugin.Literals (
 
 import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
+#if __GLASGOW_HASKELL__ >= 908
+import qualified Data.Text.Encoding            as T
+#else
 import qualified Data.Text                     as T
+#endif
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.Graph.Classes (NFData (rnf))
-import           Generics.SYB                  (Data, Typeable, everything,
-                                                extQ)
+import           Generics.SYB                  (Data, everything, extQ)
 import qualified GHC.Generics                  as GHC
 
 -- data type to capture what type of literal we are dealing with
@@ -50,7 +49,7 @@ getSrcSpan = \case
     FracLiteral ss _ _ -> unLit ss
 
 -- | Find all literals in a Parsed Source File
-collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
+collectLiterals :: Data ast => ast -> [Literal]
 collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLiteral `extQ` getPattern))
 
 
@@ -69,13 +68,8 @@ getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
         HsInt _ val   -> fromIntegralLit patSpan val
         HsRat _ val _ -> fromFractionalLit patSpan val
         _             -> Nothing
-#if __GLASGOW_HASKELL__ == 902
-    NPat _ (L (RealSrcSpan sSpan _) overLit) _ _ -> fromOverLit overLit sSpan
-    NPlusKPat _ _ (L (RealSrcSpan sSpan _) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
-#else
     NPat _ (L (locA -> (RealSrcSpan sSpan _)) overLit) _ _ -> fromOverLit overLit sSpan
     NPlusKPat _ _ (L (locA -> (RealSrcSpan sSpan _)) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
-#endif
     _ -> Nothing
 getPattern _ = Nothing
 
@@ -100,5 +94,9 @@ fromFractionalLit s fl@FL{fl_text} = fmap (\txt' -> FracLiteral (LiteralSrcSpan 
 
 fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case
+#if __GLASGOW_HASKELL__ >= 908
+  SourceText s -> Just $ T.decodeUtf8 $ bytesFS s
+#else
   SourceText s -> Just $ T.pack s
+#endif
   NoSourceText -> Nothing

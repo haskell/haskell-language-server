@@ -7,7 +7,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE ImplicitParams        #-}
-{-# LANGUAGE PolyKinds             #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Main (main) where
@@ -42,7 +41,7 @@ benchmarkTests =
     ]
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir = runSessionWithConfig defaultConfig cmd fullCaps dir
+runInDir dir = runSessionWithConfig defaultConfig cmd fullLatestClientCaps dir
   where
     -- TODO use HLS instead of ghcide
     cmd = "ghcide --lsp --test --verbose -j2 --cwd " <> dir

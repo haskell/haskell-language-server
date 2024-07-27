@@ -27,19 +27,21 @@ import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger          (Pretty (pretty),
+import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake           (toKey)
+import qualified Focus
+import           Ide.Logger                            (Pretty (pretty),
                                                         Recorder, WithPriority,
                                                         cmapWithPrio)
-import           Development.IDE.Types.Options
-import qualified Focus
 import           Ide.Plugin.Config                     (Config)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                   hiding (getVirtualFile)
-import           Language.LSP.Types
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
 
 {- Note [File existence cache and LSP file watchers]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Some LSP servers provide the ability to register file watches with the client, which will then notify
 us of file changes. Some clients can do this more efficiently than us, or generally it's a tricky
 problem
@@ -95,8 +97,8 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogFileStore log -> pretty log
-    LogShake log     -> pretty log
+    LogFileStore msg -> pretty msg
+    LogShake msg     -> pretty msg
 
 -- | Grab the current global value of 'FileExistsMap' without acquiring a dependency
 getFileExistsMapUntracked :: Action FileExistsMap
@@ -104,12 +106,12 @@ getFileExistsMapUntracked = do
   FileExistsMapVar v <- getIdeGlobalAction
   return v
 
--- | Modify the global store of file exists.
-modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO ()
+-- | Modify the global store of file exists and return the keys that need to be marked as dirty
+modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO [Key]
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   -- Masked to ensure that the previous values are flushed together with the map update
-  join $ mask_ $ atomicallyNamed "modifyFileExists" $ do
+  mask_ $ atomicallyNamed "modifyFileExists" $ do
     forM_ changes $ \(f,c) ->
         case fromChange c of
             Just c' -> STM.focus (Focus.insert c') f var
@@ -117,16 +119,16 @@ modifyFileExists state changes = do
     -- See Note [Invalidating file existence results]
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
-            partition ((== FcChanged) . snd) changes
-    mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
-    io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
-    io2 <- recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
-    return (io1 <> io2)
+            partition ((== FileChangeType_Changed) . snd) changes
+    keys0 <- concat <$> mapM (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+    let keys1 = map (toKey GetFileExists . fst) fileExistChanges
+    let keys2 = map (toKey GetModificationTime . fst) fileModifChanges
+    return (keys0 <> keys1 <> keys2)
 
 fromChange :: FileChangeType -> Maybe Bool
-fromChange FcCreated = Just True
-fromChange FcDeleted = Just False
-fromChange FcChanged = Nothing
+fromChange FileChangeType_Created = Just True
+fromChange FileChangeType_Deleted = Just False
+fromChange FileChangeType_Changed = Nothing
 
 -------------------------------------------------------------------------------------
 
@@ -135,6 +137,7 @@ getFileExists :: NormalizedFilePath -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The watcher system gives us a lot of flexibility: we can set multiple watchers, and they can all watch on glob
 patterns.
 
@@ -201,6 +204,7 @@ fileExistsRulesFast recorder isWatched =
             else fileExistsSlow file
 
 {- Note [Invalidating file existence results]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 We have two mechanisms for getting file existence information:
 - The file existence cache
 - The VFS lookup

@@ -11,12 +11,12 @@ module Development.IDE.Types.Action
 where
 
 import           Control.Concurrent.STM
-import           Data.Hashable                (Hashable (..))
-import           Data.HashSet                 (HashSet)
-import qualified Data.HashSet                 as Set
-import           Data.Unique                  (Unique)
-import           Development.IDE.Graph        (Action)
-import           Development.IDE.Types.Logger
+import           Data.Hashable          (Hashable (..))
+import           Data.HashSet           (HashSet)
+import qualified Data.HashSet           as Set
+import           Data.Unique            (Unique)
+import           Development.IDE.Graph  (Action)
+import           Ide.Logger
 import           Numeric.Natural
 
 data DelayedAction a = DelayedAction
@@ -69,13 +69,13 @@ abortQueue :: DelayedActionInternal -> ActionQueue -> STM ()
 abortQueue x ActionQueue {..} = do
   qq <- flushTQueue newActions
   mapM_ (writeTQueue newActions) (filter (/= x) qq)
-  modifyTVar inProgress (Set.delete x)
+  modifyTVar' inProgress (Set.delete x)
 
 -- | Mark an action as complete when called after 'popQueue'.
 --   Has no effect otherwise
 doneQueue :: DelayedActionInternal -> ActionQueue -> STM ()
 doneQueue x ActionQueue {..} = do
-  modifyTVar inProgress (Set.delete x)
+  modifyTVar' inProgress (Set.delete x)
 
 countQueue :: ActionQueue -> STM Natural
 countQueue ActionQueue{..} = do

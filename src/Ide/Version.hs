@@ -7,6 +7,7 @@
 -- and the current project's version
 module Ide.Version where
 
+
 import           Data.Maybe                    (listToMaybe)
 import           Data.Version
 import           GitHash                       (giCommitCount, tGitInfoCwdTry)

@@ -1,22 +1,21 @@
 {-# LANGUAGE MultiWayIf #-}
 module HieDbRetry (tests) where
 
-import           Control.Concurrent.Extra     (Var, modifyVar, newVar, readVar,
-                                               withVar)
-import           Control.Exception            (ErrorCall (ErrorCall), evaluate,
-                                               throwIO, tryJust)
-import           Control.Monad.IO.Class       (MonadIO (liftIO))
-import           Data.Tuple.Extra             (dupe)
-import qualified Database.SQLite.Simple       as SQLite
-import           Development.IDE.Session      (retryOnException,
-                                               retryOnSqliteBusy)
-import qualified Development.IDE.Session      as Session
-import           Development.IDE.Types.Logger (Recorder (Recorder, logger_),
-                                               WithPriority (WithPriority, payload),
-                                               cmapWithPrio)
-import qualified System.Random                as Random
-import           Test.Tasty                   (TestTree, testGroup)
-import           Test.Tasty.HUnit             (assertFailure, testCase, (@?=))
+import           Control.Concurrent.Extra (Var, modifyVar, newVar, readVar,
+                                           withVar)
+import           Control.Exception        (ErrorCall (ErrorCall), evaluate,
+                                           throwIO, tryJust)
+import           Control.Monad.IO.Class   (MonadIO (liftIO))
+import           Data.Tuple.Extra         (dupe)
+import qualified Database.SQLite.Simple   as SQLite
+import           Development.IDE.Session  (retryOnException, retryOnSqliteBusy)
+import qualified Development.IDE.Session  as Session
+import           Ide.Logger               (Recorder (Recorder, logger_),
+                                           WithPriority (WithPriority, payload),
+                                           cmapWithPrio)
+import qualified System.Random            as Random
+import           Test.Tasty               (TestTree, testGroup)
+import           Test.Tasty.HUnit         (assertFailure, testCase, (@?=))
 
 data Log
   = LogSession Session.Log
@@ -45,7 +44,6 @@ errorBusy = SQLite.SQLError{ sqlError = SQLite.ErrorBusy, sqlErrorDetails = "", 
 isErrorCall :: ErrorCall -> Maybe ErrorCall
 isErrorCall e
   | ErrorCall _ <- e = Just e
-  | otherwise = Nothing
 
 tests :: TestTree
 tests = testGroup "RetryHieDb"

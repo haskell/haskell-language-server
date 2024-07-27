@@ -1,9 +1,8 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 module HlsPlugins where
 
-import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
+import           Ide.Logger                        (Pretty (pretty), Recorder,
                                                     WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins,
@@ -28,10 +27,6 @@ import qualified Ide.Plugin.Cabal                  as Cabal
 import qualified Ide.Plugin.Class                  as Class
 #endif
 
-#if hls_haddockComments
-import qualified Ide.Plugin.HaddockComments        as HaddockComments
-#endif
-
 #if hls_eval
 import qualified Ide.Plugin.Eval                   as Eval
 #endif
@@ -40,9 +35,7 @@ import qualified Ide.Plugin.Eval                   as Eval
 import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
-#if hls_refineImports
-import qualified Ide.Plugin.RefineImports          as RefineImports
-#endif
+
 
 #if hls_rename
 import qualified Ide.Plugin.Rename                 as Rename
@@ -50,10 +43,6 @@ import qualified Ide.Plugin.Rename                 as Rename
 
 #if hls_retrie
 import qualified Ide.Plugin.Retrie                 as Retrie
-#endif
-
-#if hls_tactic
-import qualified Ide.Plugin.Tactic                 as Tactic
 #endif
 
 #if hls_hlint
@@ -100,6 +89,14 @@ import qualified Ide.Plugin.ExplicitFixity         as ExplicitFixity
 import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 #endif
 
+#if hls_overloaded_record_dot
+import qualified Ide.Plugin.OverloadedRecordDot    as OverloadedRecordDot
+#endif
+
+#if hls_notes
+import qualified Ide.Plugin.Notes                  as Notes
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -114,6 +111,10 @@ import qualified Ide.Plugin.Fourmolu               as Fourmolu
 import qualified Ide.Plugin.CabalFmt               as CabalFmt
 #endif
 
+#if hls_cabalgild
+import qualified Ide.Plugin.CabalGild              as CabalGild
+#endif
+
 #if hls_ormolu
 import qualified Ide.Plugin.Ormolu                 as Ormolu
 #endif
@@ -122,13 +123,14 @@ import qualified Ide.Plugin.Ormolu                 as Ormolu
 import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
-#if hls_brittany
-import qualified Ide.Plugin.Brittany               as Brittany
-#endif
-
 #if hls_refactor
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
+
+#if hls_semanticTokens
+import qualified Ide.Plugin.SemanticTokens         as SemanticTokens
+#endif
+
 
 data Log = forall a. (Pretty a) => Log PluginId a
 
@@ -152,7 +154,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "cabal" in Cabal.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_pragmas
-      Pragmas.descriptor  "pragmas" :
+      Pragmas.suggestPragmaDescriptor  "pragmas-suggest" :
+      Pragmas.completionDescriptor  "pragmas-completion" :
+      Pragmas.suggestDisableWarningDescriptor  "pragmas-disable" :
 #endif
 #if hls_floskell
       Floskell.descriptor "floskell" :
@@ -161,34 +165,35 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_cabalfmt
-      let pId = "cabalfmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
+      let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
-#if hls_tactic
-      let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
+#if hls_cabalgild
+      -- this pId needs to be kept in sync with the hardcoded
+      -- cabalFormattingProvider in the Default Config
+      let pId = "cabal-gild" in CabalGild.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_ormolu
-      Ormolu.descriptor   "ormolu" :
+      -- this pId needs to be kept in sync with the hardcoded
+      -- haskellFormattingProvider in the Default Config
+      let pId = "ormolu" in Ormolu.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_stylishHaskell
-      StylishHaskell.descriptor "stylish-haskell" :
+      let pId = "stylish-haskell" in StylishHaskell.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_retrie
-      Retrie.descriptor "retrie" :
-#endif
-#if hls_brittany
-      Brittany.descriptor "brittany" :
+      let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
 #endif
+#if hls_semanticTokens
+      let pId = "semanticTokens" in SemanticTokens.descriptor (pluginRecorder pId) pId:
+#endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
-#endif
-#if hls_haddockComments
-      let pId = "haddockComments" in HaddockComments.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
@@ -198,9 +203,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
-#endif
-#if hls_refineImports
-      let pId = "refineImports" in RefineImports.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_moduleName
       let pId = "moduleName" in ModuleName.descriptor (pluginRecorder pId) pId:
@@ -233,11 +235,17 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ghcide-code-actions-fill-holes" in Refactor.fillHolePluginDescriptor (pluginRecorder pId) pId :
       let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
 #endif
-      GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity
-      ++ [let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId]
+      let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId :
 #endif
 #if explicitFields
-      ++ [let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId]
+      let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId :
 #endif
+#if hls_overloaded_record_dot
+      let pId = "overloaded-record-dot" in OverloadedRecordDot.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_notes
+      let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
+#endif
+      GhcIde.descriptors (pluginRecorder "ghcide")
 

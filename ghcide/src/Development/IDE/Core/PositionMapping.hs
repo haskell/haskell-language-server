@@ -9,7 +9,7 @@ module Development.IDE.Core.PositionMapping
   , fromCurrentPosition
   , toCurrentPosition
   , PositionDelta(..)
-  , addDelta
+  , addOldDelta
   , idDelta
   , composeDelta
   , mkDelta
@@ -24,15 +24,18 @@ module Development.IDE.Core.PositionMapping
   ) where
 
 import           Control.DeepSeq
+import           Control.Lens                ((^.))
 import           Control.Monad
 import           Data.Algorithm.Diff
 import           Data.Bifunctor
 import           Data.List
-import qualified Data.Text           as T
-import qualified Data.Vector.Unboxed as V
-import           Language.LSP.Types  (Position (Position), Range (Range),
-                                      TextDocumentContentChangeEvent (TextDocumentContentChangeEvent),
-                                      UInt)
+import qualified Data.Text                   as T
+import qualified Data.Vector.Unboxed         as V
+import qualified Language.LSP.Protocol.Lens  as L
+import           Language.LSP.Protocol.Types (Position (Position),
+                                              Range (Range),
+                                              TextDocumentContentChangeEvent (TextDocumentContentChangeEvent),
+                                              UInt, type (|?) (InL))
 
 -- | Either an exact position, or the range of text that was substituted
 data PositionResult a
@@ -101,7 +104,7 @@ zeroMapping :: PositionMapping
 zeroMapping = PositionMapping idDelta
 
 -- | Compose two position mappings. Composes in the same way as function
--- composition (ie the second argument is applyed to the position first).
+-- composition (ie the second argument is applied to the position first).
 composeDelta :: PositionDelta
                 -> PositionDelta
                 -> PositionDelta
@@ -116,14 +119,20 @@ idDelta = PositionDelta pure pure
 mkDelta :: [TextDocumentContentChangeEvent] -> PositionDelta
 mkDelta cs = foldl' applyChange idDelta cs
 
--- | Add a new delta onto a Mapping k n to make a Mapping (k - 1) n
-addDelta :: PositionDelta -> PositionMapping -> PositionMapping
-addDelta delta (PositionMapping pm) = PositionMapping (composeDelta delta pm)
+-- | addOldDelta
+-- Add a old delta onto a Mapping k n to make a Mapping (k - 1) n
+addOldDelta ::
+    PositionDelta -- ^ delta from version k - 1 to version k
+    -> PositionMapping -- ^ The input mapping is from version k to version n
+    -> PositionMapping -- ^ The output mapping is from version k - 1 to version n
+addOldDelta delta (PositionMapping pm) = PositionMapping (composeDelta pm delta)
 
+-- TODO: We currently ignore the right hand side (if there is only text), as
+-- that was what was done with lsp* 1.6 packages
 applyChange :: PositionDelta -> TextDocumentContentChangeEvent -> PositionDelta
-applyChange PositionDelta{..} (TextDocumentContentChangeEvent (Just r) _ t) = PositionDelta
-    { toDelta = toCurrent r t <=< toDelta
-    , fromDelta = fromDelta <=< fromCurrent r t
+applyChange PositionDelta{..} (TextDocumentContentChangeEvent (InL x)) = PositionDelta
+    { toDelta = toCurrent (x ^. L.range) (x ^. L.text) <=< toDelta
+    , fromDelta = fromDelta <=< fromCurrent (x ^. L.range) (x ^. L.text)
     }
 applyChange posMapping _ = posMapping
 
@@ -214,9 +223,9 @@ deltaFromDiff (T.lines -> old) (T.lines -> new) =
           line' -> PositionExact (Position (fromIntegral line') col)
 
     -- Construct a mapping between lines in the diff
-    -- -1 for unsucessful mapping
+    -- -1 for unsuccessful mapping
     go :: [Diff T.Text] -> Int -> Int -> ([Int], [Int])
     go [] _ _ = ([],[])
-    go (Both _ _ : xs) !lold !lnew = bimap  (lnew :) (lold :) $ go xs (lold+1) (lnew+1)
-    go (First _  : xs) !lold !lnew = first  (-1   :)          $ go xs (lold+1) lnew
-    go (Second _ : xs) !lold !lnew = second          (-1   :) $ go xs lold     (lnew+1)
+    go (Both _ _ : xs) !glold !glnew = bimap  (glnew :) (glold :) $ go xs (glold+1) (glnew+1)
+    go (First _  : xs) !glold !glnew = first  (-1   :)          $ go xs (glold+1) glnew
+    go (Second _ : xs) !glold !glnew = second          (-1   :) $ go xs glold     (glnew+1)

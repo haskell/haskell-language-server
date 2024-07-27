@@ -34,7 +34,8 @@ tests = testGroup "Explicit fixity"
     , hoverTest "(<|>)" (Position 21 8) "infixl 3 `<|>`"
     , hoverTest "fixity define" (Position 23 11) "infixr 7 `>>:`"
     , hoverTest "record" (Position 28 10) "infix 9 `>>::`"
-    , hoverTest "wildcards" (Position 30 5) "infixr 7 `>>:`  \n  \ninfix 9 `>>::`"
+    , hoverTest "wildcards1" (Position 30 5) "infixr 7 `>>:`"
+    , hoverTest "wildcards2" (Position 30 5) "infix 9 `>>::`"
     , hoverTest "function" (Position 32 11) "infixl 1 `f`"
     , hoverTest "signature" (Position 35 2) "infixr 9 `>>>:`"
     , hoverTest "operator" (Position 36 2) "infixr 9 `>>>:`"
@@ -51,20 +52,19 @@ hoverTestImport :: TestName -> Position -> T.Text -> TestTree
 hoverTestImport = hoverTest' "HoverImport.hs"
 
 hoverTest' :: String -> TestName -> Position -> T.Text -> TestTree
-hoverTest' docName title pos expected = testCase title $ runSessionWithServer plugin testDataDir $ do
+hoverTest' docName title pos expected = testCase title $ runSessionWithServer def plugin testDataDir $ do
     doc <- openDoc docName "haskell"
     waitForKickDone
     h <- getHover doc pos
-    let expected' = "\n" <> sectionSeparator <> expected
     case h of
         Nothing -> liftIO $ assertFailure "No hover"
         Just (Hover contents _) -> case contents of
-          HoverContentsMS _ -> liftIO $ assertFailure "Unexpected content type"
-          HoverContents (MarkupContent mk txt) -> do
+          InL (MarkupContent _ txt) -> do
               liftIO
                 $ assertBool ("Failed to find `" <> T.unpack expected <> "` in hover message: " <> T.unpack txt)
                 $ expected `T.isInfixOf` txt
+          _ -> liftIO $ assertFailure "Unexpected content type"
     closeDoc doc
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-explicit-fixity-plugin" </> "test" </> "testdata"

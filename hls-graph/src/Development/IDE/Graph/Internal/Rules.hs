@@ -1,9 +1,8 @@
 -- We deliberately want to ensure the function we add to the rule database
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 module Development.IDE.Graph.Internal.Rules where
 
@@ -18,6 +17,7 @@ import           Data.IORef
 import           Data.Maybe
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 
 -- | The type mapping between the @key@ or a rule and the resulting @value@.

@@ -2,7 +2,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE CPP #-}
 
-
 -- | Types and functions for working with source code locations.
 module Development.IDE.Types.Location
     ( Location(..)
@@ -31,18 +30,13 @@ import           Control.Monad
 import           Data.Hashable                (Hashable (hash))
 import           Data.Maybe                   (fromMaybe)
 import           Data.String
+import           Language.LSP.Protocol.Types  (Location (..), Position (..),
+                                               Range (..))
+import qualified Language.LSP.Protocol.Types  as LSP
+import           Text.ParserCombinators.ReadP as ReadP
 
-#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.FastString
 import           GHC.Types.SrcLoc             as GHC
-#else
-import           FastString
-import           SrcLoc                       as GHC
-#endif
-import           Language.LSP.Types           (Location (..), Position (..),
-                                               Range (..))
-import qualified Language.LSP.Types           as LSP
-import           Text.ParserCombinators.ReadP as ReadP
 
 toNormalizedFilePath' :: FilePath -> LSP.NormalizedFilePath
 -- We want to keep empty paths instead of normalising them to "."

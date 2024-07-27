@@ -9,7 +9,7 @@
 [![CircleCI][badge-circleci]][circleci]
 [![GitHub Testing Workflow](https://github.com/haskell/haskell-language-server/actions/workflows/test.yml/badge.svg)](https://github.com/haskell/haskell-language-server/actions/workflows/test.yml)
 [![GitHub Nix Workflow](https://github.com/haskell/haskell-language-server/actions/workflows/nix.yml/badge.svg)](https://github.com/haskell/haskell-language-server/actions/workflows/nix.yml)
-[![ircchat][badge-ircchat]][ircchat]
+[![matrix][badge-matrix]][matrix]
 [![codetriage][badge-codetriage]][codetriage]
 
 [logo]: ./docs/logos/logo-256.png
@@ -22,8 +22,8 @@
 [hackage]: https://hackage.haskell.org/package/haskell-language-server
 [badge-codetriage]: https://www.codetriage.com/haskell/haskell-language-server/badges/users.svg
 [codetriage]:https://www.codetriage.com/haskell/haskell-language-server
-[badge-ircchat]:https://img.shields.io/badge/chat-on%20libera-brightgreen.svg
-[ircchat]:https://web.libera.chat/?channels=#haskell-language-server
+[badge-matrix]:https://img.shields.io/badge/chat-on%20matrix-brightgreen.svg
+[matrix]:https://matrix.to/#/#haskell-language-server:matrix.org
 [github-release]:https://github.com/haskell/haskell-language-server/releases/latest
 
 The official Haskell language server (LSP) implementation. Consult the [project documentation](https://haskell-language-server.readthedocs.io/en/latest/) for more details.

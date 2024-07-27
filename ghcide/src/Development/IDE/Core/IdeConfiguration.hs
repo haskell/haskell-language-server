@@ -1,4 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields #-}
 module Development.IDE.Core.IdeConfiguration
   ( IdeConfiguration(..)
   , registerIdeConfiguration
@@ -13,16 +12,17 @@ module Development.IDE.Core.IdeConfiguration
 where
 
 import           Control.Concurrent.Strict
+
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.HashSet                   (HashSet, singleton)
-import           Data.Text                      (Text, isPrefixOf)
+import           Data.Text                      (isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types
 import           System.FilePath                (isRelative)
 
 -- | Lsp client relevant configuration details
@@ -49,15 +49,15 @@ parseConfiguration InitializeParams {..} =
   IdeConfiguration {..}
  where
   workspaceFolders =
-    foldMap (singleton . toNormalizedUri) _rootUri
+    foldMap (singleton . toNormalizedUri) (nullToMaybe _rootUri)
       <> (foldMap . foldMap)
            (singleton . parseWorkspaceFolder)
-           _workspaceFolders
+           (nullToMaybe =<< _workspaceFolders)
   clientSettings = hashed _initializationOptions
 
 parseWorkspaceFolder :: WorkspaceFolder -> NormalizedUri
 parseWorkspaceFolder WorkspaceFolder{_uri} =
-  toNormalizedUri (Uri _uri)
+  toNormalizedUri _uri
 
 modifyWorkspaceFolders
   :: IdeState -> (HashSet NormalizedUri -> HashSet NormalizedUri) -> IO ()

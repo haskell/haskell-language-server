@@ -1,9 +1,6 @@
 {-# LANGUAGE BlockArguments    #-}
-{-# LANGUAGE MultiWayIf        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeOperators     #-}
 
 module Main (main) where
 
@@ -12,24 +9,21 @@ import           Data.Text                       (Text)
 import qualified Ide.Plugin.QualifyImportedNames as QualifyImportedNames
 import           System.FilePath                 ((</>))
 import           Test.Hls                        (CodeAction (CodeAction, _title),
-                                                  Command (Command), IdeState,
-                                                  MonadIO (liftIO),
-                                                  PluginDescriptor,
+                                                  Command, MonadIO (liftIO),
                                                   PluginTestDescriptor,
                                                   Position (Position),
                                                   Range (Range), Session,
                                                   TestName, TestTree,
                                                   TextDocumentIdentifier,
                                                   assertBool, assertFailure,
-                                                  defaultTestRunner,
+                                                  def, defaultTestRunner,
                                                   executeCodeAction,
                                                   getCodeActions,
                                                   goldenWithHaskellDoc,
                                                   mkPluginTestDescriptor',
-                                                  openDoc, rename,
-                                                  runSessionWithServer,
+                                                  openDoc, runSessionWithServer,
                                                   testCase, testGroup,
-                                                  type (|?) (InR), (@?=))
+                                                  type (|?) (InR))
 
 import           Prelude
 
@@ -39,12 +33,10 @@ data Point = Point {
   column :: !Int
 }
 
+makePoint :: Int -> Int -> Point
 makePoint line column
   | line >= 1 && column >= 1 = Point line column
   | otherwise = error "Line or column is less than 1."
-
-isNotEmpty :: Foldable f => f a -> Bool
-isNotEmpty = not . isEmpty
 
 isEmpty :: Foldable f => f a -> Bool
 isEmpty = null
@@ -61,13 +53,13 @@ main :: IO ()
 main = defaultTestRunner $ testGroup "Qualify Imported Names"
   [
     testCase "No CodeAction when not at import" $
-      runSessionWithServer pluginDescriptor testDataDir $ do
+      runSessionWithServer def pluginDescriptor testDataDir $ do
         let point = makePoint 1 1
         document <- openDoc "NoImport.hs" "haskell"
         actions <- getCodeActions document $ pointToRange point
         liftIO $ assertBool (makeCodeActionFoundAtString point) (isEmpty actions)
   , testCase "No CodeAction when import is qualified" $
-      runSessionWithServer pluginDescriptor testDataDir $ do
+      runSessionWithServer def pluginDescriptor testDataDir $ do
         let point = makePoint 3 1
         document <- openDoc "QualifiedImport.hs" "haskell"
         actions <- getCodeActions document $ pointToRange point
@@ -127,7 +119,7 @@ codeActionGoldenTest testCaseName goldenFilename point =
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
 testDataDir :: String
-testDataDir = "test" </> "data"
+testDataDir = "plugins" </> "hls-qualify-imported-names-plugin" </> "test" </> "data"
 
 pluginDescriptor :: PluginTestDescriptor ()
 pluginDescriptor = mkPluginTestDescriptor' QualifyImportedNames.descriptor "qualifyImportedNames"
@@ -139,7 +131,7 @@ getCodeActionTitle commandOrCodeAction
 
 goldenWithQualifyImportedNames :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithQualifyImportedNames testName path =
-  goldenWithHaskellDoc pluginDescriptor testName testDataDir path "expected" "hs"
+  goldenWithHaskellDoc def pluginDescriptor testName testDataDir path "expected" "hs"
 
 pointToRange :: Point -> Range
 pointToRange Point {..}

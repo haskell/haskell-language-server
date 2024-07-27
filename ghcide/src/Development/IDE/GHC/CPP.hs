@@ -18,16 +18,20 @@ where
 import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
-
-#if MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Driver.Pipeline             as Pipeline
 import           GHC.Settings
-#elif MIN_VERSION_ghc (8,10,0)
-import qualified DriverPipeline                  as Pipeline
-import           ToolSettings
-#endif
-#if MIN_VERSION_ghc(9,3,0)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,5,0)
 import qualified GHC.Driver.Pipeline.Execute     as Pipeline
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import qualified GHC.SysTools.Cpp                as Pipeline
+#endif
+
+#if MIN_VERSION_ghc(9,11,0)
+import qualified GHC.SysTools.Tasks              as Pipeline
 #endif
 
 addOptP :: String -> DynFlags -> DynFlags
@@ -37,13 +41,28 @@ addOptP f = alterToolSettings $ \s -> s
           }
   where
     fingerprintStrings ss = fingerprintFingerprints $ map fingerprintString ss
-    alterToolSettings f dynFlags = dynFlags { toolSettings = f (toolSettings dynFlags) }
+    alterToolSettings g dynFlags = dynFlags { toolSettings = g (toolSettings dynFlags) }
 
-doCpp :: HscEnv -> Bool -> FilePath -> FilePath -> IO ()
-doCpp env raw input_fn output_fn =
-#if MIN_VERSION_ghc (9,2,0)
-    Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) raw input_fn output_fn
+doCpp :: HscEnv -> FilePath -> FilePath -> IO ()
+doCpp env input_fn output_fn =
+        -- See GHC commit a2f53ac8d968723417baadfab5be36a020ea6850
+        -- this function/Pipeline.doCpp previously had a raw parameter
+        -- always set to True that corresponded to these settings
+
+#if MIN_VERSION_ghc(9,5,0)
+    let cpp_opts = Pipeline.CppOpts
+                 { cppLinePragmas = True
+#if MIN_VERSION_ghc(9,11,0)
+                 , sourceCodePreprocessor = Pipeline.SCPHsCpp
+#elif MIN_VERSION_ghc(9,10,0)
+                 , useHsCpp = True
 #else
-    Pipeline.doCpp (hsc_dflags env) raw input_fn output_fn
+                 , cppUseCc = False
 #endif
+                 } in
+#else
+    let cpp_opts = True in
+#endif
+
+    Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) cpp_opts input_fn output_fn
 

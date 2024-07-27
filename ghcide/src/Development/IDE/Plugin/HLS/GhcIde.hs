@@ -7,33 +7,35 @@ module Development.IDE.Plugin.HLS.GhcIde
     descriptors
   , Log(..)
   ) where
-import           Control.Monad.IO.Class
+
 import           Development.IDE
-import           Development.IDE.LSP.HoverDefinition
+import qualified Development.IDE.LSP.HoverDefinition as Hover
 import qualified Development.IDE.LSP.Notifications   as Notifications
 import           Development.IDE.LSP.Outline
 import qualified Development.IDE.Plugin.Completions  as Completions
 import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
-import           Language.LSP.Server                 (LspM)
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA.Text                ()
 
 data Log
   = LogNotifications Notifications.Log
   | LogCompletions Completions.Log
   | LogTypeLenses TypeLenses.Log
+  | LogHover Hover.Log
   deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogNotifications log -> pretty log
-    LogCompletions log   -> pretty log
-    LogTypeLenses log    -> pretty log
+    LogNotifications msg -> pretty msg
+    LogCompletions msg   -> pretty msg
+    LogTypeLenses msg    -> pretty msg
+    LogHover msg         -> pretty msg
 
 descriptors :: Recorder (WithPriority Log) -> [PluginDescriptor IdeState]
 descriptors recorder =
-  [ descriptor "ghcide-hover-and-symbols",
+  [ descriptor (cmapWithPrio LogHover recorder) "ghcide-hover-and-symbols",
     Completions.descriptor (cmapWithPrio LogCompletions recorder) "ghcide-completions",
     TypeLenses.descriptor (cmapWithPrio LogTypeLenses recorder) "ghcide-type-lenses",
     Notifications.descriptor (cmapWithPrio LogNotifications recorder) "ghcide-core"
@@ -41,31 +43,26 @@ descriptors recorder =
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler STextDocumentHover hover'
-                  <> mkPluginHandler STextDocumentDocumentSymbol symbolsProvider
-                  <> mkPluginHandler STextDocumentDefinition (\ide _ DefinitionParams{..} ->
-                      gotoDefinition ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler STextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
-                      gotoTypeDefinition ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler STextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
-                      documentHighlight ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler STextDocumentReferences (\ide _ params -> references ide params)
-                  <> mkPluginHandler SWorkspaceSymbol (\ide _ params -> wsSymbols ide params),
+descriptor :: Recorder (WithPriority Hover.Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId desc)
+  { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover (hover' recorder)
+                  <> mkPluginHandler SMethod_TextDocumentDocumentSymbol moduleOutline
+                  <> mkPluginHandler SMethod_TextDocumentDefinition (\ide _ DefinitionParams{..} ->
+                      Hover.gotoDefinition recorder ide TextDocumentPositionParams{..})
+                  <> mkPluginHandler SMethod_TextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
+                      Hover.gotoTypeDefinition recorder ide TextDocumentPositionParams{..})
+                  <> mkPluginHandler SMethod_TextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
+                      Hover.documentHighlight recorder ide TextDocumentPositionParams{..})
+                  <> mkPluginHandler SMethod_TextDocumentReferences (Hover.references recorder)
+                  <> mkPluginHandler SMethod_WorkspaceSymbol (Hover.wsSymbols recorder),
 
-    pluginConfigDescriptor = defaultConfigDescriptor {configEnableGenericConfig = False}
+    pluginConfigDescriptor = defaultConfigDescriptor
   }
+  where
+    desc = "Provides core IDE features for Haskell"
 
 -- ---------------------------------------------------------------------
 
-hover' :: IdeState -> PluginId -> HoverParams  -> LspM c (Either ResponseError (Maybe Hover))
-hover' ideState _ HoverParams{..} = do
-    liftIO $ logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
-    hover ideState TextDocumentPositionParams{..}
-
--- ---------------------------------------------------------------------
-symbolsProvider :: IdeState -> PluginId -> DocumentSymbolParams -> LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
-symbolsProvider ide _ params = moduleOutline ide params
-
--- ---------------------------------------------------------------------
+hover' :: Recorder (WithPriority Hover.Log) -> PluginMethodHandler IdeState Method_TextDocumentHover
+hover' recorder ideState _ HoverParams{..} =
+    Hover.hover recorder ideState TextDocumentPositionParams{..}

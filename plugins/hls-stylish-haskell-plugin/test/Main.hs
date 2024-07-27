@@ -10,8 +10,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-stylishHaskellPlugin :: PluginTestDescriptor ()
-stylishHaskellPlugin = mkPluginTestDescriptor' StylishHaskell.descriptor "stylishHaskell"
+stylishHaskellPlugin :: PluginTestDescriptor StylishHaskell.Log
+stylishHaskellPlugin = mkPluginTestDescriptor StylishHaskell.descriptor "stylishHaskell"
 
 tests :: TestTree
 tests = testGroup "stylish-haskell"
@@ -22,7 +22,7 @@ tests = testGroup "stylish-haskell"
   ]
 
 goldenWithStylishHaskell :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithStylishHaskell title fp desc = goldenWithHaskellDocFormatter stylishHaskellPlugin "stylishHaskell" def title testDataDir fp desc "hs"
+goldenWithStylishHaskell title fp desc = goldenWithHaskellDocFormatter def stylishHaskellPlugin "stylishHaskell" def title testDataDir fp desc "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-stylish-haskell-plugin" </> "test" </> "testdata"
