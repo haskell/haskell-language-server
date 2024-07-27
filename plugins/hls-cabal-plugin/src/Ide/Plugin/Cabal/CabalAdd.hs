@@ -120,7 +120,7 @@ hiddenPackageSuggestion :: Int -> T.Text -> [(T.Text, T.Text)]
 hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
     regex :: T.Text -- TODO: Support multiple packages suggestion
-    regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package [\8216\\']([a-z]+)[-]?([0-9\\.]*)[\8217\\']"
+    regex = "Could not load module \8216.*\8217.\nIt is a member of the hidden package [\8216']([a-z-]+)[-]?([0-9\\.]*)[\8217']"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [(T.Text, T.Text)]
     getMatch (_, _, _, []) = []
     getMatch (_, _, _, [dependency]) = [(dependency, T.empty)]
