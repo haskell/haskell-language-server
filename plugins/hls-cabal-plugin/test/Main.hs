@@ -17,6 +17,7 @@ import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
 import qualified Data.Text                       as Text
+import qualified Data.Text.Internal.Search       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
@@ -222,6 +223,17 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
+        , runCabalTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
+        doc <- openDoc ("src" </> "Main.hs") "haskell"
+        _ <- waitForDiagnosticsFromSource doc "haskell"
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
+        let selectedCas = nubOrdOn (^. L.title) $ filter
+                (\ca -> (ca ^. L.title) == "Add dependency") cas
+        mapM_ executeCodeAction selectedCas
+
+        doc <- openDoc "hidden-package.cabal" "cabal"
+        contents <- documentContents doc
+        liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) []
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
