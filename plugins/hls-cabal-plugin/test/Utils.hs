@@ -13,9 +13,14 @@ import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.FilePath
 import           Test.Hls
+import           Ide.Types (defaultPluginDescriptor)
+
 
 cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
 cabalPlugin = mkPluginTestDescriptor descriptor "cabal"
+
+ghcIdePlugin :: PluginTestDescriptor ()
+ghcIdePlugin = mkPluginTestDescriptor (\_ pid -> defaultPluginDescriptor pid "ghcIdeTestPlugin") "core"
 
 simpleCabalPrefixInfoFromPos :: Position -> T.Text -> CabalPrefixInfo
 simpleCabalPrefixInfoFromPos pos prefix =
@@ -45,9 +50,16 @@ filePathComplTestDir = addTrailingPathSeparator $ testDataDir </> "filepath-comp
 runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
 runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
 
+runHaskellTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
+runHaskellTestCaseSession title subdir = testCase title . runHaskellSession subdir
+
 runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
+
+runHaskellSession :: FilePath -> Session a -> IO a
+runHaskellSession subdir =
+    failIfSessionTimeout . runSessionWithServer def ghcIdePlugin (testDataDir </> subdir)
 
 runCabalGoldenSession :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 runCabalGoldenSession title subdir fp act = goldenWithCabalDoc def cabalPlugin title testDataDir (subdir </> fp) "golden" "cabal" act

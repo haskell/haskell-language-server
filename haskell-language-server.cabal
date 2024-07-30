@@ -303,6 +303,7 @@ test-suite hls-cabal-plugin-tests
     , lens
     , lsp-types
     , text
+    , hls-plugin-api
 
 -----------------------------
 -- class plugin
