@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE RecordPuns       #-}
 {-# LANGUAGE TypeFamilies     #-}
 
 -- | An HLS plugin to provide code lenses for type signatures
@@ -15,8 +17,9 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Control.Concurrent.STM.Stats         (atomically)
 import           Control.DeepSeq                      (rwhnf)
-import           Control.Lens                         ((?~), (^.))
-import           Control.Monad                        (forM, mzero)
+import           Control.Lens                         (Bifunctor (bimap), (?~),
+                                                       (^.))
+import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -26,8 +29,8 @@ import           Data.Generics                        (GenericQ, everything,
                                                        mkQ, something)
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, fromMaybe,
-                                                       mapMaybe, maybeToList)
+import           Data.Maybe                           (catMaybes, mapMaybe,
+                                                       maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
@@ -48,10 +51,11 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.Location       (Position (Position, _line),
+import           Development.IDE.Types.Location       (Position (Position, _character, _line),
                                                        Range (Range, _end, _start))
 import           GHC.Exts                             (IsString)
 import           GHC.Generics                         (Generic)
+import           GHC.Hs                               (realSrcSpan)
 import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
@@ -72,16 +76,19 @@ import           Ide.Types                            (CommandFunction,
                                                        mkResolveHandler,
                                                        pluginSendRequest)
 import qualified Language.LSP.Protocol.Lens           as L
-import           Language.LSP.Protocol.Message        (Method (Method_CodeLensResolve, Method_TextDocumentCodeLens),
+import           Language.LSP.Protocol.Message        (Method (..),
                                                        SMethod (..))
 import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
                                                        CodeLens (..),
                                                        CodeLensParams (CodeLensParams, _textDocument),
                                                        Command, Diagnostic (..),
+                                                       InlayHint (..),
+                                                       InlayHintParams (InlayHintParams),
                                                        Null (Null),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
+                                                       isSubrangeOf,
                                                        type (|?) (..))
 import           Text.Regex.TDFA                      ((=~))
 
@@ -100,7 +107,7 @@ descriptor recorder plId =
   (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
-                     <> mkPluginHandler SMethod_TextDocumentCodeLens whereClauseCodeLens
+                     <> mkPluginHandler SMethod_TextDocumentInlayHint whereClauseInlayHints
     , pluginCommands = [PluginCommand typeLensCommandId "adds a signature" commandHandler]
     , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
@@ -109,7 +116,7 @@ descriptor recorder plId =
     desc = "Provides code lenses type signatures"
 
 properties :: Properties
-  '[ 'PropertyKey "whereLensOn" 'TBoolean,
+  '[ 'PropertyKey "whereInlayHintOn" 'TBoolean,
      'PropertyKey "mode" ('TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
@@ -117,7 +124,7 @@ properties = emptyProperties
     , (Exported, "Only display type lenses of exported global bindings")
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
-  & defineBooleanProperty #whereLensOn
+  & defineBooleanProperty #whereInlayHintOn
     "Enable type lens on instance methods"
     True
 
@@ -317,12 +324,12 @@ rules recorder = do
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
 
-bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) String
+bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) (Name, String)
 bindToSig id hsc rdrEnv = do
     env <- tcInitTidyEnv
     let name = idName id
         (_, ty) = tidyOpenType env (idType id)
-    pure $ printName name <> " :: " <> showDocRdrEnv hsc rdrEnv (pprSigmaType ty)
+    pure (name, showDocRdrEnv hsc rdrEnv (pprSigmaType ty))
 
 gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
 gblBindingType (Just hsc) (Just gblEnv) = do
@@ -336,7 +343,7 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       renderBind id = do
         let name = idName id
         hasSig name $ do
-          sig <- bindToSig id hsc rdrEnv
+          (_, sig) <- bindToSig id hsc rdrEnv
           pure $ GlobalBindingTypeSig name sig (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p
@@ -365,17 +372,19 @@ pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
 
 -- --------------------------------------------------------------------------------
 
--- | A binding expression with its id(s) and location.
+-- | A binding expression with its id and location.
 data WhereBinding = WhereBinding
-    { bindingId  :: [Id]
-    -- ^ There may multiple ids for one expression.
-    -- e.g. @(a,b) = (1,True)@
+    { bindingId  :: Id
+    -- ^ Each WhereBinding represents a id in binding expression.
     , bindingLoc :: SrcSpan
-    -- ^ Location for the whole binding.
-    -- Here we use the this to render the type signature at the proper place.
+    -- ^ Location for a individual binding in a pattern.
+    -- Here we use the this and offset to render the type signature at the proper place.
+    , offset     :: Int
+    -- ^ Column offset between whole binding and individual binding in a pattern.
     --
-    -- Example: For @(a,b) = (1,True)@, it will print the signature after the
-    -- open parenthesis instead of the above of the whole expression.
+    -- Example: For @(a, b) = (1, True)@, there will be two `WhereBinding`s:
+    -- - `a`: WhereBinding id_a loc_a 0
+    -- - `b`: WhereBinding id_b loc_b 4
     }
 
 -- | Existed bindings in a where clause.
@@ -411,42 +420,36 @@ findBindingsQ = something (mkQ Nothing findBindings)
     findBindings :: NHsValBindsLR GhcTc -> Maybe WhereBindings
     findBindings (NValBinds binds sigs) =
       Just $ WhereBindings
-        { bindings = mapMaybe (something (mkQ Nothing findBindingIds) . snd) binds
+        { bindings = concat $ mapMaybe (something (mkQ Nothing findBindingIds) . snd) binds
         , existedSigNames = concatMap findSigIds sigs
         }
 
-    findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe WhereBinding
+    findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe [WhereBinding]
     findBindingIds bind = case unLoc bind of
-      FunBind{..} -> Just $ WhereBinding (pure $ unLoc fun_id) l
-      PatBind{..} ->
-        let ids = (everything (<>) $ mkQ [] (maybeToList . findIdFromPat)) pat_lhs
-        in Just $ WhereBinding ids l
+      FunBind{..} -> Just $ pure $ WhereBinding (unLoc fun_id) (getLoc fun_id) 0
+      PatBind{..} -> Just $ (everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)) pat_lhs
+        where
+          col = srcSpanStartCol . realSrcSpan
+          wb id srcSpan = WhereBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
       _           -> Nothing
-      where
-        l = getLoc bind
 
     -- | Example: Find `a` and `b` from @(a,b) = (1,True)@
-    findIdFromPat :: Pat GhcTc -> Maybe Id
-    findIdFromPat (VarPat _ (L _ id)) = Just id
-    findIdFromPat _                   = Nothing
+    findIdFromPat :: Pat GhcTc -> Maybe (Id, SrcSpan)
+    findIdFromPat (VarPat _ located) = Just (unLoc located, getLoc located)
+    findIdFromPat _                  = Nothing
 
+    findSigIds :: GenLocated l (Sig GhcRn) -> [IdP GhcRn]
     findSigIds (L _ (TypeSig _ names _)) = map unLoc names
     findSigIds _                         = []
 
 -- | Provide code lens for where bindings.
-whereClauseCodeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-whereClauseCodeLens state plId CodeLensParams{..} = do
-  enabled <- liftIO $ runAction "codeLens.config" state $ usePropertyAction #whereLensOn plId properties
+whereClauseInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
+whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) visibleRange)  = do
+  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #whereInlayHintOn plId properties
   if not enabled then pure $ InL [] else do
     nfp <- getNormalizedFilePathE uri
-    tmr <- handleMaybeM (PluginInternalError "Unable to typechecking")
-      $ liftIO
-      $ runAction "codeLens.local.TypeCheck" state
-      $ use TypeCheck nfp
-    (hscEnv -> hsc) <- handleMaybeM (PluginInternalError "Unable to get GhcSession")
-      $ liftIO
-      $ runAction "codeLens.local.GhcSession" state
-      $ use GhcSession nfp
+    (tmr, _) <- runActionE "inlayHint.local.TypeCheck" state $ useWithStaleE TypeCheck nfp
+    (hscEnv -> hsc, _) <- runActionE "InlayHint.local.GhcSession" state $ useWithStaleE GhcSession nfp
     let tcGblEnv = tmrTypechecked tmr
         rdrEnv = tcg_rdr_env tcGblEnv
         typeCheckedSource = tcg_binds tcGblEnv
@@ -457,37 +460,45 @@ whereClauseCodeLens state plId CodeLensParams{..} = do
         -- | Note there may multi ids for one binding,
         -- like @(a, b) = (42, True)@, there are `a` and `b`
         -- in one binding.
-        bindingToLenses ids span = case srcSpanToRange span of
-          Nothing -> pure []
-          Just range -> forM ids $ \id -> do
-            (_, fromMaybe [] -> sig) <- liftIO
+        bindingToInlayHints id span offset = case srcSpanToRange span of
+          Nothing -> pure Nothing
+          Just range -> do
+            (_, sig) <- liftIO
               $ initTcWithGbl hsc tcGblEnv ghostSpan
               $ bindToSig id hsc rdrEnv
-            pure $ generateWhereLens plId range (T.pack sig)
+            pure $ Just $ generateWhereInlayHints range (maybe ("", "") (bimap (T.pack . printName) T.pack) sig) offset
 
-    lenses <- concat <$> sequence
-      [ bindingToLenses idsWithoutSig bindingLoc
+    inlayHints <- catMaybes <$> sequence
+      [ bindingToInlayHints bindingId bindingLoc offset
       | WhereBindings{..} <- localBindings
       , let sigSpans = getSrcSpan <$> existedSigNames
       , WhereBinding{..} <- bindings
-      , let idsWithoutSig = filter (\x -> getSrcSpan (idName x) `notElem` sigSpans) bindingId
+      , let bindingSpan = getSrcSpan (idName bindingId)
+      , bindingSpan `notElem` sigSpans
+      -- Show inlay hints only within visible range
+      , Just True <- [flip isSubrangeOf visibleRange <$> srcSpanToRange bindingSpan]
       ]
 
-    pure $ InL lenses
+    pure $ InL inlayHints
     where
-      uri = _textDocument ^. L.uri
+      generateWhereInlayHints :: Range -> (T.Text, T.Text) -> Int -> InlayHint
+      generateWhereInlayHints range (name, ty) offset =
+        let edit = makeEdit range (name <> " :: " <> ty) offset
+        in InlayHint { _textEdits = Just [edit]
+                     , _paddingRight = Nothing
+                     , _paddingLeft = Just True
+                     , _tooltip = Nothing
+                     , _position = _end range
+                     , _kind = Nothing
+                     , _label = InL $ ":: " <> ty
+                     , _data_ = Nothing
+                     }
 
-      generateWhereLens :: PluginId -> Range -> T.Text -> CodeLens
-      generateWhereLens plId range title =
-        let cmd = mkLspCommand plId typeLensCommandId title (Just [toJSON (makeEdit range title)])
-        in  CodeLens range (Just cmd) Nothing
-
-      makeEdit :: Range -> T.Text -> WorkspaceEdit
-      makeEdit range text =
+      makeEdit :: Range -> T.Text -> Int -> TextEdit
+      makeEdit range text offset =
         let startPos = range ^. L.start
-            insertChar = startPos ^. L.character
-            insertRange = Range startPos startPos
-        in WorkspaceEdit
-          (pure $ Map.fromList [(uri, [TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")])])
-          Nothing
-          Nothing
+            -- Subtract the offset to align with the whole binding expression
+            startPos' = startPos { _character = _character startPos - fromIntegral offset }
+            insertChar = startPos' ^. L.character
+            insertRange = Range startPos' startPos'
+        in TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")
