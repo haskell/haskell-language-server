@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE RecordPuns       #-}
 {-# LANGUAGE TypeFamilies     #-}
 
 -- | An HLS plugin to provide code lenses for type signatures
@@ -426,12 +425,16 @@ findBindingsQ = something (mkQ Nothing findBindings)
 
     findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe [WhereBinding]
     findBindingIds bind = case unLoc bind of
-      FunBind{..} -> Just $ pure $ WhereBinding (unLoc fun_id) (getLoc fun_id) 0
+      FunBind{..} ->
+        let whereBinding = WhereBinding (unLoc fun_id) (getLoc fun_id)
+                           (col (getLoc fun_id) - col (getLoc bind))
+        in Just $ pure whereBinding
       PatBind{..} -> Just $ (everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)) pat_lhs
         where
-          col = srcSpanStartCol . realSrcSpan
           wb id srcSpan = WhereBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
       _           -> Nothing
+      where
+        col = srcSpanStartCol . realSrcSpan
 
     -- | Example: Find `a` and `b` from @(a,b) = (1,True)@
     findIdFromPat :: Pat GhcTc -> Maybe (Id, SrcSpan)
@@ -460,23 +463,23 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
         -- | Note there may multi ids for one binding,
         -- like @(a, b) = (42, True)@, there are `a` and `b`
         -- in one binding.
-        bindingToInlayHints id span offset = case srcSpanToRange span of
-          Nothing -> pure Nothing
-          Just range -> do
-            (_, sig) <- liftIO
-              $ initTcWithGbl hsc tcGblEnv ghostSpan
-              $ bindToSig id hsc rdrEnv
-            pure $ Just $ generateWhereInlayHints range (maybe ("", "") (bimap (T.pack . printName) T.pack) sig) offset
+        bindingToInlayHints id range offset = do
+          (_, sig) <- liftIO
+            $ initTcWithGbl hsc tcGblEnv ghostSpan
+            $ bindToSig id hsc rdrEnv
+          pure $ generateWhereInlayHints range (maybe ("", "") (bimap (T.pack . printName) T.pack) sig) offset
 
-    inlayHints <- catMaybes <$> sequence
-      [ bindingToInlayHints bindingId bindingLoc offset
+    inlayHints <- sequence
+      [ bindingToInlayHints bindingId bindingRange offset
       | WhereBindings{..} <- localBindings
       , let sigSpans = getSrcSpan <$> existedSigNames
       , WhereBinding{..} <- bindings
       , let bindingSpan = getSrcSpan (idName bindingId)
       , bindingSpan `notElem` sigSpans
+      -- , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
+      , Just bindingRange <- [srcSpanToRange bindingLoc]
       -- Show inlay hints only within visible range
-      , Just True <- [flip isSubrangeOf visibleRange <$> srcSpanToRange bindingSpan]
+      , isSubrangeOf bindingRange visibleRange
       ]
 
     pure $ InL inlayHints
@@ -498,7 +501,7 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
       makeEdit range text offset =
         let startPos = range ^. L.start
             -- Subtract the offset to align with the whole binding expression
-            startPos' = startPos { _character = _character startPos - fromIntegral offset }
-            insertChar = startPos' ^. L.character
+            insertChar = _character startPos - fromIntegral offset
+            startPos' = startPos { _character = insertChar }
             insertRange = Range startPos' startPos'
         in TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")
