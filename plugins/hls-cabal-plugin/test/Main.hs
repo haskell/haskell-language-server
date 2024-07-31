@@ -225,28 +225,16 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
-    , runHaskellTestCaseSession "test that haskell files are read" ("cabal-add-testdata" </> "hidden-package") $ do
-        hsDoc <- openDoc ("src" </> "Main.hs") "haskell"
-
-        diags <- waitForDiagnosticsFrom hsDoc
-        traceShowM ("Diags", diags)
-        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsDoc
-        traceShowM ("Code ACtions", cas)
-        let selectedCas = nubOrdOn (^. L.title) $ filter
-                (\ca -> (ca ^. L.title) == "Add dependency") cas
-        mapM_ executeCodeAction selectedCas
-        liftIO $ assertEqual "Split isn't found in the cabal file" (show selectedCas) []
     , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
         hsdoc <- openDoc ("src" </> "Main.hs") "haskell"
         _ <- waitForDiagnosticsFrom hsdoc
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
-        let selectedCas = nubOrdOn (^. L.title) $ filter
-                (\ca -> (ca ^. L.title) == "Add dependency") cas
+        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
         mapM_ executeCodeAction selectedCas
 
         doc <- openDoc "hidden-package.cabal" "cabal"
         contents <- documentContents doc
-        liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) []
+        liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) [256]
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
