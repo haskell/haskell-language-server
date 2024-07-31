@@ -325,7 +325,11 @@ rules recorder = do
 
 bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) (Name, String)
 bindToSig id hsc rdrEnv = do
-    env <- tcInitTidyEnv
+    env <-
+#if MIN_VERSION_ghc(9,7,0)
+      liftZonkM
+#endif
+      tcInitTidyEnv
     let name = idName id
         (_, ty) = tidyOpenType env (idType id)
     pure (name, showDocRdrEnv hsc rdrEnv (pprSigmaType ty))
