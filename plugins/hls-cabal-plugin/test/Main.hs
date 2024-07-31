@@ -226,24 +226,23 @@ codeActionTests = testGroup "Code Actions"
         mapM_ executeCodeAction selectedCas
         pure ()
     , runHaskellTestCaseSession "test that haskell files are read" ("cabal-add-testdata" </> "hidden-package") $ do
-        doc <- openDoc ("src" </> "Main.hs") "haskell"
+        hsDoc <- openDoc ("src" </> "Main.hs") "haskell"
 
-        _ <- waitForDiagnosticsFromSource doc "haskell"
-        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
+        diags <- waitForDiagnosticsFrom hsDoc
+        traceShowM ("Diags", diags)
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsDoc
+        traceShowM ("Code ACtions", cas)
         let selectedCas = nubOrdOn (^. L.title) $ filter
                 (\ca -> (ca ^. L.title) == "Add dependency") cas
         mapM_ executeCodeAction selectedCas
         liftIO $ assertEqual "Split isn't found in the cabal file" (show selectedCas) []
-    , runCabalTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
-        _ <- liftIO $ runHaskellSession ("cabal-add-testdata" </> "hidden-package") $ do
-                doc <- openDoc ("src" </> "Main.hs") "haskell"
-
-                _ <- waitForDiagnosticsFromSource doc "haskell"
-                cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
-                let selectedCas = nubOrdOn (^. L.title) $ filter
-                        (\ca -> (ca ^. L.title) == "Add dependency") cas
-                mapM_ executeCodeAction selectedCas
-                pure ()
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
+        hsdoc <- openDoc ("src" </> "Main.hs") "haskell"
+        _ <- waitForDiagnosticsFrom hsdoc
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
+        let selectedCas = nubOrdOn (^. L.title) $ filter
+                (\ca -> (ca ^. L.title) == "Add dependency") cas
+        mapM_ executeCodeAction selectedCas
 
         doc <- openDoc "hidden-package.cabal" "cabal"
         contents <- documentContents doc
