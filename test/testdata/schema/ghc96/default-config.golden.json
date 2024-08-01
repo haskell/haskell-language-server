@@ -79,10 +79,12 @@
             "symbolsOn": true
         },
         "ghcide-type-lenses": {
+            "codeLensOn": true,
             "config": {
-                "mode": "always"
+                "mode": "always",
+                "whereInlayHintOn": true
             },
-            "globalOn": true
+            "inlayHintsOn": true
         },
         "hlint": {
             "codeActionsOn": true,

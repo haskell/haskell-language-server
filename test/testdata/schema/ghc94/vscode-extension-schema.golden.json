@@ -161,6 +161,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.ghcide-type-lenses.codeLensOn": {
+        "default": true,
+        "description": "Enables ghcide-type-lenses code lenses",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.ghcide-type-lenses.config.mode": {
         "default": "always",
         "description": "Control how type lenses are shown",
@@ -177,9 +183,15 @@
         "scope": "resource",
         "type": "string"
     },
-    "haskell.plugin.ghcide-type-lenses.globalOn": {
+    "haskell.plugin.ghcide-type-lenses.config.whereInlayHintOn": {
         "default": true,
-        "description": "Enables ghcide-type-lenses plugin",
+        "markdownDescription": "Enable type lens on instance methods",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-type-lenses.inlayHintsOn": {
+        "default": true,
+        "description": "Enables ghcide-type-lenses inlay hints",
         "scope": "resource",
         "type": "boolean"
     },
