@@ -29,7 +29,6 @@ import           Control.Concurrent.STM
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
-import           Control.Monad
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
 import           Control.Monad.Trans.Class                          (MonadTrans (lift))
@@ -118,7 +117,6 @@ import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
-import qualified Development.IDE.Types.Options                      as Options
 import           Text.Regex.TDFA.Text                               ()
 
 -- ---------------------------------------------------------------------
@@ -205,10 +203,7 @@ rules recorder plugin = do
 
   action $ do
     files <- Map.keys <$> getFilesOfInterestUntracked
-    Shake.ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- Shake.getShakeExtras
-    Shake.kickSignal testing lspEnv files (Proxy @"kick/start/hlint")
-    void $ uses GetHlintDiagnostics files
-    Shake.kickSignal testing lspEnv files (Proxy @"kick/done/hlint")
+    Shake.runWithSignal (Proxy @"kick/start/hlint") (Proxy @"kick/done/hlint") files GetHlintDiagnostics
 
   where
 

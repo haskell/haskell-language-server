@@ -74,7 +74,7 @@ module Development.IDE.Core.Shake(
     Log(..),
     VFSModified(..), getClientConfigAction,
     ThreadQueue(..),
-    kickSignal
+    runWithSignal
     ) where
 
 import           Control.Concurrent.Async
@@ -124,6 +124,7 @@ import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
 
@@ -151,7 +152,6 @@ import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Monitoring       (Monitoring (..))
-import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
@@ -170,7 +170,6 @@ import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types            as LSP
-import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog                 hiding (addEvent)
@@ -1456,3 +1455,11 @@ kickSignal :: KnownSymbol s => Bool -> Maybe (LSP.LanguageContextEnv c) -> [Norm
 kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
   LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
   toJSON $ map fromNormalizedFilePath files
+
+-- | Add kick start/done signal to rule
+runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [NormalizedFilePath] -> k -> Action ()
+runWithSignal msgStart msgEnd files rule = do
+  ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- getShakeExtras
+  kickSignal testing lspEnv files msgStart
+  void $ uses rule files
+  kickSignal testing lspEnv files msgEnd

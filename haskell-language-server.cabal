@@ -714,7 +714,6 @@ library hls-hlint-plugin
     , hlint                 >= 3.5 && < 3.9
     , hls-plugin-api        == 2.9.0.1
     , lens
-    , lsp
     , mtl
     , refact
     , regex-tdfa

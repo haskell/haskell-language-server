@@ -27,7 +27,6 @@ import           Development.IDE.Core.Shake                  (restartShakeSessio
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (Key, alwaysRerun)
 import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
-import qualified Development.IDE.Types.Options               as Options
 import           Development.IDE.Types.Shake                 (toKey)
 import qualified Distribution.Fields                         as Syntax
 import qualified Distribution.Parsec.Position                as Syntax
@@ -230,10 +229,7 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
-  Shake.ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- Shake.getShakeExtras
-  Shake.kickSignal testing lspEnv files (Proxy @"kick/start/cabal")
-  void $ uses Types.ParseCabalFile files
-  Shake.kickSignal testing lspEnv files (Proxy @"kick/done/cabal")
+  Shake.runWithSignal (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") files Types.ParseCabalFile
 
 -- ----------------------------------------------------------------
 -- Code Actions
