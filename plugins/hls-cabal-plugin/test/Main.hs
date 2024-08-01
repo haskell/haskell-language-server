@@ -20,6 +20,7 @@ import qualified Data.Text                       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
+import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
@@ -33,6 +34,7 @@ main = do
             , pluginTests
             , completerTests
             , contextTests
+            , outlineTests
             , codeActionTests
             ]
 
