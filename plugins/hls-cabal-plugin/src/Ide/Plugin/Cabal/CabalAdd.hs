@@ -10,7 +10,6 @@ module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
  , hiddenPackageAction
  , hiddenPackageSuggestion
- , hiddenPackageAction
  , cabalAddCommand
  , command
 )
@@ -20,17 +19,18 @@ import           Control.Monad                                 (filterM, void)
 import           Control.Monad.IO.Class                        (liftIO)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as T
 import           Development.IDE                               (IdeState (shakeExtras), runIdeAction, useWithStale)
 import           Distribution.PackageDescription.Quirks        (patchQuirks)
-import           Ide.PluginUtils                               (mkLspCommand)
+import Ide.PluginUtils ( mkLspCommand, WithDeletions(SkipDeletions), diffText )
 import           Ide.Types                                     (CommandFunction,
                                                                 CommandId (CommandId),
-                                                                PluginId)
+                                                                PluginId, pluginGetClientCapabilities, pluginSendRequest)
 import           Language.LSP.Protocol.Types                   (CodeAction (CodeAction),
                                                                 CodeActionKind (CodeActionKind_QuickFix),
                                                                 Diagnostic (..),
                                                                 Null (Null),
-                                                                type (|?) (InR), toNormalizedFilePath)
+                                                                type (|?) (InR), toNormalizedFilePath, TextDocumentIdentifier, VersionedTextDocumentIdentifier, ClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceEdit, ApplyWorkspaceEditParams (ApplyWorkspaceEditParams))
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
 
@@ -67,6 +67,9 @@ import Development.IDE.Core.RuleTypes (GetFileContents(..))
 import Data.Text.Encoding (encodeUtf8)
 import Ide.Plugin.Cabal.Orphans ()
 import Distribution.Fields.Field (fieldAnn)
+import           Control.Monad.Trans.Class            (lift)
+import Language.LSP.Protocol.Message (SMethod (SMethod_WorkspaceApplyEdit))
+import Debug.Trace
 
 -- | Given a path to a haskell file, returns the closest cabal file.
 --   If cabal file wasn't found, dives Nothing.
@@ -91,8 +94,8 @@ findResponsibleCabalFile haskellFilePath = do
 --   if a suggestion for a missing dependency is found.
 --   Disabled action if no cabal files given.
 --   Conducts IO action on a cabal file to find build targets.
-hiddenPackageAction :: PluginId -> Int -> Diagnostic -> FilePath -> FilePath -> GenericPackageDescription -> IO [CodeAction]
-hiddenPackageAction plId maxCompletions diag haskellFilePath cabalFilePath gpd = do
+hiddenPackageAction :: PluginId -> VersionedTextDocumentIdentifier -> Int -> Diagnostic -> FilePath -> FilePath -> GenericPackageDescription -> IO [CodeAction]
+hiddenPackageAction plId verTxtDocId maxCompletions diag haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
     case buildTargets of
       [] -> pure $ mkCodeAction cabalFilePath Nothing <$> hiddenPackageSuggestion maxCompletions (_message diag)
@@ -110,7 +113,11 @@ hiddenPackageAction plId maxCompletions diag haskellFilePath cabalFilePath gpd =
 
         version = if T.null suggestedVersion then Nothing else Just suggestedVersion
 
-        params = CabalAddCommandParams {cabalPath = cabalFilePath, buildTarget = target, dependency = suggestedDep, version=version}
+        params = CabalAddCommandParams {cabalPath = cabalFilePath
+                                      , verTxtDocId = verTxtDocId
+                                      , buildTarget = target
+                                      , dependency = suggestedDep
+                                      , version=version}
         command = mkLspCommand plId (CommandId cabalAddCommand) "Execute Code Action" (Just [toJSON params])
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
@@ -134,6 +141,7 @@ cabalAddCommand = "cabalAdd"
 
 data CabalAddCommandParams =
      CabalAddCommandParams { cabalPath   :: FilePath
+                           , verTxtDocId :: VersionedTextDocumentIdentifier
                            , buildTarget :: Maybe String
                            , dependency  :: T.Text
                            , version     :: Maybe T.Text
@@ -142,12 +150,16 @@ data CabalAddCommandParams =
   deriving anyclass (FromJSON, ToJSON)
 
 command :: CommandFunction IdeState CabalAddCommandParams
-command state _ (CabalAddCommandParams {cabalPath = path, buildTarget = target, dependency = dep, version = mbVer}) = do
+command state _ (CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do
   let specifiedDep = case mbVer of
         Nothing  -> dep
         Just ver -> dep <> " ^>=" <> ver
-  void $ liftIO $ addDependency state path target (fromList [T.unpack specifiedDep])
+  caps <- lift pluginGetClientCapabilities
+  let env = (state, caps, verTxtDocId)
+  edit <- liftIO $ getDependencyEdit env path target (fromList [T.unpack specifiedDep])
+  void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   pure $ InR Null
+
 
 -- | Gives cabal file's contents or throws error.
 --   Inspired by @readCabalFile@ in cabal-add,
@@ -170,8 +182,9 @@ getBuildTargets gpd cabalFilePath haskellFilePath = do
 --
 --   Inspired by @main@ in cabal-add,
 --   Distribution.Client.Main
-addDependency :: IdeState -> FilePath -> Maybe String -> NonEmpty String -> IO ()
-addDependency state cabalFilePath buildTarget dependency = do
+getDependencyEdit :: (IdeState, ClientCapabilities, VersionedTextDocumentIdentifier) -> FilePath -> Maybe String -> NonEmpty String -> IO(WorkspaceEdit)
+getDependencyEdit env cabalFilePath buildTarget dependency = do
+  let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
         contents <- useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
         inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
@@ -207,4 +220,6 @@ addDependency state cabalFilePath buildTarget dependency = do
 
   case executeConfig (validateChanges origPackDescr) (Config {..}) of
     Nothing -> error $ "Cannot extend build-depends in " ++ cabalFilePath
-    Just r  -> B.writeFile cabalFilePath r
+    Just newContents  -> do
+              let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
+              pure edit

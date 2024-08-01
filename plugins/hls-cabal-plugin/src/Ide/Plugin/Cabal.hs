@@ -327,7 +327,7 @@ gotoDefinition ideState _ msgParam = do
       isSectionArgName _ _ = False
 
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
+cabalAddCodeAction recorder state plId (CodeActionParams _ _ docId@(TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
   let mbHaskellFilePath = uriToFilePath uri
   case mbHaskellFilePath of
@@ -337,11 +337,12 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
       case mbCabalFile of
         Nothing -> pure $ InL $ fmap InR [noCabalFileAction]
         Just cabalFilePath -> do
+          verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
           mGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
           case mGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
-              actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction plId maxCompls diag haskellFilePath cabalFilePath gpd) diags
+              actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction plId verTxtDocId maxCompls diag haskellFilePath cabalFilePath gpd) diags
               pure $ InL $ fmap InR (concat actions)
   where
     noCabalFileAction = CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
