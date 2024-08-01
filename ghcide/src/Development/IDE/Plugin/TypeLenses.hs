@@ -106,7 +106,7 @@ descriptor recorder plId =
   (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
-                     <> mkPluginHandler SMethod_TextDocumentInlayHint whereClauseInlayHints
+                    <> mkPluginHandler SMethod_TextDocumentInlayHint whereClauseInlayHints
     , pluginCommands = [PluginCommand typeLensCommandId "adds a signature" commandHandler]
     , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
@@ -346,8 +346,8 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       renderBind id = do
         let name = idName id
         hasSig name $ do
-          (_, sig) <- bindToSig id hsc rdrEnv
-          pure $ GlobalBindingTypeSig name sig (name `elemNameSet` exports)
+          (name', sig) <- bindToSig id hsc rdrEnv
+          pure $ GlobalBindingTypeSig name (printName name' <> " :: " <> sig) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p
         hasSig name
