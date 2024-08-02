@@ -20,6 +20,7 @@ import           Data.ByteString                (ByteString)
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Types    as LSP (Diagnostic (..),
                                                         DiagnosticSeverity (..))
@@ -44,7 +45,7 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
-ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
+ideErrorText :: Path Abs NormalizedFilePath -> T.Text -> FileDiagnostic
 ideErrorText = ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error)
 
 ideErrorWithSource
@@ -86,7 +87,7 @@ instance NFData ShowDiagnostic where
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
-type FileDiagnostic = (NormalizedFilePath, ShowDiagnostic, Diagnostic)
+type FileDiagnostic = (Path Abs NormalizedFilePath, ShowDiagnostic, Diagnostic)
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
@@ -108,7 +109,7 @@ prettyDiagnostics = vcat . map prettyDiagnostic
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
 prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
     vcat
-        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fp)
+        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath $ normalizeAbs fp)
         , slabel_ "Hidden:  " $ if sh == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source

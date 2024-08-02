@@ -148,6 +148,7 @@ import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Monitoring       (Monitoring (..))
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Path
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
@@ -1204,7 +1205,7 @@ defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnost
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
-    :: forall k v. IdeRule k v
+    :: forall k v. (IdeRule k v, NFData v)
     => (Maybe Int32 -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
@@ -1245,7 +1246,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText (mkAbsPath file) $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1354,7 +1355,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                  lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
-                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
+                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (mkAbsPath fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $ do
                             liftIO $ tag "count" (show $ Prelude.length newDiags)
                             liftIO $ tag "key" (show k)
@@ -1422,7 +1423,7 @@ getAllDiagnostics ::
     STMDiagnosticStore ->
     STM [FileDiagnostic]
 getAllDiagnostics =
-    fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
+    fmap (concatMap (\(k,v) -> map (mkAbsPath $ fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =

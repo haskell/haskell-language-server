@@ -190,6 +190,7 @@ library
     Development.IDE.Spans.Pragmas
     Development.IDE.Types.Diagnostics
     Development.IDE.Types.Exports
+    Development.IDE.Types.Path
     Development.IDE.Types.HscEnvEq
     Development.IDE.Types.KnownTargets
     Development.IDE.Types.Location

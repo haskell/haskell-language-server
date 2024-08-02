@@ -27,6 +27,7 @@ import qualified Data.Text                         as T
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import qualified GHC.LanguageExtensions            as LangExt
 import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Utils.Logger                  (LogFlags (..))
@@ -104,7 +105,7 @@ data CPPDiag
 
 diagsFromCPPLogs :: FilePath -> [CPPLog] -> [FileDiagnostic]
 diagsFromCPPLogs filename logs =
-  map (\d -> (toNormalizedFilePath' filename, ShowDiag, cppDiagToDiagnostic d)) $
+  map (\d -> (mkAbsPath $ toNormalizedFilePath' filename, ShowDiag, cppDiagToDiagnostic d)) $
     go [] logs
   where
     -- On errors, CPP calls logAction with a real span for the initial log and
