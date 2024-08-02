@@ -4,7 +4,11 @@
 module Main ( main ) where
 
 import           Data.Either               (rights)
+import           Data.Text                 (Text)
 import qualified Data.Text                 as T
+import           Development.IDE           (filePathToUri',
+                                            toNormalizedFilePath')
+import           Development.IDE.Test      (canonicalizeUri)
 import qualified Ide.Plugin.ExplicitFields as ExplicitFields
 import           System.FilePath           ((<.>), (</>))
 import           Test.Hls
@@ -17,20 +21,163 @@ plugin = mkPluginTestDescriptor ExplicitFields.descriptor "explicit-fields"
 
 test :: TestTree
 test = testGroup "explicit-fields"
-  [ mkTest "WildcardOnly" "WildcardOnly" 12 10 12 20
-  , mkTest "Unused" "Unused" 12 10 12 20
-  , mkTest "Unused2" "Unused2" 12 10 12 20
-  , mkTest "WithPun" "WithPun" 13 10 13 25
-  , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
-  , mkTest "Mixed" "Mixed" 14 10 14 37
-  , mkTest "Construction" "Construction" 16 5 16 15
-  , mkTest "HsExpanded1" "HsExpanded1" 17 10 17 20
-  , mkTest "HsExpanded2" "HsExpanded2" 23 10 23 22
-  , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
-  , mkTestNoAction "Puns" "Puns" 12 10 12 31
-  , mkTestNoAction "Infix" "Infix" 11 11 11 31
-  , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
+  [ testGroup "code actions"
+    [ mkTest "WildcardOnly" "WildcardOnly" 12 10 12 20
+    , mkTest "Unused" "Unused" 12 10 12 20
+    , mkTest "Unused2" "Unused2" 12 10 12 20
+    , mkTest "WithPun" "WithPun" 13 10 13 25
+    , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
+    , mkTest "Mixed" "Mixed" 14 10 14 37
+    , mkTest "Construction" "Construction" 16 5 16 15
+    , mkTest "HsExpanded1" "HsExpanded1" 17 10 17 20
+    , mkTest "HsExpanded2" "HsExpanded2" 23 10 23 22
+    , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
+    , mkTestNoAction "Puns" "Puns" 12 10 12 31
+    , mkTestNoAction "Infix" "Infix" 11 11 11 31
+    , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
+    ]
+  , testGroup "inlay hints"
+    [ mkInlayHintsTest "Construction" 16 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "Construction"
+        foo <- mkLabelPart' 13 6 "foo"
+        bar <- mkLabelPart' 14 6 "bar"
+        baz <- mkLabelPart' 15 6 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 16 14
+                        , _label = InR [ foo, commaPart
+                                       , bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 16 5 15
+                                            , mkPragmaTextEdit 2
+                                            ]
+                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "HsExpanded1" 17 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "HsExpanded1"
+        foo <- mkLabelPart' 11 4 "foo"
+        (@?=) ih
+          [defInlayHint { _position = Position 17 19
+                        , _label = InR [ foo ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo}" 17 10 20 ]
+                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "HsExpanded2" 23 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "HsExpanded2"
+        bar <- mkLabelPart' 14 4 "bar"
+        (@?=) ih
+          [defInlayHint { _position = Position 23 21
+                        , _label = InR [ bar ]
+                        , _textEdits = Just [ mkLineTextEdit "YourRec {bar}" 23 10 22 ]
+                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "Mixed" 14 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "Mixed"
+        baz <- mkLabelPart' 9 4 "baz"
+        quux <- mkLabelPart' 10 4 "quux"
+        (@?=) ih
+          [defInlayHint { _position = Position 14 36
+                        , _label = InR [ baz, commaPart
+                                       , quux
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar = bar', baz}" 14 10 37 ]
+                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "Unused" 12 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "Unused"
+        foo <- mkLabelPart' 6 4 "foo"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 12 19
+                        , _label = InR [ foo, commaPart
+                                       , bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar}" 12 10 20
+                                            , mkPragmaTextEdit 2
+                                            ]
+                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "Unused2" 12 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "Unused2"
+        foo <- mkLabelPart' 6 4 "foo"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 12 19
+                        , _label = InR [ foo, commaPart
+                                       , bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar}" 12 10 20
+                                            , mkPragmaTextEdit 2
+                                            ]
+                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "WildcardOnly" 12 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "WildcardOnly"
+        foo <- mkLabelPart' 6 4 "foo"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 12 19
+                        , _label = InR [ foo, commaPart
+                                       , bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 12 10 20
+                                            , mkPragmaTextEdit 2
+                                            ]
+                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "WithExplicitBind" 12 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "WithExplicitBind"
+        bar <- mkLabelPart' 7 4 "bar"
+        baz <- mkLabelPart' 8 4 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 12 31
+                        , _label = InR [ bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo = foo', bar, baz}" 12 10 32
+                                            , mkPragmaTextEdit 2
+                                            ]
+                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _paddingLeft = Just True
+                        }]
+    , mkInlayHintsTest "WithPun" 13 $ \ih -> do
+        let mkLabelPart' = mkLabelPart "WithPun"
+        bar <- mkLabelPart' 8 4 "bar"
+        baz <- mkLabelPart' 9 4 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 13 24
+                        , _label = InR [ bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 13 10 25 ]
+                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _paddingLeft = Just True
+                        }]
+    ]
   ]
+
+mkInlayHintsTest :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+mkInlayHintsTest fp line assert =
+  testCase fp $
+    runSessionWithServer def plugin testDataDir $ do
+      doc <- openDoc (fp ++ ".hs") "haskell"
+      inlayHints <- getInlayHints doc (lineRange line)
+      liftIO $ assert inlayHints
+  where
+    lineRange line = Range (Position line 0) (Position line 1000)
 
 mkTestNoAction :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkTestNoAction title fp x1 y1 x2 y2 =
@@ -65,6 +212,55 @@ findExplicitFieldsAction = filter isExplicitFieldsCodeAction . rights . map toEi
 isExplicitFieldsCodeAction :: CodeAction -> Bool
 isExplicitFieldsCodeAction CodeAction {_title} =
   "Expand record wildcard" `T.isPrefixOf` _title
+
+defInlayHint :: InlayHint
+defInlayHint =
+  InlayHint
+  { _position     = Position 0 0
+  , _label        = InR []
+  , _kind         = Nothing
+  , _textEdits    = Nothing
+  , _tooltip      = Nothing
+  , _paddingLeft  = Nothing
+  , _paddingRight = Nothing
+  , _data_        = Nothing
+  }
+
+mkLabelPart :: FilePath -> UInt -> UInt -> Text -> IO InlayHintLabelPart
+mkLabelPart fp line start value = do
+  uri' <- uri
+  pure $ InlayHintLabelPart { _location = Just (location uri' line start)
+                            , _value    = value
+                            , _tooltip  = Nothing
+                            , _command  = Nothing
+                            }
+  where
+    toUri = fromNormalizedUri . filePathToUri' . toNormalizedFilePath'
+    uri = canonicalizeUri $ toUri (testDataDir </> (fp ++ ".hs"))
+    location uri line char = Location uri (Range (Position line char) (Position line (char + (fromIntegral $ T.length value))))
+
+commaPart :: InlayHintLabelPart
+commaPart =
+  InlayHintLabelPart
+  { _location = Nothing
+  , _value    = ", "
+  , _tooltip  = Nothing
+  , _command  = Nothing
+  }
+
+mkLineTextEdit :: Text -> UInt -> UInt -> UInt -> TextEdit
+mkLineTextEdit newText line x y =
+  TextEdit
+  { _range = Range (Position line x) (Position line y)
+  , _newText = newText
+  }
+
+mkPragmaTextEdit :: UInt -> TextEdit
+mkPragmaTextEdit line =
+  TextEdit
+  { _range = Range (Position line 0) (Position line 0)
+  , _newText = "{-# LANGUAGE NamedFieldPuns #-}\n"
+  }
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-explicit-record-fields-plugin" </> "test" </> "testdata"

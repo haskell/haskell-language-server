@@ -633,6 +633,8 @@ instance HasSrcSpan (EpAnn a) where
 #if MIN_VERSION_ghc(9,9,0)
 instance HasSrcSpan (SrcLoc.GenLocated (EpAnn ann) a) where
   getLoc (L l _) = getLoc l
+instance HasSrcSpan (SrcLoc.GenLocated (GHC.EpaLocation) a) where
+  getLoc = GHC.getHasLoc
 #else
 instance HasSrcSpan (SrcSpanAnn' ann) where
   getLoc = GHC.locA

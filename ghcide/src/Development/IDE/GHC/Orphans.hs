@@ -226,6 +226,12 @@ instance NFData (HsExpr (GhcPass Renamed)) where
 instance NFData (Pat (GhcPass Renamed)) where
     rnf = rwhnf
 
+instance NFData (HsExpr (GhcPass Typechecked)) where
+    rnf = rwhnf
+
+instance NFData (Pat (GhcPass Typechecked)) where
+    rnf = rwhnf
+
 instance NFData Extension where
   rnf = rwhnf
 
