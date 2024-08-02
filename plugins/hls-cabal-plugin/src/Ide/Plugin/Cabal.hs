@@ -231,7 +231,7 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
-  void $ uses Types.ParseCabalFile files
+  Shake.runWithSignal (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") files Types.ParseCabalFile
 
 -- ----------------------------------------------------------------
 -- Code Actions
