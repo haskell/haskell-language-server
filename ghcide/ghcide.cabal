@@ -129,6 +129,7 @@ library
   exposed-modules:
     Control.Concurrent.Strict
     Development.IDE
+    Development.IDE.Core.AbstractPath
     Development.IDE.Core.Actions
     Development.IDE.Core.Compile
     Development.IDE.Core.Debouncer
