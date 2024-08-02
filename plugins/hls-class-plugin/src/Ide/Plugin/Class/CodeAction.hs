@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -203,7 +204,11 @@ isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occ
 isClassNodeIdentifier _ _ = False
 
 isClassMethodWarning :: T.Text -> Bool
+#if MIN_VERSION_ghc(9,8,0)
+isClassMethodWarning = T.isPrefixOf "No explicit implementation for"
+#else
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
+#endif
 
 isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
@@ -242,4 +247,3 @@ minDefToMethodGroups hsc gblEnv range sigs minDef = makeMethodGroup <$> go minDe
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>) . go . unLoc) [[]] ms
         go (Parens m) = go (unLoc m)
-
