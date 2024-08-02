@@ -45,6 +45,7 @@ import qualified Development.IDE.GHC.Compat.Util   as Compat
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           GHC
 import           Language.LSP.Protocol.Types       (isSubrangeOf)
 import           Language.LSP.VFS                  (CodePointPosition (CodePointPosition),
@@ -52,18 +53,21 @@ import           Language.LSP.VFS                  (CodePointPosition (CodePoint
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc,ShowDiag,)
-    Diagnostic
-    { _range    = fromMaybe noRange $ srcSpanToRange loc
-    , _severity = Just sev
-    , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
-    , _message  = msg
-    , _code     = Nothing
-    , _relatedInformation = Nothing
-    , _tags     = Nothing
-    , _codeDescription = Nothing
-    , _data_   = Nothing
-    }
+diagFromText diagSource sev loc msg = (filePath, ShowDiag,)
+                                      Diagnostic
+                                      { _range    = fromMaybe noRange $ srcSpanToRange loc
+                                      , _severity = Just sev
+                                      , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
+                                      , _message  = msg
+                                      , _code     = Nothing
+                                      , _relatedInformation = Nothing
+                                      , _tags     = Nothing
+                                      , _codeDescription = Nothing
+                                      , _data_   = Nothing
+                                      }
+  where
+    normPath = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc
+    filePath = mkAbsPath normPath
 
 -- | Produce a GHC-style error from a source span and a message.
 diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope DecoratedSDoc -> [FileDiagnostic]

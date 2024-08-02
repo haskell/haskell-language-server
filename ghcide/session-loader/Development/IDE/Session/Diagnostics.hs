@@ -10,6 +10,7 @@ import           Data.Maybe
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           GHC.Generics
 import qualified HIE.Bios.Cradle                   as HieBios
 import           HIE.Bios.Types                    hiding (Log)
@@ -26,7 +27,7 @@ data CradleErrorDetails =
   the cradle error occurred (of the file we attempted to load).
   Depicts the cradle error in a user-friendly way.
 -}
-renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
+renderCradleError :: CradleError -> Cradle a -> Path Abs NormalizedFilePath -> FileDiagnostic
 renderCradleError (CradleError deps _ec ms) cradle nfp
   | HieBios.isCabalCradle cradle =
       let (fp, showDiag, diag) = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp $ T.unlines $ map T.pack userFriendlyMessage in
@@ -42,7 +43,7 @@ renderCradleError (CradleError deps _ec ms) cradle nfp
     mkUnknownModuleMessage :: Maybe [String]
     mkUnknownModuleMessage
       | any (isInfixOf "Failed extracting script block:") ms =
-          Just $ unknownModuleMessage (fromNormalizedFilePath nfp)
+          Just $ unknownModuleMessage (fromNormalizedFilePath $ normalizeAbs nfp)
       | otherwise = Nothing
 
     fileMissingMessage :: Maybe [String]
