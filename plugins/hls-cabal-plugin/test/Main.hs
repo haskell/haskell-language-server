@@ -230,12 +230,12 @@ codeActionTests = testGroup "Code Actions"
         _ <- waitForDiagnosticsFrom hsdoc
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
         let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
-        traceShowM("selectedCas", selectedCas)
+        -- traceShowM("selectedCas", selectedCas)
         mapM_ executeCodeAction selectedCas
 
         cabDoc <- openDoc "hidden-package.cabal" "cabal"
         contents <- documentContents cabDoc
-        traceShowM("contents", contents)
+        -- traceShowM("contents", contents)
         liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) [256]
     ]
   where

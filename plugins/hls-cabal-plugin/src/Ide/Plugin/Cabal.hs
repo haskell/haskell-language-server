@@ -67,6 +67,7 @@ data Log
   | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
+  | LogCabalAdd CabalAdd.Log
   deriving (Show)
 
 instance Pretty Log where
@@ -90,6 +91,7 @@ instance Pretty Log where
         <+> "for cursor position:"
         <+> pretty position
     LogCompletions logs -> pretty logs
+    LogCabalAdd logs -> pretty logs
 
 
 haskellFilesDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -99,10 +101,13 @@ haskellFilesDescriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
           ]
-    , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" CabalAdd.command]
+    , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" (CabalAdd.command cabalAddRecorder)]
     , pluginRules = pure () -- TODO: change to haskell files only (?)
     , pluginNotificationHandlers = mempty
     }
+    where
+      cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
+
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -342,11 +347,14 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ docId@(TextDocument
           case mGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
-              actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction plId verTxtDocId maxCompls diag haskellFilePath cabalFilePath gpd) diags
+              actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction cabalAddRecorder plId verTxtDocId
+                                                                              maxCompls diag haskellFilePath cabalFilePath gpd) diags
               pure $ InL $ fmap InR (concat actions)
   where
     noCabalFileAction = CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
                                      (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing
+    cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
+
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

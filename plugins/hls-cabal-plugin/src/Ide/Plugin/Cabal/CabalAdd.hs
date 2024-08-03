@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
@@ -12,6 +13,7 @@ module Ide.Plugin.Cabal.CabalAdd
  , hiddenPackageSuggestion
  , cabalAddCommand
  , command
+ , Log
 )
 where
 
@@ -70,6 +72,23 @@ import Distribution.Fields.Field (fieldAnn)
 import           Control.Monad.Trans.Class            (lift)
 import Language.LSP.Protocol.Message (SMethod (SMethod_WorkspaceApplyEdit))
 import Debug.Trace
+import qualified Ide.Logger as Logger
+
+data Log
+  = LogFoundResponsibleCabalFile FilePath
+  | LogCalledCabalAddCodeAction
+  | LogCalledCabalAddCommand CabalAddCommandParams
+  | LogCreatedEdit WorkspaceEdit
+  | LogExecutedCommand
+  deriving (Show)
+
+instance Logger.Pretty Log where
+    pretty = \case
+      LogFoundResponsibleCabalFile fp -> "Located the responsible cabal file at " Logger.<+> Logger.pretty fp
+      LogCalledCabalAddCodeAction -> "The CabalAdd CodeAction is called"
+      LogCalledCabalAddCommand params -> "Called CabalAdd command with:\n" Logger.<+> Logger.pretty params
+      LogCreatedEdit edit -> "Created inplace edit:\n" Logger.<+> Logger.pretty edit
+      LogExecutedCommand -> "Executed CabalAdd command"
 
 -- | Given a path to a haskell file, returns the closest cabal file.
 --   If cabal file wasn't found, dives Nothing.
@@ -94,9 +113,10 @@ findResponsibleCabalFile haskellFilePath = do
 --   if a suggestion for a missing dependency is found.
 --   Disabled action if no cabal files given.
 --   Conducts IO action on a cabal file to find build targets.
-hiddenPackageAction :: PluginId -> VersionedTextDocumentIdentifier -> Int -> Diagnostic -> FilePath -> FilePath -> GenericPackageDescription -> IO [CodeAction]
-hiddenPackageAction plId verTxtDocId maxCompletions diag haskellFilePath cabalFilePath gpd = do
+hiddenPackageAction :: Logger.Recorder (Logger.WithPriority Log) -> PluginId -> VersionedTextDocumentIdentifier -> Int -> Diagnostic -> FilePath -> FilePath -> GenericPackageDescription -> IO [CodeAction]
+hiddenPackageAction recorder plId verTxtDocId maxCompletions diag haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
+    Logger.logWith recorder Logger.Info LogCalledCabalAddCodeAction
     case buildTargets of
       [] -> pure $ mkCodeAction cabalFilePath Nothing <$> hiddenPackageSuggestion maxCompletions (_message diag)
       targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
@@ -110,7 +130,6 @@ hiddenPackageAction plId verTxtDocId maxCompletions diag haskellFilePath cabalFi
           Nothing -> T.empty
           Just t  -> "  target " <> T.pack t
         title = "Add dependency " <> suggestedDep <> versionTitle <> targetTitle
-
         version = if T.null suggestedVersion then Nothing else Just suggestedVersion
 
         params = CabalAddCommandParams {cabalPath = cabalFilePath
@@ -149,15 +168,25 @@ data CabalAddCommandParams =
   deriving (Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-command :: CommandFunction IdeState CabalAddCommandParams
-command state _ (CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do
+instance Logger.Pretty CabalAddCommandParams where
+  pretty CabalAddCommandParams{..} =
+    "CabalAdd parameters:\n" Logger.<+>
+    "| cabal path: " Logger.<+> Logger.pretty cabalPath Logger.<+> "\n" Logger.<+>
+    "| target: " Logger.<+> Logger.pretty buildTarget Logger.<+> "\n" Logger.<+>
+    "| dependendency: " Logger.<+> Logger.pretty dependency Logger.<+> "\n" Logger.<+>
+    "| version: " Logger.<+> Logger.pretty version Logger.<+> "\n"
+
+command :: Logger.Recorder (Logger.WithPriority Log) -> CommandFunction IdeState CabalAddCommandParams
+command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do
+  Logger.logWith recorder Logger.Info $ LogCalledCabalAddCommand params
   let specifiedDep = case mbVer of
         Nothing  -> dep
         Just ver -> dep <> " ^>=" <> ver
   caps <- lift pluginGetClientCapabilities
   let env = (state, caps, verTxtDocId)
-  edit <- liftIO $ getDependencyEdit env path target (fromList [T.unpack specifiedDep])
+  edit <- liftIO $ getDependencyEdit recorder env path target (fromList [T.unpack specifiedDep])
   void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+  Logger.logWith recorder Logger.Info $ LogExecutedCommand
   pure $ InR Null
 
 
@@ -182,8 +211,8 @@ getBuildTargets gpd cabalFilePath haskellFilePath = do
 --
 --   Inspired by @main@ in cabal-add,
 --   Distribution.Client.Main
-getDependencyEdit :: (IdeState, ClientCapabilities, VersionedTextDocumentIdentifier) -> FilePath -> Maybe String -> NonEmpty String -> IO(WorkspaceEdit)
-getDependencyEdit env cabalFilePath buildTarget dependency = do
+getDependencyEdit :: Logger.Recorder (Logger.WithPriority Log) -> (IdeState, ClientCapabilities, VersionedTextDocumentIdentifier) -> FilePath -> Maybe String -> NonEmpty String -> IO WorkspaceEdit
+getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
         contents <- useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
@@ -222,4 +251,5 @@ getDependencyEdit env cabalFilePath buildTarget dependency = do
     Nothing -> error $ "Cannot extend build-depends in " ++ cabalFilePath
     Just newContents  -> do
               let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
+              Logger.logWith recorder Logger.Info $ LogCreatedEdit edit
               pure edit
