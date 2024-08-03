@@ -17,6 +17,7 @@ import qualified Data.ByteString                             as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                         (HashMap)
 import qualified Data.HashMap.Strict                         as HashMap
+import           Data.List                                   (find)
 import qualified Data.List.NonEmpty                          as NE
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as T
@@ -31,6 +32,7 @@ import           Development.IDE.Types.Shake                 (toKey)
 import qualified Distribution.Fields                         as Syntax
 import qualified Distribution.Parsec.Position                as Syntax
 import           GHC.Generics
+import           Ide.Plugin.Cabal.Completion.CabalFields     as CabalFields
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
 import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
@@ -93,6 +95,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
+          , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -276,6 +279,38 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields
       let completionTexts = fmap (^. JL.label) completions
       pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
+
+-- | CodeActions for going to definitions.
+--
+-- Provides a CodeAction for going to a definition when clicking on an identifier.
+-- The definition is found by traversing the sections and comparing their name to
+-- the clicked identifier.
+--
+-- TODO: Support more definitions than sections.
+gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
+gotoDefinition ideState _ msgParam = do
+    case uriToFilePath' uri of
+      Nothing ->
+        pure $ InR $ InR Null
+      Just filePath -> do
+        mCabalFields <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalFields $ toNormalizedFilePath filePath
+        let mCursorText = CabalFields.findTextWord cursor =<< mCabalFields
+        case mCursorText of
+          Nothing ->
+            pure $ InR $ InR Null
+          Just cursorText -> do
+            mCommonSections <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalCommonSections $ toNormalizedFilePath filePath
+            let mCommonSection = find (filterSectionArgName cursorText) =<< mCommonSections
+            case mCommonSection of
+              Nothing ->
+                pure $ InR $ InR Null
+              Just commonSection -> do
+                pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
+    where
+      cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
+      uri = msgParam ^. JL.textDocument . JL.uri
+      filterSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
+      filterSectionArgName _ _ = False
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
