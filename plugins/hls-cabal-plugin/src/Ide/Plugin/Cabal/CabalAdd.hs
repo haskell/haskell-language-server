@@ -2,10 +2,10 @@
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE ExplicitNamespaces    #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
@@ -22,9 +22,13 @@ import           Control.Monad.IO.Class                        (liftIO, MonadIO)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as T
-import           Development.IDE                               (IdeState (shakeExtras), runIdeAction, useWithStale)
+import           Development.IDE                               (IdeState (shakeExtras),
+                                                                runIdeAction,
+                                                                useWithStale)
 import           Distribution.PackageDescription.Quirks        (patchQuirks)
-import Ide.PluginUtils ( mkLspCommand, WithDeletions(SkipDeletions), diffText )
+import           Ide.PluginUtils                               (WithDeletions (SkipDeletions),
+                                                                diffText,
+                                                                mkLspCommand)
 import           Ide.Types                                     (CommandFunction,
                                                                 CommandId (CommandId),
                                                                 PluginId, pluginGetClientCapabilities, pluginSendRequest, HandlerM)
@@ -32,7 +36,12 @@ import           Language.LSP.Protocol.Types                   (CodeAction (Code
                                                                 CodeActionKind (CodeActionKind_QuickFix),
                                                                 Diagnostic (..),
                                                                 Null (Null),
-                                                                type (|?) (InR), toNormalizedFilePath, TextDocumentIdentifier, VersionedTextDocumentIdentifier, ClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceEdit, ApplyWorkspaceEditParams (ApplyWorkspaceEditParams))
+                                                                TextDocumentIdentifier,
+                                                                VersionedTextDocumentIdentifier,
+                                                                WorkspaceEdit,
+                                                                WorkspaceFoldersServerCapabilities,
+                                                                toNormalizedFilePath,
+                                                                type (|?) (InR), ClientCapabilities, ApplyWorkspaceEditParams (ApplyWorkspaceEditParams))
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
 
@@ -42,17 +51,22 @@ import           Data.ByteString                               (ByteString)
 import qualified Data.ByteString.Char8                         as B
 import           Data.List.NonEmpty                            (NonEmpty (..),
                                                                 fromList)
+import           Development.IDE.Core.Rules                    (runAction)
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
-import           Distribution.PackageDescription               (packageDescription,
-                                                                specVersion, GenericPackageDescription (GenericPackageDescription))
+import           Distribution.PackageDescription               (GenericPackageDescription (GenericPackageDescription),
+                                                                packageDescription,
+                                                                specVersion)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Pretty                           (pretty)
 import           Distribution.Simple.BuildTarget               (BuildTarget,
                                                                 buildTargetComponentName,
                                                                 readBuildTargets)
+import           Distribution.Simple.Utils                     (safeHead)
 import           Distribution.Verbosity                        (silent,
                                                                 verboseNoStderr)
+import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields (..),
+                                                                ParseCabalFile (..))
 import           System.FilePath                               (dropFileName,
                                                                 makeRelative,
                                                                 splitPath,
@@ -60,11 +74,6 @@ import           System.FilePath                               (dropFileName,
                                                                 (</>))
 import           Text.PrettyPrint                              (render)
 import           Text.Regex.TDFA
-import Distribution.Simple.Utils (safeHead)
-import Development.IDE.Core.Rules (runAction)
-import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalFields (..),
-                                                              ParseCabalFile (..))
-
 import Development.IDE.Core.RuleTypes (GetFileContents(..))
 import Data.Text.Encoding (encodeUtf8)
 import Ide.Plugin.Cabal.Orphans ()
@@ -107,7 +116,7 @@ findResponsibleCabalFile haskellFilePath = do
           objectsCabalExtension = filter (\c -> takeExtension c == ".cabal") objectsWithPaths
       cabalFiles <- filterM (\c -> doesFileExist c) objectsCabalExtension
       case safeHead cabalFiles of
-        Nothing -> go ps
+        Nothing        -> go ps
         Just cabalFile -> pure $ Just cabalFile
 
 
@@ -188,7 +197,7 @@ command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxt
   let env = (state, caps, verTxtDocId)
   edit <- getDependencyEdit recorder env path target (fromList [T.unpack specifiedDep])
   void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-  Logger.logWith recorder Logger.Info $ LogExecutedCommand
+  Logger.logWith recorder Logger.Info LogExecutedCommand
   pure $ InR Null
 
 
@@ -223,7 +232,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
         inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
         let mbCnfOrigContents = case snd . fst <$> contents of
                     Just (Just txt) -> Just $ encodeUtf8 txt
-                    _ -> Nothing
+                    _               -> Nothing
         let mbFields = fst <$> inFields
         let mbPackDescr :: Maybe GenericPackageDescription = fst <$> inPackDescr
         pure (mbCnfOrigContents, mbFields, mbPackDescr)

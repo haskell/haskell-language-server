@@ -50,7 +50,6 @@ import qualified Language.LSP.VFS                            as VFS
 
 import qualified Data.Text                                   ()
 import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
-import Debug.Trace
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
