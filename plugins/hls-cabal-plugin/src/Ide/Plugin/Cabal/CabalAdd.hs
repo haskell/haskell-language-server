@@ -18,12 +18,11 @@ module Ide.Plugin.Cabal.CabalAdd
 where
 
 import           Control.Monad                                 (filterM, void)
-import           Control.Monad.IO.Class                        (liftIO, MonadIO)
+import           Control.Monad.IO.Class                        (MonadIO, liftIO)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as T
-import           Development.IDE                               (IdeState (shakeExtras),
-                                                                runIdeAction,
+import           Development.IDE                               (IdeState,
                                                                 useWithStale)
 import           Distribution.PackageDescription.Quirks        (patchQuirks)
 import           Ide.PluginUtils                               (WithDeletions (SkipDeletions),
@@ -31,30 +30,37 @@ import           Ide.PluginUtils                               (WithDeletions (S
                                                                 mkLspCommand)
 import           Ide.Types                                     (CommandFunction,
                                                                 CommandId (CommandId),
-                                                                PluginId, pluginGetClientCapabilities, pluginSendRequest, HandlerM)
-import           Language.LSP.Protocol.Types                   (CodeAction (CodeAction),
+                                                                HandlerM,
+                                                                PluginId,
+                                                                pluginGetClientCapabilities,
+                                                                pluginSendRequest)
+import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                                ClientCapabilities,
+                                                                CodeAction (CodeAction),
                                                                 CodeActionKind (CodeActionKind_QuickFix),
                                                                 Diagnostic (..),
                                                                 Null (Null),
-                                                                TextDocumentIdentifier,
                                                                 VersionedTextDocumentIdentifier,
                                                                 WorkspaceEdit,
-                                                                WorkspaceFoldersServerCapabilities,
                                                                 toNormalizedFilePath,
-                                                                type (|?) (InR), ClientCapabilities, ApplyWorkspaceEditParams (ApplyWorkspaceEditParams))
+                                                                type (|?) (InR))
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
 
+import           Control.Monad.Trans.Class                     (lift)
+import           Control.Monad.Trans.Except
 import           Data.Aeson.Types                              (FromJSON,
                                                                 ToJSON, toJSON)
 import           Data.ByteString                               (ByteString)
 import qualified Data.ByteString.Char8                         as B
 import           Data.List.NonEmpty                            (NonEmpty (..),
                                                                 fromList)
+import           Data.Text.Encoding                            (encodeUtf8)
 import           Development.IDE.Core.Rules                    (runAction)
+import           Development.IDE.Core.RuleTypes                (GetFileContents (..))
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
-import           Distribution.PackageDescription               (GenericPackageDescription (GenericPackageDescription),
+import           Distribution.PackageDescription               (GenericPackageDescription,
                                                                 packageDescription,
                                                                 specVersion)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
@@ -65,8 +71,12 @@ import           Distribution.Simple.BuildTarget               (BuildTarget,
 import           Distribution.Simple.Utils                     (safeHead)
 import           Distribution.Verbosity                        (silent,
                                                                 verboseNoStderr)
+import qualified Ide.Logger                                    as Logger
 import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields (..),
                                                                 ParseCabalFile (..))
+import           Ide.Plugin.Cabal.Orphans                      ()
+import           Ide.Plugin.Error
+import           Language.LSP.Protocol.Message                 (SMethod (SMethod_WorkspaceApplyEdit))
 import           System.FilePath                               (dropFileName,
                                                                 makeRelative,
                                                                 splitPath,
@@ -74,16 +84,6 @@ import           System.FilePath                               (dropFileName,
                                                                 (</>))
 import           Text.PrettyPrint                              (render)
 import           Text.Regex.TDFA
-import Development.IDE.Core.RuleTypes (GetFileContents(..))
-import Data.Text.Encoding (encodeUtf8)
-import Ide.Plugin.Cabal.Orphans ()
-import Distribution.Fields.Field (fieldAnn)
-import           Control.Monad.Trans.Class            (lift)
-import Language.LSP.Protocol.Message (SMethod (SMethod_WorkspaceApplyEdit))
-import Debug.Trace
-import qualified Ide.Logger as Logger
-import Control.Monad.Trans.Except
-import Ide.Plugin.Error
 
 data Log
   = LogFoundResponsibleCabalFile FilePath
@@ -101,24 +101,6 @@ instance Logger.Pretty Log where
       LogCreatedEdit edit -> "Created inplace edit:\n" Logger.<+> Logger.pretty edit
       LogExecutedCommand -> "Executed CabalAdd command"
 
--- | Given a path to a haskell file, returns the closest cabal file.
---   If cabal file wasn't found, dives Nothing.
-findResponsibleCabalFile :: FilePath -> IO (Maybe FilePath)
-findResponsibleCabalFile haskellFilePath = do
-  let dirPath = dropFileName haskellFilePath
-      allDirPaths = reverse $ scanl1 (</>) (splitPath dirPath) -- sorted from most to least specific
-  go allDirPaths
-  where
-    go [] = pure Nothing
-    go (path:ps) = do
-      objects <- listDirectory path
-      let objectsWithPaths = map (\obj -> path <> obj) objects
-          objectsCabalExtension = filter (\c -> takeExtension c == ".cabal") objectsWithPaths
-      cabalFiles <- filterM (\c -> doesFileExist c) objectsCabalExtension
-      case safeHead cabalFiles of
-        Nothing        -> go ps
-        Just cabalFile -> pure $ Just cabalFile
-
 
 -- | Gives a code action that calls the command,
 --   if a suggestion for a missing dependency is found.
@@ -134,6 +116,13 @@ hiddenPackageAction recorder plId verTxtDocId maxCompletions diag haskellFilePat
                           hiddenPackageSuggestion maxCompletions (_message diag) | target <- targets]
   where
     buildTargetToStringRepr target = render $ pretty $ buildTargetComponentName target
+
+    getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
+    getBuildTargets gpd cabalFilePath haskellFilePath = do
+      let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
+      readBuildTargets (verboseNoStderr silent) (flattenPackageDescription gpd) [haskellFileRelativePath]
+
+    mkCodeAction :: FilePath -> Maybe String -> (T.Text, T.Text) -> CodeAction
     mkCodeAction cabalFilePath target (suggestedDep, suggestedVersion) =
       let
         versionTitle = if T.null suggestedVersion then T.empty else "  version " <> suggestedVersion
@@ -200,26 +189,9 @@ command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxt
   Logger.logWith recorder Logger.Info LogExecutedCommand
   pure $ InR Null
 
-
--- | Gives cabal file's contents or throws error.
---   Inspired by @readCabalFile@ in cabal-add,
---   Distribution.Client.Main
-readCabalFile :: MonadIO m => FilePath -> ExceptT PluginError m ByteString
-readCabalFile fileName = do
-  cabalFileExists <- liftIO $ doesFileExist fileName
-  if cabalFileExists
-    then snd . patchQuirks <$> liftIO (B.readFile fileName)
-    else throwE $ PluginInternalError $ T.pack ("Failed to read cabal file at " <> fileName)
-
-getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
-getBuildTargets gpd cabalFilePath haskellFilePath = do
-  let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
-  readBuildTargets (verboseNoStderr silent) (flattenPackageDescription gpd) [haskellFileRelativePath]
-
-
 -- | Constructs prerequisets for the @executeConfig@
 --   and runs it, given path to the cabal file and a dependency message.
---
+--   Given the new contents of the cabal file constructs and returns the @edit@.
 --   Inspired by @main@ in cabal-add,
 --   Distribution.Client.Main
 getDependencyEdit :: MonadIO m => Logger.Recorder (Logger.WithPriority Log) -> (IdeState, ClientCapabilities, VersionedTextDocumentIdentifier) ->
@@ -227,9 +199,9 @@ getDependencyEdit :: MonadIO m => Logger.Recorder (Logger.WithPriority Log) -> (
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-        contents <- useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
-        inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
-        inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+        contents <- Development.IDE.useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
+        inFields <- Development.IDE.useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
+        inPackDescr <- Development.IDE.useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
         let mbCnfOrigContents = case snd . fst <$> contents of
                     Just (Just txt) -> Just $ encodeUtf8 txt
                     _               -> Nothing
@@ -240,7 +212,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   (cnfOrigContents, fields, packDescr) <- do
     cnfOrigContents <- case mbCnfOrigContents of
           (Just cnfOrigContents) -> pure cnfOrigContents
-          Nothing -> readCabalFile cabalFilePath
+          Nothing                -> readCabalFile cabalFilePath
     (fields, packDescr) <- case (mbFields, mbPackDescr) of
           (Just fields, Just packDescr) -> pure (fields, packDescr)
           (_, _) -> case parseCabalFile cabalFilePath cnfOrigContents of
@@ -256,7 +228,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
         pure (fields, packDescr, cmp, deps)
 
   (cnfFields, origPackDescr, cnfComponent, cnfDependencies) <- case inputs of
-    Left err   -> throwE $ PluginInternalError $ T.pack $ err
+    Left err   -> throwE $ PluginInternalError $ T.pack err
     Right pair -> pure pair
 
   case executeConfig (validateChanges origPackDescr) (Config {..}) of
@@ -265,3 +237,31 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
               let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
               Logger.logWith recorder Logger.Info $ LogCreatedEdit edit
               pure edit
+
+-- | Given a path to a haskell file, returns the closest cabal file.
+--   If cabal file wasn't found, dives Nothing.
+findResponsibleCabalFile :: FilePath -> IO (Maybe FilePath)
+findResponsibleCabalFile haskellFilePath = do
+  let dirPath = dropFileName haskellFilePath
+      allDirPaths = reverse $ scanl1 (</>) (splitPath dirPath) -- sorted from most to least specific
+  go allDirPaths
+  where
+    go [] = pure Nothing
+    go (path:ps) = do
+      objects <- listDirectory path
+      let objectsWithPaths = map (\obj -> path <> obj) objects
+          objectsCabalExtension = filter (\c -> takeExtension c == ".cabal") objectsWithPaths
+      cabalFiles <- filterM (\c -> doesFileExist c) objectsCabalExtension
+      case safeHead cabalFiles of
+        Nothing        -> go ps
+        Just cabalFile -> pure $ Just cabalFile
+
+-- | Gives cabal file's contents or throws error.
+--   Inspired by @readCabalFile@ in cabal-add,
+--   Distribution.Client.Main
+readCabalFile :: MonadIO m => FilePath -> ExceptT PluginError m ByteString
+readCabalFile fileName = do
+  cabalFileExists <- liftIO $ doesFileExist fileName
+  if cabalFileExists
+    then snd . patchQuirks <$> liftIO (B.readFile fileName)
+    else throwE $ PluginInternalError $ T.pack ("Failed to read cabal file at " <> fileName)
