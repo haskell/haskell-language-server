@@ -41,6 +41,7 @@ import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
 import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                    ()
+import           Ide.Plugin.Cabal.Outline
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
@@ -111,6 +112,7 @@ descriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
+          , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           ]
     , pluginNotificationHandlers =
@@ -250,7 +252,7 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
-  void $ uses Types.ParseCabalFile files
+  Shake.runWithSignal (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") files Types.ParseCabalFile
 
 -- ----------------------------------------------------------------
 -- Code Actions

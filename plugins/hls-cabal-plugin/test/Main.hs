@@ -21,6 +21,7 @@ import qualified Data.Text.Internal.Search       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
+import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
@@ -34,6 +35,7 @@ main = do
             , pluginTests
             , completerTests
             , contextTests
+            , outlineTests
             , codeActionTests
             ]
 
@@ -84,6 +86,7 @@ codeActionUnitTests =
   where
     maxCompletions = 100
 
+
 -- ------------------------ ------------------------------------------------
 -- Integration Tests
 -- ------------------------------------------------------------------------
@@ -95,8 +98,8 @@ pluginTests =
         [ testGroup
             "Diagnostics"
             [ runCabalTestCaseSession "Publishes Diagnostics on Error" "" $ do
-                doc <- openDoc "invalid.cabal" "cabal"
-                diags <- waitForDiagnosticsFromSource doc "cabal"
+                _ <- openDoc "invalid.cabal" "cabal"
+                diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
@@ -104,14 +107,14 @@ pluginTests =
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
             , runCabalTestCaseSession "Clears diagnostics" "" $ do
                 doc <- openDoc "invalid.cabal" "cabal"
-                diags <- waitForDiagnosticsFrom doc
+                diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
                     unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
                 _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
-                newDiags <- waitForDiagnosticsFrom doc
+                newDiags <- cabalCaptureKick
                 liftIO $ newDiags @?= []
             , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do
                 hsDoc <- openDoc "A.hs" "haskell"

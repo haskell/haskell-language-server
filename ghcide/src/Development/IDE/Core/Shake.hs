@@ -73,7 +73,8 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeysOlderThan,
     Log(..),
     VFSModified(..), getClientConfigAction,
-    ThreadQueue(..)
+    ThreadQueue(..),
+    runWithSignal
     ) where
 
 import           Control.Concurrent.Async
@@ -123,6 +124,10 @@ import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Types.Options          as Options
+import qualified Language.LSP.Protocol.Message          as LSP
+import qualified Language.LSP.Server                    as LSP
+
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Compat             (NameCache,
@@ -147,11 +152,11 @@ import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Monitoring       (Monitoring (..))
-import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
+import           GHC.TypeLits                           (KnownSymbol)
 import           HieDb.Types
 import           Ide.Logger                             hiding (Priority)
 import qualified Ide.Logger                             as Logger
@@ -165,7 +170,6 @@ import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types            as LSP
-import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog                 hiding (addEvent)
@@ -1350,9 +1354,9 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         let uri' = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri' $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
-             join $ mask_ $ do
-                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
-                 let action = when (lastPublish /= newDiags) $ case lspEnv of
+            join $ mask_ $ do
+                lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
+                let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $ do
@@ -1360,19 +1364,18 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             liftIO $ tag "key" (show k)
                             LSP.sendNotification SMethod_TextDocumentPublishDiagnostics $
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) newDiags
-                 return action
+                return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
             | coerce ideTesting = c & L.relatedInformation ?~
-                         [
-                        DiagnosticRelatedInformation
+                        [ DiagnosticRelatedInformation
                             (Location
                                 (filePathToUri $ fromNormalizedFilePath fp)
                                 _range
                             )
                             (T.pack $ show k)
-                            ]
+                        ]
             | otherwise = c
 
 
@@ -1444,3 +1447,19 @@ updatePositionMappingHelper ver changes mappingForUri = snd $
         EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addOldDelta delta acc in (new, (delta, acc)))
             zeroMapping
             (EM.insert ver (mkDelta changes, zeroMapping) mappingForUri)
+
+-- | sends a signal whenever shake session is run/restarted
+-- being used in cabal and hlint plugin tests to know when its time
+-- to look for file diagnostics
+kickSignal :: KnownSymbol s => Bool -> Maybe (LSP.LanguageContextEnv c) -> [NormalizedFilePath] -> Proxy s -> Action ()
+kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
+  LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
+  toJSON $ map fromNormalizedFilePath files
+
+-- | Add kick start/done signal to rule
+runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [NormalizedFilePath] -> k -> Action ()
+runWithSignal msgStart msgEnd files rule = do
+  ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- getShakeExtras
+  kickSignal testing lspEnv files msgStart
+  void $ uses rule files
+  kickSignal testing lspEnv files msgEnd

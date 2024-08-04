@@ -180,3 +180,10 @@ lspPositionToCabalPosition :: Position -> Syntax.Position
 lspPositionToCabalPosition pos = Syntax.Position
   (fromIntegral (pos ^. JL.line) + 1)
   (fromIntegral (pos ^. JL.character) + 1)
+
+-- | Convert an 'Syntax.Position' to a LSP 'Position'.
+--
+-- Cabal Positions start their indexing at 1 while LSP starts at 0.
+-- This helper makes sure, the translation is done properly.
+cabalPositionToLSPPosition :: Syntax.Position -> Position
+cabalPositionToLSPPosition (Syntax.Position start end) = Position (toEnum start -1) (toEnum end -1)
