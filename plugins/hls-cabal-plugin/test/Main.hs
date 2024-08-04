@@ -27,8 +27,6 @@ import           System.FilePath
 import           Test.Hls
 import           Utils
 
-import Debug.Trace
-
 main :: IO ()
 main = do
     defaultTestRunner $
@@ -232,9 +230,21 @@ codeActionTests = testGroup "Code Actions"
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
         let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
         mapM_ executeCodeAction selectedCas
-        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Needed to wait for the changes in cabal file
+        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
         contents <- documentContents cabDoc
         liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) [256]
+    , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "hidden-package-dashed") $ do
+        hsdoc <- openDoc ("src" </> "Main.hs") "haskell"
+        cabDoc <- openDoc "hidden-package-dashed.cabal" "cabal"
+        _ <- waitForDiagnosticsFrom hsdoc
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
+        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
+        mapM_ executeCodeAction selectedCas
+        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
+        contents <- documentContents cabDoc
+        liftIO $ assertEqual "hls-plugin-api isn't found in the cabal file" (Text.indices "hls-plugin-api" contents) [263]
+
+
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
