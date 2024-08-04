@@ -18,7 +18,7 @@ module Ide.Plugin.Cabal.CabalAdd
 where
 
 import           Control.Monad                                 (filterM, void)
-import           Control.Monad.IO.Class                        (liftIO)
+import           Control.Monad.IO.Class                        (liftIO, MonadIO)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as T
@@ -27,7 +27,7 @@ import           Distribution.PackageDescription.Quirks        (patchQuirks)
 import Ide.PluginUtils ( mkLspCommand, WithDeletions(SkipDeletions), diffText )
 import           Ide.Types                                     (CommandFunction,
                                                                 CommandId (CommandId),
-                                                                PluginId, pluginGetClientCapabilities, pluginSendRequest)
+                                                                PluginId, pluginGetClientCapabilities, pluginSendRequest, HandlerM)
 import           Language.LSP.Protocol.Types                   (CodeAction (CodeAction),
                                                                 CodeActionKind (CodeActionKind_QuickFix),
                                                                 Diagnostic (..),
@@ -73,6 +73,8 @@ import           Control.Monad.Trans.Class            (lift)
 import Language.LSP.Protocol.Message (SMethod (SMethod_WorkspaceApplyEdit))
 import Debug.Trace
 import qualified Ide.Logger as Logger
+import Control.Monad.Trans.Except
+import Ide.Plugin.Error
 
 data Log
   = LogFoundResponsibleCabalFile FilePath
@@ -184,7 +186,7 @@ command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxt
         Just ver -> dep <> " ^>=" <> ver
   caps <- lift pluginGetClientCapabilities
   let env = (state, caps, verTxtDocId)
-  edit <- liftIO $ getDependencyEdit recorder env path target (fromList [T.unpack specifiedDep])
+  edit <- getDependencyEdit recorder env path target (fromList [T.unpack specifiedDep])
   void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   Logger.logWith recorder Logger.Info $ LogExecutedCommand
   pure $ InR Null
@@ -193,12 +195,12 @@ command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxt
 -- | Gives cabal file's contents or throws error.
 --   Inspired by @readCabalFile@ in cabal-add,
 --   Distribution.Client.Main
-readCabalFile :: FilePath -> IO ByteString
+readCabalFile :: MonadIO m => FilePath -> ExceptT PluginError m ByteString
 readCabalFile fileName = do
-  cabalFileExists <- doesFileExist fileName
+  cabalFileExists <- liftIO $ doesFileExist fileName
   if cabalFileExists
-    then snd . patchQuirks <$> B.readFile fileName
-    else error ("Failed to read cabal file at " <> fileName)
+    then snd . patchQuirks <$> liftIO (B.readFile fileName)
+    else throwE $ PluginInternalError $ T.pack ("Failed to read cabal file at " <> fileName)
 
 getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
 getBuildTargets gpd cabalFilePath haskellFilePath = do
@@ -211,7 +213,8 @@ getBuildTargets gpd cabalFilePath haskellFilePath = do
 --
 --   Inspired by @main@ in cabal-add,
 --   Distribution.Client.Main
-getDependencyEdit :: Logger.Recorder (Logger.WithPriority Log) -> (IdeState, ClientCapabilities, VersionedTextDocumentIdentifier) -> FilePath -> Maybe String -> NonEmpty String -> IO WorkspaceEdit
+getDependencyEdit :: MonadIO m => Logger.Recorder (Logger.WithPriority Log) -> (IdeState, ClientCapabilities, VersionedTextDocumentIdentifier) ->
+    FilePath -> Maybe String -> NonEmpty String -> ExceptT PluginError m WorkspaceEdit
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
@@ -225,15 +228,15 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
         let mbPackDescr :: Maybe GenericPackageDescription = fst <$> inPackDescr
         pure (mbCnfOrigContents, mbFields, mbPackDescr)
 
-  (cnfOrigContents, fields, packDescr) <- liftIO $ do
+  (cnfOrigContents, fields, packDescr) <- do
     cnfOrigContents <- case mbCnfOrigContents of
           (Just cnfOrigContents) -> pure cnfOrigContents
           Nothing -> readCabalFile cabalFilePath
-    let (fields, packDescr) = case (mbFields, mbPackDescr) of
-          (Just fields, Just packDescr) -> (fields, packDescr)
+    (fields, packDescr) <- case (mbFields, mbPackDescr) of
+          (Just fields, Just packDescr) -> pure (fields, packDescr)
           (_, _) -> case parseCabalFile cabalFilePath cnfOrigContents of
-                        Left err   -> error err
-                        Right (_ ,gpd) -> pure gpd
+                        Left err   -> throwE $ PluginInternalError $ T.pack $ err
+                        Right (f ,gpd) -> pure (f, gpd)
     pure (cnfOrigContents, fields, packDescr)
 
   let inputs = do
@@ -244,11 +247,11 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
         pure (fields, packDescr, cmp, deps)
 
   (cnfFields, origPackDescr, cnfComponent, cnfDependencies) <- case inputs of
-    Left err   -> error err
+    Left err   -> throwE $ PluginInternalError $ T.pack $ err
     Right pair -> pure pair
 
   case executeConfig (validateChanges origPackDescr) (Config {..}) of
-    Nothing -> error $ "Cannot extend build-depends in " ++ cabalFilePath
+    Nothing -> throwE $ PluginInternalError $ T.pack $ "Cannot extend build-depends in " ++ cabalFilePath
     Just newContents  -> do
               let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
               Logger.logWith recorder Logger.Info $ LogCreatedEdit edit
