@@ -66,7 +66,7 @@ tests = testGroup "watched files"
           ["module B where"
           ,"b :: Int"
           ,"b = 0"]
-        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "B.hs") FileChangeType_Changed ]
         expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'", Just "GHC-83865")])]
     ]

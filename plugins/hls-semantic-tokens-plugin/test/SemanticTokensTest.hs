@@ -225,7 +225,7 @@ semanticTokensFullDeltaTests =
 
 semanticTokensTests :: TestTree
 semanticTokensTests =
-  testGroup "other semantic Token test" $
+  testGroup "other semantic Token test"
     [ testCase "module import test" $ do
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"

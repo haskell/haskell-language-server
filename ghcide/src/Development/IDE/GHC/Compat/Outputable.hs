@@ -48,25 +48,23 @@ module Development.IDE.GHC.Compat.Outputable (
     textDoc,
     ) where
 
+import           Data.Maybe
+import           GHC.Driver.Config.Diagnostic
 import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
+import           GHC.Parser.Errors.Types
 import qualified GHC.Types.Error              as Error
 import           GHC.Types.Name.Ppr
 import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
+import           GHC.Utils.Error
 import           GHC.Utils.Outputable         as Out
 import           GHC.Utils.Panic
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           Data.Maybe
-import           GHC.Driver.Config.Diagnostic
-import           GHC.Parser.Errors.Types
-import           GHC.Utils.Error
 
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Driver.Errors.Types      (DriverMessage, GhcMessage)
@@ -115,7 +113,7 @@ pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
 #if MIN_VERSION_ghc(9,7,0)
       formatBulleted e
 #else
-      formatBulleted _ctx $ e
+      formatBulleted _ctx e
 #endif
 
 

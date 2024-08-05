@@ -169,6 +169,7 @@ import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
+import           GHC.Driver.Config.Stg.Pipeline
 import           GHC.Driver.Env                          as Env
 import           GHC.Iface.Env
 import           GHC.Linker.Loader                       (loadDecls, loadExpr)
@@ -181,14 +182,11 @@ import           GHC.Types.IPE
 import           GHC.Types.SrcLoc                        (combineRealSrcSpans)
 import           GHC.Unit.Home.ModInfo                   (HomePackageTable,
                                                           lookupHpt)
+import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
+                                                          Usage (..))
 import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           GHC.Driver.Config.Stg.Pipeline
-import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
-                                                          Usage (..))
 
 #if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Core.Lint                           (lintInteractiveExpr)

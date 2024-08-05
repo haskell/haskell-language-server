@@ -38,72 +38,78 @@ module Development.IDE.Core.Compile
   , shareUsages
   ) where
 
-import           Control.Concurrent.Extra
-import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (NFData (..), force, rnf)
-import           Control.Exception                 (evaluate)
+import           Control.Concurrent.STM.Stats           hiding (orElse)
+import           Control.DeepSeq                        (NFData (..), force,
+                                                         rnf)
+import           Control.Exception                      (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List, pre, (<.>))
+import           Control.Lens                           hiding (List, pre,
+                                                         (<.>))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
-import qualified Control.Monad.Trans.State.Strict  as S
-import           Data.Aeson                        (toJSON)
-import           Data.Bifunctor                    (first, second)
+import qualified Control.Monad.Trans.State.Strict       as S
+import           Data.Aeson                             (toJSON)
+import           Data.Bifunctor                         (first, second)
 import           Data.Binary
-import qualified Data.ByteString                   as BS
+import qualified Data.ByteString                        as BS
 import           Data.Coerce
-import qualified Data.DList                        as DL
+import qualified Data.DList                             as DL
 import           Data.Functor
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
-import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
+import qualified Data.HashMap.Strict                    as HashMap
+import           Data.IntMap                            (IntMap)
 import           Data.IORef
 import           Data.List.Extra
-import qualified Data.Map.Strict                   as Map
+import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
-import           Data.Proxy                        (Proxy (Proxy))
-import qualified Data.Text                         as T
-import           Data.Time                         (UTCTime (..))
-import           Data.Tuple.Extra                  (dupe)
+import           Data.Proxy                             (Proxy (Proxy))
+import qualified Data.Text                              as T
+import           Data.Time                              (UTCTime (..))
+import           Data.Tuple.Extra                       (dupe)
 import           Debug.Trace
-import           Development.IDE.Core.FileStore    (resetInterfaceStore)
+import           Development.IDE.Core.FileStore         (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
+import           Development.IDE.Core.ProgressReporting (progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
-import           Development.IDE.Core.Tracing      (withTrace)
-import           Development.IDE.GHC.Compat        hiding (assert,
-                                                    loadInterface, parseHeader,
-                                                    parseModule, tcRnModule,
-                                                    writeHieFile)
-import qualified Development.IDE.GHC.Compat        as Compat
-import qualified Development.IDE.GHC.Compat        as GHC
-import qualified Development.IDE.GHC.Compat.Util   as Util
-import           Development.IDE.Core.ProgressReporting (ProgressReporting (..), progressReportingOutsideState)
+import           Development.IDE.Core.Tracing           (withTrace)
+import           Development.IDE.GHC.Compat             hiding (assert,
+                                                         loadInterface,
+                                                         parseHeader,
+                                                         parseModule,
+                                                         tcRnModule,
+                                                         writeHieFile)
+import qualified Development.IDE.GHC.Compat             as Compat
+import qualified Development.IDE.GHC.Compat             as GHC
+import qualified Development.IDE.GHC.Compat.Util        as Util
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.Orphans       ()
+import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC                               (ForeignHValue,
-                                                    GetDocsFailure (..),
-                                                    parsedSource)
-import qualified GHC.LanguageExtensions            as LangExt
+import           GHC                                    (ForeignHValue,
+                                                         GetDocsFailure (..),
+                                                         parsedSource)
+import qualified GHC.LanguageExtensions                 as LangExt
 import           GHC.Serialized
-import           HieDb                             hiding (withHieDb)
-import qualified Language.LSP.Protocol.Message     as LSP
-import           Language.LSP.Protocol.Types       (DiagnosticTag (..))
-import qualified Language.LSP.Server               as LSP
-import           Prelude                           hiding (mod)
+import           HieDb                                  hiding (withHieDb)
+import qualified Language.LSP.Protocol.Message          as LSP
+import           Language.LSP.Protocol.Types            (DiagnosticTag (..))
+import qualified Language.LSP.Server                    as LSP
+import           Prelude                                hiding (mod)
 import           System.Directory
 import           System.FilePath
-import           System.IO.Extra                   (fixIO, newTempFileWithin)
+import           System.IO.Extra                        (fixIO,
+                                                         newTempFileWithin)
 
-import qualified GHC                               as G
+import qualified Data.Set                               as Set
+import qualified GHC                                    as G
+import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.Error
 import           GHC.Types.ForeignStubs
@@ -113,18 +119,16 @@ import           GHC.Types.TypeEnv
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 
-import qualified Data.Set                          as Set
-
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Core.Lint.Interactive
 import           GHC.Driver.Config.CoreToStg.Prep
 #endif
 
 #if MIN_VERSION_ghc(9,7,0)
-import           Data.Foldable                     (toList)
+import           Data.Foldable                          (toList)
 import           GHC.Unit.Module.Warnings
 #else
-import           Development.IDE.Core.FileStore    (shareFilePath)
+import           Development.IDE.Core.FileStore         (shareFilePath)
 #endif
 
 import           Development.IDE.GHC.Compat.Driver (hscTypecheckRenameWithDiagnostics)
@@ -179,13 +183,13 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
         initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
-                                      (initPlugins hsc modSummary)
+                                      (Loader.initializePlugins (hscSetFlags (ms_hspp_opts modSummary) hsc))
         case initialized of
           Left errs -> return (errs, Nothing)
-          Right (modSummary', hscEnv) -> do
+          Right hscEnv -> do
             etcm <-
                 catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
-                  tcRnModule hscEnv tc_helpers $ demoteIfDefer pm{pm_mod_summary = modSummary'}
+                  tcRnModule hscEnv tc_helpers $ demoteIfDefer pm{pm_mod_summary = modSummary}
             case etcm of
               Left errs -> return (errs, Nothing)
               Right tcm ->
@@ -300,7 +304,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 
              {- load it -}
            ; (fv_hvs, lbss, pkgs) <- loadDecls (hscInterp hsc_env') hsc_env' srcspan bcos
-           ; let hval = ((expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs), lbss, pkgs)
+           ; let hval = (expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs, lbss, pkgs)
 
            ; modifyIORef' var (flip extendModuleEnvList [(mi_module $ hm_iface hm, linkableHash lb) | lb <- lbs, let hm = linkableHomeMod lb])
            ; return hval }
@@ -1002,7 +1006,7 @@ getModSummaryFromImports env fp _modTime mContents = do
 
     let modl = mkHomeModule (hscHomeUnit ppEnv) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary2 =
+        msrModSummary =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1023,8 +1027,8 @@ getModSummaryFromImports env fp _modTime mContents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
-    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins ppEnv msrModSummary2
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,

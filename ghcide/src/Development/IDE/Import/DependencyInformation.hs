@@ -47,17 +47,13 @@ import           Data.List.NonEmpty                 (NonEmpty (..), nonEmpty)
 import qualified Data.List.NonEmpty                 as NonEmpty
 import           Data.Maybe
 import           Data.Tuple.Extra                   hiding (first, second)
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans        ()
-import           GHC.Generics                       (Generic)
-import           Prelude                            hiding (mod)
-
 import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
-
-import           Development.IDE.GHC.Compat
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+import           GHC.Generics                       (Generic)
+import           Prelude                            hiding (mod)
 
 
 -- | The imports for a given module.

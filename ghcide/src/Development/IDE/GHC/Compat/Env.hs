@@ -57,6 +57,7 @@ module Development.IDE.GHC.Compat.Env (
 import           GHC                 (setInteractiveDynFlags)
 
 import           GHC.Driver.Backend  as Backend
+import           GHC.Driver.Env      (HscEnv, hscSetActiveUnitId)
 import qualified GHC.Driver.Env      as Env
 import           GHC.Driver.Hooks    (Hooks)
 import           GHC.Driver.Session
@@ -68,12 +69,6 @@ import           GHC.Unit.Home       as Home
 import           GHC.Unit.Types      (UnitId)
 import           GHC.Utils.Logger
 import           GHC.Utils.TmpFs
-
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-import           GHC.Driver.Env      (HscEnv, hscSetActiveUnitId)
-
 
 
 hsc_EPS :: HscEnv -> UnitEnv
