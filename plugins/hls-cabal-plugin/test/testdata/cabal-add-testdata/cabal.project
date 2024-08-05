@@ -1,1 +1,5 @@
 packages: hidden-package
+          hidden-package-dashed
+          hidden-package-lib
+          hidden-package-tests
+          hidden-package-bench

@@ -223,27 +223,16 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
-        hsdoc <- openDoc ("src" </> "Main.hs") "haskell"
-        cabDoc <- openDoc "hidden-package.cabal" "cabal"
-        _ <- waitForDiagnosticsFrom hsdoc
-        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
-        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
-        mapM_ executeCodeAction selectedCas
-        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
-        contents <- documentContents cabDoc
-        liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) [256]
-    , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "hidden-package-dashed") $ do
-        hsdoc <- openDoc ("src" </> "Main.hs") "haskell"
-        cabDoc <- openDoc "hidden-package-dashed.cabal" "cabal"
-        _ <- waitForDiagnosticsFrom hsdoc
-        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
-        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
-        mapM_ executeCodeAction selectedCas
-        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
-        contents <- documentContents cabDoc
-        liftIO $ assertEqual "hls-plugin-api isn't found in the cabal file" (Text.indices "hls-plugin-api" contents) [263]
-
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package")
+        (generateHiddenPackageTestSession "hidden-package.cabal" ("src" </> "Main.hs") "split" [256])
+    , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "hidden-package-dashed")
+        (generateHiddenPackageTestSession "hidden-package-dashed.cabal" ("src" </> "Main.hs") "hls-plugin-api" [263])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "hidden-package-lib")
+        (generateHiddenPackageTestSession "hidden-package-lib.cabal" ("src" </> "MyLib.hs") "split" [256])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "hidden-package-tests")
+        (generateHiddenPackageTestSession "hidden-package-tests.cabal" ("test" </> "Main.hs") "split" [256])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a bench" ("cabal-add-testdata" </> "hidden-package-bench")
+        (generateHiddenPackageTestSession "hidden-package-bench.cabal" ("bench" </> "Main.hs") "split" [256])
 
     ]
   where
@@ -252,6 +241,18 @@ codeActionTests = testGroup "Code Actions"
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
+
+    generateHiddenPackageTestSession :: FilePath -> FilePath -> T.Text -> [Int] -> Session ()
+    generateHiddenPackageTestSession cabalFile haskellFile dependency indicesRes = do
+        hsdoc <- openDoc haskellFile "haskell"
+        cabDoc <- openDoc cabalFile "cabal"
+        _ <- waitForDiagnosticsFrom hsdoc
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
+        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
+        mapM_ executeCodeAction selectedCas
+        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
+        contents <- documentContents cabDoc
+        liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") (Text.indices dependency contents) indicesRes
 
 -- ----------------------------------------------------------------------------
 -- Goto Definition Tests
