@@ -1,3 +1,2 @@
 cradle:
   cabal:
-    component: "exe:hidden-package"

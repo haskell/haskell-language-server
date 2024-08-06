@@ -223,16 +223,28 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package")
-        (generateHiddenPackageTestSession "hidden-package.cabal" ("src" </> "Main.hs") "split" [256])
-    , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "hidden-package-dashed")
-        (generateHiddenPackageTestSession "hidden-package-dashed.cabal" ("src" </> "Main.hs") "hls-plugin-api" [263])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "hidden-package-lib")
-        (generateHiddenPackageTestSession "hidden-package-lib.cabal" ("src" </> "MyLib.hs") "split" [256])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "hidden-package-tests")
-        (generateHiddenPackageTestSession "hidden-package-tests.cabal" ("test" </> "Main.hs") "split" [256])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a bench" ("cabal-add-testdata" </> "hidden-package-bench")
-        (generateHiddenPackageTestSession "hidden-package-bench.cabal" ("bench" </> "Main.hs") "split" [256])
+    -- , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe") $ do
+    --     hsdoc <- openDoc ("src" </> "Main.hs") "haskell"
+    --     cabDoc <- openDoc "cabal-add-exe.cabal" "cabal"
+    --     _ <- waitForDiagnosticsFrom hsdoc
+    --     cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
+    --     let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
+    --     -- traceShowM("selectedCas", selectedCas)
+    --     mapM_ executeCodeAction selectedCas
+    --     _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc
+    --     contents <- documentContents cabDoc
+    --     -- traceShowM("contents", contents)
+        -- liftIO $ assertEqual "Split isn't found in the cabal file" (Text.indices "split" contents) [256]
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
+        (generateHiddenPackageTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
+    , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "cabal-add-dashed")
+        (generateHiddenPackageTestSession "cabal-add-dashed.cabal" ("src" </> "Main.hs") "ghc-boot-th" [260])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
+        (generateHiddenPackageTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
+        (generateHiddenPackageTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
+        (generateHiddenPackageTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
 
     ]
   where
