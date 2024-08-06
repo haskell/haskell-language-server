@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               hidden-package-tests
+name:               cabal-add-tests
 version:            0.1.0.0
 license:            NONE
 author:             George Gerasev
@@ -9,7 +9,7 @@ build-type:         Simple
 common warnings
     ghc-options: -Wall
 
-test-suite hidden-package-tests-test
+test-suite cabal-add-tests-test
     import:           warnings
     default-language: Haskell2010
     type:             exitcode-stdio-1.0

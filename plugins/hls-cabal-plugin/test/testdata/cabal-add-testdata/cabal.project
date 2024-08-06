@@ -1,5 +1,5 @@
-packages: hidden-package
-          hidden-package-dashed
-          hidden-package-lib
-          hidden-package-tests
-          hidden-package-bench
+packages: cabal-add-exe
+          cabal-add-dashed
+          cabal-add-lib
+          cabal-add-tests
+          cabal-add-bench

@@ -1,5 +1,5 @@
 module Main where
 
-import Ide.Types
+import GHC.Lexeme
 
 main = putStrLn "Hello, Haskell!"

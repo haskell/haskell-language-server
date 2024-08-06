@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               hidden-package-lib
+name:               cabal-add-bench
 version:            0.1.0.0
 license:            NONE
 author:             George Gerasev
@@ -9,9 +9,9 @@ build-type:         Simple
 common warnings
     ghc-options: -Wall
 
-library
-    import:           warnings
-    exposed-modules:  MyLib
-    build-depends:    base
-    hs-source-dirs:   src
-    default-language: Haskell2010
+benchmark benchmark
+    type: exitcode-stdio-1.0
+    ghc-options: -threaded
+    main-is: Main.hs
+    hs-source-dirs: bench
+    build-depends: base
