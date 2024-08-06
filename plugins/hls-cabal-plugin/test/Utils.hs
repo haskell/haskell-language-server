@@ -8,7 +8,8 @@ import           Control.Monad                     (guard)
 import           Data.List                         (sort)
 import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
-import           Ide.Plugin.Cabal                  (descriptor, haskellFilesDescriptor)
+import           Ide.Plugin.Cabal                  (descriptor,
+                                                    haskellFilesDescriptor)
 import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.FilePath
