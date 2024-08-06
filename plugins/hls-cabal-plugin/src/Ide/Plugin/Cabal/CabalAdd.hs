@@ -10,7 +10,6 @@
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
  , hiddenPackageAction
- , hiddenPackageSuggestion
  , cabalAddCommand
  , command
  , Log
@@ -19,34 +18,6 @@ where
 
 import           Control.Monad                                 (filterM, void)
 import           Control.Monad.IO.Class                        (MonadIO, liftIO)
-import           Data.String                                   (IsString)
-import qualified Data.Text                                     as T
-import qualified Data.Text.Encoding                            as T
-import           Development.IDE                               (IdeState,
-                                                                useWithStale)
-import           Distribution.PackageDescription.Quirks        (patchQuirks)
-import           Ide.PluginUtils                               (WithDeletions (SkipDeletions),
-                                                                diffText,
-                                                                mkLspCommand)
-import           Ide.Types                                     (CommandFunction,
-                                                                CommandId (CommandId),
-                                                                HandlerM,
-                                                                PluginId,
-                                                                pluginGetClientCapabilities,
-                                                                pluginSendRequest)
-import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
-                                                                ClientCapabilities,
-                                                                CodeAction (CodeAction),
-                                                                CodeActionKind (CodeActionKind_QuickFix),
-                                                                Diagnostic (..),
-                                                                Null (Null),
-                                                                VersionedTextDocumentIdentifier,
-                                                                WorkspaceEdit,
-                                                                toNormalizedFilePath,
-                                                                type (|?) (InR))
-import           System.Directory                              (doesFileExist,
-                                                                listDirectory)
-
 import           Control.Monad.Trans.Class                     (lift)
 import           Control.Monad.Trans.Except
 import           Data.Aeson.Types                              (FromJSON,
@@ -55,7 +26,12 @@ import           Data.ByteString                               (ByteString)
 import qualified Data.ByteString.Char8                         as B
 import           Data.List.NonEmpty                            (NonEmpty (..),
                                                                 fromList)
+import           Data.String                                   (IsString)
+import qualified Data.Text                                     as T
 import           Data.Text.Encoding                            (encodeUtf8)
+import qualified Data.Text.Encoding                            as T
+import           Development.IDE                               (IdeState,
+                                                                useWithStale)
 import           Development.IDE.Core.Rules                    (runAction)
 import           Development.IDE.Core.RuleTypes                (GetFileContents (..))
 import           Distribution.Client.Add                       as Add
@@ -64,6 +40,7 @@ import           Distribution.PackageDescription               (GenericPackageDe
                                                                 packageDescription,
                                                                 specVersion)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import           Distribution.PackageDescription.Quirks        (patchQuirks)
 import           Distribution.Pretty                           (pretty)
 import           Distribution.Simple.BuildTarget               (BuildTarget,
                                                                 buildTargetComponentName,
@@ -76,7 +53,27 @@ import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields
                                                                 ParseCabalFile (..))
 import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Error
+import           Ide.PluginUtils                               (WithDeletions (SkipDeletions),
+                                                                diffText,
+                                                                mkLspCommand)
+import           Ide.Types                                     (CommandFunction,
+                                                                CommandId (CommandId),
+                                                                PluginId,
+                                                                pluginGetClientCapabilities,
+                                                                pluginSendRequest)
 import           Language.LSP.Protocol.Message                 (SMethod (SMethod_WorkspaceApplyEdit))
+import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                                ClientCapabilities,
+                                                                CodeAction (CodeAction),
+                                                                CodeActionKind (CodeActionKind_QuickFix),
+                                                                Diagnostic (..),
+                                                                Null (Null),
+                                                                VersionedTextDocumentIdentifier,
+                                                                WorkspaceEdit,
+                                                                toNormalizedFilePath,
+                                                                type (|?) (InR))
+import           System.Directory                              (doesFileExist,
+                                                                listDirectory)
 import           System.FilePath                               (dropFileName,
                                                                 makeRelative,
                                                                 splitPath,
