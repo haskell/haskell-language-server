@@ -1,5 +1,5 @@
 module Main where
 
-import GHC.Lexeme
+import GHC.BaseDir
 
 main = putStrLn "Hello, Haskell!"

@@ -226,7 +226,7 @@ codeActionTests = testGroup "Code Actions"
     , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
         (generateHiddenPackageTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
     , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "cabal-add-dashed")
-        (generateHiddenPackageTestSession "cabal-add-dashed.cabal" ("src" </> "Main.hs") "ghc-boot-th" [260])
+        (generateHiddenPackageTestSession "cabal-add-dashed.cabal" ("src" </> "Main.hs") "ghc-boot" [260])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
         (generateHiddenPackageTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
