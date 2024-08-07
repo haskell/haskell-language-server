@@ -5,6 +5,7 @@
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE TypeFamilies          #-}
 
@@ -1007,12 +1008,12 @@ preservedKeys checkParents = HSet.fromList $
 
 -- | Define a new Rule without early cutoff
 define
-    :: IdeRule k v
+    :: forall k v. (IdeRule k v, NFData (Path Abs NormalizedFilePath))
     => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
 define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
 
 defineNoDiagnostics
-    :: IdeRule k v
+    :: forall k v. (IdeRule k v, NFData (Path Abs NormalizedFilePath))
     => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
 defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
@@ -1164,7 +1165,7 @@ data RuleBody k v
 
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
-    :: IdeRule k v
+    :: forall k v . (IdeRule k v, NFData (Path Abs NormalizedFilePath))
     => Recorder (WithPriority Log)
     -> RuleBody k v
     -> Rules ()
@@ -1194,18 +1195,19 @@ defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (o
             updateFileDiagnostics recorder file ver (newKey key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
 
-defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
+defineNoFile :: forall k v . (IdeRule k v, NFData (Path Abs NormalizedFilePath)) => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == emptyFilePath then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
-defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile :: forall k v. (IdeRule k v, NFData (Path Abs NormalizedFilePath)) => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
 defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
     if file == emptyFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
-    :: forall k v. (IdeRule k v, NFData v)
+    :: forall k v. (IdeRule k v,
+                    NFData (Path Abs NormalizedFilePath))
     => (Maybe Int32 -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
