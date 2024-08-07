@@ -236,7 +236,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
               pure edit
 
 -- | Given a path to a haskell file, returns the closest cabal file.
---   If cabal file wasn't found, dives Nothing.
+--   If cabal file wasn't found, gives Nothing.
 findResponsibleCabalFile :: FilePath -> IO (Maybe FilePath)
 findResponsibleCabalFile haskellFilePath = do
   let dirPath = dropFileName haskellFilePath
