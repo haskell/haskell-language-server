@@ -24,6 +24,9 @@
                 "path": "cabal-gild"
             }
         },
+        "cabaladd": {
+            "globalOn": true
+        },
         "callHierarchy": {
             "globalOn": true
         },
