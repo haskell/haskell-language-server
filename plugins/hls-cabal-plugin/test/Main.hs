@@ -252,7 +252,7 @@ codeActionTests = testGroup "Code Actions"
         mapM_ executeCodeAction selectedCas
         _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
         contents <- documentContents cabDoc
-        liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") (Text.indices dependency contents) indicesRes
+        liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") indicesRes (Text.indices dependency contents)
 
 -- ----------------------------------------------------------------------------
 -- Goto Definition Tests
