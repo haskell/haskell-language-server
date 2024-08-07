@@ -93,6 +93,11 @@ flag dynamic
   default:     True
   manual:      True
 
+flag ghcide-bench
+  description: Enable building of the ghcide-bench executable
+  default:     False
+  manual:      True
+
 ----------------------------
 ----------------------------
 -- PLUGINS
@@ -2193,6 +2198,8 @@ test-suite ghcide-tests
 
 
 executable ghcide-bench
+    if !flag(ghcide-bench)
+      buildable: False
     default-language: GHC2021
     build-depends:
         aeson,
