@@ -10,6 +10,7 @@
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
  , hiddenPackageAction
+ , hiddenPackageSuggestion
  , cabalAddCommand
  , command
  , Log
@@ -143,14 +144,13 @@ hiddenPackageSuggestion :: Int -> T.Text -> [(T.Text, T.Text)]
 hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
     regex :: T.Text -- TODO: Support multiple packages suggestion
-    regex = "It is a member of the hidden package [\8216']([a-z-]+)(-([0-9\\.]*))?[\8217']"
+    regex = "It is a member of the hidden package [\8216']([a-zA-Z0-9-]*[a-zA-Z0-9])(-([0-9\\.]*))?[\8217']"
+    -- Have to do this matching because `Regex.TDFA` doesn't(?) support
+    -- not-capturing groups like (?:message)
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [(T.Text, T.Text)]
     getMatch (_, _, _, []) = []
-    getMatch (_, _, _, [dependency]) = [(dependency, T.empty)]
-    getMatch (_, _, _, [dependency, dashedVersion]) = [(dependency, T.empty)] -- failed to get version
-    getMatch (_, _, _, [dependency, dashedVersion, cleanVersion]) = [(dependency, cleanVersion)]
+    getMatch (_, _, _, [dependency, _, cleanVersion]) = [(dependency, cleanVersion)]
     getMatch (_, _, _, _) = error "Impossible pattern matching case"
-
 
 cabalAddCommand :: IsString p => p
 cabalAddCommand = "cabalAdd"
