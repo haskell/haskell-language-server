@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.Cabal (descriptor, Log (..)) where
+module Ide.Plugin.Cabal (descriptor, haskellFilesDescriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -49,6 +49,9 @@ import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
 
+import qualified Data.Text                                   ()
+import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
+
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
   | LogShake Shake.Log
@@ -59,6 +62,7 @@ data Log
   | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
+  | LogCabalAdd CabalAdd.Log
   deriving (Show)
 
 instance Pretty Log where
@@ -82,6 +86,23 @@ instance Pretty Log where
         <+> "for cursor position:"
         <+> pretty position
     LogCompletions logs -> pretty logs
+    LogCabalAdd logs -> pretty logs
+
+
+haskellFilesDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+haskellFilesDescriptor recorder plId =
+  (defaultPluginDescriptor plId "Provides the cabal-add code action in haskell files")
+    { pluginHandlers =
+        mconcat
+          [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
+          ]
+    , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" (CabalAdd.command cabalAddRecorder)]
+    , pluginRules = pure () -- TODO: change to haskell files only (?)
+    , pluginNotificationHandlers = mempty
+    }
+    where
+      cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
+
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -276,6 +297,31 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields
       let completionTexts = fmap (^. JL.label) completions
       pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
+
+cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+cabalAddCodeAction recorder state plId (CodeActionParams _ _ docId@(TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
+  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
+  let mbHaskellFilePath = uriToFilePath uri
+  case mbHaskellFilePath of
+    Nothing -> pure $ InL []
+    Just haskellFilePath -> do
+      mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
+      case mbCabalFile of
+        Nothing -> pure $ InL $ fmap InR [noCabalFileAction]
+        Just cabalFilePath -> do
+          verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
+          mGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+          case mGPD of
+            Nothing -> pure $ InL []
+            Just (gpd, _) -> do
+              actions <- liftIO $ mapM (\diag -> CabalAdd.hiddenPackageAction cabalAddRecorder plId verTxtDocId
+                                                                              maxCompls diag haskellFilePath cabalFilePath gpd) diags
+              pure $ InL $ fmap InR (concat actions)
+  where
+    noCabalFileAction = CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
+                                     (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing
+    cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
+
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
