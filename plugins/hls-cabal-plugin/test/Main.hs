@@ -26,6 +26,8 @@ import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
+import Ide.Plugin.Cabal.CabalAdd (hiddenPackageSuggestion)
+import Distribution.Utils.Generic (safeHead)
 
 main :: IO ()
 main = do
@@ -225,15 +227,84 @@ codeActionTests = testGroup "Code Actions"
         pure ()
     , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
         (generateHiddenPackageTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
-    , runHaskellTestCaseSession "Code Actions - Can add dashed hidden package" ("cabal-add-testdata" </> "cabal-add-dashed")
-        (generateHiddenPackageTestSession "cabal-add-dashed.cabal" ("src" </> "Main.hs") "ghc-boot" [260])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
         (generateHiddenPackageTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
         (generateHiddenPackageTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
         (generateHiddenPackageTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
-
+    , testHiddenPackageSuggestions "Check CabalAdd's parser, no version"
+                                   [ "It is a member of the hidden package 'base'"
+                                   , "It is a member of the hidden package 'Blammo-wai'"
+                                   , "It is a member of the hidden package 'BlastHTTP'"
+                                   , "It is a member of the hidden package 'CC-delcont-ref-tf'"
+                                   , "It is a member of the hidden package '3d-graphics-examples'"
+                                   , "It is a member of the hidden package 'AAI'"
+                                   , "It is a member of the hidden package 'AWin32Console'"
+                                   ]
+                                   [ ("base", T.empty)
+                                   , ("Blammo-wai", T.empty)
+                                   , ("BlastHTTP", T.empty)
+                                   , ("CC-delcont-ref-tf", T.empty)
+                                   , ("3d-graphics-examples", T.empty)
+                                   , ("AAI", T.empty)
+                                   , ("AWin32Console", T.empty)
+                                   ]
+    , testHiddenPackageSuggestions "Check CabalAdd's parser, with version"
+                                   [ "It is a member of the hidden package 'base-0.1.0.0'"
+                                   , "It is a member of the hidden package 'Blammo-wai-0.11.0'"
+                                   , "It is a member of the hidden package 'BlastHTTP-2.6.4.3'"
+                                   , "It is a member of the hidden package 'CC-delcont-ref-tf-0.0.0.2'"
+                                   , "It is a member of the hidden package '3d-graphics-examples-1.1.6'"
+                                   , "It is a member of the hidden package 'AAI-0.1'"
+                                   , "It is a member of the hidden package 'AWin32Console-1.19.1'"
+                                   ]
+                                   [ ("base","0.1.0.0")
+                                   , ("Blammo-wai", "0.11.0")
+                                   , ("BlastHTTP", "2.6.4.3")
+                                   , ("CC-delcont-ref-tf", "0.0.0.2")
+                                   , ("3d-graphics-examples", "1.1.6")
+                                   , ("AAI", "0.1")
+                                   , ("AWin32Console", "1.19.1")
+                                   ]
+    , testHiddenPackageSuggestions "Check CabalAdd's parser, no version, unicode comma"
+                                   [ "It is a member of the hidden package \8216base\8217"
+                                   , "It is a member of the hidden package \8216Blammo-wai\8217"
+                                   , "It is a member of the hidden package \8216BlastHTTP\8217"
+                                   , "It is a member of the hidden package \8216CC-delcont-ref-tf\8217"
+                                   , "It is a member of the hidden package \8216AAI\8217"
+                                   , "It is a member of the hidden package \8216AWin32Console\8217"
+                                   ]
+                                   [ ("base", T.empty)
+                                   , ("Blammo-wai", T.empty)
+                                   , ("BlastHTTP", T.empty)
+                                   , ("CC-delcont-ref-tf", T.empty)
+                                   , ("AAI", T.empty)
+                                   , ("AWin32Console", T.empty)
+                                   ]
+    , testHiddenPackageSuggestions "Check CabalAdd's parser, with version, unicode comma"
+                                   [ "It is a member of the hidden package \8216base-0.1.0.0\8217"
+                                   , "It is a member of the hidden package \8216Blammo-wai-0.11.0\8217"
+                                   , "It is a member of the hidden package \8216BlastHTTP-2.6.4.3\8217"
+                                   , "It is a member of the hidden package \8216CC-delcont-ref-tf-0.0.0.2\8217"
+                                   , "It is a member of the hidden package \8216AAI-0.1\8217"
+                                   , "It is a member of the hidden package \8216AWin32Console-1.19.1\8217"
+                                   ]
+                                   [ ("base","0.1.0.0")
+                                   , ("Blammo-wai", "0.11.0")
+                                   , ("BlastHTTP", "2.6.4.3")
+                                   , ("CC-delcont-ref-tf", "0.0.0.2")
+                                   , ("AAI", "0.1")
+                                   , ("AWin32Console", "1.19.1")
+                                   ]
+    , expectFailBecause "TODO fix regex for these cases" $
+      testHiddenPackageSuggestions "Check CabalAdd's parser, with version, unicode comma"
+                                   [ "It is a member of the hidden package \82163d-graphics-examples\8217"
+                                   , "It is a member of the hidden package \82163d-graphics-examples-1.1.6\8217"
+                                   ]
+                                   [ ("3d-graphics-examples", T.empty)
+                                   , ("3d-graphics-examples", "1.1.6")
+                                   ]
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
@@ -253,6 +324,14 @@ codeActionTests = testGroup "Code Actions"
         _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
         contents <- documentContents cabDoc
         liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") indicesRes (Text.indices dependency contents)
+
+    testHiddenPackageSuggestions :: String -> [T.Text] -> [(T.Text, T.Text)] -> TestTree
+    testHiddenPackageSuggestions testTitle messages suggestions =
+        let suggestions' = map (safeHead . hiddenPackageSuggestion 1) messages
+            assertions   = zipWith (@?=) suggestions' (map Just suggestions)
+            testNames    = map (\(f, s) -> "Check if " ++ T.unpack f ++ "-" ++ T.unpack s ++ " was parsed correctly") suggestions
+            test         = testGroup testTitle $ zipWith testCase testNames assertions
+        in test
 
 -- ----------------------------------------------------------------------------
 -- Goto Definition Tests
