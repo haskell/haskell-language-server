@@ -18,6 +18,8 @@ import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
 import qualified Data.Text                       as Text
 import qualified Data.Text.Internal.Search       as Text
+import           Distribution.Utils.Generic      (safeHead)
+import           Ide.Plugin.Cabal.CabalAdd       (hiddenPackageSuggestion)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
@@ -26,8 +28,6 @@ import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
-import Ide.Plugin.Cabal.CabalAdd (hiddenPackageSuggestion)
-import Distribution.Utils.Generic (safeHead)
 
 main :: IO ()
 main = do
