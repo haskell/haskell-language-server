@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeFamilies     #-}
@@ -15,16 +16,20 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Control.Concurrent.STM.Stats         (atomically)
 import           Control.DeepSeq                      (rwhnf)
-import           Control.Lens                         ((?~))
+import           Control.Lens                         (Bifunctor (bimap), (?~),
+                                                       (^.))
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
+import           Data.Generics                        (GenericQ, everything,
+                                                       mkQ, something)
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, maybeToList)
+import           Data.Maybe                           (catMaybes, mapMaybe,
+                                                       maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
@@ -45,9 +50,11 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.Location       (Position (Position, _line),
+import           Development.IDE.Types.Location       (Position (Position, _character, _line),
                                                        Range (Range, _end, _start))
+import           GHC.Exts                             (IsString)
 import           GHC.Generics                         (Generic)
+import           GHC.Hs                               (realSrcSpan)
 import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
@@ -55,7 +62,6 @@ import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types                            (CommandFunction,
-                                                       CommandId (CommandId),
                                                        PluginCommand (PluginCommand),
                                                        PluginDescriptor (..),
                                                        PluginId,
@@ -69,16 +75,19 @@ import           Ide.Types                            (CommandFunction,
                                                        mkResolveHandler,
                                                        pluginSendRequest)
 import qualified Language.LSP.Protocol.Lens           as L
-import           Language.LSP.Protocol.Message        (Method (Method_CodeLensResolve, Method_TextDocumentCodeLens),
+import           Language.LSP.Protocol.Message        (Method (..),
                                                        SMethod (..))
 import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
                                                        CodeLens (..),
                                                        CodeLensParams (CodeLensParams, _textDocument),
                                                        Command, Diagnostic (..),
+                                                       InlayHint (..),
+                                                       InlayHintParams (InlayHintParams),
                                                        Null (Null),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
+                                                       isSubrangeOf,
                                                        type (|?) (..))
 import           Text.Regex.TDFA                      ((=~))
 
@@ -89,7 +98,7 @@ instance Pretty Log where
     LogShake msg -> pretty msg
 
 
-typeLensCommandId :: T.Text
+typeLensCommandId :: IsString s => s
 typeLensCommandId = "typesignature.add"
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -97,20 +106,26 @@ descriptor recorder plId =
   (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
-    , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
+                    <> mkPluginHandler SMethod_TextDocumentInlayHint whereClauseInlayHints
+    , pluginCommands = [PluginCommand typeLensCommandId "adds a signature" commandHandler]
     , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
   where
     desc = "Provides code lenses type signatures"
 
-properties :: Properties '[ 'PropertyKey "mode" (TEnum Mode)]
+properties :: Properties
+  '[ 'PropertyKey "whereInlayHintOn" 'TBoolean,
+     'PropertyKey "mode" ('TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
     [ (Always, "Always displays type lenses of global bindings")
     , (Exported, "Only display type lenses of exported global bindings")
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
+  & defineBooleanProperty #whereInlayHintOn
+    "Enable type lens on instance methods"
+    True
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
@@ -184,7 +199,7 @@ codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve
 generateLensCommand :: PluginId -> Uri -> T.Text -> TextEdit -> Command
 generateLensCommand pId uri title edit =
   let wEdit = WorkspaceEdit (Just $ Map.singleton uri [edit]) Nothing Nothing
-  in mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON wEdit])
+  in mkLspCommand pId typeLensCommandId title (Just [toJSON wEdit])
 
 -- Since the lenses are created with diagnostics, and since the globalTypeSig
 -- rule can't be changed as it is also used by the hls-refactor plugin, we can't
@@ -274,6 +289,9 @@ instance A.FromJSON Mode where
 showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
 showDocRdrEnv env rdrEnv = showSDocForUser' env (mkPrintUnqualifiedDefault env rdrEnv)
 
+ghostSpan :: RealSrcSpan
+ghostSpan = realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1
+
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
   deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
@@ -305,6 +323,17 @@ rules recorder = do
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
 
+bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) (Name, String)
+bindToSig id hsc rdrEnv = do
+    env <-
+#if MIN_VERSION_ghc(9,7,0)
+      liftZonkM
+#endif
+      tcInitTidyEnv
+    let name = idName id
+        (_, ty) = tidyOpenType env (idType id)
+    pure (name, showDocRdrEnv hsc rdrEnv (pprSigmaType ty))
+
 gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
 gblBindingType (Just hsc) (Just gblEnv) = do
   let exports = availsToNameSet $ tcg_exports gblEnv
@@ -312,19 +341,22 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       binds = collectHsBindsBinders $ tcg_binds gblEnv
       patSyns = tcg_patsyns gblEnv
       rdrEnv = tcg_rdr_env gblEnv
-      showDoc = showDocRdrEnv hsc rdrEnv
       hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
-      hasSig name f = whenMaybe (name `elemNameSet` sigs) f
-      bindToSig identifier = liftZonkM $ do
-        let name = idName identifier
+      hasSig name = whenMaybe (name `elemNameSet` sigs)
+      renderBind id = do
+        let name = idName id
         hasSig name $ do
-          env <- tcInitTidyEnv
-          let (_, ty) = tidyOpenType env (idType identifier)
-          pure $ GlobalBindingTypeSig name (printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
+          (name', sig) <- bindToSig id hsc rdrEnv
+          pure $ GlobalBindingTypeSig name (printName name' <> " :: " <> sig) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p
-        hasSig name $ pure $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> showDoc (pprPatSynTypeWithoutForalls p)) (name `elemNameSet` exports)
-  (_, maybe [] catMaybes -> bindings) <- initTcWithGbl hsc gblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) $ mapM bindToSig binds
+        hasSig name
+            $ pure
+            $ GlobalBindingTypeSig
+                name
+                ("pattern " <> printName name <> " :: " <> showDocRdrEnv hsc rdrEnv (pprPatSynTypeWithoutForalls p))
+                (name `elemNameSet` exports)
+  (_, maybe [] catMaybes -> bindings) <- initTcWithGbl hsc gblEnv ghostSpan $ mapM renderBind binds
   patterns <- catMaybes <$> mapM patToSig patSyns
   pure . Just . GlobalBindingTypeSigsResult $ bindings <> patterns
 gblBindingType _ _ = pure Nothing
@@ -340,3 +372,140 @@ pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
     builder = patSynBuilder p
     field_labels = patSynFieldLabels p
     orig_args' = map scaledThing orig_args
+
+-- --------------------------------------------------------------------------------
+
+-- | A binding expression with its id and location.
+data WhereBinding = WhereBinding
+    { bindingId  :: Id
+    -- ^ Each WhereBinding represents a id in binding expression.
+    , bindingLoc :: SrcSpan
+    -- ^ Location for a individual binding in a pattern.
+    -- Here we use the this and offset to render the type signature at the proper place.
+    , offset     :: Int
+    -- ^ Column offset between whole binding and individual binding in a pattern.
+    --
+    -- Example: For @(a, b) = (1, True)@, there will be two `WhereBinding`s:
+    -- - `a`: WhereBinding id_a loc_a 0
+    -- - `b`: WhereBinding id_b loc_b 4
+    }
+
+-- | Existed bindings in a where clause.
+data WhereBindings = WhereBindings
+  { bindings        :: [WhereBinding]
+  , existedSigNames :: [Name]
+  -- ^ Names of existing signatures.
+  -- It is used to hide type lens for existing signatures.
+  --
+  -- NOTE: The location of this name is equal to
+  -- the binding name.
+  --
+  -- Example:
+  -- @
+  -- f :: Int
+  -- f = 42
+  -- @
+  -- The location of signature name `f`(first line) is equal to
+  -- the definition of `f`(second line).
+  }
+
+-- | All where clauses from type checked source.
+findWhereQ :: GenericQ [HsLocalBinds GhcTc]
+findWhereQ = everything (<>) $ mkQ [] (pure . findWhere)
+  where
+    findWhere :: GRHSs GhcTc (LHsExpr GhcTc) -> HsLocalBinds GhcTc
+    findWhere = grhssLocalBinds
+
+-- | Find all bindings for **one** where clause.
+findBindingsQ :: GenericQ (Maybe WhereBindings)
+findBindingsQ = something (mkQ Nothing findBindings)
+  where
+    findBindings :: NHsValBindsLR GhcTc -> Maybe WhereBindings
+    findBindings (NValBinds binds sigs) =
+      Just $ WhereBindings
+        { bindings = concat $ mapMaybe (something (mkQ Nothing findBindingIds) . snd) binds
+        , existedSigNames = concatMap findSigIds sigs
+        }
+
+    findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe [WhereBinding]
+    findBindingIds bind = case unLoc bind of
+      FunBind{..} ->
+        let whereBinding = WhereBinding (unLoc fun_id) (getLoc fun_id)
+                           (col (getLoc fun_id) - col (getLoc bind))
+        in Just $ pure whereBinding
+      PatBind{..} -> Just $ (everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)) pat_lhs
+        where
+          wb id srcSpan = WhereBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
+      _           -> Nothing
+      where
+        col = srcSpanStartCol . realSrcSpan
+
+    -- | Example: Find `a` and `b` from @(a,b) = (1,True)@
+    findIdFromPat :: Pat GhcTc -> Maybe (Id, SrcSpan)
+    findIdFromPat (VarPat _ located) = Just (unLoc located, getLoc located)
+    findIdFromPat _                  = Nothing
+
+    findSigIds :: GenLocated l (Sig GhcRn) -> [IdP GhcRn]
+    findSigIds (L _ (TypeSig _ names _)) = map unLoc names
+    findSigIds _                         = []
+
+-- | Provide code lens for where bindings.
+whereClauseInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
+whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) visibleRange)  = do
+  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #whereInlayHintOn plId properties
+  if not enabled then pure $ InL [] else do
+    nfp <- getNormalizedFilePathE uri
+    (tmr, _) <- runActionE "inlayHint.local.TypeCheck" state $ useWithStaleE TypeCheck nfp
+    (hscEnv -> hsc, _) <- runActionE "InlayHint.local.GhcSession" state $ useWithStaleE GhcSession nfp
+    let tcGblEnv = tmrTypechecked tmr
+        rdrEnv = tcg_rdr_env tcGblEnv
+        typeCheckedSource = tcg_binds tcGblEnv
+
+        wheres = findWhereQ typeCheckedSource
+        localBindings = mapMaybe findBindingsQ wheres
+
+        -- | Note there may multi ids for one binding,
+        -- like @(a, b) = (42, True)@, there are `a` and `b`
+        -- in one binding.
+        bindingToInlayHints id range offset = do
+          (_, sig) <- liftIO
+            $ initTcWithGbl hsc tcGblEnv ghostSpan
+            $ bindToSig id hsc rdrEnv
+          pure $ generateWhereInlayHints range (maybe ("", "") (bimap (T.pack . printName) T.pack) sig) offset
+
+    inlayHints <- sequence
+      [ bindingToInlayHints bindingId bindingRange offset
+      | WhereBindings{..} <- localBindings
+      , let sigSpans = getSrcSpan <$> existedSigNames
+      , WhereBinding{..} <- bindings
+      , let bindingSpan = getSrcSpan (idName bindingId)
+      , bindingSpan `notElem` sigSpans
+      -- , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
+      , Just bindingRange <- [srcSpanToRange bindingLoc]
+      -- Show inlay hints only within visible range
+      , isSubrangeOf bindingRange visibleRange
+      ]
+
+    pure $ InL inlayHints
+    where
+      generateWhereInlayHints :: Range -> (T.Text, T.Text) -> Int -> InlayHint
+      generateWhereInlayHints range (name, ty) offset =
+        let edit = makeEdit range (name <> " :: " <> ty) offset
+        in InlayHint { _textEdits = Just [edit]
+                     , _paddingRight = Nothing
+                     , _paddingLeft = Just True
+                     , _tooltip = Nothing
+                     , _position = _end range
+                     , _kind = Nothing
+                     , _label = InL $ ":: " <> ty
+                     , _data_ = Nothing
+                     }
+
+      makeEdit :: Range -> T.Text -> Int -> TextEdit
+      makeEdit range text offset =
+        let startPos = range ^. L.start
+            -- Subtract the offset to align with the whole binding expression
+            insertChar = _character startPos - fromIntegral offset
+            startPos' = startPos { _character = insertChar }
+            insertRange = Range startPos' startPos'
+        in TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")
