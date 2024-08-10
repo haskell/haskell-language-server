@@ -42,7 +42,8 @@
             "globalOn": true
         },
         "explicit-fields": {
-            "globalOn": true
+            "codeActionsOn": true,
+            "inlayHintsOn": true
         },
         "explicit-fixity": {
             "globalOn": true
