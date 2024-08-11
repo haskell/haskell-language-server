@@ -40,6 +40,7 @@ import           Development.IDE.Import.FindImports           (ArtifactsLocation
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Path
 import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
@@ -113,7 +114,7 @@ instance NFData   GetImportMap
 
 type instance RuleResult GetImportMap = ImportMap
 newtype ImportMap = ImportMap
-  { importMap :: M.Map ModuleName NormalizedFilePath -- ^ Where are the modules imported by this file located?
+  { importMap :: M.Map ModuleName (Path Abs NormalizedFilePath) -- ^ Where are the modules imported by this file located?
   } deriving stock Show
     deriving newtype NFData
 

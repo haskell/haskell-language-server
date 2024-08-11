@@ -46,6 +46,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Path
 import           Development.IDE.Types.Shake                  (toKey)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Logger                                   (Pretty (pretty),
@@ -70,10 +71,9 @@ import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
 
-
 data Log
-  = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
-  | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
+  = LogCouldNotIdentifyReverseDeps !(Path Abs NormalizedFilePath)
+  | LogTypeCheckingReverseDeps !(Path Abs NormalizedFilePath) !(Maybe [(Path Abs NormalizedFilePath)])
   | LogShake Shake.Log
   deriving Show
 
@@ -88,7 +88,7 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake msg -> pretty msg
 
-addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule :: Recorder (WithPriority Log) -> (Path Abs NormalizedFilePath -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
@@ -97,7 +97,7 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
         ShakeExtras{lspEnv} <- getShakeExtras
         case lspEnv of
             Just env -> fmap Just $ liftIO $ LSP.runLspT env $
-                registerFileWatches [fromNormalizedFilePath f]
+                registerFileWatches [fromAbsPath f]
             Nothing -> pure $ Just False
 
 
@@ -107,10 +107,10 @@ getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
 
 getModificationTimeImpl
   :: Bool
-  -> NormalizedFilePath
+  -> (Path Abs NormalizedFilePath)
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getModificationTimeImpl missingFileDiags file = do
-    let file' = fromNormalizedFilePath file
+    let file' = fromAbsPath file
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
     mbVf <- getVirtualFile file
     case mbVf of
@@ -142,17 +142,17 @@ getModificationTimeImpl missingFileDiags file = do
 -- | Interface files cannot be watched, since they live outside the workspace.
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
-isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
+isInterface :: (Path Abs NormalizedFilePath) -> Bool
+isInterface f = takeExtension (fromAbsPath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
+resetInterfaceStore :: ShakeExtras -> (Path Abs NormalizedFilePath) -> STM [Key]
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
+resetFileStore :: IdeState -> [(Path Abs NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
@@ -174,7 +174,7 @@ getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
 getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: NormalizedFilePath
+    :: (Path Abs NormalizedFilePath)
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
@@ -186,7 +186,7 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe T.Text)
+getFileContents :: (Path Abs NormalizedFilePath) -> Action (UTCTime, Maybe T.Text)
 getFileContents f = do
     (fv, txt) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
@@ -196,11 +196,11 @@ getFileContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            posix <- getModTime $ fromNormalizedFilePath f
+            posix <- getModTime $ fromAbsPath f
             pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
-fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules :: Recorder (WithPriority Log) -> ((Path Abs NormalizedFilePath) -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
     getFileContentsRule recorder
@@ -212,7 +212,7 @@ setFileModified :: Recorder (WithPriority Log)
                 -> VFSModified
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
-                -> NormalizedFilePath
+                -> (Path Abs NormalizedFilePath)
                 -> IO [Key]
                 -> IO ()
 setFileModified recorder vfs state saved nfp actionBefore = do
@@ -222,17 +222,17 @@ setFileModified recorder vfs state saved nfp actionBefore = do
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+    restartShakeSession (shakeExtras state) vfs (fromAbsPath nfp ++ " (modified)") [] $ do
         keys<-actionBefore
         return (toKey GetModificationTime nfp:keys)
     when checkParents $
       typecheckParents recorder state nfp
 
-typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
+typecheckParents :: Recorder (WithPriority Log) -> IdeState -> Path Abs NormalizedFilePath -> IO ()
 typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
   where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
 
-typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
+typecheckParentsAction :: Recorder (WithPriority Log) -> Path Abs NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
     revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
     case revs of

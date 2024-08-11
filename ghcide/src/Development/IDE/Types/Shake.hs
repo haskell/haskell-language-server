@@ -29,6 +29,7 @@ import           Development.IDE.Graph                (Key, RuleResult, newKey,
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           GHC.Generics
 import           HieDb.Types                          (HieDb)
 import qualified StmContainers.Map                    as STM
@@ -76,16 +77,16 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey :: Shake.ShakeValue k => k -> Path Abs NormalizedFilePath -> Key
 toKey = (newKey.) . curry Q
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: Typeable k => Key -> Maybe (k, Path Abs NormalizedFilePath)
 fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, Path Abs NormalizedFilePath)
 fromKeyType (Key k) = case typeOf k of
     App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
         -> case unsafeCoerce k of
@@ -93,13 +94,13 @@ fromKeyType (Key k) = case typeOf k of
     _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = newKey $ Q (k, emptyFilePath)
+toNoFileKey k = newKey $ Q (k, mkAbsPath emptyFilePath)
 
-newtype Q k = Q (k, NormalizedFilePath)
+newtype Q k = Q (k, Path Abs NormalizedFilePath)
     deriving newtype (Eq, Hashable, NFData)
 
 instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
+    show (Q (k, file)) = show k ++ "; " ++ fromAbsPath file
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database

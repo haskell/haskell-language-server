@@ -42,6 +42,7 @@ import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
+import           Development.IDE.Types.Path
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Types          as LSP
@@ -63,30 +64,30 @@ runActionMT herald ide act =
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
 
 -- |ExceptT version of `use` that throws a PluginRuleFailed upon failure
-useE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
+useE :: IdeRule k v => k -> Path Abs NormalizedFilePath -> ExceptT PluginError Action v
 useE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useMT k
 
 -- |MaybeT version of `use`
-useMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
+useMT :: IdeRule k v => k -> Path Abs NormalizedFilePath -> MaybeT Action v
 useMT k = MaybeT . Shake.use k
 
 -- |ExceptT version of `uses` that throws a PluginRuleFailed upon failure
-usesE :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> ExceptT PluginError Action (f v)
+usesE :: (Traversable f, IdeRule k v) => k -> f (Path Abs NormalizedFilePath) -> ExceptT PluginError Action (f v)
 usesE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . usesMT k
 
 -- |MaybeT version of `uses`
-usesMT :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> MaybeT Action (f v)
+usesMT :: (Traversable f, IdeRule k v) => k -> f (Path Abs NormalizedFilePath) -> MaybeT Action (f v)
 usesMT k xs = MaybeT $ sequence <$> Shake.uses k xs
 
 -- |ExceptT version of `useWithStale` that throws a PluginRuleFailed upon
 -- failure
 useWithStaleE :: IdeRule k v
-    => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
+    => k -> Path Abs NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
 useWithStaleE key = maybeToExceptT (PluginRuleFailed (T.pack $ show key)) . useWithStaleMT key
 
 -- |MaybeT version of `useWithStale`
 useWithStaleMT :: IdeRule k v
-    => k -> NormalizedFilePath -> MaybeT Action (v, PositionMapping)
+    => k -> Path Abs NormalizedFilePath -> MaybeT Action (v, PositionMapping)
 useWithStaleMT key file = MaybeT $ runIdentity <$> Shake.usesWithStale key (Identity file)
 
 -- ----------------------------------------------------------------------------
@@ -103,11 +104,11 @@ runIdeActionMT _herald s i = MaybeT $ liftIO $ runReaderT (Shake.runIdeActionT $
 
 -- |ExceptT version of `useWithStaleFast` that throws a PluginRuleFailed upon
 -- failure
-useWithStaleFastE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
+useWithStaleFastE :: IdeRule k v => k -> Path Abs NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
 useWithStaleFastE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useWithStaleFastMT k
 
 -- |MaybeT version of `useWithStaleFast`
-useWithStaleFastMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
+useWithStaleFastMT :: IdeRule k v => k -> Path Abs NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
 useWithStaleFastMT k = MaybeT . Shake.useWithStaleFast k
 
 -- ----------------------------------------------------------------------------

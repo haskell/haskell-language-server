@@ -56,6 +56,7 @@ import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
+import           Development.IDE.Types.Path
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
@@ -66,7 +67,7 @@ import           System.Directory                     (doesFileExist)
 type LookupModule m = FilePath -> ModuleName -> Unit -> Bool -> MaybeT m Uri
 
 -- | HieFileResult for files of interest, along with the position mappings
-newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
+newtype FOIReferences = FOIReferences (HM.HashMap (Path Abs NormalizedFilePath) (HieAstResult, PositionMapping))
 
 computeTypeReferences :: Foldable f => f (HieAST Type) -> M.Map Name [Span]
 computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
@@ -83,7 +84,7 @@ computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
 -- | Given a file and position, return the names at a point, the references for
 -- those names in the FOIs, and a list of file paths we already searched through
 foiReferencesAtPoint
-  :: NormalizedFilePath
+  :: Path Abs NormalizedFilePath
   -> Position
   -> FOIReferences
   -> ([Name],[Location],[FilePath])
@@ -99,7 +100,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
                                (mapMaybe (\n -> M.lookup (Right n) rf) names)
               typerefs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation))
                                    (mapMaybe (`M.lookup` tr) names)
-        in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
+        in (names, adjustedLocs,map fromAbsPath $ HM.keys asts)
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
 getNamesAtPoint hf pos mapping =
@@ -114,7 +115,7 @@ toCurrentLocation mapping (Location uri range) =
 referencesAtPoint
   :: MonadIO m
   => WithHieDb
-  -> NormalizedFilePath -- ^ The file the cursor is in
+  -> Path Abs NormalizedFilePath -- ^ The file the cursor is in
   -> Position -- ^ position in the file
   -> FOIReferences -- ^ references data for FOIs
   -> m [Location]
@@ -196,7 +197,7 @@ gotoDefinition
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedFilePath
+  -> M.Map ModuleName (Path Abs NormalizedFilePath)
   -> HieASTs a
   -> Position
   -> MaybeT m [Location]
@@ -358,7 +359,7 @@ locationsAtPoint
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedFilePath
+  -> M.Map ModuleName (Path Abs NormalizedFilePath)
   -> Position
   -> HieASTs a
   -> m [Location]
@@ -366,7 +367,7 @@ locationsAtPoint withHieDb lookupModule _ideOptions imports pos ast =
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
-      modToLocation m = fmap (\fs -> pure $ Location (fromNormalizedUri $ filePathToUri' fs) zeroRange) $ M.lookup m imports
+      modToLocation m = fmap (\fs -> pure $ Location (fromNormalizedUri $ absToUri fs) zeroRange) $ M.lookup m imports
     in fmap (nubOrd . concat) $ mapMaybeM (either (pure . modToLocation) $ nameToLocation withHieDb lookupModule) ns
 
 -- | Given a 'Name' attempt to find the location where it is defined.

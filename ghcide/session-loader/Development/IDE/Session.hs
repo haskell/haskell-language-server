@@ -65,6 +65,7 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq      (HscEnvEq, newHscEnvEq)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Path
 import           GHC.ResponseFile
 import qualified HIE.Bios                            as HieBios
 import           HIE.Bios.Environment                hiding (getCacheDir)
@@ -135,7 +136,7 @@ data Log
   | LogHieDbWriterThreadSQLiteError !SQLError
   | LogHieDbWriterThreadException !SomeException
   | LogInterfaceFilesCacheDir !FilePath
-  | LogKnownFilesUpdated !(HashMap Target (HashSet NormalizedFilePath))
+  | LogKnownFilesUpdated !(HashMap Target (HashSet (Path Abs NormalizedFilePath)))
   | LogMakingNewHscEnv ![UnitId]
   | LogDLLLoadError !String
   | LogCradlePath !FilePath
@@ -196,7 +197,7 @@ instance Pretty Log where
       nest 2 $
         vcat
           [ "Known files updated:"
-          , viaShow $ (HM.map . Set.map) fromNormalizedFilePath targetToPathsMap
+          , viaShow $ (HM.map . Set.map) fromAbsPath targetToPathsMap
           ]
     LogMakingNewHscEnv inPlaceUnitIds ->
       "Making new HscEnv. In-place unit ids:" <+> pretty (map show inPlaceUnitIds)
@@ -481,10 +482,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 -- If we don't generate a TargetFile for each potential location, we will only have
                 -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
                 -- and also not find 'TargetModule Foo'.
-                fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
+                fs <- filterM (IO.doesFileExist . fromAbsPath) targetLocations
                 pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
               TargetModule _ -> do
-                found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
+                found <- filterM (IO.doesFileExist . fromAbsPath) targetLocations
                 return [(targetTarget, Set.fromList found)]
           hasUpdate <- atomically $ do
             known <- readTVar knownTargetsVar
@@ -497,7 +498,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           return $ toNoFileKey GetKnownTargets
 
     -- Create a new HscEnv from a hieYaml root and a set of options
-    let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
+    let packageSetup :: (Maybe FilePath, Path Abs NormalizedFilePath, ComponentOptions, FilePath)
                      -> IO ([ComponentInfo], [ComponentInfo])
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
@@ -549,7 +550,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               pure (Map.insert hieYaml (NE.toList all_deps) m, (new,old))
 
 
-    let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
+    let session :: (Maybe FilePath, Path Abs NormalizedFilePath, ComponentOptions, FilePath)
                 -> IO (IdeResult HscEnvEq,[FilePath])
         session args@(hieYaml, _cfp, _opts, _libDir) = do
           (new_deps, old_deps) <- packageSetup args
@@ -590,7 +591,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
           unless (null new_deps || not checkProject) $ do
-                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
+                cfps' <- liftIO $ filterM (IO.doesFileExist . fromAbsPath) (concatMap targetLocations all_targets)
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
                     mmt <- uses GetModificationTime cfps'
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
@@ -634,12 +635,12 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                  ((runTime, _):_)
                    | compileTime == runTime -> do
                      atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
-                     session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                     session (hieYaml, mkAbsPath $ toNormalizedFilePath' cfp, opts, libDir)
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
                dep_info <- getDependencyInfo (maybeToList hieYaml)
-               let ncfp = toNormalizedFilePath' cfp
+               let ncfp = mkAbsFromFp cfp
                let res = (map (\err' -> renderCradleError err' cradle ncfp) err, Nothing)
                void $ modifyVar' fileToFlags $
                     Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
@@ -680,7 +681,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
           v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
           let cfp = toAbsolutePath file
-          case HM.lookup (toNormalizedFilePath' cfp) v of
+          case HM.lookup (mkAbsFromFp cfp) v of
             Just (opts, old_di) -> do
               deps_ok <- checkDependencyInfo old_di
               if not deps_ok
@@ -701,7 +702,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     -- before attempting to do so.
     let getOptions :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         getOptions file = do
-            let ncfp = toNormalizedFilePath' (toAbsolutePath file)
+            let ncfp = mkAbsFromFp file
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
@@ -758,7 +759,7 @@ data TargetDetails = TargetDetails
       targetTarget    :: !Target,
       targetEnv       :: !(IdeResult HscEnvEq),
       targetDepends   :: !DependencyInfo,
-      targetLocations :: ![NormalizedFilePath]
+      targetLocations :: ![(Path Abs NormalizedFilePath)]
   }
 
 fromTargetId :: [FilePath]          -- ^ import paths
@@ -774,17 +775,17 @@ fromTargetId is exts (GHC.TargetModule modName) env dep = do
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    let locs = fmap toNormalizedFilePath' fps
+    let locs = fmap mkAbsFromFp fps
     return [TargetDetails (TargetModule modName) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do
-    let nf = toNormalizedFilePath' f
+    let nf = mkAbsFromFp f
     let other
-          | "-boot" `isSuffixOf` f = toNormalizedFilePath' (L.dropEnd 5 $ fromNormalizedFilePath nf)
-          | otherwise = toNormalizedFilePath' (fromNormalizedFilePath nf ++ "-boot")
+          | "-boot" `isSuffixOf` f = removeSuffix nf 5
+          | otherwise = addSuffix nf "-boot"
     return [TargetDetails (TargetFile nf) env deps [nf, other]]
 
-toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]
+toFlagsMap :: TargetDetails -> [(Path Abs NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]
 toFlagsMap TargetDetails{..} =
     [ (l, (targetEnv, targetDepends)) | l <-  targetLocations]
 
@@ -856,7 +857,7 @@ checkHomeUnitsClosed' ue home_id_set
 newComponentCache
          :: Recorder (WithPriority Log)
          -> [String]           -- ^ File extensions to consider
-         -> NormalizedFilePath -- ^ Path to file that caused the creation of this component
+         -> (Path Abs NormalizedFilePath) -- ^ Path to file that caused the creation of this component
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
@@ -984,10 +985,10 @@ setCacheDirs recorder CacheDirs{..} dflags = do
 type DependencyInfo = Map.Map FilePath (Maybe UTCTime)
 type HieMap = Map.Map (Maybe FilePath) [RawComponentInfo]
 -- | Maps a "hie.yaml" location to all its Target Filepaths and options.
-type FlagsMap = Map.Map (Maybe FilePath) (HM.HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
+type FlagsMap = Map.Map (Maybe FilePath) (HM.HashMap (Path Abs NormalizedFilePath) (IdeResult HscEnvEq, DependencyInfo))
 -- | Maps a Filepath to its respective "hie.yaml" location.
 -- It aims to be the reverse of 'FlagsMap'.
-type FilesMap = HM.HashMap NormalizedFilePath (Maybe FilePath)
+type FilesMap = HM.HashMap (Path Abs NormalizedFilePath) (Maybe FilePath)
 
 -- This is pristine information about a component
 data RawComponentInfo = RawComponentInfo
@@ -998,7 +999,7 @@ data RawComponentInfo = RawComponentInfo
   -- | All targets of this components.
   , rawComponentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , rawComponentFP             :: NormalizedFilePath
+  , rawComponentFP             :: Path Abs NormalizedFilePath
   -- | Component Options used to load the component.
   , rawComponentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
@@ -1015,7 +1016,7 @@ data ComponentInfo = ComponentInfo
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , componentFP             :: NormalizedFilePath
+  , componentFP             :: Path Abs NormalizedFilePath
   -- | Component Options used to load the component.
   , componentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
@@ -1094,7 +1095,7 @@ addUnit unit_str = liftEwM $ do
 
 -- | Throws if package flags are unsatisfiable
 setOptions :: GhcMonad m
-    => NormalizedFilePath
+    => Path Abs NormalizedFilePath
     -> ComponentOptions
     -> DynFlags
     -> FilePath -- ^ root dir, see Note [Root Directory]
@@ -1122,7 +1123,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
         --
         -- If we don't end up with a target for the current file in the end, then
         -- we will report it as an error for that file
-        let abs_fp = toAbsolute rootDir (fromNormalizedFilePath cfp)
+        let abs_fp = toAbsolute rootDir (fromAbsPath cfp)
         let special_target = Compat.mkSimpleTarget df abs_fp
         pure $ (df, special_target : targets) :| []
     where
@@ -1223,6 +1224,6 @@ showPackageSetupException PackageSetupException{..} = unwords
     , "failed to load packages:", message <> "."
     , "\nPlease ensure that ghcide is compiled with the same GHC installation as the project."]
 
-renderPackageSetupException :: FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
+renderPackageSetupException :: FilePath -> PackageSetupException -> (Path Abs NormalizedFilePath, ShowDiagnostic, Diagnostic)
 renderPackageSetupException fp e =
-    ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)
+    ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (mkAbsPath $ toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)

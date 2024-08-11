@@ -75,8 +75,7 @@ import           Development.IDE.Core.ProgressReporting (progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing           (withTrace)
-import           Development.IDE.GHC.Compat             hiding (assert,
-                                                         loadInterface,
+import           Development.IDE.GHC.Compat             hiding (loadInterface,
                                                          parseHeader,
                                                          parseModule,
                                                          tcRnModule,
@@ -92,9 +91,11 @@ import           Development.IDE.GHC.Warnings
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Path
 import           GHC                                    (ForeignHValue,
                                                          GetDocsFailure (..),
-                                                         parsedSource, ModLocation (..))
+                                                         ModLocation (..),
+                                                         parsedSource)
 import qualified GHC.LanguageExtensions                 as LangExt
 import           GHC.Serialized
 import           HieDb                                  hiding (withHieDb)
@@ -109,7 +110,7 @@ import           System.IO.Extra                        (fixIO,
 
 import qualified Data.Set                               as Set
 import qualified GHC                                    as G
-import qualified GHC.Runtime.Loader                as Loader
+import qualified GHC.Runtime.Loader                     as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
@@ -157,13 +158,13 @@ computePackageDeps
     -> IO (Either [FileDiagnostic] [UnitId])
 computePackageDeps env pkg = do
     case lookupUnit env pkg of
-        Nothing -> return $ Left [ideErrorText (toNormalizedFilePath' noFilePath) $
+        Nothing -> return $ Left [ideErrorText (mkAbsFromFp noFilePath) $
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
 newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables       :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  { getLinkables       :: [Path Abs NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
@@ -284,7 +285,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                                          mapMaybe nodeKeyToInstalledModule $ Set.toList mods_transitive
 
            ; moduleLocs <- readIORef (fcModuleCache $ hsc_FC hsc_env)
-           ; lbs <- getLinkables [toNormalizedFilePath' file
+           ; lbs <- getLinkables [mkAbsFromFp file
                                  | installedMod <- mods_transitive_list
                                  , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs installedMod
                                        file = case ifr of
@@ -727,7 +728,7 @@ atomicFileWrite se targetPath write = do
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
-  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)) >> pure x)
+  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (mkAbsFromFp targetPath)) >> pure x)
     `onException` cleanUp
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
@@ -786,7 +787,7 @@ spliceExpressions Splices{..} =
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile :: ShakeExtras -> ModSummary -> Path Abs NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
  atomically $ do
   pending <- readTVar indexPending
@@ -809,7 +810,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
           bracket_ pre post $
-            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
+            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromAbsPath srcPath) hash hf')
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
@@ -829,10 +830,10 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust (lspEnv se) $ \env -> LSP.runLspT env $
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-            toJSON $ fromNormalizedFilePath srcPath
+            toJSON $ fromAbsPath srcPath
       whenJust mdone $ \_ -> progressUpdate indexProgressReporting ProgressCompleted
 
-writeAndIndexHieFile :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
+writeAndIndexHieFile :: HscEnv -> ShakeExtras -> ModSummary -> Path Abs NormalizedFilePath -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
 writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
   handleGenerationErrors dflags "extended interface write/compression" $ do
     hf <- runHsc hscEnv $
@@ -1211,8 +1212,8 @@ data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
-  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
-  , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
+  , get_file_version :: Path Abs NormalizedFilePath -> m (Maybe FileVersion)
+  , get_linkable_hashes :: [Path Abs NormalizedFilePath] -> m [BS.ByteString]
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
 
@@ -1250,7 +1251,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     mb_dest_version <- case mb_old_version of
       Just ver -> pure $ Just ver
-      Nothing  -> get_file_version (toNormalizedFilePath' iface_file)
+      Nothing  -> get_file_version (mkAbsFromFp iface_file)
 
     -- The source is modified if it is newer than the destination (iface file)
     -- A more precise check for the core file is performed later
@@ -1332,7 +1333,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => HscEnv -> ([NormalizedFilePath] -> m [BS.ByteString]) -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies :: MonadIO m => HscEnv -> ([Path Abs NormalizedFilePath] -> m [BS.ByteString]) -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
 checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
   moduleLocs <- liftIO $ readIORef (fcModuleCache $ hsc_FC hsc_env)
   let go (mod, hash) = do
@@ -1340,7 +1341,7 @@ checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
         case ifr of
           InstalledFound loc _ -> do
             hs <- ml_hs_file loc
-            pure (toNormalizedFilePath' hs,hash)
+            pure (mkAbsFromFp hs,hash)
           _ -> Nothing
       hs_files = mapM go (moduleEnvToList runtime_deps)
   case hs_files of

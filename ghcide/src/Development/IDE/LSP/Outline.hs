@@ -21,6 +21,7 @@ import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.GHC.Util       (printOutputable)
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types    (DocumentSymbol (..),

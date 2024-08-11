@@ -33,7 +33,7 @@ import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
-import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           Ide.Logger
 import           Ide.Types
 import           Numeric.Natural
@@ -60,8 +60,8 @@ instance Pretty Log where
     LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
     LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
 
-whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
+whenUriFile :: Uri -> (Path Abs NormalizedFilePath -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . mkAbsFromFp
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
@@ -109,7 +109,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         let fileEvents' =
                 [ (nfp, event) | (FileEvent uri event) <- fileEvents
                 , Just fp <- [uriToFilePath uri]
-                , let nfp = toNormalizedFilePath fp
+                , let nfp = mkAbsFromFp fp
                 , not $ HM.member nfp filesOfInterest
                 ]
         unless (null fileEvents') $ do

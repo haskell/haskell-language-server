@@ -26,10 +26,10 @@ import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Diagnostics (FileDiagnostic,
                                                     showDiagnostics)
 import           Development.IDE.Types.Location    (Uri (..))
+import           Development.IDE.Types.Path
 import           Ide.Logger
 import           Ide.Types                         (PluginId (..))
-import           Language.LSP.Protocol.Types       (NormalizedFilePath,
-                                                    fromNormalizedFilePath)
+import           Language.LSP.Protocol.Types       (NormalizedFilePath)
 import           OpenTelemetry.Eventlog            (SpanInFlight (..), addEvent,
                                                     beginSpan, endSpan, setTag,
                                                     withSpan)
@@ -91,7 +91,7 @@ otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
 otTracedAction
     :: Show k
     => k -- ^ The Action's Key
-    -> NormalizedFilePath -- ^ Path to the file the action was run for
+    -> Path Abs NormalizedFilePath -- ^ Path to the file the action was run for
     -> RunMode
     -> (a -> String)
     -> (([FileDiagnostic] -> Action ()) -> Action (RunResult a)) -- ^ The action
@@ -101,7 +101,7 @@ otTracedAction key file mode result act
     generalBracket
         (do
             sp <- beginSpan (fromString (show key))
-            setTag sp "File" (fromString $ fromNormalizedFilePath file)
+            setTag sp "File" (fromString $ fromAbsPath file)
             setTag sp "Mode" (fromString $ show mode)
             return sp
         )

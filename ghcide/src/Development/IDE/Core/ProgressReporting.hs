@@ -33,6 +33,7 @@ import qualified Data.Text                      as T
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Path
 import qualified Focus
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server            (ProgressAmount (..),
@@ -56,7 +57,7 @@ data ProgressReporting = ProgressReporting
 
 data PerFileProgressReporting = PerFileProgressReporting
   {
-    inProgress             :: forall a. NormalizedFilePath -> IO a -> IO a,
+    inProgress             :: forall a. Path Abs NormalizedFilePath -> IO a -> IO a,
     -- ^ see Note [ProgressReporting API and InProgressState]
     progressReportingInner :: ProgressReporting
   }
@@ -127,13 +128,13 @@ data InProgressState
         todoVar    :: TVar Int,
         -- | Number of files done
         doneVar    :: TVar Int,
-        currentVar :: STM.Map NormalizedFilePath Int
+        currentVar :: STM.Map (Path Abs NormalizedFilePath) Int
       }
 
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 
-recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
+recordProgress :: InProgressState -> Path Abs NormalizedFilePath -> (Int -> Int) -> IO ()
 recordProgress InProgressState {..} file shift = do
   (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
   atomicallyNamed "recordProgress2" $ case (prev, new) of
@@ -184,7 +185,7 @@ progressReporting (Just lspEnv) title optProgressStyle = do
   progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
                                 (readTVar $ doneVar inProgressState) (Just lspEnv) title optProgressStyle
   let
-    inProgress :: NormalizedFilePath -> IO a -> IO a
+    inProgress :: Path Abs NormalizedFilePath -> IO a -> IO a
     inProgress = updateStateForFile inProgressState
   return PerFileProgressReporting {..}
   where

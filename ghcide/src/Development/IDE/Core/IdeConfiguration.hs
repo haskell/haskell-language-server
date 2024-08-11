@@ -22,6 +22,7 @@ import           Data.Text                      (isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           Language.LSP.Protocol.Types
 import           System.FilePath                (isRelative)
 
@@ -76,16 +77,16 @@ modifyIdeConfiguration ide f = do
   IdeConfigurationVar var <- getIdeGlobalState ide
   void $ modifyVar' var f
 
-isWorkspaceFile :: NormalizedFilePath -> Action Bool
+isWorkspaceFile :: Path Abs NormalizedFilePath -> Action Bool
 isWorkspaceFile file =
-  if isRelative (fromNormalizedFilePath file)
+  if isRelative (fromAbsPath file)
     then return True
     else do
       IdeConfiguration {..} <- getIdeConfiguration
       let toText = getUri . fromNormalizedUri
       return $
         any
-          (\root -> toText root `isPrefixOf` toText (filePathToUri' file))
+          (\root -> toText root `isPrefixOf` toText (absToUri file))
           workspaceFolders
 
 getClientSettings :: Action (Maybe Value)

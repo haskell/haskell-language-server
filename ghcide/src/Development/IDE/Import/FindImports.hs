@@ -24,10 +24,10 @@ import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import           GHC.Types.PkgQual
 import           GHC.Unit.State
 import           System.FilePath
-
 
 data Import
   = FileImport !ArtifactsLocation
@@ -35,7 +35,7 @@ data Import
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
-  { artifactFilePath    :: !NormalizedFilePath
+  { artifactFilePath    :: !(Path Abs NormalizedFilePath)
   , artifactModLocation :: !(Maybe ModLocation)
   , artifactIsSource    :: !Bool          -- ^ True if a module is a source input
   , artifactModule      :: !(Maybe Module)
@@ -51,32 +51,32 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf PackageImport  = ()
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation :: Path Abs NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
 modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
   where
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Nothing     -> "-boot" `isSuffixOf` fromAbsPath nfp
       Just modSum -> isSource (ms_hsc_src modSum)
     mbMod = ms_mod <$> ms
 
 data LocateResult
   = LocateNotFound
   | LocateFoundReexport UnitId
-  | LocateFoundFile UnitId NormalizedFilePath
+  | LocateFoundFile UnitId (Path Abs NormalizedFilePath)
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
 locateModuleFile :: MonadIO m
              => [(UnitId, [FilePath], S.Set ModuleName)]
              -> [String]
-             -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))
+             -> (ModuleName -> Path Abs NormalizedFilePath -> m (Maybe (Path Abs NormalizedFilePath)))
              -> Bool
              -> ModuleName
              -> m LocateResult
 locateModuleFile import_dirss exts targetFor isSource modName = do
   let candidates import_dirs =
-        [ toNormalizedFilePath' (prefix </> moduleNameSlashes modName <.> maybeBoot ext)
+        [ mkAbsFromFp (prefix </> moduleNameSlashes modName <.> maybeBoot ext)
            | prefix <- import_dirs , ext <- exts]
   mf <- firstJustM go (concat [map (uid,) (candidates dirs) | (uid, dirs, _) <- import_dirss])
   case mf of
@@ -105,7 +105,7 @@ locateModule
     => HscEnv
     -> [(UnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
-    -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))  -- ^ does file exist predicate
+    -> (ModuleName -> Path Abs NormalizedFilePath -> m (Maybe (Path Abs NormalizedFilePath)))  -- ^ does file exist predicate
     -> Located ModuleName              -- ^ Module name
     -> PkgQual                -- ^ Package name
     -> Bool                            -- ^ Is boot module
@@ -164,7 +164,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
             import_paths
 
     toModLocation uid file = liftIO $ do
-        loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
+        loc <- mkHomeModLocation dflags (unLoc modName) (fromAbsPath file)
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
