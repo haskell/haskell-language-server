@@ -47,6 +47,7 @@ import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location       (Position (Position, _line),
                                                        Range (Range, _end, _start))
+import           Development.IDE.Types.Path
 import           GHC.Generics                         (Generic)
 import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,
@@ -127,7 +128,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
           -- dummy type to make sure HLS resolves our lens
           [ CodeLens _range Nothing (Just $ toJSON TypeLensesResolve)
             | (dFile, _, diag@Diagnostic{_range}) <- diags
-            , dFile == nfp
+            , dFile == mkAbsPath nfp
             , isGlobalDiagnostic diag]
         -- The second option is to generate lenses from the GlobalBindingTypeSig
         -- rule. This is the only type that needs to have the range adjusted
@@ -148,7 +149,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
         -- GlobalBindingTypeSigs rule.
         (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
           runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-          $ useWithStaleE GetGlobalBindingTypeSigs nfp
+          $ useWithStaleE GetGlobalBindingTypeSigs (mkAbsPath nfp)
         -- Depending on whether we only want exported or not we filter our list
         -- of signatures to get what we want
         let relevantGlobalSigs =
@@ -169,7 +170,7 @@ codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve
   nfp <- getNormalizedFilePathE uri
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-    $ useWithStaleE GetGlobalBindingTypeSigs nfp
+    $ useWithStaleE GetGlobalBindingTypeSigs (mkAbsPath nfp)
   -- regardless of how the original lens was generated, we want to get the range
   -- that the global bindings rule would expect here, hence the need to reverse
   -- position map the range, regardless of whether it was position mapped in the

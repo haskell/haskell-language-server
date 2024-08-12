@@ -9,23 +9,27 @@ module Development.IDE.Spans.Pragmas
   , insertNewPragma
   , getFirstPragma ) where
 
-import           Control.Lens                    ((&), (.~))
-import           Data.Bits                       (Bits (setBit))
-import qualified Data.List                       as List
-import qualified Data.Maybe                      as Maybe
-import           Data.Text                       (Text, pack)
-import qualified Data.Text                       as Text
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
+import           Control.Lens                     ((&), (.~))
+import           Control.Monad.IO.Class           (MonadIO (..))
+import           Control.Monad.Trans.Except       (ExceptT)
+import           Data.Bits                        (Bits (setBit))
+import qualified Data.List                        as List
+import qualified Data.Maybe                       as Maybe
+import           Data.Text                        (Text, pack)
+import qualified Data.Text                        as T
+import qualified Data.Text                        as Text
+import           Development.IDE                  (GhcSession (..), IdeState,
+                                                   NormalizedFilePath,
+                                                   getFileContents, hscEnv,
+                                                   runAction, srcSpanToRange)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import qualified Language.LSP.Protocol.Types    as LSP
-import           Control.Monad.IO.Class         (MonadIO (..))
-import           Control.Monad.Trans.Except     (ExceptT)
-import           Ide.Plugin.Error               (PluginError)
-import           Ide.Types                      (PluginId(..))
-import qualified Data.Text                      as T
-import           Development.IDE.Core.PluginUtils
-import qualified Language.LSP.Protocol.Lens     as L
+import           Development.IDE.Types.Path
+import           Ide.Plugin.Error                 (PluginError)
+import           Ide.Types                        (PluginId (..))
+import qualified Language.LSP.Protocol.Lens       as L
+import qualified Language.LSP.Protocol.Types      as LSP
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags mbSourceText =
@@ -44,7 +48,7 @@ getNextPragmaInfo dynFlags mbSourceText =
 -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
 showExtension :: Extension -> Text
 showExtension NamedFieldPuns = "NamedFieldPuns"
-showExtension ext = pack (show ext)
+showExtension ext            = pack (show ext)
 
 insertNewPragma :: NextPragmaInfo -> Extension -> LSP.TextEdit
 insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins & L.newText .~ "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n" :: LSP.TextEdit
@@ -53,7 +57,7 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> Path Abs NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
   (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp

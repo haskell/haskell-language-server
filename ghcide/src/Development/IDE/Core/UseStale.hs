@@ -36,6 +36,7 @@ import qualified Development.IDE.Core.PositionMapping as P
 import qualified Development.IDE.Core.Shake           as IDE
 import           Development.IDE.GHC.Compat           (RealSrcSpan, srcSpanFile)
 import           Development.IDE.GHC.Compat.Util      (unpackFS)
+import           Development.IDE.Types.Path
 
 
 ------------------------------------------------------------------------------
@@ -144,7 +145,7 @@ unsafeCopyAge _ = coerce
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
 useWithStale :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe (TrackedStale v))
+    => k -> Path Abs NormalizedFilePath -> Action (Maybe (TrackedStale v))
 useWithStale key file = do
   x <- IDE.useWithStale key file
   pure $ x <&> \(v, pm) ->
@@ -153,7 +154,7 @@ useWithStale key file = do
 -- | Request a Rule result, it not available return the last computed result which may be stale.
 --   Errors out if none available.
 useWithStale_ :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (TrackedStale v)
+    => k -> Path Abs NormalizedFilePath -> Action (TrackedStale v)
 useWithStale_ key file = do
   (v, pm) <- IDE.useWithStale_ key file
   pure $ TrackedStale (coerce v) (coerce pm)

@@ -41,4 +41,3 @@ removeSuffix (Path f) s = mkAbsFromFp $ L.dropEnd s $ fromNormalizedFilePath f
 
 addSuffix :: Path Abs NormalizedFilePath -> String -> Path Abs NormalizedFilePath
 addSuffix (Path f) s = mkAbsFromFp $ fromNormalizedFilePath f ++ s
-

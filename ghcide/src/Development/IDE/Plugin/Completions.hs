@@ -53,9 +53,9 @@ import           Text.Fuzzy.Parallel                      (Scored (..))
 
 import           Development.IDE.Core.Rules               (usePropertyAction)
 
-import qualified Ide.Plugin.Config                        as Config
-
+import           Development.IDE.Types.Path
 import qualified GHC.LanguageExtensions                   as LangExt
+import qualified Ide.Plugin.Config                        as Config
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -81,7 +81,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
     define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
-        let uri = fromNormalizedUri $ normalizedFilePathToUri file
+        let uri = fromNormalizedUri $ absToUri file
         mbPm <- useWithStale GetParsedModule file
         case mbPm of
             Just (pm, _) -> do
@@ -103,7 +103,7 @@ produceCompletions recorder = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       visibleMods <- liftIO $ fmap (fromMaybe []) $ envVisibleModuleNames sess
-                      let uri = fromNormalizedUri $ normalizedFilePathToUri file
+                      let uri = fromNormalizedUri $ absToUri file
                       let cdata = cacheDataProducer uri visibleMods (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
                   (_diag, _) ->
@@ -131,10 +131,10 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
     file <- getNormalizedFilePathE uri
     (sess,_) <- withExceptT (const PluginStaleResolve)
                   $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
-                  $ useWithStaleFastE GhcSessionDeps file
+                  $ useWithStaleFastE GhcSessionDeps (mkAbsPath file)
     let nc = ideNc $ shakeExtras ide
     name <- liftIO $ lookupNameCache nc mod occ
-    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
+    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap (mkAbsPath file)
     let (dm,km) = case mdkm of
           Just (DKMap docMap tyThingMap, _) -> (docMap,tyThingMap)
           Nothing                           -> (mempty, mempty)
@@ -168,7 +168,7 @@ getCompletionsLSP ide plId
     contents <- pluginGetVirtualFile $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
-        let npath = toNormalizedFilePath' path
+        let npath = mkAbsFromFp path
         (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath

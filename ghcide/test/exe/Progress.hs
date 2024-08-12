@@ -6,6 +6,7 @@ import           Data.Foldable                          (for_)
 import qualified Data.HashMap.Strict                    as Map
 import           Development.IDE                        (NormalizedFilePath)
 import           Development.IDE.Core.ProgressReporting
+import           Development.IDE.Types.Path
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
 import           Test.Tasty
@@ -18,7 +19,7 @@ tests = testGroup "Progress"
 
 data InProgressModel = InProgressModel {
     done, todo :: Int,
-    current    :: Map.HashMap NormalizedFilePath Int
+    current    :: Map.HashMap (Path Abs NormalizedFilePath) Int
 }
 
 reportProgressTests :: TestTree
@@ -30,10 +31,10 @@ reportProgressTests = testGroup "recordProgress"
     ]
     where
         p0 = pure $ InProgressModel 0 0 mempty
-        addNew = recordProgressModel "A" succ p0
-        increase = recordProgressModel "A" succ addNew
-        decrease = recordProgressModel "A" succ increase
-        done = recordProgressModel "A" pred decrease
+        addNew = recordProgressModel (mkAbsPath "A") succ p0
+        increase = recordProgressModel (mkAbsPath "A") succ addNew
+        decrease = recordProgressModel (mkAbsPath "A") succ increase
+        done = recordProgressModel (mkAbsPath "A") pred decrease
         recordProgressModel key change state =
             model state $ \st -> recordProgress st key change
         model stateModelIO k = do

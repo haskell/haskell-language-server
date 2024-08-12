@@ -36,7 +36,7 @@ moduleOutline
   :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
-    Just (toNormalizedFilePath' -> fp) -> do
+    Just (mkAbsFromFp -> fp) -> do
       mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
       pure $ case mb_decls of
         Nothing -> InL []

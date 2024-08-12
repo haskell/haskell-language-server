@@ -13,6 +13,7 @@ import           Development.IDE.Core.FileStore    (getModTime)
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Path
 import qualified FuzzySearch
 import           Ide.Logger                        (Recorder, WithPriority)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -51,7 +52,7 @@ tests = do
          let uri = Uri "file://"
          uriToFilePath' uri @?= Just ""
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
-         let diag = ("", Diagnostics.ShowDiag, Diagnostic
+         let diag = (mkAbsPath "", Diagnostics.ShowDiag, Diagnostic
                {  _codeDescription = Nothing
                 , _data_ = Nothing
                 , _range = Range
