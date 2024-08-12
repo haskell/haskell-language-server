@@ -51,6 +51,8 @@ import qualified Language.LSP.VFS                            as VFS
 import           Data.List                                   (find)
 import           Ide.Plugin.Cabal.Completion.CabalFields     as CabalFields
 
+import Debug.Trace
+
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
   | LogShake Shake.Log
@@ -295,6 +297,11 @@ gotoDefinition ideState _ msgParam = do
       pure $ InR $ InR Null
     Just filePath -> do
       mCabalFields <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalFields $ toNormalizedFilePath filePath
+      let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
+      let mModuleSections = CabalFields.getSectionsWithModules <$> mCabalFields
+      traceShowM ("mModuleNames", mModuleNames)
+      traceShowM ("mModuleSections", mModuleSections)
+
       let mCursorText = CabalFields.findTextWord cursor =<< mCabalFields
       case mCursorText of
         Nothing ->

@@ -1,4 +1,4 @@
-module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, findFieldSection, findTextWord, findFieldLine, getOptionalSectionName, getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition, getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition, getFieldLSPRange) where
+module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, getSectionsWithModules, getModulesNames, findFieldSection, findTextWord, findFieldLine, getOptionalSectionName, getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition, getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition, getFieldLSPRange) where
 
 import           Data.List.NonEmpty                (NonEmpty)
 import qualified Data.List.NonEmpty                as NE
@@ -124,6 +124,9 @@ getFieldName :: Syntax.Field ann -> FieldName
 getFieldName (Syntax.Field (Syntax.Name _ fn) _)     = T.decodeUtf8 fn
 getFieldName (Syntax.Section (Syntax.Name _ fn) _ _) = T.decodeUtf8 fn
 
+getFieldLineName :: Syntax.FieldLine ann -> FieldName
+getFieldLineName (Syntax.FieldLine  _ fn) = T.decodeUtf8 fn
+
 -- | Returns the name of a section if it has a name.
 --
 -- This assumes that the given section args belong to named stanza
@@ -134,6 +137,42 @@ getOptionalSectionName (x:xs) = case x of
     Syntax.SecArgName _ name -> Just (T.decodeUtf8 name)
     _                        -> getOptionalSectionName xs
 
+getModulesNames :: [Syntax.Field any] -> [(T.Text, T.Text)]
+getModulesNames fields = concatMap getSectionModuleNames sections
+  where
+    sections = getSectionsWithModules fields
+
+    getSectionModuleNames (Syntax.Section _ secArgs fields) = map (getArgsName secArgs, ) $ concatMap getFieldModuleNames fields
+    getSectionModuleNames _ = []
+
+    getArgsName [] = T.empty
+    getArgsName [Syntax.SecArgName _ name] = T.decodeUtf8 name
+    getArgsName _ = T.empty
+
+    getFieldModuleNames field@(Syntax.Field _ modules) = if getFieldName field == T.pack "exposed-modules" ||
+                                                            getFieldName field == T.pack "other-modules"
+                                                            then map getFieldLineName modules
+                                                            else []
+    getFieldModuleNames _ = []
+
+getSectionsWithModules :: [Syntax.Field any] -> [Syntax.Field any]
+getSectionsWithModules fields = concatMap go fields
+  where
+    go :: Syntax.Field any -> [Syntax.Field any]
+    go (Syntax.Field _ _) = []
+    go section@(Syntax.Section _ _ fields) = concatMap onlySectionsWithModules (section:fields)
+
+    onlySectionsWithModules :: Syntax.Field any -> [Syntax.Field any]
+    onlySectionsWithModules (Syntax.Field _ _) = []
+    onlySectionsWithModules (Syntax.Section name secArgs fields)
+      | (not . null) newFields = [Syntax.Section name secArgs newFields]
+      | otherwise = []
+      where newFields = filter subfieldHasModule fields
+
+    subfieldHasModule :: Syntax.Field any -> Bool
+    subfieldHasModule field@(Syntax.Field _ _) = getFieldName field == T.pack "exposed-modules" ||
+                                                 getFieldName field == T.pack "other-modules"
+    subfieldHasModule (Syntax.Section _ _ _) = False
 
 -- | Makes a single text line out of multiple
 --   @SectionArg@s. Allows to display conditions,
