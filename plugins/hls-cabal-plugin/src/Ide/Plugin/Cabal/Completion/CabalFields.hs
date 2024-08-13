@@ -1,18 +1,18 @@
 module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, getSectionsWithModules, getModulesNames, findFieldSection, findTextWord, findFieldLine, getOptionalSectionName, getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition, getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition, getFieldLSPRange) where
 
+import qualified Data.ByteString                   as BS
+import           Data.List                         (find)
+import           Data.List.Extra                   (groupSort)
 import           Data.List.NonEmpty                (NonEmpty)
 import qualified Data.List.NonEmpty                as NE
 import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as T
+import           Data.Tuple                        (swap)
 import qualified Distribution.Fields               as Syntax
 import qualified Distribution.Parsec.Position      as Syntax
-import           Ide.Plugin.Cabal.Completion.Types
-import qualified Data.ByteString                   as BS
-import           Data.List                         (find)
+import Ide.Plugin.Cabal.Completion.Types
+    ( cabalPositionToLSPPosition, FieldContext(None), StanzaContext )
 import qualified Language.LSP.Protocol.Types       as LSP
-import Data.List.Extra (groupSort)
-import Data.Bifunctor (second)
-import Data.Tuple (swap)
 
 -- ----------------------------------------------------------------
 -- Cabal-syntax utilities I don't really want to write myself
@@ -152,9 +152,9 @@ getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
     getSectionModuleNames (Syntax.Section _ secArgs fields) = map (, getArgsName secArgs) $ concatMap getFieldModuleNames fields
     getSectionModuleNames _ = []
 
-    getArgsName [] = Nothing -- only a main library can have no name
+    getArgsName []                         = Nothing -- only a main library can have no name
     getArgsName [Syntax.SecArgName _ name] = Just $ T.decodeUtf8 name
-    getArgsName _ = Nothing -- impossible to have multiple names for a build target
+    getArgsName _                          = Nothing -- impossible to have multiple names for a build target
 
     getFieldModuleNames field@(Syntax.Field _ modules) = if getFieldName field == T.pack "exposed-modules" ||
                                                             getFieldName field == T.pack "other-modules"

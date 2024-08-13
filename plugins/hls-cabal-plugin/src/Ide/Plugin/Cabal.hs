@@ -65,6 +65,10 @@ import           Distribution.PackageDescription               (Benchmark (..),
                                                                 library,
                                                                 unUnqualComponentName)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import Distribution.Utils.Path (getSymbolicPath)
+import System.Directory (doesFileExist)
+import System.FilePath ((</>), takeDirectory)
+import Distribution.Utils.Generic (safeHead)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -325,23 +329,25 @@ gotoDefinition ideState _ msgParam = do
               let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
                   mModuleName = find (isModuleName cursorText) =<< mModuleNames
               case mModuleName of
-                Nothing   -> traceShowM ("NOT A MODULE")
+                Nothing -> pure $ InR $ InR Null
                 Just (mBuildTargetNames, moduleName) -> do
-                  traceShowM ("IS A MODULE", moduleName, "at", mBuildTargetNames)
                   mGPD <- liftIO $ runAction "cabal.GPD" ideState $ useWithStale ParseCabalFile $ toNormalizedFilePath filePath
                   case mGPD of
-                    Nothing -> traceShowM ("failed to get GPD")
+                    Nothing -> pure $ InR $ InR Null
                     Just (gpd, _) -> do
-                      let debug = map (lookupBuildTargetPackageDescription
-                                                      (flattenPackageDescription gpd))
-                                                      mBuildTargetNames
-                      traceShowM ("debug is", debug)
                       let buildInfos = foldMap (lookupBuildTargetPackageDescription
                                                       (flattenPackageDescription gpd))
                                                       mBuildTargetNames
-                      traceShowM ("buildInfos is", buildInfos)
-                      traceShowM ("Found hsSourceDirs", map hsSourceDirs buildInfos)
-              pure $ InR $ InR Null
+                          sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
+                          potentialPaths = map (\dir -> takeDirectory filePath </> dir </> toHaskellFile moduleName) sourceDirs
+                      traceShowM ("potentialPaths", potentialPaths)
+                      allPaths <- liftIO $ filterM doesFileExist potentialPaths
+                      traceShowM ("allPaths", allPaths)
+                      let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
+                      traceShowM ("locations", locations)
+                      case safeHead locations of
+                        Nothing -> pure $ InR $ InR Null
+                        Just location -> pure $ InL $ Definition $ InL location
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
@@ -390,6 +396,10 @@ gotoDefinition ideState _ msgParam = do
               if T.pack (unUnqualComponentName benchmarkName) == buildTargetName
               then Just benchmarkBuildInfo
               else Nothing
+
+      toHaskellFile :: T.Text -> FilePath
+      toHaskellFile moduleName = foldl1 (</>) (map T.unpack $ T.splitOn "." moduleName) ++ ".hs"
+
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
 -- ----------------------------------------------------------------
