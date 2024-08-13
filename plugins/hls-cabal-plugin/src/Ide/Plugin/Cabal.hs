@@ -2,56 +2,69 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.Cabal (descriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                ((^.))
+import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Maybe                   (runMaybeT)
-import qualified Data.ByteString                             as BS
+import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import qualified Data.ByteString                               as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                         (HashMap)
-import qualified Data.HashMap.Strict                         as HashMap
-import qualified Data.List.NonEmpty                          as NE
-import qualified Data.Maybe                                  as Maybe
-import qualified Data.Text                                   as T
-import qualified Data.Text.Encoding                          as Encoding
+import           Data.HashMap.Strict                           (HashMap)
+import qualified Data.HashMap.Strict                           as HashMap
+import           Data.List                                     (find)
+import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Maybe                                    as Maybe
+import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as Encoding
 import           Data.Typeable
-import           Development.IDE                             as D
-import           Development.IDE.Core.Shake                  (restartShakeSession)
-import qualified Development.IDE.Core.Shake                  as Shake
-import           Development.IDE.Graph                       (Key, alwaysRerun)
-import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
-import           Development.IDE.Types.Shake                 (toKey)
-import qualified Distribution.Fields                         as Syntax
-import qualified Distribution.Parsec.Position                as Syntax
+import           Development.IDE                               as D
+import           Development.IDE.Core.Shake                    (restartShakeSession)
+import qualified Development.IDE.Core.Shake                    as Shake
+import           Development.IDE.Graph                         (Key,
+                                                                alwaysRerun)
+import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
+import           Development.IDE.Types.Shake                   (toKey)
+import qualified Distribution.Fields                           as Syntax
+import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
-import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
-import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
-import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
-                                                              ParseCabalFields (..),
-                                                              ParseCabalFile (..))
-import qualified Ide.Plugin.Cabal.Completion.Types           as Types
-import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
-import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
-import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
-import           Ide.Plugin.Cabal.Orphans                    ()
+import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
+import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
+import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
+import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommonSections (ParseCabalCommonSections),
+                                                                ParseCabalFields (..),
+                                                                ParseCabalFile (..))
+import qualified Ide.Plugin.Cabal.Completion.Types             as Types
+import qualified Ide.Plugin.Cabal.Diagnostics                  as Diagnostics
+import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
+import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
+import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Cabal.Outline
-import qualified Ide.Plugin.Cabal.Parse                      as Parse
+import qualified Ide.Plugin.Cabal.Parse                        as Parse
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens                  as JL
-import qualified Language.LSP.Protocol.Message               as LSP
+import qualified Language.LSP.Protocol.Lens                    as JL
+import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                            as VFS
-import           Data.List                                   (find)
-import           Ide.Plugin.Cabal.Completion.CabalFields     as CabalFields
+import qualified Language.LSP.VFS                              as VFS
 
-import Debug.Trace
+import           Debug.Trace
+import           Distribution.PackageDescription               (Benchmark (..),
+                                                                BuildInfo (..),
+                                                                Executable (..),
+                                                                ForeignLib (..),
+                                                                Library (..),
+                                                                LibraryName (LMainLibName, LSubLibName),
+                                                                PackageDescription (..),
+                                                                TestSuite (..),
+                                                                library,
+                                                                unUnqualComponentName)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -297,10 +310,6 @@ gotoDefinition ideState _ msgParam = do
       pure $ InR $ InR Null
     Just filePath -> do
       mCabalFields <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalFields $ toNormalizedFilePath filePath
-      let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
-      let mModuleSections = CabalFields.getSectionsWithModules <$> mCabalFields
-      traceShowM ("mModuleNames", mModuleNames)
-      traceShowM ("mModuleSections", mModuleSections)
 
       let mCursorText = CabalFields.findTextWord cursor =<< mCabalFields
       case mCursorText of
@@ -308,20 +317,79 @@ gotoDefinition ideState _ msgParam = do
           pure $ InR $ InR Null
         Just cursorText -> do
           mCommonSections <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalCommonSections $ toNormalizedFilePath filePath
-          let mCommonSection = find (filterSectionArgName cursorText) =<< mCommonSections
+          let mCommonSection = find (isSectionArgName cursorText) =<< mCommonSections
           case mCommonSection of
-            Nothing ->
-              pure $ InR $ InR Null
             Just commonSection -> do
               pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
+            Nothing -> do
+              let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
+                  mModuleName = find (isModuleName cursorText) =<< mModuleNames
+              case mModuleName of
+                Nothing   -> traceShowM ("NOT A MODULE")
+                Just (mBuildTargetNames, moduleName) -> do
+                  traceShowM ("IS A MODULE", moduleName, "at", mBuildTargetNames)
+                  mGPD <- liftIO $ runAction "cabal.GPD" ideState $ useWithStale ParseCabalFile $ toNormalizedFilePath filePath
+                  case mGPD of
+                    Nothing -> traceShowM ("failed to get GPD")
+                    Just (gpd, _) -> do
+                      let debug = map (lookupBuildTargetPackageDescription
+                                                      (flattenPackageDescription gpd))
+                                                      mBuildTargetNames
+                      traceShowM ("debug is", debug)
+                      let buildInfos = foldMap (lookupBuildTargetPackageDescription
+                                                      (flattenPackageDescription gpd))
+                                                      mBuildTargetNames
+                      traceShowM ("buildInfos is", buildInfos)
+                      traceShowM ("Found hsSourceDirs", map hsSourceDirs buildInfos)
+              pure $ InR $ InR Null
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
-      filterSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
-      filterSectionArgName _ _ = False
+      isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
+      isSectionArgName _ _ = False
+      isModuleName name (_,  moduleName) = name == moduleName
 
-
-
+      lookupBuildTargetPackageDescription :: PackageDescription -> Maybe T.Text -> [BuildInfo]
+      lookupBuildTargetPackageDescription (PackageDescription {..}) Nothing =
+        case library of
+          Nothing                       -> error "Target is a main library but no main library was found"
+          Just (Library {libBuildInfo}) -> [libBuildInfo]
+      lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetName) =
+        Maybe.catMaybes $
+          map (\exec -> executableNameLookup exec buildTargetName) executables <>
+          map (\lib -> subLibraryNameLookup lib buildTargetName) subLibraries <>
+          map (\lib -> foreignLibsNameLookup lib buildTargetName) foreignLibs <>
+          map (\test -> testSuiteNameLookup test buildTargetName) testSuites <>
+          map (\bench -> benchmarkNameLookup bench buildTargetName) benchmarks
+        where
+          executableNameLookup :: Executable -> T.Text -> Maybe BuildInfo
+          executableNameLookup (Executable {exeName, buildInfo}) buildTargetName =
+            if T.pack (unUnqualComponentName exeName) == buildTargetName
+              then Just buildInfo
+              else Nothing
+          subLibraryNameLookup :: Library -> T.Text -> Maybe BuildInfo
+          subLibraryNameLookup (Library {libName, libBuildInfo}) buildTargetName =
+            case libName of
+              (LSubLibName name) ->
+                if T.pack (unUnqualComponentName name) == buildTargetName
+                  then Just libBuildInfo
+                  else Nothing
+              LMainLibName -> Nothing
+          foreignLibsNameLookup :: ForeignLib -> T.Text -> Maybe BuildInfo
+          foreignLibsNameLookup (ForeignLib {foreignLibName, foreignLibBuildInfo}) buildTargetName =
+              if T.pack (unUnqualComponentName foreignLibName) == buildTargetName
+              then Just foreignLibBuildInfo
+              else Nothing
+          testSuiteNameLookup :: TestSuite -> T.Text -> Maybe BuildInfo
+          testSuiteNameLookup (TestSuite {testName, testBuildInfo}) buildTargetName =
+            if T.pack (unUnqualComponentName testName) == buildTargetName
+              then Just testBuildInfo
+              else Nothing
+          benchmarkNameLookup :: Benchmark -> T.Text -> Maybe BuildInfo
+          benchmarkNameLookup (Benchmark {benchmarkName, benchmarkBuildInfo}) buildTargetName =
+              if T.pack (unUnqualComponentName benchmarkName) == buildTargetName
+              then Just benchmarkBuildInfo
+              else Nothing
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
 -- ----------------------------------------------------------------

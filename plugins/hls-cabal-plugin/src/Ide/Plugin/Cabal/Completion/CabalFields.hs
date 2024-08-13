@@ -10,6 +10,9 @@ import           Ide.Plugin.Cabal.Completion.Types
 import qualified Data.ByteString                   as BS
 import           Data.List                         (find)
 import qualified Language.LSP.Protocol.Types       as LSP
+import Data.List.Extra (groupSort)
+import Data.Bifunctor (second)
+import Data.Tuple (swap)
 
 -- ----------------------------------------------------------------
 -- Cabal-syntax utilities I don't really want to write myself
@@ -50,7 +53,6 @@ findFieldSection cursor (x:y:ys)
     cursorLine = Syntax.positionRow cursor
 
 type FieldName = T.Text
-
 
 -- | Determine the field line the cursor is currently a part of.
 --
@@ -137,17 +139,22 @@ getOptionalSectionName (x:xs) = case x of
     Syntax.SecArgName _ name -> Just (T.decodeUtf8 name)
     _                        -> getOptionalSectionName xs
 
-getModulesNames :: [Syntax.Field any] -> [(T.Text, T.Text)]
-getModulesNames fields = concatMap getSectionModuleNames sections
+type BuildTargetName = T.Text
+type ModuleName      = T.Text
+
+getModulesNames :: [Syntax.Field any] -> [([Maybe BuildTargetName], ModuleName)]
+getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
   where
+    rawModuleTargetPairs = concatMap getSectionModuleNames sections
     sections = getSectionsWithModules fields
 
-    getSectionModuleNames (Syntax.Section _ secArgs fields) = map (getArgsName secArgs, ) $ concatMap getFieldModuleNames fields
+    getSectionModuleNames :: Syntax.Field any -> [(ModuleName, Maybe BuildTargetName)]
+    getSectionModuleNames (Syntax.Section _ secArgs fields) = map (, getArgsName secArgs) $ concatMap getFieldModuleNames fields
     getSectionModuleNames _ = []
 
-    getArgsName [] = T.empty
-    getArgsName [Syntax.SecArgName _ name] = T.decodeUtf8 name
-    getArgsName _ = T.empty
+    getArgsName [] = Nothing -- only a main library can have no name
+    getArgsName [Syntax.SecArgName _ name] = Just $ T.decodeUtf8 name
+    getArgsName _ = Nothing -- impossible to have multiple names for a build target
 
     getFieldModuleNames field@(Syntax.Field _ modules) = if getFieldName field == T.pack "exposed-modules" ||
                                                             getFieldName field == T.pack "other-modules"
