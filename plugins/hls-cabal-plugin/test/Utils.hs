@@ -9,7 +9,7 @@ import           Data.List                         (sort)
 import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
 import           Ide.Plugin.Cabal                  (descriptor,
-                                                    haskellFilesDescriptor)
+                                                    haskellInteractionDescriptor)
 import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.FilePath
@@ -20,7 +20,7 @@ cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
 cabalPlugin = mkPluginTestDescriptor descriptor "cabal"
 
 cabalHaskellPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
-cabalHaskellPlugin = mkPluginTestDescriptor haskellFilesDescriptor "cabal-haskell"
+cabalHaskellPlugin = mkPluginTestDescriptor haskellInteractionDescriptor "cabal-haskell"
 
 simpleCabalPrefixInfoFromPos :: Position -> T.Text -> CabalPrefixInfo
 simpleCabalPrefixInfoFromPos pos prefix =

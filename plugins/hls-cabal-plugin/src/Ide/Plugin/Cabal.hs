@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.Cabal (descriptor, haskellFilesDescriptor, Log (..)) where
+module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -92,9 +92,10 @@ instance Pretty Log where
     LogCompletions logs -> pretty logs
     LogCabalAdd logs -> pretty logs
 
-
-haskellFilesDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-haskellFilesDescriptor recorder plId =
+-- | Some actions with cabal files originate from haskell files.
+-- This descriptor is needed to handle these cases.
+haskellInteractionDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+haskellInteractionDescriptor recorder plId =
   (defaultPluginDescriptor plId "Provides the cabal-add code action in haskell files")
     { pluginHandlers =
         mconcat
