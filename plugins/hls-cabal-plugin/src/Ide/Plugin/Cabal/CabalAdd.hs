@@ -186,7 +186,7 @@ command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxt
   Logger.logWith recorder Logger.Info LogExecutedCommand
   pure $ InR Null
 
--- | Constructs prerequisets for the @executeConfig@
+-- | Constructs prerequisites for the @executeConfig@
 --   and runs it, given path to the cabal file and a dependency message.
 --   Given the new contents of the cabal file constructs and returns the @edit@.
 --   Inspired by @main@ in cabal-add,
