@@ -4,16 +4,16 @@ module CabalAdd (
   cabalAddTests,
 ) where
 
-import Test.Hls
-import           Control.Lens                    ((^.))
-import           Control.Lens.Fold               ((^?))
-import qualified Data.Text as T
-import qualified Data.Text.Internal.Search       as T
-import qualified Language.LSP.Protocol.Lens      as L
-import qualified Data.Maybe                      as Maybe
-import           Distribution.Utils.Generic      (safeHead)
+import           Control.Lens               ((^.))
+import           Control.Lens.Fold          ((^?))
+import qualified Data.Maybe                 as Maybe
+import qualified Data.Text                  as T
+import qualified Data.Text.Internal.Search  as T
+import           Distribution.Utils.Generic (safeHead)
+import           Ide.Plugin.Cabal.CabalAdd  (hiddenPackageSuggestion)
+import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath
-import           Ide.Plugin.Cabal.CabalAdd       (hiddenPackageSuggestion)
+import           Test.Hls
 import           Utils
 
 

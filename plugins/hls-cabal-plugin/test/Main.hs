@@ -6,6 +6,7 @@ module Main (
     main,
 ) where
 
+import           CabalAdd                        (cabalAddTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
@@ -16,14 +17,11 @@ import           Data.Either                     (isRight)
 import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
-import           Distribution.Utils.Generic      (safeHead)
-import           Ide.Plugin.Cabal.CabalAdd       (hiddenPackageSuggestion)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
 import qualified Language.LSP.Protocol.Types     as LSP
 import           Outline                         (outlineTests)
-import           CabalAdd                        (cabalAddTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
