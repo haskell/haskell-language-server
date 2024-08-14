@@ -16,8 +16,6 @@ import           Data.Either                     (isRight)
 import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
-import qualified Data.Text                       as Text
-import qualified Data.Text.Internal.Search       as Text
 import           Distribution.Utils.Generic      (safeHead)
 import           Ide.Plugin.Cabal.CabalAdd       (hiddenPackageSuggestion)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
@@ -25,6 +23,7 @@ import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
 import qualified Language.LSP.Protocol.Types     as LSP
 import           Outline                         (outlineTests)
+import           CabalAdd                        (cabalAddTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
@@ -169,7 +168,7 @@ codeActionTests = testGroup "Code Actions"
         contents <- documentContents doc
         liftIO $
             contents
-                @?= Text.unlines
+                @?= T.unlines
                     [ "cabal-version:      3.0"
                     , "name:               licenseCodeAction"
                     , "version:            0.1.0.0"
@@ -193,7 +192,7 @@ codeActionTests = testGroup "Code Actions"
         contents <- documentContents doc
         liftIO $
             contents
-                @?= Text.unlines
+                @?= T.unlines
                     [ "cabal-version:      3.0"
                     , "name:               licenseCodeAction2"
                     , "version:            0.1.0.0"
@@ -225,86 +224,7 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
-        (generateHiddenPackageTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
-        (generateHiddenPackageTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
-        (generateHiddenPackageTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
-        (generateHiddenPackageTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
-    , testHiddenPackageSuggestions "Check CabalAdd's parser, no version"
-                                   [ "It is a member of the hidden package 'base'"
-                                   , "It is a member of the hidden package 'Blammo-wai'"
-                                   , "It is a member of the hidden package 'BlastHTTP'"
-                                   , "It is a member of the hidden package 'CC-delcont-ref-tf'"
-                                   , "It is a member of the hidden package '3d-graphics-examples'"
-                                   , "It is a member of the hidden package 'AAI'"
-                                   , "It is a member of the hidden package 'AWin32Console'"
-                                   ]
-                                   [ ("base", T.empty)
-                                   , ("Blammo-wai", T.empty)
-                                   , ("BlastHTTP", T.empty)
-                                   , ("CC-delcont-ref-tf", T.empty)
-                                   , ("3d-graphics-examples", T.empty)
-                                   , ("AAI", T.empty)
-                                   , ("AWin32Console", T.empty)
-                                   ]
-    , testHiddenPackageSuggestions "Check CabalAdd's parser, with version"
-                                   [ "It is a member of the hidden package 'base-0.1.0.0'"
-                                   , "It is a member of the hidden package 'Blammo-wai-0.11.0'"
-                                   , "It is a member of the hidden package 'BlastHTTP-2.6.4.3'"
-                                   , "It is a member of the hidden package 'CC-delcont-ref-tf-0.0.0.2'"
-                                   , "It is a member of the hidden package '3d-graphics-examples-1.1.6'"
-                                   , "It is a member of the hidden package 'AAI-0.1'"
-                                   , "It is a member of the hidden package 'AWin32Console-1.19.1'"
-                                   ]
-                                   [ ("base","0.1.0.0")
-                                   , ("Blammo-wai", "0.11.0")
-                                   , ("BlastHTTP", "2.6.4.3")
-                                   , ("CC-delcont-ref-tf", "0.0.0.2")
-                                   , ("3d-graphics-examples", "1.1.6")
-                                   , ("AAI", "0.1")
-                                   , ("AWin32Console", "1.19.1")
-                                   ]
-    , testHiddenPackageSuggestions "Check CabalAdd's parser, no version, unicode comma"
-                                   [ "It is a member of the hidden package \8216base\8217"
-                                   , "It is a member of the hidden package \8216Blammo-wai\8217"
-                                   , "It is a member of the hidden package \8216BlastHTTP\8217"
-                                   , "It is a member of the hidden package \8216CC-delcont-ref-tf\8217"
-                                   , "It is a member of the hidden package \8216AAI\8217"
-                                   , "It is a member of the hidden package \8216AWin32Console\8217"
-                                   ]
-                                   [ ("base", T.empty)
-                                   , ("Blammo-wai", T.empty)
-                                   , ("BlastHTTP", T.empty)
-                                   , ("CC-delcont-ref-tf", T.empty)
-                                   , ("AAI", T.empty)
-                                   , ("AWin32Console", T.empty)
-                                   ]
-    , testHiddenPackageSuggestions "Check CabalAdd's parser, with version, unicode comma"
-                                   [ "It is a member of the hidden package \8216base-0.1.0.0\8217"
-                                   , "It is a member of the hidden package \8216Blammo-wai-0.11.0\8217"
-                                   , "It is a member of the hidden package \8216BlastHTTP-2.6.4.3\8217"
-                                   , "It is a member of the hidden package \8216CC-delcont-ref-tf-0.0.0.2\8217"
-                                   , "It is a member of the hidden package \8216AAI-0.1\8217"
-                                   , "It is a member of the hidden package \8216AWin32Console-1.19.1\8217"
-                                   ]
-                                   [ ("base","0.1.0.0")
-                                   , ("Blammo-wai", "0.11.0")
-                                   , ("BlastHTTP", "2.6.4.3")
-                                   , ("CC-delcont-ref-tf", "0.0.0.2")
-                                   , ("AAI", "0.1")
-                                   , ("AWin32Console", "1.19.1")
-                                   ]
-    , expectFailBecause "TODO fix regex for these cases" $
-      testHiddenPackageSuggestions "Check CabalAdd's parser, with version, unicode comma"
-                                   [ "It is a member of the hidden package \82163d-graphics-examples\8217"
-                                   , "It is a member of the hidden package \82163d-graphics-examples-1.1.6\8217"
-                                   ]
-                                   [ ("3d-graphics-examples", T.empty)
-                                   , ("3d-graphics-examples", "1.1.6")
-                                   ]
+    , cabalAddTests
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
@@ -312,6 +232,7 @@ codeActionTests = testGroup "Code Actions"
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
+
 
     generateHiddenPackageTestSession :: FilePath -> FilePath -> T.Text -> [Int] -> Session ()
     generateHiddenPackageTestSession cabalFile haskellFile dependency indicesRes = do

@@ -291,6 +291,7 @@ test-suite hls-cabal-plugin-tests
     Context
     Utils
     Outline
+    CabalAdd
   build-depends:
     , base
     , bytestring

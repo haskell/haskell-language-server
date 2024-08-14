@@ -9,7 +9,7 @@
 
 module Ide.Plugin.Cabal.CabalAdd
 (  findResponsibleCabalFile
- , hiddenPackageAction
+ , addDependencySuggestCodeAction
  , hiddenPackageSuggestion
  , cabalAddCommand
  , command
@@ -99,13 +99,42 @@ instance Logger.Pretty Log where
       LogCreatedEdit edit -> "Created inplace edit:\n" Logger.<+> Logger.pretty edit
       LogExecutedCommand -> "Executed CabalAdd command"
 
+cabalAddCommand :: IsString p => p
+cabalAddCommand = "cabalAdd"
+
+data CabalAddCommandParams =
+     CabalAddCommandParams { cabalPath   :: FilePath
+                           , verTxtDocId :: VersionedTextDocumentIdentifier
+                           , buildTarget :: Maybe String
+                           , dependency  :: T.Text
+                           , version     :: Maybe T.Text
+                           }
+  deriving (Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+instance Logger.Pretty CabalAddCommandParams where
+  pretty CabalAddCommandParams{..} =
+    "CabalAdd parameters:\n" Logger.<+>
+    "| cabal path: " Logger.<+> Logger.pretty cabalPath Logger.<+> "\n" Logger.<+>
+    "| target: " Logger.<+> Logger.pretty buildTarget Logger.<+> "\n" Logger.<+>
+    "| dependendency: " Logger.<+> Logger.pretty dependency Logger.<+> "\n" Logger.<+>
+    "| version: " Logger.<+> Logger.pretty version Logger.<+> "\n"
 
 -- | Gives a code action that calls the command,
 --   if a suggestion for a missing dependency is found.
 --   Disabled action if no cabal files given.
 --   Conducts IO action on a cabal file to find build targets.
-hiddenPackageAction :: Logger.Recorder (Logger.WithPriority Log) -> PluginId -> VersionedTextDocumentIdentifier -> Int -> Diagnostic -> FilePath -> FilePath -> GenericPackageDescription -> IO [CodeAction]
-hiddenPackageAction recorder plId verTxtDocId maxCompletions diag haskellFilePath cabalFilePath gpd = do
+addDependencySuggestCodeAction
+  :: Logger.Recorder (Logger.WithPriority Log)
+  -> PluginId
+  -> VersionedTextDocumentIdentifier -- ^ Cabal's versioned text identifier
+  -> Int -- ^ Maximum number of suggestions to return
+  -> Diagnostic -- ^ Diagnostic from a code action
+  -> FilePath -- ^ Path to the haskell file
+  -> FilePath -- ^ Path to the cabal file
+  -> GenericPackageDescription
+  -> IO [CodeAction]
+addDependencySuggestCodeAction recorder plId verTxtDocId maxCompletions diag haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
     Logger.logWith recorder Logger.Info LogCalledCabalAddCodeAction
     case buildTargets of
@@ -138,8 +167,8 @@ hiddenPackageAction recorder plId verTxtDocId maxCompletions diag haskellFilePat
         command = mkLspCommand plId (CommandId cabalAddCommand) "Execute Code Action" (Just [toJSON params])
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
--- | Gives a mentioned number of hidden packages given
---   a specific error message
+-- | Gives a mentioned number of @(dependency, version)@ pairs
+--   found in the "hidden package" message
 hiddenPackageSuggestion :: Int -> T.Text -> [(T.Text, T.Text)]
 hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
   where
@@ -151,27 +180,6 @@ hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg
     getMatch (_, _, _, []) = []
     getMatch (_, _, _, [dependency, _, cleanVersion]) = [(dependency, cleanVersion)]
     getMatch (_, _, _, _) = error "Impossible pattern matching case"
-
-cabalAddCommand :: IsString p => p
-cabalAddCommand = "cabalAdd"
-
-data CabalAddCommandParams =
-     CabalAddCommandParams { cabalPath   :: FilePath
-                           , verTxtDocId :: VersionedTextDocumentIdentifier
-                           , buildTarget :: Maybe String
-                           , dependency  :: T.Text
-                           , version     :: Maybe T.Text
-                           }
-  deriving (Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
-
-instance Logger.Pretty CabalAddCommandParams where
-  pretty CabalAddCommandParams{..} =
-    "CabalAdd parameters:\n" Logger.<+>
-    "| cabal path: " Logger.<+> Logger.pretty cabalPath Logger.<+> "\n" Logger.<+>
-    "| target: " Logger.<+> Logger.pretty buildTarget Logger.<+> "\n" Logger.<+>
-    "| dependendency: " Logger.<+> Logger.pretty dependency Logger.<+> "\n" Logger.<+>
-    "| version: " Logger.<+> Logger.pretty version Logger.<+> "\n"
 
 command :: Logger.Recorder (Logger.WithPriority Log) -> CommandFunction IdeState CabalAddCommandParams
 command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do
