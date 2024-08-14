@@ -1,4 +1,10 @@
-module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, getSectionsWithModules, getModulesNames, findFieldSection, findTextWord, findFieldLine, getOptionalSectionName, getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition, getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition, getFieldLSPRange) where
+module Ide.Plugin.Cabal.Completion.CabalFields
+  ( findStanzaForColumn, getModulesNames, getFieldLSPRange,
+    findFieldSection, findTextWord, findFieldLine, getOptionalSectionName,
+    getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition,
+    getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition
+  )
+  where
 
 import qualified Data.ByteString                   as BS
 import           Data.List                         (find)
