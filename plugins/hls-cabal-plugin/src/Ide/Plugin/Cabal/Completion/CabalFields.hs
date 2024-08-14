@@ -10,8 +10,9 @@ import qualified Data.Text.Encoding                as T
 import           Data.Tuple                        (swap)
 import qualified Distribution.Fields               as Syntax
 import qualified Distribution.Parsec.Position      as Syntax
-import Ide.Plugin.Cabal.Completion.Types
-    ( cabalPositionToLSPPosition, FieldContext(None), StanzaContext )
+import           Ide.Plugin.Cabal.Completion.Types (FieldContext (None),
+                                                    StanzaContext,
+                                                    cabalPositionToLSPPosition)
 import qualified Language.LSP.Protocol.Types       as LSP
 
 -- ----------------------------------------------------------------
@@ -142,6 +143,34 @@ getOptionalSectionName (x:xs) = case x of
 type BuildTargetName = T.Text
 type ModuleName      = T.Text
 
+-- | Given a cabal AST returns pairs of all respective target names
+-- and the module name bounded to them. If a target is a main library gives
+-- @Nothing@, otherwise @Just target-name@
+--
+-- Examples of input cabal files and the outputs:
+--
+-- * Target is a main library module:
+--
+-- >   library
+-- >     exposed-modules:
+-- >       MyLib
+--
+-- * @getModulesNames@ output:
+--
+-- >   [([Nothing], "MyLib")]
+--
+-- * Same module names in different targets:
+--
+-- >   test-suite first-target
+-- >        other-modules:
+-- >          Config
+-- >   test-suite second-target
+-- >        other-modules:
+-- >          Config
+--
+-- * @getModulesNames@ output:
+--
+-- >   [([Just "first-target", Just "second-target"], "Config")]
 getModulesNames :: [Syntax.Field any] -> [([Maybe BuildTargetName], ModuleName)]
 getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
   where
@@ -162,6 +191,38 @@ getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
                                                             else []
     getFieldModuleNames _ = []
 
+-- | Trims a given cabal AST leaving only targets and their
+-- @exposed-modules@ and @other-modules@ sections.
+--
+-- For examle:
+--
+-- * Given a cabal file like this:
+--
+-- >   library
+-- >     import: extra
+-- >     hs-source-dirs: source/directory
+-- >     ...
+-- >     exposed-modules:
+-- >       Importaint.Exposed.Module
+-- >     other-modules:
+-- >       Importaint.Other.Module
+-- >
+-- >   test-suite tests
+-- >     type: type
+-- >     build-tool-depends: tool
+-- >     other-modules:
+-- >       Importaint.Other.Module
+--
+-- * @getSectionsWithModules@ gives output:
+--
+-- >   library
+-- >     exposed-modules:
+-- >       Importaint.Exposed.Module
+-- >     other-modules:
+-- >       Importaint.Other.Module
+-- >   test-suite tests
+-- >     other-modules:
+-- >       Importaint.Other.Module
 getSectionsWithModules :: [Syntax.Field any] -> [Syntax.Field any]
 getSectionsWithModules fields = concatMap go fields
   where

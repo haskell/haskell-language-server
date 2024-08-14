@@ -32,7 +32,20 @@ import           Development.IDE.Graph                         (Key,
 import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
 import           Development.IDE.Types.Shake                   (toKey)
 import qualified Distribution.Fields                           as Syntax
+import           Distribution.PackageDescription               (Benchmark (..),
+                                                                BuildInfo (..),
+                                                                Executable (..),
+                                                                ForeignLib (..),
+                                                                Library (..),
+                                                                LibraryName (LMainLibName, LSubLibName),
+                                                                PackageDescription (..),
+                                                                TestSuite (..),
+                                                                library,
+                                                                unUnqualComponentName)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import qualified Distribution.Parsec.Position                  as Syntax
+import           Distribution.Utils.Generic                    (safeHead)
+import           Distribution.Utils.Path                       (getSymbolicPath)
 import           GHC.Generics
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
@@ -52,23 +65,9 @@ import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
-
-import           Debug.Trace
-import           Distribution.PackageDescription               (Benchmark (..),
-                                                                BuildInfo (..),
-                                                                Executable (..),
-                                                                ForeignLib (..),
-                                                                Library (..),
-                                                                LibraryName (LMainLibName, LSubLibName),
-                                                                PackageDescription (..),
-                                                                TestSuite (..),
-                                                                library,
-                                                                unUnqualComponentName)
-import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import Distribution.Utils.Path (getSymbolicPath)
-import System.Directory (doesFileExist)
-import System.FilePath ((</>), takeDirectory)
-import Distribution.Utils.Generic (safeHead)
+import           System.Directory                              (doesFileExist)
+import           System.FilePath                               (takeDirectory,
+                                                                (</>))
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -302,11 +301,12 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
 
 -- | CodeActions for going to definitions.
 --
--- Provides a CodeAction for going to a definition when clicking on an identifier.
+-- Provides a CodeAction for going to a definition when clicking on an identifier
+-- and clicking on exposed-module or other-module field.
 -- The definition is found by traversing the sections and comparing their name to
--- the clicked identifier.
+-- the clicked identifier. If it's not in sections it attempts to find it in module names.
 --
--- TODO: Support more definitions than sections.
+-- TODO: Resolve more cases for go-to definition.
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ideState _ msgParam = do
   case uriToFilePath' uri of
@@ -340,13 +340,10 @@ gotoDefinition ideState _ msgParam = do
                                                       mBuildTargetNames
                           sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
                           potentialPaths = map (\dir -> takeDirectory filePath </> dir </> toHaskellFile moduleName) sourceDirs
-                      traceShowM ("potentialPaths", potentialPaths)
                       allPaths <- liftIO $ filterM doesFileExist potentialPaths
-                      traceShowM ("allPaths", allPaths)
                       let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
-                      traceShowM ("locations", locations)
-                      case safeHead locations of
-                        Nothing -> pure $ InR $ InR Null
+                      case safeHead locations of -- We assume there could be only one source location
+                        Nothing       -> pure $ InR $ InR Null
                         Just location -> pure $ InL $ Definition $ InL location
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
