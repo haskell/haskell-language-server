@@ -41,9 +41,9 @@
         "scope": "resource",
         "type": "boolean"
     },
-    "haskell.plugin.cabaladd.globalOn": {
+    "haskell.plugin.cabalHaskellIntegration.globalOn": {
         "default": true,
-        "description": "Enables cabaladd plugin",
+        "description": "Enables cabalHaskellIntegration plugin",
         "scope": "resource",
         "type": "boolean"
     },
