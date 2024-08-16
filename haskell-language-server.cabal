@@ -137,6 +137,7 @@ library hls-cabal-fmt-plugin
     , process-extras
     , text
 
+-- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-fmt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
   if !flag(cabalfmt)
@@ -148,7 +149,9 @@ test-suite hls-cabal-fmt-plugin-tests
     , base
     , directory
     , filepath
+    , haskell-language-server:hls-cabal-plugin
     , haskell-language-server:hls-cabal-fmt-plugin
+    , hls-plugin-api        == 2.9.0.1
     , hls-test-utils        == 2.9.0.1
 
   if flag(isolateCabalfmtTests)
@@ -192,6 +195,7 @@ library hls-cabal-gild-plugin
     , mtl
     , process-extras
 
+-- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
   if !flag(cabalgild)
@@ -203,7 +207,9 @@ test-suite hls-cabal-gild-plugin-tests
     , base
     , directory
     , filepath
+    , haskell-language-server:hls-cabal-plugin
     , haskell-language-server:hls-cabal-gild-plugin
+    , hls-plugin-api        == 2.9.0.1
     , hls-test-utils        == 2.9.0.1
 
   if flag(isolateCabalGildTests)

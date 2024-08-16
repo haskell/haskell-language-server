@@ -1,13 +1,25 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main
   ( main
   ) where
 
+import           Ide.Logger
+import qualified Ide.Plugin.Cabal     as Cabal
 import qualified Ide.Plugin.CabalGild as CabalGild
 import           System.Directory     (findExecutable)
 import           System.FilePath
 import           Test.Hls
+
+data TestLog
+  = LogCabalGild CabalGild.Log
+  | LogCabal Cabal.Log
+
+instance Pretty TestLog where
+  pretty = \case
+    LogCabalGild msg -> pretty msg
+    LogCabal msg -> pretty msg
 
 data CabalGildFound = Found | NotFound
 
@@ -30,8 +42,11 @@ main = do
   foundCabalFmt <- isCabalFmtFound
   defaultTestRunner (tests foundCabalFmt)
 
-cabalGildPlugin :: PluginTestDescriptor CabalGild.Log
-cabalGildPlugin = mkPluginTestDescriptor CabalGild.descriptor "cabal-gild"
+cabalGildPlugin :: PluginTestDescriptor TestLog
+cabalGildPlugin = mconcat
+  [ mkPluginTestDescriptor (CabalGild.descriptor . cmapWithPrio LogCabalGild) "cabal-gild"
+  , mkPluginTestDescriptor (Cabal.descriptor . cmapWithPrio LogCabal) "cabal"
+  ]
 
 tests :: CabalGildFound -> TestTree
 tests found = testGroup "cabal-gild"

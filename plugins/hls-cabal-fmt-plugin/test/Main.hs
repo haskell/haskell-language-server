@@ -1,13 +1,25 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main
   ( main
   ) where
 
+import           Ide.Logger
+import qualified Ide.Plugin.Cabal    as Cabal
 import qualified Ide.Plugin.CabalFmt as CabalFmt
 import           System.Directory    (findExecutable)
 import           System.FilePath
 import           Test.Hls
+
+data TestLog
+  = LogCabalFmt CabalFmt.Log
+  | LogCabal Cabal.Log
+
+instance Pretty TestLog where
+  pretty = \case
+    LogCabalFmt msg -> pretty msg
+    LogCabal msg -> pretty msg
 
 data CabalFmtFound = Found | NotFound
 
@@ -30,8 +42,11 @@ main = do
   foundCabalFmt <- isCabalFmtFound
   defaultTestRunner (tests foundCabalFmt)
 
-cabalFmtPlugin :: PluginTestDescriptor CabalFmt.Log
-cabalFmtPlugin = mkPluginTestDescriptor CabalFmt.descriptor "cabal-fmt"
+cabalFmtPlugin :: PluginTestDescriptor TestLog
+cabalFmtPlugin = mconcat
+  [ mkPluginTestDescriptor (CabalFmt.descriptor . cmapWithPrio LogCabalFmt) "cabal-fmt"
+  , mkPluginTestDescriptor (Cabal.descriptor . cmapWithPrio LogCabal) "cabal"
+  ]
 
 tests :: CabalFmtFound -> TestTree
 tests found = testGroup "cabal-fmt"
