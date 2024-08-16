@@ -150,7 +150,7 @@ type BuildTargetName = T.Text
 type ModuleName      = T.Text
 
 -- | Given a cabal AST returns pairs of all respective target names
--- and the module name bounded to them. If a target is a main library gives
+-- and the module name bound to them. If a target is a main library gives
 -- @Nothing@, otherwise @Just target-name@
 --
 -- Examples of input cabal files and the outputs:
