@@ -184,7 +184,22 @@ addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFile
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
 -- | Gives a mentioned number of @(dependency, version)@ pairs
---   found in the "hidden package" diagnostic message
+-- found in the "hidden package" diagnostic message.
+--
+-- For example, if a ghc error looks like this:
+--
+-- > "Could not load module ‘Data.List.Split’
+-- > It is a member of the hidden package ‘split-0.2.5’.
+-- > Perhaps you need to add ‘split’ to the build-depends in your .cabal file."
+--
+-- It extracts mentioned package names and version numbers.
+-- In this example, it will be @[("split", "0.2.5")]@
+--
+-- Also supports messages without a version.
+--
+-- > "Perhaps you need to add ‘split’ to the build-depends in your .cabal file."
+--
+-- Will turn into @[("split", "")]@
 hiddenPackageSuggestion :: Int -> Diagnostic -> [(T.Text, T.Text)]
 hiddenPackageSuggestion maxCompletions diag = take maxCompletions $ getMatch (msg =~ regex)
   where
