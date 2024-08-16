@@ -35,6 +35,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.cabal.symbolsOn": {
+        "default": true,
+        "description": "Enables cabal symbols",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.callHierarchy.globalOn": {
         "default": true,
         "description": "Enables callHierarchy plugin",
@@ -210,6 +216,12 @@
     "haskell.plugin.importLens.codeLensOn": {
         "default": true,
         "description": "Enables importLens code lenses",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.importLens.inlayHintsOn": {
+        "default": true,
+        "description": "Enables importLens inlay hints",
         "scope": "resource",
         "type": "boolean"
     },

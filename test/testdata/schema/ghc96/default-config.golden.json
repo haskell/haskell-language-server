@@ -11,7 +11,8 @@
         "cabal": {
             "codeActionsOn": true,
             "completionOn": true,
-            "diagnosticsOn": true
+            "diagnosticsOn": true,
+            "symbolsOn": true
         },
         "cabal-fmt": {
             "config": {
@@ -93,7 +94,8 @@
         },
         "importLens": {
             "codeActionsOn": true,
-            "codeLensOn": true
+            "codeLensOn": true,
+            "inlayHintsOn": true
         },
         "moduleName": {
             "globalOn": true

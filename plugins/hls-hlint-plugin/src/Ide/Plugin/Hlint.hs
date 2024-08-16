@@ -29,7 +29,6 @@ import           Control.Concurrent.STM
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
-import           Control.Monad
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                         (ExceptT (..),
@@ -121,6 +120,7 @@ import           System.Environment                                 (setEnv,
 #endif
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import           Text.Regex.TDFA.Text                               ()
+
 -- ---------------------------------------------------------------------
 
 data Log
@@ -136,7 +136,7 @@ instance Pretty Log where
     LogShake log -> pretty log
     LogApplying fp res -> "Applying hint(s) for" <+> viaShow fp <> ":" <+> viaShow res
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
-    LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
+    LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <> line <> indent 4 (pretty exts)
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
     LogResolve msg -> pretty msg
 
@@ -185,12 +185,12 @@ instance NFData   GetHlintDiagnostics
 type instance RuleResult GetHlintDiagnostics = ()
 
 -- | Hlint rules to generate file diagnostics based on hlint hints
--- | This rule is recomputed when:
--- | - A file has been edited via
--- |    - `getIdeas` -> `getParsedModule` in any case
--- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
--- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
--- | - The hlint specific settings have changed, via `getHlintSettingsRule`
+-- This rule is recomputed when:
+-- - A file has been edited via
+--    - `getIdeas` -> `getParsedModule` in any case
+--    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
+-- - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
+-- - The hlint specific settings have changed, via `getHlintSettingsRule`
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
@@ -204,8 +204,8 @@ rules recorder plugin = do
     liftIO $ argsSettings flags
 
   action $ do
-    files <- getFilesOfInterestUntracked
-    void $ uses GetHlintDiagnostics $ Map.keys files
+    files <- Map.keys <$> getFilesOfInterestUntracked
+    Shake.runWithSignal (Proxy @"kick/start/hlint") (Proxy @"kick/done/hlint") files GetHlintDiagnostics
 
   where
 

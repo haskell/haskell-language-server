@@ -1,9 +1,12 @@
+{-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE OverloadedStrings        #-}
 
 module Utils where
 
+import           Control.Monad                     (guard)
 import           Data.List                         (sort)
+import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
 import           Ide.Plugin.Cabal                  (descriptor)
 import qualified Ide.Plugin.Cabal
@@ -46,8 +49,23 @@ runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
 
+runCabalGoldenSession :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+runCabalGoldenSession title subdir fp act = goldenWithCabalDoc def cabalPlugin title testDataDir (subdir </> fp) "golden" "cabal" act
+
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-cabal-plugin" </> "test" </> "testdata"
+
+-- | these functions are used to detect cabal kicks
+-- and look at diagnostics for cabal files
+-- kicks are run everytime there is a shake session run/restart
+cabalKickDone :: Session ()
+cabalKickDone = kick (Proxy @"kick/done/cabal") >>= guard . not . null
+
+cabalKickStart :: Session ()
+cabalKickStart = kick (Proxy @"kick/start/cabal") >>= guard . not . null
+
+cabalCaptureKick :: Session [Diagnostic]
+cabalCaptureKick = captureKickDiagnostics cabalKickStart cabalKickDone
 
 -- | list comparison where the order in the list is irrelevant
 (@?==) :: (HasCallStack, Ord a, Show a) => [a] -> [a] -> Assertion

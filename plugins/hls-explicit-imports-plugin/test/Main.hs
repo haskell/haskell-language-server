@@ -26,18 +26,33 @@ main = defaultTestRunner $ testGroup "import-actions"
   [testGroup
     "Refine Imports"
     [ codeActionGoldenTest "RefineWithOverride" 3 1
-    , codeLensGoldenTest isRefineImports "RefineUsualCase" 1
-    , codeLensGoldenTest isRefineImports "RefineQualified" 0
-    , codeLensGoldenTest isRefineImports "RefineQualifiedExplicit" 0
+    -- Although the client has inlay hints caps, refine is always provided by the code lens
+    , codeLensGoldenTest codeActionNoResolveCaps isRefineImports "RefineUsualCase" 1
+    , codeLensGoldenTest codeActionNoResolveCaps isRefineImports "RefineQualified" 0
+    , codeLensGoldenTest codeActionNoResolveCaps isRefineImports "RefineQualifiedExplicit" 0
     ],
   testGroup
     "Make imports explicit"
     [ codeActionAllGoldenTest "ExplicitUsualCase" 3 0
     , codeActionAllResolveGoldenTest "ExplicitUsualCase" 3 0
+    , inlayHintsTestWithCap "ExplicitUsualCase" 2 $ (@=?)
+        [mkInlayHint (Position 2 16) "( a1 )"
+                     (TextEdit (Range (Position 2 0) (Position 2 16)) "import ExplicitA ( a1 )")]
+    , inlayHintsTestWithoutCap "ExplicitUsualCase" 2 $ (@=?) []
     , codeActionOnlyGoldenTest "ExplicitOnlyThis" 3 0
     , codeActionOnlyResolveGoldenTest "ExplicitOnlyThis" 3 0
-    , codeLensGoldenTest notRefineImports "ExplicitUsualCase" 0
+    , inlayHintsTestWithCap "ExplicitOnlyThis" 3 $ (@=?)
+        [mkInlayHint (Position 3 16) "( b1 )"
+                     (TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitB ( b1 )")]
+    , inlayHintsTestWithoutCap "ExplicitOnlyThis" 3 $ (@=?) []
+    -- Only when the client does not support inlay hints, explicit will be provided by code lens
+    , codeLensGoldenTest codeActionNoInlayHintsCaps notRefineImports "ExplicitUsualCase" 0
+    , expectFail $ codeLensGoldenTest codeActionNoResolveCaps notRefineImports "ExplicitUsualCase" 0
     , codeActionBreakFile "ExplicitBreakFile" 4 0
+    , inlayHintsTestWithCap "ExplicitBreakFile" 3 $ (@=?)
+        [mkInlayHint (Position 3 16) "( a1 )"
+                     (TextEdit (Range (Position 3 0) (Position 3 16)) "import ExplicitA ( a1 )")]
+    , inlayHintsTestWithoutCap "ExplicitBreakFile" 3 $ (@=?) []
     , codeActionStaleAction "ExplicitStaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer def explicitImportsPlugin testDataDir $ do
@@ -49,6 +64,11 @@ main = defaultTestRunner $ testGroup "import-actions"
         doc <- openDoc "ExplicitExported.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
+    , testCase "No InlayHints when exported" $
+      runSessionWithServer def explicitImportsPlugin testDataDir $ do
+        doc <- openDoc "ExplicitExported.hs" "haskell"
+        inlayHints <- getInlayHints doc (pointRange 3 0)
+        liftIO $ inlayHints @?= []
     , testGroup "Title abbreviation"
       [ testCase "not abbreviated" $
           let i = "import " <> T.replicate 70 "F" <> " (Athing, Bthing, Cthing)"
@@ -72,6 +92,20 @@ main = defaultTestRunner $ testGroup "import-actions"
               o = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, ... (3 items))"
           in ExplicitImports.abbreviateImportTitle i @?= o
       ]
+    , testGroup "Title abbreviation without module"
+      [ testCase "not abbreviated" $
+          let i = "import M (" <> T.replicate 70 "F" <> ", Athing, Bthing, Cthing)"
+              o = "(FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, Athing, Bthing, Cthing)"
+          in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
+      , testCase "abbreviated that drop module name" $
+          let i = "import " <> T.replicate 120 "F" <> " (Athing, Bthing, Cthing)"
+              o = "(Athing, Bthing, Cthing)"
+          in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
+      , testCase "abbreviated in import list" $
+          let i = "import M (Athing, Bthing, " <> T.replicate 100 "F" <> ", Cthing, Dthing, Ething)"
+              o = "(Athing, Bthing, ... (4 items))"
+          in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
+      ]
     ]]
 
 -- code action tests
@@ -84,7 +118,9 @@ codeActionAllGoldenTest fp l c = goldenWithImportActions " code action" fp codeA
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
 codeActionBreakFile :: FilePath -> Int -> Int -> TestTree
-codeActionBreakFile fp l c = goldenWithImportActions " code action" fp codeActionNoResolveCaps $ \doc -> do
+-- If use `codeActionNoResolveCaps` instead of `codeActionNoInlayHintsCaps` here,
+-- we will get a puzzling error: https://github.com/haskell/haskell-language-server/pull/4235#issuecomment-2189048997
+codeActionBreakFile fp l c = goldenWithImportActions " code action" fp codeActionNoInlayHintsCaps $ \doc -> do
   _ <- getCodeLenses doc
   changeDoc doc [edit]
   actions <- getCodeActions doc (pointRange l c)
@@ -150,8 +186,8 @@ caTitle _                         = Nothing
 
 -- code lens tests
 
-codeLensGoldenTest :: (CodeLens -> Bool) -> FilePath -> Int -> TestTree
-codeLensGoldenTest predicate fp i = goldenWithImportActions " code lens" fp codeActionNoResolveCaps $ \doc -> do
+codeLensGoldenTest :: ClientCapabilities -> (CodeLens -> Bool) -> FilePath -> Int -> TestTree
+codeLensGoldenTest caps predicate fp i = goldenWithImportActions " code lens" fp caps $ \doc -> do
   codeLenses <- getCodeLenses doc
   resolvedCodeLenses <- for codeLenses resolveCodeLens
   (CodeLens {_command = Just c}) <- pure (filter predicate resolvedCodeLenses !! i)
@@ -161,6 +197,42 @@ notRefineImports :: CodeLens -> Bool
 notRefineImports (CodeLens _ (Just (Command text _ _)) _)
   | "Refine imports to" `T.isPrefixOf` text = False
 notRefineImports _ = True
+
+-- inlay hints tests
+
+inlayHintsTest :: ClientCapabilities -> String -> FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTest configCaps postfix fp line assert = testCase (fp ++ postfix) $ run $ \_ -> do
+  doc <- openDoc (fp ++ ".hs") "haskell"
+  inlayHints <- getInlayHints doc (lineRange line)
+  liftIO $ assert inlayHints
+  where
+    -- zero-based position
+    lineRange line = Range (Position line 0) (Position line 1000)
+    run = runSessionWithTestConfig def
+        { testDirLocation = Left testDataDir
+        , testPluginDescriptor = explicitImportsPlugin
+        , testConfigCaps = configCaps
+        }
+
+inlayHintsTestWithCap :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTestWithCap = inlayHintsTest fullLatestClientCaps " inlay hints with client caps"
+
+inlayHintsTestWithoutCap :: FilePath -> UInt -> ([InlayHint] -> Assertion) -> TestTree
+inlayHintsTestWithoutCap = inlayHintsTest codeActionNoInlayHintsCaps " inlay hints without client caps"
+
+
+mkInlayHint :: Position -> Text -> TextEdit -> InlayHint
+mkInlayHint pos label textEdit =
+  InlayHint
+  { _position = pos
+  , _label = InL label
+  , _kind = Nothing
+  , _textEdits = Just [textEdit]
+  , _tooltip = Just $ InL "Make this import explicit"
+  , _paddingLeft = Just True
+  , _paddingRight = Nothing
+  , _data_ = Nothing
+  }
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()
