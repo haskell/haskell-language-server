@@ -93,7 +93,8 @@ instance Pretty Log where
     LogCabalAdd logs -> pretty logs
 
 -- | Some actions with cabal files originate from haskell files.
--- This descriptor is needed to handle these cases.
+-- This descriptor allows to hook into the diagnostics of haskell source files, and
+-- allows us to provide code actions and commands that interact with `.cabal` files.
 haskellInteractionDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 haskellInteractionDescriptor recorder plId =
   (defaultPluginDescriptor plId "Provides the cabal-add code action in haskell files")
@@ -102,7 +103,7 @@ haskellInteractionDescriptor recorder plId =
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
           ]
     , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" (CabalAdd.command cabalAddRecorder)]
-    , pluginRules = pure () -- TODO: change to haskell files only (?)
+    , pluginRules = pure ()
     , pluginNotificationHandlers = mempty
     }
     where
@@ -334,13 +335,12 @@ gotoDefinition ideState _ msgParam = do
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
-  let mbHaskellFilePath = uriToFilePath uri
-  case mbHaskellFilePath of
+  case uriToFilePath uri of
     Nothing -> pure $ InL []
     Just haskellFilePath -> do
       mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
       case mbCabalFile of
-        Nothing -> pure $ InL $ fmap InR [noCabalFileAction]
+        Nothing -> pure $ InL [InR noCabalFileAction]
         Just cabalFilePath -> do
           verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
           mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
