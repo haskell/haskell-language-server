@@ -114,11 +114,12 @@ data CabalAddCommandParams =
 
 instance Logger.Pretty CabalAddCommandParams where
   pretty CabalAddCommandParams{..} =
-    "CabalAdd parameters:\n" Logger.<+>
-    "| cabal path: " Logger.<+> Logger.pretty cabalPath Logger.<+> "\n" Logger.<+>
-    "| target: " Logger.<+> Logger.pretty buildTarget Logger.<+> "\n" Logger.<+>
-    "| dependendency: " Logger.<+> Logger.pretty dependency Logger.<+> "\n" Logger.<+>
-    "| version: " Logger.<+> Logger.pretty version Logger.<+> "\n"
+    "CabalAdd parameters:" <+> vcat
+      [ "cabal path:" <+> pretty cabalPath
+      , "target:" <+> pretty buildTarget
+      , "dependendency:" <+> pretty dependency
+      , "version:" <+> pretty version
+      ]
 
 -- | Gives a code action that calls the command,
 --   if a suggestion for a missing dependency is found.
@@ -204,10 +205,10 @@ getDependencyEdit :: MonadIO m => Logger.Recorder (Logger.WithPriority Log) -> (
     FilePath -> Maybe String -> NonEmpty String -> ExceptT PluginError m WorkspaceEdit
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
-  (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-        contents <- Development.IDE.useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
-        inFields <- Development.IDE.useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
-        inPackDescr <- Development.IDE.useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+  runActionE "cabal.cabal-add" state $ do
+          contents <- useWithStaleE GetFileContents $ toNormalizedFilePath cabalFilePath
+          inFields <- useWithStaleE ParseCabalFields $ toNormalizedFilePath cabalFilePath
+          inPackDescr <- useWithStaleE ParseCabalFile $ toNormalizedFilePath cabalFilePath
         let mbCnfOrigContents = case snd . fst <$> contents of
                     Just (Just txt) -> Just $ encodeUtf8 txt
                     _               -> Nothing
