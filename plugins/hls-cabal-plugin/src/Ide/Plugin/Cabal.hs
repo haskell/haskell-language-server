@@ -335,23 +335,26 @@ gotoDefinition ideState _ msgParam = do
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
-  case uriToFilePath uri of
-    Nothing -> pure $ InL []
-    Just haskellFilePath -> do
-      mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
-      case mbCabalFile of
-        Nothing -> pure $ InL [InR noCabalFileAction]
-        Just cabalFilePath -> do
-          verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
-          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
-          case mbGPD of
-            Nothing -> pure $ InL []
-            Just (gpd, _) -> do
-              actions <- liftIO $ mapM (\diag ->
-                                        CabalAdd.addDependencySuggestCodeAction cabalAddRecorder plId
-                                                                                verTxtDocId maxCompls diag
-                                                                                haskellFilePath cabalFilePath gpd) diags
-              pure $ InL $ fmap InR (concat actions)
+  let suggestions = concatMap (\diag -> CabalAdd.hiddenPackageSuggestion maxCompls diag) diags
+  case suggestions of
+    [] -> pure $ InL []
+    _ ->
+      case uriToFilePath uri of
+        Nothing -> pure $ InL []
+        Just haskellFilePath -> do
+          mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
+          case mbCabalFile of
+            Nothing -> pure $ InL [InR noCabalFileAction]
+            Just cabalFilePath -> do
+              verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
+              mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+              case mbGPD of
+                Nothing -> pure $ InL []
+                Just (gpd, _) -> do
+                  actions <- liftIO $ CabalAdd.addDependencySuggestCodeAction cabalAddRecorder plId
+                                                                              verTxtDocId suggestions
+                                                                              haskellFilePath cabalFilePath gpd
+                  pure $ InL $ fmap InR actions
   where
     noCabalFileAction = CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
                                      (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing

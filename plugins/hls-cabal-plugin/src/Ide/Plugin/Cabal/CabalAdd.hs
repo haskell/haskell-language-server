@@ -128,19 +128,18 @@ addDependencySuggestCodeAction
   :: Logger.Recorder (Logger.WithPriority Log)
   -> PluginId
   -> VersionedTextDocumentIdentifier -- ^ Cabal's versioned text identifier
-  -> Int -- ^ Maximum number of suggestions to return
-  -> Diagnostic -- ^ Diagnostic from a code action
+  -> [(T.Text, T.Text)] -- ^ A dependency-version suggestion pairs
   -> FilePath -- ^ Path to the haskell file
   -> FilePath -- ^ Path to the cabal file
   -> GenericPackageDescription
   -> IO [CodeAction]
-addDependencySuggestCodeAction recorder plId verTxtDocId maxCompletions diag haskellFilePath cabalFilePath gpd = do
+addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
     Logger.logWith recorder Logger.Info LogCalledCabalAddCodeAction
     case buildTargets of
-      [] -> pure $ mkCodeAction cabalFilePath Nothing <$> hiddenPackageSuggestion maxCompletions (_message diag)
+      [] -> pure $ mkCodeAction cabalFilePath Nothing <$> suggestions
       targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
-                          hiddenPackageSuggestion maxCompletions (_message diag) | target <- targets]
+                                                            suggestions | target <- targets]
   where
     buildTargetToStringRepr target = render $ pretty $ buildTargetComponentName target
 
@@ -168,10 +167,12 @@ addDependencySuggestCodeAction recorder plId verTxtDocId maxCompletions diag has
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
 -- | Gives a mentioned number of @(dependency, version)@ pairs
---   found in the "hidden package" message
-hiddenPackageSuggestion :: Int -> T.Text -> [(T.Text, T.Text)]
-hiddenPackageSuggestion maxCompletions msg = take maxCompletions $ getMatch (msg =~ regex)
+--   found in the "hidden package" diagnostic message
+hiddenPackageSuggestion :: Int -> Diagnostic -> [(T.Text, T.Text)]
+hiddenPackageSuggestion maxCompletions diag = take maxCompletions $ getMatch (msg =~ regex)
   where
+    msg :: T.Text
+    msg = _message diag
     regex :: T.Text -- TODO: Support multiple packages suggestion
     regex = "It is a member of the hidden package [\8216']([a-zA-Z0-9-]*[a-zA-Z0-9])(-([0-9\\.]*))?[\8217']"
     -- Have to do this matching because `Regex.TDFA` doesn't(?) support

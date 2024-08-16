@@ -4,18 +4,25 @@ module CabalAdd (
   cabalAddTests,
 ) where
 
-import           Control.Lens               ((^.))
-import           Control.Lens.Fold          ((^?))
-import qualified Data.Maybe                 as Maybe
-import qualified Data.Text                  as T
-import qualified Data.Text.Internal.Search  as T
-import           Distribution.Utils.Generic (safeHead)
-import           Ide.Plugin.Cabal.CabalAdd  (hiddenPackageSuggestion)
-import qualified Language.LSP.Protocol.Lens as L
+import           Control.Lens                ((^.))
+import           Control.Lens.Fold           ((^?))
+import qualified Data.Maybe                  as Maybe
+import qualified Data.Text                   as T
+import qualified Data.Text.Internal.Search   as T
+import           Distribution.Utils.Generic  (safeHead)
+import           Ide.Plugin.Cabal.CabalAdd   (hiddenPackageSuggestion)
+import qualified Language.LSP.Protocol.Lens  as L
+import           Language.LSP.Protocol.Types (Diagnostic (..), mkRange)
 import           System.FilePath
-import           Test.Hls
+import           Test.Hls                    (Session, TestTree, _R, anyMessage,
+                                              assertEqual, documentContents,
+                                              executeCodeAction,
+                                              expectFailBecause,
+                                              getAllCodeActions,
+                                              getDocumentEdit, liftIO, openDoc,
+                                              skipManyTill, testCase, testGroup,
+                                              waitForDiagnosticsFrom, (@?=))
 import           Utils
-
 
 cabalAddTests :: TestTree
 cabalAddTests =
@@ -116,8 +123,21 @@ cabalAddTests =
         liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") indicesRes (T.indices dependency contents)
     testHiddenPackageSuggestions :: String -> [T.Text] -> [(T.Text, T.Text)] -> TestTree
     testHiddenPackageSuggestions testTitle messages suggestions =
-        let suggestions' = map (safeHead . hiddenPackageSuggestion 1) messages
+        let diags = map (\msg -> messageToDiagnostic msg ) messages
+            suggestions' = map (safeHead . hiddenPackageSuggestion 1) diags
             assertions   = zipWith (@?=) suggestions' (map Just suggestions)
             testNames    = map (\(f, s) -> "Check if " ++ T.unpack f ++ (if s == "" then "" else "-") ++ T.unpack s ++ " was parsed correctly") suggestions
             test         = testGroup testTitle $ zipWith testCase testNames assertions
         in test
+    messageToDiagnostic :: T.Text -> Diagnostic
+    messageToDiagnostic msg = Diagnostic {
+            _range    = mkRange 0 0 0 0
+          , _severity = Nothing
+          , _code     = Nothing
+          , _source   = Nothing
+          , _message  = msg
+          , _relatedInformation = Nothing
+          , _tags     = Nothing
+          , _codeDescription = Nothing
+          , _data_ = Nothing
+        }
