@@ -50,8 +50,8 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.Location       (Position (Position, _character, _line),
-                                                       Range (Range, _end, _start))
+import           Development.IDE.Types.Location       (Position (..),
+                                                       Range (..))
 import           GHC.Exts                             (IsString)
 import           GHC.Generics                         (Generic)
 import           GHC.Hs                               (realSrcSpan)
@@ -378,10 +378,10 @@ pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
 -- | A binding expression with its id and location.
 data WhereBinding = WhereBinding
     { bindingId  :: Id
-    -- ^ Each WhereBinding represents a id in binding expression.
+    -- ^ Each WhereBinding represents an id in binding expression.
     , bindingLoc :: SrcSpan
-    -- ^ Location for a individual binding in a pattern.
-    -- Here we use the this and offset to render the type signature at the proper place.
+    -- ^ Location for an individual binding in a pattern.
+    -- Here we use the 'bindingLoc' and offset to render the type signature at the proper place.
     , offset     :: Int
     -- ^ Column offset between whole binding and individual binding in a pattern.
     --
@@ -390,10 +390,10 @@ data WhereBinding = WhereBinding
     -- - `b`: WhereBinding id_b loc_b 4
     }
 
--- | Existed bindings in a where clause.
+-- | Existing bindings in a where clause.
 data WhereBindings = WhereBindings
   { bindings        :: [WhereBinding]
-  , existedSigNames :: [Name]
+  , existingSigNames :: [Name]
   -- ^ Names of existing signatures.
   -- It is used to hide type lens for existing signatures.
   --
