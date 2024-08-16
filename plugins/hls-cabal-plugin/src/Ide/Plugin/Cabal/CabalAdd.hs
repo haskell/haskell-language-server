@@ -114,17 +114,25 @@ data CabalAddCommandParams =
 
 instance Logger.Pretty CabalAddCommandParams where
   pretty CabalAddCommandParams{..} =
-    "CabalAdd parameters:" <+> vcat
-      [ "cabal path:" <+> pretty cabalPath
-      , "target:" <+> pretty buildTarget
-      , "dependendency:" <+> pretty dependency
-      , "version:" <+> pretty version
+    "CabalAdd parameters:" Logger.<+> Logger.vcat
+      [ "cabal path:" Logger.<+> Logger.pretty cabalPath
+      , "target:" Logger.<+> Logger.pretty buildTarget
+      , "dependendency:" Logger.<+> Logger.pretty dependency
+      , "version:" Logger.<+> Logger.pretty version
       ]
 
--- | Gives a code action that calls the command,
---   if a suggestion for a missing dependency is found.
---   Disabled action if no cabal files given.
---   Conducts IO action on a cabal file to find build targets.
+-- | Creates a code action that calls the `cabalAddCommand`,
+--   using dependency-version suggestion pairs as input.
+--
+--   Returns disabled action if no cabal files given.
+--
+--   Takes haskell file and cabal file paths to create a relative path
+--   to the haskell file, which is used to get a `BuildTarget`.
+--   In current implementation the dependency is being added to the main found
+--   build target, but if there will be a way to get all build targets from a file
+--   it will be possible to support addition to a build target of choice.
+--
+--   The cabal file path is also used to make the text `edit` down the line.
 addDependencySuggestCodeAction
   :: Logger.Recorder (Logger.WithPriority Log)
   -> PluginId
@@ -142,8 +150,17 @@ addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFile
       targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
                                                             suggestions | target <- targets]
   where
+    -- | Note the use of `pretty` funciton.
+    -- It converts the `BuildTarget` to an acceptable string representation.
+    -- It will be used in as the input for `cabal-add`'s `executeConfig`.
     buildTargetToStringRepr target = render $ pretty $ buildTargetComponentName target
 
+    -- | Gives the build targets that are used in the `CabalAdd`.
+    -- Note the unorthodox usage of `readBuildTargets`:
+    -- If the relative path to the haskell file is provided,
+    -- the `readBuildTargets` will return a main build target.
+    -- This behaviour is acceptable for now, but changing to a way of getting
+    -- all build targets in a file is advised.
     getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
     getBuildTargets gpd cabalFilePath haskellFilePath = do
       let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
@@ -205,10 +222,10 @@ getDependencyEdit :: MonadIO m => Logger.Recorder (Logger.WithPriority Log) -> (
     FilePath -> Maybe String -> NonEmpty String -> ExceptT PluginError m WorkspaceEdit
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
-  runActionE "cabal.cabal-add" state $ do
-          contents <- useWithStaleE GetFileContents $ toNormalizedFilePath cabalFilePath
-          inFields <- useWithStaleE ParseCabalFields $ toNormalizedFilePath cabalFilePath
-          inPackDescr <- useWithStaleE ParseCabalFile $ toNormalizedFilePath cabalFilePath
+  (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
+        contents <- Development.IDE.useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
+        inFields <- Development.IDE.useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
+        inPackDescr <- Development.IDE.useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
         let mbCnfOrigContents = case snd . fst <$> contents of
                     Just (Just txt) -> Just $ encodeUtf8 txt
                     _               -> Nothing
