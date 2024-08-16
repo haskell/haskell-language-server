@@ -163,7 +163,7 @@ addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFile
                                       , buildTarget = target
                                       , dependency = suggestedDep
                                       , version=version}
-        command = mkLspCommand plId (CommandId cabalAddCommand) "Execute Code Action" (Just [toJSON params])
+        command = mkLspCommand plId (CommandId cabalAddCommand) "Add missing dependency" (Just [toJSON params])
       in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
 
 -- | Gives a mentioned number of @(dependency, version)@ pairs
