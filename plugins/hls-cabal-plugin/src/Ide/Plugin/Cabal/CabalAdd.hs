@@ -126,13 +126,13 @@ instance Logger.Pretty CabalAddCommandParams where
 --
 --   Returns disabled action if no cabal files given.
 --
---   Takes haskell file and cabal file paths to create a relative path
+--   Takes haskell file (source of diagnostics) and
+--   cabal file (the file that will be edited) paths to create a relative path
 --   to the haskell file, which is used to get a `BuildTarget`.
+--
 --   In current implementation the dependency is being added to the main found
 --   build target, but if there will be a way to get all build targets from a file
 --   it will be possible to support addition to a build target of choice.
---
---   The cabal file path is also used to make the text `edit` down the line.
 addDependencySuggestCodeAction
   :: Logger.Recorder (Logger.WithPriority Log)
   -> PluginId
@@ -223,16 +223,18 @@ getDependencyEdit :: MonadIO m => Logger.Recorder (Logger.WithPriority Log) -> (
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-        contents <- Development.IDE.useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
-        inFields <- Development.IDE.useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
-        inPackDescr <- Development.IDE.useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+        contents <- useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
+        inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
+        inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
         let mbCnfOrigContents = case snd . fst <$> contents of
                     Just (Just txt) -> Just $ encodeUtf8 txt
                     _               -> Nothing
         let mbFields = fst <$> inFields
-        let mbPackDescr :: Maybe GenericPackageDescription = fst <$> inPackDescr
+        let mbPackDescr = fst <$> inPackDescr
         pure (mbCnfOrigContents, mbFields, mbPackDescr)
 
+  -- Check if required info was received,
+  -- otherwise fall back on other options.
   (cnfOrigContents, fields, packDescr) <- do
     cnfOrigContents <- case mbCnfOrigContents of
           (Just cnfOrigContents) -> pure cnfOrigContents
@@ -240,7 +242,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
     (fields, packDescr) <- case (mbFields, mbPackDescr) of
           (Just fields, Just packDescr) -> pure (fields, packDescr)
           (_, _) -> case parseCabalFile cabalFilePath cnfOrigContents of
-                        Left err   -> throwE $ PluginInternalError $ T.pack $ err
+                        Left err   -> throwE $ PluginInternalError $ T.pack err
                         Right (f ,gpd) -> pure (f, gpd)
     pure (cnfOrigContents, fields, packDescr)
 
