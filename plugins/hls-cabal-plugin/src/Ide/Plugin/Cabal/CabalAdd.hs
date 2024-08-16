@@ -126,8 +126,7 @@ instance Logger.Pretty CabalAddCommandParams where
 --
 --   Returns disabled action if no cabal files given.
 --
---   Takes haskell file (source of diagnostics) and
---   cabal file (the file that will be edited) paths to create a relative path
+--   Takes haskell file and cabal file paths to create a relative path
 --   to the haskell file, which is used to get a `BuildTarget`.
 --
 --   In current implementation the dependency is being added to the main found
@@ -138,8 +137,8 @@ addDependencySuggestCodeAction
   -> PluginId
   -> VersionedTextDocumentIdentifier -- ^ Cabal's versioned text identifier
   -> [(T.Text, T.Text)] -- ^ A dependency-version suggestion pairs
-  -> FilePath -- ^ Path to the haskell file
-  -> FilePath -- ^ Path to the cabal file
+  -> FilePath -- ^ Path to the haskell file (source of diagnostics)
+  -> FilePath -- ^ Path to the cabal file (that will be edited)
   -> GenericPackageDescription
   -> IO [CodeAction]
 addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
