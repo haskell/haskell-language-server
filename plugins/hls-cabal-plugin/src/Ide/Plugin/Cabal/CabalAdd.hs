@@ -202,7 +202,7 @@ hiddenPackageSuggestion maxCompletions diag = take maxCompletions $ getMatch (ms
 
 command :: Logger.Recorder (Logger.WithPriority Log) -> CommandFunction IdeState CabalAddCommandParams
 command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do
-  Logger.logWith recorder Logger.Info $ LogCalledCabalAddCommand params
+  Logger.logWith recorder Logger.Debug $ LogCalledCabalAddCommand params
   let specifiedDep = case mbVer of
         Nothing  -> dep
         Just ver -> dep <> " ^>=" <> ver
@@ -210,7 +210,7 @@ command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxt
   let env = (state, caps, verTxtDocId)
   edit <- getDependencyEdit recorder env path target (fromList [T.unpack specifiedDep])
   void $ lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-  Logger.logWith recorder Logger.Info LogExecutedCommand
+  Logger.logWith recorder Logger.Debug LogExecutedCommand
   pure $ InR Null
 
 -- | Constructs prerequisites for the @executeConfig@
@@ -259,7 +259,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
     Nothing -> throwE $ PluginInternalError $ T.pack $ "Cannot extend build-depends in " ++ cabalFilePath
     Just newContents  -> do
               let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
-              Logger.logWith recorder Logger.Info $ LogCreatedEdit edit
+              Logger.logWith recorder Logger.Debug $ LogCreatedEdit edit
               pure edit
 
 -- | Given a path to a haskell file, returns the closest cabal file.
@@ -283,6 +283,9 @@ findResponsibleCabalFile haskellFilePath = do
 -- | Gives cabal file's contents or throws error.
 --   Inspired by @readCabalFile@ in cabal-add,
 --   Distribution.Client.Main
+--
+--   This is a fallback option!
+--   Use only if the `GetFileContents` fails.
 readCabalFile :: MonadIO m => FilePath -> ExceptT PluginError m ByteString
 readCabalFile fileName = do
   cabalFileExists <- liftIO $ doesFileExist fileName
