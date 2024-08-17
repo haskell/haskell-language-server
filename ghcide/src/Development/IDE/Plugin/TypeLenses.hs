@@ -16,8 +16,7 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Control.Concurrent.STM.Stats         (atomically)
 import           Control.DeepSeq                      (rwhnf)
-import           Control.Lens                         (Bifunctor (bimap), (?~),
-                                                       (^.))
+import           Control.Lens                         ((?~), (^.))
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
@@ -268,7 +267,7 @@ data Mode
     Always
   | -- | similar to 'Always', but only displays for exported global bindings
     Exported
-  | -- |  follows error messages produced by GHC
+  | -- | follows error messages produced by GHC
     Diagnostics
   deriving (Eq, Ord, Show, Read, Enum)
 
@@ -323,16 +322,16 @@ rules recorder = do
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
 
-bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) (Name, String)
+-- | Converts a given haskell bind to its corresponding type signature.
+bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) String
 bindToSig id hsc rdrEnv = do
     env <-
 #if MIN_VERSION_ghc(9,7,0)
       liftZonkM
 #endif
       tcInitTidyEnv
-    let name = idName id
-        (_, ty) = tidyOpenType env (idType id)
-    pure (name, showDocRdrEnv hsc rdrEnv (pprSigmaType ty))
+    let (_, ty) = tidyOpenType env (idType id)
+    pure (showDocRdrEnv hsc rdrEnv (pprSigmaType ty))
 
 gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
 gblBindingType (Just hsc) (Just gblEnv) = do
@@ -346,8 +345,9 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       renderBind id = do
         let name = idName id
         hasSig name $ do
-          (name', sig) <- bindToSig id hsc rdrEnv
-          pure $ GlobalBindingTypeSig name (printName name' <> " :: " <> sig) (name `elemNameSet` exports)
+          -- convert from bind id to its signature
+          sig <- bindToSig id hsc rdrEnv
+          pure $ GlobalBindingTypeSig name (printName name <> " :: " <> sig) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p
         hasSig name
@@ -471,7 +471,8 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
           (_, sig) <- liftIO
             $ initTcWithGbl hsc tcGblEnv ghostSpan
             $ bindToSig id hsc rdrEnv
-          pure $ generateWhereInlayHints range (maybe ("", "") (bimap (T.pack . printName) T.pack) sig) offset
+          let name = idName id
+          pure $ generateWhereInlayHints range (T.pack $ printName name) (maybe "_" T.pack sig) offset
 
     inlayHints <- sequence
       [ bindingToInlayHints bindingId bindingRange offset
@@ -488,8 +489,8 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
 
     pure $ InL inlayHints
     where
-      generateWhereInlayHints :: Range -> (T.Text, T.Text) -> Int -> InlayHint
-      generateWhereInlayHints range (name, ty) offset =
+      generateWhereInlayHints :: Range -> T.Text -> T.Text -> Int -> InlayHint
+      generateWhereInlayHints range name ty offset =
         let edit = makeEdit range (name <> " :: " <> ty) offset
         in InlayHint { _textEdits = Just [edit]
                      , _paddingRight = Nothing
