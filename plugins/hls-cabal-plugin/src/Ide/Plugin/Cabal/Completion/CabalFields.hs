@@ -1,5 +1,18 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-module Ide.Plugin.Cabal.Completion.CabalFields (findStanzaForColumn, findFieldSection, findTextWord, findFieldLine, getOptionalSectionName, getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition, getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition, getFieldLSPRange) where
+module Ide.Plugin.Cabal.Completion.CabalFields
+  ( findStanzaForColumn,
+    findFieldSection,
+    findTextWord,
+    findFieldLine,
+    getOptionalSectionName,
+    getAnnotation,
+    getFieldName,
+    onelineSectionArgs,
+    getFieldEndPosition,
+    getSectionArgEndPosition,
+    getNameEndPosition,
+    getFieldLineEndPosition,
+    getFieldLSPRange
+    ) where
 
 import qualified Data.ByteString                   as BS
 import           Data.List                         (find)
@@ -10,7 +23,7 @@ import qualified Data.Text.Encoding                as T
 import qualified Distribution.Fields               as Syntax
 import qualified Distribution.Parsec.Position      as Syntax
 import           Ide.Plugin.Cabal.Completion.Types
-import qualified Language.LSP.Protocol.Types       as LSPTypes
+import qualified Language.LSP.Protocol.Types       as LSP
 
 -- ----------------------------------------------------------------
 -- Cabal-syntax utilities I don't really want to write myself
@@ -32,7 +45,7 @@ findStanzaForColumn col ctx = case NE.uncons ctx of
 --
 -- The result is said field and its starting position
 -- or Nothing if the passed list of fields is empty.
-
+--
 -- This only looks at the row of the cursor and not at the cursor's
 -- position within the row.
 --
@@ -54,7 +67,7 @@ findFieldSection cursor (x:y:ys)
 --
 -- The result is said field line and its starting position
 -- or Nothing if the passed list of fields is empty.
-
+--
 -- This function assumes that elements in a field's @FieldLine@ list
 -- do not share the same row.
 findFieldLine :: Syntax.Position -> [Syntax.Field Syntax.Position] -> Maybe (Syntax.FieldLine Syntax.Position)
@@ -76,7 +89,7 @@ findFieldLine cursor fields =
 -- or the cursor position is not next to, or on a word.
 -- For this function, a word is a sequence of consecutive characters
 -- that are not a space or column.
-
+--
 -- This function currently only considers words inside of a @FieldLine@.
 findTextWord :: Syntax.Position -> [Syntax.Field Syntax.Position] -> Maybe T.Text
 findTextWord _cursor [] = Nothing
@@ -175,9 +188,9 @@ getNameEndPosition (Syntax.Name (Syntax.Position row col) byteString) = Syntax.P
 getFieldLineEndPosition :: Syntax.FieldLine Syntax.Position -> Syntax.Position
 getFieldLineEndPosition (Syntax.FieldLine (Syntax.Position row col) byteString) = Syntax.Position row (col + BS.length byteString)
 
--- | Returns a LSP compatible range for a provided field
-getFieldLSPRange :: Syntax.Field Syntax.Position -> LSPTypes.Range
-getFieldLSPRange field = LSPTypes.Range startLSPPos endLSPPos
+-- | Returns an LSP compatible range for a provided field
+getFieldLSPRange :: Syntax.Field Syntax.Position -> LSP.Range
+getFieldLSPRange field = LSP.Range startLSPPos endLSPPos
   where
     startLSPPos = cabalPositionToLSPPosition $ getAnnotation field
     endLSPPos   = cabalPositionToLSPPosition $ getFieldEndPosition field

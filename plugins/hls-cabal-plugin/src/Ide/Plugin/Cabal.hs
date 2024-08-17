@@ -24,6 +24,7 @@ import qualified Data.Text                                   as T
 import qualified Data.Text.Encoding                          as Encoding
 import           Data.Typeable
 import           Development.IDE                             as D
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Shake                  (restartShakeSession)
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (Key, alwaysRerun)
@@ -45,6 +46,7 @@ import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                    ()
 import           Ide.Plugin.Cabal.Outline
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
+import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
@@ -289,28 +291,23 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
 -- TODO: Support more definitions than sections.
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ideState _ msgParam = do
-    case uriToFilePath' uri of
+    nfp <- getNormalizedFilePathE uri
+    cabalFields <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalFields nfp
+    case CabalFields.findTextWord cursor cabalFields of
       Nothing ->
         pure $ InR $ InR Null
-      Just filePath -> do
-        mCabalFields <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalFields $ toNormalizedFilePath filePath
-        let mCursorText = CabalFields.findTextWord cursor =<< mCabalFields
-        case mCursorText of
+      Just cursorText -> do
+        commonSections <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalCommonSections nfp
+        case find (isSectionArgName cursorText) commonSections of
           Nothing ->
             pure $ InR $ InR Null
-          Just cursorText -> do
-            mCommonSections <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalCommonSections $ toNormalizedFilePath filePath
-            let mCommonSection = find (filterSectionArgName cursorText) =<< mCommonSections
-            case mCommonSection of
-              Nothing ->
-                pure $ InR $ InR Null
-              Just commonSection -> do
-                pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
+          Just commonSection -> do
+            pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
-      filterSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
-      filterSectionArgName _ _ = False
+      isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
+      isSectionArgName _ _ = False
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
