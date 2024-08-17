@@ -123,7 +123,7 @@ properties = emptyProperties
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
   & defineBooleanProperty #whereInlayHintOn
-    "Enable type lens on instance methods"
+    "Display type lenses of where bindings"
     True
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
