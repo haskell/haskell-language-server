@@ -3,6 +3,7 @@ module Development.IDE.Types.Path
 where
 
 import           Control.DeepSeq
+import           Control.Exception
 import           Data.Hashable
 import           Data.List.Extra                as L
 import           Development.IDE.Types.Location
@@ -10,6 +11,7 @@ import qualified Language.LSP.Protocol.Types    as LSP
 
 import           Prettyprinter.Internal
 import           Prettyprinter.Render.Terminal  as Terminal
+import           System.FilePath
 
 data Abs
 data Rel
@@ -24,7 +26,7 @@ mkAbsPath :: NormalizedFilePath -> Path Abs NormalizedFilePath
 mkAbsPath path = Path path
 
 mkAbsFromFp :: FilePath -> Path Abs NormalizedFilePath
-mkAbsFromFp = mkAbsPath . toNormalizedFilePath'
+mkAbsFromFp path = assert (isAbsolute path) (mkAbsPath $ toNormalizedFilePath' path)
 
 fromAbsPath :: Path Abs NormalizedFilePath -> FilePath
 fromAbsPath = fromNormalizedFilePath . getRawPath
