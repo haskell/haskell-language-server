@@ -10,6 +10,7 @@ module Development.IDE.LSP.HoverDefinition
     , foundHover
     , gotoDefinition
     , gotoTypeDefinition
+    , gotoImplementation
     , documentHighlight
     , references
     , wsSymbols
@@ -47,9 +48,11 @@ instance Pretty Log where
 gotoDefinition     :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentDefinition)
 hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (Hover |? Null)
 gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
+gotoImplementation :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentImplementation)
 documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
-gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR . map fst)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR . map fst)
+gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition . InR . map fst)
+gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition . InR . map fst)
+gotoImplementation = request "Implementation" getImplementationDefinition (InR $ InR Null) (InL . Definition . InR)
 hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
 documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
 
