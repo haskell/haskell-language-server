@@ -322,7 +322,7 @@ rules recorder = do
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
 
--- | Converts a given haskell bind to its corresponding type signature.
+-- | Convert a given haskell bind to its corresponding type signature.
 bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) String
 bindToSig id hsc rdrEnv = do
     env <-
