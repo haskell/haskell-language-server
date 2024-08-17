@@ -392,7 +392,7 @@ data WhereBinding = WhereBinding
 
 -- | Existing bindings in a where clause.
 data WhereBindings = WhereBindings
-  { bindings        :: [WhereBinding]
+  { bindings         :: [WhereBinding]
   , existingSigNames :: [Name]
   -- ^ Names of existing signatures.
   -- It is used to hide type lens for existing signatures.
@@ -424,7 +424,7 @@ findBindingsQ = something (mkQ Nothing findBindings)
     findBindings (NValBinds binds sigs) =
       Just $ WhereBindings
         { bindings = concat $ mapMaybe (something (mkQ Nothing findBindingIds) . snd) binds
-        , existedSigNames = concatMap findSigIds sigs
+        , existingSigNames = concatMap findSigIds sigs
         }
 
     findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe [WhereBinding]
@@ -477,7 +477,7 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
     inlayHints <- sequence
       [ bindingToInlayHints bindingId bindingRange offset
       | WhereBindings{..} <- localBindings
-      , let sigSpans = getSrcSpan <$> existedSigNames
+      , let sigSpans = getSrcSpan <$> existingSigNames
       , WhereBinding{..} <- bindings
       , let bindingSpan = getSrcSpan (idName bindingId)
       , bindingSpan `notElem` sigSpans
