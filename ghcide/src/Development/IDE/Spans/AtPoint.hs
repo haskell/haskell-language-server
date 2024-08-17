@@ -10,6 +10,7 @@ module Development.IDE.Spans.AtPoint (
     atPoint
   , gotoDefinition
   , gotoTypeDefinition
+  , gotoImplementation
   , documentHighlight
   , pointCommand
   , referencesAtPoint
@@ -58,6 +59,8 @@ import qualified Data.Array                           as A
 import           Data.Either
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
+
+import           Data.Either.Extra                    (eitherToMaybe)
 import           Data.List                            (isSuffixOf, sortOn)
 import           Data.Tree
 import qualified Data.Tree                            as T
@@ -214,6 +217,19 @@ gotoDefinition
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
   = lift $ locationsAtPoint withHieDb getHieFile ideOpts imports pos srcSpans
 
+-- | Locate the implementation definition of the name at a given position.
+-- Goto Implementation for an overloaded function.
+gotoImplementation
+  :: MonadIO m
+  => WithHieDb
+  -> LookupModule m
+  -> IdeOptions
+  -> HieAstResult
+  -> Position
+  -> MaybeT m [Location]
+gotoImplementation withHieDb getHieFile ideOpts srcSpans pos
+  = lift $ instanceLocationsAtPoint withHieDb getHieFile ideOpts pos srcSpans
+
 -- | Synopsis for the name at a given position.
 atPoint
   :: IdeOptions
@@ -228,7 +244,7 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
     -- Hover info for values/data
     hoverInfo :: HieAST hietype -> IO (Maybe Range, [T.Text])
     hoverInfo ast = do
-        prettyNames <- mapM prettyName filteredNames
+        prettyNames <- mapM prettyName names
         pure (Just range, prettyNames ++ pTypes)
       where
         pTypes :: [T.Text]
@@ -245,27 +261,20 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         info :: NodeInfo hietype
         info = nodeInfoH kind ast
 
+        -- We want evidence variables to be displayed last.
+        -- Evidence trees contain information of secondary relevance.
         names :: [(Identifier, IdentifierDetails hietype)]
         names = sortOn (any isEvidenceUse . identInfo . snd) $ M.assocs $ nodeIdentifiers info
 
-        -- Check for evidence bindings
-        isInternal :: (Identifier, IdentifierDetails a) -> Bool
-        isInternal (Right _, dets) =
-          any isEvidenceContext $ identInfo dets
-        isInternal (Left _, _) = False
-
-        filteredNames :: [(Identifier, IdentifierDetails hietype)]
-        filteredNames = filter (not . isInternal) names
-
         prettyName :: (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
         prettyName (Right n, dets)
-          | any isEvidenceUse (identInfo dets) =
-            pure $ maybe "" (printOutputable . renderEvidenceTree) (getEvidenceTree rf n) <> "\n"
+          -- We want to print evidence variable using a readable tree structure.
+          | any isEvidenceUse (identInfo dets) = pure $ maybe "" (printOutputable . renderEvidenceTree) (getEvidenceTree rf n) <> "\n"
           | otherwise = pure $ T.unlines $
             wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
             : maybeToList (pretty (definedAt n) (prettyPackageName n))
             ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
-                        ]
+                         ]
           where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
                 pretty Nothing Nothing = Nothing
                 pretty (Just define) Nothing = Just $ define <> "\n"
@@ -299,7 +308,7 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
               version = T.pack $ showVersion (unitPackageVersion conf)
           pure $ pkgName <> "-" <> version
 
-        -- Type info for the current node, it may contains several symbols
+        -- Type info for the current node, it may contain several symbols
         -- for one range, like wildcard
         types :: [hietype]
         types = nodeType info
@@ -308,10 +317,7 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         prettyTypes = map (("_ :: "<>) . prettyType) types
 
         prettyType :: hietype -> T.Text
-        prettyType t = case kind of
-          HieFresh -> printOutputable t
-          HieFromDisk full_file -> printOutputable $ hieTypeToIface $ recoverFullType t (hie_types full_file)
-        -- prettyType = printOutputable . expandType
+        prettyType = printOutputable . expandType
 
         expandType :: a -> SDoc
         expandType t = case kind of
@@ -352,7 +358,7 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         printDets ospn (Just (src,_,mspn)) = pprSrc
                                       $$ text "at" <+> ppr spn
           where
-            -- Use the bind span if we have one, else use the occurence span
+            -- Use the bind span if we have one, else use the occurrence span
             spn = fromMaybe ospn mspn
             pprSrc = case src of
               -- Users don't know what HsWrappers are
@@ -419,15 +425,31 @@ locationsAtPoint
   -> m [(Location, Identifier)]
 locationsAtPoint withHieDb lookupModule _ideOptions imports pos (HAR _ ast _rm _ _) =
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
-      evTrees = mapMaybe (either (const Nothing) $ getEvidenceTree _rm) ns
-      evNs = concatMap (map (Right . evidenceVar) . T.flatten) evTrees
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
       modToLocation m = fmap (\fs -> pure (Location (fromNormalizedUri $ filePathToUri' fs) zeroRange)) $ M.lookup m imports
    in fmap (nubOrd . concat) $ mapMaybeM
         (either (\m -> pure ((fmap $ fmap (,Left m)) (modToLocation m)))
                 (\n -> fmap (fmap $ fmap (,Right n)) (nameToLocation withHieDb lookupModule n)))
-        (ns ++ evNs)
+        ns
+
+-- | Find 'Location's of a implementation definition at a specific point.
+instanceLocationsAtPoint
+  :: forall m
+   . MonadIO m
+  => WithHieDb
+  -> LookupModule m
+  -> IdeOptions
+  -> Position
+  -> HieAstResult
+  -> m [Location]
+instanceLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _rm _ _) =
+  let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
+      evTrees = mapMaybe (eitherToMaybe >=> getEvidenceTree _rm) ns
+      evNs = concatMap (map (evidenceVar) . T.flatten) evTrees
+   in fmap (nubOrd . concat) $ mapMaybeM
+        (nameToLocation withHieDb lookupModule)
+        evNs
 
 -- | Given a 'Name' attempt to find the location where it is defined.
 nameToLocation :: MonadIO m => WithHieDb -> LookupModule m -> Name -> m (Maybe [Location])

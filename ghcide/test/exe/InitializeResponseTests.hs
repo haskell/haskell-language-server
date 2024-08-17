@@ -33,9 +33,7 @@ tests = withResource acquire release tests where
     , chk "NO signature help"        _signatureHelpProvider Nothing
     , chk "   goto definition"          _definitionProvider (Just $ InR (DefinitionOptions (Just False)))
     , chk "   goto type definition" _typeDefinitionProvider (Just $ InR (InL (TypeDefinitionOptions (Just False))))
-    -- BUG in lsp-test, this test fails, just change the accepted response
-    -- for now
-    , chk "NO goto implementation"  _implementationProvider Nothing
+    , chk "   goto implementation"  _implementationProvider (Just $ InR (InL (ImplementationOptions (Just False))))
     , chk "   find references"          _referencesProvider (Just $ InR (ReferenceOptions (Just False)))
     , chk "   doc highlight"     _documentHighlightProvider (Just $ InR (DocumentHighlightOptions (Just False)))
     , chk "   doc symbol"           _documentSymbolProvider (Just $ InR (DocumentSymbolOptions (Just False) Nothing))
