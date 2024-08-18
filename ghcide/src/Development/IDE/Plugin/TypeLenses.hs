@@ -27,8 +27,8 @@ import           Data.Generics                        (GenericQ, everything,
                                                        mkQ, something)
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, mapMaybe,
-                                                       maybeToList)
+import           Data.Maybe                           (catMaybes, fromMaybe,
+                                                       mapMaybe, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
@@ -107,7 +107,7 @@ descriptor recorder plId =
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
                     <> mkPluginHandler SMethod_TextDocumentInlayHint whereClauseInlayHints
     , pluginCommands = [PluginCommand typeLensCommandId "adds a signature" commandHandler]
-    , pluginRules = rules recorder
+    , pluginRules = globalBindingRules recorder *> whereBindingRules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
   where
@@ -306,15 +306,15 @@ gbSrcSpan GlobalBindingTypeSig{gbName} = getSrcSpan gbName
 newtype GlobalBindingTypeSigsResult = GlobalBindingTypeSigsResult [GlobalBindingTypeSig]
 
 instance Show GlobalBindingTypeSigsResult where
-  show _ = "<GetTypeResult>"
+  show _ = "<GetTypeResult.global>"
 
 instance NFData GlobalBindingTypeSigsResult where
   rnf = rwhnf
 
 type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
 
-rules :: Recorder (WithPriority Log) -> Rules ()
-rules recorder = do
+globalBindingRules :: Recorder (WithPriority Log) -> Rules ()
+globalBindingRules recorder = do
   define (cmapWithPrio LogShake recorder) $ \GetGlobalBindingTypeSigs nfp -> do
     tmr <- use TypeCheck nfp
     -- we need session here for tidying types
@@ -323,8 +323,8 @@ rules recorder = do
     pure ([], result)
 
 -- | Convert a given haskell bind to its corresponding type signature.
-bindToSig :: Id -> HscEnv -> GlobalRdrEnv -> IOEnv (Env TcGblEnv TcLclEnv) String
-bindToSig id hsc rdrEnv = do
+bindToSig :: HscEnv -> GlobalRdrEnv -> Id -> IOEnv (Env TcGblEnv TcLclEnv) String
+bindToSig hsc rdrEnv id = do
     env <-
 #if MIN_VERSION_ghc(9,7,0)
       liftZonkM
@@ -346,7 +346,7 @@ gblBindingType (Just hsc) (Just gblEnv) = do
         let name = idName id
         hasSig name $ do
           -- convert from bind id to its signature
-          sig <- bindToSig id hsc rdrEnv
+          sig <- bindToSig hsc rdrEnv id
           pure $ GlobalBindingTypeSig name (printName name <> " :: " <> sig) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p
@@ -409,6 +409,42 @@ data WhereBindings = WhereBindings
   -- the definition of `f`(second line).
   }
 
+data GetWhereBindingTypeSigs = GetWhereBindingTypeSigs
+  deriving (Generic, Show, Eq, Ord, Hashable, NFData)
+
+type BindingSigMap = Map.Map Id String
+
+newtype WhereBindingTypeSigsResult = WhereBindingTypeSigsResult ([WhereBindings], BindingSigMap)
+
+instance Show WhereBindingTypeSigsResult where
+  show _ = "<GetTypeResult.where>"
+
+instance NFData WhereBindingTypeSigsResult where
+  rnf = rwhnf
+
+type instance RuleResult GetWhereBindingTypeSigs = WhereBindingTypeSigsResult
+
+whereBindingRules :: Recorder (WithPriority Log) -> Rules ()
+whereBindingRules recorder = do
+  define (cmapWithPrio LogShake recorder) $ \GetWhereBindingTypeSigs nfp -> do
+    tmr <- use TypeCheck nfp
+    -- we need session here for tidying types
+    hsc <- use GhcSession nfp
+    result <- liftIO $ whereBindingType (tmrTypechecked <$> tmr) (hscEnv <$> hsc)
+    pure ([], result)
+
+whereBindingType :: Maybe TcGblEnv -> Maybe HscEnv -> IO (Maybe WhereBindingTypeSigsResult)
+whereBindingType (Just gblEnv) (Just hsc) = do
+  let wheres = findWhereQ (tcg_binds gblEnv)
+      localBindings = mapMaybe findBindingsQ wheres
+      bindToSig' = bindToSig hsc (tcg_rdr_env gblEnv)
+      findSigs (WhereBindings bindings _) = fmap findSig bindings
+        where findSig (WhereBinding bindingId _ _) = sequence (bindingId, bindToSig' bindingId)
+  (_, Map.fromList . fromMaybe [] -> sigMap) <-
+    initTcWithGbl hsc gblEnv ghostSpan $ sequence $ concatMap findSigs localBindings
+  pure $ Just (WhereBindingTypeSigsResult (localBindings, sigMap))
+whereBindingType _ _                   = pure Nothing
+
 -- | All where clauses from type checked source.
 findWhereQ :: GenericQ [HsLocalBinds GhcTc]
 findWhereQ = everything (<>) $ mkQ [] (pure . findWhere)
@@ -455,42 +491,30 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
   enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #whereInlayHintOn plId properties
   if not enabled then pure $ InL [] else do
     nfp <- getNormalizedFilePathE uri
-    (tmr, _) <- runActionE "inlayHint.local.TypeCheck" state $ useWithStaleE TypeCheck nfp
-    (hscEnv -> hsc, _) <- runActionE "InlayHint.local.GhcSession" state $ useWithStaleE GhcSession nfp
-    let tcGblEnv = tmrTypechecked tmr
-        rdrEnv = tcg_rdr_env tcGblEnv
-        typeCheckedSource = tcg_binds tcGblEnv
-
-        wheres = findWhereQ typeCheckedSource
-        localBindings = mapMaybe findBindingsQ wheres
+    (WhereBindingTypeSigsResult (localBindings, sigMap), pm)
+        <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetWhereBindingTypeSigs nfp
+    let bindingToInlayHints id sig = generateWhereInlayHints (T.pack $ printName (idName id)) (maybe "_" T.pack sig)
 
         -- | Note there may multi ids for one binding,
         -- like @(a, b) = (42, True)@, there are `a` and `b`
         -- in one binding.
-        bindingToInlayHints id range offset = do
-          (_, sig) <- liftIO
-            $ initTcWithGbl hsc tcGblEnv ghostSpan
-            $ bindToSig id hsc rdrEnv
-          let name = idName id
-          pure $ generateWhereInlayHints range (T.pack $ printName name) (maybe "_" T.pack sig) offset
-
-    inlayHints <- sequence
-      [ bindingToInlayHints bindingId bindingRange offset
-      | WhereBindings{..} <- localBindings
-      , let sigSpans = getSrcSpan <$> existingSigNames
-      , WhereBinding{..} <- bindings
-      , let bindingSpan = getSrcSpan (idName bindingId)
-      , bindingSpan `notElem` sigSpans
-      -- , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
-      , Just bindingRange <- [srcSpanToRange bindingLoc]
-      -- Show inlay hints only within visible range
-      , isSubrangeOf bindingRange visibleRange
-      ]
-
+        inlayHints =
+          [ bindingToInlayHints bindingId bindingSig bindingRange offset
+          | WhereBindings{..} <- localBindings
+          , let sigSpans = getSrcSpan <$> existingSigNames
+          , WhereBinding{..} <- bindings
+          , let bindingSpan = getSrcSpan (idName bindingId)
+          , let bindingSig = Map.lookup bindingId sigMap
+          , bindingSpan `notElem` sigSpans
+          , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
+          -- , Just bindingRange <- [srcSpanToRange bindingLoc]
+          -- Show inlay hints only within visible range
+          , isSubrangeOf bindingRange visibleRange
+          ]
     pure $ InL inlayHints
     where
-      generateWhereInlayHints :: Range -> T.Text -> T.Text -> Int -> InlayHint
-      generateWhereInlayHints range name ty offset =
+      generateWhereInlayHints :: T.Text -> T.Text -> Range -> Int -> InlayHint
+      generateWhereInlayHints name ty range offset =
         let edit = makeEdit range (name <> " :: " <> ty) offset
         in InlayHint { _textEdits = Just [edit]
                      , _paddingRight = Nothing
