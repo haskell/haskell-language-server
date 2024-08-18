@@ -52,6 +52,13 @@ import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
+import Development.IDE.Core.PluginUtils (useWithStaleE, runActionE)
+import Ide.Plugin.Error (getNormalizedFilePathE)
+import Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import Distribution.Package (Dependency())
+import Distribution.PackageDescription (depPkgName, unPackageName, allBuildDepends)
+import Development.IDE.LSP.HoverDefinition (foundHover)
+
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
