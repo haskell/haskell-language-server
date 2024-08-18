@@ -357,37 +357,37 @@ gotoDefinition ideState _ msgParam = do
           Just (Library {libBuildInfo}) -> [libBuildInfo]
       lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetName) =
         Maybe.catMaybes $
-          map (\exec -> executableNameLookup exec buildTargetName) executables <>
-          map (\lib -> subLibraryNameLookup lib buildTargetName) subLibraries <>
-          map (\lib -> foreignLibsNameLookup lib buildTargetName) foreignLibs <>
-          map (\test -> testSuiteNameLookup test buildTargetName) testSuites <>
-          map (\bench -> benchmarkNameLookup bench buildTargetName) benchmarks
+          map executableNameLookup executables <>
+          map subLibraryNameLookup subLibraries <>
+          map foreignLibsNameLookup foreignLibs <>
+          map testSuiteNameLookup testSuites <>
+          map benchmarkNameLookup benchmarks
         where
-          executableNameLookup :: Executable -> T.Text -> Maybe BuildInfo
-          executableNameLookup (Executable {exeName, buildInfo}) buildTargetName =
+          executableNameLookup :: Executable -> Maybe BuildInfo
+          executableNameLookup (Executable {exeName, buildInfo}) =
             if T.pack (unUnqualComponentName exeName) == buildTargetName
               then Just buildInfo
               else Nothing
-          subLibraryNameLookup :: Library -> T.Text -> Maybe BuildInfo
-          subLibraryNameLookup (Library {libName, libBuildInfo}) buildTargetName =
+          subLibraryNameLookup :: Library -> Maybe BuildInfo
+          subLibraryNameLookup (Library {libName, libBuildInfo}) =
             case libName of
               (LSubLibName name) ->
                 if T.pack (unUnqualComponentName name) == buildTargetName
                   then Just libBuildInfo
                   else Nothing
               LMainLibName -> Nothing
-          foreignLibsNameLookup :: ForeignLib -> T.Text -> Maybe BuildInfo
-          foreignLibsNameLookup (ForeignLib {foreignLibName, foreignLibBuildInfo}) buildTargetName =
+          foreignLibsNameLookup :: ForeignLib -> Maybe BuildInfo
+          foreignLibsNameLookup (ForeignLib {foreignLibName, foreignLibBuildInfo}) =
               if T.pack (unUnqualComponentName foreignLibName) == buildTargetName
               then Just foreignLibBuildInfo
               else Nothing
-          testSuiteNameLookup :: TestSuite -> T.Text -> Maybe BuildInfo
-          testSuiteNameLookup (TestSuite {testName, testBuildInfo}) buildTargetName =
+          testSuiteNameLookup :: TestSuite -> Maybe BuildInfo
+          testSuiteNameLookup (TestSuite {testName, testBuildInfo}) =
             if T.pack (unUnqualComponentName testName) == buildTargetName
               then Just testBuildInfo
               else Nothing
-          benchmarkNameLookup :: Benchmark -> T.Text -> Maybe BuildInfo
-          benchmarkNameLookup (Benchmark {benchmarkName, benchmarkBuildInfo}) buildTargetName =
+          benchmarkNameLookup :: Benchmark -> Maybe BuildInfo
+          benchmarkNameLookup (Benchmark {benchmarkName, benchmarkBuildInfo}) =
               if T.pack (unUnqualComponentName benchmarkName) == buildTargetName
               then Just benchmarkBuildInfo
               else Nothing
