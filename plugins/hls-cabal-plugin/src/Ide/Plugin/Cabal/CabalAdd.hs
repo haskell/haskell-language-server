@@ -149,7 +149,7 @@ addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFile
       targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
                                                             suggestions | target <- targets]
   where
-    -- | Note the use of `pretty` funciton.
+    -- | Note the use of `pretty` function.
     -- It converts the `BuildTarget` to an acceptable string representation.
     -- It will be used in as the input for `cabal-add`'s `executeConfig`.
     buildTargetToStringRepr target = render $ Pretty.pretty $ buildTargetComponentName target
@@ -274,9 +274,9 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   case executeConfig (validateChanges origPackDescr) (Config {..}) of
     Nothing -> throwE $ PluginInternalError $ T.pack $ "Cannot extend build-depends in " ++ cabalFilePath
     Just newContents  -> do
-              let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
-              logWith recorder Debug $ LogCreatedEdit edit
-              pure edit
+      let edit = diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) SkipDeletions
+      logWith recorder Debug $ LogCreatedEdit edit
+      pure edit
 
 -- | Given a path to a haskell file, returns the closest cabal file.
 --   If cabal file wasn't found, gives Nothing.
