@@ -25,6 +25,7 @@ import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
 import           Data.Typeable
 import           Development.IDE                               as D
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Shake                    (restartShakeSession)
 import qualified Development.IDE.Core.Shake                    as Shake
 import           Development.IDE.Graph                         (Key,
@@ -60,6 +61,7 @@ import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Cabal.Outline
 import qualified Ide.Plugin.Cabal.Parse                        as Parse
+import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
@@ -309,42 +311,37 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
 -- TODO: Resolve more cases for go-to definition.
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ideState _ msgParam = do
-  case uriToFilePath' uri of
-    Nothing ->
-      pure $ InR $ InR Null
-    Just filePath -> do
-      mCabalFields <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalFields $ toNormalizedFilePath filePath
+    nfp <- getNormalizedFilePathE uri
+    cabalFields <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalFields nfp
+    case CabalFields.findTextWord cursor cabalFields of
+      Nothing ->
+        pure $ InR $ InR Null
+      Just cursorText -> do
+        commonSections <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalCommonSections nfp
+        case find (isSectionArgName cursorText) commonSections of
+          Just commonSection -> do
+            pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
 
-      let mCursorText = CabalFields.findTextWord cursor =<< mCabalFields
-      case mCursorText of
-        Nothing ->
-          pure $ InR $ InR Null
-        Just cursorText -> do
-          mCommonSections <- liftIO $ runAction "cabal-plugin.commonSections" ideState $ use ParseCabalCommonSections $ toNormalizedFilePath filePath
-          let mCommonSection = find (isSectionArgName cursorText) =<< mCommonSections
-          case mCommonSection of
-            Just commonSection -> do
-              pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
-            Nothing -> do
-              let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
-                  mModuleName = find (isModuleName cursorText) =<< mModuleNames
-              case mModuleName of
-                Nothing -> pure $ InR $ InR Null
-                Just (mBuildTargetNames, moduleName) -> do
-                  mGPD <- liftIO $ runAction "cabal.GPD" ideState $ useWithStale ParseCabalFile $ toNormalizedFilePath filePath
-                  case mGPD of
-                    Nothing -> pure $ InR $ InR Null
-                    Just (gpd, _) -> do
-                      let buildInfos = foldMap (lookupBuildTargetPackageDescription
-                                                      (flattenPackageDescription gpd))
-                                                      mBuildTargetNames
-                          sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
-                          potentialPaths = map (\dir -> takeDirectory filePath </> dir </> toHaskellFile moduleName) sourceDirs
-                      allPaths <- liftIO $ filterM doesFileExist potentialPaths
-                      let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
-                      case safeHead locations of -- We assume there could be only one source location
-                        Nothing       -> pure $ InR $ InR Null
-                        Just location -> pure $ InL $ Definition $ InL location
+          Nothing -> do
+            let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
+                mModuleName = find (isModuleName cursorText) =<< mModuleNames
+            case mModuleName of
+              Nothing -> pure $ InR $ InR Null
+              Just (mBuildTargetNames, moduleName) -> do
+                mGPD <- liftIO $ runAction "cabal.GPD" ideState $ useWithStale ParseCabalFile nfp
+                case mGPD of
+                  Nothing -> pure $ InR $ InR Null
+                  Just (gpd, _) -> do
+                    let buildInfos = foldMap (lookupBuildTargetPackageDescription
+                                                    (flattenPackageDescription gpd))
+                                                    mBuildTargetNames
+                        sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
+                        potentialPaths = map (\dir -> takeDirectory filePath </> dir </> toHaskellFile moduleName) sourceDirs
+                    allPaths <- liftIO $ filterM doesFileExist potentialPaths
+                    let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
+                    case safeHead locations of -- We assume there could be only one source location
+                      Nothing       -> pure $ InR $ InR Null
+                      Just location -> pure $ InL $ Definition $ InL location
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
