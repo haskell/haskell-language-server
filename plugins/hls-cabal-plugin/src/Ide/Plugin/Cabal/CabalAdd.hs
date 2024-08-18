@@ -85,7 +85,6 @@ import           Text.Regex.TDFA
 
 data Log
   = LogFoundResponsibleCabalFile FilePath
-  | LogCalledCabalAddCodeAction
   | LogCalledCabalAddCommand CabalAddCommandParams
   | LogCreatedEdit WorkspaceEdit
   | LogExecutedCommand
@@ -94,7 +93,6 @@ data Log
 instance Pretty Log where
     pretty = \case
       LogFoundResponsibleCabalFile fp -> "Located the responsible cabal file at " <+> pretty fp
-      LogCalledCabalAddCodeAction -> "The CabalAdd CodeAction is called"
       LogCalledCabalAddCommand params -> "Called CabalAdd command with:\n" <+> pretty params
       LogCreatedEdit edit -> "Created inplace edit:\n" <+> pretty edit
       LogExecutedCommand -> "Executed CabalAdd command"
@@ -143,7 +141,6 @@ addDependencySuggestCodeAction
   -> IO [CodeAction]
 addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
-    logWith recorder Info LogCalledCabalAddCodeAction
     case buildTargets of
       [] -> pure $ mkCodeAction cabalFilePath Nothing <$> suggestions
       targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>

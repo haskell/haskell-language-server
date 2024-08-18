@@ -344,7 +344,7 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
         Just haskellFilePath -> do
           mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
           case mbCabalFile of
-            Nothing -> pure $ InL [InR noCabalFileAction]
+            Nothing -> pure $ InL []
             Just cabalFilePath -> do
               verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
               mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
@@ -356,8 +356,6 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
                                                                               haskellFilePath cabalFilePath gpd
                   pure $ InL $ fmap InR actions
   where
-    noCabalFileAction = CodeAction "No .cabal file found" (Just CodeActionKind_QuickFix) (Just []) Nothing
-                                     (Just (CodeActionDisabled "No .cabal file found")) Nothing Nothing Nothing
     cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
 
 
