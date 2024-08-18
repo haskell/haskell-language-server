@@ -70,7 +70,6 @@ import qualified Language.LSP.VFS                              as VFS
 import           System.Directory                              (doesFileExist)
 import           System.FilePath                               (takeDirectory,
                                                                 (</>))
-import           Ide.Plugin.Error
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -350,6 +349,11 @@ gotoDefinition ideState _ msgParam = do
       isSectionArgName _ _ = False
       isModuleName name (_,  moduleName) = name == moduleName
 
+      -- | Gives all `buildInfo`s given a target name.
+      --
+      -- `Maybe buildTargetName` is provided, and if it's
+      -- Nothing we assume, that it's a main library.
+      -- Otherwise looks for the provided name.
       lookupBuildTargetPackageDescription :: PackageDescription -> Maybe T.Text -> [BuildInfo]
       lookupBuildTargetPackageDescription (PackageDescription {..}) Nothing =
         case library of
@@ -392,8 +396,17 @@ gotoDefinition ideState _ msgParam = do
               then Just benchmarkBuildInfo
               else Nothing
 
+      -- | Converts a name of a module to a FilePath
+      -- Warning: Takes a lot of assumptions and generally
+      -- not advised to copy.
+      --
+      -- Examples: (output is system dependent)
+      --   >>> toHaskellFile "My.Module.Lib"
+      --   "My/Module/Lib.hs"
+      --   >>> toHaskellFile "Main"
+      --   "Main.hs"
       toHaskellFile :: T.Text -> FilePath
-      toHaskellFile moduleName = foldl1 (</>) (map T.unpack $ T.splitOn "." moduleName) ++ ".hs"
+      toHaskellFile moduleName = foldl (</>) "" (map T.unpack $ T.splitOn "." moduleName) ++ ".hs"
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
