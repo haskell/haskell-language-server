@@ -70,6 +70,7 @@ import qualified Language.LSP.VFS                              as VFS
 import           System.Directory                              (doesFileExist)
 import           System.FilePath                               (takeDirectory,
                                                                 (</>))
+import           Ide.Plugin.Error
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -352,7 +353,7 @@ gotoDefinition ideState _ msgParam = do
       lookupBuildTargetPackageDescription :: PackageDescription -> Maybe T.Text -> [BuildInfo]
       lookupBuildTargetPackageDescription (PackageDescription {..}) Nothing =
         case library of
-          Nothing                       -> error "Target is a main library but no main library was found"
+          Nothing                       -> [] -- Target is a main library but no main library was found
           Just (Library {libBuildInfo}) -> [libBuildInfo]
       lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetName) =
         Maybe.catMaybes $
