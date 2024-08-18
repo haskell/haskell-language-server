@@ -331,8 +331,6 @@ hover ide _ msgParam = do
           if cursorText `elem` depsNames
             then pure $ foundHover (Nothing, [cursorText <> "\n", documentationText cursorText])
             else pure $ foundHover (Nothing, [cursorText])
-
-        -- TODO get package description and use `allBuildDepends` to check if hover is on a dependency
   where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
