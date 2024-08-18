@@ -309,6 +309,30 @@ gotoDefinition ideState _ msgParam = do
       isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
       isSectionArgName _ _ = False
 
+hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
+hover ide _ msgParam = do
+      nfp <- getNormalizedFilePathE uri
+      (cabalFields, _) <- runActionE "cabal.cabal-hover" ide $ useWithStaleE ParseCabalFields nfp
+      let mCursorText = CabalFields.findTextWord cursor cabalFields
+      case mCursorText of
+        Nothing ->
+          pure $ InR Null
+        Just cursorText -> do
+          (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
+          let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
+          if cursorText `elem` depsNames
+            then pure $ foundHover (Nothing, [cursorText <> "\n---\n" <> documentationText cursorText])
+            else pure $ foundHover (Nothing, [cursorText])
+
+        -- TODO get package description and use `allBuildDepends` to check if hover is on a dependency
+  where
+      cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
+      uri = msgParam ^. JL.textDocument . JL.uri
+      dependencyName :: Dependency -> T.Text
+      dependencyName dep = T.pack $ unPackageName $ depPkgName dep
+      documentationText :: T.Text -> T.Text
+      documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
+
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
 -- ----------------------------------------------------------------
