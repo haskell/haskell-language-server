@@ -327,10 +327,6 @@ onelineSectionArgs sectionArgs = joinedName
     getName (Syntax.SecArgStr _ quotedString) = T.decodeUtf8 quotedString
     getName (Syntax.SecArgOther _ string)     = T.decodeUtf8 string
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 6f6f75bc (Add Goto Definition for cabal common sections (#4375))
 -- | Returns the end position of a provided field
 getFieldEndPosition :: Syntax.Field Syntax.Position -> Syntax.Position
 getFieldEndPosition (Syntax.Field name [])       = getNameEndPosition name
