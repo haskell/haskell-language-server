@@ -335,7 +335,7 @@ gotoDefinition ideState _ msgParam = do
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
-  let suggestions = concatMap (\diag -> CabalAdd.hiddenPackageSuggestion maxCompls diag) diags
+  let suggestions = take maxCompls $ concatMap CabalAdd.hiddenPackageSuggestion diags
   case suggestions of
     [] -> pure $ InL []
     _ ->

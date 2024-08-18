@@ -141,7 +141,9 @@ addDependencySuggestCodeAction
 addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
     case buildTargets of
+      -- If there are no build targets found, run `cabal-add` command with default behaviour
       [] -> pure $ mkCodeAction cabalFilePath Nothing <$> suggestions
+      -- Otherwise provide actions for all found targets
       targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
                                                             suggestions | target <- targets]
   where
@@ -196,8 +198,8 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
 -- > "Perhaps you need to add ‘split’ to the build-depends in your .cabal file."
 --
 -- Will turn into @[("split", "")]@
-hiddenPackageSuggestion :: Int -> Diagnostic -> [(T.Text, T.Text)]
-hiddenPackageSuggestion maxCompletions diag = take maxCompletions $ getMatch (msg =~ regex)
+hiddenPackageSuggestion :: Diagnostic -> [(T.Text, T.Text)]
+hiddenPackageSuggestion diag = getMatch (msg =~ regex)
   where
     msg :: T.Text
     msg = _message diag
