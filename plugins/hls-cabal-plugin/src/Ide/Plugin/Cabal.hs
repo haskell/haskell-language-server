@@ -323,8 +323,8 @@ gotoDefinition ideState _ msgParam = do
             pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
 
           Nothing -> do
-            let mModuleNames = CabalFields.getModulesNames <$> mCabalFields
-                mModuleName = find (isModuleName cursorText) =<< mModuleNames
+            let moduleNames = CabalFields.getModulesNames cabalFields
+                mModuleName = find (isModuleName cursorText) moduleNames
             case mModuleName of
               Nothing -> pure $ InR $ InR Null
               Just (mBuildTargetNames, moduleName) -> do
@@ -336,7 +336,7 @@ gotoDefinition ideState _ msgParam = do
                                                     (flattenPackageDescription gpd))
                                                     mBuildTargetNames
                         sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
-                        potentialPaths = map (\dir -> takeDirectory filePath </> dir </> toHaskellFile moduleName) sourceDirs
+                        potentialPaths = map (\dir -> takeDirectory (fromNormalizedFilePath nfp) </> dir </> toHaskellFile moduleName) sourceDirs
                     allPaths <- liftIO $ filterM doesFileExist potentialPaths
                     let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
                     case safeHead locations of -- We assume there could be only one source location
