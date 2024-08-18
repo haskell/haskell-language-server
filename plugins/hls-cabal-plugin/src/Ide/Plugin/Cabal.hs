@@ -329,7 +329,7 @@ hover ide _ msgParam = do
           (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
           let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
           if cursorText `elem` depsNames
-            then pure $ foundHover (Nothing, [cursorText <> "\n---\n" <> documentationText cursorText])
+            then pure $ foundHover (Nothing, [cursorText <> "\n", documentationText cursorText])
             else pure $ foundHover (Nothing, [cursorText])
 
         -- TODO get package description and use `allBuildDepends` to check if hover is on a dependency
