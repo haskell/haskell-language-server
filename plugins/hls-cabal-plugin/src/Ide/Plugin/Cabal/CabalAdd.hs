@@ -131,15 +131,14 @@ instance Pretty CabalAddCommandParams where
 --   build target, but if there will be a way to get all build targets from a file
 --   it will be possible to support addition to a build target of choice.
 addDependencySuggestCodeAction
-  :: Recorder (WithPriority Log)
-  -> PluginId
+  :: PluginId
   -> VersionedTextDocumentIdentifier -- ^ Cabal's versioned text identifier
   -> [(T.Text, T.Text)] -- ^ A dependency-version suggestion pairs
   -> FilePath -- ^ Path to the haskell file (source of diagnostics)
   -> FilePath -- ^ Path to the cabal file (that will be edited)
   -> GenericPackageDescription
   -> IO [CodeAction]
-addDependencySuggestCodeAction recorder plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
+addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
     buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
     case buildTargets of
       [] -> pure $ mkCodeAction cabalFilePath Nothing <$> suggestions
