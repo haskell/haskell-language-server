@@ -124,7 +124,7 @@ cabalAddTests =
     testHiddenPackageSuggestions :: String -> [T.Text] -> [(T.Text, T.Text)] -> TestTree
     testHiddenPackageSuggestions testTitle messages suggestions =
         let diags = map (\msg -> messageToDiagnostic msg ) messages
-            suggestions' = map (safeHead . hiddenPackageSuggestion 1) diags
+            suggestions' = map (safeHead . hiddenPackageSuggestion) diags
             assertions   = zipWith (@?=) suggestions' (map Just suggestions)
             testNames    = map (\(f, s) -> "Check if " ++ T.unpack f ++ (if s == "" then "" else "-") ++ T.unpack s ++ " was parsed correctly") suggestions
             test         = testGroup testTitle $ zipWith testCase testNames assertions

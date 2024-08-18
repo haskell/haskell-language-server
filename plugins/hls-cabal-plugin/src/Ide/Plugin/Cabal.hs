@@ -100,7 +100,7 @@ haskellInteractionDescriptor recorder plId =
   (defaultPluginDescriptor plId "Provides the cabal-add code action in haskell files")
     { pluginHandlers =
         mconcat
-          [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ cabalAddCodeAction recorder
+          [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction cabalAddCodeAction
           ]
     , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" (CabalAdd.command cabalAddRecorder)]
     , pluginRules = pure ()
@@ -332,8 +332,8 @@ gotoDefinition ideState _ msgParam = do
       isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
       isSectionArgName _ _ = False
 
-cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
+cabalAddCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
   let suggestions = take maxCompls $ concatMap CabalAdd.hiddenPackageSuggestion diags
   case suggestions of
@@ -351,12 +351,11 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
               case mbGPD of
                 Nothing -> pure $ InL []
                 Just (gpd, _) -> do
-                  actions <- liftIO $ CabalAdd.addDependencySuggestCodeAction cabalAddRecorder plId
-                                                                              verTxtDocId suggestions
-                                                                              haskellFilePath cabalFilePath gpd
+                  actions <- liftIO $ CabalAdd.addDependencySuggestCodeAction plId verTxtDocId
+                                                                              suggestions
+                                                                              haskellFilePath cabalFilePath
+                                                                              gpd
                   pure $ InL $ fmap InR actions
-  where
-    cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
 
 
 -- ----------------------------------------------------------------

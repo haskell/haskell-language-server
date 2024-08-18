@@ -231,27 +231,6 @@ codeActionTests = testGroup "Code Actions"
         guard (_title == "Replace with " <> license)
         pure action
 
-
-    generateHiddenPackageTestSession :: FilePath -> FilePath -> T.Text -> [Int] -> Session ()
-    generateHiddenPackageTestSession cabalFile haskellFile dependency indicesRes = do
-        hsdoc <- openDoc haskellFile "haskell"
-        cabDoc <- openDoc cabalFile "cabal"
-        _ <- waitForDiagnosticsFrom hsdoc
-        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
-        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
-        mapM_ executeCodeAction selectedCas
-        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
-        contents <- documentContents cabDoc
-        liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") indicesRes (Text.indices dependency contents)
-
-    testHiddenPackageSuggestions :: String -> [T.Text] -> [(T.Text, T.Text)] -> TestTree
-    testHiddenPackageSuggestions testTitle messages suggestions =
-        let suggestions' = map (safeHead . hiddenPackageSuggestion 1) messages
-            assertions   = zipWith (@?=) suggestions' (map Just suggestions)
-            testNames    = map (\(f, s) -> "Check if " ++ T.unpack f ++ "-" ++ T.unpack s ++ " was parsed correctly") suggestions
-            test         = testGroup testTitle $ zipWith testCase testNames assertions
-        in test
-
 -- ----------------------------------------------------------------------------
 -- Goto Definition Tests
 -- ----------------------------------------------------------------------------
