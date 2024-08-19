@@ -69,7 +69,7 @@ import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
 import           System.Directory                              (doesFileExist)
 import           System.FilePath                               (takeDirectory,
-                                                                (</>))
+                                                                (</>), (<.>), joinPath)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -406,7 +406,7 @@ gotoDefinition ideState _ msgParam = do
       --   >>> toHaskellFile "Main"
       --   "Main.hs"
       toHaskellFile :: T.Text -> FilePath
-      toHaskellFile moduleName = foldl (</>) "" (map T.unpack $ T.splitOn "." moduleName) ++ ".hs"
+      toHaskellFile moduleName = joinPath (map T.unpack $ T.splitOn "." moduleName) <.> ".hs"
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
