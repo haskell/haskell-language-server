@@ -52,12 +52,12 @@ import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
-import Development.IDE.Core.PluginUtils (useWithStaleE, runActionE)
-import Ide.Plugin.Error (getNormalizedFilePathE)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.Package (Dependency())
 import Distribution.PackageDescription (depPkgName, unPackageName, allBuildDepends)
 import Development.IDE.LSP.HoverDefinition (foundHover)
+import           Text.Regex.TDFA
+import Debug.Trace
 
 
 data Log
@@ -328,14 +328,31 @@ hover ide _ msgParam = do
         Just cursorText -> do
           (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
           let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-          if cursorText `elem` depsNames
-            then pure $ foundHover (Nothing, [cursorText <> "\n", documentationText cursorText])
-            else pure $ foundHover (Nothing, [cursorText])
+              mText = filterVersion cursorText
+          case mText of
+            Nothing -> pure $ foundHover (Nothing, [cursorText])
+            Just txt ->
+              if txt `elem` depsNames
+                then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
+                else pure $ foundHover (Nothing, [txt])
   where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
+
       dependencyName :: Dependency -> T.Text
       dependencyName dep = T.pack $ unPackageName $ depPkgName dep
+
+      filterVersion :: T.Text -> Maybe T.Text
+      filterVersion msg = getMatch (msg =~ regex)
+        where
+          regex :: T.Text
+          regex = "([a-zA-Z0-9-]*[a-zA-Z0-9]).*"
+
+          getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
+          getMatch (_, _, _, []) = Nothing
+          getMatch (_, _, _, [dependency]) = Just dependency
+          getMatch (_, _, _, _) = Nothing -- impossible case
+
       documentationText :: T.Text -> T.Text
       documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
 
