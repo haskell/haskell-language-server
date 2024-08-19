@@ -283,8 +283,9 @@ test-suite hls-cabal-plugin-tests
   other-modules:
     Completer
     Context
-    Utils
+    Definition
     Outline
+    Utils
   build-depends:
     , base
     , bytestring

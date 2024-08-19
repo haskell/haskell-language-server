@@ -141,7 +141,7 @@ lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetN
 
 -- | Converts a name of a module to a FilePath
 -- Warning: Takes a lot of assumptions and generally
--- not advised to copy.
+-- not advised to use.
 --
 -- Examples: (output is system dependent)
 --   >>> toHaskellFile "My.Module.Lib"
