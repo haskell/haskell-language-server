@@ -61,7 +61,9 @@ module Test.Hls
     WithPriority(..),
     Recorder,
     Priority(..),
-    TestConfig(..),
+    captureKickDiagnostics,
+    kick,
+    TestConfig(..)
     )
 where
 
@@ -69,6 +71,7 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async                 (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
+import           Control.Lens                             ((^.))
 import           Control.Lens.Extras                      (is)
 import           Control.Monad                            (guard, unless, void)
 import           Control.Monad.Extra                      (forM)
@@ -80,7 +83,7 @@ import qualified Data.Aeson                               as A
 import           Data.ByteString.Lazy                     (ByteString)
 import           Data.Default                             (Default, def)
 import qualified Data.Map                                 as M
-import           Data.Maybe                               (fromMaybe)
+import           Data.Maybe                               (fromMaybe, mapMaybe)
 import           Data.Proxy                               (Proxy (Proxy))
 import qualified Data.Text                                as T
 import qualified Data.Text.Lazy                           as TL
@@ -114,6 +117,7 @@ import           Ide.PluginUtils                          (idePluginsToPluginDes
                                                            pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
+import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Message            as LSP
 import           Language.LSP.Protocol.Types              hiding (Null)
@@ -232,14 +236,14 @@ goldenWithTestConfig
   :: Pretty b
   => TestConfig b
   -> TestName
-  -> FilePath
+  -> VirtualFileTree
   -> FilePath
   -> FilePath
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithTestConfig config title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+goldenWithTestConfig config title tree path desc ext act =
+  goldenGitDiff title (vftOriginalRoot tree </> path <.> desc <.> ext)
   $ runSessionWithTestConfig config $ const
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
@@ -870,6 +874,17 @@ setHlsConfig config = do
   -- requests!
   skipManyTill anyMessage (void configurationRequest)
 
+captureKickDiagnostics :: Session () -> Session () -> Session [Diagnostic]
+captureKickDiagnostics start done = do
+    _ <- skipManyTill anyMessage start
+    messages <- manyTill anyMessage done
+    pure $ concat $ mapMaybe diagnostics messages
+    where
+        diagnostics :: FromServerMessage' a -> Maybe [Diagnostic]
+        diagnostics = \msg -> case msg of
+            FromServerMess SMethod_TextDocumentPublishDiagnostics diags -> Just (diags ^. L.params . L.diagnostics)
+            _ -> Nothing
+
 waitForKickDone :: Session ()
 waitForKickDone = void $ skipManyTill anyMessage nonTrivialKickDone
 
@@ -882,9 +897,11 @@ nonTrivialKickDone = kick (Proxy @"kick/done") >>= guard . not . null
 nonTrivialKickStart :: Session ()
 nonTrivialKickStart = kick (Proxy @"kick/start") >>= guard . not . null
 
+
 kick :: KnownSymbol k => Proxy k -> Session [FilePath]
 kick proxyMsg = do
   NotMess TNotificationMessage{_params} <- customNotification proxyMsg
   case fromJSON _params of
     Success x -> return x
     other     -> error $ "Failed to parse kick/done details: " <> show other
+
