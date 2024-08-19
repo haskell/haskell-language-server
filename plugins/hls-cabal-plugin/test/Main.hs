@@ -243,9 +243,18 @@ gotoDefinitionTests = testGroup "Goto Definition"
 gotoModuleDefinitionTests :: TestTree
 gotoModuleDefinitionTests = testGroup "Goto Module Definition"
     [ testGoToDefinitionLink "simple cabal test" "simple-cabal" "simple-cabal.cabal"
-                            (Position 8 23) "A.hs"
-    , testGoToDefinitionLink "simple cabal test" ("goto-definition" </> "modules") "module-examples.cabal"
-                             (Position 6 22) "A.hs"
+                             (Position 8 23) "A.hs"
+
+    , testGoToDefinitionLink "library start of exposed-modules" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 6 22) "src/Library/Lib.hs"
+    , testGoToDefinitionLink "library end of exposed-modules" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 6 33) "src/Library/Lib.hs"
+
+    , testGoToDefinitionLink "library start of other-modules" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 9 22) "src/Library/Other/OtherLib.hs"
+    , testGoToDefinitionLink "library end of other-modules" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 9 44) "src/Library/Other/OtherLib.hs"
+
     ]
     where
         getUriFromDefinition :: Show b => (Definition |? b) -> Uri

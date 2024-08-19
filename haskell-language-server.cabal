@@ -242,6 +242,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Completions
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
+    Ide.Plugin.Cabal.Definition
     Ide.Plugin.Cabal.FieldSuggest
     Ide.Plugin.Cabal.LicenseSuggest
     Ide.Plugin.Cabal.Orphans

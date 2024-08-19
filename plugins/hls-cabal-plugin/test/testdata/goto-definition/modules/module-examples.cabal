@@ -8,8 +8,8 @@ library
 --                    ^ Position: (6, 22)
 --                              ^ Position: (6, 33)
     other-modules:    Library.Other.OtherLib
---                    ^ Position: (6, 22)
---                              ^ Position: (6, 44)
+--                    ^ Position: (9, 22)
+--                              ^ Position: (9, 44)
 
     build-depends:    base
     hs-source-dirs:   src
