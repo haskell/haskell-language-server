@@ -5,7 +5,12 @@ version:            0.1.0.0
 
 library
     exposed-modules:  Library.Lib
+--                    ^ Position: (6, 22)
+--                              ^ Position: (6, 33)
     other-modules:    Library.Other.OtherLib
+--                    ^ Position: (6, 22)
+--                              ^ Position: (6, 44)
+
     build-depends:    base
     hs-source-dirs:   src
     default-language: Haskell2010
@@ -16,6 +21,8 @@ executable exec
     build-depends:    base
     other-modules:
         Config
+--      ^ Position: (22, 8)
+--            ^ Position: (22, 14)
 
 test-suite module-examples-test
     type:             exitcode-stdio-1.0
@@ -23,7 +30,11 @@ test-suite module-examples-test
     main-is:          Main.hs
     other-modules:
         Config
+--      ^ Position: (31, 8)
+--            ^ Position: (31, 14)
         Library
+--      ^ Position: (31, 8)
+--             ^ Position: (31, 15)
     build-depends:    base
 
 benchmark benchmark
@@ -32,4 +43,6 @@ benchmark benchmark
     hs-source-dirs: src/bench
     build-depends: base
     other-modules:
-        Config
+                            Config
+--                         ^ Position: (45, 28)
+--                                ^ Position: (45, 34)

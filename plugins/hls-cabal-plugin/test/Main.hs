@@ -242,7 +242,10 @@ gotoDefinitionTests = testGroup "Goto Definition"
 
 gotoModuleDefinitionTests :: TestTree
 gotoModuleDefinitionTests = testGroup "Goto Module Definition"
-    [ testGoToDefinitionLink "simple cabal test" "simple-cabal" "simple-cabal.cabal" (Position 8 23) "A.hs"
+    [ testGoToDefinitionLink "simple cabal test" "simple-cabal" "simple-cabal.cabal"
+                            (Position 8 23) "A.hs"
+    , testGoToDefinitionLink "simple cabal test" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 6 22) "A.hs"
     ]
     where
         getUriFromDefinition :: Show b => (Definition |? b) -> Uri
