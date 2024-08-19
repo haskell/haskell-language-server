@@ -2,75 +2,53 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.Cabal (descriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                  ((^.))
+import           Control.Lens                                ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Maybe                     (runMaybeT)
-import qualified Data.ByteString                               as BS
+import           Control.Monad.Trans.Maybe                   (runMaybeT)
+import qualified Data.ByteString                             as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                           (HashMap)
-import qualified Data.HashMap.Strict                           as HashMap
-import           Data.List                                     (find)
-import qualified Data.List.NonEmpty                            as NE
-import qualified Data.Maybe                                    as Maybe
-import qualified Data.Text                                     as T
-import qualified Data.Text.Encoding                            as Encoding
+import           Data.HashMap.Strict                         (HashMap)
+import qualified Data.HashMap.Strict                         as HashMap
+import qualified Data.List.NonEmpty                          as NE
+import qualified Data.Maybe                                  as Maybe
+import qualified Data.Text                                   as T
+import qualified Data.Text.Encoding                          as Encoding
 import           Data.Typeable
-import           Development.IDE                               as D
-import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.Shake                    (restartShakeSession)
-import qualified Development.IDE.Core.Shake                    as Shake
-import           Development.IDE.Graph                         (Key,
-                                                                alwaysRerun)
-import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
-import           Development.IDE.Types.Shake                   (toKey)
-import qualified Distribution.Fields                           as Syntax
-import           Distribution.PackageDescription               (Benchmark (..),
-                                                                BuildInfo (..),
-                                                                Executable (..),
-                                                                ForeignLib (..),
-                                                                Library (..),
-                                                                LibraryName (LMainLibName, LSubLibName),
-                                                                PackageDescription (..),
-                                                                TestSuite (..),
-                                                                library,
-                                                                unUnqualComponentName)
-import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import qualified Distribution.Parsec.Position                  as Syntax
-import           Distribution.Utils.Generic                    (safeHead)
-import           Distribution.Utils.Path                       (getSymbolicPath)
+import           Development.IDE                             as D
+import           Development.IDE.Core.Shake                  (restartShakeSession)
+import qualified Development.IDE.Core.Shake                  as Shake
+import           Development.IDE.Graph                       (Key, alwaysRerun)
+import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
+import           Development.IDE.Types.Shake                 (toKey)
+import qualified Distribution.Fields                         as Syntax
+import qualified Distribution.Parsec.Position                as Syntax
 import           GHC.Generics
-import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
-import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
-import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
-import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommonSections (ParseCabalCommonSections),
-                                                                ParseCabalFields (..),
-                                                                ParseCabalFile (..))
-import qualified Ide.Plugin.Cabal.Completion.Types             as Types
-import qualified Ide.Plugin.Cabal.Diagnostics                  as Diagnostics
-import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
-import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
-import           Ide.Plugin.Cabal.Orphans                      ()
+import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
+import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
+import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
+                                                              ParseCabalFields (..),
+                                                              ParseCabalFile (..))
+import qualified Ide.Plugin.Cabal.Completion.Types           as Types
+import           Ide.Plugin.Cabal.Definition                 (gotoDefinition)
+import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
+import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
+import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
+import           Ide.Plugin.Cabal.Orphans                    ()
 import           Ide.Plugin.Cabal.Outline
-import qualified Ide.Plugin.Cabal.Parse                        as Parse
-import           Ide.Plugin.Error
+import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens                    as JL
-import qualified Language.LSP.Protocol.Message                 as LSP
+import qualified Language.LSP.Protocol.Lens                  as JL
+import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                              as VFS
-import           System.Directory                              (doesFileExist)
-import           System.FilePath                               (takeDirectory,
-                                                                (</>), (<.>), joinPath)
-import Ide.Plugin.Cabal.Definition (gotoDefinition)
+import qualified Language.LSP.VFS                            as VFS
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
