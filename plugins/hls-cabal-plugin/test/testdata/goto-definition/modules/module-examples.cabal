@@ -1,0 +1,35 @@
+cabal-version:      3.0
+name:               module-examples
+version:            0.1.0.0
+
+
+library
+    exposed-modules:  Library.Lib
+    other-modules:    Library.Other.OtherLib
+    build-depends:    base
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+executable exec
+    hs-source-dirs:   src/exe
+    main-is: Main.hs
+    build-depends:    base
+    other-modules:
+        Config
+
+test-suite module-examples-test
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   src/test
+    main-is:          Main.hs
+    other-modules:
+        Config
+        Library
+    build-depends:    base
+
+benchmark benchmark
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    hs-source-dirs: src/bench
+    build-depends: base
+    other-modules:
+        Config
