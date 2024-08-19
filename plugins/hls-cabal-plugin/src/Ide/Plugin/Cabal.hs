@@ -317,6 +317,11 @@ gotoDefinition ideState _ msgParam = do
       isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
       isSectionArgName _ _ = False
 
+-- | CodeActions for hover messages.
+--
+-- Provides a CodeAction for displaying message on hover.
+-- If found that the filtered hover message is a dependency,
+-- adds a Documentation link.
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
       nfp <- getNormalizedFilePathE uri
