@@ -1,8 +1,18 @@
 module Ide.Plugin.Cabal.Completion.CabalFields
-  ( findStanzaForColumn, getModulesNames, getFieldLSPRange,
-    findFieldSection, findTextWord, findFieldLine, getOptionalSectionName,
-    getAnnotation, getFieldName, onelineSectionArgs, getFieldEndPosition,
-    getSectionArgEndPosition, getNameEndPosition, getFieldLineEndPosition
+  ( findStanzaForColumn
+  , getModulesNames
+  , getFieldLSPRange
+  , findFieldSection
+  , findTextWord
+  , findFieldLine
+  , getOptionalSectionName
+  , getAnnotation
+  , getFieldName
+  , onelineSectionArgs
+  , getFieldEndPosition
+  , getSectionArgEndPosition
+  , getNameEndPosition
+  , getFieldLineEndPosition
   )
   where
 

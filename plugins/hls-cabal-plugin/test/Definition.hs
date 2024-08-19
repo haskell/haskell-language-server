@@ -6,6 +6,8 @@ module Definition (
 
 import           Control.Lens                ((^.))
 import           Data.List.Extra             (isSuffixOf)
+import qualified Data.Text                   as T
+import           Ide.Plugin.Cabal.Definition (toHaskellFile)
 import qualified Language.LSP.Protocol.Lens  as L
 import qualified Language.LSP.Protocol.Types as LSP
 import           System.FilePath
@@ -22,20 +24,38 @@ gotoDefinitionTests = testGroup "Goto Definition"
 gotoModuleDefinitionTests :: TestTree
 gotoModuleDefinitionTests = testGroup "Goto Module Definition"
     [ testGoToDefinitionLink "simple cabal test" "simple-cabal" "simple-cabal.cabal"
-                             (Position 8 23) "A.hs"
+                             (Position 8 23) (toTestHaskellPath "" "A")
 
     , testGoToDefinitionLink "library start of exposed-modules" ("goto-definition" </> "modules") "module-examples.cabal"
-                             (Position 6 22) "src/Library/Lib.hs"
+                             (Position 6 22) (toTestHaskellPath "src" "Library.Lib")
+    , testGoToDefinitionLink "library middle of exposed-modules" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 6 29) (toTestHaskellPath "src" "Library.Lib")
     , testGoToDefinitionLink "library end of exposed-modules" ("goto-definition" </> "modules") "module-examples.cabal"
-                             (Position 6 33) "src/Library/Lib.hs"
-
+                             (Position 6 33) (toTestHaskellPath "src" "Library.Lib")
     , testGoToDefinitionLink "library start of other-modules" ("goto-definition" </> "modules") "module-examples.cabal"
-                             (Position 9 22) "src/Library/Other/OtherLib.hs"
+                             (Position 9 22) (toTestHaskellPath "src" "Library.Other.OtherLib")
     , testGoToDefinitionLink "library end of other-modules" ("goto-definition" </> "modules") "module-examples.cabal"
-                             (Position 9 44) "src/Library/Other/OtherLib.hs"
+                             (Position 9 44) (toTestHaskellPath "src" "Library.Other.OtherLib")
 
+    , testGoToDefinitionLink "executable other-modules" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 22 10) (toTestHaskellPath ("src" </> "exe") "Config")
+
+    , testGoToDefinitionLink "test-suite other-modules Config" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 31 10) (toTestHaskellPath ("src" </> "test") "Config")
+    , testGoToDefinitionLink "test-suite other-modules Library" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 34 10) (toTestHaskellPath ("src" </> "test") "Library")
+
+    , testGoToDefinitionLink "benchmark other-modules Config" ("goto-definition" </> "modules") "module-examples.cabal"
+                             (Position 45 30) (toTestHaskellPath ("src" </> "bench") "Config")
+
+    , testGoToDefinitionLinkNoLocation "not existent module" ("goto-definition" </> "modules") "module-examples.cabal" (Position 48 25)
+    , testGoToDefinitionLinkNoLocation "behind module" ("goto-definition" </> "modules") "module-examples.cabal" (Position 9 20)
+    , testGoToDefinitionLinkNoLocation "after module" ("goto-definition" </> "modules") "module-examples.cabal" (Position 9 50)
     ]
     where
+        toTestHaskellPath :: FilePath -> T.Text -> FilePath
+        toTestHaskellPath dir moduleName = dir </> toHaskellFile moduleName
+
         getUriFromDefinition :: Show b => (Definition |? b) -> Uri
         getUriFromDefinition (InL (Definition (InL loc))) = loc^.L.uri
         getUriFromDefinition unk = error $ "Unexpected pattern '" ++ show unk ++ "' , expected '(InL (Definition (InL loc))'"
@@ -54,6 +74,13 @@ gotoModuleDefinitionTests = testGroup "Goto Module Definition"
                             isCorrectPath = filePathWithDir `isSuffixOf` filePath
                         liftIO $ isCorrectPath @? ("Absolute path expected to end on " <> filePathWithDir <>
                                                    " but " <> filePath <> " was given.")
+
+        testGoToDefinitionLinkNoLocation :: TestName -> FilePath -> FilePath -> Position -> TestTree
+        testGoToDefinitionLinkNoLocation testName testDir cabalFile cursorPos =
+            runCabalTestCaseSession testName testDir $ do
+                doc <- openDoc cabalFile "cabal"
+                empty <- getDefinitions doc cursorPos
+                liftIO $ empty @?= (InR $ InR LSP.Null)
 
 gotoCommonSectionDefinitionTests :: TestTree
 gotoCommonSectionDefinitionTests = testGroup "Goto Common Section Definition"
