@@ -15,18 +15,19 @@ import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
 import qualified Distribution.Fields                           as Syntax
-import qualified Distribution.Parsec.Position                  as Syntax
 import           Distribution.PackageDescription               (Benchmark (..),
                                                                 BuildInfo (..),
                                                                 Executable (..),
                                                                 ForeignLib (..),
+                                                                GenericPackageDescription,
                                                                 Library (..),
                                                                 LibraryName (LMainLibName, LSubLibName),
                                                                 PackageDescription (..),
                                                                 TestSuite (..),
                                                                 library,
-                                                                unUnqualComponentName, GenericPackageDescription)
+                                                                unUnqualComponentName)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import qualified Distribution.Parsec.Position                  as Syntax
 import           Distribution.Utils.Generic                    (safeHead)
 import           Distribution.Utils.Path                       (getSymbolicPath)
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
@@ -47,7 +48,7 @@ import           System.FilePath                               (joinPath,
 
 -- | CodeActions for going to definitions.
 --
--- Provides a CodeAction for going to a definition in a cabal file,
+-- Provides a CodeAction for going to the definition in a cabal file,
 -- gathering all possible definitions by calling subfunctions.
 
 -- TODO: Resolve more cases for go-to definition.
@@ -55,7 +56,7 @@ gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ide _ msgParam = do
     nfp <- getNormalizedFilePathE uri
     cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields nfp
-    -- Trim the AST three, so multiple passes in subfunctions won't hurt the performance.
+    -- Trim the AST tree, so multiple passes in subfunctions won't hurt the performance.
     let fieldsOfInterest = maybe cabalFields (:[] ) $ CabalFields.findFieldSection cursor cabalFields
 
     commonSections <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalCommonSections nfp
@@ -70,11 +71,11 @@ gotoDefinition ide _ msgParam = do
     let defs = Maybe.catMaybes [ mCommonSectionsDef
                                , mModuleDef
                                ]
-    -- Take the first found definition.
+    -- Take first found definition.
     -- We assume, that there can't be multiple definitions,
     -- or the most specific definitions come first.
     case safeHead defs of
-      Nothing -> pure $ InR $ InR Null
+      Nothing  -> pure $ InR $ InR Null
       Just def -> pure $ InL def
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
@@ -83,7 +84,7 @@ gotoDefinition ide _ msgParam = do
 -- | Definitions for Sections.
 --
 -- Provides a Definition if cursor is pointed at an identifier,
--- otherwise gives Nothing
+-- otherwise gives Nothing.
 -- The definition is found by traversing the sections and comparing their name to
 -- the clicked identifier.
 gotoCommonSectionDefinition
@@ -135,13 +136,14 @@ gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
           sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
           potentialPaths = map (\dir -> takeDirectory (fromNormalizedFilePath nfp) </> dir </> toHaskellFile moduleName) sourceDirs
       allPaths <- liftIO $ filterM doesFileExist potentialPaths
+      -- Don't provide the range, since there is little benefit for it
       let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
       case safeHead locations of -- We assume there could be only one source location
         Nothing       -> pure Nothing
         Just location -> pure $ Just $ Definition $ InL location
   where
     isModuleName (Just name) (_,  moduleName) = name == moduleName
-    isModuleName _ _ = False
+    isModuleName _ _                          = False
 
 -- | Gives all `buildInfo`s given a target name.
 --
