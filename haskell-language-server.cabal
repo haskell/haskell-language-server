@@ -245,6 +245,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Definition
     Ide.Plugin.Cabal.FieldSuggest
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.CabalAdd
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
     Ide.Plugin.Cabal.Parse
@@ -271,6 +272,12 @@ library hls-cabal-plugin
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
+    , cabal-add
+    , process
+    , aeson
+    , Cabal
+    , pretty
+
   hs-source-dirs:   plugins/hls-cabal-plugin/src
 
 test-suite hls-cabal-plugin-tests
@@ -281,6 +288,7 @@ test-suite hls-cabal-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-plugin/test
   main-is:          Main.hs
   other-modules:
+    CabalAdd
     Completer
     Context
     Definition
@@ -298,6 +306,7 @@ test-suite hls-cabal-plugin-tests
     , lens
     , lsp-types
     , text
+    , hls-plugin-api
 
 -----------------------------
 -- class plugin
