@@ -8,56 +8,59 @@ module Ide.Plugin.Cabal (descriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                ((^.))
+import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Maybe                   (runMaybeT)
-import qualified Data.ByteString                             as BS
+import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import qualified Data.ByteString                               as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                         (HashMap)
-import qualified Data.HashMap.Strict                         as HashMap
-import           Data.List                                   (find)
-import qualified Data.List.NonEmpty                          as NE
-import qualified Data.Maybe                                  as Maybe
-import qualified Data.Text                                   as T
-import qualified Data.Text.Encoding                          as Encoding
+import           Data.HashMap.Strict                           (HashMap)
+import qualified Data.HashMap.Strict                           as HashMap
+import           Data.List                                     (find)
+import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Maybe                                    as Maybe
+import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as Encoding
 import           Data.Typeable
-import           Development.IDE                             as D
+import           Debug.Trace
+import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.Shake                  (restartShakeSession)
-import qualified Development.IDE.Core.Shake                  as Shake
-import           Development.IDE.Graph                       (Key, alwaysRerun)
-import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
-import           Development.IDE.Types.Shake                 (toKey)
-import qualified Distribution.Fields                         as Syntax
-import qualified Distribution.Parsec.Position                as Syntax
+import           Development.IDE.Core.Shake                    (restartShakeSession)
+import qualified Development.IDE.Core.Shake                    as Shake
+import           Development.IDE.Graph                         (Key,
+                                                                alwaysRerun)
+import           Development.IDE.LSP.HoverDefinition           (foundHover)
+import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
+import           Development.IDE.Types.Shake                   (toKey)
+import qualified Distribution.Fields                           as Syntax
+import           Distribution.Package                          (Dependency)
+import           Distribution.PackageDescription               (allBuildDepends,
+                                                                depPkgName,
+                                                                unPackageName)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
-import           Ide.Plugin.Cabal.Completion.CabalFields     as CabalFields
-import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
-import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
-import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
-                                                              ParseCabalFields (..),
-                                                              ParseCabalFile (..))
-import qualified Ide.Plugin.Cabal.Completion.Types           as Types
-import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
-import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
-import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
-import           Ide.Plugin.Cabal.Orphans                    ()
+import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
+import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
+import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
+import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommonSections (ParseCabalCommonSections),
+                                                                ParseCabalFields (..),
+                                                                ParseCabalFile (..))
+import qualified Ide.Plugin.Cabal.Completion.Types             as Types
+import qualified Ide.Plugin.Cabal.Diagnostics                  as Diagnostics
+import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
+import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
+import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Cabal.Outline
-import qualified Ide.Plugin.Cabal.Parse                      as Parse
+import qualified Ide.Plugin.Cabal.Parse                        as Parse
 import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens                  as JL
-import qualified Language.LSP.Protocol.Message               as LSP
+import qualified Language.LSP.Protocol.Lens                    as JL
+import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                            as VFS
-import Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import Distribution.Package (Dependency())
-import Distribution.PackageDescription (depPkgName, unPackageName, allBuildDepends)
-import Development.IDE.LSP.HoverDefinition (foundHover)
+import qualified Language.LSP.VFS                              as VFS
 import           Text.Regex.TDFA
-import Debug.Trace
 
 
 data Log
@@ -299,67 +302,67 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
 -- TODO: Support more definitions than sections.
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ideState _ msgParam = do
-    nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalFields nfp
-    case CabalFields.findTextWord cursor cabalFields of
-      Nothing ->
-        pure $ InR $ InR Null
-      Just cursorText -> do
-        commonSections <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalCommonSections nfp
-        case find (isSectionArgName cursorText) commonSections of
-          Nothing ->
-            pure $ InR $ InR Null
-          Just commonSection -> do
-            pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
-    where
-      cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
-      uri = msgParam ^. JL.textDocument . JL.uri
-      isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
-      isSectionArgName _ _ = False
+  nfp <- getNormalizedFilePathE uri
+  cabalFields <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalFields nfp
+  case CabalFields.findTextWord cursor cabalFields of
+    Nothing ->
+      pure $ InR $ InR Null
+    Just cursorText -> do
+      commonSections <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalCommonSections nfp
+      case find (isSectionArgName cursorText) commonSections of
+        Nothing ->
+          pure $ InR $ InR Null
+        Just commonSection -> do
+          pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
+  where
+    cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
+    uri = msgParam ^. JL.textDocument . JL.uri
+    isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
+    isSectionArgName _ _ = False
 
--- | CodeActions for hover messages.
+-- | Handler for hover messages.
 --
--- Provides a CodeAction for displaying message on hover.
+-- Provides a Handler for displaying message on hover.
 -- If found that the filtered hover message is a dependency,
 -- adds a Documentation link.
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
-      nfp <- getNormalizedFilePathE uri
-      (cabalFields, _) <- runActionE "cabal.cabal-hover" ide $ useWithStaleE ParseCabalFields nfp
-      let mCursorText = CabalFields.findTextWord cursor cabalFields
-      case mCursorText of
-        Nothing ->
-          pure $ InR Null
-        Just cursorText -> do
-          (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
-          let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-              mText = filterVersion cursorText
-          case mText of
-            Nothing -> pure $ foundHover (Nothing, [cursorText])
-            Just txt ->
-              if txt `elem` depsNames
-                then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
-                else pure $ foundHover (Nothing, [txt])
+  nfp <- getNormalizedFilePathE uri
+  (cabalFields, _) <- runActionE "cabal.cabal-hover" ide $ useWithStaleE ParseCabalFields nfp
+  let mCursorText = CabalFields.findTextWord cursor cabalFields
+  case mCursorText of
+    Nothing ->
+      pure $ InR Null
+    Just cursorText -> do
+      (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
+      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
+          mText = filterVersion cursorText
+      case mText of
+        Nothing -> pure $ InR Null
+        Just txt ->
+          if txt `elem` depsNames
+          then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
+          else pure $ InR Null
   where
-      cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
-      uri = msgParam ^. JL.textDocument . JL.uri
+    cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
+    uri = msgParam ^. JL.textDocument . JL.uri
 
-      dependencyName :: Dependency -> T.Text
-      dependencyName dep = T.pack $ unPackageName $ depPkgName dep
+    dependencyName :: Dependency -> T.Text
+    dependencyName dep = T.pack $ unPackageName $ depPkgName dep
 
-      filterVersion :: T.Text -> Maybe T.Text
-      filterVersion msg = getMatch (msg =~ regex)
-        where
-          regex :: T.Text
-          regex = "([a-zA-Z0-9-]*[a-zA-Z0-9]).*"
+    filterVersion :: T.Text -> Maybe T.Text
+    filterVersion msg = getMatch (msg =~ regex)
+      where
+        regex :: T.Text
+        regex = "([a-zA-Z0-9-]*[a-zA-Z0-9])"
 
-          getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
-          getMatch (_, _, _, []) = Nothing
-          getMatch (_, _, _, [dependency]) = Just dependency
-          getMatch (_, _, _, _) = Nothing -- impossible case
+        getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
+        getMatch (_, _, _, [])           = Nothing
+        getMatch (_, _, _, [dependency]) = Just dependency
+        getMatch (_, _, _, _)            = Nothing -- impossible case
 
-      documentationText :: T.Text -> T.Text
-      documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
+    documentationText :: T.Text -> T.Text
+    documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

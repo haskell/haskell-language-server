@@ -299,9 +299,9 @@ hoverOnDependencyTests = testGroup "Hover Dependency"
     , hoverContainsTest "aeson with not separated version " "hover-deps.cabal" (Position 7 25) "[Documentation](https://hackage.haskell.org/package/aeson)"
     , hoverContainsTest "lens no version" "hover-deps.cabal" (Position 7 42) "[Documentation](https://hackage.haskell.org/package/lens)"
 
-    , hoverNotContainsTest "name has no documentation" "hover-deps.cabal" (Position 1 25) "[Documentation]"
-    , hoverNotContainsTest "exposed-modules has no documentation" "hover-deps.cabal" (Position 5 25) "[Documentation]"
-    , hoverNotContainsTest "hs-source-dirs has no documentation" "hover-deps.cabal" (Position 8 25) "[Documentation]"
+    , hoverIsNullTest "name has no documentation" "hover-deps.cabal" (Position 1 25)
+    , hoverIsNullTest "exposed-modules has no documentation" "hover-deps.cabal" (Position 5 25)
+    , hoverIsNullTest "hs-source-dirs has no documentation" "hover-deps.cabal" (Position 8 25)
     ]
     where
         hoverContainsTest :: TestName -> FilePath -> Position -> T.Text -> TestTree
@@ -319,17 +319,10 @@ hoverOnDependencyTests = testGroup "Hover Dependency"
                         _ -> liftIO $ assertFailure "Unexpected content type"
                 closeDoc doc
 
-        hoverNotContainsTest :: TestName -> FilePath -> Position -> T.Text -> TestTree
-        hoverNotContainsTest testName cabalFile pos containedText =
+        hoverIsNullTest :: TestName -> FilePath -> Position -> TestTree
+        hoverIsNullTest testName cabalFile pos =
             runCabalTestCaseSession testName "hover" $ do
                 doc <- openDoc cabalFile "cabal"
                 h <- getHover doc pos
-                case h of
-                    Nothing -> liftIO $ assertFailure "No hover"
-                    Just (Hover contents _) -> case contents of
-                        InL (MarkupContent _ txt) -> do
-                            liftIO
-                            $ assertBool ("Found `" <> T.unpack containedText <> "` in hover message: " <> T.unpack txt)
-                            $ not (containedText `T.isInfixOf` txt)
-                        _ -> liftIO $ assertFailure "Unexpected content type"
+                liftIO $ assertBool ("Found hover `" <> show h <> "`") $ Maybe.isNothing h
                 closeDoc doc
