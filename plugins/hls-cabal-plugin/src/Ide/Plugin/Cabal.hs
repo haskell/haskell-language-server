@@ -23,7 +23,6 @@ import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
 import           Data.Typeable
-import           Debug.Trace
 import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Shake                    (restartShakeSession)
