@@ -116,10 +116,10 @@ gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest =
 --
 -- See resolving @Config@ module in tests.
 gotoModulesDefinition
-  :: NormalizedFilePath
+  :: NormalizedFilePath -- ^ Normalized FilePath to the cabal file
   -> GenericPackageDescription
-  -> Syntax.Position
-  -> [Syntax.Field Syntax.Position]
+  -> Syntax.Position -- ^ Cursor position
+  -> [Syntax.Field Syntax.Position] -- ^ Trimmed cabal AST on a cursor
   -> IO (Maybe Definition)
 gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
   let mCursorText = CabalFields.findTextWord cursor fieldsOfInterest
