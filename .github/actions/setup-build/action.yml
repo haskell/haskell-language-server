@@ -116,3 +116,18 @@ runs:
     - name: "Remove freeze file"
       run: rm -f cabal.project.freeze
       shell: bash
+
+    # Make sure to clear all unneeded `ghcup`` caches.
+    # At some point, we were running out of disk space, see issue
+    # https://github.com/haskell/haskell-language-server/issues/4386 for details.
+    #
+    # Using "printf" debugging (`du -sh *` and `df -h /`) and binary searching,
+    # we figured out that `ghcup` caches are taking up a sizable portion of the
+    # disk space.
+    # Thus, we remove anything we don't need, especially caches and temporary files.
+    # For got measure, we also make sure no other tooling versions are
+    # installed besides the ones we explicitly want.
+    - name: "Remove ghcup caches"
+      if: runner.os == 'Linux'
+      run: ghcup gc --ghc-old --share-dir --hls-no-ghc --cache --tmpdirs --unset
+      shell: bash
