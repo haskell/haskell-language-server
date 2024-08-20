@@ -40,7 +40,7 @@ import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSe
                                                               ParseCabalFields (..),
                                                               ParseCabalFile (..))
 import qualified Ide.Plugin.Cabal.Completion.Types           as Types
-import           Ide.Plugin.Cabal.Definition                 (gotoDefinition)
+import           Ide.Plugin.Cabal.Definition                 (gotoDefinitionAction)
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
 import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
@@ -98,7 +98,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
-          , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
+          , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinitionAction
           ]
     , pluginNotificationHandlers =
         mconcat

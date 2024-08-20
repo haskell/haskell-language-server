@@ -52,8 +52,8 @@ import           System.FilePath                               (joinPath,
 -- gathering all possible definitions by calling subfunctions.
 
 -- TODO: Resolve more cases for go-to definition.
-gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
-gotoDefinition ide _ msgParam = do
+gotoDefinitionAction :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
+gotoDefinitionAction ide _ msgParam = do
     nfp <- getNormalizedFilePathE uri
     cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields nfp
     -- Trim the AST tree, so multiple passes in subfunctions won't hurt the performance.
