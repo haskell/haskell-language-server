@@ -15,6 +15,7 @@ import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
 import qualified Distribution.Fields                           as Syntax
+import qualified Distribution.Parsec.Position                  as Syntax
 import           Distribution.PackageDescription               (Benchmark (..),
                                                                 BuildInfo (..),
                                                                 Executable (..),
@@ -24,7 +25,7 @@ import           Distribution.PackageDescription               (Benchmark (..),
                                                                 PackageDescription (..),
                                                                 TestSuite (..),
                                                                 library,
-                                                                unUnqualComponentName)
+                                                                unUnqualComponentName, GenericPackageDescription)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Utils.Generic                    (safeHead)
 import           Distribution.Utils.Path                       (getSymbolicPath)
@@ -46,51 +47,101 @@ import           System.FilePath                               (joinPath,
 
 -- | CodeActions for going to definitions.
 --
--- Provides a CodeAction for going to a definition when clicking on an identifier
--- and clicking on exposed-module or other-module field.
--- The definition is found by traversing the sections and comparing their name to
--- the clicked identifier. If it's not in sections it attempts to find it in module names.
---
+-- Provides a CodeAction for going to a definition in a cabal file,
+-- gathering all possible definitions by calling subfunctions.
+
 -- TODO: Resolve more cases for go-to definition.
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
-gotoDefinition ideState _ msgParam = do
+gotoDefinition ide _ msgParam = do
     nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalFields nfp
-    case CabalFields.findTextWord cursor cabalFields of
-      Nothing ->
-        pure $ InR $ InR Null
-      Just cursorText -> do
-        commonSections <- runActionE "cabal-plugin.commonSections" ideState $ useE ParseCabalCommonSections nfp
-        case find (isSectionArgName cursorText) commonSections of
-          Just commonSection -> do
-            pure $ InL $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
+    cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields nfp
+    -- Trim the AST three, so multiple passes in subfunctions won't hurt the performance.
+    let fieldsOfInterest = maybe cabalFields (:[] ) $ CabalFields.findFieldSection cursor cabalFields
 
-          Nothing -> do
-            let moduleNames = CabalFields.getModulesNames cabalFields
-                mModuleName = find (isModuleName cursorText) moduleNames
-            case mModuleName of
-              Nothing -> pure $ InR $ InR Null
-              Just (mBuildTargetNames, moduleName) -> do
-                mGPD <- liftIO $ runAction "cabal.GPD" ideState $ useWithStale ParseCabalFile nfp
-                case mGPD of
-                  Nothing -> pure $ InR $ InR Null
-                  Just (gpd, _) -> do
-                    let buildInfos = foldMap (lookupBuildTargetPackageDescription
-                                                    (flattenPackageDescription gpd))
-                                                    mBuildTargetNames
-                        sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
-                        potentialPaths = map (\dir -> takeDirectory (fromNormalizedFilePath nfp) </> dir </> toHaskellFile moduleName) sourceDirs
-                    allPaths <- liftIO $ filterM doesFileExist potentialPaths
-                    let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
-                    case safeHead locations of -- We assume there could be only one source location
-                      Nothing       -> pure $ InR $ InR Null
-                      Just location -> pure $ InL $ Definition $ InL location
+    commonSections <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalCommonSections nfp
+    let mCommonSectionsDef = gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest
+
+    mModuleDef <- do
+      mGPD <- liftIO $ runAction "cabal.GPD" ide $ useWithStale ParseCabalFile nfp
+      case mGPD of
+        Nothing -> pure Nothing
+        Just (gpd, _) -> liftIO $ gotoModulesDefinition nfp gpd cursor fieldsOfInterest
+
+    let defs = Maybe.catMaybes [ mCommonSectionsDef
+                               , mModuleDef
+                               ]
+    -- Take the first found definition.
+    -- We assume, that there can't be multiple definitions,
+    -- or the most specific definitions come first.
+    case safeHead defs of
+      Nothing -> pure $ InR $ InR Null
+      Just def -> pure $ InL def
     where
       cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
       uri = msgParam ^. JL.textDocument . JL.uri
-      isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
-      isSectionArgName _ _ = False
-      isModuleName name (_,  moduleName) = name == moduleName
+
+-- | Definitions for Sections.
+--
+-- Provides a Definition if cursor is pointed at an identifier,
+-- otherwise gives Nothing
+-- The definition is found by traversing the sections and comparing their name to
+-- the clicked identifier.
+gotoCommonSectionDefinition
+  :: Uri -- ^ Cabal file URI
+  -> [Syntax.Field Syntax.Position] -- ^ Found common sections
+  -> Syntax.Position -- ^ Cursor position
+  -> [Syntax.Field Syntax.Position] -- ^ Trimmed cabal AST on a cursor
+  -> Maybe Definition
+gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest =
+  case CabalFields.findTextWord cursor fieldsOfInterest of
+    Nothing -> Nothing
+    Just cursorText -> do
+      case find (isSectionArgName cursorText) commonSections of
+        Just commonSection -> Just $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
+        Nothing -> Nothing
+  where
+    isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
+    isSectionArgName _ _ = False
+
+-- | Definitions for Modules.
+--
+-- Provides a Definition if cursor is pointed at a
+-- exposed-module or other-module field, otherwise gives Nothing
+--
+-- Definition is found by looking for a module name,
+-- the cursor is pointing to and looking for it in @BuildInfo@s.
+-- Note that since a trimmed ast is provided, a @Definition@ to
+-- a module with the same name as the target one,
+-- but in another build target can't be given.
+--
+-- See resolving @Config@ module in tests.
+gotoModulesDefinition
+  :: NormalizedFilePath
+  -> GenericPackageDescription
+  -> Syntax.Position
+  -> [Syntax.Field Syntax.Position]
+  -> IO (Maybe Definition)
+gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
+  let mCursorText = CabalFields.findTextWord cursor fieldsOfInterest
+      moduleNames = CabalFields.getModulesNames fieldsOfInterest
+      mModuleName = find (isModuleName mCursorText) moduleNames
+
+  case mModuleName of
+    Nothing -> pure Nothing
+    Just (mBuildTargetNames, moduleName) -> do
+      let buildInfos = foldMap (lookupBuildTargetPackageDescription
+                                      (flattenPackageDescription gpd))
+                                      mBuildTargetNames
+          sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
+          potentialPaths = map (\dir -> takeDirectory (fromNormalizedFilePath nfp) </> dir </> toHaskellFile moduleName) sourceDirs
+      allPaths <- liftIO $ filterM doesFileExist potentialPaths
+      let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
+      case safeHead locations of -- We assume there could be only one source location
+        Nothing       -> pure Nothing
+        Just location -> pure $ Just $ Definition $ InL location
+  where
+    isModuleName (Just name) (_,  moduleName) = name == moduleName
+    isModuleName _ _ = False
 
 -- | Gives all `buildInfo`s given a target name.
 --
