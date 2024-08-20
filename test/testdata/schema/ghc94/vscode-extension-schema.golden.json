@@ -35,6 +35,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.cabal.hoverOn": {
+        "default": true,
+        "description": "Enables cabal hover",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.cabal.symbolsOn": {
         "default": true,
         "description": "Enables cabal symbols",
