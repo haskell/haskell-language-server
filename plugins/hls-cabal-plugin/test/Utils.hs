@@ -8,14 +8,19 @@ import           Control.Monad                     (guard)
 import           Data.List                         (sort)
 import           Data.Proxy                        (Proxy (Proxy))
 import qualified Data.Text                         as T
-import           Ide.Plugin.Cabal                  (descriptor)
+import           Ide.Plugin.Cabal                  (descriptor,
+                                                    haskellInteractionDescriptor)
 import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.FilePath
 import           Test.Hls
 
+
 cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
 cabalPlugin = mkPluginTestDescriptor descriptor "cabal"
+
+cabalHaskellPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
+cabalHaskellPlugin = mkPluginTestDescriptor haskellInteractionDescriptor "cabal-haskell"
 
 simpleCabalPrefixInfoFromPos :: Position -> T.Text -> CabalPrefixInfo
 simpleCabalPrefixInfoFromPos pos prefix =
@@ -45,9 +50,16 @@ filePathComplTestDir = addTrailingPathSeparator $ testDataDir </> "filepath-comp
 runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
 runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
 
+runHaskellTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
+runHaskellTestCaseSession title subdir = testCase title . runHaskellAndCabalSession subdir
+
 runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
+
+runHaskellAndCabalSession :: FilePath -> Session a -> IO a
+runHaskellAndCabalSession subdir =
+    failIfSessionTimeout . runSessionWithServer def (cabalPlugin <> cabalHaskellPlugin) (testDataDir </> subdir)
 
 runCabalGoldenSession :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 runCabalGoldenSession title subdir fp act = goldenWithCabalDoc def cabalPlugin title testDataDir (subdir </> fp) "golden" "cabal" act

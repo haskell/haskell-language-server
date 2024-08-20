@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.Cabal (descriptor, Log (..)) where
+module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -53,6 +53,9 @@ import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
 
+import qualified Data.Text                                   ()
+import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
+
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
   | LogShake Shake.Log
@@ -63,6 +66,7 @@ data Log
   | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
+  | LogCabalAdd CabalAdd.Log
   deriving (Show)
 
 instance Pretty Log where
@@ -86,6 +90,25 @@ instance Pretty Log where
         <+> "for cursor position:"
         <+> pretty position
     LogCompletions logs -> pretty logs
+    LogCabalAdd logs -> pretty logs
+
+-- | Some actions with cabal files originate from haskell files.
+-- This descriptor allows to hook into the diagnostics of haskell source files, and
+-- allows us to provide code actions and commands that interact with `.cabal` files.
+haskellInteractionDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+haskellInteractionDescriptor recorder plId =
+  (defaultPluginDescriptor plId "Provides the cabal-add code action in haskell files")
+    { pluginHandlers =
+        mconcat
+          [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction cabalAddCodeAction
+          ]
+    , pluginCommands = [PluginCommand CabalAdd.cabalAddCommand "add a dependency to a cabal file" (CabalAdd.command cabalAddRecorder)]
+    , pluginRules = pure ()
+    , pluginNotificationHandlers = mempty
+    }
+    where
+      cabalAddRecorder = cmapWithPrio LogCabalAdd recorder
+
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -308,6 +331,32 @@ gotoDefinition ideState _ msgParam = do
       uri = msgParam ^. JL.textDocument . JL.uri
       isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
       isSectionArgName _ _ = False
+
+cabalAddCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
+  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
+  let suggestions = take maxCompls $ concatMap CabalAdd.hiddenPackageSuggestion diags
+  case suggestions of
+    [] -> pure $ InL []
+    _ ->
+      case uriToFilePath uri of
+        Nothing -> pure $ InL []
+        Just haskellFilePath -> do
+          mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile haskellFilePath
+          case mbCabalFile of
+            Nothing -> pure $ InL []
+            Just cabalFilePath -> do
+              verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
+              mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+              case mbGPD of
+                Nothing -> pure $ InL []
+                Just (gpd, _) -> do
+                  actions <- liftIO $ CabalAdd.addDependencySuggestCodeAction plId verTxtDocId
+                                                                              suggestions
+                                                                              haskellFilePath cabalFilePath
+                                                                              gpd
+                  pure $ InL $ fmap InR actions
+
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
