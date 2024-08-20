@@ -21,7 +21,6 @@ import           Definition                      (gotoDefinitionTests)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
-import qualified Language.LSP.Protocol.Types     as LSP
 import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
@@ -230,56 +229,3 @@ codeActionTests = testGroup "Code Actions"
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
-
--- ----------------------------------------------------------------------------
--- Goto Definition Tests
--- ----------------------------------------------------------------------------
-
-gotoDefinitionTests :: TestTree
-gotoDefinitionTests = testGroup "Goto Definition"
-    [ positiveTest "middle of identifier"            (mkP 27 16) (mkR  6 0  7 22)
-    , positiveTest "left of identifier"              (mkP 30 12) (mkR 10 0 17 40)
-    , positiveTest "right of identifier"             (mkP 33 22) (mkR 20 0 23 34)
-    , positiveTest "left of '-' in identifier"       (mkP 36 20) (mkR  6 0  7 22)
-    , positiveTest "right of '-' in identifier"      (mkP 39 19) (mkR 10 0 17 40)
-    , positiveTest "identifier in identifier list"   (mkP 42 16) (mkR 20 0 23 34)
-    , positiveTest "left of ',' right of identifier" (mkP 45 33) (mkR 10 0 17 40)
-    , positiveTest "right of ',' left of identifier" (mkP 48 34) (mkR  6 0  7 22)
-
-    , negativeTest "right of ',' left of space"      (mkP 51 23)
-    , negativeTest "right of ':' left of space"      (mkP 54 11)
-    , negativeTest "not a definition"                (mkP 57 8)
-    , negativeTest "empty space"                     (mkP 59 7)
-    ]
-    where
-        mkP :: UInt -> UInt -> Position
-        mkP x1 y1 = Position x1 y1
-
-        mkR :: UInt -> UInt -> UInt -> UInt -> Range
-        mkR x1 y1 x2 y2 = Range (mkP x1 y1) (mkP x2 y2)
-
-        getDefinition :: Show b => (Definition |? b) -> Range
-        getDefinition (InL (Definition (InL loc))) = loc^.L.range
-        getDefinition unk = error $ "Unexpected pattern '" ++ show unk ++ "' , expected '(InL (Definition (InL loc))'"
-
-        -- A positive test checks if the provided range is equal
-        -- to the expected range from the definition in the test file.
-        -- The test emulates a goto-definition request of an actual definition.
-        positiveTest :: TestName -> Position -> Range -> TestTree
-        positiveTest testName cursorPos expectedRange =
-            runCabalTestCaseSession testName "goto-definition" $ do
-                doc <- openDoc "simple-with-common.cabal" "cabal"
-                definitions <- getDefinitions doc cursorPos
-                let locationRange = getDefinition definitions
-                liftIO $ locationRange @?= expectedRange
-
-        -- A negative test checks if the request failed and
-        -- the provided result is empty, i.e. `InR $ InR Null`.
-        -- The test emulates a goto-definition request of anything but an
-        -- actual definition.
-        negativeTest :: TestName -> Position -> TestTree
-        negativeTest testName cursorPos =
-            runCabalTestCaseSession testName "goto-definition" $ do
-                doc <- openDoc "simple-with-common.cabal" "cabal"
-                empty <- getDefinitions doc cursorPos
-                liftIO $ empty @?= (InR $ InR LSP.Null)
