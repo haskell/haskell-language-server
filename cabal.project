@@ -7,10 +7,12 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
+-- Only keep this until https://github.com/Bodigrim/cabal-add/issues/7
+-- is resolved
 source-repository-package
     type: git
     location: https://github.com/Bodigrim/cabal-add.git
-    tag: master
+    tag: 8c004e2a4329232f9824425f5472b2d6d7958bbd
 
 index-state: 2024-06-29T00:00:00Z
 

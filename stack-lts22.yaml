@@ -37,6 +37,12 @@ extra-deps:
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
   - validation-selective-0.2.0.0
+  # Only keep this until https://github.com/Bodigrim/cabal-add/issues/7
+  # is resolved
+  - git: https://github.com/Bodigrim/cabal-add.git
+    commit: 8c004e2a4329232f9824425f5472b2d6d7958bbd
+  - cabal-install-parsers-0.6.1.1
+
 
 configure-options:
   ghcide:
@@ -51,6 +57,8 @@ flags:
     ghc-lib: true
   retrie:
     BuildExecutable: false
+  cabal-add:
+    cabal-syntax: true
 
 nix:
   packages: [icu libcxx zlib]
