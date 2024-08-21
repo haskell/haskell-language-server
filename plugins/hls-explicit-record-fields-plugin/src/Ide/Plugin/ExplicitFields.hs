@@ -25,7 +25,7 @@ import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
 
 import           Control.Monad                        (replicateM)
-import           Control.Monad.Trans.Except           (except)
+import           Control.Monad.Trans.Class            (lift)
 import           Data.Aeson                           (ToJSON (toJSON))
 import           Data.List                            (find, intersperse)
 import qualified Data.Text                            as T
@@ -108,7 +108,6 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        type (|?) (InL, InR))
 
 #if __GLASGOW_HASKELL__ < 910
-import           Control.Monad.Trans.Class            (lift)
 import           Development.IDE.GHC.Compat           (HsExpansion (HsExpanded))
 #endif
 
@@ -203,9 +202,14 @@ inlayHintProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdent
          end <- fmap _end range
          names' <- names
          defnLocs' <- defnLocs
-         let excludeDotDot (Location _ (Range _ pos)) = pos /= end
+         let excludeDotDot (Location _ (Range _ end')) = end' /= end
              -- find location from dotdot definitions that name equal to label name
-             findLocation t = fmap fst . find (either (const False) ((==) t) . snd) . filter (excludeDotDot . fst)
+             findLocation name locations =
+               let -- filter locations not within dotdot range
+                   filteredLocations = filter (excludeDotDot . fst) locations
+                   -- checks if 'a' is equal to 'Name' if the 'Either' is 'Right a', otherwise return 'False'
+                   nameEq = either (const False) ((==) name)
+                in fmap fst $ find (nameEq . snd) filteredLocations
              valueWithLoc = [ (T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
              -- use `, ` to separate labels with definition location
              label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart valueWithLoc
