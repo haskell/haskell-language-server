@@ -11,7 +11,8 @@
         "cabal": {
             "codeActionsOn": true,
             "completionOn": true,
-            "diagnosticsOn": true
+            "diagnosticsOn": true,
+            "symbolsOn": true
         },
         "cabal-fmt": {
             "config": {
@@ -22,6 +23,9 @@
             "config": {
                 "path": "cabal-gild"
             }
+        },
+        "cabalHaskellIntegration": {
+            "globalOn": true
         },
         "callHierarchy": {
             "globalOn": true

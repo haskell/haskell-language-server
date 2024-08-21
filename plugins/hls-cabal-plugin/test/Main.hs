@@ -6,6 +6,7 @@ module Main (
     main,
 ) where
 
+import           CabalAdd                        (cabalAddTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
@@ -16,10 +17,11 @@ import           Data.Either                     (isRight)
 import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
-import qualified Data.Text                       as Text
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
+import qualified Language.LSP.Protocol.Types     as LSP
+import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
 import           Utils
@@ -33,7 +35,9 @@ main = do
             , pluginTests
             , completerTests
             , contextTests
+            , outlineTests
             , codeActionTests
+            , gotoDefinitionTests
             ]
 
 -- ------------------------------------------------------------------------
@@ -83,6 +87,7 @@ codeActionUnitTests =
   where
     maxCompletions = 100
 
+
 -- ------------------------ ------------------------------------------------
 -- Integration Tests
 -- ------------------------------------------------------------------------
@@ -94,8 +99,8 @@ pluginTests =
         [ testGroup
             "Diagnostics"
             [ runCabalTestCaseSession "Publishes Diagnostics on Error" "" $ do
-                doc <- openDoc "invalid.cabal" "cabal"
-                diags <- waitForDiagnosticsFromSource doc "cabal"
+                _ <- openDoc "invalid.cabal" "cabal"
+                diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
@@ -103,14 +108,14 @@ pluginTests =
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
             , runCabalTestCaseSession "Clears diagnostics" "" $ do
                 doc <- openDoc "invalid.cabal" "cabal"
-                diags <- waitForDiagnosticsFrom doc
+                diags <- cabalCaptureKick
                 unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
                 liftIO $ do
                     length diags @?= 1
                     unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
                 _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
-                newDiags <- waitForDiagnosticsFrom doc
+                newDiags <- cabalCaptureKick
                 liftIO $ newDiags @?= []
             , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do
                 hsDoc <- openDoc "A.hs" "haskell"
@@ -161,7 +166,7 @@ codeActionTests = testGroup "Code Actions"
         contents <- documentContents doc
         liftIO $
             contents
-                @?= Text.unlines
+                @?= T.unlines
                     [ "cabal-version:      3.0"
                     , "name:               licenseCodeAction"
                     , "version:            0.1.0.0"
@@ -185,7 +190,7 @@ codeActionTests = testGroup "Code Actions"
         contents <- documentContents doc
         liftIO $
             contents
-                @?= Text.unlines
+                @?= T.unlines
                     [ "cabal-version:      3.0"
                     , "name:               licenseCodeAction2"
                     , "version:            0.1.0.0"
@@ -217,6 +222,7 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
+    , cabalAddTests
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
@@ -224,3 +230,56 @@ codeActionTests = testGroup "Code Actions"
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
+
+-- ----------------------------------------------------------------------------
+-- Goto Definition Tests
+-- ----------------------------------------------------------------------------
+
+gotoDefinitionTests :: TestTree
+gotoDefinitionTests = testGroup "Goto Definition"
+    [ positiveTest "middle of identifier"            (mkP 27 16) (mkR  6 0  7 22)
+    , positiveTest "left of identifier"              (mkP 30 12) (mkR 10 0 17 40)
+    , positiveTest "right of identifier"             (mkP 33 22) (mkR 20 0 23 34)
+    , positiveTest "left of '-' in identifier"       (mkP 36 20) (mkR  6 0  7 22)
+    , positiveTest "right of '-' in identifier"      (mkP 39 19) (mkR 10 0 17 40)
+    , positiveTest "identifier in identifier list"   (mkP 42 16) (mkR 20 0 23 34)
+    , positiveTest "left of ',' right of identifier" (mkP 45 33) (mkR 10 0 17 40)
+    , positiveTest "right of ',' left of identifier" (mkP 48 34) (mkR  6 0  7 22)
+
+    , negativeTest "right of ',' left of space"      (mkP 51 23)
+    , negativeTest "right of ':' left of space"      (mkP 54 11)
+    , negativeTest "not a definition"                (mkP 57 8)
+    , negativeTest "empty space"                     (mkP 59 7)
+    ]
+    where
+        mkP :: UInt -> UInt -> Position
+        mkP x1 y1 = Position x1 y1
+
+        mkR :: UInt -> UInt -> UInt -> UInt -> Range
+        mkR x1 y1 x2 y2 = Range (mkP x1 y1) (mkP x2 y2)
+
+        getDefinition :: Show b => (Definition |? b) -> Range
+        getDefinition (InL (Definition (InL loc))) = loc^.L.range
+        getDefinition unk = error $ "Unexpected pattern '" ++ show unk ++ "' , expected '(InL (Definition (InL loc))'"
+
+        -- A positive test checks if the provided range is equal
+        -- to the expected range from the definition in the test file.
+        -- The test emulates a goto-definition request of an actual definition.
+        positiveTest :: TestName -> Position -> Range -> TestTree
+        positiveTest testName cursorPos expectedRange =
+            runCabalTestCaseSession testName "goto-definition" $ do
+                doc <- openDoc "simple-with-common.cabal" "cabal"
+                definitions <- getDefinitions doc cursorPos
+                let locationRange = getDefinition definitions
+                liftIO $ locationRange @?= expectedRange
+
+        -- A negative test checks if the request failed and
+        -- the provided result is empty, i.e. `InR $ InR Null`.
+        -- The test emulates a goto-definition request of anything but an
+        -- actual definition.
+        negativeTest :: TestName -> Position -> TestTree
+        negativeTest testName cursorPos =
+            runCabalTestCaseSession testName "goto-definition" $ do
+                doc <- openDoc "simple-with-common.cabal" "cabal"
+                empty <- getDefinitions doc cursorPos
+                liftIO $ empty @?= (InR $ InR LSP.Null)
