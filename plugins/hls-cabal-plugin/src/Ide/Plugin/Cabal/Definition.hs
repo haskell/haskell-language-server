@@ -46,9 +46,9 @@ import           System.FilePath                               (joinPath,
                                                                 takeDirectory,
                                                                 (<.>), (</>))
 
--- | CodeActions for going to definitions.
+-- | Handler for going to definitions.
 --
--- Provides a CodeAction for going to the definition in a cabal file,
+-- Provides a handler for going to the definition in a cabal file,
 -- gathering all possible definitions by calling subfunctions.
 
 -- TODO: Resolve more cases for go-to definition.
@@ -93,13 +93,10 @@ gotoCommonSectionDefinition
   -> Syntax.Position -- ^ Cursor position
   -> [Syntax.Field Syntax.Position] -- ^ Trimmed cabal AST on a cursor
   -> Maybe Definition
-gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest =
-  case CabalFields.findTextWord cursor fieldsOfInterest of
-    Nothing -> Nothing
-    Just cursorText -> do
-      case find (isSectionArgName cursorText) commonSections of
-        Just commonSection -> Just $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
-        Nothing -> Nothing
+gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest = do
+  cursorText <- CabalFields.findTextWord cursor fieldsOfInterest
+  commonSection <- find (isSectionArgName cursorText) commonSections
+  Just $ Definition $ InL $ Location uri $ CabalFields.getFieldLSPRange commonSection
   where
     isSectionArgName name (Syntax.Section _ sectionArgName _) = name == CabalFields.onelineSectionArgs sectionArgName
     isSectionArgName _ _ = False
@@ -192,9 +189,13 @@ lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetN
         then Just benchmarkBuildInfo
         else Nothing
 
--- | Converts a name of a module to a FilePath
--- Warning: Makes a lot of assumptions and generally
--- not advised to use.
+-- | Converts a name of a module to a FilePath.
+-- Is needed to guess the relative path to a file
+-- using the name of the module.
+-- We assume, that correct module naming is guaranteed.
+--
+-- Warning: Generally not advised to use, if there are
+-- better ways to get the path.
 --
 -- Examples: (output is system dependent)
 --   >>> toHaskellFile "My.Module.Lib"

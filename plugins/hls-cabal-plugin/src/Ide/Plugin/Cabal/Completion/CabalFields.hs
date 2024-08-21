@@ -196,9 +196,9 @@ getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
     getSectionModuleNames (Syntax.Section _ secArgs fields) = map (, getArgsName secArgs) $ concatMap getFieldModuleNames fields
     getSectionModuleNames _ = []
 
-    getArgsName []                         = Nothing -- only a main library can have no name
     getArgsName [Syntax.SecArgName _ name] = Just $ T.decodeUtf8 name
-    getArgsName _                          = Nothing -- impossible to have multiple names for a build target
+    getArgsName _                          = Nothing -- Can be only a main library, that has no name
+                                                     -- since it's impossible to have multiple names for a build target
 
     getFieldModuleNames field@(Syntax.Field _ modules) = if getFieldName field == T.pack "exposed-modules" ||
                                                             getFieldName field == T.pack "other-modules"
