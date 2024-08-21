@@ -179,6 +179,7 @@ documentHighlight hf rf pos = pure highlights
         then DocumentHighlightKind_Write
         else DocumentHighlightKind_Read
 
+-- | Locate the type definition of the name at a given position.
 gotoTypeDefinition
   :: MonadIO m
   => WithHieDb
@@ -306,6 +307,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> Nothing
             _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
 
+-- | Find 'Location's of type definition at a specific point and return them along with their 'Identifier's.
 typeLocationsAtPoint
   :: forall m
    . MonadIO m
@@ -352,6 +354,7 @@ namesInType _                = []
 getTypes :: [Type] -> [Name]
 getTypes ts = concatMap namesInType ts
 
+-- | Find 'Location's of definition at a specific point and return them along with their 'Identifier's.
 locationsAtPoint
   :: forall m a
    . MonadIO m
