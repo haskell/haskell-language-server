@@ -25,6 +25,7 @@ import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
 
 import           Control.Monad                        (replicateM)
+import           Control.Monad.Trans.Except           (except)
 import           Data.Aeson                           (ToJSON (toJSON))
 import           Data.List                            (find, intersperse)
 import qualified Data.Text                            as T
@@ -106,8 +107,8 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        WorkspaceEdit (WorkspaceEdit),
                                                        type (|?) (InL, InR))
 
-
 #if __GLASGOW_HASKELL__ < 910
+import           Control.Monad.Trans.Class            (lift)
 import           Development.IDE.GHC.Compat           (HsExpansion (HsExpanded))
 #endif
 
@@ -189,7 +190,7 @@ inlayHintProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdent
         locations = [ getDefinition nfp pos
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
-    defnLocsList <- liftIO $ Shake.runIdeAction "ExplicitFields.getDefinition" (shakeExtras state) (sequence locations)
+    defnLocsList <- lift $ sequence locations
     pure $ InL $ mapMaybe (mkInlayHints crr pragma) (zip defnLocsList records)
    where
      mkInlayHints :: CollectRecordsResult -> NextPragmaInfo -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
