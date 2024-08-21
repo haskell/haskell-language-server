@@ -183,7 +183,7 @@ inlayHintProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdent
     let -- Get all records with dotdot in current nfp
         records = [ record
                   | Just range <- [toCurrentRange pm visibleRange]
-                  , uid <- RangeMap.flippedFilterByRange range crCodeActions
+                  , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
         -- Get the definition of each dotdot of record
         locations = [ getDefinition nfp pos
