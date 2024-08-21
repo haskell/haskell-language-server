@@ -481,7 +481,7 @@ getRecCons :: LHsExpr GhcTc -> ([RecordInfo], Bool)
 -- branch
 
 #if __GLASGOW_HASKELL__ >= 910
-getRecCons (unLoc -> XExpr (ExpandedThingTc a _)) = (collectRecords a, True)
+getRecCons (unLoc -> XExpr (ExpandedThingTc a _)) = (collectRecords a, False)
 #else
 getRecCons (unLoc -> XExpr (ExpansionExpr (HsExpanded _ a))) = (collectRecords a, True)
 #endif
