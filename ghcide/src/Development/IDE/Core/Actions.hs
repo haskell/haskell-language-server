@@ -66,36 +66,32 @@ getAtPoint file pos = runMaybeT $ do
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf dkMap env pos'
 
--- | For each Location, determine if we have the PositionMapping
--- for the correct file. If not, get the correct position mapping
--- and then apply the position mapping to the location.
-toCurrentLocations
+-- | Converts locations in the source code to their current positions,
+-- taking into account changes that may have occurred due to edits.
+toCurrentLocation
   :: PositionMapping
   -> NormalizedFilePath
-  -> [Location]
-  -> IdeAction [Location]
-toCurrentLocations mapping file = mapMaybeM go
+  -> Location
+  -> IdeAction (Maybe Location)
+toCurrentLocation mapping file (Location uri range) =
+  -- The Location we are going to might be in a different
+  -- file than the one we are calling gotoDefinition from.
+  -- So we check that the location file matches the file
+  -- we are in.
+  if nUri == normalizedFilePathToUri file
+  -- The Location matches the file, so use the PositionMapping
+  -- we have.
+  then pure $ Location uri <$> toCurrentRange mapping range
+  -- The Location does not match the file, so get the correct
+  -- PositionMapping and use that instead.
+  else do
+    otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
+      otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
+      useWithStaleFastMT GetHieAst otherLocationFile
+    pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
   where
-    go :: Location -> IdeAction (Maybe Location)
-    go (Location uri range) =
-      -- The Location we are going to might be in a different
-      -- file than the one we are calling gotoDefinition from.
-      -- So we check that the location file matches the file
-      -- we are in.
-      if nUri == normalizedFilePathToUri file
-      -- The Location matches the file, so use the PositionMapping
-      -- we have.
-      then pure $ Location uri <$> toCurrentRange mapping range
-      -- The Location does not match the file, so get the correct
-      -- PositionMapping and use that instead.
-      else do
-        otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
-          otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
-          useWithStaleFastMT GetHieAst otherLocationFile
-        pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
-      where
-        nUri :: NormalizedUri
-        nUri = toNormalizedUri uri
+    nUri :: NormalizedUri
+    nUri = toNormalizedUri uri
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
@@ -106,10 +102,11 @@ getDefinition file pos = runMaybeT $ do
     (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
-    MaybeT $ do
-      let (locations, names) = unzip locationsWithIdentifier
-      curLocations <- toCurrentLocations mapping file locations
-      pure (Just $ zip curLocations names)
+    mapMaybeM (\(location, identifier) -> do
+      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      pure $ Just (fixedLocation, identifier)
+      ) locationsWithIdentifier
+
 
 getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getTypeDefinition file pos = runMaybeT $ do
@@ -118,10 +115,10 @@ getTypeDefinition file pos = runMaybeT $ do
     (hf, mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
-    MaybeT $ do
-      let (locations, names) = unzip locationsWithIdentifier
-      curLocations <- toCurrentLocations mapping file locations
-      pure (Just $ zip curLocations names)
+    mapMaybeM (\(location, identifier) -> do
+      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      pure $ Just (fixedLocation, identifier)
+      ) locationsWithIdentifier
 
 highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
