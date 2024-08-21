@@ -107,9 +107,9 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        WorkspaceEdit (WorkspaceEdit),
                                                        type (|?) (InL, InR))
 
-#if __GLASGOW_HASKELL__ < 910
+
 import           Development.IDE.GHC.Compat           (HsExpansion (HsExpanded))
-#endif
+
 
 data Log
   = LogShake Shake.Log
@@ -271,11 +271,11 @@ collectNamesRule = defineNoDiagnostics mempty $ \CollectNames nfp -> runMaybeT $
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
 getNames :: TcModuleResult -> UniqFM Name [Name]
-#if __GLASGOW_HASKELL__ < 910
+
 getNames (tmrRenamed -> (group,_,_,_))   = collectNames group
-#else
-getNames (tmrRenamed -> (group,_,_,_,_)) = collectNames group
-#endif
+
+
+
 
 data CollectRecords = CollectRecords
                     deriving (Eq, Show, Generic)
@@ -441,10 +441,16 @@ showRecordPat names = fmap printOutputable . mapConPatDetail (\case
   _           -> Nothing)
 
 showRecordPatFlds :: Pat GhcTc -> Maybe [Name]
-showRecordPatFlds (ConPat _ _ args) = fmap (fmap ((\case FieldOcc x _ -> getName x) . unLoc . hfbLHS . unLoc) . rec_flds) (m args)
+showRecordPatFlds (ConPat _ _ args) = do
+  fields <- processRecCon args
+  names <- mapM getFieldName (rec_flds fields)
+  pure names
   where
-    m (RecCon flds) = Just $ processRecordFlds flds
-    m _             = Nothing
+    processRecCon (RecCon flds) = Just $ processRecordFlds flds
+    processRecCon _             = Nothing
+    getOccName (FieldOcc x _) = Just $ getName x
+    getOccName _              = Nothing
+    getFieldName = getOccName . unLoc . hfbLHS . unLoc
 showRecordPatFlds _ = Nothing
 
 showRecordCon :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
@@ -454,10 +460,12 @@ showRecordCon expr@(RecordCon _ _ flds) =
 showRecordCon _ = Nothing
 
 showRecordConFlds :: p ~ GhcTc => HsExpr p -> Maybe [Name]
-showRecordConFlds (RecordCon _ _ flds) = mapM (m . unLoc . hfbRHS . unLoc) (rec_flds $ processRecordFlds flds)
+showRecordConFlds (RecordCon _ _ flds) =
+  mapM getFieldName (rec_flds $ processRecordFlds flds)
   where
-    m (HsVar _ lidp) = Just $ getName lidp
-    m _              = Nothing
+    getVarName (HsVar _ lidp) = Just $ getName lidp
+    getVarName _              = Nothing
+    getFieldName = getVarName . unLoc . hfbRHS . unLoc
 showRecordConFlds _ = Nothing
 
 
@@ -485,11 +493,11 @@ getRecCons :: LHsExpr GhcTc -> ([RecordInfo], Bool)
 -- because there is a possibility that there were be more than one result per
 -- branch
 
-#if __GLASGOW_HASKELL__ >= 910
-getRecCons (unLoc -> XExpr (ExpandedThingTc a _)) = (collectRecords a, False)
-#else
+
+
+
 getRecCons (unLoc -> XExpr (ExpansionExpr (HsExpanded _ a))) = (collectRecords a, True)
-#endif
+
 getRecCons e@(unLoc -> RecordCon _ _ flds)
   | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where
