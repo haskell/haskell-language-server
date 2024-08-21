@@ -209,7 +209,7 @@ getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
 -- | Trims a given cabal AST leaving only targets and their
 -- @exposed-modules@ and @other-modules@ sections.
 --
--- For examle:
+-- For example:
 --
 -- * Given a cabal file like this:
 --
@@ -218,26 +218,26 @@ getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
 -- >     hs-source-dirs: source/directory
 -- >     ...
 -- >     exposed-modules:
--- >       Importaint.Exposed.Module
+-- >       Important.Exposed.Module
 -- >     other-modules:
--- >       Importaint.Other.Module
+-- >       Important.Other.Module
 -- >
 -- >   test-suite tests
 -- >     type: type
 -- >     build-tool-depends: tool
 -- >     other-modules:
--- >       Importaint.Other.Module
+-- >       Important.Other.Module
 --
 -- * @getSectionsWithModules@ gives output:
 --
 -- >   library
 -- >     exposed-modules:
--- >       Importaint.Exposed.Module
+-- >       Important.Exposed.Module
 -- >     other-modules:
--- >       Importaint.Other.Module
+-- >       Important.Other.Module
 -- >   test-suite tests
 -- >     other-modules:
--- >       Importaint.Other.Module
+-- >       Important.Other.Module
 getSectionsWithModules :: [Syntax.Field any] -> [Syntax.Field any]
 getSectionsWithModules fields = concatMap go fields
   where
@@ -295,7 +295,7 @@ getNameEndPosition (Syntax.Name (Syntax.Position row col) byteString) = Syntax.P
 getFieldLineEndPosition :: Syntax.FieldLine Syntax.Position -> Syntax.Position
 getFieldLineEndPosition (Syntax.FieldLine (Syntax.Position row col) byteString) = Syntax.Position row (col + BS.length byteString)
 
--- | Returns a LSP compatible range for a provided field
+-- | Returns an LSP compatible range for a provided field
 getFieldLSPRange :: Syntax.Field Syntax.Position -> LSP.Range
 getFieldLSPRange field = LSP.Range startLSPPos endLSPPos
   where

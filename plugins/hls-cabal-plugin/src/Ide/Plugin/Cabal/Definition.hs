@@ -193,7 +193,7 @@ lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetN
         else Nothing
 
 -- | Converts a name of a module to a FilePath
--- Warning: Takes a lot of assumptions and generally
+-- Warning: Makes a lot of assumptions and generally
 -- not advised to use.
 --
 -- Examples: (output is system dependent)
