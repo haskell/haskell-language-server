@@ -6,6 +6,7 @@ module Main (
     main,
 ) where
 
+import           CabalAdd                        (cabalAddTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
@@ -16,11 +17,10 @@ import           Data.Either                     (isRight)
 import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
 import qualified Data.Text                       as T
-import qualified Data.Text                       as Text
+import           Definition                      (gotoDefinitionTests)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
-import qualified Language.LSP.Protocol.Types     as LSP
 import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
@@ -167,7 +167,7 @@ codeActionTests = testGroup "Code Actions"
         contents <- documentContents doc
         liftIO $
             contents
-                @?= Text.unlines
+                @?= T.unlines
                     [ "cabal-version:      3.0"
                     , "name:               licenseCodeAction"
                     , "version:            0.1.0.0"
@@ -191,7 +191,7 @@ codeActionTests = testGroup "Code Actions"
         contents <- documentContents doc
         liftIO $
             contents
-                @?= Text.unlines
+                @?= T.unlines
                     [ "cabal-version:      3.0"
                     , "name:               licenseCodeAction2"
                     , "version:            0.1.0.0"
@@ -223,6 +223,7 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
+    , cabalAddTests
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]

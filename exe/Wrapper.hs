@@ -9,7 +9,6 @@ module Main where
 
 import           Control.Monad.Extra
 import           Data.Default
-import           Data.Either.Extra                  (eitherToMaybe)
 import           Data.Foldable
 import           Data.List
 import           Data.List.Extra                    (trimEnd)
@@ -76,8 +75,11 @@ main = do
           putStrLn $ showProgramVersionOfInterest programsOfInterest
           putStrLn "Tool versions in your project"
           cradle <- findProjectCradle' recorder False
-          ghcVersion <- runExceptT $ getRuntimeGhcVersion' cradle
-          putStrLn $ showProgramVersion "ghc" $ mkVersion =<< eitherToMaybe ghcVersion
+          runExceptT (getRuntimeGhcVersion' cradle) >>= \case
+            Left err ->
+              T.hPutStrLn stderr (prettyError err NoShorten)
+            Right ghcVersion ->
+              putStrLn $ showProgramVersion "ghc" $ mkVersion ghcVersion
 
       VersionMode PrintVersion ->
           putStrLn hlsVer

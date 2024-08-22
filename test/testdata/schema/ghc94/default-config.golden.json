@@ -25,6 +25,9 @@
                 "path": "cabal-gild"
             }
         },
+        "cabalHaskellIntegration": {
+            "globalOn": true
+        },
         "callHierarchy": {
             "globalOn": true
         },
