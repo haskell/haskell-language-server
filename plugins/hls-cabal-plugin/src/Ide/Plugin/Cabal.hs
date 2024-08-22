@@ -348,19 +348,25 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
   nfp <- getNormalizedFilePathE uri
-  (cabalFields, _) <- runActionE "cabal.cabal-hover" ide $ useWithStaleE ParseCabalFields nfp
-  case CabalFields.findTextWord cursor cabalFields of
-    Nothing ->
-      pure $ InR Null
-    Just cursorText -> do
-      (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
-      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-      case filterVersion cursorText of
-        Nothing -> pure $ InR Null
-        Just txt ->
-          if txt `elem` depsNames
-          then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
-          else pure $ InR Null
+  mFields <- liftIO $ runAction "cabal.cabal-hover" ide $ useWithStale ParseCabalFields nfp
+  case mFields of
+    Nothing -> pure $ InR Null
+    Just (cabalFields, _) ->
+      case CabalFields.findTextWord cursor cabalFields of
+        Nothing ->
+          pure $ InR Null
+        Just cursorText -> do
+          mGPD <- liftIO $ runAction "cabal.GPD" ide $ useWithStale ParseCabalFile nfp
+          case mGPD of
+            Nothing -> pure $ InR Null
+            Just (gpd, _) -> do
+              let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
+              case filterVersion cursorText of
+                Nothing -> pure $ InR Null
+                Just txt ->
+                  if txt `elem` depsNames
+                  then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
+                  else pure $ InR Null
   where
     cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
     uri = msgParam ^. JL.textDocument . JL.uri
