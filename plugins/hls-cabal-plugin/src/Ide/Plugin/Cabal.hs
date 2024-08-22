@@ -328,15 +328,13 @@ hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
   nfp <- getNormalizedFilePathE uri
   (cabalFields, _) <- runActionE "cabal.cabal-hover" ide $ useWithStaleE ParseCabalFields nfp
-  let mCursorText = CabalFields.findTextWord cursor cabalFields
-  case mCursorText of
+  case CabalFields.findTextWord cursor cabalFields of
     Nothing ->
       pure $ InR Null
     Just cursorText -> do
       (gpd, _) <- runActionE "cabal.GPD" ide $ useWithStaleE ParseCabalFile nfp
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-          mText = filterVersion cursorText
-      case mText of
+      case filterVersion cursorText of
         Nothing -> pure $ InR Null
         Just txt ->
           if txt `elem` depsNames
