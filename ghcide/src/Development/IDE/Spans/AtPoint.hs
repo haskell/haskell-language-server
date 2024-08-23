@@ -35,7 +35,8 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
-import           Development.IDE.GHC.Util             (printOutputable)
+import           Development.IDE.GHC.Util             (evalGhcEnv,
+                                                       printOutputable)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
@@ -57,6 +58,7 @@ import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
+import           GHC                                  (getInstancesForType)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
 import           System.Directory                     (doesFileExist)
@@ -218,7 +220,8 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
     hoverInfo :: HieAST hietype -> IO (Maybe Range, [T.Text])
     hoverInfo ast = do
         prettyNames <- mapM prettyName filteredNames
-        pure (Just range, prettyNames ++ pTypes)
+        instances <- catMaybes <$> mapM (either (const $ pure Nothing) prettyInstances . fst) filteredNames
+        pure (Just range, prettyNames ++ pTypes ++ instances)
       where
         pTypes :: [T.Text]
         pTypes
@@ -305,6 +308,28 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
           case nameSrcLoc name of
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> Nothing
             _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
+
+        prettyInstances :: Name -> IO (Maybe T.Text)
+        prettyInstances n =
+            fmap (wrapHaskell . T.unlines . fmap printOutputable) <$> instancesForName
+            where
+                instancesForName :: IO (Maybe [ClsInst])
+                instancesForName = runMaybeT $ do
+                    typ <- MaybeT . pure $ lookupNameEnv km n >>= tyThingAsDataType
+                    clsInst <- liftIO $ evalGhcEnv env $ getInstancesForType typ
+                    -- Avoid creating an empty wrapped section if no instances are found
+                    guard $ not $ null clsInst
+                    return clsInst
+
+                -- | Gets the datatype `Type` corresponding to a TyThing, if it repressents a datatype or
+                -- a data constructor.
+                tyThingAsDataType :: TyThing -> Maybe Type
+                tyThingAsDataType (AnId _)      = Nothing
+                tyThingAsDataType (ACoAxiom _)  = Nothing
+                tyThingAsDataType (AConLike cl) = case cl of
+                    PatSynCon   _  -> Nothing
+                    RealDataCon dc -> Just $ mkTyConTy $ dataConTyCon dc
+                tyThingAsDataType (ATyCon tc)   = Just $ mkTyConTy tc
 
 typeLocationsAtPoint
   :: forall m
