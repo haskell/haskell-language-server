@@ -375,7 +375,6 @@ hover ide _ msgParam = do
         regex = "([a-zA-Z0-9-]*[a-zA-Z0-9])"
 
         getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
-        getMatch (_, _, _, [])           = Nothing
         getMatch (_, _, _, [dependency]) = Just dependency
         getMatch (_, _, _, _)            = Nothing -- impossible case
 
