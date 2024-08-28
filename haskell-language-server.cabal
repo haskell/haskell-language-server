@@ -242,6 +242,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Completions
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
+    Ide.Plugin.Cabal.Definition
     Ide.Plugin.Cabal.FieldSuggest
     Ide.Plugin.Cabal.LicenseSuggest
     Ide.Plugin.Cabal.CabalAdd
@@ -287,11 +288,12 @@ test-suite hls-cabal-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-plugin/test
   main-is:          Main.hs
   other-modules:
+    CabalAdd
     Completer
     Context
-    Utils
+    Definition
     Outline
-    CabalAdd
+    Utils
   build-depends:
     , base
     , bytestring
