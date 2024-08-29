@@ -1,0 +1,62 @@
+cabal-version:      3.0
+name:               simple-cabal
+version:            0.1.0.0
+license:            MIT
+
+-- Range : (6, 0) - (7, 22)
+common warnings-0
+    ghc-options: -Wall
+
+-- Range : (10, 0) - (17, 40)
+common warnings-1
+    ghc-options: -Wall
+                        -Wredundant-constraints
+                 -Wunused-packages
+
+     -Wno-name-shadowing
+
+     -Wno-unticked-promoted-constructors
+
+-- Range : (20, 0) - (23, 34)
+common warnings-2
+    ghc-options: -Wall
+                 -Wredundant-constraints
+                 -Wunused-packages
+
+library
+
+    import: warnings-0
+--              ^ Position: (27, 16), middle of identifier
+
+    import: warnings-1
+--          ^ Position: (30, 12), left of identifier
+    
+    import: warnings-2
+--                   ^ Position: (33, 22), right of identifier
+
+    import: warnings-0
+--                  ^ Position: (36, 20), left of '-' in identifier
+
+    import: warnings-1
+--                  ^ Position: (39, 19), right of "-" in identifier
+
+    import: warnings-2,warnings-1,warnings-0
+--              ^ Position: (42, 16), identifier in identifier list
+
+    import: warnings-2,warnings-1,warnings-0
+--                               ^ Position: (45, 33), left of ',' right of identifier
+
+    import: warnings-2,warnings-1,warnings-0
+--                               ^ Position: (48, 34), right of ',' left of identifier
+
+    import: warnings-2, warnings-1,warnings-0
+--                    ^ Position: (51, 37), right of ',' left of space
+
+    import: warnings-0
+--        ^ Position: (54, 11), right of ':' left of space
+
+    import: warnings-0
+--     ^ Position: (57, 8), not a definition
+
+          -- EOL
+--     ^ Position: (59, 7), empty space

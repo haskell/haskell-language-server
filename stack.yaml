@@ -38,6 +38,8 @@ extra-deps:
   - trial-0.0.0.0
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
+  - cabal-add-0.1
+  - cabal-install-parsers-0.6.1.1
 
 configure-options:
   ghcide:
@@ -52,6 +54,8 @@ flags:
     ghc-lib: true
   retrie:
     BuildExecutable: false
+  cabal-add:
+    cabal-syntax: true
 
 nix:
   packages: [icu libcxx zlib]
