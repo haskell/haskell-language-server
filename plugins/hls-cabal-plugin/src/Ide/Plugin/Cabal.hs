@@ -322,10 +322,8 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
               case mbGPD of
                 Nothing -> pure $ InL []
                 Just (gpd, _) -> do
-                  actions <- liftIO $ CabalAdd.addDependencySuggestCodeAction plId verTxtDocId
-                                                                              suggestions
-                                                                              haskellFilePath cabalFilePath
-                                                                              gpd
+                  actions <- liftIO $ CabalAdd.addDependencySuggestCodeAction plId verTxtDocId suggestions
+                                                                              cabalFilePath gpd
                   pure $ InL $ fmap InR actions
 
 

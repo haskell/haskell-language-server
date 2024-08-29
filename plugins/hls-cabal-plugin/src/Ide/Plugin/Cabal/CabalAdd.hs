@@ -27,6 +27,7 @@ import           Data.ByteString                               (ByteString)
 import qualified Data.ByteString.Char8                         as B
 import           Data.List.NonEmpty                            (NonEmpty (..),
                                                                 fromList)
+import           Data.Maybe                                    (catMaybes)
 import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
 import           Data.Text.Encoding                            (encodeUtf8)
@@ -37,18 +38,17 @@ import           Development.IDE.Core.Rules                    (runAction)
 import           Development.IDE.Core.RuleTypes                (GetFileContents (..))
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
-import           Distribution.PackageDescription               (GenericPackageDescription,
+import           Distribution.PackageDescription               (ComponentName,
+                                                                GenericPackageDescription,
+                                                                PackageDescription (..),
                                                                 packageDescription,
                                                                 specVersion)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.PackageDescription.Quirks        (patchQuirks)
 import qualified Distribution.Pretty                           as Pretty
-import           Distribution.Simple.BuildTarget               (BuildTarget,
-                                                                buildTargetComponentName,
-                                                                readBuildTargets)
 import           Distribution.Simple.Utils                     (safeHead)
-import           Distribution.Verbosity                        (silent,
-                                                                verboseNoStderr)
+import           Distribution.Types.Component                  (Component (..),
+                                                                componentName)
 import           Ide.Logger
 import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields (..),
                                                                 ParseCabalFile (..))
@@ -76,7 +76,6 @@ import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEd
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
 import           System.FilePath                               (dropFileName,
-                                                                makeRelative,
                                                                 splitPath,
                                                                 takeExtension,
                                                                 (</>))
@@ -134,42 +133,34 @@ addDependencySuggestCodeAction
   :: PluginId
   -> VersionedTextDocumentIdentifier -- ^ Cabal's versioned text identifier
   -> [(T.Text, T.Text)] -- ^ A dependency-version suggestion pairs
-  -> FilePath -- ^ Path to the haskell file (source of diagnostics)
   -> FilePath -- ^ Path to the cabal file (that will be edited)
   -> GenericPackageDescription
   -> IO [CodeAction]
-addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
-    buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
-    case buildTargets of
-      -- If there are no build targets found, run `cabal-add` command with default behaviour
-      [] -> pure $ mkCodeAction cabalFilePath Nothing <$> suggestions
-      -- Otherwise provide actions for all found targets
-      targets -> pure $ concat [mkCodeAction cabalFilePath (Just $ buildTargetToStringRepr target) <$>
-                                                            suggestions | target <- targets]
-  where
+addDependencySuggestCodeAction plId verTxtDocId suggestions cabalFilePath gpd = do
     -- | Note the use of `pretty` function.
-    -- It converts the `BuildTarget` to an acceptable string representation.
+    -- It converts the `ComponentName` to an acceptable string representation.
     -- It will be used in as the input for `cabal-add`'s `executeConfig`.
-    buildTargetToStringRepr target = render $ Pretty.pretty $ buildTargetComponentName target
-
-    -- | Gives the build targets that are used in the `CabalAdd`.
-    -- Note the unorthodox usage of `readBuildTargets`:
-    -- If the relative path to the haskell file is provided,
-    -- the `readBuildTargets` will return a main build target.
-    -- This behaviour is acceptable for now, but changing to a way of getting
-    -- all build targets in a file is advised.
-    getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
-    getBuildTargets gpd cabalFilePath haskellFilePath = do
-      let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
-      readBuildTargets (verboseNoStderr silent) (flattenPackageDescription gpd) [haskellFileRelativePath]
+    pure $ concat [mkCodeAction cabalFilePath (Just $ render $ Pretty.pretty cNames) <$>
+                                suggestions | cNames <- getBuildTargetComponentNames gpd]
+  where
+    getBuildTargetComponentNames :: GenericPackageDescription -> [ComponentName]
+    getBuildTargetComponentNames gpd = map componentName components
+      where PackageDescription{..} = flattenPackageDescription gpd
+            components = catMaybes $
+                            [CLib <$> library] <>
+                            map (Just . CLib) subLibraries <>
+                            map (Just . CFLib) foreignLibs <>
+                            map (Just . CExe) executables <>
+                            map (Just . CTest) testSuites <>
+                            map (Just . CBench) benchmarks
 
     mkCodeAction :: FilePath -> Maybe String -> (T.Text, T.Text) -> CodeAction
     mkCodeAction cabalFilePath target (suggestedDep, suggestedVersion) =
       let
-        versionTitle = if T.null suggestedVersion then T.empty else "  version " <> suggestedVersion
+        versionTitle = if T.null suggestedVersion then T.empty else "-" <> suggestedVersion
         targetTitle = case target of
           Nothing -> T.empty
-          Just t  -> "  target " <> T.pack t
+          Just t  -> " at " <> T.pack t
         title = "Add dependency " <> suggestedDep <> versionTitle <> targetTitle
         version = if T.null suggestedVersion then Nothing else Just suggestedVersion
 
