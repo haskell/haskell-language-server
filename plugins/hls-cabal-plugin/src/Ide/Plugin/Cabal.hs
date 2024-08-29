@@ -368,6 +368,14 @@ hover ide _ msgParam = do
     dependencyName :: Dependency -> T.Text
     dependencyName dep = T.pack $ unPackageName $ depPkgName dep
 
+    -- | Removes version requirements like
+    -- `==1.0.0.0`, `>= 2.1.1` that could be included in
+    -- hover message. Assumes that the dependency consists
+    -- of alphanums with dashes in between. Ends with an alphanum.
+    --
+    -- Examples:
+    -- >>> filterVersion "imp-deps>=2.1.1"
+    -- "imp-deps"
     filterVersion :: T.Text -> Maybe T.Text
     filterVersion msg = getMatch (msg =~ regex)
       where
