@@ -28,7 +28,7 @@ cabalAddTests :: TestTree
 cabalAddTests =
   testGroup
     "CabalAdd Tests"
-    [ runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
+    [ runHaskellTestCaseSession "Code Actions - Can add hidden packages" ("cabal-add-testdata" </> "cabal-add-exe")
         (generateAddDependencyTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
         (generateAddDependencyTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
@@ -36,6 +36,9 @@ cabalAddTests =
         (generateAddDependencyTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
         (generateAddDependencyTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden packages for multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("src" </> "Main.hs") "split" [261,345,590,754])
+
     , testHiddenPackageSuggestions "Check CabalAdd's parser, no version"
                                    [ "It is a member of the hidden package 'base'"
                                    , "It is a member of the hidden package 'Blammo-wai'"
@@ -117,8 +120,10 @@ cabalAddTests =
         _ <- waitForDiagnosticsFrom hsdoc
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
         let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
-        mapM_ executeCodeAction selectedCas
-        _ <- skipManyTill anyMessage $ getDocumentEdit cabDoc -- Wait for the changes in cabal file
+        let runAvait codeAction = do
+              executeCodeAction codeAction
+              skipManyTill anyMessage $ getDocumentEdit cabDoc
+        mapM_ runAvait selectedCas
         contents <- documentContents cabDoc
         liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") indicesRes (T.indices dependency contents)
     testHiddenPackageSuggestions :: String -> [T.Text] -> [(T.Text, T.Text)] -> TestTree
