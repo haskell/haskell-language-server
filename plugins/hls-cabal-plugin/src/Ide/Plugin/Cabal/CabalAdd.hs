@@ -121,14 +121,7 @@ instance Pretty CabalAddCommandParams where
 -- | Creates a code action that calls the `cabalAddCommand`,
 --   using dependency-version suggestion pairs as input.
 --
---   Returns disabled action if no cabal files given.
---
---   Takes haskell file and cabal file paths to create a relative path
---   to the haskell file, which is used to get a `BuildTarget`.
---
---   In current implementation the dependency is being added to the main found
---   build target, but if there will be a way to get all build targets from a file
---   it will be possible to support addition to a build target of choice.
+--   Gives a code action for all found build targets.
 addDependencySuggestCodeAction
   :: PluginId
   -> VersionedTextDocumentIdentifier -- ^ Cabal's versioned text identifier
