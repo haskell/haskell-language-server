@@ -85,8 +85,8 @@
         "ghcide-type-lenses": {
             "codeLensOn": true,
             "config": {
-                "mode": "always",
-                "whereInlayHintOn": true
+                "localBindingInlayHintOn": true,
+                "mode": "always"
             },
             "inlayHintsOn": true
         },

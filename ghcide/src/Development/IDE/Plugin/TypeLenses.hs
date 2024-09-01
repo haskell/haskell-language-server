@@ -24,7 +24,7 @@ import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.Generics                        (GenericQ, everything,
-                                                       mkQ, something)
+                                                       extQ, mkQ, something)
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
@@ -105,16 +105,16 @@ descriptor recorder plId =
   (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
-                    <> mkPluginHandler SMethod_TextDocumentInlayHint whereClauseInlayHints
+                    <> mkPluginHandler SMethod_TextDocumentInlayHint localBindingInlayHints
     , pluginCommands = [PluginCommand typeLensCommandId "adds a signature" commandHandler]
-    , pluginRules = globalBindingRules recorder *> whereBindingRules recorder
+    , pluginRules = globalBindingRules recorder *> localBindingRules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
   where
     desc = "Provides code lenses type signatures"
 
 properties :: Properties
-  '[ 'PropertyKey "whereInlayHintOn" 'TBoolean,
+  '[ 'PropertyKey "localBindingInlayHintOn" 'TBoolean,
      'PropertyKey "mode" ('TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
@@ -122,8 +122,8 @@ properties = emptyProperties
     , (Exported, "Only display type lenses of exported global bindings")
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
-  & defineBooleanProperty #whereInlayHintOn
-    "Display type lenses of where bindings"
+  & defineBooleanProperty #localBindingInlayHintOn
+    "Display type lenses of local bindings"
     True
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
@@ -376,23 +376,23 @@ pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
 -- --------------------------------------------------------------------------------
 
 -- | A binding expression with its id and location.
-data WhereBinding = WhereBinding
+data LocalBinding = LocalBinding
     { bindingId  :: Id
-    -- ^ Each WhereBinding represents an id in binding expression.
+    -- ^ Each LocalBinding represents an id in binding expression.
     , bindingLoc :: SrcSpan
     -- ^ Location for an individual binding in a pattern.
     -- Here we use the 'bindingLoc' and offset to render the type signature at the proper place.
     , offset     :: Int
     -- ^ Column offset between whole binding and individual binding in a pattern.
     --
-    -- Example: For @(a, b) = (1, True)@, there will be two `WhereBinding`s:
-    -- - `a`: WhereBinding id_a loc_a 0
-    -- - `b`: WhereBinding id_b loc_b 4
+    -- Example: For @(a, b) = (1, True)@, there will be two `LocalBinding`s:
+    -- - `a`: LocalBinding id_a loc_a 0
+    -- - `b`: LocalBinding id_b loc_b 4
     }
 
--- | Existing bindings in a where clause.
-data WhereBindings = WhereBindings
-  { bindings         :: [WhereBinding]
+-- | Existing local bindings
+data LocalBindings = LocalBindings
+  { bindings         :: [LocalBinding]
   , existingSigNames :: [Name]
   -- ^ Names of existing signatures.
   -- It is used to hide type lens for existing signatures.
@@ -409,69 +409,84 @@ data WhereBindings = WhereBindings
   -- the definition of `f`(second line).
   }
 
-data GetWhereBindingTypeSigs = GetWhereBindingTypeSigs
+data GetLocalBindingTypeSigs = GetLocalBindingTypeSigs
   deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 type BindingSigMap = Map.Map Id String
 
-newtype WhereBindingTypeSigsResult = WhereBindingTypeSigsResult ([WhereBindings], BindingSigMap)
+newtype LocalBindingTypeSigsResult = LocalBindingTypeSigsResult ([LocalBindings], BindingSigMap)
 
-instance Show WhereBindingTypeSigsResult where
-  show _ = "<GetTypeResult.where>"
+instance Show LocalBindingTypeSigsResult where
+  show _ = "<GetTypeResult.local>"
 
-instance NFData WhereBindingTypeSigsResult where
+instance NFData LocalBindingTypeSigsResult where
   rnf = rwhnf
 
-type instance RuleResult GetWhereBindingTypeSigs = WhereBindingTypeSigsResult
+type instance RuleResult GetLocalBindingTypeSigs = LocalBindingTypeSigsResult
 
-whereBindingRules :: Recorder (WithPriority Log) -> Rules ()
-whereBindingRules recorder = do
-  define (cmapWithPrio LogShake recorder) $ \GetWhereBindingTypeSigs nfp -> do
+localBindingRules :: Recorder (WithPriority Log) -> Rules ()
+localBindingRules recorder = do
+  define (cmapWithPrio LogShake recorder) $ \GetLocalBindingTypeSigs nfp -> do
     tmr <- use TypeCheck nfp
     -- we need session here for tidying types
     hsc <- use GhcSession nfp
-    result <- liftIO $ whereBindingType (tmrTypechecked <$> tmr) (hscEnv <$> hsc)
+    result <- liftIO $ localBindingType (tmrTypechecked <$> tmr) (hscEnv <$> hsc)
     pure ([], result)
 
-whereBindingType :: Maybe TcGblEnv -> Maybe HscEnv -> IO (Maybe WhereBindingTypeSigsResult)
-whereBindingType (Just gblEnv) (Just hsc) = do
-  let wheres = findWhereQ (tcg_binds gblEnv)
-      localBindings = mapMaybe findBindingsQ wheres
+localBindingType :: Maybe TcGblEnv -> Maybe HscEnv -> IO (Maybe LocalBindingTypeSigsResult)
+localBindingType (Just gblEnv) (Just hsc) = do
+  let locals = findLocalQ (tcg_binds gblEnv)
+      localBindings = mapMaybe findBindingsQ locals
       bindToSig' = bindToSig hsc (tcg_rdr_env gblEnv)
-      findSigs (WhereBindings bindings _) = fmap findSig bindings
-        where findSig (WhereBinding bindingId _ _) = sequence (bindingId, bindToSig' bindingId)
+      findSigs (LocalBindings bindings _) = fmap findSig bindings
+        where findSig (LocalBinding bindingId _ _) = sequence (bindingId, bindToSig' bindingId)
   (_, Map.fromList . fromMaybe [] -> sigMap) <-
     initTcWithGbl hsc gblEnv ghostSpan $ sequence $ concatMap findSigs localBindings
-  pure $ Just (WhereBindingTypeSigsResult (localBindings, sigMap))
-whereBindingType _ _                   = pure Nothing
+  pure $ Just (LocalBindingTypeSigsResult (localBindings, sigMap))
+localBindingType _ _                   = pure Nothing
 
--- | All where clauses from type checked source.
-findWhereQ :: GenericQ [HsLocalBinds GhcTc]
-findWhereQ = everything (<>) $ mkQ [] (pure . findWhere)
+-- | All local bind expression from type checked source.
+findLocalQ :: GenericQ [HsLocalBinds GhcTc]
+findLocalQ = everything (<>) ([] `mkQ` (pure . findWhere) `extQ` findLet)
   where
     findWhere :: GRHSs GhcTc (LHsExpr GhcTc) -> HsLocalBinds GhcTc
     findWhere = grhssLocalBinds
 
--- | Find all bindings for **one** where clause.
-findBindingsQ :: GenericQ (Maybe WhereBindings)
+    findLet :: LHsExpr GhcTc -> [HsLocalBinds GhcTc]
+    findLet = findLetExpr . unLoc
+
+    findLetExpr :: HsExpr GhcTc -> [HsLocalBinds GhcTc]
+    findLetExpr (HsLet _ _ binds _ _)       = [binds]
+    findLetExpr (HsDo _ _ (unLoc -> stmts)) = concatMap (findLetStmt . unLoc) stmts
+    findLetExpr _                           = []
+
+    findLetStmt :: ExprStmt GhcTc -> [HsLocalBinds GhcTc]
+    findLetStmt (LetStmt _ binds) = [binds]
+    -- TODO(jinser): why `foo <- expr` does not exist
+    -- findLetStmt (BindStmt _ _ expr) = findLetExpr (unLoc expr)
+    findLetStmt _                 = []
+
+-- | Find all bindings for **one** local bind expression.
+findBindingsQ :: GenericQ (Maybe LocalBindings)
 findBindingsQ = something (mkQ Nothing findBindings)
   where
-    findBindings :: NHsValBindsLR GhcTc -> Maybe WhereBindings
+    findBindings :: NHsValBindsLR GhcTc -> Maybe LocalBindings
     findBindings (NValBinds binds sigs) =
-      Just $ WhereBindings
+      Just $ LocalBindings
         { bindings = concat $ mapMaybe (something (mkQ Nothing findBindingIds) . snd) binds
         , existingSigNames = concatMap findSigIds sigs
         }
 
-    findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe [WhereBinding]
+    findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe [LocalBinding]
     findBindingIds bind = case unLoc bind of
       FunBind{..} ->
-        let whereBinding = WhereBinding (unLoc fun_id) (getLoc fun_id)
+        let localBinding = LocalBinding (unLoc fun_id) (getLoc fun_id)
                            (col (getLoc fun_id) - col (getLoc bind))
-        in Just $ pure whereBinding
-      PatBind{..} -> Just $ (everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)) pat_lhs
+        in Just $ pure localBinding
+      PatBind{..} ->
+        Just $ (everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)) pat_lhs
         where
-          wb id srcSpan = WhereBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
+          wb id srcSpan = LocalBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
       _           -> Nothing
       where
         col = srcSpanStartCol . realSrcSpan
@@ -485,14 +500,14 @@ findBindingsQ = something (mkQ Nothing findBindings)
     findSigIds (L _ (TypeSig _ names _)) = map unLoc names
     findSigIds _                         = []
 
--- | Provide code lens for where bindings.
-whereClauseInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
-whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) visibleRange)  = do
-  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #whereInlayHintOn plId properties
+-- | Provide code lens for local bindings.
+localBindingInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
+localBindingInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) visibleRange)  = do
+  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #localBindingInlayHintOn plId properties
   if not enabled then pure $ InL [] else do
     nfp <- getNormalizedFilePathE uri
-    (WhereBindingTypeSigsResult (localBindings, sigMap), pm)
-        <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetWhereBindingTypeSigs nfp
+    (LocalBindingTypeSigsResult (localBindings, sigMap), pm)
+        <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetLocalBindingTypeSigs nfp
     let bindingToInlayHints id sig = generateWhereInlayHints (T.pack $ printName (idName id)) (maybe "_" T.pack sig)
 
         -- | Note there may multi ids for one binding,
@@ -500,14 +515,13 @@ whereClauseInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri)
         -- in one binding.
         inlayHints =
           [ bindingToInlayHints bindingId bindingSig bindingRange offset
-          | WhereBindings{..} <- localBindings
+          | LocalBindings{..} <- localBindings
           , let sigSpans = getSrcSpan <$> existingSigNames
-          , WhereBinding{..} <- bindings
+          , LocalBinding{..} <- bindings
           , let bindingSpan = getSrcSpan (idName bindingId)
           , let bindingSig = Map.lookup bindingId sigMap
           , bindingSpan `notElem` sigSpans
           , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
-          -- , Just bindingRange <- [srcSpanToRange bindingLoc]
           -- Show inlay hints only within visible range
           , isSubrangeOf bindingRange visibleRange
           ]

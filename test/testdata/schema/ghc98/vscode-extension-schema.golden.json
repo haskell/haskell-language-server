@@ -179,6 +179,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.ghcide-type-lenses.config.localBindingInlayHintOn": {
+        "default": true,
+        "markdownDescription": "Display type lenses of local bindings",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.ghcide-type-lenses.config.mode": {
         "default": "always",
         "description": "Control how type lenses are shown",
@@ -194,12 +200,6 @@
         ],
         "scope": "resource",
         "type": "string"
-    },
-    "haskell.plugin.ghcide-type-lenses.config.whereInlayHintOn": {
-        "default": true,
-        "markdownDescription": "Display type lenses of where bindings",
-        "scope": "resource",
-        "type": "boolean"
     },
     "haskell.plugin.ghcide-type-lenses.inlayHintsOn": {
         "default": true,
