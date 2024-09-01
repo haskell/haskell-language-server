@@ -510,12 +510,15 @@ localBindingInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri
     nfp <- getNormalizedFilePathE uri
     (LocalBindingTypeSigsResult (localBindings, sigMap), pm)
         <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetLocalBindingTypeSigs nfp
-    let bindingToInlayHints id sig = generateWhereInlayHints (T.pack $ printName (idName id)) (maybe "_" T.pack sig)
+    let bindingToInlayHints :: Id -> Maybe String -> Range -> Int -> Maybe InlayHint
+        bindingToInlayHints id (Just sig) range offset =
+          Just $ generateWhereInlayHints (T.pack $ printName (idName id)) (T.pack sig) range offset
+        bindingToInlayHints _ Nothing _ _              = Nothing
 
         -- | Note there may multi ids for one binding,
         -- like @(a, b) = (42, True)@, there are `a` and `b`
         -- in one binding.
-        inlayHints =
+        inlayHints = catMaybes
           [ bindingToInlayHints bindingId bindingSig bindingRange offset
           | LocalBindings{..} <- localBindings
           , let sigSpans = getSrcSpan <$> existingSigNames
