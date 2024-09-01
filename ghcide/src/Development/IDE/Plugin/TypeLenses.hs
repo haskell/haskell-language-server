@@ -484,17 +484,19 @@ findBindingsQ = something (mkQ Nothing findBindings)
                            (col (getLoc fun_id) - col (getLoc bind))
         in Just $ pure localBinding
       PatBind{..} ->
-        Just $ (everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)) pat_lhs
-        where
-          wb id srcSpan = LocalBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
+        let wb id srcSpan = LocalBinding id srcSpan (col srcSpan - col (getLoc pat_lhs))
+
+            -- | Example: Find `a` and `b` from @(a,b) = (1,True)@
+            findIdFromPat :: Pat GhcTc -> Maybe (Id, SrcSpan)
+            findIdFromPat (VarPat _ located) = Just (unLoc located, getLoc located)
+            findIdFromPat _                  = Nothing
+
+            findIdsFromPat :: LocatedA (Pat GhcTc) -> [LocalBinding]
+            findIdsFromPat = everything (<>) $ mkQ [] (fmap (uncurry wb) . maybeToList . findIdFromPat)
+        in Just $ findIdsFromPat pat_lhs
       _           -> Nothing
       where
         col = srcSpanStartCol . realSrcSpan
-
-    -- | Example: Find `a` and `b` from @(a,b) = (1,True)@
-    findIdFromPat :: Pat GhcTc -> Maybe (Id, SrcSpan)
-    findIdFromPat (VarPat _ located) = Just (unLoc located, getLoc located)
-    findIdFromPat _                  = Nothing
 
     findSigIds :: GenLocated l (Sig GhcRn) -> [IdP GhcRn]
     findSigIds (L _ (TypeSig _ names _)) = map unLoc names
