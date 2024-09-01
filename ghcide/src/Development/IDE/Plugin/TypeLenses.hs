@@ -498,9 +498,9 @@ findBindingsQ = something (mkQ Nothing findBindings)
       where
         col = srcSpanStartCol . realSrcSpan
 
-    findSigIds :: GenLocated l (Sig GhcRn) -> [IdP GhcRn]
-    findSigIds (L _ (TypeSig _ names _)) = map unLoc names
-    findSigIds _                         = []
+    findSigIds :: LSig GhcRn -> [Name]
+    findSigIds (unLoc -> (TypeSig _ names _)) = map unLoc names
+    findSigIds _                              = []
 
 -- | Provide code lens for local bindings.
 localBindingInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
