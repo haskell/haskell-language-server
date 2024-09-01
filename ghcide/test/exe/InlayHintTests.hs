@@ -117,7 +117,7 @@ whereInlayHintsTests = testGroup "add signature for where clauses"
 
 editTest :: String -> TestTree
 editTest file =
-  testWithDummyPlugin (file <> " (InlayHint EditText)") (mkIdeTestFs [copyDir "local-sig-lens"]) $ do
+  testWithDummyPlugin (file <> " (InlayHint EditText)") (mkIdeTestFs [copyDir "local-sig-inlay-hints"]) $ do
     doc <- openDoc (file ++ ".hs") "haskell"
     executeAllHints doc globalRange
     real <- documentContents doc
@@ -127,7 +127,7 @@ editTest file =
 
 hintTest :: String -> ([InlayHint] -> Assertion) -> TestTree
 hintTest file assert =
-  testWithDummyPlugin (file <> " (InlayHint)") (mkIdeTestFs [copyDir "local-sig-lens"]) $ do
+  testWithDummyPlugin (file <> " (InlayHint)") (mkIdeTestFs [copyDir "local-sig-inlay-hints"]) $ do
     doc <- openDoc (file ++ ".hs") "haskell"
     hints <- getInlayHints doc globalRange
     liftIO $ assert hints
@@ -138,7 +138,7 @@ createConfig on =
   A.object [ "plugin"
     A..= A.object [ "ghcide-type-lenses"
       A..= A.object [ "config"
-        A..= A.object [ "whereInlayHintOn" A..= A.Bool on ]]]]
+        A..= A.object [ "localBindingInlayHintOn" A..= A.Bool on ]]]]
 
 
 executeAllHints :: TextDocumentIdentifier -> Range -> Session ()
