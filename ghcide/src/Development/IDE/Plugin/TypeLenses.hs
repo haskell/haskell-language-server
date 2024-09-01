@@ -111,7 +111,7 @@ descriptor recorder plId =
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
   where
-    desc = "Provides code lenses type signatures"
+    desc = "Provides type signatures through code lenses and inlay hints"
 
 properties :: Properties
   '[ 'PropertyKey "localBindingInlayHintOn" 'TBoolean,
