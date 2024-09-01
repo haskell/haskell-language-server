@@ -181,7 +181,7 @@
     },
     "haskell.plugin.ghcide-type-lenses.config.localBindingInlayHintOn": {
         "default": true,
-        "markdownDescription": "Display type lenses of local bindings",
+        "markdownDescription": "Display inlay hints of local bindings",
         "scope": "resource",
         "type": "boolean"
     },

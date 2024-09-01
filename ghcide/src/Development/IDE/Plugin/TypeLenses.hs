@@ -123,7 +123,7 @@ properties = emptyProperties
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
   & defineBooleanProperty #localBindingInlayHintOn
-    "Display type lenses of local bindings"
+    "Display inlay hints of local bindings"
     True
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
