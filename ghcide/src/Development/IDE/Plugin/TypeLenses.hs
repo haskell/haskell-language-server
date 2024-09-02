@@ -456,7 +456,11 @@ findLocalQ = everything (<>) ([] `mkQ` (pure . findWhere) `extQ` findLet)
     findLet = findLetExpr . unLoc
 
     findLetExpr :: HsExpr GhcTc -> [HsLocalBinds GhcTc]
+#if !MIN_VERSION_ghc(9,9,0)
     findLetExpr (HsLet _ _ binds _ _)       = [binds]
+#else
+    findLetExpr (HsLet _ binds _)           = [binds]
+#endif
     findLetExpr (HsDo _ _ (unLoc -> stmts)) = concatMap (findLetStmt . unLoc) stmts
     findLetExpr _                           = []
 
