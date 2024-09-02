@@ -179,6 +179,7 @@ documentHighlight hf rf pos = pure highlights
         then DocumentHighlightKind_Write
         else DocumentHighlightKind_Read
 
+-- | Locate the type definition of the name at a given position.
 gotoTypeDefinition
   :: MonadIO m
   => WithHieDb
@@ -186,7 +187,7 @@ gotoTypeDefinition
   -> IdeOptions
   -> HieAstResult
   -> Position
-  -> MaybeT m [Location]
+  -> MaybeT m [(Location, Identifier)]
 gotoTypeDefinition withHieDb lookupModule ideOpts srcSpans pos
   = lift $ typeLocationsAtPoint withHieDb lookupModule ideOpts pos srcSpans
 
@@ -199,7 +200,7 @@ gotoDefinition
   -> M.Map ModuleName NormalizedFilePath
   -> HieASTs a
   -> Position
-  -> MaybeT m [Location]
+  -> MaybeT m [(Location, Identifier)]
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
   = lift $ locationsAtPoint withHieDb getHieFile ideOpts imports pos srcSpans
 
@@ -306,6 +307,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> Nothing
             _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
 
+-- | Find 'Location's of type definition at a specific point and return them along with their 'Identifier's.
 typeLocationsAtPoint
   :: forall m
    . MonadIO m
@@ -314,7 +316,7 @@ typeLocationsAtPoint
   -> IdeOptions
   -> Position
   -> HieAstResult
-  -> m [Location]
+  -> m [(Location, Identifier)]
 typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKind) =
   case hieKind of
     HieFromDisk hf ->
@@ -332,12 +334,12 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
             HQualTy a b -> getTypes' [a,b]
             HCastTy a -> getTypes' [a]
             _ -> []
-        in fmap nubOrd $ concatMapM (fmap (fromMaybe []) . nameToLocation withHieDb lookupModule) (getTypes' ts)
+        in fmap nubOrd $ concatMapM (\n -> fmap (maybe [] (fmap (,Right n))) (nameToLocation withHieDb lookupModule n)) (getTypes' ts)
     HieFresh ->
       let ts = concat $ pointCommand ast pos getts
           getts x = nodeType ni  ++ (mapMaybe identType $ M.elems $ nodeIdentifiers ni)
             where ni = nodeInfo x
-        in fmap nubOrd $ concatMapM (fmap (fromMaybe []) . nameToLocation withHieDb lookupModule) (getTypes ts)
+        in fmap nubOrd $ concatMapM (\n -> fmap (maybe [] (fmap (,Right n))) (nameToLocation withHieDb lookupModule n)) (getTypes ts)
 
 namesInType :: Type -> [Name]
 namesInType (TyVarTy n)      = [varName n]
@@ -352,6 +354,7 @@ namesInType _                = []
 getTypes :: [Type] -> [Name]
 getTypes ts = concatMap namesInType ts
 
+-- | Find 'Location's of definition at a specific point and return them along with their 'Identifier's.
 locationsAtPoint
   :: forall m a
    . MonadIO m
@@ -361,13 +364,16 @@ locationsAtPoint
   -> M.Map ModuleName NormalizedFilePath
   -> Position
   -> HieASTs a
-  -> m [Location]
+  -> m [(Location, Identifier)]
 locationsAtPoint withHieDb lookupModule _ideOptions imports pos ast =
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
-      modToLocation m = fmap (\fs -> pure $ Location (fromNormalizedUri $ filePathToUri' fs) zeroRange) $ M.lookup m imports
-    in fmap (nubOrd . concat) $ mapMaybeM (either (pure . modToLocation) $ nameToLocation withHieDb lookupModule) ns
+      modToLocation m = fmap (\fs -> pure (Location (fromNormalizedUri $ filePathToUri' fs) zeroRange)) $ M.lookup m imports
+   in fmap (nubOrd . concat) $ mapMaybeM
+        (either (\m -> pure ((fmap $ fmap (,Left m)) (modToLocation m)))
+                (\n -> fmap (fmap $ fmap (,Right n)) (nameToLocation withHieDb lookupModule n)))
+        ns
 
 -- | Given a 'Name' attempt to find the location where it is defined.
 nameToLocation :: MonadIO m => WithHieDb -> LookupModule m -> Name -> m (Maybe [Location])

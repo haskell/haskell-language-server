@@ -1,25 +1,29 @@
 module Ide.Plugin.Cabal.Completion.CabalFields
-  ( findStanzaForColumn,
-    findFieldSection,
-    findTextWord,
-    findFieldLine,
-    getOptionalSectionName,
-    getAnnotation,
-    getFieldName,
-    onelineSectionArgs,
-    getFieldEndPosition,
-    getSectionArgEndPosition,
-    getNameEndPosition,
-    getFieldLineEndPosition,
-    getFieldLSPRange
-    ) where
+  ( findStanzaForColumn
+  , getModulesNames
+  , getFieldLSPRange
+  , findFieldSection
+  , findTextWord
+  , findFieldLine
+  , getOptionalSectionName
+  , getAnnotation
+  , getFieldName
+  , onelineSectionArgs
+  , getFieldEndPosition
+  , getSectionArgEndPosition
+  , getNameEndPosition
+  , getFieldLineEndPosition
+  )
+  where
 
 import qualified Data.ByteString                   as BS
 import           Data.List                         (find)
+import           Data.List.Extra                   (groupSort)
 import           Data.List.NonEmpty                (NonEmpty)
 import qualified Data.List.NonEmpty                as NE
 import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as T
+import           Data.Tuple                        (swap)
 import qualified Distribution.Fields               as Syntax
 import qualified Distribution.Parsec.Position      as Syntax
 import           Ide.Plugin.Cabal.Completion.Types
@@ -138,6 +142,9 @@ getFieldName :: Syntax.Field ann -> FieldName
 getFieldName (Syntax.Field (Syntax.Name _ fn) _)     = T.decodeUtf8 fn
 getFieldName (Syntax.Section (Syntax.Name _ fn) _ _) = T.decodeUtf8 fn
 
+getFieldLineName :: Syntax.FieldLine ann -> FieldName
+getFieldLineName (Syntax.FieldLine  _ fn) = T.decodeUtf8 fn
+
 -- | Returns the name of a section if it has a name.
 --
 -- This assumes that the given section args belong to named stanza
@@ -148,6 +155,107 @@ getOptionalSectionName (x:xs) = case x of
     Syntax.SecArgName _ name -> Just (T.decodeUtf8 name)
     _                        -> getOptionalSectionName xs
 
+type BuildTargetName = T.Text
+type ModuleName      = T.Text
+
+-- | Given a cabal AST returns pairs of all respective target names
+-- and the module name bound to them. If a target is a main library gives
+-- @Nothing@, otherwise @Just target-name@
+--
+-- Examples of input cabal files and the outputs:
+--
+-- * Target is a main library module:
+--
+-- >   library
+-- >     exposed-modules:
+-- >       MyLib
+--
+-- * @getModulesNames@ output:
+--
+-- >   [([Nothing], "MyLib")]
+--
+-- * Same module names in different targets:
+--
+-- >   test-suite first-target
+-- >        other-modules:
+-- >          Config
+-- >   test-suite second-target
+-- >        other-modules:
+-- >          Config
+--
+-- * @getModulesNames@ output:
+--
+-- >   [([Just "first-target", Just "second-target"], "Config")]
+getModulesNames :: [Syntax.Field any] -> [([Maybe BuildTargetName], ModuleName)]
+getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
+  where
+    rawModuleTargetPairs = concatMap getSectionModuleNames sections
+    sections = getSectionsWithModules fields
+
+    getSectionModuleNames :: Syntax.Field any -> [(ModuleName, Maybe BuildTargetName)]
+    getSectionModuleNames (Syntax.Section _ secArgs fields) = map (, getArgsName secArgs) $ concatMap getFieldModuleNames fields
+    getSectionModuleNames _ = []
+
+    getArgsName [Syntax.SecArgName _ name] = Just $ T.decodeUtf8 name
+    getArgsName _                          = Nothing -- Can be only a main library, that has no name
+                                                     -- since it's impossible to have multiple names for a build target
+
+    getFieldModuleNames field@(Syntax.Field _ modules) = if getFieldName field == T.pack "exposed-modules" ||
+                                                            getFieldName field == T.pack "other-modules"
+                                                            then map getFieldLineName modules
+                                                            else []
+    getFieldModuleNames _ = []
+
+-- | Trims a given cabal AST leaving only targets and their
+-- @exposed-modules@ and @other-modules@ sections.
+--
+-- For example:
+--
+-- * Given a cabal file like this:
+--
+-- >   library
+-- >     import: extra
+-- >     hs-source-dirs: source/directory
+-- >     ...
+-- >     exposed-modules:
+-- >       Important.Exposed.Module
+-- >     other-modules:
+-- >       Important.Other.Module
+-- >
+-- >   test-suite tests
+-- >     type: type
+-- >     build-tool-depends: tool
+-- >     other-modules:
+-- >       Important.Other.Module
+--
+-- * @getSectionsWithModules@ gives output:
+--
+-- >   library
+-- >     exposed-modules:
+-- >       Important.Exposed.Module
+-- >     other-modules:
+-- >       Important.Other.Module
+-- >   test-suite tests
+-- >     other-modules:
+-- >       Important.Other.Module
+getSectionsWithModules :: [Syntax.Field any] -> [Syntax.Field any]
+getSectionsWithModules fields = concatMap go fields
+  where
+    go :: Syntax.Field any -> [Syntax.Field any]
+    go (Syntax.Field _ _) = []
+    go section@(Syntax.Section _ _ fields) = concatMap onlySectionsWithModules (section:fields)
+
+    onlySectionsWithModules :: Syntax.Field any -> [Syntax.Field any]
+    onlySectionsWithModules (Syntax.Field _ _) = []
+    onlySectionsWithModules (Syntax.Section name secArgs fields)
+      | (not . null) newFields = [Syntax.Section name secArgs newFields]
+      | otherwise = []
+      where newFields = filter subfieldHasModule fields
+
+    subfieldHasModule :: Syntax.Field any -> Bool
+    subfieldHasModule field@(Syntax.Field _ _) = getFieldName field == T.pack "exposed-modules" ||
+                                                 getFieldName field == T.pack "other-modules"
+    subfieldHasModule (Syntax.Section _ _ _) = False
 
 -- | Makes a single text line out of multiple
 --   @SectionArg@s. Allows to display conditions,
@@ -164,7 +272,6 @@ onelineSectionArgs sectionArgs = joinedName
     getName (Syntax.SecArgName _ identifier)  = T.decodeUtf8 identifier
     getName (Syntax.SecArgStr _ quotedString) = T.decodeUtf8 quotedString
     getName (Syntax.SecArgOther _ string)     = T.decodeUtf8 string
-
 
 -- | Returns the end position of a provided field
 getFieldEndPosition :: Syntax.Field Syntax.Position -> Syntax.Position

@@ -13,6 +13,7 @@ module Ide.Plugin.RangeMap
     fromList,
     fromList',
     filterByRange,
+    elementsInRange,
   ) where
 
 import           Development.IDE.Graph.Classes            (NFData)
@@ -65,6 +66,14 @@ filterByRange :: Range -> RangeMap a -> [a]
 filterByRange range = map snd . IM.dominators (rangeToInterval range) . unRangeMap
 #else
 filterByRange range = map snd . filter (isSubrangeOf range . fst) . unRangeMap
+#endif
+
+-- | Extracts all elements from a 'RangeMap' that fall within a given 'Range'.
+elementsInRange :: Range -> RangeMap a -> [a]
+#ifdef USE_FINGERTREE
+elementsInRange range = map snd . IM.intersections (rangeToInterval range) . unRangeMap
+#else
+elementsInRange range = map snd . filter (flip isSubrangeOf range . fst) . unRangeMap
 #endif
 
 #ifdef USE_FINGERTREE

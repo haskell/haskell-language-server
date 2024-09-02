@@ -47,8 +47,8 @@ gotoDefinition     :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPos
 hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (Hover |? Null)
 gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
 documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
-gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)
+gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR . map fst)
+gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR . map fst)
 hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
 documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
 
