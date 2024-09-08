@@ -1,0 +1,10 @@
+cabal-version:      3.0
+name:               hover-deps
+version:            0.1.0.0
+
+library
+    exposed-modules:  Module
+    build-depends:    base ^>=4.14.3.0
+                    , aeson==1.0.0.0 , lens
+    hs-source-dirs:   src
+    default-language: Haskell2010

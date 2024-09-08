@@ -12,6 +12,7 @@
             "codeActionsOn": true,
             "completionOn": true,
             "diagnosticsOn": true,
+            "hoverOn": true,
             "symbolsOn": true
         },
         "cabal-fmt": {
