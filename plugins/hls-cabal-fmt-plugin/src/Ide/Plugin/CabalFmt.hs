@@ -64,7 +64,7 @@ provider recorder _ _ _ (FormatRange _) _ _ _ = do
   throwError $ PluginInvalidParams "You cannot format a text-range using cabal-fmt."
 provider recorder plId ideState _ FormatText contents nfp opts = do
   let cabalFmtArgs = [ "--indent", show tabularSize]
-  cabalFmtExePath <- fmap T.unpack $ liftIO $ runAction "cabal-gild" ideState $ usePropertyAction #path plId properties
+  cabalFmtExePath <- fmap T.unpack $ liftIO $ runAction "cabal-fmt" ideState $ usePropertyAction #path plId properties
   x <- liftIO $ findExecutable cabalFmtExePath
   case x of
     Just _ -> do
@@ -85,7 +85,7 @@ provider recorder plId ideState _ FormatText contents nfp opts = do
           pure $ InL fmtDiff
     Nothing -> do
       log Error $ LogFormatterBinNotFound cabalFmtExePath
-      throwError (PluginInternalError "No installation of cabal-gild could be found. Please install it globally, or provide the full path to the executable")
+      throwError (PluginInternalError "No installation of cabal-fmt could be found. Please install it globally, or provide the full path to the executable")
   where
     fp = fromNormalizedFilePath nfp
     tabularSize = opts ^. L.tabSize
