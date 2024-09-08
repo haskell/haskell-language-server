@@ -6,6 +6,7 @@ type ValidInputs = [Input]
 data Input
     = ProjectHaskellFile
     | DependencyHaskellFile
+    | NoFile
 
 type family RuleInput k :: ValidInputs
 
