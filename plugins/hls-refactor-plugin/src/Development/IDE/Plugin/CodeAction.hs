@@ -52,7 +52,8 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint                    as E
 import           Development.IDE.GHC.Util                          (printOutputable,
-                                                                    printRdrName)
+                                                                    printRdrName,
+                                                                    textInRange)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -343,12 +344,13 @@ findSigOfBinds range = go
             findSigOfBind range (unLoc lHsBindLR)
     go _ = Nothing
 
-findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
-findInstanceHead df instanceHead decls =
+findInstanceHead :: (p ~ GhcPass p0) => Range -> [LHsDecl p] -> Maybe (LHsType p)
+findInstanceHead diagnosticLocation decls =
   listToMaybe
     [ hsib_body
-      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
-        showSDoc df (ppr hsib_body) == instanceHead
+      | L (locA -> instanceLocation) (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls
+      , Just instanceRange <- [srcSpanToRange instanceLocation]
+      , (subRange diagnosticLocation instanceRange)
     ]
 
 #if MIN_VERSION_ghc(9,9,0)
@@ -832,7 +834,15 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,8,0)
+      pat multiple at _ _ = T.concat [ ".*Defaulting the type variable "
+                                       , ".*to type ‘([^ ]+)’ "
+                                       , "in the following constraint"
+                                       , if multiple then "s" else " "
+                                       , ".*arising from the literal ‘(.+)’"
+                                       , if at then ".+at ([^ ]*)" else ""
+                                       ]
+#elif MIN_VERSION_ghc(9,4,0)
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
                                        , ".*to type ‘([^ ]+)’ "
                                        , "in the following constraint"
@@ -1246,7 +1256,7 @@ suggestConstraint df ps diag@Diagnostic {..}
 #endif
         codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedSource
-                        else suggestInstanceConstraint df parsedSource
+                        else suggestInstanceConstraint parsedSource
      in codeAction diag missingConstraint
   | otherwise = []
     where
@@ -1268,9 +1278,9 @@ suggestConstraint df ps diag@Diagnostic {..}
         in getCorrectGroup <$> match
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
-suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
+suggestInstanceConstraint :: ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
 
-suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
+suggestInstanceConstraint (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
   | Just instHead <- instanceHead
   = [(actionTitle missingConstraint , appendConstraint (T.unpack missingConstraint) instHead)]
   | otherwise = []
@@ -1282,8 +1292,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         -- • In the expression: x == y
         --   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
         --   In the instance declaration for ‘Eq (Wrap a)’
-        | Just [instanceDeclaration] <- matchRegexUnifySpaces _message "In the instance declaration for ‘([^`]*)’"
-        , Just instHead <- findInstanceHead df (T.unpack instanceDeclaration) hsmodDecls
+        | Just instHead <- findInstanceHead _range hsmodDecls
         = Just instHead
         -- Suggests a constraint for an instance declaration with one or more existing constraints.
         -- • Could not deduce (Eq b) arising from a use of ‘==’
@@ -1939,24 +1948,6 @@ splitTextAtPosition (Position (fromIntegral -> row) (fromIntegral -> col)) x
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
     | otherwise = (x, T.empty)
 
--- | Returns [start .. end[
-textInRange :: Range -> T.Text -> T.Text
-textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCol)) (Position (fromIntegral -> endRow) (fromIntegral -> endCol))) text =
-    case compare startRow endRow of
-      LT ->
-        let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine
-            (textInRangeInFirstLine, linesBetween) = case linesInRangeBeforeEndLine of
-              [] -> ("", [])
-              firstLine:linesInBetween -> (T.drop startCol firstLine, linesInBetween)
-            maybeTextInRangeInEndLine = T.take endCol <$> listToMaybe endLineAndFurtherLines
-        in T.intercalate "\n" (textInRangeInFirstLine : linesBetween ++ maybeToList maybeTextInRangeInEndLine)
-      EQ ->
-        let line = fromMaybe "" (listToMaybe linesBeginningWithStartLine)
-        in T.take (endCol - startCol) (T.drop startCol line)
-      GT -> ""
-    where
-      linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
-
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
 #if MIN_VERSION_ghc(9,5,0)
@@ -1991,14 +1982,18 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens $ unqualify b
+
 #if MIN_VERSION_ghc(9,9,0)
     ranges' (L _ (IEThingWith _ thing _  inners _))
-#else
-    ranges' (L _ (IEThingWith _ thing _  inners))
-#endif
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+#else
+    ranges' (L _ (IEThingWith _ thing _  inners))
+      | T.unpack (printOutputable thing) == b' = []
+      | otherwise =
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+#endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
