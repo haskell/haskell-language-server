@@ -8,50 +8,64 @@ module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) whe
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                ((^.))
+import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Maybe                   (runMaybeT)
-import qualified Data.ByteString                             as BS
+import           Control.Monad.Trans.Class                     (lift)
+import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import qualified Data.ByteString                               as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                         (HashMap)
-import qualified Data.HashMap.Strict                         as HashMap
-import qualified Data.List.NonEmpty                          as NE
-import qualified Data.Maybe                                  as Maybe
-import qualified Data.Text                                   as T
-import qualified Data.Text.Encoding                          as Encoding
-import qualified Data.Text.Utf16.Rope.Mixed                  as Rope
+import           Data.HashMap.Strict                           (HashMap)
+import qualified Data.HashMap.Strict                           as HashMap
+import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Maybe                                    as Maybe
+import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as Encoding
+import           Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Data.Typeable
-import           Development.IDE                             as D
-import           Development.IDE.Core.Shake                  (restartShakeSession)
-import qualified Development.IDE.Core.Shake                  as Shake
-import           Development.IDE.Graph                       (Key, alwaysRerun)
-import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
-import           Development.IDE.Types.Shake                 (toKey)
-import qualified Distribution.Fields                         as Syntax
-import qualified Distribution.Parsec.Position                as Syntax
+import           Development.IDE                               as D
+import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.Shake                    (restartShakeSession)
+import qualified Development.IDE.Core.Shake                    as Shake
+import           Development.IDE.Graph                         (Key,
+                                                                alwaysRerun)
+import           Development.IDE.LSP.HoverDefinition           (foundHover)
+import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
+import           Development.IDE.Types.Shake                   (toKey)
+import qualified Distribution.Fields                           as Syntax
+import           Distribution.Package                          (Dependency)
+import           Distribution.PackageDescription               (allBuildDepends,
+                                                                depPkgName,
+                                                                unPackageName)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
-import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
-import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
-import           Ide.Plugin.Cabal.Completion.Types           (ParseCabalCommonSections (ParseCabalCommonSections),
-                                                              ParseCabalFields (..),
-                                                              ParseCabalFile (..))
-import qualified Ide.Plugin.Cabal.Completion.Types           as Types
-import           Ide.Plugin.Cabal.Definition                 (gotoDefinition)
-import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
-import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
-import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
-import           Ide.Plugin.Cabal.Orphans                    ()
+import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
+import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
+import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
+import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommonSections (ParseCabalCommonSections),
+                                                                ParseCabalFields (..),
+                                                                ParseCabalFile (..))
+import qualified Ide.Plugin.Cabal.Completion.Types             as Types
+import           Ide.Plugin.Cabal.Definition                   (gotoDefinition)
+import qualified Ide.Plugin.Cabal.Diagnostics                  as Diagnostics
+import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
+import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
+import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Cabal.Outline
-import qualified Ide.Plugin.Cabal.Parse                      as Parse
+import qualified Ide.Plugin.Cabal.Parse                        as Parse
+import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens                  as JL
-import qualified Language.LSP.Protocol.Message               as LSP
+import qualified Language.LSP.Protocol.Lens                    as JL
+import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                            as VFS
+import qualified Language.LSP.VFS                              as VFS
+import           Text.Regex.TDFA
 
-import qualified Data.Text                                   ()
-import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
+
+import qualified Data.Text                                     ()
+import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -118,6 +132,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
+          , mkPluginHandler LSP.SMethod_TextDocumentHover hover
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -302,7 +317,6 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       let completionTexts = fmap (^. JL.label) completions
       pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
 
-
 cabalAddCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
@@ -317,7 +331,8 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
           case mbCabalFile of
             Nothing -> pure $ InL []
             Just cabalFilePath -> do
-              verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
+              verTxtDocId <- runActionE "cabalAdd.getVersionedTextDoc" state $
+                lift $ getVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
               mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
               case mbGPD of
                 Nothing -> pure $ InL []
@@ -327,6 +342,55 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
                                                                               haskellFilePath cabalFilePath
                                                                               gpd
                   pure $ InL $ fmap InR actions
+
+-- | Handler for hover messages.
+--
+-- Provides a Handler for displaying message on hover.
+-- If found that the filtered hover message is a dependency,
+-- adds a Documentation link.
+hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
+hover ide _ msgParam = do
+  nfp <- getNormalizedFilePathE uri
+  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
+  case CabalFields.findTextWord cursor cabalFields of
+    Nothing ->
+      pure $ InR Null
+    Just cursorText -> do
+      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
+      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
+      case filterVersion cursorText of
+        Nothing -> pure $ InR Null
+        Just txt ->
+          if txt `elem` depsNames
+          then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
+          else pure $ InR Null
+  where
+    cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
+    uri = msgParam ^. JL.textDocument . JL.uri
+
+    dependencyName :: Dependency -> T.Text
+    dependencyName dep = T.pack $ unPackageName $ depPkgName dep
+
+    -- | Removes version requirements like
+    -- `==1.0.0.0`, `>= 2.1.1` that could be included in
+    -- hover message. Assumes that the dependency consists
+    -- of alphanums with dashes in between. Ends with an alphanum.
+    --
+    -- Examples:
+    -- >>> filterVersion "imp-deps>=2.1.1"
+    -- "imp-deps"
+    filterVersion :: T.Text -> Maybe T.Text
+    filterVersion msg = getMatch (msg =~ regex)
+      where
+        regex :: T.Text
+        regex = "([a-zA-Z0-9-]*[a-zA-Z0-9])"
+
+        getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
+        getMatch (_, _, _, [dependency]) = Just dependency
+        getMatch (_, _, _, _)            = Nothing -- impossible case
+
+    documentationText :: T.Text -> T.Text
+    documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
 
 
 -- ----------------------------------------------------------------

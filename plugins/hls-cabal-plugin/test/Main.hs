@@ -38,6 +38,7 @@ main = do
             , outlineTests
             , codeActionTests
             , gotoDefinitionTests
+            , hoverTests
             ]
 
 -- ------------------------------------------------------------------------
@@ -230,3 +231,46 @@ codeActionTests = testGroup "Code Actions"
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
+
+-- ----------------------------------------------------------------------------
+-- Hover Tests
+-- ----------------------------------------------------------------------------
+
+hoverTests :: TestTree
+hoverTests = testGroup "Hover"
+    [ hoverOnDependencyTests
+    ]
+
+hoverOnDependencyTests :: TestTree
+hoverOnDependencyTests = testGroup "Hover Dependency"
+    [ hoverContainsTest "base with separated version" "hover-deps.cabal" (Position 6 25) "[Documentation](https://hackage.haskell.org/package/base)"
+    , hoverContainsTest "aeson with not separated version " "hover-deps.cabal" (Position 7 25) "[Documentation](https://hackage.haskell.org/package/aeson)"
+    , hoverContainsTest "lens no version" "hover-deps.cabal" (Position 7 42) "[Documentation](https://hackage.haskell.org/package/lens)"
+
+    , hoverIsNullTest "name has no documentation" "hover-deps.cabal" (Position 1 25)
+    , hoverIsNullTest "exposed-modules has no documentation" "hover-deps.cabal" (Position 5 25)
+    , hoverIsNullTest "hs-source-dirs has no documentation" "hover-deps.cabal" (Position 8 25)
+    ]
+    where
+        hoverContainsTest :: TestName -> FilePath -> Position -> T.Text -> TestTree
+        hoverContainsTest testName cabalFile pos containedText =
+            runCabalTestCaseSession testName "hover" $ do
+                doc <- openDoc cabalFile "cabal"
+                h <- getHover doc pos
+                case h of
+                    Nothing -> liftIO $ assertFailure "No hover"
+                    Just (Hover contents _) -> case contents of
+                        InL (MarkupContent _ txt) -> do
+                            liftIO
+                            $ assertBool ("Failed to find `" <> T.unpack containedText <> "` in hover message: " <> T.unpack txt)
+                            $ containedText `T.isInfixOf` txt
+                        _ -> liftIO $ assertFailure "Unexpected content type"
+                closeDoc doc
+
+        hoverIsNullTest :: TestName -> FilePath -> Position -> TestTree
+        hoverIsNullTest testName cabalFile pos =
+            runCabalTestCaseSession testName "hover" $ do
+                doc <- openDoc cabalFile "cabal"
+                h <- getHover doc pos
+                liftIO $ assertBool ("Found hover `" <> show h <> "`") $ Maybe.isNothing h
+                closeDoc doc
