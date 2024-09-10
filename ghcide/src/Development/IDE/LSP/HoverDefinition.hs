@@ -7,6 +7,7 @@ module Development.IDE.LSP.HoverDefinition
     ( Log(..)
     -- * For haskell-language-server
     , hover
+    , foundHover
     , gotoDefinition
     , gotoTypeDefinition
     , documentHighlight
