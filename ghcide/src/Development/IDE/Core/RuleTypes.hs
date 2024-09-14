@@ -514,7 +514,7 @@ instance Hashable GetClientSettings
 instance NFData   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
-type instance RuleInput GetClientSettings = '[ProjectHaskellFile]
+type instance RuleInput GetClientSettings = '[NoFile]
 
 data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Typeable, Generic)
 instance Hashable AddWatchedFile

@@ -517,10 +517,14 @@ mappingForVersion allMappings file (Just (VFSVersion ver)) = do
 mappingForVersion _ _ _ = pure zeroMapping
 
 type IdeRule k i is v =
-  ( Shake.RuleResult k ~ v
-  , Shake.ShakeValue k
+  ( IdeValueRule k v
   , RuleInput k ~ is
   , HasInput i is
+  )
+
+type IdeValueRule k v =
+  ( Shake.RuleResult k ~ v
+  , Shake.ShakeValue k
   , Show v
   , Typeable v
   , NFData v
@@ -1156,9 +1160,9 @@ usesWithStale key files = do
     -- whether the rule succeeded or not.
     traverse (lastValue key) files
 
-useWithoutDependency :: IdeRule k i is v
-    => k -> InputPath i -> Action (Maybe v)
-useWithoutDependency key (InputPath file) =
+useWithoutDependency :: IdeValueRule k v
+    => k -> NormalizedFilePath -> Action (Maybe v)
+useWithoutDependency key file =
     (\(Identity (A value)) -> currentValue value) <$> applyWithoutDependency (Identity (Q (key, file)))
 
 data RuleBody k i v
@@ -1288,8 +1292,8 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         -> Maybe v
         -> InputPath i
         -> Action (Maybe FileVersion)
-    estimateFileVersionUnsafely _k v fp
-        | unInputPath fp == emptyFilePath = pure Nothing
+    estimateFileVersionUnsafely _k v (InputPath fp)
+        | fp == emptyFilePath = pure Nothing
         | Just Refl <- eqT @k @GetModificationTime = pure v
         -- GetModificationTime depends on these rules, so avoid creating a cycle
         | Just Refl <- eqT @k @AddWatchedFile = pure Nothing
