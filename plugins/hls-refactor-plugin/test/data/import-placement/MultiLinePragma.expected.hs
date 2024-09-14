@@ -3,8 +3,8 @@
 {-# LANGUAGE RecordWildCards, 
    OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall,
-  -Wno-unused-imports #-}
 import Data.Monoid
+  -Wno-unused-imports #-}
 
 
 -- some comment

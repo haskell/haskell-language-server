@@ -30,6 +30,7 @@ module Config(
 
 import           Control.Exception           (bracket_)
 import           Control.Lens.Setter         ((.~))
+import           Control.Monad               (unless)
 import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
 import qualified Data.Text                   as T
@@ -100,6 +101,7 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
+  | ExpectRanges [Range] -- definition lookup with multiple results
   | ExpectLocation Location
 --  | ExpectDefRange Range -- Only gotoDef should report this range
   | ExpectHoverRange Range -- Only hover should report this range
@@ -124,6 +126,8 @@ checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpecta
   check (ExpectRange expectedRange) = do
     def <- assertOneDefinitionFound defs
     assertRangeCorrect def expectedRange
+  check (ExpectRanges ranges) =
+    traverse_ (assertHasRange defs) ranges
   check (ExpectLocation expectedLocation) = do
     def <- assertOneDefinitionFound defs
     liftIO $ do
@@ -142,6 +146,10 @@ checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpecta
   assertRangeCorrect Location{_range = foundRange} expectedRange =
     liftIO $ expectedRange @=? foundRange
 
+  assertHasRange actualRanges expectedRange = do
+    let hasRange = any (\Location{_range=foundRange} -> foundRange == expectedRange) actualRanges
+    unless hasRange $ liftIO $ assertFailure $
+      "expected range: " <> show expectedRange <> "\nbut got ranges: " <> show defs
 
 canonicalizeLocation :: Location -> IO Location
 canonicalizeLocation (Location uri range) = Location <$> canonicalizeUri uri <*> pure range

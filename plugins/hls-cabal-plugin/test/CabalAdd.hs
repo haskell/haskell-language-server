@@ -17,7 +17,6 @@ import           System.FilePath
 import           Test.Hls                    (Session, TestTree, _R, anyMessage,
                                               assertEqual, documentContents,
                                               executeCodeAction,
-                                              expectFailBecause,
                                               getAllCodeActions,
                                               getDocumentEdit, liftIO, openDoc,
                                               skipManyTill, testCase, testGroup,
@@ -100,10 +99,9 @@ cabalAddTests =
                                    , ("AAI", "0.1")
                                    , ("AWin32Console", "1.19.1")
                                    ]
-    , expectFailBecause "TODO fix regex for these cases" $
-      testHiddenPackageSuggestions "Check CabalAdd's parser, with version, unicode comma"
-                                   [ "It is a member of the hidden package \82163d-graphics-examples\8217"
-                                   , "It is a member of the hidden package \82163d-graphics-examples-1.1.6\8217"
+    , testHiddenPackageSuggestions "Check CabalAdd's parser, with version, unicode comma"
+                                   [ "It is a member of the hidden package \8216\&3d-graphics-examples\8217"
+                                   , "It is a member of the hidden package \8216\&3d-graphics-examples-1.1.6\8217"
                                    ]
                                    [ ("3d-graphics-examples", T.empty)
                                    , ("3d-graphics-examples", "1.1.6")

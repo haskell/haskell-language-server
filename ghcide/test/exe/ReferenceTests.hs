@@ -36,7 +36,6 @@ import           Test.Hls                        (FromServerMessage' (..),
                                                   TNotificationMessage (..))
 import           Test.Hls.FileSystem             (copyDir)
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 
 
@@ -90,16 +89,7 @@ tests = testGroup "references"
                           , ("Main.hs", 10, 0)
                           ]
 
-          , expectFailBecause "references provider does not respect includeDeclaration parameter" $
- referenceTest "works when we ask to exclude declarations"
-                          ("References.hs", 4, 7)
-                          NoExcludeDeclaration
-                          [ ("References.hs", 6, 0)
-                          , ("References.hs", 6, 14)
-                          , ("References.hs", 9, 7)
-                          , ("References.hs", 10, 11)
-                          ]
-
+          -- TODO: references provider does not respect includeDeclaration parameter
           , referenceTest "INCORRECTLY returns declarations when we ask to exclude them"
                           ("References.hs", 4, 7)
                           NoExcludeDeclaration

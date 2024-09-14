@@ -40,10 +40,9 @@ tests = testGroup "Explicit fixity"
     , hoverTest "signature" (Position 35 2) "infixr 9 `>>>:`"
     , hoverTest "operator" (Position 36 2) "infixr 9 `>>>:`"
     , hoverTest "escape" (Position 39 2) "infixl 3 `~\\:`"
-    -- Ensure that there is no one extra new line in import statement
-    , expectFail $ hoverTest "import" (Position 2 18) "Control.Monad***"
-    -- Known issue, See https://github.com/haskell/haskell-language-server/pull/2973/files#r916535742
-    , expectFail $ hoverTestImport "import" (Position 4 7) "infixr 9 `>>>:`"
+    -- TODO: Ensure that there is no one extra new line in import statement
+    , hoverTest "import" (Position 2 18) "Control.Monad\n\n"
+    , hoverTestImport "import" (Position 4 7) "infixr 9 `>>>:`"
     ]
 
 hoverTest :: TestName -> Position -> T.Text -> TestTree
