@@ -1,7 +1,10 @@
 {-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Graph.Internal.RuleInput where
 
-type ValidInputs = [Input]
+data ValidInputs
+    = ProjectHaskellFilesOnly
+    | AllHaskellFiles
+    | NoFiles
 
 data Input
     = ProjectHaskellFile
@@ -12,7 +15,10 @@ type family RuleInput k :: ValidInputs
 
 class HasInput (i :: Input) (is :: ValidInputs)
 
-instance HasInput i (i : is)
+instance HasInput ProjectHaskellFile ProjectHaskellFilesOnly
 
-instance {-# OVERLAPPABLE #-}
-    HasInput i is => HasInput i (j : is)
+instance HasInput ProjectHaskellFile AllHaskellFiles
+
+instance HasInput DependencyHaskellFile AllHaskellFiles
+
+instance HasInput NoFile NoFiles
