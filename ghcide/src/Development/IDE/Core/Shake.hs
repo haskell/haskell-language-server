@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -121,6 +122,7 @@ import           Data.Vector                            (Vector)
 import qualified Data.Vector                            as Vector
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileUtils         (getModTime)
+import           Development.IDE.Core.InputPath         (InputPath (unInputPath, InputPath))
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
@@ -179,6 +181,7 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
+import Development.IDE.Graph.Internal.RuleInput (RuleInput, HasInput, Input(NoFile))
 
 
 data Log
@@ -384,7 +387,7 @@ getPluginConfigAction plId = do
 -- This is called when we don't already have a result, or computing the rule failed.
 -- The result of this function will always be marked as 'stale', and a 'proper' rebuild of the rule will
 -- be queued if the rule hasn't run before.
-addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
+addPersistentRule :: IdeRule k i is v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
   void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) (fmap (fmap (first3 toDyn)) . getVal)
@@ -452,8 +455,8 @@ getIdeOptionsIO ide = do
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedFilePath -> IO (Maybe (v, PositionMapping))
-lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
+lastValueIO :: IdeRule k i is v => ShakeExtras -> k -> InputPath i -> IO (Maybe (v, PositionMapping))
+lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k (InputPath file) = do
 
     let readPersistent
           | IdeTesting testing <- ideTesting s -- Don't read stale persistent values in tests
@@ -498,7 +501,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValue :: IdeRule k v => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
+lastValue :: IdeRule k i is v => k -> InputPath i -> Action (Maybe (v, PositionMapping))
 lastValue key file = do
     s <- getShakeExtras
     liftIO $ lastValueIO s key file
@@ -513,7 +516,13 @@ mappingForVersion allMappings file (Just (VFSVersion ver)) = do
     return $ maybe zeroMapping snd $ EM.lookup ver =<< mapping
 mappingForVersion _ _ _ = pure zeroMapping
 
-type IdeRule k v =
+type IdeRule k i is v =
+  ( IdeValueRule k v
+  , RuleInput k ~ is
+  , HasInput i is
+  )
+
+type IdeValueRule k v =
   ( Shake.RuleResult k ~ v
   , Shake.ShakeValue k
   , Show v
@@ -581,14 +590,14 @@ shakeDatabaseProfileIO mbProfileDir = do
                 shakeProfileDatabase shakeDb $ dir </> file
                 return (dir </> file)
 
-setValues :: IdeRule k v
+setValues :: IdeRule k i is v
           => Values
           -> k
-          -> NormalizedFilePath
+          -> InputPath i
           -> Value v
           -> Vector FileDiagnostic
           -> STM ()
-setValues state key file val diags =
+setValues state key (InputPath file) val diags =
     STM.insert (ValueWithDiagnostics (fmap toDyn val) diags) (toKey key file) state
 
 
@@ -607,13 +616,13 @@ deleteValue ShakeExtras{state} key file = do
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
-  forall k v.
-  IdeRule k v =>
+  forall k i is v.
+  IdeRule k i is v =>
   Values ->
   k ->
-  NormalizedFilePath ->
+  InputPath i ->
   STM (Maybe (Value v, Vector FileDiagnostic))
-getValues state key file = do
+getValues state key (InputPath file) = do
     STM.lookup (toKey key file) state >>= \case
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
@@ -1010,23 +1019,23 @@ preservedKeys checkParents = HSet.fromList $
 
 -- | Define a new Rule without early cutoff
 define
-    :: IdeRule k v
-    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
+    :: IdeRule k i is v
+    => Recorder (WithPriority Log) -> (k -> InputPath i -> Action (IdeResult v)) -> Rules ()
 define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
 
 defineNoDiagnostics
-    :: IdeRule k v
-    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+    :: IdeRule k i is v
+    => Recorder (WithPriority Log) -> (k -> InputPath i -> Action (Maybe v)) -> Rules ()
 defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
-use :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe v)
+use :: IdeRule k i is v
+    => k -> InputPath i -> Action (Maybe v)
 use key file = runIdentity <$> uses key (Identity file)
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
-useWithStale :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
+useWithStale :: IdeRule k i is v
+    => k -> InputPath i -> Action (Maybe (v, PositionMapping))
 useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 
 -- |Request a Rule result, it not available return the last computed result
@@ -1036,8 +1045,8 @@ useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
-useWithStale_ :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (v, PositionMapping)
+useWithStale_ :: IdeRule k i is v
+    => k -> InputPath i -> Action (v, PositionMapping)
 useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
 -- |Plural version of 'useWithStale_'
@@ -1046,7 +1055,7 @@ useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers.
-usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f (v, PositionMapping))
+usesWithStale_ :: (Traversable f, IdeRule k i is v) => k -> f (InputPath i) -> Action (f (v, PositionMapping))
 usesWithStale_ key files = do
     res <- usesWithStale key files
     case sequence res of
@@ -1077,11 +1086,11 @@ data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate ::
 -- | Lookup value in the database and return with the stale value immediately
 -- Will queue an action to refresh the value.
 -- Might block the first time the rule runs, but never blocks after that.
-useWithStaleFast :: IdeRule k v => k -> NormalizedFilePath -> IdeAction (Maybe (v, PositionMapping))
+useWithStaleFast :: IdeRule k i is v => k -> InputPath i -> IdeAction (Maybe (v, PositionMapping))
 useWithStaleFast key file = stale <$> useWithStaleFast' key file
 
 -- | Same as useWithStaleFast but lets you wait for an up to date result
-useWithStaleFast' :: IdeRule k v => k -> NormalizedFilePath -> IdeAction (FastResult v)
+useWithStaleFast' :: IdeRule k i is v => k -> InputPath i -> IdeAction (FastResult v)
 useWithStaleFast' key file = do
   -- This lookup directly looks up the key in the shake database and
   -- returns the last value that was computed for this key without
@@ -1089,7 +1098,7 @@ useWithStaleFast' key file = do
 
   -- Async trigger the key to be built anyway because we want to
   -- keep updating the value in the key.
-  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
+  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath (unInputPath file)) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
   r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key file
@@ -1108,8 +1117,8 @@ useWithStaleFast' key file = do
       res <- lastValueIO s key file
       pure $ FastResult res waitValue
 
-useNoFile :: IdeRule k v => k -> Action (Maybe v)
-useNoFile key = use key emptyFilePath
+useNoFile :: forall k is v. IdeRule k NoFile is v => k -> Action (Maybe v)
+useNoFile key = use key (InputPath @NoFile emptyFilePath)
 
 -- Requests a rule if available.
 --
@@ -1117,11 +1126,11 @@ useNoFile key = use key emptyFilePath
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
-use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
+use_ :: IdeRule k i is v => k -> InputPath i -> Action v
 use_ key file = runIdentity <$> uses_ key (Identity file)
 
-useNoFile_ :: IdeRule k v => k -> Action v
-useNoFile_ key = use_ key emptyFilePath
+useNoFile_ :: forall k is v. IdeRule k NoFile is v => k -> Action v
+useNoFile_ key = use_ key (InputPath @NoFile emptyFilePath)
 
 -- |Plural version of `use_`
 --
@@ -1129,7 +1138,7 @@ useNoFile_ key = use_ key emptyFilePath
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
-uses_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f v)
+uses_ :: (Traversable f, IdeRule k i is v) => k -> f (InputPath i) -> Action (f v)
 uses_ key files = do
     res <- uses key files
     case sequence res of
@@ -1137,92 +1146,94 @@ uses_ key files = do
         Just v  -> return v
 
 -- | Plural version of 'use'
-uses :: (Traversable f, IdeRule k v)
-    => k -> f NormalizedFilePath -> Action (f (Maybe v))
-uses key files = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
+uses :: (Traversable f, IdeRule k i is v)
+    => k -> f (InputPath i) -> Action (f (Maybe v))
+uses key files = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,) . unInputPath) files)
 
 -- | Return the last computed result which might be stale.
-usesWithStale :: (Traversable f, IdeRule k v)
-    => k -> f NormalizedFilePath -> Action (f (Maybe (v, PositionMapping)))
+usesWithStale :: (Traversable f, IdeRule k i is v)
+    => k -> f (InputPath i) -> Action (f (Maybe (v, PositionMapping)))
 usesWithStale key files = do
-    _ <- apply (fmap (Q . (key,)) files)
+    _ <- apply (fmap (Q . (key,) . unInputPath) files)
     -- We don't look at the result of the 'apply' since 'lastValue' will
     -- return the most recent successfully computed value regardless of
     -- whether the rule succeeded or not.
     traverse (lastValue key) files
 
-useWithoutDependency :: IdeRule k v
+useWithoutDependency :: IdeValueRule k v
     => k -> NormalizedFilePath -> Action (Maybe v)
 useWithoutDependency key file =
     (\(Identity (A value)) -> currentValue value) <$> applyWithoutDependency (Identity (Q (key, file)))
 
-data RuleBody k v
-  = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
-  | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+data RuleBody k i v
+  = Rule (k -> InputPath i -> Action (Maybe BS.ByteString, IdeResult v))
+  | RuleNoDiagnostics (k -> InputPath i -> Action (Maybe BS.ByteString, Maybe v))
   | RuleWithCustomNewnessCheck
     { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
-    , build :: k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
+    , build :: k -> InputPath i -> Action (Maybe BS.ByteString, Maybe v)
     }
-  | RuleWithOldValue (k -> NormalizedFilePath -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
+  | RuleWithOldValue (k -> InputPath i -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
 
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
-    :: IdeRule k v
+    :: forall k i is v
+     . IdeRule k i is v
     => Recorder (WithPriority Log)
-    -> RuleBody k v
+    -> RuleBody k i v
     -> Rules ()
 defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
     let diagnostics ver diags = do
             traceDiagnostics diags
             updateFileDiagnostics recorder file ver (newKey key) extras . map (\(_,y,z) -> (y,z)) $ diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ const $ op key file
+    defineEarlyCutoff' diagnostics (==) key (InputPath @i file) old mode $ const $ op key (InputPath @i file)
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics _ver diags = do
             traceDiagnostics diags
             mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ const $ second (mempty,) <$> op key file
+    defineEarlyCutoff' diagnostics (==) key (InputPath @i file) old mode $ const $ second (mempty,) <$> op key (InputPath @i file)
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
             let diagnostics _ver diags = do
                     traceDiagnostics diags
                     mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
-            defineEarlyCutoff' diagnostics newnessCheck key file old mode $
-                const $ second (mempty,) <$> build key file
+            defineEarlyCutoff' diagnostics newnessCheck key (InputPath @i file) old mode $
+                const $ second (mempty,) <$> build key (InputPath @i file)
 defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
     let diagnostics ver diags = do
             traceDiagnostics diags
             updateFileDiagnostics recorder file ver (newKey key) extras . map (\(_,y,z) -> (y,z)) $ diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
+    defineEarlyCutoff' diagnostics (==) key (InputPath @i file) old mode $ op key (InputPath @i file)
 
-defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
+defineNoFile :: forall k i is v. IdeRule k i is v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
-    if file == emptyFilePath then do res <- f k; return (Just res) else
+    if file == (InputPath @i emptyFilePath) then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
-defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile :: forall k i is v. IdeRule k i is v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
 defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
+    if file == (InputPath @i emptyFilePath) then do (hashString, res) <- f k; return (Just hashString, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
-    :: forall k v. IdeRule k v
+    :: forall k i is v. IdeRule k i is v
     => (Maybe Int32 -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
-    -> NormalizedFilePath
+    -> InputPath i
     -> Maybe BS.ByteString
     -> RunMode
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
+    let rawFile = unInputPath file
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     let trans g x =  withRunInIO $ \run -> g (run x)
-    (if optSkipProgress options key then id else trans (inProgress progress file)) $ do
+    (if optSkipProgress options key then id else trans (inProgress progress rawFile)) $ do
         val <- case mbOld of
             Just old | mode == RunDependenciesSame -> do
                 mbValue <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
@@ -1249,7 +1260,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText rawFile $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1270,7 +1281,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         -- this hook needs to be run in the same transaction as the key is marked clean
                         -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
                         setValues state key file res (Vector.fromList diags)
-                        modifyTVar' dirtyKeys (deleteKeySet $ toKey key file)
+                        modifyTVar' dirtyKeys (deleteKeySet $ toKey key rawFile)
         return res
   where
     -- Highly unsafe helper to compute the version of a file
@@ -1279,9 +1290,9 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
     estimateFileVersionUnsafely
         :: k
         -> Maybe v
-        -> NormalizedFilePath
+        -> InputPath i
         -> Action (Maybe FileVersion)
-    estimateFileVersionUnsafely _k v fp
+    estimateFileVersionUnsafely _k v (InputPath fp)
         | fp == emptyFilePath = pure Nothing
         | Just Refl <- eqT @k @GetModificationTime = pure v
         -- GetModificationTime depends on these rules, so avoid creating a cycle
@@ -1457,9 +1468,10 @@ kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
   toJSON $ map fromNormalizedFilePath files
 
 -- | Add kick start/done signal to rule
-runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [NormalizedFilePath] -> k -> Action ()
-runWithSignal msgStart msgEnd files rule = do
+runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k i is v) => Proxy s0 -> Proxy s1 -> [InputPath i] -> k -> Action ()
+runWithSignal msgStart msgEnd inputFiles rule = do
+  let files = map unInputPath inputFiles
   ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- getShakeExtras
   kickSignal testing lspEnv files msgStart
-  void $ uses rule files
+  void $ uses rule inputFiles
   kickSignal testing lspEnv files msgEnd
