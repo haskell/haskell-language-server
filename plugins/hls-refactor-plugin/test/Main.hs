@@ -1507,20 +1507,46 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Refl"
                     ])
         -- TODO: importing pattern synonyms is unsupported
-        -- Ideally the result is "Add pattern Some of the import list of A"
-        , testSession "extend import list with pattern synonym" $ noCodeActionsTemplate
-            [("ModuleA.hs", T.unlines
-                    [ "{-# LANGUAGE PatternSynonyms #-}"
-                      , "module ModuleA where"
-                      , "pattern Some x = Just x"
-                    ])
-            ]
-            ("ModuleB.hs", T.unlines
-                    [ "module ModuleB where"
-                    , "import A ()"
-                    , "k (Some x) = x"
-                    ])
-            (Range (Position 2 3) (Position 2 7))
+        , testSessionExpectFail "extend import list with pattern synonym"
+            (BrokenIdeal $
+              template
+                [("ModuleA.hs", T.unlines
+                       [ "{-# LANGUAGE PatternSynonyms #-}"
+                       , "module ModuleA where"
+                       , "pattern Some x = Just x"
+                       ])
+                ]
+                ("ModuleB.hs", T.unlines
+                      [ "module ModuleB where"
+                      , "import A ()"
+                      , "k (Some x) = x"
+                      ]
+                )
+                (Range (Position 2 3) (Position 2 7))
+                ["Add pattern Some to the import list of A"]
+                (T.unlines
+                        [ "module ModuleB where"
+                        , "import A (pattern Some)"
+                        , "k (Some x) = x"
+                        ]
+                )
+            )
+            (BrokenCurrent $
+              noCodeActionsTemplate
+                [("ModuleA.hs", T.unlines
+                       [ "{-# LANGUAGE PatternSynonyms #-}"
+                       , "module ModuleA where"
+                       , "pattern Some x = Just x"
+                       ])
+                ]
+                ("ModuleB.hs", T.unlines
+                      [ "module ModuleB where"
+                      , "import A ()"
+                      , "k (Some x) = x"
+                      ]
+                )
+                (Range (Position 2 3) (Position 2 7))
+            )
         , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
@@ -3807,6 +3833,13 @@ assertActionWithTitle actions title =
 
 testSession :: TestName -> Session () -> TestTree
 testSession name = testCase name . run
+
+testSessionExpectFail
+  :: TestName
+  -> ExpectBroken 'Ideal (Session ())
+  -> ExpectBroken 'Current (Session ())
+  -> TestTree
+testSessionExpectFail name _ = testSession name . unCurrent
 
 testSessionWithExtraFiles :: HasCallStack => FilePath -> TestName -> (FilePath -> Session ()) -> TestTree
 testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix

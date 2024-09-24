@@ -8,12 +8,13 @@ import           Control.Monad
 import           Data.Hashable
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.Map             as Map
+import qualified Data.Text            as T
 import           Data.Typeable        (Typeable)
 import           Development.IDE      (RuleResult, action, define,
                                        getFilesOfInterestUntracked,
                                        getPluginConfigAction, ideErrorText,
                                        uses_)
-import           Development.IDE.Test (expectDiagnostics)
+import           Development.IDE.Test (Cursor, expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
@@ -49,7 +50,9 @@ genericConfigTests = testGroup "generic plugin config"
             -- test that the user config doesn't accidentally override the initial config
             setHlsConfig $ changeConfig testPluginId def{plcHoverOn = False}
             -- getting only the expected diagnostics means the plugin wasn't enabled
-            expectDiagnostics testPluginDiagnostics
+            expectDiagnosticsFail
+                (BrokenIdeal standardDiagnostics)
+                (BrokenCurrent testPluginDiagnostics)
     ,   testCase "custom defaults and overlapping user plugin config" $ runConfigSession "diagnostics" $ do
             _doc <- createDoc "Foo.hs" "haskell" "module Foo where\nfoo = False"
             -- test that the user config overrides the default initial config
@@ -104,3 +107,10 @@ data GetTestDiagnostics = GetTestDiagnostics
 instance Hashable GetTestDiagnostics
 instance NFData   GetTestDiagnostics
 type instance RuleResult GetTestDiagnostics = ()
+
+expectDiagnosticsFail
+  :: HasCallStack
+  => ExpectBroken 'Ideal [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])]
+  -> ExpectBroken 'Current [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])]
+  -> Session ()
+expectDiagnosticsFail _ = expectDiagnostics . unCurrent

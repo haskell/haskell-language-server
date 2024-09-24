@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -41,14 +42,28 @@ tests = testGroup "Explicit fixity"
     , hoverTest "operator" (Position 36 2) "infixr 9 `>>>:`"
     , hoverTest "escape" (Position 39 2) "infixl 3 `~\\:`"
     -- TODO: Ensure that there is no one extra new line in import statement
-    , hoverTest "import" (Position 2 18) "Control.Monad\n\n"
+    , hoverTestExpectFail
+        "import"
+        (Position 2 18)
+        (BrokenIdeal "Control.Monad***")
+        (BrokenCurrent "Control.Monad\n\n")
     , hoverTestImport "import" (Position 4 7) "infixr 9 `>>>:`"
     ]
 
 hoverTest :: TestName -> Position -> T.Text -> TestTree
 hoverTest = hoverTest' "Hover.hs"
+
 hoverTestImport :: TestName -> Position -> T.Text -> TestTree
 hoverTestImport = hoverTest' "HoverImport.hs"
+
+hoverTestExpectFail
+  :: TestName
+  -> Position
+  -> ExpectBroken 'Ideal T.Text
+  -> ExpectBroken 'Current T.Text
+  -> TestTree
+hoverTestExpectFail title pos _ =
+  hoverTest title pos . unCurrent
 
 hoverTest' :: String -> TestName -> Position -> T.Text -> TestTree
 hoverTest' docName title pos expected = testCase title $ runSessionWithServer def plugin testDataDir $ do
