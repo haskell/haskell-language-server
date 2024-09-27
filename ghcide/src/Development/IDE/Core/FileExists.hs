@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedLists      #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -26,6 +27,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
+import           Development.IDE.Graph.Internal.RuleInput
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake           (toKey)
@@ -39,6 +41,7 @@ import           Language.LSP.Server                   hiding (getVirtualFile)
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
+import Development.IDE.Core.InputPath (InputPath (InputPath))
 
 {- Note [File existence cache and LSP file watchers]
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -133,7 +136,7 @@ fromChange FileChangeType_Changed = Nothing
 -------------------------------------------------------------------------------------
 
 -- | Returns True if the file exists
-getFileExists :: NormalizedFilePath -> Action Bool
+getFileExists :: InputPath i -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
@@ -192,12 +195,15 @@ fileExistsRules recorder lspEnv = do
     then fileExistsRulesFast recorder isWatched
     else fileExistsRulesSlow recorder
 
-  fileStoreRules (cmapWithPrio LogFileStore recorder) isWatched
+  fileStoreRules (cmapWithPrio LogFileStore recorder) (\(InputPath f) -> isWatched f)
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileExistsRulesFast :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileExistsRulesFast recorder isWatched =
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics runGetFileExists
+    where
+      runGetFileExists :: GetFileExists -> InputPath i -> Action (Maybe BS.ByteString, Maybe Bool)
+      runGetFileExists GetFileExists (InputPath file) = do
         isWF <- isWatched file
         if isWF
             then fileExistsFast file
@@ -236,9 +242,12 @@ fileExistsFast file = do
 summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
-fileExistsRulesSlow :: Recorder (WithPriority Log) -> Rules ()
+fileExistsRulesSlow :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> Rules ()
 fileExistsRulesSlow recorder =
-  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow file
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics runGetFileExists
+  where
+    runGetFileExists :: GetFileExists -> InputPath i -> Action (Maybe BS.ByteString, Maybe Bool)
+    runGetFileExists GetFileExists (InputPath file) = fileExistsSlow file
 
 fileExistsSlow :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsSlow file = do

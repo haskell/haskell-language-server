@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
@@ -42,6 +43,7 @@ import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
+import           Development.IDE.Graph.Internal.RuleInput
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
@@ -69,7 +71,7 @@ import           Language.LSP.VFS
 import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
-import Development.IDE.Core.InputPath (InputPath (InputPath, unInputPath))
+import Development.IDE.Core.InputPath (InputPath (unInputPath), partitionInputs, PartitionedInputs (projectFiles, dependencyFiles))
 
 
 data Log
@@ -89,7 +91,7 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake msg -> pretty msg
 
-addWatchedFileRule :: Recorder (WithPriority Log) -> (InputPath i -> Action Bool) -> Rules ()
+addWatchedFileRule :: HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> (InputPath i -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile $ unInputPath f
@@ -102,12 +104,16 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
             Nothing -> pure $ Just False
 
 
-getModificationTimeRule :: Recorder (WithPriority Log) -> Rules ()
-getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
-    getModificationTimeImpl missingFileDiags file
+getModificationTimeRule :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> Rules ()
+getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule runGetModificationTimeImpl
+  where
+    runGetModificationTimeImpl :: GetModificationTime -> InputPath i -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
+    runGetModificationTimeImpl (GetModificationTime_ missingFileDiags) file =
+      getModificationTimeImpl missingFileDiags file
 
 getModificationTimeImpl
-  :: Bool
+  :: HasInput i AllHaskellFiles
+  => Bool
   -> InputPath i
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getModificationTimeImpl missingFileDiags file = do
@@ -171,11 +177,15 @@ modificationTime :: FileVersion -> Maybe UTCTime
 modificationTime VFSVersion{}             = Nothing
 modificationTime (ModificationTime posix) = Just $ posixSecondsToUTCTime posix
 
-getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
-getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
+getFileContentsRule :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> Rules ()
+getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) runGetFileContentsImpl
+  where
+    runGetFileContentsImpl :: GetFileContents -> InputPath i -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
+    runGetFileContentsImpl GetFileContents file = getFileContentsImpl file
 
 getFileContentsImpl
-    :: InputPath i
+    :: HasInput i AllHaskellFiles
+    => InputPath i
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
@@ -187,7 +197,7 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileContents :: InputPath i -> Action (UTCTime, Maybe T.Text)
+getFileContents :: HasInput i AllHaskellFiles => InputPath i -> Action (UTCTime, Maybe T.Text)
 getFileContents f = do
     (fv, txt) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
@@ -201,10 +211,10 @@ getFileContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
-fileStoreRules :: Recorder (WithPriority Log) -> (InputPath i -> Action Bool) -> Rules ()
+fileStoreRules :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> (InputPath i -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
-    getModificationTimeRule recorder
-    getFileContentsRule recorder
+    getModificationTimeRule @i recorder
+    getFileContentsRule @i recorder
     addWatchedFileRule recorder isWatched
 
 -- | Note that some buffer for a specific file has been modified but not
@@ -240,7 +250,9 @@ typecheckParentsAction recorder nfp = do
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
         logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
-        void $ uses GetModIface (map InputPath rs)
+        let partitionedInputs = partitionInputs rs
+        void $ uses GetModIface (projectFiles partitionedInputs)
+        void $ uses GetModIface (dependencyFiles partitionedInputs)
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that

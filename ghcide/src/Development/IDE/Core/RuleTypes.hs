@@ -74,7 +74,7 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 type instance RuleInput GetParsedModuleWithComments = AllHaskellFiles
 
 type instance RuleResult GetModuleGraph = DependencyInformation
-type instance RuleInput GetModuleGraph = ProjectHaskellFilesOnly
+type instance RuleInput GetModuleGraph = NoFiles
 
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
@@ -301,7 +301,7 @@ type instance RuleResult GetFileExists = Bool
 type instance RuleInput GetFileExists = AllHaskellFiles
 
 type instance RuleResult AddWatchedFile = Bool
-type instance RuleInput AddWatchedFile = ProjectHaskellFilesOnly
+type instance RuleInput AddWatchedFile = AllHaskellFiles
 
 
 -- The Shake key type for getModificationTime queries
