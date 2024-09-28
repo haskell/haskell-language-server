@@ -31,10 +31,11 @@ import           Data.String                                   (IsString)
 import qualified Data.Text                                     as T
 import           Data.Text.Encoding                            (encodeUtf8)
 import qualified Data.Text.Encoding                            as T
+import           Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Development.IDE                               (IdeState,
+                                                                getFileContents,
                                                                 useWithStale)
 import           Development.IDE.Core.Rules                    (runAction)
-import           Development.IDE.Core.RuleTypes                (GetFileContents (..))
 import           Distribution.Client.Add                       as Add
 import           Distribution.Compat.Prelude                   (Generic)
 import           Distribution.PackageDescription               (GenericPackageDescription,
@@ -235,12 +236,12 @@ getDependencyEdit :: MonadIO m => Recorder (WithPriority Log) -> (IdeState, Clie
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-        contents <- useWithStale GetFileContents $ toNormalizedFilePath cabalFilePath
+        contents <- getFileContents $ toNormalizedFilePath cabalFilePath
         inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
         inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
-        let mbCnfOrigContents = case snd . fst <$> contents of
-                    Just (Just txt) -> Just $ encodeUtf8 txt
-                    _               -> Nothing
+        let mbCnfOrigContents = case contents of
+                    (Just txt) -> Just $ encodeUtf8 $ Rope.toText txt
+                    _          -> Nothing
         let mbFields = fst <$> inFields
         let mbPackDescr = fst <$> inPackDescr
         pure (mbCnfOrigContents, mbFields, mbPackDescr)

@@ -6,12 +6,13 @@ module Ide.Plugin.Floskell
   , provider
   ) where
 
-import           Control.Monad.Except        (throwError)
+import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class
-import           Data.List                   (find)
-import qualified Data.Text                   as T
-import qualified Data.Text.Lazy              as TL
-import           Development.IDE             hiding (pluginHandlers)
+import           Data.List                        (find)
+import qualified Data.Text                        as T
+import qualified Data.Text.Lazy                   as TL
+import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
 import           Floskell
 import           Ide.Plugin.Error
 import           Ide.PluginUtils

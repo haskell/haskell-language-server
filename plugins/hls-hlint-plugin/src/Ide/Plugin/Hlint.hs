@@ -31,7 +31,6 @@ import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
-import           Control.Monad.Trans.Class                          (MonadTrans (lift))
 import           Control.Monad.Trans.Except                         (ExceptT (..),
                                                                      runExceptT)
 import           Data.Aeson.Types                                   (FromJSON (..),
@@ -44,11 +43,14 @@ import qualified Data.Map                                           as M
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
+import           Data.Text.Utf16.Rope.Mixed                         (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed                         as Rope
 import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error,
                                                                      getExtensions)
 import           Development.IDE.Core.Compile                       (sourceParser)
+import           Development.IDE.Core.FileStore                     (getVersionedTextDoc)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
@@ -300,9 +302,9 @@ getIdeas recorder nfp = do
               then return Nothing
               else do
                      flags' <- setExtensions flags
-                     (_, contents) <- getFileContents nfp
+                     contents <- getFileContents nfp
                      let fp = fromNormalizedFilePath nfp
-                     let contents' = T.unpack <$> contents
+                     let contents' = T.unpack . Rope.toText <$> contents
                      Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
@@ -361,7 +363,10 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
-    verTxtDocId <- lift $ pluginGetVersionedTextDoc documentId
+    verTxtDocId <-
+        liftIO $
+            runAction "Hlint.getVersionedTextDoc" ideState $
+                getVersionedTextDoc documentId
     liftIO $ fmap (InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 
@@ -440,7 +445,7 @@ mkCodeAction title diagnostic data_  isPreferred =
     , _data_ = data_
     }
 
-mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
+mkSuppressHintTextEdits :: DynFlags -> Rope -> T.Text -> [LSP.TextEdit]
 mkSuppressHintTextEdits dynFlags fileContents hint =
   let
     NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
@@ -511,7 +516,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
     let fp = fromNormalizedFilePath nfp
-    (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
+    mbOldContent <- fmap (fmap Rope.toText) $ liftIO $ runAction' $ getFileContents nfp
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum

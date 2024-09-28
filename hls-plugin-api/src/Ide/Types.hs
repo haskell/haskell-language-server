@@ -26,12 +26,12 @@ module Ide.Types
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
-, FormattingType(..), FormattingMethod, FormattingHandler, mkFormattingHandlers
+, FormattingType(..), FormattingMethod, FormattingHandler
 , HasTracing(..)
 , PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
 , PluginId(..)
 , PluginHandler(..), mkPluginHandler
-, HandlerM, runHandlerM, pluginGetClientCapabilities, pluginGetVirtualFile, pluginGetVersionedTextDoc, pluginSendNotification, pluginSendRequest, pluginWithIndefiniteProgress
+, HandlerM, runHandlerM, pluginGetClientCapabilities, pluginSendNotification, pluginSendRequest, pluginWithIndefiniteProgress
 , PluginHandlers(..)
 , PluginMethod(..)
 , PluginMethodHandler
@@ -64,7 +64,6 @@ import           Control.Lens                  (_Just, view, (.~), (?~), (^.),
 import           Control.Monad                 (void)
 import           Control.Monad.Error.Class     (MonadError (throwError))
 import           Control.Monad.IO.Class        (MonadIO)
-import           Control.Monad.Trans.Class     (MonadTrans (lift))
 import           Control.Monad.Trans.Except    (ExceptT, runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
 import qualified Data.Aeson.Types              as A
@@ -911,28 +910,14 @@ instance GCompare IdeNotification where
 
 -- | Restricted version of 'LspM' specific to plugins.
 --
--- We plan to use this monad for running plugins instead of 'LspM', since there
--- are parts of the LSP server state which plugins should not access directly,
--- but instead only via the build system. Note that this restriction of the LSP
--- server state has not yet been implemented. See 'pluginGetVirtualFile'.
+-- We use this monad for running plugins instead of 'LspM', since there are
+-- parts of the LSP server state which plugins should not access directly, but
+-- instead only via the build system.
 newtype HandlerM config a = HandlerM { _runHandlerM :: LspM config a }
   deriving newtype (Applicative, Functor, Monad, MonadIO, MonadUnliftIO)
 
 runHandlerM :: HandlerM config a -> LspM config a
 runHandlerM = _runHandlerM
-
--- | Wrapper of 'getVirtualFile' for HandlerM
---
--- TODO: To be replaced by a lookup of the Shake build graph
-pluginGetVirtualFile :: NormalizedUri -> HandlerM config (Maybe VirtualFile)
-pluginGetVirtualFile uri = HandlerM $ getVirtualFile uri
-
--- | Version of 'getVersionedTextDoc' for HandlerM
---
--- TODO: Should use 'pluginGetVirtualFile' instead of wrapping 'getVersionedTextDoc'.
--- At the time of writing, 'getVersionedTextDoc' of the "lsp" package is implemented with 'getVirtualFile'.
-pluginGetVersionedTextDoc :: TextDocumentIdentifier -> HandlerM config VersionedTextDocumentIdentifier
-pluginGetVersionedTextDoc = HandlerM . getVersionedTextDoc
 
 -- | Wrapper of 'getClientCapabilities' for HandlerM
 pluginGetClientCapabilities :: HandlerM config ClientCapabilities
@@ -1195,30 +1180,7 @@ type FormattingHandler a
   -> FormattingOptions
   -> ExceptT PluginError (HandlerM Config) ([TextEdit] |? Null)
 
-mkFormattingHandlers :: forall a. FormattingHandler a -> PluginHandlers a
-mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)
-                      <> mkPluginHandler SMethod_TextDocumentRangeFormatting (provider SMethod_TextDocumentRangeFormatting)
-  where
-    provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler a m
-    provider m ide _pid params
-      | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-        mf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
-        case mf of
-          Just vf -> do
-            let (typ, mtoken) = case m of
-                  SMethod_TextDocumentFormatting -> (FormatText, params ^. L.workDoneToken)
-                  SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. L.range), params ^. L.workDoneToken)
-                  _ -> Prelude.error "mkFormattingHandlers: impossible"
-            f ide mtoken typ (virtualFileText vf) nfp opts
-          Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
-
-      | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
-      where
-        uri = params ^. L.textDocument . L.uri
-        opts = params ^. L.options
-
 -- ---------------------------------------------------------------------
-
 
 data FallbackCodeActionParams =
   FallbackCodeActionParams

@@ -23,8 +23,12 @@ module Development.IDE.Core.PluginUtils
 , toCurrentRangeE
 , toCurrentRangeMT
 , fromCurrentRangeE
-, fromCurrentRangeMT) where
+, fromCurrentRangeMT
+-- Formatting handlers
+, mkFormattingHandlers) where
 
+import           Control.Lens                         ((^.))
+import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader                 (runReaderT)
@@ -32,7 +36,10 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Functor.Identity
 import qualified Data.Text                            as T
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
+import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.Service         (runAction)
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
                                                        IdeState (shakeExtras),
                                                        mkDelayedAction,
@@ -44,6 +51,9 @@ import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
+import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as LSP
+import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
 
 -- ----------------------------------------------------------------------------
@@ -162,3 +172,34 @@ fromCurrentRangeE mapping = maybeToExceptT (PluginInvalidUserState "fromCurrentR
 -- |MaybeT version of `fromCurrentRange`
 fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
 fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
+
+-- ----------------------------------------------------------------------------
+-- Formatting handlers
+-- ----------------------------------------------------------------------------
+
+-- `mkFormattingHandlers` was moved here from hls-plugin-api package so that
+-- `mkFormattingHandlers` can refer to `IdeState`. `IdeState` is defined in the
+-- ghcide package, but hls-plugin-api does not depend on ghcide, so `IdeState`
+-- is not in scope there.
+
+mkFormattingHandlers :: FormattingHandler IdeState -> PluginHandlers IdeState
+mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)
+                      <> mkPluginHandler SMethod_TextDocumentRangeFormatting (provider SMethod_TextDocumentRangeFormatting)
+  where
+    provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
+    provider m ide _pid params
+      | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
+        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nfp
+        case contentsMaybe of
+          Just contents -> do
+            let (typ, mtoken) = case m of
+                  SMethod_TextDocumentFormatting -> (FormatText, params ^. LSP.workDoneToken)
+                  SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. LSP.range), params ^. LSP.workDoneToken)
+                  _ -> Prelude.error "mkFormattingHandlers: impossible"
+            f ide mtoken typ (Rope.toText contents) nfp opts
+          Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
+
+      | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
+      where
+        uri = params ^. LSP.textDocument . LSP.uri
+        opts = params ^. LSP.options

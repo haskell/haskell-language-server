@@ -3,7 +3,10 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
+    getFileModTimeContents,
     getFileContents,
+    getUriContents,
+    getVersionedTextDoc,
     setFileModified,
     setSomethingModified,
     fileStoreRules,
@@ -18,12 +21,13 @@ module Development.IDE.Core.FileStore(
     isWatchSupported,
     registerFileWatches,
     shareFilePath,
-    Log(..)
+    Log(..),
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically)
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
+import           Control.Lens                                 ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.Binary                                  as B
@@ -33,6 +37,7 @@ import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
+import           Data.Text.Utf16.Rope.Mixed                   (Rope)
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
@@ -56,13 +61,16 @@ import           Ide.Logger                                   (Pretty (pretty),
                                                                logWith, viaShow,
                                                                (<+>))
 import qualified Ide.Logger                                   as L
-import           Ide.Plugin.Config                            (CheckParents (..),
-                                                               Config)
+import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message                (toUntypedRegistration)
 import qualified Language.LSP.Protocol.Message                as LSP
 import           Language.LSP.Protocol.Types                  (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
                                                                FileSystemWatcher (..),
-                                                               _watchers)
+                                                               TextDocumentIdentifier (..),
+                                                               VersionedTextDocumentIdentifier (..),
+                                                               _watchers,
+                                                               uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types                  as LSP
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -175,20 +183,20 @@ getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFil
 
 getFileContentsImpl
     :: NormalizedFilePath
-    -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
+    -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
     res <- do
         mbVirtual <- getVirtualFile file
-        pure $ virtualFileText <$> mbVirtual
+        pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe T.Text)
-getFileContents f = do
-    (fv, txt) <- use_ GetFileContents f
+getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents f = do
+    (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
       Just t -> pure t
       Nothing -> do
@@ -198,7 +206,29 @@ getFileContents f = do
           _ -> do
             posix <- getModTime $ fromNormalizedFilePath f
             pure $ posixSecondsToUTCTime posix
-    return (modTime, txt)
+    return (modTime, contents)
+
+getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
+getFileContents f = snd <$> use_ GetFileContents f
+
+getUriContents :: NormalizedUri -> Action (Maybe Rope)
+getUriContents uri =
+    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
+
+-- | Given a text document identifier, annotate it with the latest version.
+--
+-- Like Language.LSP.Server.Core.getVersionedTextDoc, but gets the virtual file
+-- from the Shake VFS rather than the LSP VFS.
+getVersionedTextDoc :: TextDocumentIdentifier -> Action VersionedTextDocumentIdentifier
+getVersionedTextDoc doc = do
+  let uri = doc ^. L.uri
+  mvf <-
+    maybe (pure Nothing) getVirtualFile $
+        uriToNormalizedFilePath $ toNormalizedUri uri
+  let ver = case mvf of
+        Just (VirtualFile lspver _ _) -> lspver
+        Nothing                       -> 0
+  return (VersionedTextDocumentIdentifier uri ver)
 
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
@@ -303,4 +333,3 @@ shareFilePath k = unsafePerformIO $ do
           Just v  -> (km, v)
           Nothing -> (HashMap.insert k k km, k)
 {-# NOINLINE shareFilePath  #-}
-

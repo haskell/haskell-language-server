@@ -11,7 +11,7 @@ import           Control.DeepSeq
 import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Class                     (lift)
 import           Control.Monad.Trans.Maybe                     (runMaybeT)
 import qualified Data.ByteString                               as BS
 import           Data.Hashable
@@ -21,8 +21,10 @@ import qualified Data.List.NonEmpty                            as NE
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
+import           Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Data.Typeable
 import           Development.IDE                               as D
+import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Shake                    (restartShakeSession)
 import qualified Development.IDE.Core.Shake                    as Shake
@@ -204,7 +206,7 @@ cabalRules recorder plId = do
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 sources
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
             liftIO $ BS.readFile $ fromNormalizedFilePath file
 
@@ -233,7 +235,7 @@ cabalRules recorder plId = do
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 sources
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
             liftIO $ BS.readFile $ fromNormalizedFilePath file
 
@@ -291,10 +293,10 @@ licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifie
 -- use some sort of fuzzy matching in the future, see issue #4357.
 fieldSuggestCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
-  vfileM <- lift (pluginGetVirtualFile $ toNormalizedUri uri)
-  case (,) <$> vfileM <*> uriToFilePath' uri of
+  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
+  case (,) <$> mContents <*> uriToFilePath' uri of
     Nothing -> pure $ InL []
-    Just (vfile, path) -> do
+    Just (fileContents, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
       mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
@@ -303,13 +305,13 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
           pure $ InL []
         Just (cabalFields, _) -> do
           let fields = Maybe.mapMaybe FieldSuggest.fieldErrorName diags
-          results <- forM fields (getSuggestion vfile path cabalFields)
+          results <- forM fields (getSuggestion fileContents path cabalFields)
           pure $ InL $ map InR $ concat results
   where
-    getSuggestion vfile fp cabalFields (fieldName,Diagnostic{ _range=_range@(Range (Position lineNr col) _) }) = do
+    getSuggestion fileContents fp cabalFields (fieldName,Diagnostic{ _range=_range@(Range (Position lineNr col) _) }) = do
       let -- Compute where we would anticipate the cursor to be.
           fakeLspCursorPosition = Position lineNr (col + fromIntegral (T.length fieldName))
-          lspPrefixInfo = Ghcide.getCompletionPrefix fakeLspCursorPosition vfile
+          lspPrefixInfo = Ghcide.getCompletionPrefixFromRope fakeLspCursorPosition fileContents
           cabalPrefixInfo = Completions.getCabalPrefixInfo fp lspPrefixInfo
       completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields
       let completionTexts = fmap (^. JL.label) completions
@@ -329,7 +331,8 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
           case mbCabalFile of
             Nothing -> pure $ InL []
             Just cabalFilePath -> do
-              verTxtDocId <- lift $ pluginGetVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
+              verTxtDocId <- runActionE "cabalAdd.getVersionedTextDoc" state $
+                lift $ getVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
               mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
               case mbGPD of
                 Nothing -> pure $ InL []
@@ -473,8 +476,8 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let TextDocumentIdentifier uri = complParams ^. JL.textDocument
       position = complParams ^. JL.position
-  mVf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
-  case (,) <$> mVf <*> uriToFilePath' uri of
+  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
+  case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
@@ -483,7 +486,7 @@ completion recorder ide _ complParams = do
         Nothing ->
           pure . InR $ InR Null
         Just (fields, _) -> do
-          let lspPrefInfo = Ghcide.getCompletionPrefix position cnts
+          let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
               cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
           let res = computeCompletionsAt recorder ide cabalPrefInfo path fields
           liftIO $ fmap InL res
