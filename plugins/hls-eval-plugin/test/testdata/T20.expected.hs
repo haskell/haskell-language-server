@@ -4,4 +4,4 @@ import Data.Word (Word)
 default (Word)
 
 -- >>> :type  +d   40+ 2 
--- 40+ 2 :: Word
+-- 40+ 2 :: Integer

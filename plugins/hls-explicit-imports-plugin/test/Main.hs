@@ -7,6 +7,7 @@ module Main
   ) where
 
 import           Control.Lens                  ((^.))
+import           Control.Monad                 (unless)
 import           Data.Either.Extra
 import           Data.Foldable                 (find)
 import           Data.Text                     (Text)
@@ -47,7 +48,7 @@ main = defaultTestRunner $ testGroup "import-actions"
     , inlayHintsTestWithoutCap "ExplicitOnlyThis" 3 $ (@=?) []
     -- Only when the client does not support inlay hints, explicit will be provided by code lens
     , codeLensGoldenTest codeActionNoInlayHintsCaps notRefineImports "ExplicitUsualCase" 0
-    , expectFail $ codeLensGoldenTest codeActionNoResolveCaps notRefineImports "ExplicitUsualCase" 0
+    , noCodeLensTest codeActionNoResolveCaps "ExplicitUsualCase"
     , codeActionBreakFile "ExplicitBreakFile" 4 0
     , inlayHintsTestWithCap "ExplicitBreakFile" 3 $ (@=?)
         [mkInlayHint (Position 3 16) "( a1 )"
@@ -192,6 +193,23 @@ codeLensGoldenTest caps predicate fp i = goldenWithImportActions " code lens" fp
   resolvedCodeLenses <- for codeLenses resolveCodeLens
   (CodeLens {_command = Just c}) <- pure (filter predicate resolvedCodeLenses !! i)
   executeCmd c
+
+noCodeLensTest :: ClientCapabilities -> FilePath -> TestTree
+noCodeLensTest caps fp = do
+  testCase (fp ++ " no code lens") $ run $ \_ -> do
+    doc <- openDoc (fp ++ ".hs") "haskell"
+    codeLenses <- getCodeLenses doc
+    resolvedCodeLenses <- for codeLenses resolveCodeLens
+    unless (null resolvedCodeLenses) $
+      liftIO (assertFailure "Unexpected code lens")
+  where
+    run = runSessionWithTestConfig def
+         { testDirLocation = Left testDataDir
+         , testConfigCaps = caps
+         , testLspConfig = def
+         , testPluginDescriptor = explicitImportsPlugin
+         }
+
 
 notRefineImports :: CodeLens -> Bool
 notRefineImports (CodeLens _ (Just (Command text _ _)) _)

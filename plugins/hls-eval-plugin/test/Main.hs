@@ -89,8 +89,8 @@ tests =
   , goldenWithEval ":type reports an error when given with unknown +x option" "T17" "hs"
   , goldenWithEval "Reports an error when given with unknown command" "T18" "hs"
   , goldenWithEval "Returns defaulted type for :type +d reflecting the default declaration specified in the >>> prompt" "T19" "hs"
-  , expectFailBecause "known issue - see a note in P.R. #361" $
-      goldenWithEval ":type +d reflects the `default' declaration of the module" "T20" "hs"
+  -- TODO: known issue - see a note in P.R. #361
+  , goldenWithEval ":type +d reflects the `default' declaration of the module" "T20" "hs"
   , testCase ":type handles a multilined result properly" $
       evalInFile "T21.hs" "-- >>> :type fun" $ T.unlines [
         "-- fun",

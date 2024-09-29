@@ -119,8 +119,9 @@ tests = let
       hover = (getHover      , checkHover)
 
   -- search locations            expectations on results
-  fffL4  = fffR  ^. L.start;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
-  fffL8  = Position 12  4  ;
+  -- TODO: Lookup of record field should return exactly one result
+  fffL4  = fffR  ^. L.start;  fffR = mkRange 8  4    8  7; fff  = [ExpectRanges [fffR, mkRange 7 23 9 16]]
+  fffL8  = Position 12  4  ;  fff' = [ExpectRange fffR]
   fffL14 = Position 18  7  ;
   aL20   = Position 19 15
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
@@ -148,13 +149,19 @@ tests = let
                            ;  constr = [ExpectHoverText ["Monad m"]]
   eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [":: Type -> Type -> Type\n"]]
   intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [":: Type\n"]]
-  tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
-  intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["7518"]]
-  chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
-  txtL8  = Position 12 14  ;  litT   = [ExpectHoverText ["\"dfgy\""]]
-  lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
+  -- TODO: Kind signature of type variables should be `Type -> Type`
+  tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText ["m"]];        kindV' = [ExpectHoverText [":: * -> *\n"]]
+  -- TODO: Hover of integer literal should be `7518`
+  intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["_ :: Int"]];  litI' = [ExpectHoverText ["7518"]]
+  -- TODO: Hover info of char literal should be `'f'`
+  chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["_ :: Char"]]; litC' = [ExpectHoverText ["'f'"]]
+  -- TODO: Hover info of Text literal should be `"dfgy"`
+  txtL8  = Position 12 14  ;  litT   = [ExpectHoverText ["_ :: Text"]]; litT' = [ExpectHoverText ["\"dfgy\""]]
+  -- TODO: Hover info of List literal should be `[8391 :: Int, 6268]`
+  lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[Int]"]];     litL' = [ExpectHoverText ["[8391 :: Int, 6268]"]]
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 50 0 50 5]
-  innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
+  -- TODO: Hover info of local function signature should be `inner :: Bool`
+  innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner"], mkR 53 2 53 7]; innSig' = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
@@ -167,46 +174,46 @@ tests = let
   mkFindTests
   --      def    hover  look       expect
   [ -- It suggests either going to the constructor or to the field
-    test  broken yes    fffL4      fff           "field in record definition"
-  , test  yes    yes    fffL8      fff           "field in record construction    #1102"
-  , test  yes    yes    fffL14     fff           "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
-  , test  yes    yes    aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    dcL7       tcDC          "data constructor record         #1029"
-  , test  yes    yes    dcL12      tcDC          "data constructor plain"                -- https://github.com/haskell/ghcide/pull/121
-  , test  yes    yes    tcL6       tcData        "type constructor                #1028" -- https://github.com/haskell/ghcide/pull/147
-  , test  yes    yes    xtcL5      xtc           "type constructor external   #717,1028"
-  , test  yes    yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    vvL16      vv            "plain parameter"                       -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    aL18       apmp          "pattern match name"                    -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    opL16      op            "top-level operator               #713" -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    opL18      opp           "parameter operator"                    -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    b'L19      bp            "name in backticks"                     -- https://github.com/haskell/ghcide/pull/120
-  , test  yes    yes    clL23      cls           "class in instance declaration   #1027"
-  , test  yes    yes    clL25      cls           "class in signature              #1027" -- https://github.com/haskell/ghcide/pull/147
-  , test  yes    yes    eclL15     ecls          "external class in signature #717,1027"
-  , test  yes    yes    dnbL29     dnb           "do-notation   bind              #1073"
-  , test  yes    yes    dnbL30     dnb           "do-notation lookup"
-  , test  yes    yes    lcbL33     lcb           "listcomp   bind                 #1073"
-  , test  yes    yes    lclL33     lcb           "listcomp lookup"
-  , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
-  , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
-  , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
-  , test  no     yes    docL41     doc           "documentation                   #1129"
-  , test  no     yes    eitL40     kindE         "kind of Either                  #1017"
-  , test  no     yes    intL40     kindI         "kind of Int                     #1017"
-  , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #1017"
-  , test  no     broken intL41     litI          "literal Int  in hover info      #1016"
-  , test  no     broken chrL36     litC          "literal Char in hover info      #1016"
-  , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
-  , test  no     broken lstL43     litL          "literal List in hover info      #1016"
-  , test  yes    yes    cmtL68     lackOfdEq     "no Core symbols                 #3280"
-  , test  no     yes    docL41     constr        "type constraint in hover info   #1012"
-  , test  no     yes    outL45     outSig        "top-level signature              #767"
-  , test  broken broken innL48     innSig        "inner     signature              #767"
-  , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
-  , test  no     yes    holeL65    hleInfo2      "hole with variable"
-  , test  no     yes    cccL17     docLink       "Haddock html links"
-  , testM yes    yes    imported   importedSig   "Imported symbol"
+    test  (broken fff')  yes               fffL4      fff           "field in record definition"
+  , test  yes            yes               fffL8      fff'          "field in record construction    #1102"
+  , test  yes            yes               fffL14     fff'          "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
+  , test  yes            yes               aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               dcL7       tcDC          "data constructor record         #1029"
+  , test  yes            yes               dcL12      tcDC          "data constructor plain"                -- https://github.com/haskell/ghcide/pull/121
+  , test  yes            yes               tcL6       tcData        "type constructor                #1028" -- https://github.com/haskell/ghcide/pull/147
+  , test  yes            yes               xtcL5      xtc           "type constructor external   #717,1028"
+  , test  yes            yes               xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               vvL16      vv            "plain parameter"                       -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               aL18       apmp          "pattern match name"                    -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               opL16      op            "top-level operator               #713" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               opL18      opp           "parameter operator"                    -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               b'L19      bp            "name in backticks"                     -- https://github.com/haskell/ghcide/pull/120
+  , test  yes            yes               clL23      cls           "class in instance declaration   #1027"
+  , test  yes            yes               clL25      cls           "class in signature              #1027" -- https://github.com/haskell/ghcide/pull/147
+  , test  yes            yes               eclL15     ecls          "external class in signature #717,1027"
+  , test  yes            yes               dnbL29     dnb           "do-notation   bind              #1073"
+  , test  yes            yes               dnbL30     dnb           "do-notation lookup"
+  , test  yes            yes               lcbL33     lcb           "listcomp   bind                 #1073"
+  , test  yes            yes               lclL33     lcb           "listcomp lookup"
+  , test  yes            yes               mclL36     mcl           "top-level fn 1st clause"
+  , test  yes            yes               mclL37     mcl           "top-level fn 2nd clause         #1030"
+  , test  yes            yes               spaceL37   space         "top-level fn on space           #1002"
+  , test  no             yes               docL41     doc           "documentation                   #1129"
+  , test  no             yes               eitL40     kindE         "kind of Either                  #1017"
+  , test  no             yes               intL40     kindI         "kind of Int                     #1017"
+  , test  no             (broken kindV')   tvrL40     kindV         "kind of (* -> *) type variable  #1017"
+  , test  no             (broken litI')    intL41     litI          "literal Int  in hover info      #1016"
+  , test  no             (broken litC')    chrL36     litC          "literal Char in hover info      #1016"
+  , test  no             (broken litT')    txtL8      litT          "literal Text in hover info      #1016"
+  , test  no             (broken litL')    lstL43     litL          "literal List in hover info      #1016"
+  , test  yes            yes               cmtL68     lackOfdEq     "no Core symbols                 #3280"
+  , test  no             yes               docL41     constr        "type constraint in hover info   #1012"
+  , test  no             yes               outL45     outSig        "top-level signature              #767"
+  , test  yes            (broken innSig')  innL48     innSig        "inner     signature              #767"
+  , test  no             yes               holeL60    hleInfo       "hole without internal name       #831"
+  , test  no             yes               holeL65    hleInfo2      "hole with variable"
+  , test  no             yes               cccL17     docLink       "Haddock html links"
+  , testM yes            yes               imported   importedSig   "Imported symbol"
   , if isWindows then
         -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
         testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
@@ -215,14 +222,12 @@ tests = let
   , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   , test yes yes import310 pkgTxt "show package name and its version"
   ]
-  where yes, broken :: (TestTree -> Maybe TestTree)
-        yes    = Just -- test should run and pass
-        broken = Just . (`xfail` "known broken")
+  where yes :: (TestTree -> Maybe TestTree)
+        yes = Just -- test should run and pass
         no = const Nothing -- don't run this test at all
         --skip = const Nothing -- unreliable, don't run
-
-xfail :: TestTree -> String -> TestTree
-xfail = flip expectFailBecause
+        broken :: [Expect] -> TestTree -> Maybe TestTree
+        broken _ = yes
 
 checkFileCompiles :: FilePath -> Session () -> TestTree
 checkFileCompiles fp diag =

@@ -39,6 +39,10 @@ module Test.Hls
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
+    -- * Helpers for expected test case failuers
+    BrokenBehavior(..),
+    ExpectBroken(..),
+    unCurrent,
     -- * Assertion helper functions
     waitForProgressDone,
     waitForAllProgressDone,
@@ -165,6 +169,15 @@ instance Pretty LogTestHarness where
     LogTestDir dir -> "Test Project located in directory:" <+> pretty dir
     LogCleanup     -> "Cleaned up temporary directory"
     LogNoCleanup   -> "No cleanup of temporary directory"
+
+data BrokenBehavior = Current | Ideal
+
+data ExpectBroken (k :: BrokenBehavior) a where
+  BrokenCurrent :: a -> ExpectBroken 'Current a
+  BrokenIdeal :: a -> ExpectBroken 'Ideal a
+
+unCurrent :: ExpectBroken 'Current a -> a
+unCurrent (BrokenCurrent a) = a
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
@@ -903,4 +916,3 @@ kick proxyMsg = do
   case fromJSON _params of
     Success x -> return x
     other     -> error $ "Failed to parse kick/done details: " <> show other
-

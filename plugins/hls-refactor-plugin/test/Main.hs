@@ -39,7 +39,6 @@ import qualified System.IO.Extra
 import           System.IO.Extra                          hiding (withTempDir)
 import           System.Time.Extra
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Text.Regex.TDFA                          ((=~))
 
@@ -337,67 +336,61 @@ insertImportTests = testGroup "insert import"
         "WhereDeclLowerInFileWithCommentsBeforeIt.hs"
         "WhereDeclLowerInFileWithCommentsBeforeIt.expected.hs"
         "import Data.Int"
-  , expectFailBecause
-      "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
-      (checkImport
-         "Shebang not at top with spaces"
-         "ShebangNotAtTopWithSpaces.hs"
-         "ShebangNotAtTopWithSpaces.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
-      (checkImport
-         "Shebang not at top no space"
-         "ShebangNotAtTopNoSpace.hs"
-         "ShebangNotAtTopNoSpace.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      ("'findNextPragmaPosition' function doesn't account for case "
-      ++ "when OPTIONS_GHC pragma is not placed at top of file")
-      (checkImport
-         "OPTIONS_GHC pragma not at top with spaces"
-         "OptionsNotAtTopWithSpaces.hs"
-         "OptionsNotAtTopWithSpaces.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      ("'findNextPragmaPosition' function doesn't account for "
-      ++ "case when shebang is not placed at top of file")
-      (checkImport
-         "Shebang not at top of file"
-         "ShebangNotAtTop.hs"
-         "ShebangNotAtTop.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      ("'findNextPragmaPosition' function doesn't account for case "
-      ++ "when OPTIONS_GHC is not placed at top of file")
-      (checkImport
-         "OPTIONS_GHC pragma not at top of file"
-         "OptionsPragmaNotAtTop.hs"
-         "OptionsPragmaNotAtTop.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      ("'findNextPragmaPosition' function doesn't account for case when "
-      ++ "OPTIONS_GHC pragma is not placed at top of file")
-      (checkImport
-         "pragma not at top with comment at top"
-         "PragmaNotAtTopWithCommentsAtTop.hs"
-         "PragmaNotAtTopWithCommentsAtTop.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      ("'findNextPragmaPosition' function doesn't account for case when "
-      ++ "OPTIONS_GHC pragma is not placed at top of file")
-      (checkImport
-         "pragma not at top multiple comments"
-         "PragmaNotAtTopMultipleComments.hs"
-         "PragmaNotAtTopMultipleComments.expected.hs"
-         "import Data.Monoid")
-  , expectFailBecause
-      "'findNextPragmaPosition' function doesn't account for case of multiline pragmas"
-      (checkImport
-         "after multiline language pragmas"
-         "MultiLinePragma.hs"
-         "MultiLinePragma.expected.hs"
-         "import Data.Monoid")
+  -- TODO: 'findNextPragmaPosition' function doesn't account for case when shebang is not
+  -- placed at top of file"
+  , checkImport
+        "Shebang not at top with spaces"
+        "ShebangNotAtTopWithSpaces.hs"
+        "ShebangNotAtTopWithSpaces.expected.hs"
+        "import Data.Monoid"
+  -- TODO: 'findNextPragmaPosition' function doesn't account for case when shebang is not
+  -- placed at top of file"
+  , checkImport
+        "Shebang not at top no space"
+        "ShebangNotAtTopNoSpace.hs"
+        "ShebangNotAtTopNoSpace.expected.hs"
+        "import Data.Monoid"
+  -- TODO: 'findNextPragmaPosition' function doesn't account for case when OPTIONS_GHC pragma is
+  -- not placed at top of file
+  , checkImport
+        "OPTIONS_GHC pragma not at top with spaces"
+        "OptionsNotAtTopWithSpaces.hs"
+        "OptionsNotAtTopWithSpaces.expected.hs"
+        "import Data.Monoid"
+  -- TODO: findNextPragmaPosition' function doesn't account for case when shebang is not placed
+  -- at top of file
+  , checkImport
+        "Shebang not at top of file"
+        "ShebangNotAtTop.hs"
+        "ShebangNotAtTop.expected.hs"
+        "import Data.Monoid"
+  -- TODO: findNextPragmaPosition' function doesn't account for case when OPTIONS_GHC is not
+  -- placed at top of file
+  , checkImport
+        "OPTIONS_GHC pragma not at top of file"
+        "OptionsPragmaNotAtTop.hs"
+        "OptionsPragmaNotAtTop.expected.hs"
+        "import Data.Monoid"
+  -- TODO: findNextPragmaPosition' function doesn't account for case when OPTIONS_GHC pragma is
+  -- not placed at top of file
+  , checkImport
+        "pragma not at top with comment at top"
+        "PragmaNotAtTopWithCommentsAtTop.hs"
+        "PragmaNotAtTopWithCommentsAtTop.expected.hs"
+        "import Data.Monoid"
+  -- TODO: findNextPragmaPosition' function doesn't account for case when OPTIONS_GHC pragma is
+  -- not placed at top of file
+  , checkImport
+        "pragma not at top multiple comments"
+        "PragmaNotAtTopMultipleComments.hs"
+        "PragmaNotAtTopMultipleComments.expected.hs"
+       "import Data.Monoid"
+  -- TODO: 'findNextPragmaPosition' function doesn't account for case of multiline pragmas
+  , checkImport
+        "after multiline language pragmas"
+        "MultiLinePragma.hs"
+        "MultiLinePragma.expected.hs"
+        "import Data.Monoid"
   , checkImport
       "pragmas not at top with module declaration"
       "PragmaNotAtTopWithModuleDecl.hs"
@@ -1513,26 +1506,47 @@ extendImportTests = testGroup "extend import actions"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
-        , expectFailBecause "importing pattern synonyms is unsupported"
-          $ testSession "extend import list with pattern synonym" $ template
-            [("ModuleA.hs", T.unlines
-                    [ "{-# LANGUAGE PatternSynonyms #-}"
-                      , "module ModuleA where"
-                      , "pattern Some x = Just x"
-                    ])
-            ]
-            ("ModuleB.hs", T.unlines
-                    [ "module ModuleB where"
-                    , "import A ()"
-                    , "k (Some x) = x"
-                    ])
-            (Range (Position 2 3) (Position 2 7))
-            ["Add pattern Some to the import list of A"]
-            (T.unlines
-                    [ "module ModuleB where"
-                    , "import A (pattern Some)"
-                    , "k (Some x) = x"
-                    ])
+        -- TODO: importing pattern synonyms is unsupported
+        , testSessionExpectFail "extend import list with pattern synonym"
+            (BrokenIdeal $
+              template
+                [("ModuleA.hs", T.unlines
+                       [ "{-# LANGUAGE PatternSynonyms #-}"
+                       , "module ModuleA where"
+                       , "pattern Some x = Just x"
+                       ])
+                ]
+                ("ModuleB.hs", T.unlines
+                      [ "module ModuleB where"
+                      , "import A ()"
+                      , "k (Some x) = x"
+                      ]
+                )
+                (Range (Position 2 3) (Position 2 7))
+                ["Add pattern Some to the import list of A"]
+                (T.unlines
+                        [ "module ModuleB where"
+                        , "import A (pattern Some)"
+                        , "k (Some x) = x"
+                        ]
+                )
+            )
+            (BrokenCurrent $
+              noCodeActionsTemplate
+                [("ModuleA.hs", T.unlines
+                       [ "{-# LANGUAGE PatternSynonyms #-}"
+                       , "module ModuleA where"
+                       , "pattern Some x = Just x"
+                       ])
+                ]
+                ("ModuleB.hs", T.unlines
+                      [ "module ModuleB where"
+                      , "import A ()"
+                      , "k (Some x) = x"
+                      ]
+                )
+                (Range (Position 2 3) (Position 2 7))
+            )
         , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
@@ -1601,19 +1615,10 @@ extendImportTests = testGroup "extend import actions"
         codeActionTitle CodeAction{_title=x} = x
 
         template setUpModules moduleUnderTest range expectedTitles expectedContentB = do
-            configureCheckProject overrideCheckProject
+            docB <- evalProject setUpModules moduleUnderTest
+            codeActions <- codeActions docB range
+            let actualTitles = codeActionTitle <$> codeActions
 
-            mapM_ (\(fileName, contents) -> createDoc fileName "haskell" contents) setUpModules
-            docB <- createDoc (fst moduleUnderTest) "haskell" (snd moduleUnderTest)
-            _  <- waitForDiagnostics
-            waitForProgressDone
-            actionsOrCommands <- getCodeActions docB range
-            let codeActions =
-                  [ ca | InR ca <- actionsOrCommands
-                  , let title = codeActionTitle ca
-                  , "Add" `T.isPrefixOf` title && not ("Add argument" `T.isPrefixOf` title)
-                  ]
-                actualTitles = codeActionTitle <$> codeActions
             -- Note that we are not testing the order of the actions, as the
             -- order of the expected actions indicates which one we'll execute
             -- in this test, i.e., the first one.
@@ -1627,6 +1632,30 @@ extendImportTests = testGroup "extend import actions"
             executeCodeAction action
             contentAfterAction <- documentContents docB
             liftIO $ expectedContentB @=? contentAfterAction
+
+        noCodeActionsTemplate setUpModules moduleUnderTest range = do
+            docB <- evalProject setUpModules moduleUnderTest
+            codeActions' <- codeActions docB range
+            let actualTitles = codeActionTitle <$> codeActions'
+            liftIO $ [] @=? actualTitles
+
+        evalProject setUpModules moduleUnderTest = do
+            configureCheckProject overrideCheckProject
+
+            mapM_ (\(fileName, contents) -> createDoc fileName "haskell" contents) setUpModules
+            docB <- createDoc (fst moduleUnderTest) "haskell" (snd moduleUnderTest)
+            _  <- waitForDiagnostics
+            waitForProgressDone
+
+            pure docB
+
+        codeActions docB range = do
+            actionsOrCommands <- getCodeActions docB range
+            pure $
+              [ ca | InR ca <- actionsOrCommands
+              , let title = codeActionTitle ca
+              , "Add" `T.isPrefixOf` title && not ("Add argument" `T.isPrefixOf` title)
+              ]
 
 fixModuleImportTypoTests :: TestTree
 fixModuleImportTypoTests = testGroup "fix module import typo"
@@ -1787,7 +1816,8 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits(..))"
     , test True []          "f = empty"                   []                "import Control.Applicative (Alternative(..))"
     ]
-  , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
+  -- TODO: Importing pattern synonyms is unsupported
+  , test False [] "k (Some x) = x" [] "import B (pattern Some)"
   ]
   where
     test = test' False
@@ -3803,6 +3833,13 @@ assertActionWithTitle actions title =
 
 testSession :: TestName -> Session () -> TestTree
 testSession name = testCase name . run
+
+testSessionExpectFail
+  :: TestName
+  -> ExpectBroken 'Ideal (Session ())
+  -> ExpectBroken 'Current (Session ())
+  -> TestTree
+testSessionExpectFail name _ = testSession name . unCurrent
 
 testSessionWithExtraFiles :: HasCallStack => FilePath -> TestName -> (FilePath -> Session ()) -> TestTree
 testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix

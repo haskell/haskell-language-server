@@ -54,8 +54,9 @@ tests found = testGroup "cabal-fmt"
     cabalFmtGolden found "formats a simple document" "simple_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
-  , expectFailBecause "cabal-fmt can't expand modules if .cabal file is read from stdin. Tracking issue: https://github.com/phadej/cabal-fmt/pull/82" $
-    cabalFmtGolden found "formats a document with expand:src comment" "commented_testdata" "formatted_document" $ \doc -> do
+  -- TODO: cabal-fmt can't expand modules if .cabal file is read from stdin. Tracking
+  -- issue: https://github.com/phadej/cabal-fmt/pull/82
+  , cabalFmtGolden found "formats a document with expand:src comment" "commented_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
   , cabalFmtGolden found "formats a document with lib information" "lib_testdata" "formatted_document" $ \doc -> do

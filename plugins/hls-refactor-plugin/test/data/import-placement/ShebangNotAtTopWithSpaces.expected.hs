@@ -6,7 +6,6 @@
 
 
 {-# LANGUAGE TupleSections #-}
-import Data.Monoid
 
 
 
@@ -16,6 +15,7 @@ instance SomeData All
 
 #! nix-shell --pure -i runghc -p "haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])"
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+import Data.Monoid
 
 addOne :: Int -> Int
 addOne x = x + 1

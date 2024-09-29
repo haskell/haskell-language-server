@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -30,13 +31,15 @@ import           Ide.PluginUtils                 (toAbsolute)
 import           Ide.Types
 import           System.FilePath                 (addTrailingPathSeparator,
                                                   (</>))
-import           Test.Hls                        (FromServerMessage' (..),
+import           Test.Hls                        (BrokenBehavior (..),
+                                                  ExpectBroken (..),
+                                                  FromServerMessage' (..),
                                                   SMethod (..),
                                                   TCustomMessage (..),
-                                                  TNotificationMessage (..))
+                                                  TNotificationMessage (..),
+                                                  unCurrent)
 import           Test.Hls.FileSystem             (copyDir)
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 
 
@@ -90,25 +93,25 @@ tests = testGroup "references"
                           , ("Main.hs", 10, 0)
                           ]
 
-          , expectFailBecause "references provider does not respect includeDeclaration parameter" $
- referenceTest "works when we ask to exclude declarations"
+          -- TODO: references provider does not respect includeDeclaration parameter
+          , referenceTestExpectFail "works when we ask to exclude declarations"
                           ("References.hs", 4, 7)
                           NoExcludeDeclaration
-                          [ ("References.hs", 6, 0)
-                          , ("References.hs", 6, 14)
-                          , ("References.hs", 9, 7)
-                          , ("References.hs", 10, 11)
-                          ]
-
-          , referenceTest "INCORRECTLY returns declarations when we ask to exclude them"
-                          ("References.hs", 4, 7)
-                          NoExcludeDeclaration
-                          [ ("References.hs", 4, 6)
-                          , ("References.hs", 6, 0)
-                          , ("References.hs", 6, 14)
-                          , ("References.hs", 9, 7)
-                          , ("References.hs", 10, 11)
-                          ]
+                          (BrokenIdeal
+                            [ ("References.hs", 6, 0)
+                            , ("References.hs", 6, 14)
+                            , ("References.hs", 9, 7)
+                            , ("References.hs", 10, 11)
+                            ]
+                          )
+                          (BrokenCurrent
+                            [ ("References.hs", 4, 6)
+                            , ("References.hs", 6, 0)
+                            , ("References.hs", 6, 14)
+                            , ("References.hs", 9, 7)
+                            , ("References.hs", 10, 11)
+                            ]
+                          )
           ]
 
     , testGroup "can get references to non FOIs"
@@ -203,6 +206,17 @@ referenceTest name loc includeDeclaration expected =
         liftIO $ expectSameLocations rootDir actual expected
   where
     docs = map fst3 expected
+
+referenceTestExpectFail
+  :: (HasCallStack)
+  => String
+  -> SymbolLocation
+  -> IncludeDeclaration
+  -> ExpectBroken 'Ideal [SymbolLocation]
+  -> ExpectBroken 'Current [SymbolLocation]
+  -> TestTree
+referenceTestExpectFail name loc includeDeclaration _ =
+  referenceTest name loc includeDeclaration . unCurrent
 
 type SymbolLocation = (FilePath, UInt, UInt)
 
