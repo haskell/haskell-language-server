@@ -2208,6 +2208,7 @@ test-suite ghcide-tests
     THTests
     UnitTests
     WatchedFileTests
+    InlayHintTests
 
   -- Tests that have been pulled out of the main file
   default-extensions:
