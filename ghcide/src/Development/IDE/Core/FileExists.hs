@@ -136,7 +136,7 @@ fromChange FileChangeType_Changed = Nothing
 -------------------------------------------------------------------------------------
 
 -- | Returns True if the file exists
-getFileExists :: InputPath i -> Action Bool
+getFileExists :: HasInput i AllHaskellFiles => InputPath i -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
@@ -170,7 +170,7 @@ allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> Rules ()
+fileExistsRules :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> Rules ()
 fileExistsRules recorder lspEnv = do
   supportsWatchedFiles <- case lspEnv of
     Nothing      -> pure False
@@ -192,10 +192,10 @@ fileExistsRules recorder lspEnv = do
         else const $ pure False
 
   if supportsWatchedFiles
-    then fileExistsRulesFast recorder isWatched
-    else fileExistsRulesSlow recorder
+    then fileExistsRulesFast @i recorder isWatched
+    else fileExistsRulesSlow @i recorder
 
-  fileStoreRules (cmapWithPrio LogFileStore recorder) (\(InputPath f) -> isWatched f)
+  fileStoreRules @i (cmapWithPrio LogFileStore recorder) (\(InputPath f) -> isWatched f)
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
 fileExistsRulesFast :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
