@@ -15,6 +15,7 @@ import           Data.Function                 ((&))
 import           Data.List                     (sortOn)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
+import qualified Data.Text.IO                  as T (putStrLn)
 import           Data.Text.Lazy.Encoding       (decodeUtf8)
 import qualified Data.Text.Lazy.IO             as LT
 import           Development.IDE.Core.Rules    hiding (Log)
@@ -28,7 +29,8 @@ import           HIE.Bios.Types                hiding (Log)
 import qualified HIE.Bios.Types                as HieBios
 import           Ide.Arguments
 import           Ide.Logger                    as G
-import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
+import           Ide.Plugin.ConfigUtils        (pluginsCustomConfigToMarkdownTables,
+                                                pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
                                                 describePlugin, ipMap, pluginId)
@@ -103,6 +105,8 @@ defaultMain recorder args idePlugins = do
 
         VSCodeExtensionSchemaMode -> do
           LT.putStrLn $ decodeUtf8 $ encodePrettySorted $ pluginsToVSCodeExtensionSchema idePlugins
+        PluginsCustomConfigMarkdownReferenceMode -> do
+            T.putStrLn $ pluginsCustomConfigToMarkdownTables idePlugins
         DefaultConfigurationMode -> do
           LT.putStrLn $ decodeUtf8 $ encodePrettySorted $ pluginsToDefaultConfig idePlugins
         PrintLibDir -> do
