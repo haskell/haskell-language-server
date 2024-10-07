@@ -33,6 +33,7 @@ data Arguments
   | BiosMode BiosAction
   | Ghcide GhcideArguments
   | VSCodeExtensionSchemaMode
+  | PluginsCustomConfigMarkdownReferenceMode
   | DefaultConfigurationMode
   | PrintLibDir
 

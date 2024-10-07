@@ -16,10 +16,11 @@ import           Data.List.Extra               (nubOrd)
 import           Data.String                   (IsString (fromString))
 import qualified Data.Text                     as T
 import           Ide.Plugin.Config
-import           Ide.Plugin.Properties         (toDefaultJSON,
-                                                toVSCodeExtensionSchema)
+import           Ide.Plugin.Properties         (Properties(..), toDefaultJSON,
+                                                toVSCodeExtensionSchema, SPropertyKey (SProperties), MetaData (..), SomePropertyKeyWithMetaData (..))
 import           Ide.Types
 import           Language.LSP.Protocol.Message
+import GHC.TypeLits (symbolVal)
 
 -- Attention:
 -- 'diagnosticsOn' will never be added into the default config or the schema,
@@ -139,3 +140,25 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
             ]
         withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
         toKey' = fromString . T.unpack . withIdPrefix
+
+-- | Generates markdown tables for custom config
+pluginsCustomConfigToMarkdownTables :: IdePlugins a -> T.Text
+pluginsCustomConfigToMarkdownTables IdePlugins {..} = T.unlines $ map singlePlugin ipMap
+  where
+    singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {configCustomConfig = c}, pluginId = PluginId pId} =
+        T.unlines (pluginHeader : tableHeader : rows c)
+        where
+            pluginHeader = "## " <> pId
+            tableHeader = "| Property | Description | Default |"
+            rows (CustomConfig p) = toMarkdownTable p
+            toMarkdownTable :: Properties r -> [T.Text]
+            toMarkdownTable EmptyProperties = mempty
+            toMarkdownTable (ConsProperties keyNameProxy k m xs) = renderRow (T.pack $ symbolVal keyNameProxy) (SomePropertyKeyWithMetaData k m) : toMarkdownTable xs
+            renderRow :: T.Text -> SomePropertyKeyWithMetaData -> T.Text
+            renderRow key (SomePropertyKeyWithMetaData k m) =
+              let (desc, defaultVal) = case m of
+                    PropertiesMetaData _ desc _ -> (desc, False)
+                    EnumMetaData _ desc  _ _ -> ("", True)
+                    MetaData _ desc -> (desc, False)
+              in T.unwords ["|", key, "|", desc, "|", if defaultVal then "yes" else "no", "|"]
+
