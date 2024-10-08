@@ -15,12 +15,13 @@ import qualified Data.Dependent.Sum            as DSum
 import           Data.List.Extra               (nubOrd)
 import           Data.String                   (IsString (fromString))
 import qualified Data.Text                     as T
+import           GHC.TypeLits                  (symbolVal)
 import           Ide.Plugin.Config
-import           Ide.Plugin.Properties         (Properties(..), toDefaultJSON,
-                                                toVSCodeExtensionSchema, SPropertyKey (SProperties), MetaData (..), SomePropertyKeyWithMetaData (..))
+import           Ide.Plugin.Properties         (MetaData (..), Properties (..),
+                                                toDefaultJSON,
+                                                toVSCodeExtensionSchema)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import GHC.TypeLits (symbolVal)
 
 -- Attention:
 -- 'diagnosticsOn' will never be added into the default config or the schema,
@@ -141,24 +142,41 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
         toKey' = fromString . T.unpack . withIdPrefix
 
+data PluginCustomConfig = PluginCustomConfig {
+    pccHeader :: T.Text,
+    pccParams :: [PluginCustomConfigParam]
+}
+data PluginCustomConfigParam = PluginCustomConfigParam {
+    pccpName        :: T.Text,
+    pccpDescription :: T.Text,
+    pccpIsDefault   :: Bool
+}
+
 -- | Generates markdown tables for custom config
 pluginsCustomConfigToMarkdownTables :: IdePlugins a -> T.Text
-pluginsCustomConfigToMarkdownTables IdePlugins {..} = T.unlines $ map singlePlugin ipMap
+pluginsCustomConfigToMarkdownTables IdePlugins {..} = T.unlines
+    $ map renderCfg
+    $ filter (\(PluginCustomConfig _ params) -> not $ null params)
+    $ map pluginCfg ipMap
   where
-    singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {configCustomConfig = c}, pluginId = PluginId pId} =
-        T.unlines (pluginHeader : tableHeader : rows c)
+    renderCfg :: PluginCustomConfig -> T.Text
+    renderCfg (PluginCustomConfig pId pccParams) =
+        T.unlines (pluginHeader : tableHeader : rows pccParams)
         where
             pluginHeader = "## " <> pId
-            tableHeader = "| Property | Description | Default |"
-            rows (CustomConfig p) = toMarkdownTable p
-            toMarkdownTable :: Properties r -> [T.Text]
-            toMarkdownTable EmptyProperties = mempty
-            toMarkdownTable (ConsProperties keyNameProxy k m xs) = renderRow (T.pack $ symbolVal keyNameProxy) (SomePropertyKeyWithMetaData k m) : toMarkdownTable xs
-            renderRow :: T.Text -> SomePropertyKeyWithMetaData -> T.Text
-            renderRow key (SomePropertyKeyWithMetaData k m) =
-              let (desc, defaultVal) = case m of
-                    PropertiesMetaData _ desc _ -> (desc, False)
-                    EnumMetaData _ desc  _ _ -> ("", True)
-                    MetaData _ desc -> (desc, False)
-              in T.unwords ["|", key, "|", desc, "|", if defaultVal then "yes" else "no", "|"]
-
+            tableHeader = "| Property | Description | Default |" <> "\n" <> "| --- | --- | --- |"
+            rows = map renderRow
+            renderRow (PluginCustomConfigParam name desc isDefault) =
+                "| `" <> name <> "` | " <> desc <> " | " <> if isDefault then "Yes" else "No" <> " |"
+    pluginCfg :: PluginDescriptor r -> PluginCustomConfig
+    pluginCfg PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {configCustomConfig = c}, pluginId = PluginId pId} =
+        PluginCustomConfig pId (pccProcess c)
+        where
+            pccProcess :: CustomConfig -> [PluginCustomConfigParam]
+            pccProcess (CustomConfig EmptyProperties) = mempty
+            pccProcess (CustomConfig (ConsProperties keyNameProxy _k m xs)) =
+                let (desc, isDefault) = case m of
+                        PropertiesMetaData _ desc _ -> (desc, False)
+                        EnumMetaData _ desc  _ _    -> (desc, True)
+                        MetaData _ desc             -> (desc, False)
+                in PluginCustomConfigParam (T.pack $ symbolVal keyNameProxy) desc isDefault : pccProcess (CustomConfig xs)
