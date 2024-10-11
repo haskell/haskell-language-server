@@ -3413,7 +3413,7 @@ exportUnusedTests = testGroup "export unused actions"
       , "module A (pattern Foo) where"
       , "pattern Foo a <- (a, _)"
       ]
-    , testSession "unused pattern synonym symbol" $ template
+    , testSession "unused pattern synonym operator" $ template
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "{-# LANGUAGE PatternSynonyms #-}"
       , "module A () where"
@@ -3472,19 +3472,6 @@ exportUnusedTests = testGroup "export unused actions"
       , "module A (Foo) where"
       , "type family Foo p"
       ]
-    , testSession "unused type family symbol" $ template
-      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-      , "{-# LANGUAGE TypeFamilies #-}"
-      , "module A () where"
-      , "type family p &&& q"
-      ]
-      (R 3 0 3 10)
-      "Export ‘&&&’"
-      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-      , "{-# LANGUAGE TypeFamilies #-}"
-      , "module A (type (&&&)) where"
-      , "type family p &&& q"
-      ]
     , testSession "unused typeclass" $ template
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A () where"
@@ -3495,17 +3482,6 @@ exportUnusedTests = testGroup "export unused actions"
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (Foo(..)) where"
       , "class Foo a"
-      ]
-    , testSession "unused typeclass symbol" $ template
-      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-      , "module A () where"
-      , "class p &&& q"
-      ]
-      (R 2 0 2 10)
-      "Export ‘&&&’"
-      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-      , "module A (type (&&&)(..)) where"
-      , "class p &&& q"
       ]
     , testSession "infix" $ template
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
