@@ -111,7 +111,7 @@ Yet another way to pass the pattern without recompilation is to use the `TASTY_P
 Run any of the `cabal test` commands above and set it to your pattern, e.g.:
 
 ```bash
-$ TASTY_PATTERN='-p hlint' cabal test func-test
+$ TASTY_PATTERN='hlint' cabal test func-test
 ```
 
 ## Using HLS on HLS code
