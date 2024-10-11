@@ -100,15 +100,7 @@ $ cabal test func-test --test-option "-p hlint"
 ```
 
 The above recompiles everything every time you use a different test option though.
-
-An alternative, which only recompiles when tests (or dependencies) change:
-
-```bash
-$ cabal run haskell-language-server:func-test -- -p "hlint enables"
-```
-
-Yet another way to pass the pattern without recompilation is to use the `TASTY_PATTERN` environment variable.
-Run any of the `cabal test` commands above and set it to your pattern, e.g.:
+An alternative, which only recompiles when tests (or dependencies) change is to pass the `TASTY_PATTERN` environment variable:
 
 ```bash
 $ TASTY_PATTERN='hlint' cabal test func-test
