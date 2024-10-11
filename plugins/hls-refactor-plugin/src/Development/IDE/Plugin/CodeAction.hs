@@ -769,7 +769,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
 
     printExport :: ExportsAs -> T.Text -> T.Text
     printExport ExportName x    = parenthesizeIfNeeds False x
-    printExport ExportPattern x = "pattern " <> x
+    printExport ExportPattern x = "pattern " <> parenthesizeIfNeeds False x
     printExport ExportFamily x  = parenthesizeIfNeeds True x
     printExport ExportAll x     = parenthesizeIfNeeds True x <> "(..)"
 
