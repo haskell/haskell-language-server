@@ -755,21 +755,23 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     opLetter :: T.Text
     opLetter = ":!#$%&*+./<=>?@\\^|-~"
 
+    parenthesizeIfNeeds :: Bool -> T.Text -> T.Text
+    parenthesizeIfNeeds needsTypeKeyword x
+      | T.any (c ==) opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <> ")"
+      | otherwise = x
+      where
+        c = T.head x
+
     matchWithDiagnostic :: Range -> Located (IdP GhcPs) -> Bool
     matchWithDiagnostic Range{_start=l,_end=r} x =
       let loc = fmap _start . getLocatedRange $ x
        in loc >= Just l && loc <= Just r
 
     printExport :: ExportsAs -> T.Text -> T.Text
-    printExport ea name = prefix <> parenthesizedName <> suffix
-      where
-        parenthesizedName = if T.any (firstChar ==) opLetter then "(" <> name <> ")" else name
-        firstChar = T.head name
-        (prefix, suffix) = case ea of
-          ExportName    -> ("", "")
-          ExportPattern -> ("pattern ", "")
-          ExportFamily  -> ("type ", "")
-          ExportAll     -> ("type ", "(..)")
+    printExport ExportName x    = parenthesizeIfNeeds False x
+    printExport ExportPattern x = "pattern " <> parenthesizeIfNeeds False x
+    printExport ExportFamily x  = parenthesizeIfNeeds True x
+    printExport ExportAll x     = parenthesizeIfNeeds True x <> "(..)"
 
     isTopLevel :: SrcSpan -> Bool
     isTopLevel span = fmap (_character . _start) (srcSpanToRange span) == Just 0
