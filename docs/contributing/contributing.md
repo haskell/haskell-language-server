@@ -81,6 +81,14 @@ Running just the wrapper tests
 $ cabal test wrapper-test
 ```
 
+Running just the tests for a specific plugin
+
+```bash
+$ cabal test hls-<plugin-name>-plugin-tests
+# E.g.
+$ cabal test hls-refactor-plugin-tests
+```
+
 Running a subset of tests
 
 Tasty supports providing
@@ -92,11 +100,10 @@ $ cabal test func-test --test-option "-p hlint"
 ```
 
 The above recompiles everything every time you use a different test option though.
-
-An alternative, which only recompiles when tests (or dependencies) change:
+An alternative, which only recompiles when tests (or dependencies) change is to pass the `TASTY_PATTERN` environment variable:
 
 ```bash
-$ cabal run haskell-language-server:func-test -- -p "hlint enables"
+$ TASTY_PATTERN='hlint' cabal test func-test
 ```
 
 ## Using HLS on HLS code
