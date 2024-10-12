@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               cabal-add-bench
+name:               cabal-add-packageYaml
 version:            0.1.0.0
 license:            NONE
 author:             George Gerasev
@@ -9,7 +9,7 @@ build-type:         Simple
 common warnings
     ghc-options: -Wall
 
-benchmark benchmark
+benchmark benchmark-packageYaml
     type: exitcode-stdio-1.0
     ghc-options: -threaded
     main-is: Main.hs
