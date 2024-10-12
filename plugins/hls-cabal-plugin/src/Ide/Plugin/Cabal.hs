@@ -68,6 +68,8 @@ import           Text.Regex.TDFA
 
 import qualified Data.Text                                     ()
 import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
+import           System.Exit                                   (ExitCode (ExitSuccess))
+import           System.Process                                (readProcessWithExitCode)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -366,7 +368,9 @@ hover ide _ msgParam = getHoverMessage >>= showHoverMessage
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
       guard $ txt `elem` depsNames
 
-      pure [txt <> "\n", documentationText txt]
+      cabalInfo <- MaybeT $ liftIO $ execCabalInfo txt
+
+      pure [txt <> "\n", cabalInfo, documentationText txt]
 
     showHoverMessage = \case
       Nothing -> pure $ InR Null
@@ -395,6 +399,14 @@ hover ide _ msgParam = getHoverMessage >>= showHoverMessage
         getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
         getMatch (_, _, _, [dependency]) = Just dependency
         getMatch (_, _, _, _)            = Nothing -- impossible case
+
+    execCabalInfo :: T.Text -> IO (Maybe T.Text)
+    execCabalInfo package = do
+      (exitCode, stdout, _stderr) <- readProcessWithExitCode "cabal" ["info", T.unpack package] ""
+      if exitCode == System.Exit.ExitSuccess then
+        pure $ Just $ T.pack stdout
+      else
+        pure Nothing
 
     documentationText :: T.Text -> T.Text
     documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
