@@ -29,6 +29,8 @@ cabalAddTests =
     "CabalAdd Tests"
     [ runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
         (generateAddDependencyTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
+    , runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "cabal-add-packageYaml")
+        (generatePackageYAMLTestSession ("src" </> "Main.hs"))
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
         (generateAddDependencyTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
@@ -139,3 +141,12 @@ cabalAddTests =
           , _codeDescription = Nothing
           , _data_ = Nothing
         }
+
+
+    generatePackageYAMLTestSession :: FilePath -> Session ()
+    generatePackageYAMLTestSession haskellFile  = do
+        hsdoc <- openDoc haskellFile "haskell"
+        _ <- waitForDiagnosticsFrom hsdoc
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc
+        let selectedCas = filter (\ca -> "Add dependency" `T.isPrefixOf` (ca ^. L.title)) cas
+        liftIO $ assertEqual "PackageYAML" [] selectedCas
