@@ -308,6 +308,7 @@ test-suite hls-cabal-plugin-tests
     , base
     , bytestring
     , Cabal-syntax          >= 3.7
+    , containers
     , extra
     , filepath
     , ghcide

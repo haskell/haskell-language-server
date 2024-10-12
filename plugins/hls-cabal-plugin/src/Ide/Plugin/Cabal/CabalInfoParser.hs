@@ -6,10 +6,10 @@ module Ide.Plugin.Cabal.CabalInfoParser (parseCabalInfo, cabalInfo) where
 import           Data.Map.Strict   (Map)
 import           Data.Text         (Text)
 import           Data.Void         (Void)
-import           Text.Megaparsec   (MonadParsec (..), Parsec, chunk, many,
-                                    parse, sepBy, single, (<|>))
+import           Text.Megaparsec   (MonadParsec (..), Parsec, chunk, failure,
+                                    many, parse, single, (<|>))
 
-import           Control.Monad     (void)
+import           Control.Monad     (void, when)
 import           Data.Either.Extra (mapLeft)
 import qualified Data.Map.Strict   as Map
 import qualified Data.Text         as T
@@ -21,11 +21,9 @@ parseCabalInfo = mapLeft (T.pack . show) . parse cabalInfo ""
 
 type CabalInfoParserError = Text
 
--- TODO: parse eof at the end to avoid early exits
 cabalInfo :: Parser (Map Text (Map Text [Text]))
 cabalInfo = do
-    entries <- cabalInfoEntry `sepBy` chunk "\n\n"
-    void $ takeWhileP (Just "trailing whitespace") (`elem` (" \t\r\n" :: String))
+    entries <- many $ try cabalInfoEntry
     eof
 
     pure $ Map.fromList entries
@@ -39,13 +37,18 @@ cabalInfoEntry = do
 
     void restOfLine
 
-    pairs <- many $ try kvPair
+    pairs <- many $ try field
+
+    void $ takeWhileP (Just "trailing whitespace") (`elem` (" \t\r\n" :: String))
 
     pure (name, Map.fromList pairs)
 
-kvPair :: Parser (Text, [Text])
-kvPair = do
+field :: Parser (Text, [Text])
+field = do
     spacesBeforeKey <- spaces
+    -- We assume that all fields are indented ==> fail if that ain't so.
+    when (T.null spacesBeforeKey) $ failure Nothing mempty
+
     key <- takeWhileP (Just "field name") (/= ':')
     void $ single ':'
     spacesAfterKey <- spaces
