@@ -68,6 +68,15 @@ instance Hashable ParseCabalCommonSections
 
 instance NFData ParseCabalCommonSections
 
+data ParsePlanJson = ParsePlanJson
+  deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable ParsePlanJson
+
+instance NFData ParsePlanJson
+
+type instance RuleResult ParsePlanJson = Int
+
 -- | The context a cursor can be in within a cabal file.
 --
 --  We can be in stanzas or the top level,

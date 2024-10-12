@@ -2,6 +2,7 @@
 module Ide.Plugin.Cabal.Parse
 ( parseCabalFileContents
 , readCabalFields
+, fromSyntaxPosition
 ) where
 
 import qualified Data.ByteString                              as BS
@@ -38,3 +39,6 @@ readCabalFields file contents  = do
     Right (fields, _warnings) -> do
       -- we don't want to double report diagnostics, all diagnostics are produced by 'ParseCabalFile'.
       Right fields
+
+fromSyntaxPosition :: Syntax.Position -> Position
+fromSyntaxPosition (Syntax.Position row col) = Position (fromInteger $ toInteger (row - 1)) (fromInteger $ toInteger col)
