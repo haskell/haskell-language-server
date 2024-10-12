@@ -3413,6 +3413,19 @@ exportUnusedTests = testGroup "export unused actions"
       , "module A (pattern Foo) where"
       , "pattern Foo a <- (a, _)"
       ]
+    , testSession "unused pattern synonym operator" $ template
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE PatternSynonyms #-}"
+      , "module A () where"
+      , "pattern x :+ y = (x, y)"
+      ]
+      (R 3 0 3 12)
+      "Export ‘:+’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE PatternSynonyms #-}"
+      , "module A (pattern (:+)) where"
+      , "pattern x :+ y = (x, y)"
+      ]
     , testSession "unused data type" $ template
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A () where"
