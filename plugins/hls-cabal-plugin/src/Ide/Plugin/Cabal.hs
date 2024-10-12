@@ -12,7 +12,9 @@ import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class                     (lift)
-import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import           Control.Monad.Trans.Maybe                     (MaybeT (..),
+                                                                hoistMaybe,
+                                                                runMaybeT)
 import qualified Data.ByteString                               as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                           (HashMap)
@@ -349,22 +351,27 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
 -- If found that the filtered hover message is a dependency,
 -- adds a Documentation link.
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
-hover ide _ msgParam = do
-  nfp <- getNormalizedFilePathE uri
-  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
-  case CabalFields.findTextWord cursor cabalFields of
-    Nothing ->
-      pure $ InR Null
-    Just cursorText -> do
-      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
-      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-      case filterVersion cursorText of
-        Nothing -> pure $ InR Null
-        Just txt ->
-          if txt `elem` depsNames
-          then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
-          else pure $ InR Null
+hover ide _ msgParam = getHoverMessage >>= showHoverMessage
   where
+    -- Return the tooltip content for a hovered name...
+    getHoverMessage = runMaybeT $ do
+      nfp <- lift $ getNormalizedFilePathE uri
+      cabalFields <- lift $ runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
+      -- ... at the cursor position...
+      cursorText <- hoistMaybe $ CabalFields.findTextWord cursor cabalFields
+      -- ... without any version information...
+      txt <- hoistMaybe $ filterVersion cursorText
+      -- ... and only if it's a listed depdendency.
+      gpd <- lift $ runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
+      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
+      guard $ txt `elem` depsNames
+
+      pure [txt <> "\n", documentationText txt]
+
+    showHoverMessage = \case
+      Nothing -> pure $ InR Null
+      Just message -> pure $ foundHover (Nothing, message)
+
     cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
     uri = msgParam ^. JL.textDocument . JL.uri
 
