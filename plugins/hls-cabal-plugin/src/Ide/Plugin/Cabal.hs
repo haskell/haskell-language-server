@@ -18,6 +18,7 @@ import Control.Monad.Trans.Maybe (runMaybeT)
 import Data.ByteString qualified as BS
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HashMap
+import Data.Map qualified as Map
 import Data.Hashable
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe qualified as Maybe
@@ -57,7 +58,7 @@ import Ide.Plugin.Cabal.Completion.Types
   ( ParseCabalCommonSections (ParseCabalCommonSections),
     ParseCabalFields (..),
     ParseCabalFile (..),
-    ParsePlanJson (..),
+    ParsePlanJson (..), BuildDependencyVersionMapping (..), Versioned(..),
   )
 import Ide.Plugin.Cabal.Completion.Types qualified as Types
 import Ide.Plugin.Cabal.Definition (gotoDefinition)
@@ -247,6 +248,13 @@ cabalRules recorder plId = do
       Nothing -> do liftIO $ BS.readFile $ fromNormalizedFilePath file
     
     pure ([], installPlan <$> A.decodeStrict contents)
+    
+  define (cmapWithPrio LogShake recorder) $ \BuildDependencyVersionMapping file -> do
+    deps <- use_ ParsePlanJson file 
+    
+    let versionMapping = Map.fromList $ map (\d -> (_pkgName d, _pkgVersion d)) deps
+    
+    pure ([], Just versionMapping)
 
   define (cmapWithPrio LogShake recorder) $ \ParseCabalFile file -> do
     config <- getPluginConfigAction plId
@@ -433,21 +441,22 @@ lens state _plId clp = do
     nfp <- getNormalizedFilePathE uri
     cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
     let positionedDeps = concatMap parseDeps cabalFields
-    let lenses = map getCodeLens positionedDeps
 
     let rfp = rootDir state
     let planJson = toNormalizedFilePath $ rfp </> planJsonPath
-    deps <- runActionE "cabal.cabal-lens" state $ useE ParsePlanJson planJson
-    
-    traceShowM deps
+    planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
+
+    let lenses = Maybe.mapMaybe 
+          (\p@(PositionedDependency _ name) -> getCodeLens . Versioned p <$> Map.lookup name planDeps) 
+          positionedDeps
     
     pure $ InL lenses
   where
-    getCodeLens :: PositionedDependency -> CodeLens
-    getCodeLens (PositionedDependency pos dep) = 
+    getCodeLens :: Versioned PositionedDependency -> CodeLens
+    getCodeLens (Versioned (PositionedDependency pos _) v) = 
       let cPos = Types.cabalPositionToLSPPosition pos in CodeLens 
           { _range = Range cPos cPos
-          , _command = Just $ mkActionlessCommand dep 
+          , _command = Just $ mkActionlessCommand v 
           , _data_ = Nothing 
           }
         

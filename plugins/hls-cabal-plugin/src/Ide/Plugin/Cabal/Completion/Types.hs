@@ -8,6 +8,7 @@ import           Control.DeepSeq                 (NFData)
 import           Control.Lens                    ((^.))
 import           Data.Hashable
 import qualified Data.Text                       as T
+import qualified Data.Map                        as M
 import           Data.Typeable
 import           Development.IDE                 as D
 import qualified Distribution.Fields             as Syntax
@@ -69,6 +70,15 @@ data ParseCabalCommonSections = ParseCabalCommonSections
 instance Hashable ParseCabalCommonSections
 
 instance NFData ParseCabalCommonSections
+
+data BuildDependencyVersionMapping = BuildDependencyVersionMapping 
+  deriving (Eq, Show, Typeable, Generic)
+  
+instance Hashable BuildDependencyVersionMapping
+  
+instance NFData BuildDependencyVersionMapping
+
+type instance RuleResult BuildDependencyVersionMapping = M.Map PkgName PkgVersion
 
 data ParsePlanJson = ParsePlanJson
   deriving (Eq, Show, Typeable, Generic)
@@ -170,17 +180,22 @@ data CabalPrefixInfo = CabalPrefixInfo
 --  while 'LeftSide' means, a closing apostrophe has to be added after the completion item.
 data Apostrophe = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
+  
+type PkgName = T.Text
+type PkgVersion = T.Text
 
-data PositionedDependency = PositionedDependency Syntax.Position T.Text
+data PositionedDependency = PositionedDependency Syntax.Position PkgName
     deriving Show
+    
+data Versioned a = Versioned a PkgVersion
 
 data DependencyInstances = DependencyInstances 
     { installPlan :: [DependencyInstance] }
     deriving Show
 
 data DependencyInstance = DependencyInstance 
-    { _pkgName :: T.Text
-    , _pkgVersion :: T.Text 
+    { _pkgName :: PkgName
+    , _pkgVersion :: PkgVersion
     }
     deriving (Show, Generic)
     
