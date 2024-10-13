@@ -436,21 +436,25 @@ hover ide _ msgParam = do
 
 lens :: PluginMethodHandler IdeState LSP.Method_TextDocumentCodeLens
 lens state _plId clp = do 
-    let uri = clp ^. JL.textDocument . JL.uri
+    if not $ isInlayHintsSupported state
+    then do
+      let uri = clp ^. JL.textDocument . JL.uri
 
-    nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
-    let positionedDeps = concatMap parseDeps cabalFields
+      nfp <- getNormalizedFilePathE uri
+      cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
+      let positionedDeps = concatMap parseDeps cabalFields
 
-    let rfp = rootDir state
-    let planJson = toNormalizedFilePath $ rfp </> planJsonPath
-    planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
+      let rfp = rootDir state
+      let planJson = toNormalizedFilePath $ rfp </> planJsonPath
+      planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
 
-    let lenses = Maybe.mapMaybe 
-          (\p@(PositionedDependency _ name) -> getCodeLens . Versioned p <$> Map.lookup name planDeps) 
-          positionedDeps
+      let lenses = Maybe.mapMaybe 
+           (\p@(PositionedDependency _ name) -> getCodeLens . Versioned p <$> Map.lookup name planDeps) 
+           positionedDeps
     
-    pure $ InL lenses
+      pure $ InL lenses
+    else
+      pure $ InL []
   where
     getCodeLens :: Versioned PositionedDependency -> CodeLens
     getCodeLens (Versioned (PositionedDependency pos _) v) = 
@@ -477,23 +481,27 @@ hint state _plId clp =
   if isInlayHintsSupported state 
   then do
     let uri = clp ^. JL.textDocument . JL.uri
-    let rfp = toNormalizedFilePath $ rootDir state
 
     nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal.cabal-inlayhint" state $ useE ParseCabalFields nfp
+    cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
     let positionedDeps = concatMap parseDeps cabalFields
-    let hints = map getInlayHint positionedDeps   
-  
-    let testDep = PositionedDependency (Syntax.Position 1 1) "test"
 
-    pure $ InL (getInlayHint testDep : hints)
+    let rfp = rootDir state
+    let planJson = toNormalizedFilePath $ rfp </> planJsonPath
+    planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
+
+    let hints = Maybe.mapMaybe 
+          (\p@(PositionedDependency _ name) -> getInlayHint . Versioned p <$> Map.lookup name planDeps) 
+          positionedDeps
+
+    pure $ InL hints
   else 
     pure $ InL []
   where     
-    getInlayHint :: PositionedDependency -> InlayHint
-    getInlayHint (PositionedDependency pos dep) = InlayHint 
+    getInlayHint :: Versioned PositionedDependency -> InlayHint
+    getInlayHint (Versioned (PositionedDependency pos _) v) = InlayHint 
           { _position = Types.cabalPositionToLSPPosition pos
-          , _label = InL dep
+          , _label = InL v
           , _kind = Nothing
           , _textEdits = Nothing 
           , _tooltip = Nothing 
