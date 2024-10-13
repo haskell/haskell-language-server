@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | This module allows you to parse the output of @cabal info@.
+-- This is basically a placeholder implementation until cabal info provides
+-- machine readable output or Cabal provides an API for this.
 module Ide.Plugin.Cabal.CabalInfoParser (parseCabalInfo, cabalInfo) where
 
 import           Data.Map.Strict   (Map)

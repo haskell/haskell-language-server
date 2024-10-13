@@ -20,6 +20,7 @@ import           Data.Hashable
 import           Data.HashMap.Strict                           (HashMap)
 import qualified Data.HashMap.Strict                           as HashMap
 import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Map.Strict                               as Map
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
@@ -66,8 +67,13 @@ import qualified Language.LSP.VFS                              as VFS
 import           Text.Regex.TDFA
 
 
+import           Data.Either.Extra                             (eitherToMaybe)
 import qualified Data.Text                                     ()
+import qualified Development.IDE.GHC.Compat                    as T
+import           Development.IDE.Spans.Common                  (spanDocToMarkdown,
+                                                                spanDocToMarkdownForTest)
 import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
+import           Ide.Plugin.Cabal.CabalInfoParser              (parseCabalInfo)
 import           System.Exit                                   (ExitCode (ExitSuccess))
 import           System.Process                                (readProcessWithExitCode)
 
@@ -368,9 +374,14 @@ hover ide _ msgParam = getHoverMessage >>= showHoverMessage
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
       guard $ txt `elem` depsNames
 
-      cabalInfo <- MaybeT $ liftIO $ execCabalInfo txt
+      cabalInfoRaw <- MaybeT $ liftIO $ execCabalInfo txt
+      cabalInfoData <- hoistMaybe $ eitherToMaybe $ parseCabalInfo cabalInfoRaw
 
-      pure [txt <> "\n", cabalInfo, documentationText txt]
+      let fields = cabalInfoData Map.! txt
+      let description = T.unlines $ fields Map.! "Description"
+      let descriptionMarkdown = T.pack $ spanDocToMarkdownForTest $ T.unpack description
+
+      pure [txt <> "\n", descriptionMarkdown <> "\n", documentationText txt]
 
     showHoverMessage = \case
       Nothing -> pure $ InR Null
