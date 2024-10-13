@@ -58,7 +58,10 @@ import Ide.Plugin.Cabal.Completion.Types
   ( ParseCabalCommonSections (ParseCabalCommonSections),
     ParseCabalFields (..),
     ParseCabalFile (..),
-    ParsePlanJson (..), BuildDependencyVersionMapping (..), Versioned(..),
+    ParsePlanJson (..), 
+    BuildDependencyVersionMapping (..), 
+    Positioned(..),
+    SimpleDependency(..)
   )
 import Ide.Plugin.Cabal.Completion.Types qualified as Types
 import Ide.Plugin.Cabal.Definition (gotoDefinition)
@@ -76,7 +79,6 @@ import Language.LSP.Protocol.Message qualified as LSP
 import Language.LSP.Protocol.Types
 import Language.LSP.VFS qualified as VFS
 import Text.Regex.TDFA
-import Debug.Trace
 import System.FilePath ((</>))
 
 data Log
@@ -449,15 +451,15 @@ lens state _plId clp = do
       planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
 
       let lenses = Maybe.mapMaybe 
-           (\p@(PositionedDependency _ name) -> getCodeLens . Versioned p <$> Map.lookup name planDeps) 
-           positionedDeps
+            (\(Positioned pos name) -> getCodeLens . Positioned pos . Dependency name <$> Map.lookup name planDeps) 
+            positionedDeps
     
       pure $ InL lenses
     else
       pure $ InL []
   where
-    getCodeLens :: Versioned PositionedDependency -> CodeLens
-    getCodeLens (Versioned (PositionedDependency pos _) v) = 
+    getCodeLens :: Positioned SimpleDependency -> CodeLens
+    getCodeLens (Positioned pos (Dependency _ v)) = 
       let cPos = Types.cabalPositionToLSPPosition pos in CodeLens 
           { _range = Range cPos cPos
           , _command = Just $ mkActionlessCommand v 
@@ -490,16 +492,16 @@ hint state _plId clp =
     let planJson = toNormalizedFilePath $ rfp </> planJsonPath
     planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
 
-    let hints = Maybe.mapMaybe 
-          (\p@(PositionedDependency _ name) -> getInlayHint . Versioned p <$> Map.lookup name planDeps) 
+    let lenses = Maybe.mapMaybe 
+          (\(Positioned pos name) -> getInlayHint . Positioned pos . Dependency name <$> Map.lookup name planDeps) 
           positionedDeps
 
-    pure $ InL hints
+    pure $ InL lenses
   else 
     pure $ InL []
   where     
-    getInlayHint :: Versioned PositionedDependency -> InlayHint
-    getInlayHint (Versioned (PositionedDependency pos _) v) = InlayHint 
+    getInlayHint :: Positioned SimpleDependency -> InlayHint
+    getInlayHint (Positioned pos (Dependency _ v)) = InlayHint 
           { _position = Types.cabalPositionToLSPPosition pos
           , _label = InL v
           , _kind = Nothing

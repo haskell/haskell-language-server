@@ -184,10 +184,9 @@ data Apostrophe = Surrounded | LeftSide
 type PkgName = T.Text
 type PkgVersion = T.Text
 
-data PositionedDependency = PositionedDependency Syntax.Position PkgName
-    deriving Show
-    
-data Versioned a = Versioned a PkgVersion
+data SimpleDependency = Dependency PkgName PkgVersion
+
+data Positioned a = Positioned Syntax.Position a
 
 data DependencyInstances = DependencyInstances 
     { installPlan :: [DependencyInstance] }
