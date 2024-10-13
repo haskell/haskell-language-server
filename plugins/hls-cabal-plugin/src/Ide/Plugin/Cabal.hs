@@ -252,12 +252,13 @@ cabalRules recorder plId = do
                 -- We don't support the cabal version, this should not be an error, as the
                 -- user did not do anything wrong. Instead we cast it to a warning
                 regex = "Unsupported cabal-version [0-9]+.[0-9]*"
+                unsupportedCabalHelpText = "\nThe used cabal version is not fully supported by hls. This means that some functionallity might not work as expected.\nIf you face any issues try to downgrade to a supported cabal version."
                 errorDiags =
                   NE.toList $
                     NE.map
                       ( \pe@(PError pos text) ->
                           if text =~ regex
-                            then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos text)
+                            then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos (text <> unsupportedCabalHelpText))
                             else Diagnostics.errorDiagnostic file pe
                       )
                       pErrorNE
