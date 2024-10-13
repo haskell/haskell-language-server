@@ -69,9 +69,7 @@ import           Text.Regex.TDFA
 
 import           Data.Either.Extra                             (eitherToMaybe)
 import qualified Data.Text                                     ()
-import qualified Development.IDE.GHC.Compat                    as T
-import           Development.IDE.Spans.Common                  (spanDocToMarkdown,
-                                                                spanDocToMarkdownForTest)
+import           Development.IDE.Spans.Common                  (spanDocToMarkdownForTest)
 import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
 import           Ide.Plugin.Cabal.CabalInfoParser              (parseCabalInfo)
 import           System.Exit                                   (ExitCode (ExitSuccess))
@@ -368,20 +366,23 @@ hover ide _ msgParam = getHoverMessage >>= showHoverMessage
       -- ... at the cursor position...
       cursorText <- hoistMaybe $ CabalFields.findTextWord cursor cabalFields
       -- ... without any version information...
-      txt <- hoistMaybe $ filterVersion cursorText
+      packageName <- hoistMaybe $ filterVersion cursorText
       -- ... and only if it's a listed depdendency.
       gpd <- lift $ runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-      guard $ txt `elem` depsNames
+      guard $ packageName `elem` depsNames
 
-      cabalInfoRaw <- MaybeT $ liftIO $ execCabalInfo txt
-      cabalInfoData <- hoistMaybe $ eitherToMaybe $ parseCabalInfo cabalInfoRaw
+      rawCabalInfo <- MaybeT $ liftIO $ execCabalInfo packageName
 
-      let fields = cabalInfoData Map.! txt
-      let description = T.unlines $ fields Map.! "Description"
-      let descriptionMarkdown = T.pack $ spanDocToMarkdownForTest $ T.unpack description
+      let cabalInfo = eitherToMaybe $ parseCabalInfo rawCabalInfo
+      liftIO $ print cabalInfo
 
-      pure [txt <> "\n", descriptionMarkdown <> "\n", documentationText txt]
+      case getDescription rawCabalInfo packageName of
+        Nothing ->
+          pure [packageName <> "\n", "Description not available\n", documentationText packageName]
+        Just description -> do
+          let descriptionMarkdown = T.pack $ spanDocToMarkdownForTest $ T.unpack description
+          pure [packageName <> "\n", descriptionMarkdown <> "\n", documentationText packageName]
 
     showHoverMessage = \case
       Nothing -> pure $ InR Null
@@ -421,6 +422,12 @@ hover ide _ msgParam = getHoverMessage >>= showHoverMessage
 
     documentationText :: T.Text -> T.Text
     documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
+
+    getDescription :: T.Text -> T.Text -> Maybe T.Text
+    getDescription rawCabalInfo packageName = do
+      cabalInfo <- eitherToMaybe $ parseCabalInfo rawCabalInfo
+      pkInfo <- cabalInfo Map.!? packageName
+      T.unlines <$> pkInfo Map.!? "Description"
 
 
 -- ----------------------------------------------------------------
