@@ -30,7 +30,7 @@ parseDeps _ = []
 
 -- | Matches valid Cabal dependency names 
 packageRegex :: T.Text
-packageRegex = "[a-zA-Z0-9_-]+"
+packageRegex = "[a-zA-Z0-9_-]+" -- not sure if this is correct
 
 -- | Parses a single FieldLine of Cabal dependencies. Returns a list since a single line may
 -- contain multiple dependencies.

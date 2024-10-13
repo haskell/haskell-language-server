@@ -186,16 +186,19 @@ type PkgVersion = T.Text
 
 data SimpleDependency = Dependency PkgName PkgVersion
 
+-- | Represents some element that has an associated position in a file
 data Positioned a = Positioned Syntax.Position a
 
 data DependencyInstances = DependencyInstances 
     { installPlan :: [DependencyInstance] }
     deriving Show
 
+-- | Represents a concrete dependency entry in plan.json
 data DependencyInstance = DependencyInstance 
     { _pkgName :: PkgName
     , _pkgVersion :: PkgVersion
-    }
+    , _componentName :: T.Text
+    } -- missing some unneeded fields
     deriving (Show, Generic)
     
 instance NFData DependencyInstance
@@ -204,7 +207,8 @@ instance A.FromJSON DependencyInstance where
     parseJSON = A.withObject "InstallPlan" $ \obj -> do
         pkgName <- obj .: "pkg-name"
         pkgVersion <- obj .: "pkg-version"
-        return $ DependencyInstance pkgName pkgVersion
+        cmpName <- obj .: "component-name"
+        return $ DependencyInstance pkgName pkgVersion cmpName
 
 instance A.FromJSON DependencyInstances where
   parseJSON = A.withObject "PlanJson" $ \obj -> do
