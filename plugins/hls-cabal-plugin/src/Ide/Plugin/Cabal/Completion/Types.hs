@@ -15,6 +15,8 @@ import qualified Distribution.PackageDescription as PD
 import qualified Distribution.Parsec.Position    as Syntax
 import           GHC.Generics
 import qualified Language.LSP.Protocol.Lens      as JL
+import qualified Data.Aeson                      as A
+import           Data.Aeson                      ((.:))
 
 data Log
   = LogFileSplitError Position
@@ -75,7 +77,7 @@ instance Hashable ParsePlanJson
 
 instance NFData ParsePlanJson
 
-type instance RuleResult ParsePlanJson = Int
+type instance RuleResult ParsePlanJson = [DependencyInstance]
 
 -- | The context a cursor can be in within a cabal file.
 --
@@ -168,6 +170,32 @@ data CabalPrefixInfo = CabalPrefixInfo
 --  while 'LeftSide' means, a closing apostrophe has to be added after the completion item.
 data Apostrophe = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
+
+data PositionedDependency = PositionedDependency Syntax.Position T.Text
+    deriving Show
+
+data DependencyInstances = DependencyInstances 
+    { installPlan :: [DependencyInstance] }
+    deriving Show
+
+data DependencyInstance = DependencyInstance 
+    { _pkgName :: T.Text
+    , _pkgVersion :: T.Text 
+    }
+    deriving (Show, Generic)
+    
+instance NFData DependencyInstance
+
+instance A.FromJSON DependencyInstance where
+    parseJSON = A.withObject "InstallPlan" $ \obj -> do
+        pkgName <- obj .: "pkg-name"
+        pkgVersion <- obj .: "pkg-version"
+        return $ DependencyInstance pkgName pkgVersion
+
+instance A.FromJSON DependencyInstances where
+  parseJSON = A.withObject "PlanJson" $ \obj -> do
+    deps <- obj .: "install-plan" >>= A.parseJSON
+    return (DependencyInstances deps) 
 
 -- | Wraps a completion in apostrophes where appropriate.
 --

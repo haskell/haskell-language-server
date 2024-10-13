@@ -75,6 +75,8 @@ import Language.LSP.Protocol.Message qualified as LSP
 import Language.LSP.Protocol.Types
 import Language.LSP.VFS qualified as VFS
 import Text.Regex.TDFA
+import Debug.Trace
+import System.FilePath ((</>))
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -238,8 +240,13 @@ cabalRules recorder plId = do
     pure ([], Just commonSections)
     
   define (cmapWithPrio LogShake recorder) $ \ParsePlanJson file -> do
-    (t, _) <- use_ GetFileContents file
-    pure ([], Just 0)
+    (_, planSrc) <- use_ GetFileContents file
+    
+    contents <- case planSrc of
+      Just sources -> pure $ Encoding.encodeUtf8 $ Rope.toText sources
+      Nothing -> do liftIO $ BS.readFile $ fromNormalizedFilePath file
+    
+    pure ([], installPlan <$> A.decodeStrict contents)
 
   define (cmapWithPrio LogShake recorder) $ \ParseCabalFile file -> do
     config <- getPluginConfigAction plId
@@ -424,17 +431,21 @@ lens state _plId clp = do
     let uri = clp ^. JL.textDocument . JL.uri
 
     nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal.cabal-hover" state $ useE ParseCabalFields nfp
+    cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
     let positionedDeps = concatMap parseDeps cabalFields
     let lenses = map getCodeLens positionedDeps
-    
-    let testDep = PositionedDependency (Syntax.Position 0 0) (T.pack $ show positionedDeps)
 
-    pure $ InL (getCodeLens testDep : lenses)
+    let rfp = rootDir state
+    let planJson = toNormalizedFilePath $ rfp </> planJsonPath
+    deps <- runActionE "cabal.cabal-lens" state $ useE ParsePlanJson planJson
+    
+    traceShowM deps
+    
+    pure $ InL lenses
   where
     getCodeLens :: PositionedDependency -> CodeLens
     getCodeLens (PositionedDependency pos dep) = 
-      let cPos = Parse.fromSyntaxPosition pos in CodeLens 
+      let cPos = Types.cabalPositionToLSPPosition pos in CodeLens 
           { _range = Range cPos cPos
           , _command = Just $ mkActionlessCommand dep 
           , _data_ = Nothing 
@@ -457,11 +468,12 @@ hint state _plId clp =
   if isInlayHintsSupported state 
   then do
     let uri = clp ^. JL.textDocument . JL.uri
+    let rfp = toNormalizedFilePath $ rootDir state
 
     nfp <- getNormalizedFilePathE uri
     cabalFields <- runActionE "cabal.cabal-inlayhint" state $ useE ParseCabalFields nfp
     let positionedDeps = concatMap parseDeps cabalFields
-    let hints = map getInlayHint positionedDeps
+    let hints = map getInlayHint positionedDeps   
   
     let testDep = PositionedDependency (Syntax.Position 1 1) "test"
 
@@ -471,7 +483,7 @@ hint state _plId clp =
   where     
     getInlayHint :: PositionedDependency -> InlayHint
     getInlayHint (PositionedDependency pos dep) = InlayHint 
-          { _position = Parse.fromSyntaxPosition pos
+          { _position = Types.cabalPositionToLSPPosition pos
           , _label = InL dep
           , _kind = Nothing
           , _textEdits = Nothing 
