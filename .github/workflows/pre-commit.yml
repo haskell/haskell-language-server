@@ -53,7 +53,7 @@ jobs:
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
 
-    - uses: actions/setup-python@v3
+    - uses: actions/setup-python@v5
     - uses: pre-commit/action@v3.0.1
       with:
         extra_args: --files ${{ needs.file-diff.outputs.git-diff }}
