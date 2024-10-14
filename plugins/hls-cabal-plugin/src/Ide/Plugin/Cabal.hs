@@ -80,6 +80,7 @@ import Language.LSP.Protocol.Types
 import Language.LSP.VFS qualified as VFS
 import Text.Regex.TDFA
 import System.FilePath ((</>))
+import Debug.Trace
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -444,6 +445,7 @@ lens state _plId clp = do
 
       nfp <- getNormalizedFilePathE uri
       cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
+      
       let positionedDeps = concatMap parseDeps cabalFields
 
       let rfp = rootDir state
@@ -460,7 +462,8 @@ lens state _plId clp = do
   where
     getCodeLens :: Positioned SimpleDependency -> CodeLens
     getCodeLens (Positioned pos (Dependency _ v)) = 
-      let cPos = Types.cabalPositionToLSPPosition pos in CodeLens 
+      let cPos = Types.cabalPositionToLSPPosition pos
+      in CodeLens 
           { _range = Range cPos cPos
           , _command = Just $ mkActionlessCommand v 
           , _data_ = Nothing 
