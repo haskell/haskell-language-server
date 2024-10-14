@@ -1,85 +1,79 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
 
-import Control.Concurrent.Strict
-import Control.DeepSeq
-import Control.Lens ((^.))
-import Control.Lens.Fold ((^?))
-import Control.Lens.Prism (_Just)
-import Control.Monad.Extra
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (runMaybeT)
-import Data.ByteString qualified as BS
-import Data.HashMap.Strict (HashMap)
-import Data.HashMap.Strict qualified as HashMap
-import Data.Map qualified as Map
-import Data.Hashable
-import Data.List.NonEmpty qualified as NE
-import Data.Maybe qualified as Maybe
-import Data.Text qualified ()
-import Data.Text qualified as T
-import Data.Text.Encoding qualified as Encoding
-import Data.Text.Utf16.Rope.Mixed as Rope
-import Data.Typeable
-import Data.Aeson qualified as A
-import Development.IDE as D
-import Development.IDE.Core.FileStore (getVersionedTextDoc)
-import Development.IDE.Core.PluginUtils
-import Development.IDE.Core.Shake (restartShakeSession)
-import Development.IDE.Core.Shake qualified as Shake
-import Development.IDE.Graph
-  ( Key,
-    alwaysRerun,
-  )
-import Development.IDE.LSP.HoverDefinition (foundHover)
-import Development.IDE.Plugin.Completions.Logic qualified as Ghcide
-import Development.IDE.Types.Shake (toKey)
-import Distribution.Fields qualified as Syntax
-import Distribution.Package (Dependency)
-import Distribution.PackageDescription
-  ( allBuildDepends,
-    depPkgName,
-    unPackageName,
-  )
-import Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import Distribution.Parsec.Position qualified as Syntax
-import GHC.Generics
-import Ide.Plugin.Cabal.CabalAdd qualified as CabalAdd
-import Ide.Plugin.Cabal.Completion.CabalFields as CabalFields
-import Ide.Plugin.Cabal.Completion.Completer.Types qualified as CompleterTypes
-import Ide.Plugin.Cabal.Completion.Completions qualified as Completions
-import Ide.Plugin.Cabal.Completion.Types
-  ( ParseCabalCommonSections (ParseCabalCommonSections),
-    ParseCabalFields (..),
-    ParseCabalFile (..),
-    ParsePlanJson (..), 
-    BuildDependencyVersionMapping (..), 
-    Positioned(..),
-    SimpleDependency(..)
-  )
-import Ide.Plugin.Cabal.Completion.Types qualified as Types
-import Ide.Plugin.Cabal.Definition (gotoDefinition)
-import Ide.Plugin.Cabal.Dependencies
-import Ide.Plugin.Cabal.Diagnostics qualified as Diagnostics
-import Ide.Plugin.Cabal.FieldSuggest qualified as FieldSuggest
-import Ide.Plugin.Cabal.LicenseSuggest qualified as LicenseSuggest
-import Ide.Plugin.Cabal.Orphans ()
-import Ide.Plugin.Cabal.Outline
-import Ide.Plugin.Cabal.Parse qualified as Parse
-import Ide.Plugin.Error
-import Ide.Types
-import Language.LSP.Protocol.Lens qualified as JL
-import Language.LSP.Protocol.Message qualified as LSP
-import Language.LSP.Protocol.Types
-import Language.LSP.VFS qualified as VFS
-import Text.Regex.TDFA
-import System.FilePath ((</>))
+import           Control.Concurrent.Strict
+import           Control.DeepSeq
+import           Control.Lens                                  ((^.))
+import           Control.Lens.Fold                             ((^?))
+import           Control.Lens.Prism                            (_Just)
+import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class                     (lift)
+import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import qualified Data.Aeson                                    as A
+import qualified Data.ByteString                               as BS
+import           Data.Hashable
+import           Data.HashMap.Strict                           (HashMap)
+import qualified Data.HashMap.Strict                           as HashMap
+import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Map                                      as Map
+import qualified Data.Maybe                                    as Maybe
+import qualified Data.Text                                     ()
+import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as Encoding
+import           Data.Text.Utf16.Rope.Mixed                    as Rope
+import           Data.Typeable
+import           Development.IDE                               as D
+import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.Shake                    (restartShakeSession)
+import qualified Development.IDE.Core.Shake                    as Shake
+import           Development.IDE.Graph                         (Key,
+                                                                alwaysRerun)
+import           Development.IDE.LSP.HoverDefinition           (foundHover)
+import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
+import           Development.IDE.Types.Shake                   (toKey)
+import qualified Distribution.Fields                           as Syntax
+import           Distribution.Package                          (Dependency)
+import           Distribution.PackageDescription               (allBuildDepends,
+                                                                depPkgName,
+                                                                unPackageName)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import qualified Distribution.Parsec.Position                  as Syntax
+import           GHC.Generics
+import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
+import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
+import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
+import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
+import           Ide.Plugin.Cabal.Completion.Types             (BuildDependencyVersionMapping (..),
+                                                                ParseCabalCommonSections (ParseCabalCommonSections),
+                                                                ParseCabalFields (..),
+                                                                ParseCabalFile (..),
+                                                                ParsePlanJson (..),
+                                                                Positioned (..),
+                                                                SimpleDependency (..))
+import qualified Ide.Plugin.Cabal.Completion.Types             as Types
+import           Ide.Plugin.Cabal.Definition                   (gotoDefinition)
+import           Ide.Plugin.Cabal.Dependencies
+import qualified Ide.Plugin.Cabal.Diagnostics                  as Diagnostics
+import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
+import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
+import           Ide.Plugin.Cabal.Orphans                      ()
+import           Ide.Plugin.Cabal.Outline
+import qualified Ide.Plugin.Cabal.Parse                        as Parse
+import           Ide.Plugin.Error
+import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                    as JL
+import qualified Language.LSP.Protocol.Message                 as LSP
+import           Language.LSP.Protocol.Types
+import qualified Language.LSP.VFS                              as VFS
+import           System.FilePath                               ((</>))
+import           Text.Regex.TDFA
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -141,13 +135,13 @@ descriptor recorder plId =
       pluginHandlers =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
-          ,  mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
-          ,  mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
-          ,  mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
-          ,  mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
-          ,  mkPluginHandler LSP.SMethod_TextDocumentHover hover
-          ,  mkPluginHandler LSP.SMethod_TextDocumentInlayHint hint
-          ,  mkPluginHandler LSP.SMethod_TextDocumentCodeLens lens
+          , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
+          , mkPluginHandler LSP.SMethod_TextDocumentDocumentSymbol moduleOutline
+          , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
+          , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
+          , mkPluginHandler LSP.SMethod_TextDocumentHover hover
+          , mkPluginHandler LSP.SMethod_TextDocumentInlayHint hint
+          , mkPluginHandler LSP.SMethod_TextDocumentCodeLens lens
           ],
       pluginNotificationHandlers =
         mconcat
@@ -241,21 +235,21 @@ cabalRules recorder plId = do
             )
             fields
     pure ([], Just commonSections)
-    
+
   define (cmapWithPrio LogShake recorder) $ \ParsePlanJson file -> do
     (_, planSrc) <- use_ GetFileContents file
-    
+
     contents <- case planSrc of
       Just sources -> pure $ Encoding.encodeUtf8 $ Rope.toText sources
-      Nothing -> do liftIO $ BS.readFile $ fromNormalizedFilePath file
-    
+      Nothing      -> do liftIO $ BS.readFile $ fromNormalizedFilePath file
+
     pure ([], installPlan <$> A.decodeStrict contents)
-    
+
   define (cmapWithPrio LogShake recorder) $ \BuildDependencyVersionMapping file -> do
-    deps <- use_ ParsePlanJson file 
-    
+    deps <- use_ ParsePlanJson file
+
     let versionMapping = Map.fromList $ map (\d -> (_pkgName d, _pkgVersion d)) deps
-    
+
     pure ([], Just versionMapping)
 
   define (cmapWithPrio LogShake recorder) $ \ParseCabalFile file -> do
@@ -428,7 +422,7 @@ hover ide _ msgParam = do
 
         getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> Maybe T.Text
         getMatch (_, _, _, [dependency]) = Just dependency
-        getMatch (_, _, _, _) = Nothing -- impossible case
+        getMatch (_, _, _, _)            = Nothing -- impossible case
     documentationText :: T.Text -> T.Text
     documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
 
@@ -437,42 +431,42 @@ hover ide _ msgParam = do
 -- ----------------------------------------------------------------
 
 lens :: PluginMethodHandler IdeState LSP.Method_TextDocumentCodeLens
-lens state _plId clp = do 
+lens state _plId clp = do
     if not $ isInlayHintsSupported state
     then do
       let uri = clp ^. JL.textDocument . JL.uri
 
       nfp <- getNormalizedFilePathE uri
       cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
-      
+
       let positionedDeps = concatMap parseDeps cabalFields
 
       let rfp = rootDir state
       let planJson = toNormalizedFilePath $ rfp </> planJsonPath
       planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
 
-      let lenses = Maybe.mapMaybe 
-            (\(Positioned pos name) -> getCodeLens . Positioned pos . Dependency name <$> Map.lookup name planDeps) 
+      let lenses = Maybe.mapMaybe
+            (\(Positioned pos name) -> getCodeLens . Positioned pos . Dependency name <$> Map.lookup name planDeps)
             positionedDeps
-    
+
       pure $ InL lenses
     else
       pure $ InL []
   where
     getCodeLens :: Positioned SimpleDependency -> CodeLens
-    getCodeLens (Positioned pos (Dependency _ v)) = 
+    getCodeLens (Positioned pos (Dependency _ v)) =
       let cPos = Types.cabalPositionToLSPPosition pos
-      in CodeLens 
+      in CodeLens
           { _range = Range cPos cPos
-          , _command = Just $ mkActionlessCommand v 
-          , _data_ = Nothing 
+          , _command = Just $ mkActionlessCommand v
+          , _data_ = Nothing
           }
-        
+
     mkActionlessCommand :: T.Text -> Command
     mkActionlessCommand t = Command
           { _title = t
           , _command = ""
-          , _arguments = Nothing 
+          , _arguments = Nothing
           }
 
 -- ----------------------------------------------------------------
@@ -481,8 +475,8 @@ lens state _plId clp = do
 
 -- | Handler for inlay hints
 hint :: PluginMethodHandler IdeState LSP.Method_TextDocumentInlayHint
-hint state _plId clp = 
-  if isInlayHintsSupported state 
+hint state _plId clp =
+  if isInlayHintsSupported state
   then do
     let uri = clp ^. JL.textDocument . JL.uri
 
@@ -494,26 +488,26 @@ hint state _plId clp =
     let planJson = toNormalizedFilePath $ rfp </> planJsonPath
     planDeps <- runActionE "cabal.cabal-lens" state $ useE BuildDependencyVersionMapping planJson
 
-    let lenses = Maybe.mapMaybe 
-          (\(Positioned pos name) -> getInlayHint . Positioned pos . Dependency name <$> Map.lookup name planDeps) 
+    let lenses = Maybe.mapMaybe
+          (\(Positioned pos name) -> getInlayHint . Positioned pos . Dependency name <$> Map.lookup name planDeps)
           positionedDeps
 
     pure $ InL lenses
-  else 
+  else
     pure $ InL []
-  where     
+  where
     getInlayHint :: Positioned SimpleDependency -> InlayHint
-    getInlayHint (Positioned pos (Dependency _ v)) = InlayHint 
+    getInlayHint (Positioned pos (Dependency _ v)) = InlayHint
           { _position = Types.cabalPositionToLSPPosition pos
           , _label = InL v
           , _kind = Nothing
-          , _textEdits = Nothing 
-          , _tooltip = Nothing 
-          , _paddingLeft = Nothing 
-          , _paddingRight = Nothing 
+          , _textEdits = Nothing
+          , _tooltip = Nothing
+          , _paddingLeft = Nothing
+          , _paddingRight = Nothing
           , _data_ = Nothing
           }
-    
+
 isInlayHintsSupported :: IdeState -> Bool
 isInlayHintsSupported ideState =
   let clientCaps = Shake.clientCapabilities $ shakeExtras ideState
@@ -563,10 +557,10 @@ ofInterestRules recorder = do
         res = (Just fp, Just foi)
     return res
   where
-    summarize NotCabalFOI = BS.singleton 0
-    summarize (IsCabalFOI OnDisk) = BS.singleton 1
+    summarize NotCabalFOI                   = BS.singleton 0
+    summarize (IsCabalFOI OnDisk)           = BS.singleton 1
     summarize (IsCabalFOI (Modified False)) = BS.singleton 2
-    summarize (IsCabalFOI (Modified True)) = BS.singleton 3
+    summarize (IsCabalFOI (Modified True))  = BS.singleton 3
 
 getCabalFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
 getCabalFilesOfInterestUntracked = do
@@ -640,7 +634,7 @@ computeCompletionsAt recorder ide prefInfo fp fields = do
                 stanzaName =
                   case fst ctx of
                     Types.Stanza _ name -> name
-                    _ -> Nothing
+                    _                   -> Nothing
               }
       completions <- completer completerRecorder completerData
       pure completions

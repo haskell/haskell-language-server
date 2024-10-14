@@ -6,9 +6,11 @@ module Ide.Plugin.Cabal.Completion.Types where
 
 import           Control.DeepSeq                 (NFData)
 import           Control.Lens                    ((^.))
+import           Data.Aeson                      ((.:))
+import qualified Data.Aeson                      as A
 import           Data.Hashable
-import qualified Data.Text                       as T
 import qualified Data.Map                        as M
+import qualified Data.Text                       as T
 import           Data.Typeable
 import           Development.IDE                 as D
 import qualified Distribution.Fields             as Syntax
@@ -16,8 +18,6 @@ import qualified Distribution.PackageDescription as PD
 import qualified Distribution.Parsec.Position    as Syntax
 import           GHC.Generics
 import qualified Language.LSP.Protocol.Lens      as JL
-import qualified Data.Aeson                      as A
-import           Data.Aeson                      ((.:))
 
 data Log
   = LogFileSplitError Position
@@ -71,11 +71,11 @@ instance Hashable ParseCabalCommonSections
 
 instance NFData ParseCabalCommonSections
 
-data BuildDependencyVersionMapping = BuildDependencyVersionMapping 
+data BuildDependencyVersionMapping = BuildDependencyVersionMapping
   deriving (Eq, Show, Typeable, Generic)
-  
+
 instance Hashable BuildDependencyVersionMapping
-  
+
 instance NFData BuildDependencyVersionMapping
 
 type instance RuleResult BuildDependencyVersionMapping = M.Map PkgName PkgVersion
@@ -180,7 +180,7 @@ data CabalPrefixInfo = CabalPrefixInfo
 --  while 'LeftSide' means, a closing apostrophe has to be added after the completion item.
 data Apostrophe = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
-  
+
 type PkgName = T.Text
 type PkgVersion = T.Text
 
@@ -191,18 +191,18 @@ data SimpleDependency = Dependency PkgName PkgVersion
 data Positioned a = Positioned Syntax.Position a
   deriving Show
 
-data DependencyInstances = DependencyInstances 
+data DependencyInstances = DependencyInstances
     { installPlan :: [DependencyInstance] }
     deriving Show
 
 -- | Represents a concrete dependency entry in plan.json
-data DependencyInstance = DependencyInstance 
-    { _pkgName :: PkgName
+data DependencyInstance = DependencyInstance
+    { _pkgName    :: PkgName
     , _pkgVersion :: PkgVersion
-    , _pkgType :: T.Text
+    , _pkgType    :: T.Text
     } -- missing some unneeded fields
     deriving (Show, Generic)
-    
+
 instance NFData DependencyInstance
 
 instance A.FromJSON DependencyInstance where
@@ -215,7 +215,7 @@ instance A.FromJSON DependencyInstance where
 instance A.FromJSON DependencyInstances where
   parseJSON = A.withObject "PlanJson" $ \obj -> do
     deps <- obj .: "install-plan" >>= A.parseJSON
-    return (DependencyInstances deps) 
+    return (DependencyInstances deps)
 
 -- | Wraps a completion in apostrophes where appropriate.
 --
