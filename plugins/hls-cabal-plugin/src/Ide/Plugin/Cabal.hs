@@ -12,12 +12,15 @@ import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class                     (lift)
-import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import           Control.Monad.Trans.Maybe                     (MaybeT (..),
+                                                                hoistMaybe,
+                                                                runMaybeT)
 import qualified Data.ByteString                               as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                           (HashMap)
 import qualified Data.HashMap.Strict                           as HashMap
 import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Map.Strict                               as Map
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
@@ -64,8 +67,13 @@ import qualified Language.LSP.VFS                              as VFS
 import           Text.Regex.TDFA
 
 
+import           Data.Either.Extra                             (eitherToMaybe)
 import qualified Data.Text                                     ()
+import           Development.IDE.Spans.Common                  (spanDocToMarkdownForTest)
 import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
+import           Ide.Plugin.Cabal.CabalInfoParser              (parseCabalInfo)
+import           System.Exit                                   (ExitCode (ExitSuccess))
+import           System.Process                                (readProcessWithExitCode)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -349,22 +357,37 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
 -- If found that the filtered hover message is a dependency,
 -- adds a Documentation link.
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
-hover ide _ msgParam = do
-  nfp <- getNormalizedFilePathE uri
-  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
-  case CabalFields.findTextWord cursor cabalFields of
-    Nothing ->
-      pure $ InR Null
-    Just cursorText -> do
-      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
-      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
-      case filterVersion cursorText of
-        Nothing -> pure $ InR Null
-        Just txt ->
-          if txt `elem` depsNames
-          then pure $ foundHover (Nothing, [txt <> "\n", documentationText txt])
-          else pure $ InR Null
+hover ide _ msgParam = getHoverMessage >>= showHoverMessage
   where
+    -- Return the tooltip content for a hovered name...
+    getHoverMessage = runMaybeT $ do
+      nfp <- lift $ getNormalizedFilePathE uri
+      cabalFields <- lift $ runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
+      -- ... at the cursor position...
+      cursorText <- hoistMaybe $ CabalFields.findTextWord cursor cabalFields
+      -- ... without any version information...
+      packageName <- hoistMaybe $ filterVersion cursorText
+      -- ... and only if it's a listed depdendency.
+      gpd <- lift $ runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
+      let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
+      guard $ packageName `elem` depsNames
+
+      rawCabalInfo <- MaybeT $ liftIO $ execCabalInfo packageName
+
+      let cabalInfo = eitherToMaybe $ parseCabalInfo rawCabalInfo
+      liftIO $ print cabalInfo
+
+      case getDescription rawCabalInfo packageName of
+        Nothing ->
+          pure [packageName <> "\n", "Description not available\n", documentationText packageName]
+        Just description -> do
+          let descriptionMarkdown = T.pack $ spanDocToMarkdownForTest $ T.unpack description
+          pure [packageName <> "\n", descriptionMarkdown <> "\n", documentationText packageName]
+
+    showHoverMessage = \case
+      Nothing -> pure $ InR Null
+      Just message -> pure $ foundHover (Nothing, message)
+
     cursor = Types.lspPositionToCabalPosition (msgParam ^. JL.position)
     uri = msgParam ^. JL.textDocument . JL.uri
 
@@ -389,8 +412,22 @@ hover ide _ msgParam = do
         getMatch (_, _, _, [dependency]) = Just dependency
         getMatch (_, _, _, _)            = Nothing -- impossible case
 
+    execCabalInfo :: T.Text -> IO (Maybe T.Text)
+    execCabalInfo package = do
+      (exitCode, stdout, _stderr) <- readProcessWithExitCode "cabal" ["info", T.unpack package] ""
+      if exitCode == System.Exit.ExitSuccess then
+        pure $ Just $ T.pack stdout
+      else
+        pure Nothing
+
     documentationText :: T.Text -> T.Text
     documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
+
+    getDescription :: T.Text -> T.Text -> Maybe T.Text
+    getDescription rawCabalInfo packageName = do
+      cabalInfo <- eitherToMaybe $ parseCabalInfo rawCabalInfo
+      pkInfo <- cabalInfo Map.!? packageName
+      T.unlines <$> pkInfo Map.!? "Description"
 
 
 -- ----------------------------------------------------------------

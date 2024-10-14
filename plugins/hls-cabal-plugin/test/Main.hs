@@ -7,6 +7,7 @@ module Main (
 ) where
 
 import           CabalAdd                        (cabalAddTests)
+import           CabalInfoParser                 (cabalInfoParserUnitTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
@@ -51,6 +52,7 @@ unitTests =
         "Unit Tests"
         [ cabalParserUnitTests
         , codeActionUnitTests
+        , cabalInfoParserUnitTests
         ]
 
 cabalParserUnitTests :: TestTree

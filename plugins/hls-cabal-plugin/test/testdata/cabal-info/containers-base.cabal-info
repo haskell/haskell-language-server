@@ -1,0 +1,326 @@
+* containers       (library)
+    Synopsis:      Assorted concrete container types
+    Versions available: 0.4.2.1, 0.5.10.1, 0.5.10.2, 0.5.11.0, 0.6.5.1, 0.6.6,
+                        0.6.7, 0.6.8, 0.7 (and 32 others)
+    Versions installed: 0.6.7
+    Homepage:      [ Not specified ]
+    Bug reports:   https://github.com/haskell/containers/issues
+    Description:   This package contains efficient general-purpose
+                   implementations of various immutable container types
+                   including sets, maps, sequences, trees, and graphs.
+                   
+                   For a walkthrough of what this package provides with examples
+                   of common operations see the [containers
+                   introduction](https://haskell-containers.readthedocs.io).
+                   
+                   The declared cost of each operation is either worst-case or
+                   amortized, but remains valid even if structures are shared.
+    Category:      Data Structures
+    License:       BSD3
+    Maintainer:    libraries@haskell.org
+    Source repo:   http://github.com/haskell/containers.git
+    Dependencies:  base >=4.10 && <5, array >=0.4.0.0, deepseq >=1.2 && <1.6,
+                   template-haskell
+    Documentation: [ Not installed ]
+    Cached:        No
+    Modules:
+        Data.Containers.ListUtils
+        Data.Graph
+        Data.IntMap
+        Data.IntMap.Internal
+        Data.IntMap.Internal.Debug
+        Data.IntMap.Lazy
+        Data.IntMap.Merge.Lazy
+        Data.IntMap.Merge.Strict
+        Data.IntMap.Strict
+        Data.IntMap.Strict.Internal
+        Data.IntSet
+        Data.IntSet.Internal
+        Data.Map
+        Data.Map.Internal
+        Data.Map.Internal.Debug
+        Data.Map.Lazy
+        Data.Map.Merge.Lazy
+        Data.Map.Merge.Strict
+        Data.Map.Strict
+        Data.Map.Strict.Internal
+        Data.Sequence
+        Data.Sequence.Internal
+        Data.Sequence.Internal.Sorting
+        Data.Set
+        Data.Set.Internal
+        Data.Tree
+        Utils.Containers.Internal.BitQueue
+        Utils.Containers.Internal.BitUtil
+        Utils.Containers.Internal.StrictPair
+
+* base             (library)
+    Synopsis:      Core data structures and operations
+    Versions available: 3.0.3.1, 3.0.3.2, 4.18.1.0, 4.18.2.0, 4.18.2.1,
+                        4.19.0.0, 4.19.1.0, 4.20.0.0, 4.20.0.1 (and 43 others)
+    Versions installed: 4.18.2.1
+    Homepage:      [ Not specified ]
+    Bug reports:   https://github.com/haskell/core-libraries-committee/issues
+    Description:   Haskell's base library provides, among other things, core
+                   types (e.g. [Bool]("Data.Bool") and [Int]("Data.Int")), data
+                   structures (e.g. [List]("Data.List"), [Tuple]("Data.Tuple")
+                   and [Maybe]("Data.Maybe")), the
+                   [Exception]("Control.Exception") mechanism, and the
+                   [IO]("System.IO") & [Concurrency]("Control.Concurrent")
+                   operations. The "Prelude" module, which is imported by
+                   default, exposes a curated set of types and functions from
+                   other modules.
+                   
+                   Other data structures like
+                   [Map](https://hackage.haskell.org/package/containers/docs/Data-Map.html),
+                   [Set](https://hackage.haskell.org/package/containers/docs/Data-Set.html)
+                   are available in the
+                   [containers](https://hackage.haskell.org/package/containers)
+                   library. To work with textual data, use the
+                   [text](https://hackage.haskell.org/package/text/docs/Data-Text.html)
+                   library.
+    Category:      Prelude
+    License:       BSD-3-Clause
+    Maintainer:    Core Libraries Committee <core-libraries-committee@haskell.org>
+    Source repo:   [ Not specified ]
+    Dependencies:  ghc-internal >=9.1001 && <9.1002, ghc-prim
+    Documentation: [ Not installed ]
+    Cached:        No
+    Modules:
+        Control.Applicative
+        Control.Arrow
+        Control.Category
+        Control.Concurrent
+        Control.Concurrent.Chan
+        Control.Concurrent.MVar
+        Control.Concurrent.QSem
+        Control.Concurrent.QSemN
+        Control.Exception
+        Control.Exception.Base
+        Control.Monad
+        Control.Monad.Fail
+        Control.Monad.Fix
+        Control.Monad.IO.Class
+        Control.Monad.Instances
+        Control.Monad.ST
+        Control.Monad.ST.Lazy
+        Control.Monad.ST.Lazy.Safe
+        Control.Monad.ST.Lazy.Unsafe
+        Control.Monad.ST.Safe
+        Control.Monad.ST.Strict
+        Control.Monad.ST.Unsafe
+        Control.Monad.Zip
+        Data.Array.Byte
+        Data.Bifoldable
+        Data.Bifoldable1
+        Data.Bifunctor
+        Data.Bitraversable
+        Data.Bits
+        Data.Bool
+        Data.Char
+        Data.Coerce
+        Data.Complex
+        Data.Data
+        Data.Dynamic
+        Data.Either
+        Data.Eq
+        Data.Fixed
+        Data.Foldable
+        Data.Foldable1
+        Data.Function
+        Data.Functor
+        Data.Functor.Classes
+        Data.Functor.Compose
+        Data.Functor.Const
+        Data.Functor.Contravariant
+        Data.Functor.Identity
+        Data.Functor.Product
+        Data.Functor.Sum
+        Data.IORef
+        Data.Int
+        Data.Ix
+        Data.Kind
+        Data.List
+        Data.List.NonEmpty
+        Data.Maybe
+        Data.Monoid
+        Data.Ord
+        Data.Proxy
+        Data.Ratio
+        Data.STRef
+        Data.STRef.Lazy
+        Data.STRef.Strict
+        Data.Semigroup
+        Data.String
+        Data.Traversable
+        Data.Tuple
+        Data.Type.Bool
+        Data.Type.Coercion
+        Data.Type.Equality
+        Data.Type.Ord
+        Data.Typeable
+        Data.Unique
+        Data.Version
+        Data.Void
+        Data.Word
+        Debug.Trace
+        Foreign
+        Foreign.C
+        Foreign.C.ConstPtr
+        Foreign.C.Error
+        Foreign.C.String
+        Foreign.C.Types
+        Foreign.Concurrent
+        Foreign.ForeignPtr
+        Foreign.ForeignPtr.Safe
+        Foreign.ForeignPtr.Unsafe
+        Foreign.Marshal
+        Foreign.Marshal.Alloc
+        Foreign.Marshal.Array
+        Foreign.Marshal.Error
+        Foreign.Marshal.Pool
+        Foreign.Marshal.Safe
+        Foreign.Marshal.Unsafe
+        Foreign.Marshal.Utils
+        Foreign.Ptr
+        Foreign.Safe
+        Foreign.StablePtr
+        Foreign.Storable
+        GHC.Arr
+        GHC.ArrayArray
+        GHC.Base
+        GHC.Bits
+        GHC.ByteOrder
+        GHC.Char
+        GHC.Clock
+        GHC.Conc
+        GHC.Conc.IO
+        GHC.Conc.Signal
+        GHC.Conc.Sync
+        GHC.ConsoleHandler
+        GHC.Constants
+        GHC.Desugar
+        GHC.Encoding.UTF8
+        GHC.Enum
+        GHC.Environment
+        GHC.Err
+        GHC.Event
+        GHC.Event.TimeOut
+        GHC.Exception
+        GHC.Exception.Type
+        GHC.ExecutionStack
+        GHC.ExecutionStack.Internal
+        GHC.Exts
+        GHC.Fingerprint
+        GHC.Fingerprint.Type
+        GHC.Float
+        GHC.Float.ConversionUtils
+        GHC.Float.RealFracMethods
+        GHC.Foreign
+        GHC.ForeignPtr
+        GHC.GHCi
+        GHC.GHCi.Helpers
+        GHC.Generics
+        GHC.IO
+        GHC.IO.Buffer
+        GHC.IO.BufferedIO
+        GHC.IO.Device
+        GHC.IO.Encoding
+        GHC.IO.Encoding.CodePage
+        GHC.IO.Encoding.Failure
+        GHC.IO.Encoding.Iconv
+        GHC.IO.Encoding.Latin1
+        GHC.IO.Encoding.Types
+        GHC.IO.Encoding.UTF16
+        GHC.IO.Encoding.UTF32
+        GHC.IO.Encoding.UTF8
+        GHC.IO.Exception
+        GHC.IO.FD
+        GHC.IO.Handle
+        GHC.IO.Handle.FD
+        GHC.IO.Handle.Internals
+        GHC.IO.Handle.Lock
+        GHC.IO.Handle.Text
+        GHC.IO.Handle.Types
+        GHC.IO.IOMode
+        GHC.IO.StdHandles
+        GHC.IO.SubSystem
+        GHC.IO.Unsafe
+        GHC.IOArray
+        GHC.IOPort
+        GHC.IORef
+        GHC.InfoProv
+        GHC.Int
+        GHC.Integer
+        GHC.Integer.Logarithms
+        GHC.IsList
+        GHC.Ix
+        GHC.List
+        GHC.MVar
+        GHC.Maybe
+        GHC.Natural
+        GHC.Num
+        GHC.Num.BigNat
+        GHC.Num.Integer
+        GHC.Num.Natural
+        GHC.OldList
+        GHC.OverloadedLabels
+        GHC.Pack
+        GHC.Profiling
+        GHC.Ptr
+        GHC.RTS.Flags
+        GHC.Read
+        GHC.Real
+        GHC.Records
+        GHC.ResponseFile
+        GHC.ST
+        GHC.STRef
+        GHC.Show
+        GHC.Stable
+        GHC.StableName
+        GHC.Stack
+        GHC.Stack.CCS
+        GHC.Stack.CloneStack
+        GHC.Stack.Types
+        GHC.StaticPtr
+        GHC.Stats
+        GHC.Storable
+        GHC.TopHandler
+        GHC.TypeError
+        GHC.TypeLits
+        GHC.TypeLits.Internal
+        GHC.TypeNats
+        GHC.TypeNats.Internal
+        GHC.Unicode
+        GHC.Weak
+        GHC.Weak.Finalize
+        GHC.Word
+        Numeric
+        Numeric.Natural
+        Prelude
+        System.CPUTime
+        System.Console.GetOpt
+        System.Environment
+        System.Environment.Blank
+        System.Exit
+        System.IO
+        System.IO.Error
+        System.IO.Unsafe
+        System.Info
+        System.Mem
+        System.Mem.StableName
+        System.Mem.Weak
+        System.Posix.Internals
+        System.Posix.Types
+        System.Timeout
+        Text.ParserCombinators.ReadP
+        Text.ParserCombinators.ReadPrec
+        Text.Printf
+        Text.Read
+        Text.Read.Lex
+        Text.Show
+        Text.Show.Functions
+        Type.Reflection
+        Type.Reflection.Unsafe
+        Unsafe.Coerce
+

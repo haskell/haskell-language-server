@@ -237,6 +237,7 @@ library hls-cabal-plugin
     buildable: False
   exposed-modules:
     Ide.Plugin.Cabal
+    Ide.Plugin.Cabal.CabalInfoParser
     Ide.Plugin.Cabal.Diagnostics
     Ide.Plugin.Cabal.Completion.CabalFields
     Ide.Plugin.Cabal.Completion.Completer.FilePath
@@ -273,6 +274,7 @@ library hls-cabal-plugin
     , lens
     , lsp                   ^>=2.7
     , lsp-types             ^>=2.3
+    , megaparsec
     , regex-tdfa            ^>=1.3.1
     , text
     , text-rope
@@ -296,6 +298,7 @@ test-suite hls-cabal-plugin-tests
   main-is:          Main.hs
   other-modules:
     CabalAdd
+    CabalInfoParser
     Completer
     Context
     Definition
@@ -305,6 +308,7 @@ test-suite hls-cabal-plugin-tests
     , base
     , bytestring
     , Cabal-syntax          >= 3.7
+    , containers
     , extra
     , filepath
     , ghcide

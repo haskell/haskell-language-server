@@ -1,0 +1,105 @@
+* text             (library)
+    Synopsis:      An efficient packed Unicode text type.
+                   djaksldjks
+    Versions available: 0.11.3.1, 1.1.1.4, 1.2.4.1, 1.2.5.0, 2.0, 2.0.1, 2.0.2,
+                        2.1, 2.1.1 (and 70 others)
+    Versions installed: 2.0.2
+    Homepage:      https://github.com/haskell/text
+    Bug reports:   https://github.com/haskell/text/issues
+    Description:   An efficient packed, immutable Unicode text type (both strict
+                   and lazy).
+                   
+                   The 'Text' type represents Unicode character strings, in a
+                   time and space-efficient manner. This package provides text
+                   processing capabilities that are optimized for performance
+                   critical use, both in terms of large data quantities and high
+                   speed.
+                   
+                   The 'Text' type provides character-encoding, type-safe case
+                   conversion via whole-string case conversion functions (see
+                   "Data.Text"). It also provides a range of functions for
+                   converting 'Text' values to and from 'ByteStrings', using
+                   several standard encodings (see "Data.Text.Encoding").
+                   
+                   Efficient locale-sensitive support for text IO is also
+                   supported (see "Data.Text.IO").
+                   
+                   These modules are intended to be imported qualified, to avoid
+                   name clashes with Prelude functions, e.g.
+                   
+                   > import qualified Data.Text as T
+                   
+                   == ICU Support
+                   
+                   To use an extended and very rich family of functions for
+                   working with Unicode text (including normalization, regular
+                   expressions, non-standard encodings, text breaking, and
+                   locales), see the [text-icu
+                   package](https://hackage.haskell.org/package/text-icu) based
+                   on the well-respected and liberally licensed [ICU
+                   library](http://site.icu-project.org/).
+    Category:      Data, Text
+    License:       BSD-2-Clause
+    Author:        Bryan O'Sullivan <bos@serpentine.com>
+    Maintainer:    Haskell Text Team <andrew.lelechenko@gmail.com>, Core Libraries Committee
+    Source repo:   https://github.com/haskell/text
+    Flags:         developer, simdutf, pure-haskell
+    Dependencies:  array >=0.3 && <0.6, base >=4.10 && <5, binary >=0.5 && <0.9,
+                   bytestring >=0.10.4 && <0.13, deepseq >=1.1 && <1.6,
+                   ghc-prim >=0.2 && <0.12, template-haskell >=2.5 && <2.23,
+                   system-cxx-std-lib ==1.0, base <0,
+                   data-array-byte >=0.1 && <0.2, QuickCheck >=2.12.6 && <2.15,
+                   base <5, bytestring, deepseq, directory, ghc-prim, tasty,
+                   tasty-hunit, tasty-quickcheck, template-haskell,
+                   transformers, text, data-array-byte >=0.1 && <0.2,
+                   tasty-inspection-testing, base, bytestring >=0.10.4,
+                   containers, deepseq, directory, filepath, tasty-bench >=0.2,
+                   text, transformers
+    Documentation: [ Not installed ]
+    Cached:        No
+    Modules:
+        Data.Text
+        Data.Text.Array
+        Data.Text.Encoding
+        Data.Text.Encoding.Error
+        Data.Text.Foreign
+        Data.Text.IO
+        Data.Text.Internal
+        Data.Text.Internal.Builder
+        Data.Text.Internal.Builder.Functions
+        Data.Text.Internal.Builder.Int.Digits
+        Data.Text.Internal.Builder.RealFloat.Functions
+        Data.Text.Internal.ByteStringCompat
+        Data.Text.Internal.Encoding
+        Data.Text.Internal.Encoding.Fusion
+        Data.Text.Internal.Encoding.Fusion.Common
+        Data.Text.Internal.Encoding.Utf16
+        Data.Text.Internal.Encoding.Utf32
+        Data.Text.Internal.Encoding.Utf8
+        Data.Text.Internal.Fusion
+        Data.Text.Internal.Fusion.CaseMapping
+        Data.Text.Internal.Fusion.Common
+        Data.Text.Internal.Fusion.Size
+        Data.Text.Internal.Fusion.Types
+        Data.Text.Internal.IO
+        Data.Text.Internal.Lazy
+        Data.Text.Internal.Lazy.Encoding.Fusion
+        Data.Text.Internal.Lazy.Fusion
+        Data.Text.Internal.Lazy.Search
+        Data.Text.Internal.PrimCompat
+        Data.Text.Internal.Private
+        Data.Text.Internal.Read
+        Data.Text.Internal.Search
+        Data.Text.Internal.StrictBuilder
+        Data.Text.Internal.Unsafe
+        Data.Text.Internal.Unsafe.Char
+        Data.Text.Lazy
+        Data.Text.Lazy.Builder
+        Data.Text.Lazy.Builder.Int
+        Data.Text.Lazy.Builder.RealFloat
+        Data.Text.Lazy.Encoding
+        Data.Text.Lazy.IO
+        Data.Text.Lazy.Internal
+        Data.Text.Lazy.Read
+        Data.Text.Read
+        Data.Text.Unsafe
