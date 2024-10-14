@@ -65,6 +65,7 @@ import           Text.Regex.TDFA
 
 
 import qualified Data.Text                                     ()
+import           Distribution.Parsec.Error
 import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
 
 data Log
@@ -247,7 +248,20 @@ cabalRules recorder plId = do
         let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do
-            let errorDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrorNE
+            let regex :: T.Text
+                -- We don't support the cabal version, this should not be an error, as the
+                -- user did not do anything wrong. Instead we cast it to a warning
+                regex = "Unsupported cabal-version [0-9]+.[0-9]*"
+                unsupportedCabalHelpText = "\nThe used cabal version is not fully supported by hls. This means that some functionallity might not work as expected.\nIf you face any issues try to downgrade to a supported cabal version."
+                errorDiags =
+                  NE.toList $
+                    NE.map
+                      ( \pe@(PError pos text) ->
+                          if text =~ regex
+                            then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos (text <> unsupportedCabalHelpText))
+                            else Diagnostics.errorDiagnostic file pe
+                      )
+                      pErrorNE
                 allDiags = errorDiags <> warningDiags
             pure (allDiags, Nothing)
           Right gpd -> do
