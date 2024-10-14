@@ -22,6 +22,7 @@ import           Data.Dynamic
 import           Data.Hashable
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes       (FileVersion)
 import           Development.IDE.Graph                (Key, RuleResult, newKey,
@@ -76,30 +77,30 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey :: (Shake.ShakeValue i, HasNormalizedFilePath i, Shake.ShakeValue k) => k -> i -> Key
 toKey = (newKey.) . curry Q
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: (Typeable k, Typeable i) => Key -> Maybe (k, i)
 fromKey (Key k)
-  | Just (Q (k', f)) <- cast k = Just (k', f)
+  | Just (Q (k', i)) <- cast k = Just (k', i)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, i)
 fromKeyType (Key k) = case typeOf k of
     App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
         -> case unsafeCoerce k of
-         Q (_ :: (), f) -> Just (SomeTypeRep a, f)
+         Q (_ :: (), i) -> Just (SomeTypeRep a, i)
     _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = newKey $ Q (k, emptyFilePath)
+toNoFileKey k = newKey $ Q (k, ())
 
-newtype Q k = Q (k, NormalizedFilePath)
+newtype Q k i = Q (k, i)
     deriving newtype (Eq, Hashable, NFData)
 
-instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
+instance (Show k, HasNormalizedFilePath i) => Show (Q k i) where
+    show (Q (k, input)) = show k ++ "; " ++ fromNormalizedFilePath (getNormalizedFilePath input)
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
@@ -110,7 +111,7 @@ instance NFData (A v) where rnf (A v) = v `seq` ()
 
 -- In the Shake database we only store one type of key/result pairs,
 -- namely Q (question) / A (answer).
-type instance RuleResult (Q k) = A (RuleResult k)
+type instance RuleResult (Q k i) = A (RuleResult k)
 
 
 toShakeValue :: (BS.ByteString -> ShakeValue) -> Maybe BS.ByteString -> ShakeValue

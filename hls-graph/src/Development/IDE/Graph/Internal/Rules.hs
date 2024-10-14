@@ -22,6 +22,7 @@ import           Development.IDE.Graph.Internal.Types
 
 -- | The type mapping between the @key@ or a rule and the resulting @value@.
 type family RuleResult key -- = value
+type family RuleInput k -- input - (InputPath inputclass) or ()
 
 action :: Action a -> Rules ()
 action x = do

@@ -12,7 +12,7 @@ module Development.IDE.Graph(
     -- * Explicit parallelism
     parallel,
     -- * Oracle rules
-    ShakeValue, RuleResult,
+    ShakeValue, RuleResult, RuleInput,
     -- * Special rules
     alwaysRerun,
     -- * Actions for inspecting the keys in the database
