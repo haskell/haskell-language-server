@@ -5,7 +5,6 @@ module Ide.Plugin.Cabal.Dependencies (
     DependencyInstances(..),
     parseDeps,
     planJsonPath,
-    packageRegex
 ) where
 
 import Distribution.Fields qualified as Syntax
@@ -17,10 +16,7 @@ import System.FilePath ((</>), (<.>))
 
 import Text.Regex.TDFA ((=~), AllTextMatches (getAllTextMatches), AllMatches(getAllMatches))
 import Data.ByteString (ByteString)
-
 import Ide.Plugin.Cabal.Completion.Types
-import Debug.Trace
-import Data.Tuple.Extra (dupe)
 
 planJsonPath :: FilePath
 planJsonPath = "dist-newstyle" </> "cache" </> "plan" <.> "json" -- hard coded for now

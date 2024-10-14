@@ -80,7 +80,6 @@ import Language.LSP.Protocol.Types
 import Language.LSP.VFS qualified as VFS
 import Text.Regex.TDFA
 import System.FilePath ((</>))
-import Debug.Trace
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
