@@ -140,6 +140,7 @@ findCursorContext cursor parentHistory prefixText fields =
     Just field@(Syntax.Field _ _) -> classifyFieldContext parentHistory cursor field
     Just section@(Syntax.Section _ args sectionFields)
       | inSameLineAsSectionName section -> (stanzaCtx, None) -- TODO: test whether keyword in same line is parsed correctly
+      | getFieldName section `elem` conditionalKeywords -> findCursorContext cursor parentHistory prefixText sectionFields -- Ignore if conditionals, they are not real sections
       | otherwise ->
           findCursorContext cursor
             (NE.cons (Syntax.positionCol (getAnnotation section) + 1, Stanza (getFieldName section) (getOptionalSectionName args)) parentHistory)
@@ -147,6 +148,7 @@ findCursorContext cursor parentHistory prefixText fields =
     where
         inSameLineAsSectionName section = Syntax.positionRow (getAnnotation section) == Syntax.positionRow cursor
         stanzaCtx = snd $ NE.head parentHistory
+        conditionalKeywords = ["if", "elif", "else"]
 
 -- | Finds the cursor's context, where the cursor is already found to be in a specific field
 --
