@@ -237,6 +237,7 @@ library hls-cabal-plugin
     buildable: False
   exposed-modules:
     Ide.Plugin.Cabal
+    Ide.Plugin.Cabal.Dependencies
     Ide.Plugin.Cabal.Diagnostics
     Ide.Plugin.Cabal.Completion.CabalFields
     Ide.Plugin.Cabal.Completion.Completer.FilePath

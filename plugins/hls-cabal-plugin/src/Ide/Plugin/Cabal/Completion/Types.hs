@@ -6,7 +6,10 @@ module Ide.Plugin.Cabal.Completion.Types where
 
 import           Control.DeepSeq                 (NFData)
 import           Control.Lens                    ((^.))
+import           Data.Aeson                      ((.:))
+import qualified Data.Aeson                      as A
 import           Data.Hashable
+import qualified Data.Map                        as M
 import qualified Data.Text                       as T
 import           Data.Typeable
 import           Development.IDE                 as D
@@ -67,6 +70,24 @@ data ParseCabalCommonSections = ParseCabalCommonSections
 instance Hashable ParseCabalCommonSections
 
 instance NFData ParseCabalCommonSections
+
+data BuildDependencyVersionMapping = BuildDependencyVersionMapping
+  deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable BuildDependencyVersionMapping
+
+instance NFData BuildDependencyVersionMapping
+
+type instance RuleResult BuildDependencyVersionMapping = M.Map PkgName PkgVersion
+
+data ParsePlanJson = ParsePlanJson
+  deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable ParsePlanJson
+
+instance NFData ParsePlanJson
+
+type instance RuleResult ParsePlanJson = [DependencyInstance]
 
 -- | The context a cursor can be in within a cabal file.
 --
@@ -159,6 +180,42 @@ data CabalPrefixInfo = CabalPrefixInfo
 --  while 'LeftSide' means, a closing apostrophe has to be added after the completion item.
 data Apostrophe = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
+
+type PkgName = T.Text
+type PkgVersion = T.Text
+
+data SimpleDependency = Dependency PkgName PkgVersion
+  deriving Show
+
+-- | Represents some element that has an associated position in a file
+data Positioned a = Positioned Syntax.Position a
+  deriving Show
+
+data DependencyInstances = DependencyInstances
+    { installPlan :: [DependencyInstance] }
+    deriving Show
+
+-- | Represents a concrete dependency entry in plan.json
+data DependencyInstance = DependencyInstance
+    { _pkgName    :: PkgName
+    , _pkgVersion :: PkgVersion
+    , _pkgType    :: T.Text
+    } -- missing some unneeded fields
+    deriving (Show, Generic)
+
+instance NFData DependencyInstance
+
+instance A.FromJSON DependencyInstance where
+    parseJSON = A.withObject "InstallPlan" $ \obj -> do
+        pkgName <- obj .: "pkg-name"
+        pkgVersion <- obj .: "pkg-version"
+        pkgType <- obj .: "type"
+        return $ DependencyInstance pkgName pkgVersion pkgType
+
+instance A.FromJSON DependencyInstances where
+  parseJSON = A.withObject "PlanJson" $ \obj -> do
+    deps <- obj .: "install-plan" >>= A.parseJSON
+    return (DependencyInstances deps)
 
 -- | Wraps a completion in apostrophes where appropriate.
 --
