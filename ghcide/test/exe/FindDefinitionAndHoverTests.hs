@@ -13,6 +13,7 @@ import           Language.LSP.Test
 import           System.Info.Extra          (isWindows)
 
 import           Config
+import           Control.Category           ((>>>))
 import           Control.Lens               ((^.))
 import           Development.IDE.Test       (expectDiagnostics,
                                              standardizeQuotes)
@@ -53,7 +54,27 @@ tests = let
         _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
 
   extractLineColFromHoverMsg :: T.Text -> [T.Text]
-  extractLineColFromHoverMsg = T.splitOn ":" . head . T.splitOn "*" . last . T.splitOn (sourceFileName <> ":")
+  extractLineColFromHoverMsg =
+    -- Hover messages contain multiple lines, and we are looking for the definition
+    -- site
+    T.lines
+    -- The line we are looking for looks like: "*Defined at /tmp/GotoHover.hs:22:3*"
+    -- So filter by the start of the line
+    >>> mapMaybe (T.stripPrefix "*Defined at")
+    -- There can be multiple definitions per hover message!
+    -- See the test "field in record definition" for example.
+    -- The tests check against the last line that contains the above line.
+    >>> last
+    -- [" /tmp/", "22:3*"]
+    >>> T.splitOn (sourceFileName <> ":")
+    -- "22:3*"
+    >>> last
+    -- ["22:3", ""]
+    >>> T.splitOn "*"
+    -- "22:3"
+    >>> head
+    -- ["22", "3"]
+    >>> T.splitOn ":"
 
   checkHoverRange :: Range -> Maybe Range -> T.Text -> Session ()
   checkHoverRange expectedRange rangeInHover msg =
