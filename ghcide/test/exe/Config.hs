@@ -110,6 +110,7 @@ data Expect
   | ExpectHoverTextRegex T.Text -- the hover message must match this pattern
   | ExpectExternFail -- definition lookup in other file expected to fail
   | ExpectNoDefinitions
+  | ExpectNoImplementations
   | ExpectNoHover
 --  | ExpectExtern -- TODO: as above, but expected to succeed: need some more info in here, once we have some working examples
   deriving Eq
@@ -134,6 +135,8 @@ checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpecta
       canonActualLoc <- canonicalizeLocation def
       canonExpectedLoc <- canonicalizeLocation expectedLocation
       canonActualLoc @?= canonExpectedLoc
+  check ExpectNoImplementations = do
+    liftIO $ assertBool "Expecting no implementations" $ null defs
   check ExpectNoDefinitions = do
     liftIO $ assertBool "Expecting no definitions" $ null defs
   check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
