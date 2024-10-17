@@ -2007,7 +2007,6 @@ smallerRangesForBindingExport lies b =
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
-#endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]

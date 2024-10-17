@@ -190,7 +190,7 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
             etcm <-
                 let
                    -- TODO: maybe setting ms_hspp_opts is unnecessary?
-                  mod_summary' = modSummary { ms_hspp_opts = hsc_dflags session}
+                  mod_summary' = modSummary { ms_hspp_opts = hsc_dflags hscEnv}
                 in
                   catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
                     tcRnModule hscEnv tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary'}
