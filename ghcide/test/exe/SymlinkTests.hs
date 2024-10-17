@@ -22,6 +22,6 @@ tests =
         liftIO $ createFileLink (dir </> "some_loc" </> "Sym.hs") (dir </> "other_loc" </> "Sym.hs")
         let fooPath = dir </> "src" </> "Foo.hs"
         _ <- openDoc fooPath "haskell"
-        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DiagnosticSeverity_Warning, (2, 0), "The import of 'Sym' is redundant", Just DiagnosticTag_Unnecessary)])]
+        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DiagnosticSeverity_Warning, (2, 0), "The import of 'Sym' is redundant", Nothing, Just DiagnosticTag_Unnecessary)])]
         pure ()
     ]
