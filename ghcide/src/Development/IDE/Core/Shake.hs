@@ -158,8 +158,8 @@ import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
-import           GHC.Types.Error                        (errMsgDiagnostic)
 import           GHC.TypeLits                           (KnownSymbol)
+import           GHC.Types.Error                        (errMsgDiagnostic)
 import           HieDb.Types
 import           Ide.Logger                             hiding (Priority)
 import qualified Ide.Logger                             as Logger
