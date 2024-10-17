@@ -14,7 +14,6 @@ import qualified Data.Text                         as T
 import           Development.IDE
 import           Development.IDE.Core.Rules        (getHieFile)
 import qualified Development.IDE.Core.Shake        as Shake
-import           Development.IDE.Types.Diagnostics
 import           GHC.Generics                      (Generic)
 import           Ide.Plugin.Config                 (PluginConfig (..))
 import           Ide.Types                         (PluginDescriptor (..),
