@@ -21,7 +21,6 @@ import           Data.Foldable
 import           Data.List.Extra
 import           Data.Maybe
 import qualified Data.Text                                as T
-import           Data.Tuple.Extra
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Test

@@ -88,7 +88,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     CodeActionKind (CodeActionKind_QuickFix),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
-                                                                    Diagnostic (..),
                                                                     MessageType (..),
                                                                     Null (Null),
                                                                     ShowMessageParams (..),

@@ -13,8 +13,7 @@ where
 
 import           Control.Lens                      ((&), (.~))
 import qualified Data.Text                         as T
-import           Development.IDE                   (FileDiagnostic,
-                                                    ShowDiagnostic (ShowDiag))
+import           Development.IDE                   (FileDiagnostic)
 import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL,
                                                     ideErrorWithSource)
 import           Distribution.Fields               (showPError, showPWarning)
