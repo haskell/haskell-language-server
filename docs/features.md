@@ -81,6 +81,12 @@ Known limitations:
 
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
+## Jump to implementation
+
+Provided by: `ghcide`
+
+Jump to the implementation of an overloaded function if it is locally implemented.
+
 ## Jump to note definition
 
 Provided by: `hls-notes-plugin`

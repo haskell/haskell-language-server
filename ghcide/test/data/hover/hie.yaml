@@ -1,1 +1,1 @@
-cradle: {direct: {arguments: ["Foo", "Bar", "GotoHover", "RecordDotSyntax"]}}
+cradle: {direct: {arguments: ["Foo", "Bar", "GotoHover", "RecordDotSyntax", "GotoImplementation"]}}
