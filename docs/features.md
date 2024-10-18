@@ -81,6 +81,16 @@ Known limitations:
 
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
+## Jump to implementation
+
+Provided by: `ghcide`
+
+Jump to the implementation instance of a type class method.
+
+Known limitations:
+
+- Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
+
 ## Jump to note definition
 
 Provided by: `hls-notes-plugin`
