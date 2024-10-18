@@ -13,22 +13,26 @@ module Development.IDE.Spans.Common (
 , spanDocToMarkdownForTest
 , DocMap
 , TyThingMap
+, srcSpanToMdLink
 ) where
 
 import           Control.DeepSeq
+import           Data.Bifunctor               (second)
 import           Data.List.Extra
 import           Data.Maybe
 import qualified Data.Text                    as T
-import           GHC.Generics
-
-import           GHC
-
-import           Data.Bifunctor               (second)
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Orphans  ()
 import           Development.IDE.GHC.Util
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types  as H
+import           GHC
+import           GHC.Generics
+import           System.FilePath
+
+import           Control.Lens
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Orphans  ()
+import qualified Language.LSP.Protocol.Lens   as JL
+import           Language.LSP.Protocol.Types
 
 type DocMap = NameEnv SpanDoc
 type TyThingMap = NameEnv TyThing
@@ -109,7 +113,13 @@ spanDocUrisToMarkdown (SpanDocUris mdoc msrc) = catMaybes
   [ linkify "Documentation" <$> mdoc
   , linkify "Source" <$> msrc
   ]
-  where linkify title uri = "[" <> title <> "](" <> uri <> ")"
+
+-- | Generate a markdown link.
+--
+-- >>> linkify "Title" "uri"
+-- "[Title](Uri)"
+linkify :: T.Text -> T.Text -> T.Text
+linkify title uri = "[" <> title <> "](" <> uri <> ")"
 
 spanDocToMarkdownForTest :: String -> String
 spanDocToMarkdownForTest
@@ -215,3 +225,35 @@ splitForList s
   = case lines s of
       []           -> ""
       (first:rest) -> unlines $ first : map (("  " ++) . trimStart) rest
+
+-- | Generate a source link for the 'Location' according to VSCode's supported form:
+-- https://github.com/microsoft/vscode/blob/b3ec8181fc49f5462b5128f38e0723ae85e295c2/src/vs/platform/opener/common/opener.ts#L151-L160
+--
+srcSpanToMdLink :: Location -> T.Text
+srcSpanToMdLink location =
+  let
+    uri = location ^. JL.uri
+    range = location ^. JL.range
+    -- LSP 'Range' starts at '0', but link locations start at '1'.
+    intText n = T.pack $ show (n + 1)
+    srcRangeText =
+      T.concat
+        [ "L"
+        , intText (range ^. JL.start . JL.line)
+        , ","
+        , intText (range ^. JL.start . JL.character)
+        , "-L"
+        , intText (range ^. JL.end . JL.line)
+        , ","
+        , intText (range ^. JL.end . JL.character)
+        ]
+
+    -- If the 'Location' is a 'FilePath', display it in shortened form.
+    -- This avoids some redundancy and better readability for the user.
+    title = case uriToFilePath uri of
+      Just fp -> T.pack (takeFileName fp) <> ":" <> intText (range ^. JL.start . JL.line)
+      Nothing -> getUri uri
+
+    srcLink = getUri uri <> "#" <> srcRangeText
+  in
+   linkify title srcLink

@@ -335,7 +335,7 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         -- We want to render the root constraint even if it is a let,
         -- but we don't want to render any subsequent lets
         renderEvidenceTree :: Tree (EvidenceInfo a) -> SDoc
-        -- However, if the root constraint is simply an indirection (via let) to a single other constraint,
+        -- However, if the root constraint is simply a<n indirection (via let) to a single other constraint,
         -- we can still skip rendering it
         renderEvidenceTree (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_)}) [x])
           = renderEvidenceTree x
@@ -351,13 +351,15 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
           = vcat (map renderEvidenceTree' xs)
         renderEvidenceTree' (T.Node (EvidenceInfo{..}) _)
           = hang (text "- `" O.<> expandType evidenceType O.<> "`") 2 $
-                 vcat $ printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
+                 vcat $
+                    printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
 
         printDets :: RealSrcSpan -> Maybe (EvVarSource, Scope, Maybe Span) -> SDoc
         printDets _    Nothing = text "using an external instance"
         printDets ospn (Just (src,_,mspn)) = pprSrc
-                                      $$ text "at" <+> ppr spn
+                                      $$ text "at" <+> text (T.unpack $ srcSpanToMdLink location)
           where
+            location = realSrcSpanToLocation $ traceShowId spn
             -- Use the bind span if we have one, else use the occurrence span
             spn = fromMaybe ospn mspn
             pprSrc = case src of
