@@ -69,6 +69,8 @@ import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
 import           System.Directory                     (doesFileExist)
+import qualified Data.List as List
+import System.FilePath
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -351,13 +353,32 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
           = vcat (map renderEvidenceTree' xs)
         renderEvidenceTree' (T.Node (EvidenceInfo{..}) _)
           = hang (text "- `" O.<> expandType evidenceType O.<> "`") 2 $
-                 vcat $ printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
+                 vcat $
+                    List.intersperse (text "") $
+                    printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
 
         printDets :: RealSrcSpan -> Maybe (EvVarSource, Scope, Maybe Span) -> SDoc
         printDets _    Nothing = text "using an external instance"
         printDets ospn (Just (src,_,mspn)) = pprSrc
-                                      $$ text "at" <+> ppr spn
+                                      $$ text "at" <+> pprSrcSpanLink spn
           where
+            pprSrcSpanLink s =
+                let
+                    -- Generate a source link for the srcspan according to the supported form:
+                    -- https://github.com/microsoft/vscode/blob/b3ec8181fc49f5462b5128f38e0723ae85e295c2/src/vs/platform/opener/common/opener.ts#L151-L160
+                    --
+                    -- This allows the link to be very accurate
+                    fp = normalise $ Util.unpackFS $ srcSpanFile s
+                    startLine = srcLocLine $ realSrcSpanStart s
+                    startCol = srcLocCol $ realSrcSpanStart s
+                    endLine = srcLocLine $ realSrcSpanEnd s
+                    endCol = srcLocCol $ realSrcSpanEnd s
+                    srcRangeText =
+                        "L" <> show startLine <> "," <> show startCol
+                        <> "-L" <> show endLine <> "," <> show endCol
+                    srcLink = text "file://" O.<> text fp O.<> "#" O.<> text srcRangeText
+                in
+                    O.brackets (text (takeFileName fp) O.<> ":" O.<> ppr startLine) O.<> O.parens srcLink
             -- Use the bind span if we have one, else use the occurrence span
             spn = fromMaybe ospn mspn
             pprSrc = case src of
