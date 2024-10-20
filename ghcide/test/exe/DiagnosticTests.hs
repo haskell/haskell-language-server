@@ -48,7 +48,7 @@ tests = testGroup "diagnostics"
   [ testWithDummyPluginEmpty "fix syntax error" $ do
       let content = T.unlines [ "module Testing wher" ]
       doc <- createDoc "Testing.hs" "haskell" content
-      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error", Just "GHC-58481")])]
       let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
               { _range = Range (Position 0 15) (Position 0 19)
               , _rangeLength = Nothing
@@ -67,18 +67,18 @@ tests = testGroup "diagnostics"
               , _text = "wher"
               }
       changeDoc doc [change]
-      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error", Just "GHC-58481")])]
   , testWithDummyPluginEmpty "update syntax error" $ do
       let content = T.unlines [ "module Testing(missing) where" ]
       doc <- createDoc "Testing.hs" "haskell" content
-      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'")])]
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'", Just "GHC-76037")])]
       let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
               { _range = Range (Position 0 15) (Position 0 16)
               , _rangeLength = Nothing
               , _text = "l"
               }
       changeDoc doc [change]
-      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'")])]
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'", Just "GHC-76037")])]
   , testWithDummyPluginEmpty "variable not in scope" $ do
       let content = T.unlines
             [ "module Testing where"
@@ -90,8 +90,8 @@ tests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [ (DiagnosticSeverity_Error, (2, 15), "Variable not in scope: ab")
-            , (DiagnosticSeverity_Error, (4, 11), "Variable not in scope: cd")
+          , [ (DiagnosticSeverity_Error, (2, 15), "Variable not in scope: ab", Just "GHC-88464")
+            , (DiagnosticSeverity_Error, (4, 11), "Variable not in scope: cd", Just "GHC-88464")
             ]
           )
         ]
@@ -104,7 +104,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'")]
+          , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'", Just "GHC-83865")]
           )
         ]
   , testWithDummyPluginEmpty "typed hole" $ do
@@ -116,7 +116,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [(DiagnosticSeverity_Error, (2, 8), "Found hole: _ :: Int -> String")]
+          , [(DiagnosticSeverity_Error, (2, 8), "Found hole: _ :: Int -> String", Just "GHC-88464")]
           )
         ]
 
@@ -131,17 +131,17 @@ tests = testGroup "diagnostics"
           , "b :: Float"
           , "b = True"]
         bMessage = "Couldn't match expected type 'Float' with actual type 'Bool'"
-        expectedDs aMessage =
-          [ ("A.hs", [(DiagnosticSeverity_Error, (2,4), aMessage)])
-          , ("B.hs", [(DiagnosticSeverity_Error, (3,4), bMessage)])]
-        deferralTest title binding msg = testWithDummyPluginEmpty title $ do
+        expectedDs aMessage aCode =
+          [ ("A.hs", [(DiagnosticSeverity_Error, (2,4), aMessage, aCode)])
+          , ("B.hs", [(DiagnosticSeverity_Error, (3,4), bMessage, Just "GHC-83865")])]
+        deferralTest title binding msg code = testWithDummyPluginEmpty title $ do
           _ <- createDoc "A.hs" "haskell" $ sourceA binding
           _ <- createDoc "B.hs" "haskell"   sourceB
-          expectDiagnostics $ expectedDs msg
+          expectDiagnostics $ expectedDs msg code
     in
-    [ deferralTest "type error"          "True"    "Couldn't match expected type"
-    , deferralTest "typed hole"          "_"       "Found hole"
-    , deferralTest "out of scope var"    "unbound" "Variable not in scope"
+    [ deferralTest "type error"          "True"    "Couldn't match expected type" (Just "GHC-83865")
+    , deferralTest "typed hole"          "_"       "Found hole" (Just "GHC-88464")
+    , deferralTest "out of scope var"    "unbound" "Variable not in scope" (Just "GHC-88464")
     ]
 
   , testWithDummyPluginEmpty "remove required module" $ do
@@ -158,14 +158,14 @@ tests = testGroup "diagnostics"
               , _text = ""
               }
       changeDoc docA [change]
-      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module", Nothing)])]
   , testWithDummyPluginEmpty "add missing module" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
             ]
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
@@ -185,7 +185,7 @@ tests = testGroup "diagnostics"
             , "import ModuleA ()"
             ]
       _ <- createDoc (tmpDir </> "ModuleB.hs") "haskell" contentB
-      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
+      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
       expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
@@ -202,10 +202,10 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       expectDiagnostics
         [ ( "ModuleA.hs"
-          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB", Nothing)]
           )
         , ( "ModuleB.hs"
-          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB", Nothing)]
           )
         ]
   , let contentA = T.unlines [ "module ModuleA where" , "import ModuleB" ]
@@ -222,8 +222,8 @@ tests = testGroup "diagnostics"
         ]) $ do
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
-        [ ( "ModuleB.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")])
-        , ( "ModuleA.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")])
+        [ ( "ModuleB.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB", Nothing)])
+        , ( "ModuleA.hs" , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB", Nothing)])
         ]
   , testWithDummyPluginEmpty "cyclic module dependency with hs-boot" $ do
       let contentA = T.unlines
@@ -243,7 +243,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
-      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
   , testWithDummyPlugin "bidirectional module dependency with hs-boot"
         (mkIdeTestFs [directCradle ["ModuleA", "ModuleB"]])
         $ do
@@ -268,7 +268,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
-      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
   , testWithDummyPluginEmpty "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
@@ -294,7 +294,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
-      expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
   , testWithDummyPluginEmpty "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
@@ -306,7 +306,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       expectDiagnosticsWithTags
         [ ( "ModuleB.hs"
-          , [(DiagnosticSeverity_Warning, (2, 0), "The import of 'ModuleA' is redundant", Just DiagnosticTag_Unnecessary)]
+          , [(DiagnosticSeverity_Warning, (2, 0), "The import of 'ModuleA' is redundant", Nothing, Just DiagnosticTag_Unnecessary)]
           )
         ]
   , testWithDummyPluginEmpty "redundant import even without warning" $ do
@@ -320,7 +320,7 @@ tests = testGroup "diagnostics"
             ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
   , testWithDummyPluginEmpty "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
@@ -348,14 +348,14 @@ tests = testGroup "diagnostics"
                 else if ghcVersion >= GHC94 then
                   "Variable not in scope: map" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
                 else
-                  "Not in scope: \8216ThisList.map\8217")
+                  "Not in scope: \8216ThisList.map\8217", Just "GHC-88464")
             ,(DiagnosticSeverity_Error, (7, 9),
                 if ghcVersion >= GHC96 then
                   "Variable not in scope: BaseList.x"
                 else if ghcVersion >= GHC94 then
                   "Variable not in scope: x" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
                 else
-                  "Not in scope: \8216BaseList.x\8217")
+                  "Not in scope: \8216BaseList.x\8217", Just "GHC-88464")
             ]
           )
         ]
@@ -373,7 +373,7 @@ tests = testGroup "diagnostics"
       -- where appropriate. The warning should use an unqualified name 'Ord', not
       -- something like 'GHC.Classes.Ord'. The choice of redundant-constraints to
       -- test this is fairly arbitrary.
-          , [(DiagnosticSeverity_Warning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a")
+          , [(DiagnosticSeverity_Warning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a", Just "GHC-30606")
             ]
           )
         ]
@@ -439,7 +439,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics
         [ ( "Foo.hs"
-          , [(DiagnosticSeverity_Warning, (1, 0), "Top-level binding with no type signature:")
+          , [(DiagnosticSeverity_Warning, (1, 0), "Top-level binding with no type signature:", Nothing)
             ]
           )
         ]
@@ -453,7 +453,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics
         [ ( "Foo.hs"
-          , [(DiagnosticSeverity_Warning, (3, 0), "Defined but not used:")
+          , [(DiagnosticSeverity_Warning, (3, 0), "Defined but not used:", Nothing)
             ]
           )
         ]
@@ -469,13 +469,13 @@ tests = testGroup "diagnostics"
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
     expectDiagnostics
-      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding", Just "GHC-38417")])] -- So that we know P has been loaded
 
     -- Change y from Int to B which introduces a type error in A (imported from P)
     changeDoc bdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
                     T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     expectDiagnostics
-      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])
       ]
 
     -- Open A and edit to fix the type error
@@ -485,8 +485,8 @@ tests = testGroup "diagnostics"
 
     expectDiagnostics
       [ ( "P.hs",
-          [ (DiagnosticSeverity_Error, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'"),
-            (DiagnosticSeverity_Warning, (4, 0), "Top-level binding")
+          [ (DiagnosticSeverity_Error, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865"),
+            (DiagnosticSeverity_Warning, (4, 0), "Top-level binding", Just "GHC-38417")
           ]
         ),
         ("A.hs", [])
@@ -496,14 +496,14 @@ tests = testGroup "diagnostics"
   , testWithDummyPluginEmpty "deduplicate missing module diagnostics" $  do
       let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
       doc <- createDoc "Foo.hs" "haskell" fooContent
-      expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
+      expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'", Nothing)])]
 
       changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ "module Foo() where" ]
       expectDiagnostics []
 
       changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ T.unlines
             [ "module Foo() where" , "import MissingModule" ] ]
-      expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
+      expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'", Nothing)])]
 
   , testGroup "Cancellation"
     [ cancellationTestGroup "edit header" editHeader yesSession noParse  noTc
@@ -564,7 +564,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
             ]
 
       -- for the example above we expect one warning
-      let missingSigDiags = [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding") ]
+      let missingSigDiags = [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding", Just "GHC-38417") ]
       typeCheck doc >> expectCurrentDiagnostics doc missingSigDiags
 
       -- Now we edit the document and wait for the given key (if any)

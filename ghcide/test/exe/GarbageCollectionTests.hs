@@ -72,7 +72,7 @@ tests = testGroup "garbage collection"
             changeDoc doc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument edit]
             builds <- waitForTypecheck doc
             liftIO $ assertBool "it still builds" builds
-            expectCurrentDiagnostics doc [(DiagnosticSeverity_Error, (2,4), "Couldn't match expected type")]
+            expectCurrentDiagnostics doc [(DiagnosticSeverity_Error, (2,4), "Couldn't match expected type", Just "GHC-83865")]
         ]
   ]
   where

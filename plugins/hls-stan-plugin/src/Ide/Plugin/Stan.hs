@@ -187,17 +187,18 @@ rules recorder plId = do
                 "Possible solutions:"
               ]
                 ++ map ("  - " <>) (inspectionSolution inspection)
-        return ( file,
-          ShowDiag,
-          LSP.Diagnostic
-            { _range = realSrcSpanToRange observationSrcSpan,
-              _severity = Just LSP.DiagnosticSeverity_Hint,
-              _code = Just (LSP.InR $ unId (inspectionId inspection)),
-              _source = Just "stan",
-              _message = message,
-              _relatedInformation = Nothing,
-              _tags = Nothing,
-              _codeDescription = Nothing,
-              _data_ = Nothing
-            }
-          )
+        return $
+          ideErrorFromLspDiag
+            LSP.Diagnostic
+              { _range = realSrcSpanToRange observationSrcSpan,
+                _severity = Just LSP.DiagnosticSeverity_Hint,
+                _code = Just (LSP.InR $ unId (inspectionId inspection)),
+                _source = Just "stan",
+                _message = message,
+                _relatedInformation = Nothing,
+                _tags = Nothing,
+                _codeDescription = Nothing,
+                _data_ = Nothing
+              }
+            file
+            Nothing
