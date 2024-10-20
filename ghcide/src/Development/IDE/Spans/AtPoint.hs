@@ -269,12 +269,26 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         prettyName :: (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
         prettyName (Right n, dets)
           -- We want to print evidence variable using a readable tree structure.
-          | any isEvidenceUse (identInfo dets) = pure $ maybe "" (printOutputable . renderEvidenceTree) (getEvidenceTree rf n) <> "\n"
-          | otherwise = pure $ T.unlines $
-            wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
-            : maybeToList (pretty (definedAt n) (prettyPackageName n))
-            ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
-                         ]
+          -- Evidence variables contain information why a particular instance or
+          -- type equality was chosen, paired with location information.
+          | any isEvidenceUse (identInfo dets) =
+            let
+              -- The evidence tree may not be present for some reason, e.g., the 'Name' is not
+              -- present in the tree.
+              -- Thus, we need to handle it here, but in practice, this should never be 'Nothing'.
+              evidenceTree = maybe "" (printOutputable . renderEvidenceTree) (getEvidenceTree rf n)
+            in
+              pure $ evidenceTree <> "\n"
+          -- Identifier details that are not evidence variables are used to display type information and
+          -- documentation of that name.
+          | otherwise =
+            let
+              typeSig = wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
+              definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
+              docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
+            in
+              pure $ T.unlines $
+                [typeSig] ++ definitionLoc ++ docs
           where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
                 pretty Nothing Nothing = Nothing
                 pretty (Just define) Nothing = Just $ define <> "\n"
@@ -337,6 +351,28 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         renderEvidenceTree :: Tree (EvidenceInfo a) -> SDoc
         -- However, if the root constraint is simply a<n indirection (via let) to a single other constraint,
         -- we can still skip rendering it
+        -- A 'let' indirection is conceptually every evidence that is acquired in a 'Let' statement.
+        -- As a very simple example, take:
+        --
+        -- @
+        --  foo = show 2.0
+        -- @
+        --
+        -- The evidence at 'show' is acquired in a 'Let' (i.e., the definition of 'foo').
+        -- If we render the evidence tree, it will contain an extra indirection node 'EvLetBind'.
+        -- Rendering this single indirection will introduce a list which adds virtually no benefit.
+        -- Compare the output with skipping and then without:
+        --
+        -- @
+        --  Evidence of constraint Show Double bound by type signature or pattern at ...
+        -- @
+        --
+        -- more verbose:
+        --
+        -- @
+        --   Evidence of constraint Show Double constructed using:
+        --     - Show Double using external instance defined at  ...
+        -- @
         renderEvidenceTree (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_)}) [x])
           = renderEvidenceTree x
         renderEvidenceTree (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_), ..}) xs)
@@ -351,15 +387,15 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
           = vcat (map renderEvidenceTree' xs)
         renderEvidenceTree' (T.Node (EvidenceInfo{..}) _)
           = hang (text "- `" O.<> expandType evidenceType O.<> "`") 2 $
-                 vcat $
-                    printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
+              vcat $
+                printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
 
         printDets :: RealSrcSpan -> Maybe (EvVarSource, Scope, Maybe Span) -> SDoc
         printDets _    Nothing = text "using an external instance"
         printDets ospn (Just (src,_,mspn)) = pprSrc
                                       $$ text "at" <+> text (T.unpack $ srcSpanToMdLink location)
           where
-            location = realSrcSpanToLocation $ traceShowId spn
+            location = realSrcSpanToLocation spn
             -- Use the bind span if we have one, else use the occurrence span
             spn = fromMaybe ospn mspn
             pprSrc = case src of
