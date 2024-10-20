@@ -17,8 +17,10 @@ import qualified Data.ByteString                               as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                           (HashMap)
 import qualified Data.HashMap.Strict                           as HashMap
+import qualified Data.List                                     as List
 import qualified Data.List.NonEmpty                            as NE
 import qualified Data.Maybe                                    as Maybe
+import qualified Data.Text                                     ()
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
 import           Data.Text.Utf16.Rope.Mixed                    as Rope
@@ -33,17 +35,21 @@ import           Development.IDE.Graph                         (Key,
 import           Development.IDE.LSP.HoverDefinition           (foundHover)
 import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
 import           Development.IDE.Types.Shake                   (toKey)
+import qualified Distribution.CabalSpecVersion                 as Cabal
 import qualified Distribution.Fields                           as Syntax
 import           Distribution.Package                          (Dependency)
 import           Distribution.PackageDescription               (allBuildDepends,
                                                                 depPkgName,
                                                                 unPackageName)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import           Distribution.Parsec.Error
 import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
+import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
+import qualified Ide.Plugin.Cabal.Completion.Data              as Data
 import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommonSections (ParseCabalCommonSections),
                                                                 ParseCabalFields (..),
                                                                 ParseCabalFile (..))
@@ -62,10 +68,6 @@ import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
 import           Text.Regex.TDFA
-
-
-import qualified Data.Text                                     ()
-import qualified Ide.Plugin.Cabal.CabalAdd                     as CabalAdd
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -247,7 +249,31 @@ cabalRules recorder plId = do
         let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do
-            let errorDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrorNE
+            let regex :: T.Text
+                -- We don't support the cabal version, this should not be an error, as the
+                -- user did not do anything wrong. Instead we cast it to a warning
+                regex = "Unsupported cabal-version [0-9]+.[0-9]*"
+                unsupportedCabalHelpText = unlines
+                  [ "The used cabal version is not fully supported by HLS. This means that some functionality might not work as expected."
+                  , "If you face any issues try to downgrade to a supported cabal version."
+                  , ""
+                  , "Supported versions are: " <>
+                      List.intercalate ", "
+                        (fmap Cabal.showCabalSpecVersion Data.supportedCabalVersions)
+                  ]
+                errorDiags =
+                  NE.toList $
+                    NE.map
+                      ( \pe@(PError pos text) ->
+                          if text =~ regex
+                            then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos $
+                                  unlines
+                                    [ text
+                                    , unsupportedCabalHelpText
+                                    ])
+                            else Diagnostics.errorDiagnostic file pe
+                      )
+                      pErrorNE
                 allDiags = errorDiags <> warningDiags
             pure (allDiags, Nothing)
           Right gpd -> do

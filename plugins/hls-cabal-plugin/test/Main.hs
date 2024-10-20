@@ -107,6 +107,14 @@ pluginTests =
                     length diags @?= 1
                     unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
                     unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
+            ,   runCabalTestCaseSession "Publishes Diagnostics on unsupported cabal version as Warning" "" $ do
+                _ <- openDoc "unsupportedVersion.cabal" "cabal"
+                diags <- cabalCaptureKick
+                unknownVersionDiag <- liftIO $ inspectDiagnostic diags ["Unsupported cabal-version 99999.0"]
+                liftIO $ do
+                    length diags @?= 1
+                    unknownVersionDiag ^. L.range @?= Range (Position 0 0) (Position 1 0)
+                    unknownVersionDiag ^. L.severity @?= Just DiagnosticSeverity_Warning
             , runCabalTestCaseSession "Clears diagnostics" "" $ do
                 doc <- openDoc "invalid.cabal" "cabal"
                 diags <- cabalCaptureKick
