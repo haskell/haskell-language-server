@@ -17,6 +17,12 @@ benchmarks: True
 
 write-ghc-environment-files: never
 
+-- Link executables dynamically so the linker doesn't produce test
+-- executables of ~150MB each and works lightning fast at that too
+-- Disabled on Windows
+if(!os(windows))
+  executable-dynamic: True
+
 -- Many of our tests only work single-threaded, and the only way to
 -- ensure tasty runs everything purely single-threaded is to pass
 -- this at the top-level
