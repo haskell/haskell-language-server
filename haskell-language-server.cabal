@@ -791,13 +791,13 @@ flag stan
   manual:      True
 
 common stan
-  if flag(stan) && impl(ghc < 9.10.0)
+  if flag(stan)
     build-depends: haskell-language-server:hls-stan-plugin
     cpp-options: -Dhls_stan
 
 library hls-stan-plugin
   import:           defaults, pedantic, warnings
-  if flag(stan) && impl(ghc < 9.10.0)
+  if flag(stan)
     buildable: True
   else
     buildable: False
@@ -825,7 +825,7 @@ library hls-stan-plugin
 
 test-suite hls-stan-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if flag(stan) && impl(ghc < 9.10.0)
+  if flag(stan)
     buildable: True
   else
     buildable: False
