@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Development.IDE.Test.Diagnostic where
 
 import           Control.Lens                ((^.))
@@ -35,10 +36,14 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, mbExpectedCod
         && codeMatches d
 
     codeMatches d =
+#if MIN_VERSION_GLASGOW_HASKELL(9,5,0,0)
         case (mbExpectedCode, _code d) of
           (Nothing, _)                         -> True
           (Just expectedCode, Nothing)         -> False
           (Just expectedCode, Just actualCode) -> InR expectedCode == actualCode
+#else
+        True
+#endif
 
     hasTag :: Maybe DiagnosticTag -> Maybe [DiagnosticTag] -> Bool
     hasTag Nothing  _                   = True
