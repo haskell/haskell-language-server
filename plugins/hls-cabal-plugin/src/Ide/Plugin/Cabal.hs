@@ -257,7 +257,7 @@ cabalRules recorder plId = do
                   [ "The used `cabal-version` is not fully supported by this `HLS` binary."
                   , "Either the `cabal-version` is unknown, or too new for this executable."
                   , "This means that some functionality might not work as expected."
-                  , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if available."
+                  , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if possible."
                   , ""
                   , "Supported versions are: " <>
                       List.intercalate ", "

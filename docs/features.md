@@ -322,7 +322,7 @@ Provided by: `hls-cabal-plugin`
 
 Code action kind: `quickfix`
 
-Add a missing dependency to your `.cabal` file.
+Add a missing package dependency to your `.cabal` file.
 
 ## Code lenses
 
