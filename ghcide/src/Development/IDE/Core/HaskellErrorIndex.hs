@@ -10,7 +10,7 @@ import qualified Data.Map                          as M
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Diagnostics
 import           GHC.Driver.Errors.Types           (GhcMessage)
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 import           GHC.Types.Error                   (diagnosticCode)
 #endif
 import           Ide.Logger                        (Pretty (..), Priority (..),
@@ -65,7 +65,7 @@ instance FromJSON HaskellErrorIndex where
   parseJSON = fmap errorsToIndex <$> parseJSON
 
 initHaskellErrorIndex :: Recorder (WithPriority Log) -> IO (Maybe HaskellErrorIndex)
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 initHaskellErrorIndex recorder = do
   res <- tryJust handleJSONError $ tryJust handleHttpError $ httpJSON "https://errors.haskell.org/api/errors.json"
   case res of
@@ -86,7 +86,7 @@ initHaskellErrorIndex recorder = pure Nothing
 #endif
 
 heiGetError :: HaskellErrorIndex -> GhcMessage -> Maybe HEIError
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 heiGetError (HaskellErrorIndex index) msg
   | Just code <- diagnosticCode msg
   = showGhcCode code `M.lookup` index

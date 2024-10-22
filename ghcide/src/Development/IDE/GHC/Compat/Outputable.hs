@@ -118,7 +118,7 @@ pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
 
 
 
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 type ErrMsg  = MsgEnvelope GhcMessage
 type WarnMsg  = MsgEnvelope GhcMessage
 #else

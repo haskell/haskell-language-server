@@ -310,7 +310,7 @@ corePrepExpr _ = GHC.corePrepExpr
 
 renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
 renderMessages msgs =
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
   let renderMsgs extractor = (fmap . fmap) GhcPsMessage . getMessages $ extractor msgs
   in (renderMsgs psWarnings, renderMsgs psErrors)
 #else
@@ -318,13 +318,13 @@ renderMessages msgs =
   in (renderMsgs psWarnings, renderMsgs psErrors)
 #endif
 
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope GhcMessage)) -> ParseResult a
-#elif MIN_VERSION_ghc(9,3,0)
+#else
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
 #endif
 pattern PFailedWithErrorMessages msgs
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
      <- PFailed (const . fmap (fmap GhcPsMessage) . getMessages . getPsErrorMessages -> msgs)
 #else
      <- PFailed (const . fmap (fmap renderDiagnosticMessageWithHints) . getMessages . getPsErrorMessages -> msgs)

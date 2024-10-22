@@ -19,7 +19,7 @@ module Development.IDE.Types.Diagnostics (
   ideErrorFromLspDiag,
   showDiagnostics,
   showDiagnosticsColored,
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
   showGhcCode,
 #endif
   IdeResultNoDiagnosticsEarlyCutoff,
@@ -40,7 +40,7 @@ import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope,
                                                  flagSpecName, wWarningFlags)
 import           Development.IDE.Types.Location
 import           GHC.Generics
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 import           GHC.Types.Error                (DiagnosticCode (..),
                                                  DiagnosticReason (..),
                                                  diagnosticCode,
@@ -99,7 +99,7 @@ ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
   FileDiagnostic {..}
 
 setGhcCode :: Maybe (MsgEnvelope GhcMessage) -> LSP.Diagnostic -> LSP.Diagnostic
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
 setGhcCode mbOrigMsg diag =
   let mbGhcCode = do
           origMsg <- mbOrigMsg
@@ -111,11 +111,11 @@ setGhcCode mbOrigMsg diag =
 setGhcCode _ diag = diag
 #endif
 
-#if MIN_VERSION_ghc(9,10,1)
+#if MIN_VERSION_ghc(9,9,0)
 -- DiagnosticCode only got a show instance in 9.10.1
 showGhcCode :: DiagnosticCode -> T.Text
 showGhcCode = T.pack . show
-#elif MIN_VERSION_ghc(9,6,1)
+#elif MIN_VERSION_ghc(9,5,0)
 showGhcCode :: DiagnosticCode -> T.Text
 showGhcCode (DiagnosticCode prefix c) = T.pack $ prefix ++ "-" ++ printf "%05d" c
 #endif

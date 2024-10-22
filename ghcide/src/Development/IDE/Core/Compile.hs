@@ -1076,7 +1076,7 @@ parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
      PFailedWithErrorMessages msgs ->
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
         throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
 #else
         throwE $ diagFromSDocErrMsgs sourceParser dflags $ msgs dflags
@@ -1094,13 +1094,13 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
             throwE $ diagFromErrMsgs sourceParser dflags errs
 #else
             throwE $ diagFromSDocErrMsgs sourceParser dflags errs
 #endif
 
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
         let warnings = diagFromErrMsgs sourceParser dflags warns
 #else
         let warnings = diagFromSDocErrMsgs sourceParser dflags warns
@@ -1122,7 +1122,7 @@ parseFileContents env customPreprocessor filename ms = do
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
      PFailedWithErrorMessages msgs ->
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
        throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
 #else
        throwE $ diagFromSDocErrMsgs sourceParser dflags $ msgs dflags
@@ -1160,7 +1160,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errors) $
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
                  throwE $ diagFromErrMsgs sourceParser dflags errors
 #else
                  throwE $ diagFromSDocErrMsgs sourceParser dflags errors
@@ -1195,7 +1195,7 @@ parseFileContents env customPreprocessor filename ms = do
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
                let pm = ParsedModule ms parsed' srcs2
-#if MIN_VERSION_ghc(9,6,1)
+#if MIN_VERSION_ghc(9,5,0)
                    warnings = diagFromErrMsgs sourceParser dflags warns
 #else
                    warnings = diagFromSDocErrMsgs sourceParser dflags warns

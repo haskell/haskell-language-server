@@ -40,21 +40,11 @@ import           GHC.Utils.Logger
 import           GHC.Utils.Outputable
 import           GHC.Utils.Panic.Plain
 
-#if !MIN_VERSION_ghc(9,6,1)
-import           Development.IDE.GHC.Compat.Core (hscTypecheckRename)
-import           GHC.Utils.Error                 (emptyMessages)
-#endif
-
 hscTypecheckRenameWithDiagnostics :: HscEnv -> ModSummary -> HsParsedModule
                    -> IO ((TcGblEnv, RenamedStuff), Messages GhcMessage)
 hscTypecheckRenameWithDiagnostics hsc_env mod_summary rdr_module =
-#if MIN_VERSION_ghc(9,6,1)
     runHsc' hsc_env $ hsc_typecheck True mod_summary (Just rdr_module)
-#else
-    (,emptyMessages) <$> hscTypecheckRename hsc_env mod_summary rdr_module
-#endif
 
-#if MIN_VERSION_ghc(9,6,1)
 -- ============================================================================
 -- DO NOT EDIT - Refer to top of file
 -- ============================================================================
@@ -82,7 +72,11 @@ hsc_typecheck keep_rn mod_summary mb_rdr_module = do
                     Nothing  -> hscParse' mod_summary
             tc_result0 <- tcRnModule' mod_summary keep_rn' hpm
             if hsc_src == HsigFile
+#if MIN_VERSION_ghc(9,5,0)
                 then do (iface, _) <- liftIO $ hscSimpleIface hsc_env Nothing tc_result0 mod_summary
+#else
+                then do (iface, _) <- liftIO $ hscSimpleIface hsc_env tc_result0 mod_summary
+#endif
                         ioMsgMaybe $ hoistTcRnMessage $
                             tcRnMergeSignatures hsc_env hpm tc_result0 iface
                 else return tc_result0
@@ -134,6 +128,7 @@ extract_renamed_stuff mod_summary tc_result = do
 -- ============================================================================
 -- DO NOT EDIT - Refer to top of file
 -- ============================================================================
+#if MIN_VERSION_ghc(9,5,0)
 hscSimpleIface :: HscEnv
                -> Maybe CoreProgram
                -> TcGblEnv
@@ -141,4 +136,11 @@ hscSimpleIface :: HscEnv
                -> IO (ModIface, ModDetails)
 hscSimpleIface hsc_env mb_core_program tc_result summary
     = runHsc hsc_env $ hscSimpleIface' mb_core_program tc_result summary
+#else
+hscSimpleIface :: HscEnv
+               -> TcGblEnv
+               -> ModSummary
+               -> IO (ModIface, ModDetails)
+hscSimpleIface hsc_env tc_result summary
+    = runHsc hsc_env $ hscSimpleIface' tc_result summary
 #endif
