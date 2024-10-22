@@ -22,11 +22,11 @@ import           GHC.Driver.Main
 import           GHC.Driver.Session
 import           GHC.Hs
 import           GHC.Hs.Dump
-import           GHC.Iface.Ext.Ast               (mkHieFile)
-import           GHC.Iface.Ext.Binary            (hie_file_result, readHieFile,
-                                                  writeHieFile)
-import           GHC.Iface.Ext.Debug             (diffFile, validateScopes)
-import           GHC.Iface.Ext.Types             (getAsts, hie_asts, hie_module)
+import           GHC.Iface.Ext.Ast          (mkHieFile)
+import           GHC.Iface.Ext.Binary       (hie_file_result, readHieFile,
+                                             writeHieFile)
+import           GHC.Iface.Ext.Debug        (diffFile, validateScopes)
+import           GHC.Iface.Ext.Types        (getAsts, hie_asts, hie_module)
 import           GHC.Tc.Module
 import           GHC.Tc.Utils.Monad
 import           GHC.Types.SourceFile
@@ -72,10 +72,11 @@ hsc_typecheck keep_rn mod_summary mb_rdr_module = do
                     Nothing  -> hscParse' mod_summary
             tc_result0 <- tcRnModule' mod_summary keep_rn' hpm
             if hsc_src == HsigFile
+                then
 #if MIN_VERSION_ghc(9,5,0)
-                then do (iface, _) <- liftIO $ hscSimpleIface hsc_env Nothing tc_result0 mod_summary
+                     do (iface, _) <- liftIO $ hscSimpleIface hsc_env Nothing tc_result0 mod_summary
 #else
-                then do (iface, _) <- liftIO $ hscSimpleIface hsc_env tc_result0 mod_summary
+                     do (iface, _) <- liftIO $ hscSimpleIface hsc_env tc_result0 mod_summary
 #endif
                         ioMsgMaybe $ hoistTcRnMessage $
                             tcRnMergeSignatures hsc_env hpm tc_result0 iface
