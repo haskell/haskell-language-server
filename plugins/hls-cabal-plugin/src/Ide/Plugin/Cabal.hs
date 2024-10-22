@@ -254,8 +254,10 @@ cabalRules recorder plId = do
                 -- user did not do anything wrong. Instead we cast it to a warning
                 regex = "Unsupported cabal-version [0-9]+.[0-9]*"
                 unsupportedCabalHelpText = unlines
-                  [ "The used cabal version is not fully supported by HLS. This means that some functionality might not work as expected."
-                  , "If you face any issues try to downgrade to a supported cabal version."
+                  [ "The used `cabal-version` is not fully supported by this `HLS` binary."
+                  , "Either the `cabal-version` is unknown, or too new for this executable."
+                  , "This means that some functionality might not work as expected."
+                  , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if possible."
                   , ""
                   , "Supported versions are: " <>
                       List.intercalate ", "

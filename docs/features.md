@@ -316,6 +316,14 @@ Code action kind: `quickfix`
 
 Correct common misspelling of SPDX Licenses such as `BSD-3-Clause`.
 
+### Add dependency to `cabal` file
+
+Provided by: `hls-cabal-plugin`
+
+Code action kind: `quickfix`
+
+Add a missing package dependency to your `.cabal` file.
+
 ## Code lenses
 
 ### Add type signature
