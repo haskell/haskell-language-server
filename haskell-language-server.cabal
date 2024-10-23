@@ -722,6 +722,9 @@ library hls-hlint-plugin
   -- https://github.com/ndmitchell/hlint/pull/1594
   if !(flag(hlint) && impl(ghc < 9.10))
     buildable: False
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
   build-depends:
