@@ -50,6 +50,7 @@ import           HaddockTests
 import           HighlightTests
 import           IfaceTests
 import           InitializeResponseTests
+import           InlayHintTests
 import           LogType                      ()
 import           NonLspCommandLine
 import           OpenCloseTest
@@ -99,4 +100,5 @@ main = do
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
     , ExceptionTests.tests
+    , InlayHintTests.tests
     ]
