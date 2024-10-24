@@ -1248,7 +1248,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText Nothing file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText file (T.pack $ show e) Nothing | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of

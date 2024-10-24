@@ -76,8 +76,8 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
-ideErrorText :: Maybe (MsgEnvelope GhcMessage) -> NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText origMsg fdFilePath msg =
+ideErrorText :: NormalizedFilePath -> T.Text -> Maybe (MsgEnvelope GhcMessage) -> FileDiagnostic
+ideErrorText fdFilePath msg origMsg =
   ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) fdFilePath msg origMsg
 
 ideErrorFromLspDiag
@@ -119,8 +119,6 @@ showGhcCode = T.pack . show
 showGhcCode :: DiagnosticCode -> T.Text
 showGhcCode (DiagnosticCode prefix c) = T.pack $ prefix ++ "-" ++ printf "%05d" c
 #endif
-  in
-  FileDiagnostic {..}
 
 attachedReason :: Traversal' Diagnostic (Maybe JSON.Value)
 attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"

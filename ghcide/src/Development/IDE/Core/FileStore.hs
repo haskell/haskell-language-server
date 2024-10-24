@@ -142,7 +142,7 @@ getModificationTimeImpl missingFileDiags file = do
                 `catch` \(e :: IOException) -> do
                     let err | isDoesNotExistError e = "File does not exist: " ++ file'
                             | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                        diag = ideErrorText Nothing file (T.pack err)
+                        diag = ideErrorText file (T.pack err) Nothing
                     if isDoesNotExistError e && not missingFileDiags
                         then return (Nothing, ([], Nothing))
                         else return (Nothing, ([diag], Nothing))

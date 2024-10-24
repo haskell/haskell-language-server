@@ -6,6 +6,7 @@ import qualified Data.Text                   as T
 import           GHC.Stack                   (HasCallStack)
 import           Language.LSP.Protocol.Lens
 import           Language.LSP.Protocol.Types
+import           Development.IDE.GHC.Compat (ghcVersion, GhcVersion (..))
 
 -- | (0-based line number, 0-based column number)
 type Cursor = (UInt, UInt)
@@ -35,15 +36,13 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, mbExpectedCod
         && hasTag expectedTag (d ^. tags)
         && codeMatches d
 
-    codeMatches d =
-#if MIN_VERSION_GLASGOW_HASKELL(9,5,0,0)
+    codeMatches d
+      | ghcVersion >= GHC96 =
         case (mbExpectedCode, _code d) of
           (Nothing, _)                         -> True
           (Just expectedCode, Nothing)         -> False
           (Just expectedCode, Just actualCode) -> InR expectedCode == actualCode
-#else
-        True
-#endif
+      | otherwise =  True
 
     hasTag :: Maybe DiagnosticTag -> Maybe [DiagnosticTag] -> Bool
     hasTag Nothing  _                   = True

@@ -163,9 +163,9 @@ computePackageDeps env pkg = do
         Nothing ->
           return $ Left
             [ ideErrorText
-                Nothing
                 (toNormalizedFilePath' noFilePath)
                 (T.pack $ "unknown package: " ++ show pkg)
+                Nothing
             ]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 

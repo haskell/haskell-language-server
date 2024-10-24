@@ -90,7 +90,7 @@ genericConfigTests = testGroup "generic plugin config"
                     files <- getFilesOfInterestUntracked
                     void $ uses_ GetTestDiagnostics $ HM.keys files
               define mempty $ \GetTestDiagnostics file -> do
-                let diags = [ideErrorText Nothing file "testplugin"]
+                let diags = [ideErrorText file "testplugin" Nothing]
                 return (diags,Nothing)
           }
         -- A config that disables the plugin initially
