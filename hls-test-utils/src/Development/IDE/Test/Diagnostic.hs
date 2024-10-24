@@ -1,7 +1,9 @@
+{-# LANGUAGE CPP #-}
 module Development.IDE.Test.Diagnostic where
 
 import           Control.Lens                ((^.))
 import qualified Data.Text                   as T
+import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
 import           GHC.Stack                   (HasCallStack)
 import           Language.LSP.Protocol.Lens
 import           Language.LSP.Protocol.Types
@@ -17,9 +19,9 @@ type ErrorMsg = String
 requireDiagnostic
     :: (Foldable f, Show (f Diagnostic), HasCallStack)
     => f Diagnostic
-    -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)
+    -> (DiagnosticSeverity, Cursor, T.Text, Maybe T.Text, Maybe DiagnosticTag)
     -> Maybe ErrorMsg
-requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag)
+requireDiagnostic actuals expected@(severity, cursor, expectedMsg, mbExpectedCode, expectedTag)
     | any match actuals = Nothing
     | otherwise = Just $
             "Could not find " <> show expected <>
@@ -32,6 +34,15 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag)
         && standardizeQuotes (T.toLower expectedMsg) `T.isInfixOf`
            standardizeQuotes (T.toLower $ d ^. message)
         && hasTag expectedTag (d ^. tags)
+        && codeMatches d
+
+    codeMatches d
+      | ghcVersion >= GHC96 =
+        case (mbExpectedCode, _code d) of
+          (Nothing, _)                         -> True
+          (Just expectedCode, Nothing)         -> False
+          (Just expectedCode, Just actualCode) -> InR expectedCode == actualCode
+      | otherwise =  True
 
     hasTag :: Maybe DiagnosticTag -> Maybe [DiagnosticTag] -> Bool
     hasTag Nothing  _                   = True
