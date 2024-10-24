@@ -68,6 +68,7 @@ import           Development.IDE.Types.Options
 import           GHC.ResponseFile
 import qualified HIE.Bios                            as HieBios
 import           HIE.Bios.Environment                hiding (getCacheDir)
+import qualified HIE.Bios.Flags                      as HieBios
 import           HIE.Bios.Types                      hiding (Log)
 import qualified HIE.Bios.Types                      as HieBios
 import           Ide.Logger                          (Pretty (pretty),
@@ -119,12 +120,19 @@ import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
 
+import           Control.Exception.Extra             (errorIO)
+import qualified Data.HashMap.Strict                 as HashMap
+import qualified Data.Tuple                          as Tuple
+import           Development.IDE.Core.OfInterest     (OfInterestVar (OfInterestVar),
+                                                      getFilesOfInterest,
+                                                      getFilesOfInterestUntracked)
 import           GHC.Data.Bag
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
+import qualified HIE.Bios.Cradle                     as HieBios
 
 data Log
   = LogSettingInitialDynFlags
@@ -139,14 +147,17 @@ data Log
   | LogMakingNewHscEnv ![UnitId]
   | LogDLLLoadError !String
   | LogCradlePath !FilePath
+  | LogCradlePaths ![FilePath]
   | LogCradleNotFound !FilePath
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath, String))
   | LogCradle !(Cradle Void)
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogHieBios HieBios.Log
+
   | LogSessionLoadingChanged
 deriving instance Show Log
+
 
 instance Pretty Log where
   pretty = \case
@@ -204,6 +215,8 @@ instance Pretty Log where
       "Error dynamically loading libm.so.6:" <+> pretty errorString
     LogCradlePath path ->
       "Cradle path:" <+> pretty path
+    LogCradlePaths path ->
+      "Cradle paths:" <+> pretty path
     LogCradleNotFound path ->
       vcat
         [ "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for" <+> pretty path <> "."
@@ -446,7 +459,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
       -- e.g. see https://github.com/haskell/ghcide/issues/126
       let res' = toAbsolutePath <$> res
       return $ normalise <$> res'
-
+  -- loadCradle in batch
+  let cradleLocs :: [FilePath] -> IO [(Maybe FilePath)]
+      cradleLocs = mapM cradleLoc
   return $ do
     clientConfig <- getClientConfigAction
     extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv
@@ -454,7 +469,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     let invalidateShakeCache = do
             void $ modifyVar' version succ
             return $ toNoFileKey GhcSessionIO
-
+    OfInterestVar filesOfInterVar <- getIdeGlobalAction
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
               , optExtensions
@@ -582,6 +597,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           void $ modifyVar' filesMap $ flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
           -- The VFS doesn't change on cradle edits, re-use the old one.
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
+          -- todo result only when batch cradle loading is done
           keys2 <- invalidateShakeCache
           restartShakeSession VFSUnmodified "new component" [] $ do
             keys1 <- extendKnownTargets all_targets
@@ -602,28 +618,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
           return $ second Map.keys this_options
 
-    let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
-        consultCradle hieYaml cfp = do
-           let lfpLog = makeRelative rootDir cfp
-           logWith recorder Info $ LogCradlePath lfpLog
-           when (isNothing hieYaml) $
-             logWith recorder Warning $ LogCradleNotFound lfpLog
-           cradle <- loadCradle recorder hieYaml rootDir
-           when optTesting $ mRunLspT lspEnv $
-            sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
-
-           -- Display a user friendly progress message here: They probably don't know what a cradle is
-           let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
-                         <> " (for " <> T.pack lfpLog <> ")"
-           eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
-              withTrace "Load cradle" $ \addTag -> do
-                  addTag "file" lfpLog
-                  old_files <- readIORef cradle_files
-                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
-                  addTag "result" (show res)
-                  return res
-
-           logWith recorder Debug $ LogSessionLoadingResult eopts
+    let eoptsHscEnv (hieYaml, cfp, cradle, eopts) =
            case eopts of
              -- The cradle gave us some options so get to work turning them
              -- into and HscEnv.
@@ -646,6 +641,42 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
                return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
+    let consultCradles :: [(Maybe FilePath, FilePath)] -> IO [(IdeResult HscEnvEq, [FilePath])]
+        consultCradles hyCfpList = do
+            let cfps = map snd hyCfpList
+            let lfpLogs = map (makeRelative rootDir . snd) hyCfpList
+            logWith recorder Info $ LogCradlePaths lfpLogs
+            cradles <- mapM (\(hieYaml, _) -> loadCradle recorder hieYaml rootDir) hyCfpList
+            when optTesting $ mRunLspT lspEnv $ mapM_ (\(_, cfp) -> sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)) hyCfpList
+            let progMsg = "Setting up " <> T.pack (show (takeBaseName . cradleRootDir <$> cradles))
+                         <> " (for " <> T.pack (show lfpLogs) <> ")"
+            eoptsList <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
+                do old_files <- readIORef cradle_files
+                   res <- cradleToOptsAndLibDirs recorder (sessionLoading clientConfig) (zip cradles cfps) old_files
+                   return res
+            mapM eoptsHscEnv (zipWith (\((hieYaml, fp), cr) eopts -> (hieYaml, fp, cr, eopts) ) (zip hyCfpList cradles) eoptsList)
+
+    let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
+        consultCradle hieYaml cfp = do
+           let lfpLog = makeRelative rootDir cfp
+           logWith recorder Info $ LogCradlePath lfpLog
+           when (isNothing hieYaml) $
+             logWith recorder Warning $ LogCradleNotFound lfpLog
+           cradle <- loadCradle recorder hieYaml rootDir
+           when optTesting $ mRunLspT lspEnv $
+            sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
+           -- Display a user friendly progress message here: They probably don't know what a cradle is
+           let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
+                         <> " (for " <> T.pack lfpLog <> ")"
+           eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
+              withTrace "Load cradle" $ \addTag -> do
+                  addTag "file" lfpLog
+                  old_files <- readIORef cradle_files
+                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
+                  addTag "result" (show res)
+                  return res
+           logWith recorder Debug $ LogSessionLoadingResult eopts
+           eoptsHscEnv (hieYaml, cfp, cradle, eopts)
     let
         -- | We allow users to specify a loading strategy.
         -- Check whether this config was changed since the last time we have loaded
@@ -666,8 +697,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
     -- Returns the Ghc session and the cradle dependencies
-    let sessionOpts :: (Maybe FilePath, FilePath)
-                    -> IO (IdeResult HscEnvEq, [FilePath])
+    let sessionOpts :: (Maybe FilePath, FilePath) -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
           Extra.whenM didSessionLoadingPreferenceConfigChange $ do
             logWith recorder Info LogSessionLoadingChanged
@@ -695,6 +725,44 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 else return (opts, Map.keys old_di)
             Nothing -> consultCradle hieYaml cfp
 
+    let readSessionOptsFromCache (hieYaml, file) = do
+          v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
+          let cfp = toAbsolutePath file
+          case HM.lookup (toNormalizedFilePath' cfp) v of
+            Just (opts, old_di) -> do
+              deps_ok <- checkDependencyInfo old_di
+              if not deps_ok
+                then do
+                  -- If the dependencies are out of date then clear both caches and start
+                  -- again.
+                  modifyVar_ fileToFlags (const (return Map.empty))
+                  modifyVar_ filesMap (const (return HM.empty))
+                  -- Keep the same name cache
+                  modifyVar_ hscEnvs (return . Map.adjust (const []) hieYaml )
+                  return $ Left (hieYaml, file)
+                else return $ Right (file, (opts, Map.keys old_di))
+            Nothing -> return $ Left (hieYaml, file)
+
+    let sessionOptsList :: [(Maybe FilePath, FilePath)] -> IO (Map.Map FilePath (IdeResult HscEnvEq, [FilePath]))
+        sessionOptsList yamlFiles = do
+            cached <- mapM readSessionOptsFromCache yamlFiles
+            let (toConsults, cachedResults) = partitionEithers cached
+            results <- consultCradles toConsults
+            let consultMap = Map.fromList $ zip (map snd toConsults) results
+            let cachedMap = Map.fromList cachedResults
+            return $ consultMap <> cachedMap
+
+
+    let getOptionsList :: [FilePath] -> IO (Map.Map FilePath (IdeResult HscEnvEq, [FilePath]))
+        getOptionsList files = do
+            let ncfps = toNormalizedFilePath' . toAbsolutePath <$> files
+            cachedHieYamlLocations <- mapM (\ncfp -> HM.lookup ncfp <$> readVar filesMap) ncfps
+            hieYamls <- cradleLocs files
+            let yamlFiles = zip (zipWith (\x y -> join x <|> y) cachedHieYamlLocations hieYamls) files
+            sessionOptsList yamlFiles
+
+
+
     -- The main function which gets options for a file. We only want one of these running
     -- at a time. Therefore the IORef contains the currently running cradle, if we try
     -- to get some more options then we wait for the currently running action to finish
@@ -707,21 +775,40 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
+    let getOptionsBatch :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
+        getOptionsBatch file' = do
+            let file = toAbsolutePath file'
+            hieYaml <- cradleLoc file
+            filesOfInterest <- HashMap.keys <$> readVar filesOfInterVar
+            logWith recorder Debug LogSettingInitialDynFlags
+            results <- getOptionsList (Set.toList $ Set.fromList $ toAbsolutePath file : map fromNormalizedFilePath filesOfInterest)
+            return (results Map.! file) `Safe.catch` \e ->
+                return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
+
     returnWithVersion $ \file -> do
       -- see Note [Serializing runs in separate thread]
-      awaitRunInThread que $ getOptions file
+      awaitRunInThread que $ getOptionsBatch file
 
--- | Run the specific cradle on a specific FilePath via hie-bios.
--- This then builds dependencies or whatever based on the cradle, gets the
--- GHC options/dynflags needed for the session and the GHC library directory
-cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> Cradle Void -> FilePath -> [FilePath]
-                      -> IO (Either [CradleError] (ComponentOptions, FilePath, String))
-cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
-    -- let noneCradleFoundMessage :: FilePath -> T.Text
-    --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
-    -- Start off by getting the session options
-    logWith recorder Debug $ LogCradle cradle
-    cradleRes <- HieBios.getCompilerOptions file loadStyle cradle
+-- cradleToType :: Cradle Void -> IO ()
+-- cradleToType c = do
+--     case c of
+--         Cradle { cradleOptsProg = Just (GHC.GhcVersion _), cradleOptsProg = Just (GHC.GhcVersion _) } -> return ()
+--         _ ->
+--     return ()
+
+-- how we do batch loading of cradles depends on the the type of cradle we are using
+cradleToOptsAndLibDirs :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> [(Cradle Void, FilePath)] -> [FilePath]
+                      -> IO [Either [CradleError] (ComponentOptions, FilePath, String)]
+cradleToOptsAndLibDirs recorder loadConfig cradleFiles old_fps = do
+    -- let result :: [([FilePath], CradleLoadResult ComponentOptions)]
+    results <- HieBios.getCompilerOptionsInBatch (LoadWithContext old_fps) cradleFiles
+    let resultMap :: Map.Map FilePath (CradleLoadResult ComponentOptions)
+        resultMap = Map.fromList $ [ (fp, r) | (fps, r) <- results, fp <- fps ]
+    mapM (\(cr, fp) -> collectBiosResult recorder cr fp (resultMap Map.! fp)) cradleFiles
+
+
+collectBiosResult :: Recorder (WithPriority Log) -> Cradle a1 -> FilePath -> CradleLoadResult a2 -> IO (Either [CradleError] (a2, FilePath, String))
+collectBiosResult recorder cradle file cradleRes =
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
@@ -734,12 +821,23 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
                 CradleNone           -> do
                     logWith recorder Info $ LogNoneCradleFound file
                     return (Left [])
-
         CradleFail err -> return (Left [err])
         CradleNone -> do
             logWith recorder Info $ LogNoneCradleFound file
             return (Left [])
 
+-- | Run the specific cradle on a specific FilePath via hie-bios.
+-- This then builds dependencies or whatever based on the cradle, gets the
+-- GHC options/dynflags needed for the session and the GHC library directory
+cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> SessionLoadingPreferenceConfig -> Cradle Void -> FilePath -> [FilePath]
+                      -> IO (Either [CradleError] (ComponentOptions, FilePath, String))
+cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
+    -- let noneCradleFoundMessage :: FilePath -> T.Text
+    --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
+    -- Start off by getting the session options
+    logWith recorder Debug $ LogCradle cradle
+    cradleRes <- HieBios.getCompilerOptions file loadStyle cradle
+    collectBiosResult recorder cradle file cradleRes
     where
         loadStyle = case loadConfig of
             PreferSingleComponentLoading -> LoadFile
@@ -1212,7 +1310,8 @@ instance Exception PackageSetupException
 
 showPackageSetupException :: PackageSetupException -> String
 showPackageSetupException GhcVersionMismatch{..} = unwords
-    ["ghcide compiled against GHC"
+    [
+    "ghcide compiled against GHC"
     ,showVersion compileTime
     ,"but currently using"
     ,showVersion runTime

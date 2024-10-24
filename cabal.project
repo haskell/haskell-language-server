@@ -6,6 +6,8 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+         ../hie-bios
+
 
 
 index-state:  2024-10-21T00:00:00Z
@@ -46,3 +48,11 @@ constraints:
 if impl(ghc >= 9.9)
   -- https://github.com/haskell/haskell-language-server/issues/4324
   benchmarks: False
+
+-- add github bois repo
+-- use the batch load branch
+
+-- source-repository-package
+--  type: git
+--  location: https://github.com/soulomoon/hie-bios.git
+--  tag: a6d789d9c852f33e5e0ba89613dcd12532e48907
