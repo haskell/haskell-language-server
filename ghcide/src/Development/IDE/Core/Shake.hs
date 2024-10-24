@@ -83,7 +83,7 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
-import           Control.Lens                           (over, (%~), (&), (?~))
+import           Control.Lens                           ((&), (?~), (%~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -121,8 +121,6 @@ import           Data.Vector                            (Vector)
 import qualified Data.Vector                            as Vector
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileUtils         (getModTime)
-import           Development.IDE.Core.HaskellErrorIndex hiding (Log)
-import qualified Development.IDE.Core.HaskellErrorIndex as HaskellErrorIndex
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
@@ -198,7 +196,6 @@ data Log
   | LogShakeGarbageCollection !T.Text !Int !Seconds
   -- * OfInterest Log messages
   | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
-  | LogInitializeHaskellErrorIndex !HaskellErrorIndex.Log
   deriving Show
 
 instance Pretty Log where
@@ -242,8 +239,6 @@ instance Pretty Log where
     LogSetFilesOfInterest ofInterest ->
         "Set files of interst to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
-    LogInitializeHaskellErrorIndex hei ->
-        "Haskell Error Index:" <+> pretty hei
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -339,8 +334,6 @@ data ShakeExtras = ShakeExtras
       -- ^ Queue of restart actions to be run.
     , loaderQueue :: TQueue (IO ())
       -- ^ Queue of loader actions to be run.
-    , haskellErrorIndex :: Maybe HaskellErrorIndex
-      -- ^ List of errors in the Haskell Error Index (errors.haskell.org)
     }
 
 type WithProgressFunc = forall a.
@@ -711,7 +704,6 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
-        haskellErrorIndex <- initHaskellErrorIndex (cmapWithPrio LogInitializeHaskellErrorIndex recorder)
         pure ShakeExtras{shakeRecorder = recorder, ..}
     shakeDb  <-
         shakeNewDatabase
@@ -1332,25 +1324,24 @@ traceA (A Failed{})    = "Failed"
 traceA (A Stale{})     = "Stale"
 traceA (A Succeeded{}) = "Success"
 
-updateFileDiagnostics
-  :: Recorder (WithPriority Log)
+updateFileDiagnostics :: MonadIO m
+  => Recorder (WithPriority Log)
   -> NormalizedFilePath
   -> Maybe Int32
   -> Key
   -> ShakeExtras
   -> [FileDiagnostic] -- ^ current results
-  -> Action ()
+  -> m ()
 updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 = do
-  hei <- haskellErrorIndex <$> getShakeExtras
   liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
     addTag "key" (show k)
-    current <- traverse (attachHEI hei) $ map (over fdLspDiagnosticL diagsFromRule) current0
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fdShouldShowDiagnostic) current
         uri = filePathToUri' fp
         addTagUnsafe :: String -> String -> String -> a -> a
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
         update :: (forall a. String -> String -> a -> a) -> [FileDiagnostic] -> STMDiagnosticStore -> STM [FileDiagnostic]
         update addTagUnsafeMethod new store = addTagUnsafeMethod "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafeMethod uri ver (renderKey k) new store
+        current = map (fdLspDiagnosticL %~ diagsFromRule) current0
     addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
@@ -1374,15 +1365,6 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) (map fdLspDiagnostic newDiags)
                 return action
     where
-        attachHEI :: Maybe HaskellErrorIndex -> FileDiagnostic -> IO FileDiagnostic
-        attachHEI mbHei diag
-            | Just hei <- mbHei
-            , SomeStructuredMessage msg <- fdStructuredMessage diag
-            , Just heiError <- hei `heiGetError` errMsgDiagnostic msg
-            = pure $ diag & fdLspDiagnosticL %~ attachHeiErrorCodeDescription heiError
-            | otherwise
-            = pure diag
-
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
             | coerce ideTesting = c & L.relatedInformation ?~

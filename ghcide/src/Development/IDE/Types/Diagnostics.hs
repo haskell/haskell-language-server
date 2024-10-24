@@ -119,6 +119,8 @@ showGhcCode = T.pack . show
 showGhcCode :: DiagnosticCode -> T.Text
 showGhcCode (DiagnosticCode prefix c) = T.pack $ prefix ++ "-" ++ printf "%05d" c
 #endif
+  in
+  FileDiagnostic {..}
 
 attachedReason :: Traversal' Diagnostic (Maybe JSON.Value)
 attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"
