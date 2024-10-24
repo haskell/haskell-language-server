@@ -503,6 +503,9 @@ instance PluginMethod Request Method_TextDocumentDefinition where
 instance PluginMethod Request Method_TextDocumentTypeDefinition where
   handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
 
+instance PluginMethod Request Method_TextDocumentImplementation where
+  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
+
 instance PluginMethod Request Method_TextDocumentDocumentHighlight where
   handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
 
@@ -694,6 +697,11 @@ instance PluginRequestMethod Method_TextDocumentDefinition where
 instance PluginRequestMethod Method_TextDocumentTypeDefinition where
     combineResponses _ _ caps _ (x :| xs)
         | Just (Just True) <- caps ^? (L.textDocument . _Just . L.typeDefinition . _Just . L.linkSupport) = foldl' mergeDefinitions x xs
+        | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
+
+instance PluginRequestMethod Method_TextDocumentImplementation where
+    combineResponses _ _ caps _ (x :| xs)
+        | Just (Just True) <- caps ^? (L.textDocument . _Just . L.implementation . _Just . L.linkSupport) = foldl' mergeDefinitions x xs
         | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentDocumentHighlight where

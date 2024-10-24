@@ -2186,6 +2186,7 @@ test-suite ghcide-tests
     DiagnosticTests
     ExceptionTests
     FindDefinitionAndHoverTests
+    FindImplementationAndHoverTests
     FuzzySearch
     GarbageCollectionTests
     HaddockTests
