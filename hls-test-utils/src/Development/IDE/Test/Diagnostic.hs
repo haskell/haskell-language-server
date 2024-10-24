@@ -3,10 +3,10 @@ module Development.IDE.Test.Diagnostic where
 
 import           Control.Lens                ((^.))
 import qualified Data.Text                   as T
+import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
 import           GHC.Stack                   (HasCallStack)
 import           Language.LSP.Protocol.Lens
 import           Language.LSP.Protocol.Types
-import           Development.IDE.GHC.Compat (ghcVersion, GhcVersion (..))
 
 -- | (0-based line number, 0-based column number)
 type Cursor = (UInt, UInt)
