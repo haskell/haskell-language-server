@@ -14,7 +14,8 @@ import           Development.IDE      (RuleResult, action, define,
                                        getFilesOfInterestUntracked,
                                        getPluginConfigAction, ideErrorText,
                                        uses_)
-import           Development.IDE.Test (Cursor, expectDiagnostics)
+import           Development.IDE.Test (Cursor, ExpectedDiagnostic,
+                                       expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types

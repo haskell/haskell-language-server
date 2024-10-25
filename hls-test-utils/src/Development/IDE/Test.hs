@@ -14,6 +14,8 @@ module Development.IDE.Test
   , diagnostic
   , expectDiagnostics
   , expectDiagnosticsWithTags
+  , ExpectedDiagnostic
+  , ExpectedDiagnosticWithTag
   , expectNoMoreDiagnostics
   , expectMessages
   , expectCurrentDiagnostics
