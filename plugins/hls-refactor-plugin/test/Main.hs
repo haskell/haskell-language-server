@@ -1995,7 +1995,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     compareHideFunctionTo = compareTwo "HideFunction.hs"
     withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
-        void $ expectDiagnostics [(file, [(DiagnosticSeverity_Error, loc, "Ambiguous occurrence", Nothing) | loc <- locs])] -- TODO: Give this a proper error
+        void $ expectDiagnostics [(file, [(DiagnosticSeverity_Error, loc, "Ambiguous occurrence", Just "GHC-87543") | loc <- locs])]
         actions <- getAllCodeActions doc
         k dir doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")

@@ -110,7 +110,7 @@ type instance RuleResult GetTestDiagnostics = ()
 
 expectDiagnosticsFail
   :: HasCallStack
-  => ExpectBroken 'Ideal [(FilePath, [(DiagnosticSeverity, Cursor, T.Text, Maybe T.Text)])]
-  -> ExpectBroken 'Current [(FilePath, [(DiagnosticSeverity, Cursor, T.Text, Maybe T.Text)])]
+  => ExpectBroken 'Ideal [(FilePath, [ExpectedDiagnostic])]
+  -> ExpectBroken 'Current [(FilePath, [ExpectedDiagnostic])]
   -> Session ()
 expectDiagnosticsFail _ = expectDiagnostics . unCurrent
