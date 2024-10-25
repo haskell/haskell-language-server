@@ -45,12 +45,13 @@ import           DependentFileTest
 import           DiagnosticTests
 import           ExceptionTests
 import           FindDefinitionAndHoverTests
+import           FindImplementationAndHoverTests
 import           GarbageCollectionTests
 import           HaddockTests
 import           HighlightTests
 import           IfaceTests
 import           InitializeResponseTests
-import           LogType                      ()
+import           LogType                         ()
 import           NonLspCommandLine
 import           OpenCloseTest
 import           OutlineTests
@@ -78,6 +79,7 @@ main = do
     , OutlineTests.tests
     , HighlightTests.tests
     , FindDefinitionAndHoverTests.tests
+    , FindImplementationAndHoverTests.tests
     , PluginSimpleTests.tests
     , PreprocessorTests.tests
     , THTests.tests

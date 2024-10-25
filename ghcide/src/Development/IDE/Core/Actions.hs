@@ -3,6 +3,7 @@ module Development.IDE.Core.Actions
 ( getAtPoint
 , getDefinition
 , getTypeDefinition
+, getImplementationDefinition
 , highlightAtPoint
 , refsAtPoint
 , workspaceSymbols
@@ -98,7 +99,7 @@ getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, 
 getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (HAR _ hf _ _ _, mapping) <- useWithStaleFastMT GetHieAst file
+    (hf, mapping) <- useWithStaleFastMT GetHieAst file
     (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
@@ -119,6 +120,15 @@ getTypeDefinition file pos = runMaybeT $ do
       fixedLocation <- MaybeT $ toCurrentLocation mapping file location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
+
+getImplementationDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
+getImplementationDefinition file pos = runMaybeT $ do
+    ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
+    opts <- liftIO $ getIdeOptionsIO ide
+    (hf, mapping) <- useWithStaleFastMT GetHieAst file
+    !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
+    locs <- AtPoint.gotoImplementation withHieDb (lookupMod hiedbWriter) opts hf pos'
+    traverse (MaybeT . toCurrentLocation mapping file) locs
 
 highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
