@@ -8,14 +8,12 @@ import           Control.Monad
 import           Data.Hashable
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.Map             as Map
-import qualified Data.Text            as T
 import           Data.Typeable        (Typeable)
 import           Development.IDE      (RuleResult, action, define,
                                        getFilesOfInterestUntracked,
                                        getPluginConfigAction, ideErrorText,
                                        uses_)
-import           Development.IDE.Test (Cursor, ExpectedDiagnostic,
-                                       expectDiagnostics)
+import           Development.IDE.Test (ExpectedDiagnostic, expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
