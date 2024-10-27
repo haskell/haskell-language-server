@@ -60,7 +60,6 @@ library
     Development.IDE.Graph.Internal.Key
     Development.IDE.Graph.Internal.Paths
     Development.IDE.Graph.Internal.Profile
-    Development.IDE.Graph.Internal.RuleInput
     Development.IDE.Graph.Internal.Rules
     Development.IDE.Graph.Internal.Types
     Development.IDE.Graph.KeyMap
