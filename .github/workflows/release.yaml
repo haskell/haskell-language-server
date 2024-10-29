@@ -168,7 +168,14 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      # GitHub checkout action has a dep on NodeJS 20 which is not running on Amazonlinux2
+      # workaround is to manually checkout the repository
+      # https://github.com/actions/checkout/issues/1487
+      - name: Manually Clone repository and checkout PR
+        run: |
+          # Clone the repository
+          git clone https://github.com/${{ github.repository }}
+          cd ${{ github.event.repository.name }}
 
       - name: Run build
         run: |
