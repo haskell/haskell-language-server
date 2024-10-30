@@ -110,6 +110,7 @@
     - CompletionTests #Previously part of GHCIDE Main tests
     - DiagnosticTests #Previously part of GHCIDE Main tests
     - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
+    - FindImplementationAndHoverTests #Previously part of GHCIDE Main tests
     - TestUtils #Previously part of GHCIDE Main tests
     - CodeLensTests #Previously part of GHCIDE Main tests
 
@@ -134,6 +135,7 @@
     - Ide.Plugin.Eval.Parse.Comments
     - Ide.Plugin.Eval.CodeLens
     - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
+    - FindImplementationAndHoverTests #Previously part of GHCIDE Main tests
 
   - name: [Prelude.init, Data.List.init]
     within:

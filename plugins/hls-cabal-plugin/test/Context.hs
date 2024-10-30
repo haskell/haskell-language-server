@@ -154,6 +154,15 @@ getContextTests =
         , testCase "Top level - cursor in later line with partially written value" $ do
             ctx <- callGetContext (Position 5 13) "eee" topLevelData
             ctx @?= (TopLevel, KeyWord "name:")
+        , testCase "If is ignored" $ do
+            ctx <- callGetContext (Position 5 18) "" conditionalData
+            ctx @?= (Stanza "library" Nothing, None)
+        , testCase "Elif is ignored" $ do
+            ctx <- callGetContext (Position 7 18) "" conditionalData
+            ctx @?= (Stanza "library" Nothing, None)
+        , testCase "Else is ignored" $ do
+            ctx <- callGetContext (Position 9 18) "" conditionalData
+            ctx @?= (Stanza "library" Nothing, KeyWord "buildable:")
         , testCase "Named Stanza" $ do
             ctx <- callGetContext (Position 2 18) "" executableStanzaData
             ctx @?= (TopLevel, None)
@@ -237,6 +246,18 @@ name:
           eee
 |]
 
+conditionalData :: T.Text
+conditionalData = [trimming|
+cabal-version:      3.0
+name:               simple-cabal
+library
+    if os(windows)
+       buildable:
+    elif os(linux)
+       buildable:
+    else
+       buildable:
+|]
 multiLineOptsData :: T.Text
 multiLineOptsData = [trimming|
 cabal-version:      3.0

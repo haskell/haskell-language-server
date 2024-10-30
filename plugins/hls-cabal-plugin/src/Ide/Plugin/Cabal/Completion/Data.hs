@@ -23,6 +23,9 @@ import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 -- Completion Data
 -- ----------------------------------------------------------------
 
+supportedCabalVersions :: [CabalSpecVersion]
+supportedCabalVersions = [CabalSpecV2_2 .. maxBound]
+
 -- | Keyword for cabal version; required to be the top line in a cabal file
 cabalVersionKeyword :: Map KeyWordName Completer
 cabalVersionKeyword =
@@ -30,7 +33,7 @@ cabalVersionKeyword =
     constantCompleter $
       -- We only suggest cabal versions newer than 2.2
       -- since we don't recommend using older ones.
-      map (T.pack . showCabalSpecVersion) [CabalSpecV2_2 .. maxBound]
+      map (T.pack . showCabalSpecVersion) supportedCabalVersions
 
 -- | Top level keywords of a cabal file.
 --

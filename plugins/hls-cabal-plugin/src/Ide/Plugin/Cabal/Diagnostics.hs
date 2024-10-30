@@ -63,8 +63,9 @@ positionFromCabalPosition :: Syntax.Position -> Position
 positionFromCabalPosition (Syntax.Position line column) = Position (fromIntegral line') (fromIntegral col')
   where
     -- LSP is zero-based, Cabal is one-based
-    line' = line-1
-    col' = column-1
+    -- Cabal can return line 0 for errors in the first line
+    line' = if line <= 0 then 0 else line-1
+    col' = if column <= 0 then 0 else column-1
 
 -- | Create a 'FileDiagnostic'
 mkDiag
