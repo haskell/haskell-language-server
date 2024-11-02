@@ -424,7 +424,7 @@ getHieDbLoc dir = do
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
-  cradle_files <- newIORef []
+  cradle_files <- newIORef (Set.fromList [])
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -434,6 +434,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   -- they are inconsistent. So, everywhere you modify 'fileToFlags',
   -- you have to modify 'filesMap' as well.
   filesMap <- newVar HM.empty :: IO (Var FilesMap)
+  pendingFilesTQueue <- newTQueueIO
+  -- Pending files waiting to be loaded
   -- Version of the mappings above
   version <- newVar 0
   biosSessionLoadingVar <- newVar Nothing :: IO (Var (Maybe SessionLoadingPreferenceConfig))
@@ -550,7 +552,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
 
     let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
-                -> IO (IdeResult HscEnvEq,[FilePath])
+                -> IO ((IdeResult HscEnvEq,[FilePath]), HashSet FilePath)
         session args@(hieYaml, _cfp, _opts, _libDir) = do
           (new_deps, old_deps) <- packageSetup args
 
@@ -562,13 +564,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           let new_cache = newComponentCache recorder optExtensions _cfp hscEnv
           all_target_details <- new_cache old_deps new_deps
 
+          let flags_map' = HM.fromList (concatMap toFlagsMap all_targets')
+              all_targets' = concat all_target_details
+              newLoaded = HM.keys flags_map'
           this_dep_info <- getDependencyInfo $ maybeToList hieYaml
           let (all_targets, this_flags_map, this_options)
                 = case HM.lookup _cfp flags_map' of
                     Just this -> (all_targets', flags_map', this)
                     Nothing -> (this_target_details : all_targets', HM.insert _cfp this_flags flags_map', this_flags)
-                  where all_targets' = concat all_target_details
-                        flags_map' = HM.fromList (concatMap toFlagsMap all_targets')
+                  where
                         this_target_details = TargetDetails (TargetFile _cfp) this_error_env this_dep_info [_cfp]
                         this_flags = (this_error_env, this_dep_info)
                         this_error_env = ([this_error], Nothing)
@@ -580,27 +584,27 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
           void $ modifyVar' fileToFlags $ Map.insert hieYaml this_flags_map
           void $ modifyVar' filesMap $ flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
-          -- The VFS doesn't change on cradle edits, re-use the old one.
-          -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
-          keys2 <- invalidateShakeCache
-          restartShakeSession VFSUnmodified "new component" [] $ do
-            keys1 <- extendKnownTargets all_targets
-            return [keys1, keys2]
-
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
-          unless (null new_deps || not checkProject) $ do
-                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
-                void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                    mmt <- uses GetModificationTime cfps'
-                    let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-                    modIfaces <- uses GetModIface cs_exist
-                    -- update exports map
-                    shakeExtras <- getShakeExtras
-                    let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-                    liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
+          -- The VFS doesn't change on cradle edits, re-use the old one.
+          -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
+          restartShakeSession VFSUnmodified "new component" [] $ do
+            keys2 <- invalidateShakeCache
+            keys1 <- extendKnownTargets all_targets
+            unless (null new_deps || not checkProject) $ do
+                  cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
+                  void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
+                      mmt <- uses GetModificationTime cfps'
+                      let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+                      modIfaces <- uses GetModIface cs_exist
+                      -- update exports map
+                      shakeExtras <- getShakeExtras
+                      let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
+                      liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
+            return [keys1, keys2]
 
-          return $ second Map.keys this_options
+
+          return $ (second Map.keys this_options, Set.fromList $ fromNormalizedFilePath <$> newLoaded)
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
@@ -615,11 +619,13 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
            -- Display a user friendly progress message here: They probably don't know what a cradle is
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                          <> " (for " <> T.pack lfpLog <> ")"
+
+           pendingFiles <- Set.fromList <$> (atomically $ flushTQueue pendingFilesTQueue)
            eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfpLog
                   old_files <- readIORef cradle_files
-                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp old_files
+                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp (Set.toList $ pendingFiles <> old_files)
                   addTag "result" (show res)
                   return res
 
@@ -633,8 +639,12 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                  [] -> error $ "GHC version could not be parsed: " <> version
                  ((runTime, _):_)
                    | compileTime == runTime -> do
-                     atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
-                     session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                     (results, newLoaded) <- session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                     -- put back to pending que if not listed in the results
+                     let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` newLoaded
+                     atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
+                     atomicModifyIORef' cradle_files (\xs -> (pendingFiles `Set.intersection` newLoaded <> xs,()))
+                     return results
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
@@ -708,6 +718,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
+      atomically $ writeTQueue pendingFilesTQueue $ toAbsolutePath file
       -- see Note [Serializing runs in separate thread]
       awaitRunInThread que $ getOptions file
 
