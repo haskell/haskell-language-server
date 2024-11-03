@@ -128,9 +128,13 @@ suggestDisableWarning diagnostic
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
 
--- Don't suggest disabling type errors as a solution to all type errors
 warningBlacklist :: [T.Text]
-warningBlacklist = ["deferred-type-errors"]
+warningBlacklist =
+  -- Don't suggest disabling type errors as a solution to all type errors.
+  [ "deferred-type-errors"
+  -- Don't suggest disabling out of scope errors as a solution to all out of scope errors.
+  , "deferred-out-of-scope-variables"
+  ]
 
 -- ---------------------------------------------------------------------
 
