@@ -6,6 +6,7 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+--         ../hiebios
 
 
 index-state:  2024-10-21T00:00:00Z
@@ -46,3 +47,8 @@ constraints:
 if impl(ghc >= 9.9)
   -- https://github.com/haskell/haskell-language-server/issues/4324
   benchmarks: False
+
+source-repository-package
+    type: git
+    location: https://github.com/soulomoon/hie-bios.git
+    tag: 7dd19b547ba30b760053b5f796c439cba6ac6a07

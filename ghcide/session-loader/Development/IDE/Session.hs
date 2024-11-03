@@ -658,7 +658,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
-                errors <- mapM (makeError hieYaml cradle err) $ Set.toList pendingFiles
+                let failedLoadingFiles = nub $ cfp:concatMap cradleErrorLoadingFiles err
+                let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` Set.fromList failedLoadingFiles
+                atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
+                errors <- mapM (makeError hieYaml cradle err) $ failedLoadingFiles
                 return ((concat errors, Nothing), maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     let
