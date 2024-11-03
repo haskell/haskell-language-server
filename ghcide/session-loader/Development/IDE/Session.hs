@@ -425,6 +425,7 @@ loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef (Set.fromList [])
+--   error_loading_files <- newIORef (Set.fromList [])
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -606,6 +607,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
           return $ (second Map.keys this_options, Set.fromList $ fromNormalizedFilePath <$> newLoaded)
 
+    let makeError hieYaml cradle err cfp  = do
+               dep_info <- getDependencyInfo (maybeToList hieYaml)
+               let ncfp = toNormalizedFilePath' cfp
+               let res = (map (\err' -> renderCradleError err' cradle ncfp) err, Nothing)
+               void $ modifyVar' fileToFlags $
+                    Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
+               void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
+               return (fst res)
+
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
            let lfpLog = makeRelative rootDir cfp
@@ -648,13 +658,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
-               dep_info <- getDependencyInfo (maybeToList hieYaml)
-               let ncfp = toNormalizedFilePath' cfp
-               let res = (map (\err' -> renderCradleError err' cradle ncfp) err, Nothing)
-               void $ modifyVar' fileToFlags $
-                    Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
-               void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
-               return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
+                errors <- mapM (makeError hieYaml cradle err) $ Set.toList pendingFiles
+                return ((concat errors, Nothing), maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     let
         -- | We allow users to specify a loading strategy.
