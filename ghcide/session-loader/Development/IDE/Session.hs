@@ -623,7 +623,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                          <> " (for " <> T.pack lfpLog <> ")"
 
            pendingFiles' <- Set.fromList <$> (atomically $ flushTQueue pendingFilesTQueue)
-           -- remove the file from error loading files
            errorFiles <- readIORef error_loading_files
            -- remove error files from pending files since error loading need to load one by one
            let pendingFiles = pendingFiles' `Set.difference` errorFiles
@@ -656,6 +655,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                      atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
                      -- log new loaded files
                      logWith recorder Info $ LogSessionNewLoadedFiles $ Set.toList newLoadedT
+                     -- remove the file from error loading files
                      atomicModifyIORef' cradle_files (\xs -> (newLoadedT <> xs,()))
                      atomicModifyIORef' error_loading_files (\old -> (old `Set.difference` newLoadedT, ()))
                      return results
