@@ -438,8 +438,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   -- they are inconsistent. So, everywhere you modify 'fileToFlags',
   -- you have to modify 'filesMap' as well.
   filesMap <- newVar HM.empty :: IO (Var FilesMap)
-  pendingFilesTQueue <- newTQueueIO
   -- Pending files waiting to be loaded
+  pendingFilesTQueue <- newTQueueIO
   -- Version of the mappings above
   version <- newVar 0
   biosSessionLoadingVar <- newVar Nothing :: IO (Var (Maybe SessionLoadingPreferenceConfig))
