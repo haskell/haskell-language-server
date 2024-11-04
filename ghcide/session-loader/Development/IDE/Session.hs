@@ -146,10 +146,13 @@ data Log
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogHieBios HieBios.Log
   | LogSessionLoadingChanged
+  | LogSessionNewLoadedFiles ![FilePath]
 deriving instance Show Log
 
 instance Pretty Log where
   pretty = \case
+    LogSessionNewLoadedFiles files ->
+      "New loaded files:" <+> pretty files
     LogNoneCradleFound path ->
       "None cradle found for" <+> pretty path <+> ", ignoring the file"
     LogSettingInitialDynFlags ->
@@ -425,7 +428,7 @@ loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef (Set.fromList [])
---   error_loading_files <- newIORef (Set.fromList [])
+  error_loading_files <- newIORef (Set.fromList [])
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -603,18 +606,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                       let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
                       liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
             return [keys1, keys2]
-
-
           return $ (second Map.keys this_options, Set.fromList $ fromNormalizedFilePath <$> newLoaded)
-
-    let makeError hieYaml cradle err cfp  = do
-               dep_info <- getDependencyInfo (maybeToList hieYaml)
-               let ncfp = toNormalizedFilePath' cfp
-               let res = (map (\err' -> renderCradleError err' cradle ncfp) err, Nothing)
-               void $ modifyVar' fileToFlags $
-                    Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
-               void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
-               return (fst res)
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
@@ -630,12 +622,19 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                          <> " (for " <> T.pack lfpLog <> ")"
 
-           pendingFiles <- Set.fromList <$> (atomically $ flushTQueue pendingFilesTQueue)
+           pendingFiles' <- Set.fromList <$> (atomically $ flushTQueue pendingFilesTQueue)
+           -- remove the file from error loading files
+           errorFiles <- readIORef error_loading_files
+           -- remove error files from pending files since error loading need to load one by one
+           let pendingFiles = pendingFiles' `Set.difference` errorFiles
+           -- if the file is in error loading files, we fall back to single loading mode
+           let toLoads = if cfp `Set.member` errorFiles then Set.empty else pendingFiles
+
            eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfpLog
                   old_files <- readIORef cradle_files
-                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp (Set.toList $ pendingFiles <> old_files)
+                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp (Set.toList $ Set.delete cfp $ toLoads <> old_files)
                   addTag "result" (show res)
                   return res
 
@@ -649,20 +648,37 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                  [] -> error $ "GHC version could not be parsed: " <> version
                  ((runTime, _):_)
                    | compileTime == runTime -> do
-                     (results, newLoaded) <- session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                     (results, allNewLoaded) <- session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
                      -- put back to pending que if not listed in the results
-                     let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` newLoaded
+                     -- delete cfp even if ew report No cradle target found for cfp
+                     let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` allNewLoaded
+                     let newLoadedT = pendingFiles `Set.intersection` allNewLoaded
                      atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
-                     atomicModifyIORef' cradle_files (\xs -> (pendingFiles `Set.intersection` newLoaded <> xs,()))
+                     -- log new loaded files
+                     logWith recorder Info $ LogSessionNewLoadedFiles $ Set.toList newLoadedT
+                     atomicModifyIORef' cradle_files (\xs -> (newLoadedT <> xs,()))
+                     atomicModifyIORef' error_loading_files (\old -> (old `Set.difference` newLoadedT, ()))
                      return results
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
-                let failedLoadingFiles = nub $ cfp:concatMap cradleErrorLoadingFiles err
-                let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` Set.fromList failedLoadingFiles
-                atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
-                errors <- mapM (makeError hieYaml cradle err) $ failedLoadingFiles
-                return ((concat errors, Nothing), maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
+                if (length toLoads > 1)
+                then do
+                    succLoaded_files <- readIORef cradle_files
+                    -- mark as less loaded files as failedLoadingFiles possible
+                    let failedLoadingFiles = (Set.insert cfp toLoads) `Set.difference` succLoaded_files
+                    atomicModifyIORef' error_loading_files (\xs -> (failedLoadingFiles <> xs,()))
+                    -- retry without other files
+                    atomically $ forM_ pendingFiles (writeTQueue pendingFilesTQueue)
+                    consultCradle hieYaml cfp
+                else do
+                    dep_info <- getDependencyInfo (maybeToList hieYaml)
+                    let ncfp = toNormalizedFilePath' cfp
+                    let res = (map (\err' -> renderCradleError err' cradle ncfp) err, Nothing)
+                    void $ modifyVar' fileToFlags $
+                            Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
+                    void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
+                    return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     let
         -- | We allow users to specify a loading strategy.
@@ -703,6 +719,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               deps_ok <- checkDependencyInfo old_di
               if not deps_ok
                 then do
+                  -- todo invoke the action to recompile the file
+                  -- if deps are old, we can try to load the error files again
+                  atomicModifyIORef' error_loading_files (\xs -> (Set.delete file xs,()))
+                  atomicModifyIORef' cradle_files (\xs -> (Set.delete file xs,()))
                   -- If the dependencies are out of date then clear both caches and start
                   -- again.
                   modifyVar_ fileToFlags (const (return Map.empty))
