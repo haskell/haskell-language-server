@@ -625,17 +625,18 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                          <> " (for " <> T.pack lfpLog <> ")"
 
-           pendingFiles' <- Set.fromList <$> (atomically $ flushTQueue pendingFilesTQueue)
+           pendingFiles <- Set.insert cfp . Set.fromList <$> (atomically $ flushTQueue pendingFilesTQueue)
            errorFiles <- readIORef error_loading_files
-           -- remove error files from pending files since error loading need to load one by one
-           let pendingFiles = pendingFiles' `Set.difference` errorFiles
+           old_files <- readIORef cradle_files
            -- if the file is in error loading files, we fall back to single loading mode
-           let extraToLoads = if cfp `Set.member` errorFiles then Set.empty else pendingFiles
+           let extraToLoads = if cfp `Set.member` errorFiles
+                                then Set.empty
+                                -- remove error files from pending files since error loading need to load one by one
+                                else Set.delete cfp $ pendingFiles `Set.difference` errorFiles
 
            eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfpLog
-                  old_files <- readIORef cradle_files
                   res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp (Set.toList $ Set.delete cfp $ extraToLoads <> old_files)
                   addTag "result" (show res)
                   return res
@@ -654,22 +655,21 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                      -- put back to pending que if not listed in the results
                      -- delete cfp even if we report No cradle target found for the cfp
                      let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` allNewLoaded
-                     let newLoadedT = pendingFiles `Set.intersection` allNewLoaded
+                     let newLoaded = pendingFiles `Set.intersection` allNewLoaded
                      atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
                      -- log new loaded files
-                     logWith recorder Info $ LogSessionNewLoadedFiles $ Set.toList newLoadedT
-                     atomicModifyIORef' cradle_files (\xs -> (newLoadedT <> xs,()))
-                     -- remove the file from error loading files
+                     logWith recorder Info $ LogSessionNewLoadedFiles $ Set.toList newLoaded
+                     -- remove all new loaded file from error loading files
                      atomicModifyIORef' error_loading_files (\old -> (old `Set.difference` allNewLoaded, ()))
+                     atomicModifyIORef' cradle_files (\xs -> (newLoaded <> xs,()))
                      return results
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
                 if (not $ null extraToLoads)
                 then do
-                    succLoaded_files <- readIORef cradle_files
                     -- mark as less loaded files as failedLoadingFiles as possible
-                    let failedLoadingFiles = (Set.insert cfp extraToLoads) `Set.difference` succLoaded_files
+                    let failedLoadingFiles = (Set.insert cfp extraToLoads) `Set.difference` old_files
                     atomicModifyIORef' error_loading_files (\xs -> (failedLoadingFiles <> xs,()))
                     -- retry without other files
                     atomically $ forM_ pendingFiles (writeTQueue pendingFilesTQueue)
