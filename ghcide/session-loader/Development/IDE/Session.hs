@@ -147,10 +147,13 @@ data Log
   | LogHieBios HieBios.Log
   | LogSessionLoadingChanged
   | LogSessionNewLoadedFiles ![FilePath]
+  | LogSessionReloadOnError FilePath ![FilePath]
 deriving instance Show Log
 
 instance Pretty Log where
   pretty = \case
+    LogSessionReloadOnError path files ->
+      "Reloading file due to error in" <+> pretty path <+> "with files:" <+> pretty files
     LogSessionNewLoadedFiles files ->
       "New loaded files:" <+> pretty files
     LogNoneCradleFound path ->
@@ -649,14 +652,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                    | compileTime == runTime -> do
                      (results, allNewLoaded) <- session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
                      -- put back to pending que if not listed in the results
-                     -- delete cfp even if ew report No cradle target found for cfp
+                     -- delete cfp even if we report No cradle target found for the cfp
                      let remainPendingFiles = Set.delete cfp $ pendingFiles `Set.difference` allNewLoaded
                      let newLoadedT = pendingFiles `Set.intersection` allNewLoaded
                      atomically $ forM_ remainPendingFiles (writeTQueue pendingFilesTQueue)
                      -- log new loaded files
                      logWith recorder Info $ LogSessionNewLoadedFiles $ Set.toList newLoadedT
-                     -- remove the file from error loading files
                      atomicModifyIORef' cradle_files (\xs -> (newLoadedT <> xs,()))
+                     -- remove the file from error loading files
                      atomicModifyIORef' error_loading_files (\old -> (old `Set.difference` newLoadedT, ()))
                      return results
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
@@ -711,6 +714,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
             modifyVar_ filesMap (const (return HM.empty))
             -- Don't even keep the name cache, we start from scratch here!
             modifyVar_ hscEnvs (const (return Map.empty))
+            -- cleanup error loading files and cradle files
+            atomicModifyIORef' error_loading_files (\_ -> (Set.empty,()))
+            atomicModifyIORef' cradle_files (\_ -> (Set.empty,()))
 
           v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
           let cfp = toAbsolutePath file
