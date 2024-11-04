@@ -630,13 +630,13 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
            -- remove error files from pending files since error loading need to load one by one
            let pendingFiles = pendingFiles' `Set.difference` errorFiles
            -- if the file is in error loading files, we fall back to single loading mode
-           let toLoads = if cfp `Set.member` errorFiles then Set.empty else pendingFiles
+           let extraToLoads = if cfp `Set.member` errorFiles then Set.empty else pendingFiles
 
            eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfpLog
                   old_files <- readIORef cradle_files
-                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp (Set.toList $ Set.delete cfp $ toLoads <> old_files)
+                  res <- cradleToOptsAndLibDir recorder (sessionLoading clientConfig) cradle cfp (Set.toList $ Set.delete cfp $ extraToLoads <> old_files)
                   addTag "result" (show res)
                   return res
 
@@ -660,16 +660,16 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                      logWith recorder Info $ LogSessionNewLoadedFiles $ Set.toList newLoadedT
                      atomicModifyIORef' cradle_files (\xs -> (newLoadedT <> xs,()))
                      -- remove the file from error loading files
-                     atomicModifyIORef' error_loading_files (\old -> (old `Set.difference` newLoadedT, ()))
+                     atomicModifyIORef' error_loading_files (\old -> (old `Set.difference` allNewLoaded, ()))
                      return results
                    | otherwise -> return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
-                if (length toLoads > 1)
+                if (not $ null extraToLoads)
                 then do
                     succLoaded_files <- readIORef cradle_files
                     -- mark as less loaded files as failedLoadingFiles as possible
-                    let failedLoadingFiles = (Set.insert cfp toLoads) `Set.difference` succLoaded_files
+                    let failedLoadingFiles = (Set.insert cfp extraToLoads) `Set.difference` succLoaded_files
                     atomicModifyIORef' error_loading_files (\xs -> (failedLoadingFiles <> xs,()))
                     -- retry without other files
                     atomically $ forM_ pendingFiles (writeTQueue pendingFilesTQueue)
@@ -681,6 +681,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                     void $ modifyVar' fileToFlags $
                             Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
                     void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
+                    atomicModifyIORef' error_loading_files (\xs -> (Set.insert cfp xs,()))
                     return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     let
