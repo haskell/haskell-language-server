@@ -669,6 +669,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 if (not $ null extraToLoads)
                 then do
                     -- mark as less loaded files as failedLoadingFiles as possible
+                    -- limitation is that when we are loading files, and the dependencies of old_files
+                    -- are changed, and old_files are not valid anymore.
+                    -- but they will still be in the old_files, and will not move to error_loading_files.
+                    -- And make other files failed to load in batch mode.
                     let failedLoadingFiles = (Set.insert cfp extraToLoads) `Set.difference` old_files
                     atomicModifyIORef' error_loading_files (\xs -> (failedLoadingFiles <> xs,()))
                     -- retry without other files
@@ -726,7 +730,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               deps_ok <- checkDependencyInfo old_di
               if not deps_ok
                 then do
-                  -- todo invoke the action to recompile the file
                   -- if deps are old, we can try to load the error files again
                   atomicModifyIORef' error_loading_files (\xs -> (Set.delete file xs,()))
                   atomicModifyIORef' cradle_files (\xs -> (Set.delete file xs,()))
