@@ -665,7 +665,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 if (length toLoads > 1)
                 then do
                     succLoaded_files <- readIORef cradle_files
-                    -- mark as less loaded files as failedLoadingFiles possible
+                    -- mark as less loaded files as failedLoadingFiles as possible
                     let failedLoadingFiles = (Set.insert cfp toLoads) `Set.difference` succLoaded_files
                     atomicModifyIORef' error_loading_files (\xs -> (failedLoadingFiles <> xs,()))
                     -- retry without other files
