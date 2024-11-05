@@ -677,6 +677,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                     atomicModifyIORef' error_loading_files (\xs -> (failedLoadingFiles <> xs,()))
                     -- retry without other files
                     atomically $ forM_ pendingFiles (writeTQueue pendingFilesTQueue)
+                    logWith recorder Info $ LogSessionReloadOnError cfp (Set.toList pendingFiles)
                     consultCradle hieYaml cfp
                 else do
                     dep_info <- getDependencyInfo (maybeToList hieYaml)
@@ -724,8 +725,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
             atomicModifyIORef' cradle_files (\_ -> (Set.empty,()))
 
           v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
-          let cfp = toAbsolutePath file
-          case HM.lookup (toNormalizedFilePath' cfp) v of
+          case HM.lookup (toNormalizedFilePath' file) v of
             Just (opts, old_di) -> do
               deps_ok <- checkDependencyInfo old_di
               if not deps_ok
@@ -739,9 +739,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                   modifyVar_ filesMap (const (return HM.empty))
                   -- Keep the same name cache
                   modifyVar_ hscEnvs (return . Map.adjust (const []) hieYaml )
-                  consultCradle hieYaml cfp
+                  consultCradle hieYaml file
                 else return (opts, Map.keys old_di)
-            Nothing -> consultCradle hieYaml cfp
+            Nothing -> consultCradle hieYaml file
 
     -- The main function which gets options for a file. We only want one of these running
     -- at a time. Therefore the IORef contains the currently running cradle, if we try
@@ -749,16 +749,17 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     -- before attempting to do so.
     let getOptions :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         getOptions file = do
-            let ncfp = toNormalizedFilePath' (toAbsolutePath file)
+            let ncfp = toNormalizedFilePath' file
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
-      atomically $ writeTQueue pendingFilesTQueue $ toAbsolutePath file
+      let absFile = toAbsolutePath file
+      atomically $ writeTQueue pendingFilesTQueue absFile
       -- see Note [Serializing runs in separate thread]
-      awaitRunInThread que $ getOptions file
+      awaitRunInThread que $ getOptions absFile
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
