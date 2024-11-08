@@ -145,7 +145,7 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   let actions = map (mkCodeAction enabledExtensions) (RangeMap.filterByRange range crCodeActions)
   pure $ InL actions
   where
-    mkCodeAction :: [Extension] ->  Int -> Command |? CodeAction
+    mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
     mkCodeAction exts uid = InR CodeAction
       { _title = mkTitle exts
       , _kind = Just CodeActionKind_RefactorRewrite
@@ -186,14 +186,14 @@ inlayHintProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdent
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
         -- Get the definition of each dotdot of record
-        locations = [ getDefinition nfp pos
+        locations = [ fmap (,record) (getDefinition nfp pos)
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
-    pure $ InL $ mapMaybe (mkInlayHints crr pragma) (zip defnLocsList records)
+    pure $ InL $ mapMaybe (mkInlayHint crr pragma) defnLocsList
    where
-     mkInlayHints :: CollectRecordsResult -> NextPragmaInfo -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
-     mkInlayHints CRR {enabledExtensions, nameMap} pragma (defnLocs, record) =
+     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
+     mkInlayHint CRR {enabledExtensions, nameMap} pragma (defnLocs, record) =
        let range = recordInfoToDotDotRange record
            textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
                     <> maybeToList (pragmaEdit enabledExtensions pragma)
