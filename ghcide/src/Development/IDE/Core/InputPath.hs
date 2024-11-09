@@ -6,34 +6,18 @@ import Control.DeepSeq
 import Data.Hashable
 import Data.List (isInfixOf)
 import Data.Typeable
-import Development.IDE.Types.Location (emptyFilePath)
+import Development.IDE.Graph.Internal.Rules (InputClass(..))
 import Language.LSP.Protocol.Types (NormalizedFilePath, fromNormalizedFilePath)
 import System.FilePath (splitDirectories)
-
-data InputClass
-    = ProjectHaskellFiles
-    | AllHaskellFiles
 
 newtype InputPath (i :: InputClass) =
     InputPath { unInputPath :: NormalizedFilePath }
     deriving newtype (Eq, Hashable, NFData, Typeable, Show)
 
-class HasNormalizedFilePath input where
-    getNormalizedFilePath :: input -> NormalizedFilePath
-
-instance HasNormalizedFilePath (InputPath ProjectHaskellFiles) where
-    getNormalizedFilePath (InputPath nfp) = nfp
-
-instance HasNormalizedFilePath (InputPath AllHaskellFiles) where
-    getNormalizedFilePath (InputPath nfp) = nfp
-
-instance HasNormalizedFilePath () where
-    getNormalizedFilePath _ = emptyFilePath
-
 -- All Haskell files are valid, and we assume all
 -- files are Haskell files (for now) so there is
 -- no need to filter out any FilePaths.
-classifyAllHaskellInputs :: [NormalizedFilePath] -> [InputPath ProjectHaskellFiles]
+classifyAllHaskellInputs :: [NormalizedFilePath] -> [InputPath AllHaskellFiles]
 classifyAllHaskellInputs = map InputPath
 
 -- Dependency files should not be considered

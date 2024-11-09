@@ -19,6 +19,7 @@ import           Data.Text                    (Text)
 import           Data.Typeable                (Typeable)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
+import           Development.IDE.Graph.Internal.Rules (RuleInput, InputClass(..))
 import           Development.IDE.Spans.Common ()
 import           GHC.Generics                 (Generic)
 import qualified GHC.Types.Name.Occurrence    as Occ
@@ -28,7 +29,9 @@ import qualified Language.LSP.Protocol.Types  as J
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions
+type instance RuleInput LocalCompletions = ProjectHaskellFiles
 type instance RuleResult NonLocalCompletions = CachedCompletions
+type instance RuleInput NonLocalCompletions = ProjectHaskellFiles
 
 data LocalCompletions = LocalCompletions
     deriving (Eq, Show, Typeable, Generic)

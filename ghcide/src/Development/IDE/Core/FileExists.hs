@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedLists      #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -27,7 +26,6 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
-import           Development.IDE.Graph.Internal.RuleInput
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake           (toKey)
@@ -42,6 +40,7 @@ import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
 import Development.IDE.Core.InputPath (InputPath (InputPath))
+import Development.IDE.Graph.Internal.Rules (InputClass(AllHaskellFiles))
 
 {- Note [File existence cache and LSP file watchers]
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -136,7 +135,7 @@ fromChange FileChangeType_Changed = Nothing
 -------------------------------------------------------------------------------------
 
 -- | Returns True if the file exists
-getFileExists :: HasInput i AllHaskellFiles => InputPath i -> Action Bool
+getFileExists :: InputPath AllHaskellFiles -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
@@ -170,7 +169,7 @@ allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> Rules ()
+fileExistsRules :: Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> Rules ()
 fileExistsRules recorder lspEnv = do
   supportsWatchedFiles <- case lspEnv of
     Nothing      -> pure False
@@ -192,17 +191,17 @@ fileExistsRules recorder lspEnv = do
         else const $ pure False
 
   if supportsWatchedFiles
-    then fileExistsRulesFast @i recorder isWatched
-    else fileExistsRulesSlow @i recorder
+    then fileExistsRulesFast recorder isWatched
+    else fileExistsRulesSlow recorder
 
-  fileStoreRules @i (cmapWithPrio LogFileStore recorder) (\(InputPath f) -> isWatched f)
+  fileStoreRules (cmapWithPrio LogFileStore recorder) (\(InputPath f) -> isWatched f)
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileExistsRulesFast recorder isWatched =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics runGetFileExists
     where
-      runGetFileExists :: GetFileExists -> InputPath i -> Action (Maybe BS.ByteString, Maybe Bool)
+      runGetFileExists :: GetFileExists -> InputPath AllHaskellFiles -> Action (Maybe BS.ByteString, Maybe Bool)
       runGetFileExists GetFileExists (InputPath file) = do
         isWF <- isWatched file
         if isWF
@@ -242,11 +241,11 @@ fileExistsFast file = do
 summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
-fileExistsRulesSlow :: forall i. HasInput i AllHaskellFiles => Recorder (WithPriority Log) -> Rules ()
+fileExistsRulesSlow :: Recorder (WithPriority Log) -> Rules ()
 fileExistsRulesSlow recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics runGetFileExists
   where
-    runGetFileExists :: GetFileExists -> InputPath i -> Action (Maybe BS.ByteString, Maybe Bool)
+    runGetFileExists :: GetFileExists -> InputPath AllHaskellFiles -> Action (Maybe BS.ByteString, Maybe Bool)
     runGetFileExists GetFileExists (InputPath file) = fileExistsSlow file
 
 fileExistsSlow :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)

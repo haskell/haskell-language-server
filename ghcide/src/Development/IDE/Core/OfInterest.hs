@@ -50,6 +50,7 @@ import           Ide.Logger                               (Pretty (pretty),
                                                            logWith)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
+import Development.IDE.Core.InputPath (classifyProjectHaskellInputs, classifyAllHaskellInputs)
 
 data Log = LogShake Shake.Log
   deriving Show
@@ -134,6 +135,8 @@ scheduleGarbageCollection state = do
 kick :: Action ()
 kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
+    let classifiedHaskellFiles = classifyAllHaskellInputs files
+        classifiedProjectFiles = classifyProjectHaskellInputs files
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
     let signal :: KnownSymbol s => Proxy s -> Action ()
         signal msg = when testing $ liftIO $
@@ -145,11 +148,11 @@ kick = do
     liftIO $ progressUpdate progress ProgressNewStarted
 
     -- Update the exports map
-    results <- uses GenerateCore files
-            <* uses GetHieAst files
+    results <- uses GenerateCore classifiedProjectFiles
+            <* uses GetHieAst classifiedHaskellFiles
             -- needed to have non local completions on the first edit
             -- when the first edit breaks the module header
-            <* uses NonLocalCompletions files
+            <* uses NonLocalCompletions classifiedProjectFiles
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
