@@ -556,11 +556,11 @@ getRecCons :: LHsExpr GhcTc -> ([RecordInfo], Bool)
 -- because there is a possibility that there were be more than one result per
 -- branch
 
-
-
-
+#if __GLASGOW_HASKELL__ >= 910
+getRecCons (unLoc -> XExpr (ExpandedThingTc a _)) = (collectRecords a, False)
+#else
 getRecCons (unLoc -> XExpr (ExpansionExpr (HsExpanded _ a))) = (collectRecords a, True)
-
+#endif
 getRecCons e@(unLoc -> RecordCon _ _ flds)
   | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where
