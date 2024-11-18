@@ -49,11 +49,13 @@ import           Data.Maybe
 import           Data.Tuple.Extra                   hiding (first, second)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans        ()
+import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics                       (Generic)
 import           Prelude                            hiding (mod)
+import Development.IDE.Core.InputPath (InputPath(..))
 
 
 -- | The imports for a given module.
@@ -335,10 +337,10 @@ transitiveReverseDependencies file DependencyInformation{..} = do
       in IntSet.foldr go res new
 
 -- | Immediate reverse dependencies of a file
-immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
-immediateReverseDependencies file DependencyInformation{..} = do
-  FilePathId cur_id <- lookupPathToId depPathIdMap file
-  return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
+immediateReverseDependencies :: InputPath ProjectHaskellFiles -> DependencyInformation -> Maybe [InputPath ProjectHaskellFiles]
+immediateReverseDependencies input DependencyInformation{..} = do
+  FilePathId cur_id <- lookupPathToId depPathIdMap $ unInputPath input
+  return $ map (InputPath . idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
 -- | returns all transitive dependencies in topological order.
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies

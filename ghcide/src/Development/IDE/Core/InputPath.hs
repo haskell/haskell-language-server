@@ -41,3 +41,6 @@ classifyProjectHaskellInputs = foldr classifyInputPath []
             dependencyDirectory = [".hls", "dependencies"]
             rawInput :: [FilePath]
             rawInput = splitDirectories (fromNormalizedFilePath nfp)
+
+generalizeProjectInput :: InputPath ProjectHaskellFiles -> InputPath AllHaskellFiles
+generalizeProjectInput = InputPath . unInputPath

@@ -70,7 +70,7 @@ import           Language.LSP.VFS
 import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
-import Development.IDE.Core.InputPath (InputPath (unInputPath), classifyAllHaskellInputs)
+import Development.IDE.Core.InputPath (InputPath (unInputPath), classifyProjectHaskellInputs)
 import Development.IDE.Graph.Internal.Rules (InputClass(AllHaskellFiles))
 
 
@@ -248,7 +248,7 @@ typecheckParentsAction recorder nfp = do
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
         logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
-        let classifiedInputs = classifyAllHaskellInputs rs
+        let classifiedInputs = classifyProjectHaskellInputs rs
         void $ uses GetModIface classifiedInputs
 
 -- | Note that some keys have been modified and restart the session

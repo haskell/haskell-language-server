@@ -291,7 +291,7 @@ type instance RuleInput GetModIfaceFromDiskAndIndex = ProjectHaskellFiles
 
 -- | Get a module interface details, either from an interface file or a typechecked module
 type instance RuleResult GetModIface = HiFileResult
-type instance RuleInput GetModIface = AllHaskellFiles
+type instance RuleInput GetModIface = ProjectHaskellFiles
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
@@ -397,11 +397,11 @@ instance NFData ModSummaryResult where
 -- | Generate a ModSummary that has enough information to be used to get .hi and .hie files.
 -- without needing to parse the entire source
 type instance RuleResult GetModSummary = ModSummaryResult
-type instance RuleInput GetModSummary = AllHaskellFiles
+type instance RuleInput GetModSummary = ProjectHaskellFiles
 
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
-type instance RuleInput GetModSummaryWithoutTimestamps = AllHaskellFiles
+type instance RuleInput GetModSummaryWithoutTimestamps = ProjectHaskellFiles
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
@@ -525,7 +525,7 @@ instance NFData   AddWatchedFile
 -- thread killed exception issues, so we lift it to a full rule.
 -- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
 type instance RuleResult GhcSessionIO = IdeGhcSession
-type instance RuleInput GhcSessionIO = ProjectHaskellFiles
+type instance RuleInput GhcSessionIO = NoFile
 
 data IdeGhcSession = IdeGhcSession
   { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])

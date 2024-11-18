@@ -50,7 +50,7 @@ import           Ide.Logger                               (Pretty (pretty),
                                                            logWith)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
-import Development.IDE.Core.InputPath (classifyProjectHaskellInputs, classifyAllHaskellInputs)
+import Development.IDE.Core.InputPath (classifyProjectHaskellInputs, classifyAllHaskellInputs, InputPath (unInputPath))
 
 data Log = LogShake Shake.Log
   deriving Show
@@ -68,10 +68,11 @@ ofInterestRules :: Recorder (WithPriority Log) -> Rules ()
 ofInterestRules recorder = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
     addIdeGlobal . GarbageCollectVar =<< liftIO (newVar False)
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsFileOfInterest input -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
-        let foi = maybe NotFOI IsFOI $ f `HashMap.lookup` filesOfInterest
+        let rawFile = unInputPath input
+        let foi = maybe NotFOI IsFOI $ rawFile `HashMap.lookup` filesOfInterest
             fp  = summarize foi
             res = (Just fp, Just foi)
         return res
