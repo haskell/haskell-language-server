@@ -369,7 +369,7 @@ execRawDepM act =
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [InputPath AllHaskellFiles] -> Action (RawDependencyInformation, BootIdMap)
+rawDependencyInformation :: [InputPath ProjectHaskellFiles] -> Action (RawDependencyInformation, BootIdMap)
 rawDependencyInformation fs = do
     (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
@@ -602,7 +602,7 @@ typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
 typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
-    foi <- use_ IsFileOfInterest file
+    foi <- use_ IsFileOfInterest $ generalizeProjectInput file
     -- We should only call the typecheck rule for files of interest.
     -- Keeping typechecked modules in memory for other files is
     -- very expensive.
@@ -621,11 +621,11 @@ getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake rec
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (map (InputPath @ProjectHaskellFiles) $ HashSet.toList fs)
 
-dependencyInfoForFiles :: [InputPath AllHaskellFiles] -> Action (BS.ByteString, DependencyInformation)
+dependencyInfoForFiles :: [InputPath ProjectHaskellFiles] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
   (rawDepInfo, bm) <- rawDependencyInformation fs
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
-  msrs <- uses GetModSummaryWithoutTimestamps $ classifyAllHaskellInputs all_fs
+  msrs <- uses GetModSummaryWithoutTimestamps $ classifyProjectHaskellInputs all_fs
   let mss = map (fmap msrModSummary) msrs
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss

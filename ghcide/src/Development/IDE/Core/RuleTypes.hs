@@ -66,7 +66,7 @@ encodeLinkableType (Just ObjectLinkable) = "2"
 
 -- | The parse tree for the file using GetFileContents
 type instance RuleResult GetParsedModule = ParsedModule
-type instance RuleInput GetParsedModule = AllHaskellFiles
+type instance RuleInput GetParsedModule = ProjectHaskellFiles
 
 -- | The parse tree for the file using GetFileContents,
 -- all comments included using Opt_KeepRawTokenStream
