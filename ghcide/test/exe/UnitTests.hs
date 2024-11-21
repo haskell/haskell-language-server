@@ -64,7 +64,7 @@ tests = do
                , _message = ""
                , _relatedInformation = Nothing
                , _tags = Nothing
-               }
+               } Diagnostics.NoStructuredMessage
          let shown = T.unpack (Diagnostics.showDiagnostics [diag])
          let expected = "1:2-3:4"
          assertBool (unwords ["expected to find range", expected, "in diagnostic", shown]) $

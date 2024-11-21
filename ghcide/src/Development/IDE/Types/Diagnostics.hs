@@ -10,6 +10,7 @@ module Development.IDE.Types.Diagnostics (
   ShowDiagnostic(..),
   FileDiagnostic(..),
   fdLspDiagnosticL,
+  StructuredMessage(..),
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
@@ -86,6 +87,10 @@ ideErrorFromLspDiag
   -> FileDiagnostic
 ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
   let fdShouldShowDiagnostic = ShowDiag
+      fdStructuredMessage =
+        case mbOrigMsg of
+          Nothing  -> NoStructuredMessage
+          Just msg -> SomeStructuredMessage msg
       fdLspDiagnostic =
         lspDiag
           & attachReason (fmap (diagnosticReason . errMsgDiagnostic) mbOrigMsg)
@@ -167,16 +172,52 @@ data ShowDiagnostic
 instance NFData ShowDiagnostic where
     rnf = rwhnf
 
+-- | A Maybe-like wrapper for a GhcMessage that doesn't try to compare, show, or
+-- force the GhcMessage inside, so that we can derive Show, Eq, Ord, NFData on
+-- FileDiagnostic. FileDiagnostic only uses this as metadata so we can safely
+-- ignore it in fields.
+data StructuredMessage
+  = NoStructuredMessage
+  | SomeStructuredMessage (MsgEnvelope GhcMessage)
+  deriving (Generic)
+
+instance Show StructuredMessage where
+  show NoStructuredMessage      = "NoStructuredMessage"
+  show SomeStructuredMessage {} = "SomeStructuredMessage"
+
+instance Eq StructuredMessage where
+  (==) NoStructuredMessage NoStructuredMessage           = True
+  (==) SomeStructuredMessage {} SomeStructuredMessage {} = True
+  (==) _ _                                               = False
+
+instance Ord StructuredMessage where
+  compare NoStructuredMessage NoStructuredMessage           = EQ
+  compare SomeStructuredMessage {} SomeStructuredMessage {} = EQ
+  compare NoStructuredMessage SomeStructuredMessage {}      = GT
+  compare SomeStructuredMessage {} NoStructuredMessage      = LT
+
+instance NFData StructuredMessage where
+  rnf NoStructuredMessage      = ()
+  rnf SomeStructuredMessage {} = ()
+
 -- | Human readable diagnostics for a specific file.
 --
 --   This type packages a pretty printed, human readable error message
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
+--   It also optionally keeps a structured diagnostic message GhcMessage in
+--   StructuredMessage.
+--
 data FileDiagnostic = FileDiagnostic
   { fdFilePath             :: NormalizedFilePath
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic        :: Diagnostic
+    -- | The optional GhcMessage inside of this StructuredMessage is ignored for
+    -- Eq, Ord, Show, and NFData instances. This is fine because this field
+    -- should only ever be metadata and should never be used to distinguish
+    -- between FileDiagnostics.
+  , fdStructuredMessage    :: StructuredMessage
   }
   deriving (Eq, Ord, Show, Generic)
 
