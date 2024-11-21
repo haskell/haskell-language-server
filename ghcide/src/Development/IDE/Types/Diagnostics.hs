@@ -76,9 +76,12 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
-ideErrorText :: NormalizedFilePath -> T.Text -> Maybe (MsgEnvelope GhcMessage) -> FileDiagnostic
-ideErrorText fdFilePath msg origMsg =
-  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) fdFilePath msg origMsg
+-- | Produce a 'FileDiagnostic' for the given 'NormalizedFilePath'
+-- with an error message.
+ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
+ideErrorText nfp msg =
+  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nfp msg Nothing
+
 
 ideErrorFromLspDiag
   :: LSP.Diagnostic
