@@ -9,7 +9,10 @@ module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
   FileDiagnostic(..),
+  fdFilePathL,
   fdLspDiagnosticL,
+  fdShouldShowDiagnosticL,
+  fdStructuredMessageL,
   StructuredMessage(..),
   IdeResult,
   LSP.DiagnosticSeverity(..),
@@ -82,7 +85,15 @@ ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
 ideErrorText nfp msg =
   ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nfp msg Nothing
 
-
+-- | Create a 'FileDiagnostic' from an existing 'LSP.Diagnostic' for a
+-- specific 'NormalizedFilePath'.
+-- The optional 'MsgEnvelope GhcMessage' is the original error message
+-- that was used for creating the 'LSP.Diagnostic'.
+-- It is included here, to allow downstream consumers, such as HLS plugins,
+-- to provide LSP features based on the structured error messages.
+-- Additionally, if available, we insert the ghc error code into the
+-- 'LSP.Diagnostic'. These error codes are used in https://errors.haskell.org/
+-- to provide documentation and explanations for error messages.
 ideErrorFromLspDiag
   :: LSP.Diagnostic
   -> NormalizedFilePath
@@ -101,6 +112,8 @@ ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
   in
   FileDiagnostic {..}
 
+-- | Set the code of the 'LSP.Diagnostic' to the GHC diagnostic code which is linked
+-- to https://errors.haskell.org/.
 setGhcCode :: Maybe (MsgEnvelope GhcMessage) -> LSP.Diagnostic -> LSP.Diagnostic
 #if MIN_VERSION_ghc(9,5,0)
 setGhcCode mbOrigMsg diag =
@@ -216,7 +229,12 @@ data FileDiagnostic = FileDiagnostic
   { fdFilePath             :: NormalizedFilePath
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic        :: Diagnostic
-    -- | The optional GhcMessage inside of this StructuredMessage is ignored for
+    -- | The original diagnostic that was used to produce 'fdLspDiagnostic'.
+    -- We keep it here, so downstream consumers, e.g. HLS plugins, can use the
+    -- the structured error messages and don't have to resort to parsing
+    -- error messages via regexes or similar.
+    --
+    -- The optional GhcMessage inside of this StructuredMessage is ignored for
     -- Eq, Ord, Show, and NFData instances. This is fine because this field
     -- should only ever be metadata and should never be used to distinguish
     -- between FileDiagnostics.
