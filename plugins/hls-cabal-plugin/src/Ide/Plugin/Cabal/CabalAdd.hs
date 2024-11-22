@@ -156,9 +156,8 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
     -- | Gives the build targets that are used in the `CabalAdd`.
     -- Note the unorthodox usage of `readBuildTargets`:
     -- If the relative path to the haskell file is provided,
-    -- the `readBuildTargets` will return a main build target.
-    -- This behaviour is acceptable for now, but changing to a way of getting
-    -- all build targets in a file is advised.
+    -- the `readBuildTargets` will return build targets, where this
+    -- module is mentioned (in exposed-modules or other-modules).
     getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
     getBuildTargets gpd cabalFilePath haskellFilePath = do
       let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath

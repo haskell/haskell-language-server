@@ -39,11 +39,13 @@ cabalAddTests =
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
         (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("src" </> "Main.hs") "split" [269])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
-        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "MyLib.hs") "split" [376])
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "MyLib.hs") "split" [413])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an internal library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "InternalLib.hs") "split" [413])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
-        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("test" </> "Main.hs") "split" [618])
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("test" </> "Main.hs") "split" [655])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
-        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("bench" </> "Main.hs") "split" [739])
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("bench" </> "Main.hs") "split" [776])
 
 
     , runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "cabal-add-packageYaml")

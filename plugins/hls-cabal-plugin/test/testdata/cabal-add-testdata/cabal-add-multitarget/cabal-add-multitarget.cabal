@@ -12,6 +12,7 @@ executable cabal-add-exe
 
 library
     exposed-modules:     MyLib
+    other-modules:       InternalLib
     build-depends:       base >= 4 && < 5
     hs-source-dirs:      lib
     ghc-options:         -Wall
