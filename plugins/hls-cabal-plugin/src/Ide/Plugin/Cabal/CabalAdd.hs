@@ -167,10 +167,10 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
     mkCodeAction :: FilePath -> Maybe String -> (T.Text, T.Text) -> CodeAction
     mkCodeAction cabalFilePath target (suggestedDep, suggestedVersion) =
       let
-        versionTitle = if T.null suggestedVersion then T.empty else "  version " <> suggestedVersion
+        versionTitle = if T.null suggestedVersion then T.empty else "-" <> suggestedVersion
         targetTitle = case target of
           Nothing -> T.empty
-          Just t  -> "  target " <> T.pack t
+          Just t  -> " at " <> T.pack t
         title = "Add dependency " <> suggestedDep <> versionTitle <> targetTitle
         version = if T.null suggestedVersion then Nothing else Just suggestedVersion
 
