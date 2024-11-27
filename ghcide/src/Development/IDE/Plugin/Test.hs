@@ -52,6 +52,8 @@ import           Language.LSP.Protocol.Types
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
 import           System.Time.Extra
+import Development.IDE.Core.InputPath (InputPath(InputPath), generalizeProjectInput)
+import Development.IDE.Graph.Internal.Rules (InputClass(ProjectHaskellFiles))
 
 type Age = Int
 data TestRequest
@@ -98,7 +100,7 @@ testRequestHandler _ (BlockSeconds secs) = do
     return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
-    sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
+    sess <- runAction "Test - GhcSession" s $ use_ GhcSession $ InputPath nfp
     let hiPath = hiDir $ hsc_dflags $ hscEnv sess
     return $ Right (toJSON hiPath)
 testRequestHandler s GetShakeSessionQueueCount = liftIO $ do
@@ -111,7 +113,7 @@ testRequestHandler s WaitForShakeQueue = liftIO $ do
     return $ Right A.Null
 testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
-    success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
+    success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) $ InputPath $ nfp
     let res = WaitForIdeRuleResult <$> success
     return $ bimap PluginInvalidParams toJSON res
 testRequestHandler s GetBuildKeysBuilt = liftIO $ do
@@ -147,7 +149,7 @@ getDatabaseKeys field db = do
     step <- shakeGetBuildStep db
     return [ k | (k, res) <- keys, field res == Step step]
 
-parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
+parseAction :: CI String -> InputPath ProjectHaskellFiles -> Action (Either Text Bool)
 parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp
 parseAction "getLocatedImports" fp = Right . isJust <$> use GetLocatedImports fp
 parseAction "getmodsummary" fp = Right . isJust <$> use GetModSummary fp
@@ -155,8 +157,8 @@ parseAction "getmodsummarywithouttimestamps" fp = Right . isJust <$> use GetModS
 parseAction "getparsedmodule" fp = Right . isJust <$> use GetParsedModule fp
 parseAction "ghcsession" fp = Right . isJust <$> use GhcSession fp
 parseAction "ghcsessiondeps" fp = Right . isJust <$> use GhcSessionDeps fp
-parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
-parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
+parseAction "gethieast" fp = Right . isJust <$> use GetHieAst (generalizeProjectInput fp)
+parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents (generalizeProjectInput fp)
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
 -- | a command that blocks forever. Used for testing

@@ -71,7 +71,7 @@ type instance RuleInput GetParsedModule = ProjectHaskellFiles
 -- | The parse tree for the file using GetFileContents,
 -- all comments included using Opt_KeepRawTokenStream
 type instance RuleResult GetParsedModuleWithComments = ParsedModule
-type instance RuleInput GetParsedModuleWithComments = AllHaskellFiles
+type instance RuleInput GetParsedModuleWithComments = ProjectHaskellFiles
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 type instance RuleInput GetModuleGraph = NoFile

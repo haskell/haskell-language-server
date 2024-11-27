@@ -29,6 +29,7 @@ import           Language.LSP.Protocol.Types    (DocumentSymbol (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL, InR),
                                                  uriToFilePath)
+import Development.IDE.Core.InputPath (InputPath(InputPath))
 
 
 moduleOutline
@@ -36,7 +37,7 @@ moduleOutline
 moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
-      mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
+      mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule $ InputPath fp)
       pure $ case mb_decls of
         Nothing -> InL []
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }

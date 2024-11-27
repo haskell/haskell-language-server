@@ -170,7 +170,7 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
-import Development.IDE.Graph.Internal.Rules (InputClass(ProjectHaskellFiles, AllHaskellFiles, NoFile))
+import Development.IDE.Graph.Internal.Rules (InputClass(ProjectHaskellFiles))
 
 
 data Log
@@ -222,18 +222,18 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- TODO: return text --> return rope
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
-    (_, msource) <- getFileContents nfp
+    (_, msource) <- getFileContents $ InputPath nfp
     case msource of
         Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
         Just source -> pure $ T.encodeUtf8 source
 
 -- | Parse the contents of a haskell file.
-getParsedModule :: InputPath AllHaskellFiles -> Action (Maybe ParsedModule)
+getParsedModule :: InputPath ProjectHaskellFiles -> Action (Maybe ParsedModule)
 getParsedModule = use GetParsedModule
 
 -- | Parse the contents of a haskell file,
 -- ensuring comments are preserved in annotations
-getParsedModuleWithComments :: InputPath AllHaskellFiles -> Action (Maybe ParsedModule)
+getParsedModuleWithComments :: InputPath ProjectHaskellFiles -> Action (Maybe ParsedModule)
 getParsedModuleWithComments = use GetParsedModuleWithComments
 
 ------------------------------------------------------------
@@ -323,16 +323,16 @@ getLocatedImportsRule recorder =
         let getTargetFor modName nfp
                 | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists nfp'
+                    itExists <- getFileExists $ InputPath nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     let ttmap = HM.mapWithKey const (HashSet.toMap tt)
                         nfp' = HM.lookupDefault nfp nfp ttmap
-                    itExists <- getFileExists nfp'
+                    itExists <- getFileExists $ InputPath nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | otherwise = do
-                    itExists <- getFileExists nfp
+                    itExists <- getFileExists $ InputPath nfp
                     return $ if itExists then Just nfp else Nothing
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
@@ -379,7 +379,7 @@ rawDependencyInformation fs = do
         mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
         zipWithM go ff mss
 
-    go :: InputPath i -- ^ Current module being processed
+    go :: InputPath ProjectHaskellFiles -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
     go f mbModSum = do
@@ -414,7 +414,7 @@ rawDependencyInformation fs = do
                   (mns, ls) = unzip with_file
               -- Recursively process all the imports we just learnt about
               -- and get back a list of their FilePathIds
-              fids <- goPlural $ (classifyAllHaskellInputs . map artifactFilePath) ls
+              fids <- goPlural $ (classifyProjectHaskellInputs . map artifactFilePath) ls
               -- Associate together the ModuleName with the FilePathId
               let moduleImports' = map (,Nothing) no_file ++ zip mns (map Just fids)
               -- Insert into the map the information about this modules
@@ -506,10 +506,37 @@ reportImportCyclesRule recorder =
 
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
-      tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
-      getHieAstRuleDefinition f hsc tmr
+    define (cmapWithPrio LogShake recorder) $ \GetHieAst input -> do
+        let file = unInputPath input
+        case classifyProjectHaskellInputs [file] of
+            [] -> do
+                se <- getShakeExtras
+                mHieFile <- liftIO
+                    $ runIdeAction "GetHieAst" se
+                    $ runMaybeT
+                    -- We can look up the HIE file from its source
+                    -- because at this point lookupMod has already been
+                    -- called and has created the the source file in
+                    -- the .hls directory and indexed it.
+                    $ readHieFileForSrcFromDisk recorder file
+                pure ([], makeHieAstResult <$> mHieFile)
+            projectInput:_ -> do
+                tmr <- use_ TypeCheck projectInput
+                hsc <- hscEnv <$> use_ GhcSessionDeps projectInput
+                getHieAstRuleDefinition projectInput hsc tmr
+    where
+        -- Make an HieAstResult from a loaded HieFile
+        makeHieAstResult :: HieFile -> HieAstResult
+        makeHieAstResult hieFile =
+            HAR
+                (hie_module hieFile)
+                hieAsts
+                (generateReferencesMap $ M.elems $ getAsts hieAsts)
+                mempty
+                (HieFromDisk hieFile)
+            where
+                hieAsts :: HieASTs TypeIndex
+                hieAsts = hie_asts hieFile
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
@@ -523,23 +550,24 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
-getHieAstRuleDefinition :: InputPath AllHaskellFiles -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
-getHieAstRuleDefinition f hsc tmr = do
+getHieAstRuleDefinition :: InputPath ProjectHaskellFiles -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
+getHieAstRuleDefinition input hsc tmr = do
+  let file = unInputPath input
   (diags, masts) <- liftIO $ generateHieAsts hsc tmr
   se <- getShakeExtras
 
-  isFoi <- use_ IsFileOfInterest f
+  isFoi <- use_ IsFileOfInterest $ generalizeProjectInput input
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
         LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-          toJSON $ fromNormalizedFilePath $ unInputPath f
+          toJSON $ fromNormalizedFilePath file
       pure []
     _ | Just asts <- masts -> do
-          source <- getSourceFileSource $ unInputPath f
+          source <- getSourceFileSource file
           let exports = tcg_exports $ tmrTypechecked tmr
               modSummary = tmrModSummary tmr
-          liftIO $ writeAndIndexHieFile hsc se modSummary (unInputPath f) exports asts source
+          liftIO $ writeAndIndexHieFile hsc se modSummary file exports asts source
     _ -> pure []
 
   let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
@@ -559,7 +587,7 @@ persistentImportMapRule = addPersistentRule GetImportMap $ \_ -> pure $ Just (Im
 getBindingsRule :: Recorder (WithPriority Log) -> Rules ()
 getBindingsRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetBindings f -> do
-    HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst f
+    HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst $ generalizeProjectInput f
     case kind of
       HieFresh      -> pure ([], Just $ bindings rm)
       HieFromDisk _ -> pure ([], Nothing)
@@ -571,7 +599,7 @@ getDocMapRule recorder =
       -- but we never generated a DocMap for it
       (tmrTypechecked -> tc, _) <- useWithStale_ TypeCheck file
       (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
-      (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst file
+      (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst $ generalizeProjectInput file
 
       dkMap <- liftIO $ mkDocMap hsc rf tc
       return ([],Just dkMap)
