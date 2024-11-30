@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs #-}
 module Development.IDE.Core.PluginUtils
-(-- Wrapped Action functions
+(-- * Wrapped Action functions
   runActionE
 , runActionMT
 , useE
@@ -9,13 +9,13 @@ module Development.IDE.Core.PluginUtils
 , usesMT
 , useWithStaleE
 , useWithStaleMT
--- Wrapped IdeAction functions
+-- * Wrapped IdeAction functions
 , runIdeActionE
 , runIdeActionMT
 , useWithStaleFastE
 , useWithStaleFastMT
 , uriToFilePathE
--- Wrapped PositionMapping functions
+-- * Wrapped PositionMapping functions
 , toCurrentPositionE
 , toCurrentPositionMT
 , fromCurrentPositionE
@@ -24,9 +24,13 @@ module Development.IDE.Core.PluginUtils
 , toCurrentRangeMT
 , fromCurrentRangeE
 , fromCurrentRangeMT
--- Formatting handlers
+-- * Diagnostics
+, activeDiagnosticsInRange
+, activeDiagnosticsInRangeMT
+-- * Formatting handlers
 , mkFormattingHandlers) where
 
+import           Control.Concurrent.STM
 import           Control.Lens                         ((^.))
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
@@ -47,14 +51,17 @@ import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
+import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
+import           Ide.PluginUtils                      (rangesOverlap)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
+import qualified StmContainers.Map                    as STM
 
 -- ----------------------------------------------------------------------------
 -- Action wrappers
@@ -172,6 +179,49 @@ fromCurrentRangeE mapping = maybeToExceptT (PluginInvalidUserState "fromCurrentR
 -- |MaybeT version of `fromCurrentRange`
 fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
 fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
+
+-- ----------------------------------------------------------------------------
+-- Diagnostics
+-- ----------------------------------------------------------------------------
+
+-- | @'activeDiagnosticsInRangeMT' shakeExtras nfp range@ computes the
+-- 'FileDiagnostic' 's that HLS produced and overlap with the given @range@.
+--
+-- This function is to be used whenever we need an authoritative source of truth
+-- for which diagnostics are shown to the user.
+-- These diagnostics can be used to provide various IDE features, for example
+-- CodeActions, CodeLenses, or refactorings.
+--
+-- However, why do we need this when computing 'CodeAction's? A 'CodeActionParam'
+-- has the 'CodeActionContext' which already contains the diagnostics!
+-- But according to the LSP docs, the server shouldn't rely that these Diagnostic
+-- are actually up-to-date and accurately reflect the state of the document.
+--
+-- From the LSP docs:
+-- > An array of diagnostics known on the client side overlapping the range
+-- > provided to the `textDocument/codeAction` request. They are provided so
+-- > that the server knows which errors are currently presented to the user
+-- > for the given range. There is no guarantee that these accurately reflect
+-- > the error state of the resource. The primary parameter
+-- > to compute code actions is the provided range.
+--
+-- Thus, even when the client sends us the context, we should compute the
+-- diagnostics on the server side.
+activeDiagnosticsInRangeMT :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> MaybeT m [FileDiagnostic]
+activeDiagnosticsInRangeMT ide nfp range = do
+    MaybeT $ liftIO $ atomically $ do
+        mDiags <- STM.lookup (LSP.normalizedFilePathToUri nfp) (Shake.publishedDiagnostics ide)
+        case mDiags of
+            Nothing -> pure Nothing
+            Just fileDiags -> do
+                pure $ Just $ filter diagRangeOverlaps fileDiags
+    where
+        diagRangeOverlaps = \fileDiag ->
+            rangesOverlap range (fileDiag ^. fdLspDiagnosticL . LSP.range)
+
+-- | Just like 'activeDiagnosticsInRangeMT'. See the docs of 'activeDiagnosticsInRangeMT' for details.
+activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m (Maybe [FileDiagnostic])
+activeDiagnosticsInRange ide nfp range = runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
 
 -- ----------------------------------------------------------------------------
 -- Formatting handlers
