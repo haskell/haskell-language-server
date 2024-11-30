@@ -157,14 +157,12 @@ import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
 import           GHC.TypeLits                           (KnownSymbol)
-import           GHC.Types.Error                        (errMsgDiagnostic)
 import           HieDb.Types
 import           Ide.Logger                             hiding (Priority)
 import qualified Ide.Logger                             as Logger
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types
-import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
