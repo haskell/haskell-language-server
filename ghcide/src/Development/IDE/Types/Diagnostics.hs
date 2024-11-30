@@ -14,6 +14,8 @@ module Development.IDE.Types.Diagnostics (
   fdShouldShowDiagnosticL,
   fdStructuredMessageL,
   StructuredMessage(..),
+  _NoStructuredMessage,
+  _SomeStructuredMessage,
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
@@ -192,6 +194,23 @@ instance NFData ShowDiagnostic where
 -- force the GhcMessage inside, so that we can derive Show, Eq, Ord, NFData on
 -- FileDiagnostic. FileDiagnostic only uses this as metadata so we can safely
 -- ignore it in fields.
+--
+-- Instead of pattern matching on these constructors directly, consider 'Prism' from
+-- the 'lens' package. This allows to conveniently pattern match deeply into the 'MsgEnvelope GhcMessage'
+-- constructor.
+-- The module 'Development.IDE.GHC.Compat.Error' implements additional 'Lens's and 'Prism's,
+-- allowing you to avoid importing GHC modules directly.
+--
+-- For example, to pattern match on a 'TcRnMessage' you can use the lens:
+--
+-- @
+--   message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+-- @
+--
+-- This produces a value of type `Maybe TcRnMessage`.
+--
+-- Further, consider utility functions such as 'flatTcRnMessage', which strip
+-- context from error messages which may be more convenient in certain situations.
 data StructuredMessage
   = NoStructuredMessage
   | SomeStructuredMessage (MsgEnvelope GhcMessage)
@@ -243,10 +262,6 @@ data FileDiagnostic = FileDiagnostic
   deriving (Eq, Ord, Show, Generic)
 
 instance NFData FileDiagnostic
-
-makeLensesWith
-    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
-    ''FileDiagnostic
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
@@ -314,3 +329,9 @@ srenderColored =
 
 defaultTermWidth :: Int
 defaultTermWidth = 80
+
+makePrisms ''StructuredMessage
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''FileDiagnostic
