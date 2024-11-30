@@ -1,10 +1,12 @@
 {-# LANGUAGE GADTs           #-}
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns    #-}
 
 module Ide.Plugin.Class.CodeAction where
 
+import           Control.Arrow                        ((>>>))
 import           Control.Lens                         hiding (List, use)
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
@@ -23,11 +25,14 @@ import           Data.Maybe                           (isNothing, listToMaybe,
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as T
 import           Development.IDE
-import           Development.IDE.Core.Compile         (sourceTypecheck)
 import           Development.IDE.Core.FileStore       (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Error     (TcRnMessage (..),
+                                                       _TcRnMessage,
+                                                       flatTcRnMessage,
+                                                       msgEnvelopeErrorL)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint        (pointCommand)
 import           Ide.Plugin.Class.ExactPrint
@@ -80,21 +85,23 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
+codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
-    actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
-    pure $ InL actions
+    activeDiagnosticsInRange (shakeExtras state) nfp caRange
+        >>= \case
+        Nothing -> pure $ InL []
+        Just fileDiags -> do
+            actions <- join <$> mapM (mkActions nfp verTxtDocId) (methodDiags fileDiags)
+            pure $ InL actions
     where
-        diags = context ^. L.diagnostics
-
-        ghcDiags = filter (\d -> d ^. L.source == Just sourceTypecheck) diags
-        methodDiags = filter (\d -> isClassMethodWarning (d ^. L.message)) ghcDiags
+        methodDiags fileDiags =
+            filter (\d -> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
             :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
-            -> Diagnostic
+            -> FileDiagnostic
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]
         mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
@@ -117,7 +124,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
                 $ mkMethodGroups hsc gblEnv range sigs cls
             where
-                range = diag ^. L.range
+                range = diag ^. fdLspDiagnosticL . L.range
 
                 mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
                 mkMethodGroups hsc gblEnv range sigs cls = minimalDef <> [allClassMethods]
@@ -203,8 +210,15 @@ isClassNodeIdentifier :: Identifier -> IdentifierDetails a -> Bool
 isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occName i = (isNothing . identType) ident && Use `Set.member` identInfo ident
 isClassNodeIdentifier _ _ = False
 
-isClassMethodWarning :: T.Text -> Bool
-isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
+isClassMethodWarning :: StructuredMessage -> Bool
+isClassMethodWarning message = case message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
+    Nothing          -> False
+    Just tcRnMessage -> isGhcClassMethodWarning tcRnMessage
+
+isGhcClassMethodWarning :: TcRnMessage -> Bool
+isGhcClassMethodWarning = flatTcRnMessage >>> \case
+    TcRnUnsatisfiedMinimalDef{} -> True
+    _ -> False
 
 isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
