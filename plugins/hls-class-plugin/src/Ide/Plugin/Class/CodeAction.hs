@@ -4,7 +4,10 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns    #-}
 
-module Ide.Plugin.Class.CodeAction where
+module Ide.Plugin.Class.CodeAction (
+    addMethodPlaceholders,
+    codeAction,
+) where
 
 import           Control.Arrow                        ((>>>))
 import           Control.Lens                         hiding (List, use)
@@ -15,8 +18,6 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           hiding (Null)
-import           Data.Bifunctor                       (second)
-import           Data.Either.Extra                    (rights)
 import           Data.List
 import           Data.List.Extra                      (nubOrdOn)
 import qualified Data.Map.Strict                      as Map
@@ -96,14 +97,14 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
             pure $ InL actions
     where
         methodDiags fileDiags =
-            filter (\d -> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
+            mapMaybe (\d -> (d,) <$> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
             :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
-            -> FileDiagnostic
+            -> (FileDiagnostic, ClassMinimalDef)
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]
-        mkActions docPath verTxtDocId diag = do
+        mkActions docPath verTxtDocId (diag, classMinDef) = do
             (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStaleE GetHieAst docPath
             instancePosition <- handleMaybe (PluginInvalidUserState "fromCurrentRange") $
@@ -115,21 +116,19 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                 $ useE GetInstanceBindTypeSigs docPath
             (tmrTypechecked -> gblEnv ) <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
             (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
-            implemented <- findImplementedMethods ast instancePosition
-            logWith recorder Info (LogImplementedMethods cls implemented)
+            logWith recorder Debug (LogImplementedMethods cls classMinDef)
             pure
                 $ concatMap mkAction
                 $ nubOrdOn snd
                 $ filter ((/=) mempty . snd)
-                $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
-                $ mkMethodGroups hsc gblEnv range sigs cls
+                $ mkMethodGroups hsc gblEnv range sigs classMinDef
             where
                 range = diag ^. fdLspDiagnosticL . L.range
 
-                mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
-                mkMethodGroups hsc gblEnv range sigs cls = minimalDef <> [allClassMethods]
+                mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> ClassMinimalDef -> [MethodGroup]
+                mkMethodGroups hsc gblEnv range sigs classMinDef = minimalDef <> [allClassMethods]
                     where
-                        minimalDef = minDefToMethodGroups hsc gblEnv range sigs $ classMinimalDef cls
+                        minimalDef = minDefToMethodGroups hsc gblEnv range sigs classMinDef
                         allClassMethods = ("all missing methods", makeMethodDefinitions hsc gblEnv range sigs)
 
                 mkAction :: MethodGroup -> [Command |? CodeAction]
@@ -170,25 +169,6 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                         <=< nodeChildren
                     )
 
-        findImplementedMethods
-            :: HieASTs a
-            -> Position
-            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [T.Text]
-        findImplementedMethods asts instancePosition = do
-            pure
-                $ concat
-                $ pointCommand asts instancePosition
-                $ map (T.pack . getOccString) . rights . findInstanceValBindIdentifiers
-
-        -- | Recurses through the given AST to find identifiers which are
-        -- 'InstanceValBind's.
-        findInstanceValBindIdentifiers :: HieAST a -> [Identifier]
-        findInstanceValBindIdentifiers ast =
-            let valBindIds = Map.keys
-                            . Map.filter (any isInstanceValBind . identInfo)
-                            $ getNodeIds ast
-            in valBindIds <> concatMap findInstanceValBindIdentifiers (nodeChildren ast)
-
         findClassFromIdentifier docPath (Right name) = do
             (hscEnv -> hscenv, _) <- runActionE "classplugin.findClassFromIdentifier.GhcSessionDeps" state
                 $ useWithStaleE GhcSessionDeps docPath
@@ -210,19 +190,15 @@ isClassNodeIdentifier :: Identifier -> IdentifierDetails a -> Bool
 isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occName i = (isNothing . identType) ident && Use `Set.member` identInfo ident
 isClassNodeIdentifier _ _ = False
 
-isClassMethodWarning :: StructuredMessage -> Bool
+isClassMethodWarning :: StructuredMessage -> Maybe ClassMinimalDef
 isClassMethodWarning message = case message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
-    Nothing          -> False
-    Just tcRnMessage -> isGhcClassMethodWarning tcRnMessage
+    Nothing          -> Nothing
+    Just tcRnMessage -> isUnsatisfiedMinimalDefWarning tcRnMessage
 
-isGhcClassMethodWarning :: TcRnMessage -> Bool
-isGhcClassMethodWarning = flatTcRnMessage >>> \case
-    TcRnUnsatisfiedMinimalDef{} -> True
-    _ -> False
-
-isInstanceValBind :: ContextInfo -> Bool
-isInstanceValBind (ValBind InstanceBind _ _) = True
-isInstanceValBind _                          = False
+isUnsatisfiedMinimalDefWarning :: TcRnMessage -> Maybe ClassMinimalDef
+isUnsatisfiedMinimalDefWarning = flatTcRnMessage >>> \case
+    TcRnUnsatisfiedMinimalDef classMinDef -> Just classMinDef
+    _ -> Nothing
 
 type MethodSignature = T.Text
 type MethodName = T.Text
