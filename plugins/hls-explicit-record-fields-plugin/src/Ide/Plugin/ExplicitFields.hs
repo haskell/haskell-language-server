@@ -577,9 +577,8 @@ getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
       [ RecordInfoApp realSpan' appExpr | RealSrcSpan realSpan' _ <- [ getLoc expr ] ]
 
     getFields :: HsExpr GhcTc -> [LHsExpr GhcTc] -> Maybe RecordAppExpr
-    getFields (HsApp _ (unLoc -> (XExpr (ConLikeTc (conLikeFieldLabels -> fls) _ _))) _) _
-      | null fls = Nothing
     getFields (HsApp _ constr@(unLoc -> (XExpr (ConLikeTc (conLikeFieldLabels -> fls) _ _))) arg) args
+      | not (null fls)
       = Just (RecordAppExpr constr labelWithArgs)
       where labelWithArgs = zipWith mkLabelWithArg fls (arg : args)
             mkLabelWithArg label arg = (L (getLoc arg) label, unLoc arg)
