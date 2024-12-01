@@ -2,26 +2,19 @@ queue_rules:
   - name: default
     # Mergify always respects the branch protection settings
     # so we can left empty mergify own ones
-    conditions: []
-
-pull_request_rules:
-  - name: Automatically merge pull requests
-    conditions:
+    queue_conditions:
       - label=merge me
       - '#approved-reviews-by>=1'
-    actions:
-      queue:
-        method: squash
-        name: default
-  # The queue action automatically updates PRs that
-  # have entered the queue, but in order to do that
-  # they must have passed CI. Since our CI is a bit
-  # flaky, PRs can fail to get in, which then means
-  # they don't get updated, which is extra annoying.
-  # This just adds the updating as an independent 
-  # step.
+    merge_conditions: []
+    merge_method: squash
+
+pull_request_rules:
   - name: Automatically update pull requests
     conditions:
       - label=merge me
     actions:
       update:
+  - name: refactored queue action rule
+    conditions: []
+    actions:
+      queue:

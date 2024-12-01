@@ -27,16 +27,30 @@ cabalAddTests :: TestTree
 cabalAddTests =
   testGroup
     "CabalAdd Tests"
-    [ runHaskellTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "cabal-add-exe")
+    [ runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable" ("cabal-add-testdata" </> "cabal-add-exe")
         (generateAddDependencyTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
-    , runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "cabal-add-packageYaml")
-        (generatePackageYAMLTestSession ("src" </> "Main.hs"))
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
         (generateAddDependencyTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
         (generateAddDependencyTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
         (generateAddDependencyTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
+
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("src" </> "Main.hs") "split" [269])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "MyLib.hs") "split" [413])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an internal library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "InternalLib.hs") "split" [413])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("test" </> "Main.hs") "split" [655])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+        (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("bench" </> "Main.hs") "split" [776])
+
+
+    , runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "cabal-add-packageYaml")
+        (generatePackageYAMLTestSession ("src" </> "Main.hs"))
+
     , testHiddenPackageSuggestions "Check CabalAdd's parser, no version"
                                    [ "It is a member of the hidden package 'base'"
                                    , "It is a member of the hidden package 'Blammo-wai'"

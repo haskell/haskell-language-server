@@ -8,7 +8,7 @@ packages:
          ./hls-test-utils
 
 
-index-state:  2024-10-21T00:00:00Z
+index-state:  2024-11-02T00:00:00Z
 
 tests: True
 test-show-details: direct

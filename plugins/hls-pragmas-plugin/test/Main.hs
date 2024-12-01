@@ -109,10 +109,15 @@ codeActionTests' =
         _ -> assertFailure $ "Expected one code action, but got: " <> show cas
       liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
       executeCodeAction ca
-  , goldenWithPragmas pragmasSuggestPlugin "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
+  , goldenWithPragmas pragmasDisableWarningPlugin "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getAllCodeActions doc
       liftIO $ "Disable \"deferred-type-errors\" warnings" `notElem` map (^. L.title) cas @? "Doesn't contain deferred-type-errors code action"
+      liftIO $ length cas == 0 @? "Expected no code actions, but got: " <> show cas
+  , goldenWithPragmas pragmasDisableWarningPlugin "doesn't suggest disabling out of scope variables" "DeferredOutOfScopeVariables" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Disable \"deferred-out-of-scope-variables\" warnings" `notElem` map (^. L.title) cas @? "Doesn't contain deferred-out-of-scope-variables code action"
       liftIO $ length cas == 0 @? "Expected no code actions, but got: " <> show cas
   ]
 
