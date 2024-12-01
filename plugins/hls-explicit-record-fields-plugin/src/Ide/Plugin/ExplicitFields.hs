@@ -265,7 +265,7 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _kind = Nothing -- neither a type nor a parameter
                         , _textEdits = Just (maybeToList te) -- same as CodeAction
                         , _tooltip = Just $ InL "Expand positional record" -- same as CodeAction
-                        , _paddingLeft = Nothing -- padding after dotdot
+                        , _paddingLeft = Nothing
                         , _paddingRight = Nothing
                         , _data_ = Nothing
                         }
