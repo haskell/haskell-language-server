@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
 module Development.IDE.GHC.Compat.Error (
   -- * Top-level error types and lens for easy access
   MsgEnvelope(..),
@@ -7,7 +8,7 @@ module Development.IDE.GHC.Compat.Error (
   -- * Error messages for the typechecking and renamer phase
   TcRnMessage (..),
   TcRnMessageDetailed (..),
-  flatTcRnMessage,
+  stripTcRnMessageContext,
   -- * Parsing error message
   PsMessage(..),
   -- * Desugaring diagnostic
@@ -52,13 +53,15 @@ _GhcDriverMessage = prism' GhcDriverMessage (\case
 -- | Some 'TcRnMessage's are nested in other constructors for additional context.
 -- For example, 'TcRnWithHsDocContext' and 'TcRnMessageWithInfo'.
 -- However, in some occasions you don't need the additional context and you just want
--- the error message. @'flatTcRnMessage'@ recursively unwraps these constructors,
+-- the error message. @'stripTcRnMessageContext'@ recursively unwraps these constructors,
 -- until there are no more constructors with additional context.
 --
-flatTcRnMessage :: TcRnMessage -> TcRnMessage
-flatTcRnMessage = \case
-  TcRnWithHsDocContext _ tcMsg -> flatTcRnMessage tcMsg
-  TcRnMessageWithInfo _ (TcRnMessageDetailed _ tcMsg) -> flatTcRnMessage tcMsg
+stripTcRnMessageContext :: TcRnMessage -> TcRnMessage
+stripTcRnMessageContext = \case
+#if MIN_VERSION_ghc(9, 6, 1)
+  TcRnWithHsDocContext _ tcMsg -> stripTcRnMessageContext tcMsg
+#endif
+  TcRnMessageWithInfo _ (TcRnMessageDetailed _ tcMsg) -> stripTcRnMessageContext tcMsg
   msg -> msg
 
 msgEnvelopeErrorL :: Lens' (MsgEnvelope e) e

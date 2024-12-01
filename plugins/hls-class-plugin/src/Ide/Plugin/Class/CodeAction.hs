@@ -32,7 +32,7 @@ import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error     (TcRnMessage (..),
                                                        _TcRnMessage,
-                                                       flatTcRnMessage,
+                                                       stripTcRnMessageContext,
                                                        msgEnvelopeErrorL)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint        (pointCommand)
@@ -196,7 +196,7 @@ isClassMethodWarning message = case message ^? _SomeStructuredMessage . msgEnvel
     Just tcRnMessage -> isUnsatisfiedMinimalDefWarning tcRnMessage
 
 isUnsatisfiedMinimalDefWarning :: TcRnMessage -> Maybe ClassMinimalDef
-isUnsatisfiedMinimalDefWarning = flatTcRnMessage >>> \case
+isUnsatisfiedMinimalDefWarning = stripTcRnMessageContext >>> \case
     TcRnUnsatisfiedMinimalDef classMinDef -> Just classMinDef
     _ -> Nothing
 
