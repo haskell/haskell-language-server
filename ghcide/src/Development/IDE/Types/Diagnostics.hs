@@ -209,7 +209,7 @@ instance NFData ShowDiagnostic where
 --
 -- This produces a value of type `Maybe TcRnMessage`.
 --
--- Further, consider utility functions such as 'flatTcRnMessage', which strip
+-- Further, consider utility functions such as 'stripTcRnMessageContext', which strip
 -- context from error messages which may be more convenient in certain situations.
 data StructuredMessage
   = NoStructuredMessage
