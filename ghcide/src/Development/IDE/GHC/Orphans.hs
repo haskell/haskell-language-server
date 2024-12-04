@@ -7,7 +7,9 @@
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat        hiding
+                                                   (DuplicateRecordFields,
+                                                    FieldSelectors)
 import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
@@ -23,9 +25,10 @@ import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer             as SB
 import           GHC.Parser.Annotation
-import           GHC.Types.SrcLoc
-
+import           GHC.Types.FieldLabel              (DuplicateRecordFields (DuplicateRecordFields, NoDuplicateRecordFields),
+                                                    FieldSelectors (FieldSelectors, NoFieldSelectors))
 import           GHC.Types.PkgQual
+import           GHC.Types.SrcLoc
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -237,3 +240,16 @@ instance NFData Extension where
 
 instance NFData (UniqFM Name [Name]) where
   rnf (ufmToIntMap -> m) = rnf m
+
+#if !MIN_VERSION_ghc(9,5,0)
+instance NFData DuplicateRecordFields where
+  rnf DuplicateRecordFields   = ()
+  rnf NoDuplicateRecordFields = ()
+
+instance NFData FieldSelectors where
+  rnf FieldSelectors   = ()
+  rnf NoFieldSelectors = ()
+
+instance NFData FieldLabel where
+  rnf (FieldLabel a b c d) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
+#endif
