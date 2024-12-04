@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs #-}
 module Development.IDE.Core.PluginUtils
-(-- Wrapped Action functions
+(-- * Wrapped Action functions
   runActionE
 , runActionMT
 , useE
@@ -9,13 +9,13 @@ module Development.IDE.Core.PluginUtils
 , usesMT
 , useWithStaleE
 , useWithStaleMT
--- Wrapped IdeAction functions
+-- * Wrapped IdeAction functions
 , runIdeActionE
 , runIdeActionMT
 , useWithStaleFastE
 , useWithStaleFastMT
 , uriToFilePathE
--- Wrapped PositionMapping functions
+-- * Wrapped PositionMapping functions
 , toCurrentPositionE
 , toCurrentPositionMT
 , fromCurrentPositionE
@@ -24,9 +24,13 @@ module Development.IDE.Core.PluginUtils
 , toCurrentRangeMT
 , fromCurrentRangeE
 , fromCurrentRangeMT
--- Formatting handlers
+-- * Diagnostics
+, activeDiagnosticsInRange
+, activeDiagnosticsInRangeMT
+-- * Formatting handlers
 , mkFormattingHandlers) where
 
+import           Control.Concurrent.STM
 import           Control.Lens                         ((^.))
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
@@ -47,14 +51,17 @@ import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
+import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
+import           Ide.PluginUtils                      (rangesOverlap)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
+import qualified StmContainers.Map                    as STM
 
 -- ----------------------------------------------------------------------------
 -- Action wrappers
@@ -172,6 +179,25 @@ fromCurrentRangeE mapping = maybeToExceptT (PluginInvalidUserState "fromCurrentR
 -- |MaybeT version of `fromCurrentRange`
 fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
 fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
+
+-- ----------------------------------------------------------------------------
+-- Diagnostics
+-- ----------------------------------------------------------------------------
+
+activeDiagnosticsInRangeMT :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> MaybeT m [FileDiagnostic]
+activeDiagnosticsInRangeMT ide nfp range = do
+    MaybeT $ liftIO $ atomically $ do
+        mDiags <- STM.lookup (LSP.normalizedFilePathToUri nfp) (Shake.publishedDiagnostics ide)
+        case mDiags of
+            Nothing -> pure Nothing
+            Just fileDiags -> do
+                pure $ Just $ filter diagRangeOverlaps fileDiags
+    where
+        diagRangeOverlaps = \fileDiag ->
+            rangesOverlap range (fileDiag ^. fdLspDiagnosticL . LSP.range)
+
+activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m (Maybe [FileDiagnostic])
+activeDiagnosticsInRange ide nfp range = runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
 
 -- ----------------------------------------------------------------------------
 -- Formatting handlers

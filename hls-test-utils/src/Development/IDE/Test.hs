@@ -14,6 +14,8 @@ module Development.IDE.Test
   , diagnostic
   , expectDiagnostics
   , expectDiagnosticsWithTags
+  , ExpectedDiagnostic
+  , ExpectedDiagnosticWithTag
   , expectNoMoreDiagnostics
   , expectMessages
   , expectCurrentDiagnostics
@@ -63,10 +65,13 @@ import           System.FilePath                 (equalFilePath)
 import           System.Time.Extra
 import           Test.Tasty.HUnit
 
+expectedDiagnosticWithNothing :: ExpectedDiagnostic -> ExpectedDiagnosticWithTag
+expectedDiagnosticWithNothing (ds, c, t, code) = (ds, c, t, code, Nothing)
+
 requireDiagnosticM
     :: (Foldable f, Show (f Diagnostic), HasCallStack)
     => f Diagnostic
-    -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)
+    -> ExpectedDiagnosticWithTag
     -> Assertion
 requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
     Nothing  -> pure ()
@@ -114,25 +119,25 @@ flushMessages = do
 --
 --   Rather than trying to assert the absence of diagnostics, introduce an
 --   expected diagnostic (e.g. a redundant import) and assert the singleton diagnostic.
-expectDiagnostics :: HasCallStack => [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
+expectDiagnostics :: HasCallStack => [(FilePath, [ExpectedDiagnostic])] -> Session ()
 expectDiagnostics
   = expectDiagnosticsWithTags
-  . map (second (map (\(ds, c, t) -> (ds, c, t, Nothing))))
+  . map (second (map expectedDiagnosticWithNothing))
 
 unwrapDiagnostic :: TServerMessage Method_TextDocumentPublishDiagnostics  -> (Uri, [Diagnostic])
 unwrapDiagnostic diagsNot = (diagsNot^. L.params . L.uri, diagsNot^. L.params . L.diagnostics)
 
-expectDiagnosticsWithTags :: HasCallStack => [(String, [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)])] -> Session ()
+expectDiagnosticsWithTags :: HasCallStack => [(String, [ExpectedDiagnosticWithTag])] -> Session ()
 expectDiagnosticsWithTags expected = do
-    let f = getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
+    let toSessionPath = getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
         next = unwrapDiagnostic <$> skipManyTill anyMessage diagnostic
-    expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) f expected
+    expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) toSessionPath expected
     expectDiagnosticsWithTags' next expected'
 
 expectDiagnosticsWithTags' ::
   (HasCallStack, MonadIO m) =>
   m (Uri, [Diagnostic]) ->
-  Map.Map NormalizedUri [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)] ->
+  Map.Map NormalizedUri [ExpectedDiagnosticWithTag] ->
   m ()
 expectDiagnosticsWithTags' next m | null m = do
     (_,actual) <- next
@@ -170,14 +175,14 @@ expectDiagnosticsWithTags' next expected = go expected
                     <> show actual
             go $ Map.delete canonUri m
 
-expectCurrentDiagnostics :: HasCallStack => TextDocumentIdentifier -> [(DiagnosticSeverity, Cursor, T.Text)] -> Session ()
+expectCurrentDiagnostics :: HasCallStack => TextDocumentIdentifier -> [ExpectedDiagnostic] -> Session ()
 expectCurrentDiagnostics doc expected = do
     diags <- getCurrentDiagnostics doc
     checkDiagnosticsForDoc doc expected diags
 
-checkDiagnosticsForDoc :: HasCallStack => TextDocumentIdentifier -> [(DiagnosticSeverity, Cursor, T.Text)] -> [Diagnostic] -> Session ()
+checkDiagnosticsForDoc :: HasCallStack => TextDocumentIdentifier -> [ExpectedDiagnostic] -> [Diagnostic] -> Session ()
 checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
-    let expected' = Map.singleton nuri (map (\(ds, c, t) -> (ds, c, t, Nothing)) expected)
+    let expected' = Map.singleton nuri (map expectedDiagnosticWithNothing expected)
         nuri = toNormalizedUri _uri
     expectDiagnosticsWithTags' (return (_uri, obtained)) expected'
 

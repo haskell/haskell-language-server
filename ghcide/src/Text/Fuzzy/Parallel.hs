@@ -89,8 +89,7 @@ simpleFilter :: Int      -- ^ Chunk size. 1000 works well.
              -> T.Text   -- ^ Pattern to look for.
              -> [T.Text] -- ^ List of texts to check.
              -> [Scored T.Text] -- ^ The ones that match.
-simpleFilter chunk maxRes pattern xs =
-  filter chunk maxRes pattern xs id
+simpleFilter chunk maxRes pat xs = filter chunk maxRes pat xs id
 
 
 -- | The function to filter a list of values by fuzzy search on the text extracted from them,
@@ -104,15 +103,15 @@ filter' :: Int           -- ^ Chunk size. 1000 works well.
        -- ^ Custom scoring function to use for calculating how close words are
        -- When the function returns Nothing, this means the values are incomparable.
        -> [Scored t]    -- ^ The list of results, sorted, highest score first.
-filter' chunkSize maxRes pattern ts extract match' = partialSortByAscScore maxRes perfectScore (concat vss)
+filter' chunkSize maxRes pat ts extract match' = partialSortByAscScore maxRes perfectScore (concat vss)
   where
       -- Preserve case for the first character, make all others lowercase
-      pattern' = case T.uncons pattern of
+      pat' = case T.uncons pat of
         Just (c, rest) -> T.cons c (T.toLower rest)
-        _              -> pattern
-      vss = map (mapMaybe (\t -> flip Scored t <$> match' pattern' (extract t))) (chunkList chunkSize ts)
+        _              -> pat
+      vss = map (mapMaybe (\t -> flip Scored t <$> match' pat' (extract t))) (chunkList chunkSize ts)
         `using` parList (evalList rseq)
-      perfectScore = fromMaybe (error $ T.unpack pattern) $ match' pattern' pattern'
+      perfectScore = fromMaybe (error $ T.unpack pat) $ match' pat' pat'
 
 -- | The function to filter a list of values by fuzzy search on the text extracted from them,
 -- using a custom matching function which determines how close words are.
@@ -122,8 +121,8 @@ filter :: Int           -- ^ Chunk size. 1000 works well.
        -> [t]           -- ^ The list of values containing the text to search in.
        -> (t -> T.Text) -- ^ The function to extract the text from the container.
        -> [Scored t]    -- ^ The list of results, sorted, highest score first.
-filter chunkSize maxRes pattern ts extract =
-  filter' chunkSize maxRes pattern ts extract match
+filter chunkSize maxRes pat ts extract =
+  filter' chunkSize maxRes pat ts extract match
 
 -- | Return all elements of the list that have a fuzzy match against the pattern,
 -- the closeness of the match is determined using the custom scoring match function that is passed.
@@ -136,8 +135,8 @@ simpleFilter' :: Int      -- ^ Chunk size. 1000 works well.
              -> (T.Text -> T.Text -> Maybe Int)
              -- ^ Custom scoring function to use for calculating how close words are
              -> [Scored T.Text] -- ^ The ones that match.
-simpleFilter' chunk maxRes pattern xs match' =
-  filter' chunk maxRes pattern xs id match'
+simpleFilter' chunk maxRes pat xs match' =
+  filter' chunk maxRes pat xs id match'
 --------------------------------------------------------------------------------
 
 chunkList :: Int -> [a] -> [[a]]

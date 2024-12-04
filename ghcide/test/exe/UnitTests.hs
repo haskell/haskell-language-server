@@ -51,7 +51,7 @@ tests = do
          let uri = Uri "file://"
          uriToFilePath' uri @?= Just ""
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
-         let diag = ("", Diagnostics.ShowDiag, Diagnostic
+         let diag = Diagnostics.FileDiagnostic "" Diagnostics.ShowDiag Diagnostic
                {  _codeDescription = Nothing
                 , _data_ = Nothing
                 , _range = Range
@@ -64,7 +64,7 @@ tests = do
                , _message = ""
                , _relatedInformation = Nothing
                , _tags = Nothing
-               })
+               } Diagnostics.NoStructuredMessage
          let shown = T.unpack (Diagnostics.showDiagnostics [diag])
          let expected = "1:2-3:4"
          assertBool (unwords ["expected to find range", expected, "in diagnostic", shown]) $
