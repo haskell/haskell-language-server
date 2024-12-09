@@ -229,7 +229,9 @@ mkCompl
                   _additionalTextEdits = Nothing,
                   _commitCharacters = Nothing,
                   _command = mbCommand,
-                  _data_ = toJSON <$> fmap (CompletionResolveData uri (isNothing typeText)) nameDetails,
+                  _data_ = Just $ toJSON $ case nameDetails of
+                    Nothing ->  NothingToResolve
+                    Just nameDets -> CompletionResolveData uri (isNothing typeText) nameDets,
                   _labelDetails = Nothing,
                   _textEditText = Nothing}
   removeSnippetsWhen (isJust isInfix) ci
@@ -309,7 +311,7 @@ mkExtCompl label =
 defaultCompletionItemWithLabel :: T.Text -> CompletionItem
 defaultCompletionItemWithLabel label =
     CompletionItem label def def def def def def def def def
-                         def def def def def def def def def
+                         def def def def def def def def (Just $ toJSON NothingToResolve)
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc identInfo@IdentInfo{..} q = CI
