@@ -199,10 +199,19 @@ instance Show NameDetails where
 -- | The data that is actually sent for resolve support
 -- We need the URI to be able to reconstruct the GHC environment
 -- in the file the completion was triggered in.
-data CompletionResolveData = CompletionResolveData
-  { itemFile      :: Uri
-  , itemNeedsType :: Bool -- ^ Do we need to lookup a type for this item?
-  , itemName      :: NameDetails
-  }
+data CompletionResolveData
+  = NothingToResolve
+    -- ^ The client requested to resolve a completion, but there is nothing to resolve,
+    -- as we can't add any additional information, such as docs.
+    -- We still handle these requests, otherwise HLS will reject "completion/resolve" requests
+    -- which present on some clients (e.g., emacs) as an error message.
+    -- See https://github.com/haskell/haskell-language-server/issues/4451 for the issue that
+    -- triggered this change.
+  | CompletionResolveData
+    -- ^ Data that we use to handle "completion/resolve" requests.
+    { itemFile      :: Uri
+    , itemNeedsType :: Bool -- ^ Do we need to lookup a type for this item?
+    , itemName      :: NameDetails
+    }
   deriving stock Generic
   deriving anyclass (FromJSON, ToJSON)
