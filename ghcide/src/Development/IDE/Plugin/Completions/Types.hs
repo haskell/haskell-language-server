@@ -207,6 +207,30 @@ data CompletionResolveData
     -- which present on some clients (e.g., emacs) as an error message.
     -- See https://github.com/haskell/haskell-language-server/issues/4451 for the issue that
     -- triggered this change.
+    --
+    -- Clients (i.e., VSCode) request completion items to be resolved if
+    -- we advertise capabilities for it.
+    -- However, HLS used to resolve completion items for only a subset of completion items,
+    -- and reject requests for which there is no additional info available,
+    -- e.g. function local variables don't have any docs or similar, so we didn't
+    -- respond to "completion/resolve" requests for these completion items.
+    -- We rejected these requests by *not* adding `_data_` (i.e., `_data_ = Nothing),
+    -- which caused HLS to reject "completion/resolve" requests, as we can only thread
+    -- requests to the appropriate plugin if this `_data_` field is populated and
+    -- can be deserialised.
+    -- Since this `_data_` was missing, we rejected the request with:
+    --
+    -- @
+    -- Error processing message (error "No plugins are available to handle this SMethod_CompletionItemResolve request.
+    --  Plugins installed for this method, but not available to handle this request are:
+    -- ghcide-completions does not handle resolve requests for (unable to determine resolve owner)).").
+    -- @
+    --
+    -- However, this proved to be annoying as some clients (i.e., emacs) display
+    -- our request rejection prominently in the user interface.
+    -- As this is annoying, we insert this "dummy" data 'NothingToResolve',
+    -- which allows HLS to thread the "completion/resolve" request to this plugin.
+    -- The plugin then simply returns the original 'CompletionItem',
   | CompletionResolveData
     -- ^ Data that we use to handle "completion/resolve" requests.
     { itemFile      :: Uri

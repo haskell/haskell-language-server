@@ -127,7 +127,13 @@ dropListFromImportDecl iDecl = let
     in f <$> iDecl
 
 resolveCompletion :: ResolveFunction IdeState CompletionResolveData Method_CompletionItemResolve
-resolveCompletion _ide _pid comp _uri NothingToResolve = pure comp
+resolveCompletion _ide _pid comp _uri NothingToResolve =
+  -- See docs of 'NothingToResolve' for the reasoning of this
+  -- NO-OP handler.
+  --
+  -- Handle "completion/resolve" requests, even when we don't want to add
+  -- any additional information to the 'CompletionItem'.
+  pure comp
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
   do
     file <- getNormalizedFilePathE uri
