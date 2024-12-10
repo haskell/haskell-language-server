@@ -557,19 +557,24 @@ completionDocTests =
         ]
       let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
+  , testSessionEmpty "defined in where clause" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "bar = foo"
+        , " where foobar = 5"
+        ]
+      let expected = "*Defined at line 3, column"
+      test doc (Position 1 9) "foobar" (Just $ T.length expected) [expected]
   ]
   where
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
       rcompls <- forM compls $ \item -> do
-            if isJust (item ^. L.data_)
-            then do
-                rsp <- request SMethod_CompletionItemResolve item
-                case rsp ^. L.result of
-                    Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
-                    Right x -> pure x
-            else pure item
+        rsp <- request SMethod_CompletionItemResolve item
+        case rsp ^. L.result of
+            Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
+            Right x -> pure x
       let compls' = [
             -- We ignore doc uris since it points to the local path which determined by specific machines
             case mn of
