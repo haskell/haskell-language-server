@@ -1,0 +1,24 @@
+description: Container for deb9
+inputs:
+  stage:
+    description: which stage to build
+    required: true
+  version:
+    description: which GHC version to build/test
+    required: false
+name: action-deb9
+runs:
+  entrypoint: .github/scripts/entrypoint.sh
+  env:
+    GHC_VERSION: ${{ inputs.version }}
+    INSTALL: sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list &&
+      sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list &&
+      sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install
+      -y
+    STAGE: ${{ inputs.stage }}
+    TOOLS: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev
+      git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc
+      autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5
+      libtinfo5 patchelf
+  image: debian:9
+  using: docker
