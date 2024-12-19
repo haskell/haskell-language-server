@@ -19,7 +19,7 @@ download_cabal_cache "$HOME/.local/bin/cabal-cache"
 
 
 # build
-ghcup install ghc "${GHC_VERSION}"
+ghcup install ghc "${GHC_VERSION}" || cat /github/workspace/.ghcup/logs/*
 ghcup set ghc "${GHC_VERSION}"
 sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
 ecabal update
