@@ -124,6 +124,10 @@ import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
 
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Driver.Make                     (checkHomeUnitsClosed)
+#endif
+
 data Log
   = LogSettingInitialDynFlags
   | LogGetInitialGhcLibDirDefaultCradleFail !CradleError !FilePath !(Maybe FilePath) !(Cradle Void)
@@ -782,6 +786,11 @@ toFlagsMap TargetDetails{..} =
 setNameCache :: NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
+#if MIN_VERSION_ghc(9,13,0)
+-- Moved back to implementation in GHC.
+checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> [DriverMessages]
+checkHomeUnitsClosed' ue _ = checkHomeUnitsClosed ue
+#elif MIN_VERSION_ghc(9,3,0)
 -- This function checks the important property that if both p and q are home units
 -- then any dependency of p, which transitively depends on q is also a home unit.
 -- GHC had an implementation of this function, but it was horribly inefficient
@@ -838,6 +847,7 @@ checkHomeUnitsClosed' ue home_id_set
                     Just depends ->
                       let todo'' = (depends OS.\\ done) `OS.union` todo'
                       in DigraphNode uid uid (OS.toList depends) : go (OS.insert uid done) todo''
+#endif
 
 -- | Create a mapping from FilePaths to HscEnvEqs
 -- This combines all the components we know about into

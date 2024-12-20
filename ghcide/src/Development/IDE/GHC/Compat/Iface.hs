@@ -21,7 +21,11 @@ import           GHC.Iface.Errors.Types                (IfaceMessage)
 #endif
 
 writeIfaceFile :: HscEnv -> FilePath -> ModIface -> IO ()
+#if MIN_VERSION_ghc(9,11,0)
+writeIfaceFile env fp iface = Iface.writeIface (hsc_logger env) (targetProfile $ hsc_dflags env) (Iface.flagsToIfCompression $ hsc_dflags env) fp iface
+#elif MIN_VERSION_ghc(9,3,0)
 writeIfaceFile env fp iface = Iface.writeIface (hsc_logger env) (targetProfile $ hsc_dflags env) fp iface
+#endif
 
 cannotFindModule :: HscEnv -> ModuleName -> FindResult -> SDoc
 cannotFindModule env modname fr =

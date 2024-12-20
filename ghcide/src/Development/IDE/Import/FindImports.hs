@@ -29,6 +29,10 @@ import           GHC.Unit.State
 import           System.FilePath
 
 
+#if MIN_VERSION_ghc(9,11,0)
+import           GHC.Driver.DynFlags
+#endif
+
 data Import
   = FileImport !ArtifactsLocation
   | PackageImport
@@ -96,7 +100,11 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
 -- current module. In particular, it will return Nothing for 'main' components
 -- as they can never be imported into another package.
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, ([FilePath], S.Set ModuleName))
+#if MIN_VERSION_ghc(9,11,0)
+mkImportDirs _env (i, flags) = Just (i, (importPaths flags, S.fromList $ map reexportTo $ reexportedModules flags))
+#else
 mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModules flags))
+#endif
 
 -- | locate a module in either the file system or the package database. Where we go from *daml to
 -- Haskell
@@ -146,7 +154,11 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       -- about which module unit a imports.
       -- Without multi-component support it is hard to recontruct the dependency environment so
       -- unit a will have both unit b and unit c in scope.
+#if MIN_VERSION_ghc(9,11,0)
+      map (\uid -> let this_df = homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue) in (uid, importPaths this_df, S.fromList $ map reexportTo $ reexportedModules this_df)) hpt_deps
+#else
       map (\uid -> let this_df = homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue) in (uid, importPaths this_df, reexportedModules this_df)) hpt_deps
+#endif
     ue = hsc_unit_env env
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
     hpt_deps :: [UnitId]

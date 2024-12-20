@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -60,7 +61,11 @@ hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = do
             in  Just $ Hover (InL (mkPlainText contents')) Nothing
 
         fixityText :: (Name, Fixity) -> T.Text
+#if MIN_VERSION_GLASGOW_HASKELL(9,12,0,0)
+        fixityText (name, Fixity precedence direction) =
+#else
         fixityText (name, Fixity _ precedence direction) =
+#endif
             printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
 
 newtype FixityMap = FixityMap (M.Map Name Fixity)

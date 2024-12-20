@@ -29,6 +29,8 @@ import qualified Progress
 import           System.IO.Extra                   hiding (withTempDir)
 import           System.Mem                        (performGC)
 import           Test.Hls                          (IdeState, def,
+                                                    ignoreForGhcVersions,
+                                                    GhcVersion(..),
                                                     runSessionWithServerInTmpDir,
                                                     waitForProgressDone)
 import           Test.Tasty
@@ -97,7 +99,7 @@ tests = do
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
-     , FuzzySearch.tests
+     , ignoreForGhcVersions [GHC912] "Fuzzy search: ignore since referenceImplementation get stuck for ghc912" $ FuzzySearch.tests
      ]
 
 findResolution_us :: Int -> IO Int

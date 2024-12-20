@@ -86,7 +86,7 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder =
     -- (almost) no one wants to see an explicit import list for Prelude
-    descriptorForModules recorder (/= moduleName pRELUDE)
+    descriptorForModules recorder (/= pRELUDE_NAME)
 
 descriptorForModules
     :: Recorder (WithPriority Log)
@@ -403,7 +403,7 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
         -- for every minimal imports
         | (location, origImport, minImport@(ImportDecl{ideclName = L _ mn})) <- locationImportWithMinimal
         -- (almost) no one wants to see an refine import list for Prelude
-        , mn /= moduleName pRELUDE
+        , mn /= pRELUDE_NAME
         -- we check for the inner imports
         , Just innerImports <- [Map.lookup mn import2Map]
         -- and only get those symbols used

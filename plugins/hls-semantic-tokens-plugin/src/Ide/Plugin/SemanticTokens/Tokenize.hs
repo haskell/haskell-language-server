@@ -20,7 +20,7 @@ import qualified Data.Text.Rope                   as Char
 import qualified Data.Text.Utf16.Rope             as Utf16
 import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat       hiding (foldMapM)
 import           Development.IDE.GHC.Error        (realSrcSpanToCodePointRange)
 import           Ide.Plugin.SemanticTokens.Types  (HsSemanticTokenType (TModule),
                                                    RangeHsSemanticTokenTypes (..))

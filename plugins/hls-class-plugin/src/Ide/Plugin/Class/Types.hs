@@ -176,7 +176,11 @@ getInstanceBindLensRule recorder = do
 
         getBindSpanWithoutSig :: ClsInstDecl GhcRn -> [BindInfo]
         getBindSpanWithoutSig ClsInstDecl{..} =
-            let bindNames = mapMaybe go (bagToList cid_binds)
+            let bindNames = mapMaybe go $
+#if !MIN_VERSION_ghc(9,11,0)
+                              bagToList
+#endif
+                                cid_binds
                 go (L l bind) = case bind of
                     FunBind{..}
                         -- `Generated` tagged for Template Haskell,
@@ -221,5 +225,10 @@ getInstanceBindTypeSigsRule recorder = do
             let name = idName id
             whenMaybe (isBindingName name) $ do
                 env <- tcInitTidyEnv
-                let (_, ty) = tidyOpenType env (idType id)
+#if MIN_VERSION_ghc(9,11,0)
+                let ty =
+#else
+                let (_, ty) =
+#endif
+                              tidyOpenType env (idType id)
                 pure $ InstanceBindTypeSig name ty

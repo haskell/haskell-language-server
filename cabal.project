@@ -8,7 +8,7 @@ packages:
          ./hls-test-utils
 
 
-index-state:  2024-12-02T00:00:00Z
+index-state:  2025-03-20T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -59,3 +59,14 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
     ghc-lib-parser:filepath
   constraints:
     ghc-lib-parser==9.8.4.20241130
+
+if impl(ghc >= 9.11)
+  benchmarks: False
+  allow-newer:
+    hiedb:base,
+    hiedb:ghc,
+    hie-bios:ghc,
+    ghc-trace-events:base,
+    tasty-hspec:base,
+    cabal-install-parsers:base,
+    cabal-install-parsers:time,

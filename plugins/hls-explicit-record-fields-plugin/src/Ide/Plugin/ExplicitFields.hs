@@ -506,7 +506,11 @@ showRecordPatFlds (ConPat _ _ args) = do
   where
     processRecCon (RecCon flds) = Just $ processRecordFlds flds
     processRecCon _             = Nothing
+#if __GLASGOW_HASKELL__ < 911
     getOccName (FieldOcc x _) = Just $ getName x
+#else
+    getOccName (FieldOcc _ x) = Just $ getName (unLoc x)
+#endif
     getOccName _              = Nothing
     getFieldName = getOccName . unLoc . hfbLHS . unLoc
 showRecordPatFlds _ = Nothing
@@ -589,7 +593,11 @@ getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
 
     getExprFields :: HsExpr GhcTc -> [FieldLabel]
     getExprFields (XExpr (ConLikeTc (conLikeFieldLabels -> fls) _ _)) = fls
+#if __GLASGOW_HASKELL__ >= 911
+    getExprFields (XExpr (WrapExpr _ expr)) = getExprFields expr
+#else
     getExprFields (XExpr (WrapExpr (HsWrap _ expr))) = getExprFields expr
+#endif
     getExprFields _ = []
 getRecCons _ = ([], False)
 
