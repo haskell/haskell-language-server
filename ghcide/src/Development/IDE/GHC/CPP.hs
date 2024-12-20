@@ -34,6 +34,10 @@ import qualified GHC.SysTools.Cpp                as Pipeline
 import qualified GHC.SysTools.Tasks              as Pipeline
 #endif
 
+#if MIN_VERSION_ghc(9,11,0)
+import qualified GHC.SysTools.Tasks              as Pipeline
+#endif
+
 addOptP :: String -> DynFlags -> DynFlags
 addOptP f = alterToolSettings $ \s -> s
           { toolSettings_opt_P             = f : toolSettings_opt_P s
