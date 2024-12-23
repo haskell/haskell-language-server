@@ -5,7 +5,8 @@
 module Development.IDE.GHC.Error
   (
     -- * Producing Diagnostic values
-    diagFromErrMsgs
+    diagFromGhcErrorMessages
+  , diagFromErrMsgs
   , diagFromErrMsg
   , diagFromSDocErrMsgs
   , diagFromSDocErrMsg
@@ -71,6 +72,21 @@ diagFromErrMsg diagSource dflags origErr =
     let err = fmap (\e -> (Compat.renderDiagnosticMessageWithHints e, Just origErr)) origErr
     in
     diagFromSDocWithOptionalOrigMsg diagSource dflags err
+
+-- | Compatibility function for creating '[FileDiagnostic]' from
+-- a 'Compat.Bag' of GHC error messages.
+-- The function signature changes based on the GHC version.
+-- While this is not desirable, it avoids more CPP statements in code
+-- that implements actual logic.
+#if MIN_VERSION_ghc(9,5,0)
+diagFromGhcErrorMessages :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope GhcMessage) -> [FileDiagnostic]
+diagFromGhcErrorMessages sourceParser dflags errs =
+    diagFromErrMsgs sourceParser dflags errs
+#else
+diagFromGhcErrorMessages :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope Compat.DecoratedSDoc) -> [FileDiagnostic]
+diagFromGhcErrorMessages sourceParser dflags errs =
+    diagFromSDocErrMsgs sourceParser dflags errs
+#endif
 
 diagFromErrMsgs :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope GhcMessage) -> [FileDiagnostic]
 diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . Compat.bagToList
