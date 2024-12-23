@@ -159,6 +159,7 @@ data TcModuleResult = TcModuleResult
         -- Used for recompilation checking in the presence of TH
         -- Stores the hash of their core file
     , tmrWarnings        :: WarningMessages
+        -- ^ Structured warnings for this module.
     }
 instance Show TcModuleResult where
     show = show . pm_mod_summary . tmrParsed
