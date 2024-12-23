@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE CPP #-}
 module Development.IDE.GHC.Compat.Error (
   -- * Top-level error types and lens for easy access
   MsgEnvelope(..),
