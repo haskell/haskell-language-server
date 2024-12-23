@@ -14,8 +14,8 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 
 {-
- NOTE on withWarnings and its dangers
-
+ Note [withWarnings and its dangers]
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     withWarnings collects warnings by registering a custom logger which extracts
     the SDocs of those warnings. If you receive warnings this way, you will not
     get them in a structured form. In the medium term we'd like to remove all
@@ -46,6 +46,8 @@ import           Development.IDE.Types.Diagnostics
 --   https://github.com/ghc/ghc/blob/5f1d949ab9e09b8d95319633854b7959df06eb58/compiler/main/GHC.hs#L623-L640
 --   which basically says that log_action is taken from the ModSummary when GHC feels like it.
 --   The given argument lets you refresh a ModSummary log_action
+--
+-- Also, See Note [withWarnings and its dangers] for some commentary on this function.
 withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(Maybe DiagnosticReason, FileDiagnostic)], a)
 withWarnings diagSource action = do
   warnings <- newVar []
