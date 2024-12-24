@@ -8,7 +8,7 @@ packages:
          ./hls-test-utils
 
 
-index-state:  2024-11-02T00:00:00Z
+index-state:  2024-12-02T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -46,3 +46,13 @@ constraints:
 if impl(ghc >= 9.9)
   -- https://github.com/haskell/haskell-language-server/issues/4324
   benchmarks: False
+
+if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
+  -- By depending on ghc-lib-parser and ghc, we are encountering
+  -- a constraint conflict, ghc-9.8.4 comes with `filepath-1.4.301.0`,
+  -- and `ghc-lib-parser-9.8.4.20241130` specifies `filepath >=1.5 && < 1.6.
+  -- See https://github.com/digital-asset/ghc-lib/issues/572 for details.
+  allow-older:
+    ghc-lib-parser:filepath
+  constraints:
+    ghc-lib-parser==9.8.4.20241130
