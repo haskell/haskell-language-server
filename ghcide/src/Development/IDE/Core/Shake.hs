@@ -83,7 +83,7 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
-import           Control.Lens                           ((&), (?~))
+import           Control.Lens                           ((%~), (&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -163,7 +163,6 @@ import qualified Ide.Logger                             as Logger
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types
-import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -281,7 +280,7 @@ data ShakeExtras = ShakeExtras
     ,state :: Values
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
-    ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
+    ,publishedDiagnostics :: STM.Map NormalizedUri [FileDiagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
 
@@ -1173,7 +1172,7 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe 
     extras <- getShakeExtras
     let diagnostics ver diags = do
             traceDiagnostics diags
-            updateFileDiagnostics recorder file ver (newKey key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file ver (newKey key) extras diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ const $ op key file
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics _ver diags = do
@@ -1192,7 +1191,7 @@ defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (o
     extras <- getShakeExtras
     let diagnostics ver diags = do
             traceDiagnostics diags
-            updateFileDiagnostics recorder file ver (newKey key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file ver (newKey key) extras diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
 
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
@@ -1247,7 +1246,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText file (T.pack $ show e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1329,26 +1328,26 @@ updateFileDiagnostics :: MonadIO m
   -> Maybe Int32
   -> Key
   -> ShakeExtras
-  -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
+  -> [FileDiagnostic] -- ^ current results
   -> m ()
-updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 =
+updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 = do
   liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
     addTag "key" (show k)
-    let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
+    let (currentShown, currentHidden) = partition ((== ShowDiag) . fdShouldShowDiagnostic) current
         uri = filePathToUri' fp
         addTagUnsafe :: String -> String -> String -> a -> a
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
-        update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
+        update :: (forall a. String -> String -> a -> a) -> [FileDiagnostic] -> STMDiagnosticStore -> STM [FileDiagnostic]
         update addTagUnsafeMethod new store = addTagUnsafeMethod "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafeMethod uri ver (renderKey k) new store
-        current = second diagsFromRule <$> current0
+        current = map (fdLspDiagnosticL %~ diagsFromRule) current0
     addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (addTagUnsafe "shown ") (map snd currentShown) diagnostics
-        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (addTagUnsafe "hidden ") (map snd currentHidden) hiddenDiagnostics
+        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (addTagUnsafe "shown ") currentShown diagnostics
+        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (addTagUnsafe "hidden ") currentHidden hiddenDiagnostics
         let uri' = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri' $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
@@ -1356,12 +1355,12 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
                 let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
-                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
+                            logWith recorder Info $ LogDiagsDiffButNoLspEnv newDiags
                         Just env -> LSP.runLspT env $ do
                             liftIO $ tag "count" (show $ Prelude.length newDiags)
                             liftIO $ tag "key" (show k)
                             LSP.sendNotification SMethod_TextDocumentPublishDiagnostics $
-                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) newDiags
+                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) (map fdLspDiagnostic newDiags)
                 return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic
@@ -1384,26 +1383,28 @@ actionLogger :: Action (Recorder (WithPriority Log))
 actionLogger = shakeRecorder <$> getShakeExtras
 
 --------------------------------------------------------------------------------
-type STMDiagnosticStore = STM.Map NormalizedUri StoreItem
+type STMDiagnosticStore = STM.Map NormalizedUri StoreItem'
+data StoreItem' = StoreItem' (Maybe Int32) FileDiagnosticsBySource
+type FileDiagnosticsBySource = Map.Map (Maybe T.Text) (SL.SortedList FileDiagnostic)
 
-getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
-getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
+getDiagnosticsFromStore :: StoreItem' -> [FileDiagnostic]
+getDiagnosticsFromStore (StoreItem' _ diags) = concatMap SL.fromSortedList $ Map.elems diags
 
 updateSTMDiagnostics ::
   (forall a. String -> String -> a -> a) ->
   STMDiagnosticStore ->
   NormalizedUri ->
   Maybe Int32 ->
-  DiagnosticsBySource ->
-  STM [LSP.Diagnostic]
+  FileDiagnosticsBySource ->
+  STM [FileDiagnostic]
 updateSTMDiagnostics addTag store uri mv newDiagsBySource =
     getDiagnosticsFromStore . fromJust <$> STM.focus (Focus.alter update *> Focus.lookup) uri store
   where
-    update (Just(StoreItem mvs dbs))
+    update (Just(StoreItem' mvs dbs))
       | addTag "previous version" (show mvs) $
         addTag "previous count" (show $ Prelude.length $ filter (not.null) $ Map.elems dbs) False = undefined
-      | mvs == mv = Just (StoreItem mv (newDiagsBySource <> dbs))
-    update _ = Just (StoreItem mv newDiagsBySource)
+      | mvs == mv = Just (StoreItem' mv (newDiagsBySource <> dbs))
+    update _ = Just (StoreItem' mv newDiagsBySource)
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
@@ -1412,9 +1413,9 @@ setStageDiagnostics
     -> NormalizedUri
     -> Maybe Int32 -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
-    -> [LSP.Diagnostic]
+    -> [FileDiagnostic]
     -> STMDiagnosticStore
-    -> STM [LSP.Diagnostic]
+    -> STM [FileDiagnostic]
 setStageDiagnostics addTag uri ver stage diags ds = updateSTMDiagnostics addTag ds uri ver updatedDiags
   where
     !updatedDiags = Map.singleton (Just stage) $! SL.toSortedList diags
@@ -1423,7 +1424,7 @@ getAllDiagnostics ::
     STMDiagnosticStore ->
     STM [FileDiagnostic]
 getAllDiagnostics =
-    fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
+    fmap (concatMap (\(_,v) -> getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =
