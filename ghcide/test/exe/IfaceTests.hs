@@ -50,8 +50,8 @@ ifaceTHTest = testWithExtraFiles "iface-th-test" "TH" $ \dir -> do
     -- Check that the change propagates to C
     changeDoc cdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument cSource]
     expectDiagnostics
-      [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
-      ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
+      [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'", Just "GHC-83865")])
+      ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")])]
     closeDoc cdoc
 
 ifaceErrorTest :: TestTree
@@ -65,7 +65,7 @@ ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
 
     bdoc <- createDoc bPath "haskell" bSource
     expectDiagnostics
-      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding", Just "GHC-38417")])] -- So what we know P has been loaded
 
     -- Change y from Int to B
     changeDoc bdoc [ TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
@@ -77,7 +77,7 @@ ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
 
     -- Check that the error propagates to A
     expectDiagnostics
-      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])]
 
     -- Check that we wrote the interfaces for B when we saved
     hidir <- getInterfaceFilesDir bdoc
@@ -86,7 +86,7 @@ ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
 
     pdoc <- openDoc pPath "haskell"
     expectDiagnostics
-      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding", Just "GHC-38417")])
       ]
     changeDoc pdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
@@ -98,8 +98,8 @@ ifaceErrorTest = testWithExtraFiles "iface-error-test-1" "recomp" $ \dir -> do
     --   - The diagnostic for A has already been received. Ghcide does not repeat diagnostics
     --   - P is being typechecked with the last successful artifacts for A.
     expectDiagnostics
-      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])
-      ,("P.hs", [(DiagnosticSeverity_Warning,(6,0), "Top-level binding")])
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding", Just "GHC-38417")])
+      ,("P.hs", [(DiagnosticSeverity_Warning,(6,0), "Top-level binding", Just "GHC-38417")])
       ]
     expectNoMoreDiagnostics 2
 
@@ -114,7 +114,7 @@ ifaceErrorTest2 = testWithExtraFiles "iface-error-test-2" "recomp" $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     pdoc <- createDoc pPath "haskell" pSource
     expectDiagnostics
-      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding", Just "GHC-38417")])] -- So that we know P has been loaded
 
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
@@ -130,9 +130,9 @@ ifaceErrorTest2 = testWithExtraFiles "iface-error-test-2" "recomp" $ \dir -> do
     expectDiagnostics
     -- As in the other test, P is being typechecked with the last successful artifacts for A
     -- (ot thanks to -fdeferred-type-errors)
-      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
-      ,("P.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding")])
-      ,("P.hs", [(DiagnosticSeverity_Warning, (6, 0), "Top-level binding")])
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])
+      ,("P.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding", Just "GHC-38417")])
+      ,("P.hs", [(DiagnosticSeverity_Warning, (6, 0), "Top-level binding", Just "GHC-38417")])
       ]
 
     expectNoMoreDiagnostics 2
@@ -156,7 +156,7 @@ ifaceErrorTest3 = testWithExtraFiles "iface-error-test-3" "recomp" $ \dir -> do
     -- In this example the interface file for A should not exist (modulo the cache folder)
     -- Despite that P still type checks, as we can generate an interface file for A thanks to -fdeferred-type-errors
     expectDiagnostics
-      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
-      ,("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])
+      ,("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding", Just "GHC-38417")])
       ]
     expectNoMoreDiagnostics 2

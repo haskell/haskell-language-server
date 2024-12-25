@@ -65,6 +65,7 @@ replaceAt t i c =
 dictionaryPath :: FilePath
 dictionaryPath = "/usr/share/dict/words"
 
+{-# ANN dictionary ("HLint: ignore Avoid restricted function" :: String) #-}
 {-# NOINLINE dictionary #-}
 dictionary :: [Text]
 dictionary = unsafePerformIO $ do
@@ -73,7 +74,7 @@ dictionary = unsafePerformIO $ do
     then map pack . words <$> readFile dictionaryPath
     else pure []
 
-referenceImplementation ::
+referenceImplementation :: forall s t.
   (T.TextualMonoid s) =>
   -- | Pattern in lowercase except for first character
   s ->
@@ -87,7 +88,7 @@ referenceImplementation ::
   (t -> s) ->
   -- | The original value, rendered string and score.
   Maybe (Fuzzy t s)
-referenceImplementation pattern t pre post extract =
+referenceImplementation pat t pre post extract =
   if null pat then Just (Fuzzy t result totalScore) else Nothing
   where
     null :: (T.TextualMonoid s) => s -> Bool
@@ -118,7 +119,7 @@ referenceImplementation pattern t pre post extract =
         ( 0,
           1, -- matching at the start gives a bonus (cur = 1)
           mempty,
-          pattern,
+          pat,
           True
         )
         s
