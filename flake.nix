@@ -93,7 +93,9 @@
       in rec {
         # Developement shell with only dev tools
         devShells = {
-          default = mkDevShell pkgs.haskellPackages;
+          default = mkShell {
+            buildInputs = with pkgs; [zlib haskell.compiler.ghc910 cabal-install];
+          };
           shell-ghc94 = mkDevShell pkgs.haskell.packages.ghc94;
           shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;

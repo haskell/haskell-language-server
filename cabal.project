@@ -6,6 +6,7 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+         ./test_invalidation
 
 
 index-state: 2025-05-06T13:26:29Z
