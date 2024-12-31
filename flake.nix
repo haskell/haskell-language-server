@@ -60,7 +60,7 @@
             chmod +x $dest
           '';
 
-        mkDevShell = hpkgs: with pkgs; mkShell {
+        mkDevShell = hpkgs: with pkgs; pkgs.mkShell {
           name = "haskell-language-server-dev-ghc${hpkgs.ghc.version}";
           # For binary Haskell tools, we use the default Nixpkgs GHC version.
           # This removes a rebuild with a different GHC version. The drawback of
@@ -106,7 +106,9 @@
       in {
         # Developement shell with only dev tools
         devShells = {
-          default = mkDevShell pkgs.haskellPackages;
+          default = pkgs.mkShell {
+            buildInputs = with pkgs; [zlib haskell.compiler.ghc910 cabal-install];
+          };
           shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
           shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
