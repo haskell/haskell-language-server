@@ -261,10 +261,20 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         info :: NodeInfo hietype
         info = nodeInfoH kind ast
 
-        -- We want evidence variables to be displayed last.
-        -- Evidence trees contain information of secondary relevance.
+        -- We consider identifiers to be internal, if they are evidence bindings.
+        isInternal :: (Identifier, IdentifierDetails a) -> Bool
+        isInternal (Right _, dets) =
+          any isEvidenceBind $ identInfo dets
+        isInternal (Left _, _) = False
+
+        -- Don't display names we consider internal. They don't render correctly.
         names :: [(Identifier, IdentifierDetails hietype)]
-        names = sortOn (any isEvidenceUse . identInfo . snd) $ M.assocs $ nodeIdentifiers info
+        names = filter (not . isInternal) unfilteredNames
+
+        -- We want evidence use variables to be displayed last.
+        -- Evidence trees contain information of secondary relevance.
+        unfilteredNames :: [(Identifier, IdentifierDetails hietype)]
+        unfilteredNames = sortOn (any isEvidenceUse . identInfo . snd) $ M.assocs $ nodeIdentifiers info
 
         prettyName :: (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
         prettyName (Right n, dets)
