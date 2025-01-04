@@ -111,6 +111,7 @@ import qualified Data.Set                               as Set
 import qualified GHC                                    as G
 import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Tc.Gen.Splice
+import           GHC.Types.Error
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
@@ -129,6 +130,8 @@ import           GHC.Unit.Module.Warnings
 #else
 import           Development.IDE.Core.FileStore         (shareFilePath)
 #endif
+
+import           Development.IDE.GHC.Compat.Driver (hscTypecheckRenameWithDiagnostics)
 
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
@@ -157,8 +160,12 @@ computePackageDeps
     -> IO (Either [FileDiagnostic] [UnitId])
 computePackageDeps env pkg = do
     case lookupUnit env pkg of
-        Nothing -> return $ Left [ideErrorText (toNormalizedFilePath' noFilePath) $
-            T.pack $ "unknown package: " ++ show pkg]
+        Nothing ->
+          return $ Left
+            [ ideErrorText
+                (toNormalizedFilePath' noFilePath)
+                (T.pack $ "unknown package: " ++ show pkg)
+            ]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
 newtype TypecheckHelpers
@@ -179,20 +186,24 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         case initialized of
           Left errs -> return (errs, Nothing)
           Right hscEnv -> do
-            (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
+            etcm <-
                 let
-                  session = tweak (hscSetFlags dflags hscEnv)
-                   -- TODO: maybe settings ms_hspp_opts is unnecessary?
-                  mod_summary'' = modSummary { ms_hspp_opts = hsc_dflags session}
+                   -- TODO: maybe setting ms_hspp_opts is unnecessary?
+                  mod_summary' = modSummary { ms_hspp_opts = hsc_dflags hscEnv}
                 in
                   catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
-                    tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
-            let errorPipeline = unDefer . hideDiag dflags . tagDiag
-                diags = map errorPipeline warnings
-                deferredError = any fst diags
+                    tcRnModule hscEnv tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary'}
             case etcm of
-              Left errs -> return (map snd diags ++ errs, Nothing)
-              Right tcm -> return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
+              Left errs -> return (errs, Nothing)
+              Right tcm ->
+                let addReason diag =
+                      map (Just (diagnosticReason (errMsgDiagnostic diag)),) $
+                        diagFromErrMsg sourceTypecheck (hsc_dflags hscEnv) diag
+                    errorPipeline = map (unDefer . hideDiag dflags . tagDiag) . addReason
+                    diags = concatMap errorPipeline $ Compat.getMessages $ tmrWarnings tcm
+                    deferredError = any fst diags
+                in
+                return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
@@ -358,9 +369,9 @@ tcRnModule hsc_env tc_helpers pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
 
-  ((tc_gbl_env', mrn_info), splices, mod_env)
+  (((tc_gbl_env', mrn_info), warning_messages), splices, mod_env)
       <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hscEnvTmp ->
-             do  hscTypecheckRename hscEnvTmp ms $
+             do  hscTypecheckRenameWithDiagnostics hscEnvTmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod
                                          , hpm_src_files = pm_extra_src_files pmod
                                          }
@@ -372,7 +383,7 @@ tcRnModule hsc_env tc_helpers pmod = do
       mod_env_anns = map (\(mod, hash) -> Annotation (ModuleTarget mod) $ toSerialized BS.unpack hash)
                          (moduleEnvToList mod_env)
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
-  pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
+  pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env warning_messages)
 
 
 -- Note [Clearing mi_globals after generating an iface]
@@ -535,8 +546,14 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
     source = "compile"
     catchErrs x = x `catches`
       [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
-      , Handler $ return . (,Nothing) . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
-      . (("Error during " ++ T.unpack source) ++) . show @SomeException
+      , Handler $ \diag ->
+          return
+            ( diagFromString
+                source DiagnosticSeverity_Error (noSpan "<internal>")
+                ("Error during " ++ T.unpack source ++ show @SomeException diag)
+                Nothing
+            , Nothing
+            )
       ]
 
 -- | Whether we should run the -O0 simplifier when generating core.
@@ -660,15 +677,16 @@ unDefer (Just (WarningWithFlag Opt_WarnDeferredOutOfScopeVariables), fd) = (True
 unDefer ( _                                        , fd) = (False, fd)
 
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
-upgradeWarningToError (nfp, sh, fd) =
-  (nfp, sh, fd{_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message fd}) where
+upgradeWarningToError =
+  fdLspDiagnosticL %~ \diag -> diag {_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message diag}
+  where
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
 hideDiag :: DynFlags -> (Maybe DiagnosticReason, FileDiagnostic) -> (Maybe DiagnosticReason, FileDiagnostic)
-hideDiag originalFlags (w@(Just (WarningWithFlag warning)), (nfp, _sh, fd))
+hideDiag originalFlags (w@(Just (WarningWithFlag warning)), fd)
   | not (wopt warning originalFlags)
-  = (w, (nfp, HideDiag, fd))
+  = (w, fd { fdShouldShowDiagnostic = HideDiag })
 hideDiag _originalFlags t = t
 
 -- | Warnings which lead to a diagnostic tag
@@ -692,18 +710,18 @@ unnecessaryDeprecationWarningFlags
 tagDiag :: (Maybe DiagnosticReason, FileDiagnostic) -> (Maybe DiagnosticReason, FileDiagnostic)
 
 #if MIN_VERSION_ghc(9,7,0)
-tagDiag (w@(Just (WarningWithCategory cat)), (nfp, sh, fd))
+tagDiag (w@(Just (WarningWithCategory cat)), fd)
   | cat == defaultWarningCategory -- default warning category is for deprecations
-  = (w, (nfp, sh, fd { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags fd) }))
-tagDiag (w@(Just (WarningWithFlags warnings)), (nfp, sh, fd))
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags diag) })
+tagDiag (w@(Just (WarningWithFlags warnings)), fd)
   | tags <- mapMaybe requiresTag (toList warnings)
-  = (w, (nfp, sh, fd { _tags = Just $ tags ++ concat (_tags fd) }))
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tags ++ concat (_tags diag) })
 #else
-tagDiag (w@(Just (WarningWithFlag warning)), (nfp, sh, fd))
+tagDiag (w@(Just (WarningWithFlag warning)), fd)
   | Just tag <- requiresTag warning
-  = (w, (nfp, sh, fd { _tags = Just $ tag : concat (_tags fd) }))
+  = (w, fd & fdLspDiagnosticL %~ \diag -> diag { _tags = Just $ tag : concat (_tags diag) })
 #endif
-  where
+    where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
 #if !MIN_VERSION_ghc(9,7,0)
     -- doesn't exist on 9.8, we use WarningWithCategory instead
@@ -859,16 +877,25 @@ handleGenerationErrors :: DynFlags -> T.Text -> IO () -> IO [FileDiagnostic]
 handleGenerationErrors dflags source action =
   action >> return [] `catches`
     [ Handler $ return . diagFromGhcException source dflags
-    , Handler $ return . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
-    . (("Error during " ++ T.unpack source) ++) . show @SomeException
+    , Handler $ \(exception :: SomeException) -> return $
+        diagFromString
+          source DiagnosticSeverity_Error (noSpan "<internal>")
+          ("Error during " ++ T.unpack source ++ show exception)
+          Nothing
     ]
 
 handleGenerationErrors' :: DynFlags -> T.Text -> IO (Maybe a) -> IO ([FileDiagnostic], Maybe a)
 handleGenerationErrors' dflags source action =
   fmap ([],) action `catches`
     [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
-    , Handler $ return . (,Nothing) . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
-    . (("Error during " ++ T.unpack source) ++) . show @SomeException
+    , Handler $ \(exception :: SomeException) ->
+        return
+          ( diagFromString
+              source DiagnosticSeverity_Error (noSpan "<internal>")
+              ("Error during " ++ T.unpack source ++ show exception)
+              Nothing
+          , Nothing
+          )
     ]
 
 
@@ -1048,7 +1075,7 @@ parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
      PFailedWithErrorMessages msgs ->
-        throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
+        throwE $ diagFromGhcErrorMessages sourceParser dflags $ msgs dflags
      POk pst rdr_module -> do
         let (warns, errs) = renderMessages $ getPsMessages pst
 
@@ -1062,9 +1089,9 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
-            throwE $ diagFromErrMsgs sourceParser dflags errs
+            throwE $ diagFromGhcErrorMessages sourceParser dflags errs
 
-        let warnings = diagFromErrMsgs sourceParser dflags warns
+        let warnings = diagFromGhcErrorMessages sourceParser dflags warns
         return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
@@ -1081,18 +1108,28 @@ parseFileContents env customPreprocessor filename ms = do
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
-     PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
+     PFailedWithErrorMessages msgs ->
+       throwE $ diagFromGhcErrorMessages sourceParser dflags $ msgs dflags
      POk pst rdr_module ->
          let
              psMessages = getPsMessages pst
          in
            do
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+               let IdePreprocessedSource preproc_warns preproc_errs parsed = customPreprocessor rdr_module
+               let attachNoStructuredError (span, msg) = (span, msg, Nothing)
 
-               unless (null errs) $
-                  throwE $ diagFromStrings sourceParser DiagnosticSeverity_Error errs
+               unless (null preproc_errs) $
+                  throwE $
+                    diagFromStrings
+                      sourceParser
+                      DiagnosticSeverity_Error
+                      (fmap attachNoStructuredError preproc_errs)
 
-               let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
+               let preproc_warning_file_diagnostics =
+                     diagFromStrings
+                      sourceParser
+                      DiagnosticSeverity_Warning
+                      (fmap attachNoStructuredError preproc_warns)
                (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env ms parsed psMessages
                let (warns, errors) = renderMessages msgs
 
@@ -1106,8 +1143,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errors) $
-                 throwE $ diagFromErrMsgs sourceParser dflags errors
-
+                 throwE $ diagFromGhcErrorMessages sourceParser dflags errors
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,
@@ -1137,8 +1173,8 @@ parseFileContents env customPreprocessor filename ms = do
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
                let pm = ParsedModule ms parsed' srcs2
-                   warnings = diagFromErrMsgs sourceParser dflags warns
-               pure (warnings ++ preproc_warnings, pm)
+                   warnings = diagFromGhcErrorMessages sourceParser dflags warns
+               pure (warnings ++ preproc_warning_file_diagnostics, pm)
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do

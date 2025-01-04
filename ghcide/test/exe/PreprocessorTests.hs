@@ -22,6 +22,6 @@ tests = testWithDummyPluginEmpty "preprocessor" $ do
   _ <- createDoc "Testing.hs" "haskell" content
   expectDiagnostics
     [ ( "Testing.hs",
-        [(DiagnosticSeverity_Error, (2, 8), "Variable not in scope: z")]
+        [(DiagnosticSeverity_Error, (2, 8), "Variable not in scope: z", Nothing)] -- TODO: Why doesn't this work with expected code "GHC-88464"?
       )
     ]

@@ -1,32 +1,69 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
-  FileDiagnostic,
+  FileDiagnostic(..),
+  fdFilePathL,
+  fdLspDiagnosticL,
+  fdShouldShowDiagnosticL,
+  fdStructuredMessageL,
+  StructuredMessage(..),
+  _NoStructuredMessage,
+  _SomeStructuredMessage,
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
   ideErrorText,
   ideErrorWithSource,
+  ideErrorFromLspDiag,
   showDiagnostics,
   showDiagnosticsColored,
-  IdeResultNoDiagnosticsEarlyCutoff) where
+#if MIN_VERSION_ghc(9,5,0)
+  showGhcCode,
+#endif
+  IdeResultNoDiagnosticsEarlyCutoff,
+  attachReason,
+  attachedReason) where
 
+import           Control.Applicative            ((<|>))
 import           Control.DeepSeq
+import           Control.Lens
+import qualified Data.Aeson                     as JSON
+import qualified Data.Aeson.Lens                as JSON
 import           Data.ByteString                (ByteString)
+import           Data.List
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
+import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope,
+                                                 WarningFlag, flagSpecFlag,
+                                                 flagSpecName, wWarningFlags)
 import           Development.IDE.Types.Location
+import           GHC.Generics
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Types.Error                (DiagnosticCode (..),
+                                                 DiagnosticReason (..),
+                                                 diagnosticCode,
+                                                 diagnosticReason,
+                                                 errMsgDiagnostic)
+#else
+import           GHC.Types.Error                (DiagnosticReason (..),
+                                                 diagnosticReason,
+                                                 errMsgDiagnostic)
+#endif
 import           Language.LSP.Diagnostics
-import           Language.LSP.Protocol.Types    as LSP (Diagnostic (..),
-                                                        DiagnosticSeverity (..))
+import           Language.LSP.Protocol.Lens     (data_)
+import           Language.LSP.Protocol.Types    as LSP
 import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
 import qualified Prettyprinter.Render.Terminal  as Terminal
 import           Prettyprinter.Render.Text
+import           Text.Printf                    (printf)
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -44,26 +81,99 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
+-- | Produce a 'FileDiagnostic' for the given 'NormalizedFilePath'
+-- with an error message.
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText = ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error)
+ideErrorText nfp msg =
+  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nfp msg Nothing
+
+-- | Create a 'FileDiagnostic' from an existing 'LSP.Diagnostic' for a
+-- specific 'NormalizedFilePath'.
+-- The optional 'MsgEnvelope GhcMessage' is the original error message
+-- that was used for creating the 'LSP.Diagnostic'.
+-- It is included here, to allow downstream consumers, such as HLS plugins,
+-- to provide LSP features based on the structured error messages.
+-- Additionally, if available, we insert the ghc error code into the
+-- 'LSP.Diagnostic'. These error codes are used in https://errors.haskell.org/
+-- to provide documentation and explanations for error messages.
+ideErrorFromLspDiag
+  :: LSP.Diagnostic
+  -> NormalizedFilePath
+  -> Maybe (MsgEnvelope GhcMessage)
+  -> FileDiagnostic
+ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
+  let fdShouldShowDiagnostic = ShowDiag
+      fdStructuredMessage =
+        case mbOrigMsg of
+          Nothing  -> NoStructuredMessage
+          Just msg -> SomeStructuredMessage msg
+      fdLspDiagnostic =
+        lspDiag
+          & attachReason (fmap (diagnosticReason . errMsgDiagnostic) mbOrigMsg)
+          & setGhcCode mbOrigMsg
+  in
+  FileDiagnostic {..}
+
+-- | Set the code of the 'LSP.Diagnostic' to the GHC diagnostic code which is linked
+-- to https://errors.haskell.org/.
+setGhcCode :: Maybe (MsgEnvelope GhcMessage) -> LSP.Diagnostic -> LSP.Diagnostic
+#if MIN_VERSION_ghc(9,5,0)
+setGhcCode mbOrigMsg diag =
+  let mbGhcCode = do
+          origMsg <- mbOrigMsg
+          code <- diagnosticCode (errMsgDiagnostic origMsg)
+          pure (InR (showGhcCode code))
+  in
+  diag { _code = mbGhcCode <|> _code diag }
+#else
+setGhcCode _ diag = diag
+#endif
+
+#if MIN_VERSION_ghc(9,9,0)
+-- DiagnosticCode only got a show instance in 9.10.1
+showGhcCode :: DiagnosticCode -> T.Text
+showGhcCode = T.pack . show
+#elif MIN_VERSION_ghc(9,5,0)
+showGhcCode :: DiagnosticCode -> T.Text
+showGhcCode (DiagnosticCode prefix c) = T.pack $ prefix ++ "-" ++ printf "%05d" c
+#endif
+
+attachedReason :: Traversal' Diagnostic (Maybe JSON.Value)
+attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"
+
+attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
+attachReason Nothing = id
+attachReason (Just wr) = attachedReason .~ fmap JSON.toJSON (showReason wr)
+ where
+  showReason = \case
+    WarningWithFlag flag -> showFlag flag
+    _                    -> Nothing
+
+showFlag :: WarningFlag -> Maybe T.Text
+showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags
 
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
-  -> a
+  -> NormalizedFilePath
   -> T.Text
-  -> (a, ShowDiagnostic, Diagnostic)
-ideErrorWithSource source sev fp msg = (fp, ShowDiag, LSP.Diagnostic {
-    _range = noRange,
-    _severity = sev,
-    _code = Nothing,
-    _source = source,
-    _message = msg,
-    _relatedInformation = Nothing,
-    _tags = Nothing,
-    _codeDescription = Nothing,
-    _data_ = Nothing
-    })
+  -> Maybe (MsgEnvelope GhcMessage)
+  -> FileDiagnostic
+ideErrorWithSource source sev fdFilePath msg origMsg =
+  let lspDiagnostic =
+        LSP.Diagnostic {
+          _range = noRange,
+          _severity = sev,
+          _code = Nothing,
+          _source = source,
+          _message = msg,
+          _relatedInformation = Nothing,
+          _tags = Nothing,
+          _codeDescription = Nothing,
+          _data_ = Nothing
+        }
+  in
+  ideErrorFromLspDiag lspDiagnostic fdFilePath origMsg
 
 -- | Defines whether a particular diagnostic should be reported
 --   back to the user.
@@ -80,13 +190,78 @@ data ShowDiagnostic
 instance NFData ShowDiagnostic where
     rnf = rwhnf
 
+-- | A Maybe-like wrapper for a GhcMessage that doesn't try to compare, show, or
+-- force the GhcMessage inside, so that we can derive Show, Eq, Ord, NFData on
+-- FileDiagnostic. FileDiagnostic only uses this as metadata so we can safely
+-- ignore it in fields.
+--
+-- Instead of pattern matching on these constructors directly, consider 'Prism' from
+-- the 'lens' package. This allows to conveniently pattern match deeply into the 'MsgEnvelope GhcMessage'
+-- constructor.
+-- The module 'Development.IDE.GHC.Compat.Error' implements additional 'Lens's and 'Prism's,
+-- allowing you to avoid importing GHC modules directly.
+--
+-- For example, to pattern match on a 'TcRnMessage' you can use the lens:
+--
+-- @
+--   message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+-- @
+--
+-- This produces a value of type `Maybe TcRnMessage`.
+--
+-- Further, consider utility functions such as 'stripTcRnMessageContext', which strip
+-- context from error messages which may be more convenient in certain situations.
+data StructuredMessage
+  = NoStructuredMessage
+  | SomeStructuredMessage (MsgEnvelope GhcMessage)
+  deriving (Generic)
+
+instance Show StructuredMessage where
+  show NoStructuredMessage      = "NoStructuredMessage"
+  show SomeStructuredMessage {} = "SomeStructuredMessage"
+
+instance Eq StructuredMessage where
+  (==) NoStructuredMessage NoStructuredMessage           = True
+  (==) SomeStructuredMessage {} SomeStructuredMessage {} = True
+  (==) _ _                                               = False
+
+instance Ord StructuredMessage where
+  compare NoStructuredMessage NoStructuredMessage           = EQ
+  compare SomeStructuredMessage {} SomeStructuredMessage {} = EQ
+  compare NoStructuredMessage SomeStructuredMessage {}      = GT
+  compare SomeStructuredMessage {} NoStructuredMessage      = LT
+
+instance NFData StructuredMessage where
+  rnf NoStructuredMessage      = ()
+  rnf SomeStructuredMessage {} = ()
+
 -- | Human readable diagnostics for a specific file.
 --
 --   This type packages a pretty printed, human readable error message
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
-type FileDiagnostic = (NormalizedFilePath, ShowDiagnostic, Diagnostic)
+--   It also optionally keeps a structured diagnostic message GhcMessage in
+--   StructuredMessage.
+--
+data FileDiagnostic = FileDiagnostic
+  { fdFilePath             :: NormalizedFilePath
+  , fdShouldShowDiagnostic :: ShowDiagnostic
+  , fdLspDiagnostic        :: Diagnostic
+    -- | The original diagnostic that was used to produce 'fdLspDiagnostic'.
+    -- We keep it here, so downstream consumers, e.g. HLS plugins, can use the
+    -- the structured error messages and don't have to resort to parsing
+    -- error messages via regexes or similar.
+    --
+    -- The optional GhcMessage inside of this StructuredMessage is ignored for
+    -- Eq, Ord, Show, and NFData instances. This is fine because this field
+    -- should only ever be metadata and should never be used to distinguish
+    -- between FileDiagnostics.
+  , fdStructuredMessage    :: StructuredMessage
+  }
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData FileDiagnostic
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
@@ -106,13 +281,17 @@ prettyDiagnostics :: [FileDiagnostic] -> Doc Terminal.AnsiStyle
 prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
-prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
+prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     vcat
-        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fp)
-        , slabel_ "Hidden:  " $ if sh == ShowDiag then "no" else "yes"
+        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fdFilePath)
+        , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
+        , slabel_ "Code:    " $ case _code of
+                                  Just (InR text) -> pretty text
+                                  Just (InL i)    -> pretty i
+                                  Nothing         -> "<none>"
         , slabel_ "Message: "
             $ case sev of
               LSP.DiagnosticSeverity_Error       -> annotate $ color Red
@@ -150,3 +329,9 @@ srenderColored =
 
 defaultTermWidth :: Int
 defaultTermWidth = 80
+
+makePrisms ''StructuredMessage
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''FileDiagnostic
