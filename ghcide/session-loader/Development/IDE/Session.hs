@@ -125,6 +125,7 @@ import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
+import Development.IDE.Core.InputPath (generalizeProjectInput, classifyProjectHaskellInputs)
 
 data Log
   = LogSettingInitialDynFlags
@@ -592,8 +593,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           unless (null new_deps || not checkProject) $ do
                 cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                    mmt <- uses GetModificationTime cfps'
-                    let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+                    let cfps'' = classifyProjectHaskellInputs cfps'
+                    mmt <- uses GetModificationTime $ generalizeProjectInput <$> cfps''
+                    let cs_exist = catMaybes (zipWith (<$) cfps'' mmt)
                     modIfaces <- uses GetModIface cs_exist
                     -- update exports map
                     shakeExtras <- getShakeExtras

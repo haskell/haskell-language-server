@@ -24,7 +24,7 @@ import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, maybeToList)
+import           Data.Maybe                           (catMaybes, maybeToList, listToMaybe)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
@@ -81,6 +81,9 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        WorkspaceEdit (WorkspaceEdit),
                                                        type (|?) (..))
 import           Text.Regex.TDFA                      ((=~))
+import Development.IDE.Graph (RuleInput)
+import Development.IDE.Graph.Internal.Rules (InputClass(ProjectHaskellFiles))
+import Development.IDE.Core.InputPath (classifyProjectHaskellInputs)
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -167,18 +170,24 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
 codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
   nfp <- getNormalizedFilePathE uri
-  (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
-    runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-    $ useWithStaleE GetGlobalBindingTypeSigs nfp
+  let mInput = listToMaybe $ classifyProjectHaskellInputs [nfp]
+  (mGblSigs, mPm) <-
+    case mInput of
+      Nothing -> pure (Nothing, Nothing)
+      Just input -> do
+        (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
+          runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
+          $ useWithStaleE GetGlobalBindingTypeSigs input
+        pure (Just gblSigs, Just pm)
   -- regardless of how the original lens was generated, we want to get the range
   -- that the global bindings rule would expect here, hence the need to reverse
   -- position map the range, regardless of whether it was position mapped in the
   -- beginning or freshly taken from diagnostics.
-  newRange <- handleMaybe PluginStaleResolve (fromCurrentRange pm _range)
+  newRange <- handleMaybe PluginStaleResolve (mPm >>= flip fromCurrentRange _range)
   -- We also pass on the PositionMapping so that the generated text edit can
   -- have the range adjusted.
   (title, edit) <-
-        handleMaybe PluginStaleResolve $ suggestGlobalSignature' False (Just gblSigs) (Just pm) newRange
+        handleMaybe PluginStaleResolve $ suggestGlobalSignature' False mGblSigs mPm newRange
   pure $ lens & L.command ?~ generateLensCommand pId uri title edit
 
 generateLensCommand :: PluginId -> Uri -> T.Text -> TextEdit -> Command
@@ -295,13 +304,14 @@ instance NFData GlobalBindingTypeSigsResult where
   rnf = rwhnf
 
 type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
+type instance RuleInput GetGlobalBindingTypeSigs = ProjectHaskellFiles
 
 rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do
-  define (cmapWithPrio LogShake recorder) $ \GetGlobalBindingTypeSigs nfp -> do
-    tmr <- use TypeCheck nfp
+  define (cmapWithPrio LogShake recorder) $ \GetGlobalBindingTypeSigs input -> do
+    tmr <- use TypeCheck input
     -- we need session here for tidying types
-    hsc <- use GhcSession nfp
+    hsc <- use GhcSession input
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
 

@@ -15,7 +15,7 @@ import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
+import           Development.IDE                 (srcSpanToRange, IdeState, GhcSession (..), getFileContents, hscEnv, runAction)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types    as LSP
@@ -26,6 +26,8 @@ import           Ide.Types                      (PluginId(..))
 import qualified Data.Text                      as T
 import           Development.IDE.Core.PluginUtils
 import qualified Language.LSP.Protocol.Lens     as L
+import Development.IDE.Core.InputPath (InputPath, generalizeProjectInput)
+import Development.IDE.Graph.Internal.Rules (InputClass(ProjectHaskellFiles))
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags mbSourceText =
@@ -53,10 +55,10 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
-getFirstPragma (PluginId pId) state nfp = do
-  (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
-  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> InputPath ProjectHaskellFiles -> ExceptT PluginError m NextPragmaInfo
+getFirstPragma (PluginId pId) state input = do
+  (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession input
+  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents $ generalizeProjectInput input
   pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------
