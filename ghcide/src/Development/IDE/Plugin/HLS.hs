@@ -10,7 +10,10 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception             (SomeException)
+import           Control.Lens                  ((^.))
 import           Control.Monad
+import qualified Control.Monad.Extra           as Extra
+import           Control.Monad.IO.Class        (MonadIO)
 import           Control.Monad.Trans.Except    (runExceptT)
 import qualified Data.Aeson                    as A
 import           Data.Bifunctor                (first)
@@ -22,7 +25,7 @@ import qualified Data.List                     as List
 import           Data.List.NonEmpty            (NonEmpty, nonEmpty, toList)
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Maybe                    (mapMaybe)
+import           Data.Maybe                    (isNothing, mapMaybe)
 import           Data.Some
 import           Data.String
 import           Data.Text                     (Text)
@@ -39,6 +42,7 @@ import           Ide.Plugin.Error
 import           Ide.Plugin.HandleRequestTypes
 import           Ide.PluginUtils               (getClientConfig)
 import           Ide.Types                     as HLS
+import qualified Language.LSP.Protocol.Lens    as JL
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server           as LSP
@@ -58,6 +62,7 @@ data Log
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
     | ExceptionInPlugin PluginId (Some SMethod) SomeException
+    | LogResolveDefaultHandler (Some SMethod)
 
 instance Pretty Log where
   pretty = \case
@@ -71,6 +76,8 @@ instance Pretty Log where
     ExceptionInPlugin plId (Some method) exception ->
         "Exception in plugin " <> viaShow plId <> " while processing "
           <> pretty method <> ": " <> viaShow exception
+    LogResolveDefaultHandler (Some method) ->
+        "No plugin can handle" <+> pretty method <+> "request. Return object unchanged."
 instance Show Log where show = renderString . layoutCompact . pretty
 
 noPluginHandles :: Recorder (WithPriority Log) -> SMethod m -> [(PluginId, HandleRequestResult)] -> IO (Either (TResponseError m) c)
@@ -250,8 +257,16 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
         let (fs, dfs) = List.partition (\(_, desc, _) -> handlesRequest m params desc config == HandlesRequest) fs'
         let disabledPluginsReason = (\(x, desc, _) -> (x, handlesRequest m params desc config)) <$> dfs
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
+        -- However, some clients do display ResponseErrors! See for example the issues:
+        -- https://github.com/haskell/haskell-language-server/issues/4467
+        -- https://github.com/haskell/haskell-language-server/issues/4451
         case nonEmpty fs of
-          Nothing -> liftIO $ noPluginHandles recorder m disabledPluginsReason
+          Nothing -> do
+            liftIO (fallbackResolveHandler recorder m params) >>= \case
+              Nothing ->
+                liftIO $ noPluginHandles recorder m disabledPluginsReason
+              Just result ->
+                pure $ Right result
           Just neFs -> do
             let  plidsAndHandlers = fmap (\(plid,_,handler) -> (plid,handler)) neFs
             es <- runHandlerM $ runConcurrently exceptionInPlugin m plidsAndHandlers ide params
@@ -272,6 +287,72 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
               Just xs -> do
                 pure $ Right $ combineResponses m config caps params xs
 
+-- | Fallback Handler for resolve requests.
+-- For all kinds of `*/resolve` requests, if they don't have a 'data_' value,
+-- produce the original item, since no other plugin has any resolve data.
+--
+-- This is an internal handler, so it cannot be turned off and should be opaque
+-- to the end-user.
+-- This function does not take the ServerCapabilities into account, and assumes
+-- clients will only send these requests, if and only if the Language Server
+-- advertised support for it.
+--
+-- See Note [Fallback Handler for LSP resolve requests] for justification and reasoning.
+fallbackResolveHandler :: MonadIO m => Recorder (WithPriority Log) -> SMethod s -> MessageParams s -> m (Maybe (MessageResult s))
+fallbackResolveHandler recorder m params = do
+    let result = case m of
+          SMethod_InlayHintResolve
+              | noResolveData params -> Just params
+          SMethod_CompletionItemResolve
+              | noResolveData params -> Just params
+          SMethod_CodeActionResolve
+              | noResolveData params -> Just params
+          SMethod_WorkspaceSymbolResolve
+              | noResolveData params -> Just params
+          SMethod_CodeLensResolve
+              | noResolveData params -> Just params
+          SMethod_DocumentLinkResolve
+              | noResolveData params -> Just params
+          _ -> Nothing
+    logResolveHandling result
+    pure result
+    where
+        noResolveData :: JL.HasData_ p (Maybe a) => p -> Bool
+        noResolveData p = isNothing $ p ^. JL.data_
+
+        -- We only log if we are handling the request.
+        -- If we don't handle this request, this should be logged
+        -- on call-site.
+        logResolveHandling p = Extra.whenJust p $ \_ -> do
+          logWith recorder Debug $ LogResolveDefaultHandler (Some m)
+
+{- Note [Fallback Handler for LSP resolve requests]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We have a special fallback for `*/resolve` requests.
+
+We had multiple reports, where `resolve` requests (such as
+`completion/resolve` and `codeAction/resolve`) are rejected
+by HLS since the `_data_` field of the respective LSP feature has not been
+populated by HLS.
+This makes sense, as we only support `resolve` for certain kinds of
+`CodeAction`/`Completions`, when they contain particularly expensive
+properties, such as documentation or non-local type signatures.
+
+So what to do? We can see two options:
+
+1. Be dumb and permissive: if no plugin wants to resolve a request, then
+   just respond positively with the original item! Potentially this masks
+   real issues, but may not be too bad. If a plugin thinks it can
+   handle the request but it then fails to resolve it, we should still return a failure.
+2. Try and be smart: we try to figure out requests that we're "supposed" to
+   resolve (e.g. those with a data field), and fail if no plugin wants to handle those.
+   This is possible since we set data.
+   So as long as we maintain the invariant that only things which need resolving get
+   data, then it could be okay.
+
+In 'fallbackResolveHandler', we implement the option (2).
+-}
 
 -- ---------------------------------------------------------------------
 
