@@ -33,6 +33,7 @@ data Arguments
   | BiosMode BiosAction
   | Ghcide GhcideArguments
   | VSCodeExtensionSchemaMode
+  | PluginsCustomConfigMarkdownReferenceMode
   | DefaultConfigurationMode
   | PrintLibDir
 
@@ -69,6 +70,7 @@ getArguments exeName plugins = execParser opts
       <|> hsubparser
         (  command "vscode-extension-schema" extensionSchemaCommand
         <> command "generate-default-config" generateDefaultConfigCommand
+        <> command "plugins-custom-config-markdown-reference" pluginsCustomConfigMarkdownReferenceCommand
         )
       <|> listPluginsParser
       <|> BiosMode <$> biosParser
@@ -86,6 +88,9 @@ getArguments exeName plugins = execParser opts
     generateDefaultConfigCommand =
         info (pure DefaultConfigurationMode)
              (fullDesc <> progDesc "Print config supported by the server with default values")
+    pluginsCustomConfigMarkdownReferenceCommand =
+        info (pure PluginsCustomConfigMarkdownReferenceMode)
+            (fullDesc <> progDesc "Print markdown reference for plugins custom config")
 
 printVersionParser :: String -> Parser PrintVersion
 printVersionParser exeName =
