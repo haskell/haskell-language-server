@@ -111,6 +111,7 @@ library
     , unliftio-core
     , unordered-containers         >=0.2.10.0
     , vector
+    , ListT
 
   if os(windows)
     build-depends: Win32
@@ -207,6 +208,7 @@ library
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
     Development.IDE.Types.Action
+    Development.IDE.Session.OrderedSet
 
   if flag(pedantic)
     ghc-options:
