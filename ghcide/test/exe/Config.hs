@@ -5,6 +5,8 @@ module Config(
     mkIdeTestFs
     , dummyPlugin
 
+    -- * runners for testing specific plugins
+    , testSessionWithPlugin
     -- * runners for testing with dummy plugin
     , runWithDummyPlugin
     , testWithDummyPlugin
@@ -34,6 +36,7 @@ import           Control.Monad               (unless)
 import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
 import qualified Data.Text                   as T
+import           Development.IDE             (Pretty)
 import           Development.IDE.Test        (canonicalizeUri)
 import           Ide.Types                   (defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens  as L
@@ -48,6 +51,16 @@ testDataDir = "ghcide" </> "test" </> "data"
 
 mkIdeTestFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkIdeTestFs = FS.mkVirtualFileTree testDataDir
+
+-- * Run with some injected plugin
+-- testSessionWithPlugin ::  FS.VirtualFileTree -> (FilePath -> Session a) -> IO a
+testSessionWithPlugin :: Pretty b => FS.VirtualFileTree -> PluginTestDescriptor b -> (FilePath -> Session a) -> IO a
+testSessionWithPlugin fs plugin = runSessionWithTestConfig def
+    { testPluginDescriptor = plugin
+    , testDirLocation = Right fs
+    , testConfigCaps = lspTestCaps
+    , testShiftRoot = True
+    }
 
 -- * A dummy plugin for testing ghcIde
 dummyPlugin :: PluginTestDescriptor ()
