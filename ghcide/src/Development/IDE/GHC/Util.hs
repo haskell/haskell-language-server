@@ -255,7 +255,6 @@ ioe_dupHandlesNotCompatible h =
 -- Tracing exactprint terms
 
 -- | Print a GHC value in `defaultUserStyle` without unique symbols.
--- It uses `showSDocUnsafe` with `unsafeGlobalDynFlags` internally.
 --
 -- This is the most common print utility.
 -- It will do something additionally compared to what the 'Outputable' instance does.

@@ -16,7 +16,6 @@ import           Control.Concurrent.MVar                  (newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Exception.Safe                   (SomeException,
-                                                           catchAny,
                                                            displayException)
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
@@ -32,7 +31,7 @@ import           Data.List.Extra                          (intercalate,
 import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
-                                                           Priority (Debug, Error),
+                                                           Priority (Debug),
                                                            Rules, hDuplicateTo')
 import           Development.IDE.Core.Debouncer           (Debouncer,
                                                            newAsyncDebouncer)
@@ -72,9 +71,9 @@ import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Session                  (SessionLoadingOptions,
                                                            getHieDbLoc,
+                                                           getInitialGhcLibDirDefault,
                                                            loadSessionWithOptions,
-                                                           retryOnSqliteBusy,
-                                                           setInitialDynFlags)
+                                                           retryOnSqliteBusy)
 import qualified Development.IDE.Session                  as Session
 import           Development.IDE.Types.Location           (NormalizedUri,
                                                            toNormalizedFilePath')
@@ -136,7 +135,6 @@ data Log
   | LogLspStart [PluginId]
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
-  | LogSetInitialDynFlagsException !SomeException
   | LogConfigurationChange T.Text
   | LogService Service.Log
   | LogShake Shake.Log
@@ -160,8 +158,6 @@ instance Pretty Log where
       "Started LSP server in" <+> pretty (showDuration duration)
     LogShouldRunSubset shouldRunSubset ->
       "shouldRunSubset:" <+> pretty shouldRunSubset
-    LogSetInitialDynFlagsException e ->
-      "setInitialDynFlags:" <+> pretty (displayException e)
     LogConfigurationChange msg -> "Configuration changed:" <+> pretty msg
     LogService msg -> pretty msg
     LogShake msg -> pretty msg
@@ -329,13 +325,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 getIdeState env rootPath withHieDb threadQueue = do
                   t <- ioT
                   logWith recorder Info $ LogLspStartDuration t
-                  -- We want to set the global DynFlags right now, so that we can use
-                  -- `unsafeGlobalDynFlags` even before the project is configured
-                  _mlibdir <-
-                      setInitialDynFlags (cmapWithPrio LogSession recorder) rootPath argsSessionLoadingOptions
-                          -- TODO: should probably catch/log/rethrow at top level instead
-                          `catchAny` (\e -> logWith recorder Error (LogSetInitialDynFlagsException e) >> pure Nothing)
-
                   sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions rootPath (tLoaderQueue threadQueue)
                   config <- LSP.runLspT env LSP.getConfig
                   let def_options = argsIdeOptions config sessionLoader
@@ -435,7 +424,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             let root = argsProjectRoot
             dbLoc <- getHieDbLoc root
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags (cmapWithPrio LogSession recorder) root def
+            mlibdir <- getInitialGhcLibDirDefault (cmapWithPrio LogSession recorder) root
             rng <- newStdGen
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
