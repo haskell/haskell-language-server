@@ -21,8 +21,8 @@ case "${TARBALL_EXT}" in
 		# from the oldest version in the list
 		: "${GHCS:="$(cd "$CI_PROJECT_DIR/out/${ARTIFACT}" && rm -f ./*.json && for ghc in * ; do printf "%s\n" "$ghc" ; done | sort -r | tr '\n' ' ')"}"
 		emake --version
-		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist || ( cat /github/workspace/.ghcup/logs/* ; fail "make bindist failed" )
-		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar || ( cat /github/workspace/.ghcup/logs/* ; fail "make bindist failed" )
+		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist     || fail_with_ghcup_logs "make bindist failed"
+		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar || fail_with_ghcup_logs "make bindist failed"
         ;;
     *)
         fail "Unknown TARBALL_EXT: ${TARBALL_EXT}"
