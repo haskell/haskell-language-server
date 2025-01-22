@@ -189,7 +189,7 @@ runner AArch64 Windows = error "aarch64 windows not supported"
 -------------------------------------------------------------------------------
 -- Action generatation
 -------------------------------------------------------------------------------
--- Each x86-linux job has its own action, living in a seperate file
+-- Each x86-linux job has its own action, living in a separate file
 -- The contents of the file are derived from the 'Action' datatype
 --
 -- We do this so that we can run the build in the right kind of OS container,
@@ -199,8 +199,8 @@ runner AArch64 Windows = error "aarch64 windows not supported"
 -- github provided actions, see for instance https://github.com/actions/upload-artifact/issues/489
 -------------------------------------------------------------------------------
 
--- | Container actions for x86-linux runners
--- Each of these corresponds to a seperate action file,
+-- | Container actions for x86-linux runners.
+-- Each of these corresponds to a separate action file,
 -- called 'actionName', located at 'actionPath'
 data Action
   = Action
@@ -357,7 +357,7 @@ releaseJob cs =
 
 
 buildJob :: Arch -> Opsys -> GHC -> Job
-buildJob arch os v = 
+buildJob arch os v =
   K.fromString (buildJobName arch os v) .= object
     [ "runs-on" .= runner arch os
     , "name" .= str (buildJobName arch os v ++ " (Build binaries)")
