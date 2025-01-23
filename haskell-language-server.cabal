@@ -2208,6 +2208,7 @@ test-suite ghcide-tests
     PreprocessorTests
     Progress
     ReferenceTests
+    ResolveTests
     RootUriTests
     SafeTests
     SymlinkTests

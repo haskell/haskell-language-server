@@ -59,6 +59,7 @@ import           PluginSimpleTests
 import           PositionMappingTests
 import           PreprocessorTests
 import           ReferenceTests
+import           ResolveTests
 import           RootUriTests
 import           SafeTests
 import           SymlinkTests
@@ -98,6 +99,7 @@ main = do
     , AsyncTests.tests
     , ClientSettingsTests.tests
     , ReferenceTests.tests
+    , ResolveTests.tests
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
     , ExceptionTests.tests
