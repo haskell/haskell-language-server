@@ -8,7 +8,7 @@ module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
   ,loadSessionWithOptions
-  ,setInitialDynFlags
+  ,getInitialGhcLibDirDefault
   ,getHieDbLoc
   ,retryOnSqliteBusy
   ,retryOnException
@@ -113,13 +113,11 @@ import           Development.IDE.Types.Shake         (WithHieDb,
 import           GHC.Data.Graph.Directed
 import           HieDb.Create
 import           HieDb.Types
-import           HieDb.Utils
 import           Ide.PluginUtils                     (toAbsolute)
 import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
 
-import           GHC.Data.Bag
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
@@ -285,15 +283,6 @@ getInitialGhcLibDirDefault recorder rootDir = do
       CradleNone -> do
         logWith recorder Warning LogGetInitialGhcLibDirDefaultCradleNone
         pure Nothing
-
--- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
-setInitialDynFlags :: Recorder (WithPriority Log) -> FilePath -> SessionLoadingOptions -> IO (Maybe LibDir)
-setInitialDynFlags recorder rootDir SessionLoadingOptions{..} = do
-  libdir <- getInitialGhcLibDir recorder rootDir
-  dynFlags <- mapM dynFlagsForPrinting libdir
-  logWith recorder Debug LogSettingInitialDynFlags
-  mapM_ setUnsafeGlobalDynFlags dynFlags
-  pure libdir
 
 -- | If the action throws exception that satisfies predicate then we sleep for
 -- a duration determined by the random exponential backoff formula,
