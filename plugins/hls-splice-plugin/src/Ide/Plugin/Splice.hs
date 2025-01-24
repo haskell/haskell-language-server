@@ -9,6 +9,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE BlockArguments #-}
 
 module Ide.Plugin.Splice (descriptor) where
 
@@ -53,6 +54,14 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as J
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import Debug.Trace
+import Development.IDE.GHC.Compat.Util (FastString, fsLit)
+import GHC.Types.SrcLoc (BufPos (..), BufSpan (..))
+import System.IO.Unsafe (unsafePerformIO)
+import System.Process.Extra (readProcess)
+import GHC (EpaLocation'(EpaSpan))
+import Ide.PluginUtils (diffText, WithDeletions (..))
+import Control.Monad
 
 #if !MIN_VERSION_base(4,20,0)
 import           Data.Foldable                         (Foldable (foldl'))
@@ -133,7 +142,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
             let Splices {..} = tmrTopLevelSplices
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
-                _patSuperSpans =
+                patSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices
@@ -156,10 +165,72 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
             maybe (throwError $ PluginInternalError "No splice information found") (either (throwError . PluginInternalError . T.pack) pure) $
                 case spliceContext of
                     Expr -> graftSpliceWith exprSuperSpans
-                    Pat ->
+                    -- Pat -> graftSpliceWith patSuperSpans
+                    Pat -> patSuperSpans <&> \(_, expanded) ->
+                        -- basically just the old code inlined and with some debug tracing added
+                        let edit0 = do
+                                let src = printA ps
+                                (a', _, _) <- runTransformFromT 0 $ do
+                                    val'0 <- Development.IDE.GHC.ExactPrint.annotate dflags True $ maybeParensAST expanded
+                                    -- on 9.10, this becomes `UnhelpfulSpan UnhelpfulNoLocationInfo`
+                                    -- but seems a red herring - adding the old span manually makes no difference
+                                    -- let L (EpAnn _sp0 a0 cs0) x = val'0
+                                    -- let sp' = mkSrcSpan (mkSrcLoc (fsLit "RealSrcSpan SrcSpanPoint \"ghc-exactprint\" -1 0 Nothing") 1 1) ((mkSrcLoc (fsLit "unused") 1 6))
+                                    -- -- let sp'' = sp
+                                    -- let val'' =
+                                    --         traceShow (getLoc val'') $
+                                    --         traceShow (getLoc val'0) $
+                                    --         L (EpAnn (EpaSpan sp') a0 cs0) x
 
-                        graftSpliceWith _patSuperSpans
+                                    let val' = val'0
+                                    pure $
+                                        -- traceShow (printA expanded) $ -- same, but weird: `"\n\n\n\n\n       \"str\""`
+                                        -- traceShow (printA $ maybeParensAST expanded) $
+                                        -- traceShow (printA val') $
+                                        everywhere'
+                                            ( mkT \case
+                                                L src _ :: LocatedAn l ast | locA src `eqSrcSpan` dst ->
+                                                    -- prints the same, but has different spans
+                                                    -- traceShow (printA val') $ -- same old and new - " \"str\""
+                                                    -- traceShow (locA src) $ -- same
+                                                    -- traceShow (getLoc val') $
+                                                    -- traceShow dst $ -- same except `Nothing` for `BufSpan`
+                                                        val'
+                                                l -> l
+                                            )
+                                            ps
+                                -- this differs - 9.10 version lacks the space
+                                -- how does that happen? src spans are the same as for the expr replaced...
+                                let res = printA a'
+                                pure $
+                                    -- trace (renderWithContext defaultSDocContext $ ppr a') $
+                                    -- traceShow a' $
+                                    -- traceShow res $
 
+                                    -- trace (pShow $ showsMod a' "") $
+                                    traceFile traceFileName (pShowNoColor $ showsMod a' "") $
+
+                                    -- traceShow (src,res) $
+                                    -- same apart from `_newText = "f \"str\"= putStrLn \"is str\""`
+                                    -- where previously there was correctly an extra space
+                                    diffText clientCapabilities (verTxtDocId, T.pack src) (T.pack res) IncludeDeletions
+                            edit = edit0
+                            dst = (RealSrcSpan spliceSpan Nothing)
+                        in
+                                traceShow () $
+                                -- same on both GHC versions - weird leading newlines but no whitespace at end
+                                -- traceShow (printA expanded) $
+                                -- traceShow (g dflags) $
+                                -- traceShow spliceSpan $
+                                traceShowId $
+                                    edit
+            -- matchSplice _ (SplicePat _ spl) = Just spl
+            --     matchSplice _ _                 = Nothing
+            --     expandSplice _ =
+            -- #if MIN_VERSION_ghc(9,5,0)
+            --       fmap (first (Left . unLoc . utsplice_result . snd )) .
+            -- #endif
+            --       rnSplicePat
                     HsType -> graftSpliceWith typeSuperSpans
                     HsDecl ->
                         declSuperSpans <&> \(_, expanded) ->
@@ -181,7 +252,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                         =<< MaybeT
                             (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck fp)
                     )
-                    <|> lift (runExceptT $ expandManually fp)
+                    -- <|> lift (runExceptT $ expandManually fp)
 
             case eedits of
                 Left err -> do
@@ -195,6 +266,8 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
       Nothing -> pure $ Right $ InR Null
       Just (Left err) -> pure $ Left err
       Just (Right edit) -> do
+        -- huh, edit unnecessarily goes all the way to end of line - why?
+        -- liftIO $ print edit
         _ <- pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
         pure $ Right $ InR Null
 
@@ -202,6 +275,54 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
         range = realSrcSpanToRange spliceSpan
         srcSpan = RealSrcSpan spliceSpan Nothing
 
+traceFileName :: [Char]
+traceFileName =
+#if MIN_VERSION_ghc(9,9,0)
+    "9.10"
+#else
+    "9.8"
+#endif
+
+showsModSimple :: ParsedSource -> ShowS
+showsModSimple = gshowsWith
+     (\(s :: SrcSpan) ->
+            -- ("george-src-span-placeholder" <>)
+            shows s
+        )
+showsMod :: Data a => a -> ShowS
+showsMod =
+    ( \t ->
+        showChar '('
+            . (showString . showConstr . toConstr $ t)
+            . (foldr (.) id . gmapQ ((showChar ' ' .) . showsMod) $ t)
+            . showChar ')'
+    )
+        `extQ` (shows :: String -> ShowS)
+        `extQ` (\(s :: SrcSpan) -> shows s)
+        `extQ` (\(s :: FastString) -> shows s)
+
+gshowsWith :: (Data a, Typeable b) => (b -> ShowS) -> a -> ShowS
+gshowsWith f =
+    ( \t ->
+        showChar '('
+            . (showString . showConstr . toConstr $ t)
+            . (foldr (.) id . gmapQ ((showChar ' ' .) . gshowsWith f) $ t)
+            . showChar ')'
+    )
+        `extQ` (shows :: String -> ShowS)
+        `extQ` f
+
+pPrint :: (Show a) => a -> IO ()
+pPrint = putStrLn <=< readProcess "pretty-simple" [] . show
+{-# NOINLINE pShow #-}
+pShow :: String -> String
+pShow = unsafePerformIO . readProcess "pretty-simple" []
+{-# NOINLINE pShowNoColor #-}
+pShowNoColor :: String -> String
+pShowNoColor = unsafePerformIO . readProcess "pretty-simple" ["-cno-color"]
+{-# NOINLINE traceFile #-}
+traceFile :: String -> String -> a -> a
+traceFile fp s x = unsafePerformIO $ writeFile fp s >> pure x
 
 setupHscEnv
     :: IdeState

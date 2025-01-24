@@ -1,0 +1,822 @@
+( L RealSrcSpan SrcSpanPoint "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 1 1 Nothing
+    ( HsModule
+        ( XModulePs
+            ( EpAnn
+                ( EpaSpan RealSrcSpan SrcSpanPoint "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 1 1 Nothing )
+                ( AnnsModule
+                    ( ( : )
+                        ( AddEpAnn ( AnnModule )
+                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 2 1 7
+                                ( Just
+                                    ( BufSpan
+                                        { bufSpanStart = BufPos
+                                            { bufPos = 29 }
+                                        , bufSpanEnd = BufPos
+                                            { bufPos = 35 }
+                                        }
+                                    )
+                                )
+                            )
+                        )
+                        ( ( : )
+                            ( AddEpAnn ( AnnWhere )
+                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 2 15 20
+                                    ( Just
+                                        ( BufSpan
+                                            { bufSpanStart = BufPos
+                                                { bufPos = 43 }
+                                            , bufSpanEnd = BufPos
+                                                { bufPos = 48 }
+                                            }
+                                        )
+                                    )
+                                )
+                            ) ( [] )
+                        )
+                    ) ( [] ) ( [] )
+                    ( Just
+                        ( () ( { abstract:RealSrcSpan } ) ( { abstract:RealSrcSpan } ) )
+                    )
+                )
+                ( EpaCommentsBalanced ( [] ) ( [] ) )
+            )
+            ( EpVirtualBraces ( 1 ) ) ( Nothing ) ( Nothing )
+        )
+        ( Just
+            ( L
+                ( EpAnn
+                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 2 8 14
+                        ( Just
+                            ( BufSpan
+                                { bufSpanStart = BufPos
+                                    { bufPos = 36 }
+                                , bufSpanEnd = BufPos
+                                    { bufPos = 42 }
+                                }
+                            )
+                        )
+                    )
+                    ( AnnListItem ( [] ) )
+                    ( EpaComments ( [] ) )
+                ) ( { abstract:ModuleName } )
+            )
+        ) ( Nothing )
+        ( ( : )
+            ( L
+                ( EpAnn
+                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 3 1 10
+                        ( Just
+                            ( BufSpan
+                                { bufSpanStart = BufPos
+                                    { bufPos = 49 }
+                                , bufSpanEnd = BufPos
+                                    { bufPos = 58 }
+                                }
+                            )
+                        )
+                    )
+                    ( AnnListItem ( [] ) )
+                    ( EpaComments ( [] ) )
+                )
+                ( ImportDecl
+                    ( XImportDeclPass
+                        ( EpAnn
+                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 3 1 10
+                                ( Just
+                                    ( BufSpan
+                                        { bufSpanStart = BufPos
+                                            { bufPos = 49 }
+                                        , bufSpanEnd = BufPos
+                                            { bufPos = 58 }
+                                        }
+                                    )
+                                )
+                            )
+                            ( EpAnnImportDecl
+                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 3 1 7
+                                    ( Just
+                                        ( BufSpan
+                                            { bufSpanStart = BufPos
+                                                { bufPos = 49 }
+                                            , bufSpanEnd = BufPos
+                                                { bufPos = 55 }
+                                            }
+                                        )
+                                    )
+                                ) ( Nothing ) ( Nothing ) ( Nothing ) ( Nothing ) ( Nothing )
+                            )
+                            ( EpaComments ( [] ) )
+                        ) ( NoSourceText ) ( False )
+                    )
+                    ( L
+                        ( EpAnn
+                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 3 8 10
+                                ( Just
+                                    ( BufSpan
+                                        { bufSpanStart = BufPos
+                                            { bufPos = 56 }
+                                        , bufSpanEnd = BufPos
+                                            { bufPos = 58 }
+                                        }
+                                    )
+                                )
+                            )
+                            ( AnnListItem ( [] ) )
+                            ( EpaComments ( [] ) )
+                        ) ( { abstract:ModuleName } )
+                    ) ( NoRawPkgQual ) ( NotBoot ) ( False ) ( NotQualified ) ( Nothing ) ( Nothing )
+                )
+            ) ( [] )
+        )
+        ( ( : )
+            ( L
+                ( EpAnn
+                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 1 21
+                        ( Just
+                            ( BufSpan
+                                { bufSpanStart = BufPos
+                                    { bufPos = 60 }
+                                , bufSpanEnd = BufPos
+                                    { bufPos = 80 }
+                                }
+                            )
+                        )
+                    )
+                    ( AnnListItem ( [] ) )
+                    ( EpaComments ( [] ) )
+                )
+                ( SigD ( NoExtField )
+                    ( TypeSig
+                        ( AnnSig
+                            ( AddEpAnn ( AnnDcolon )
+                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 3 5
+                                    ( Just
+                                        ( BufSpan
+                                            { bufSpanStart = BufPos
+                                                { bufPos = 62 }
+                                            , bufSpanEnd = BufPos
+                                                { bufPos = 64 }
+                                            }
+                                        )
+                                    )
+                                )
+                            ) ( [] )
+                        )
+                        ( ( : )
+                            ( L
+                                ( EpAnn
+                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 1 2
+                                        ( Just
+                                            ( BufSpan
+                                                { bufSpanStart = BufPos
+                                                    { bufPos = 60 }
+                                                , bufSpanEnd = BufPos
+                                                    { bufPos = 61 }
+                                                }
+                                            )
+                                        )
+                                    )
+                                    ( NameAnnTrailing ( [] ) )
+                                    ( EpaComments ( [] ) )
+                                )
+                                ( Unqual ( { abstract:OccName } ) )
+                            ) ( [] )
+                        )
+                        ( HsWC ( NoExtField )
+                            ( L
+                                ( EpAnn
+                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 6 21
+                                        ( Just
+                                            ( BufSpan
+                                                { bufSpanStart = BufPos
+                                                    { bufPos = 65 }
+                                                , bufSpanEnd = BufPos
+                                                    { bufPos = 80 }
+                                                }
+                                            )
+                                        )
+                                    )
+                                    ( AnnListItem ( [] ) )
+                                    ( EpaComments ( [] ) )
+                                )
+                                ( HsSig ( NoExtField )
+                                    ( HsOuterImplicit ( NoExtField ) )
+                                    ( L
+                                        ( EpAnn
+                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 6 21
+                                                ( Just
+                                                    ( BufSpan
+                                                        { bufSpanStart = BufPos
+                                                            { bufPos = 65 }
+                                                        , bufSpanEnd = BufPos
+                                                            { bufPos = 80 }
+                                                        }
+                                                    )
+                                                )
+                                            )
+                                            ( AnnListItem ( [] ) )
+                                            ( EpaComments ( [] ) )
+                                        )
+                                        ( HsFunTy ( NoExtField )
+                                            ( HsUnrestrictedArrow
+                                                ( EpUniTok
+                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 13 15
+                                                        ( Just
+                                                            ( BufSpan
+                                                                { bufSpanStart = BufPos
+                                                                    { bufPos = 72 }
+                                                                , bufSpanEnd = BufPos
+                                                                    { bufPos = 74 }
+                                                                }
+                                                            )
+                                                        )
+                                                    ) ( NormalSyntax )
+                                                )
+                                            )
+                                            ( L
+                                                ( EpAnn
+                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 6 12
+                                                        ( Just
+                                                            ( BufSpan
+                                                                { bufSpanStart = BufPos
+                                                                    { bufPos = 65 }
+                                                                , bufSpanEnd = BufPos
+                                                                    { bufPos = 71 }
+                                                                }
+                                                            )
+                                                        )
+                                                    )
+                                                    ( AnnListItem ( [] ) )
+                                                    ( EpaComments ( [] ) )
+                                                )
+                                                ( HsTyVar ( [] ) ( NotPromoted )
+                                                    ( L
+                                                        ( EpAnn
+                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 6 12
+                                                                ( Just
+                                                                    ( BufSpan
+                                                                        { bufSpanStart = BufPos
+                                                                            { bufPos = 65 }
+                                                                        , bufSpanEnd = BufPos
+                                                                            { bufPos = 71 }
+                                                                        }
+                                                                    )
+                                                                )
+                                                            )
+                                                            ( NameAnnTrailing ( [] ) )
+                                                            ( EpaComments ( [] ) )
+                                                        )
+                                                        ( Unqual ( { abstract:OccName } ) )
+                                                    )
+                                                )
+                                            )
+                                            ( L
+                                                ( EpAnn
+                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 16 21
+                                                        ( Just
+                                                            ( BufSpan
+                                                                { bufSpanStart = BufPos
+                                                                    { bufPos = 75 }
+                                                                , bufSpanEnd = BufPos
+                                                                    { bufPos = 80 }
+                                                                }
+                                                            )
+                                                        )
+                                                    )
+                                                    ( AnnListItem ( [] ) )
+                                                    ( EpaComments ( [] ) )
+                                                )
+                                                ( HsAppTy ( NoExtField )
+                                                    ( L
+                                                        ( EpAnn
+                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 16 18
+                                                                ( Just
+                                                                    ( BufSpan
+                                                                        { bufSpanStart = BufPos
+                                                                            { bufPos = 75 }
+                                                                        , bufSpanEnd = BufPos
+                                                                            { bufPos = 77 }
+                                                                        }
+                                                                    )
+                                                                )
+                                                            )
+                                                            ( AnnListItem ( [] ) )
+                                                            ( EpaComments ( [] ) )
+                                                        )
+                                                        ( HsTyVar ( [] ) ( NotPromoted )
+                                                            ( L
+                                                                ( EpAnn
+                                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 16 18
+                                                                        ( Just
+                                                                            ( BufSpan
+                                                                                { bufSpanStart = BufPos
+                                                                                    { bufPos = 75 }
+                                                                                , bufSpanEnd = BufPos
+                                                                                    { bufPos = 77 }
+                                                                                }
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                    ( NameAnnTrailing ( [] ) )
+                                                                    ( EpaComments ( [] ) )
+                                                                )
+                                                                ( Unqual ( { abstract:OccName } ) )
+                                                            )
+                                                        )
+                                                    )
+                                                    ( L
+                                                        ( EpAnn
+                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 19 21
+                                                                ( Just
+                                                                    ( BufSpan
+                                                                        { bufSpanStart = BufPos
+                                                                            { bufPos = 78 }
+                                                                        , bufSpanEnd = BufPos
+                                                                            { bufPos = 80 }
+                                                                        }
+                                                                    )
+                                                                )
+                                                            )
+                                                            ( AnnListItem ( [] ) )
+                                                            ( EpaComments ( [] ) )
+                                                        )
+                                                        ( HsTupleTy
+                                                            ( AnnParen ( AnnParens )
+                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 19 20
+                                                                    ( Just
+                                                                        ( BufSpan
+                                                                            { bufSpanStart = BufPos
+                                                                                { bufPos = 78 }
+                                                                            , bufSpanEnd = BufPos
+                                                                                { bufPos = 79 }
+                                                                            }
+                                                                        )
+                                                                    )
+                                                                )
+                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 5 20 21
+                                                                    ( Just
+                                                                        ( BufSpan
+                                                                            { bufSpanStart = BufPos
+                                                                                { bufPos = 79 }
+                                                                            , bufSpanEnd = BufPos
+                                                                                { bufPos = 80 }
+                                                                            }
+                                                                        )
+                                                                    )
+                                                                )
+                                                            ) ( HsBoxedOrConstraintTuple ) ( [] )
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+            ( ( : )
+                ( L
+                    ( EpAnn
+                        ( EpaSpan RealSrcSpan SrcSpanMultiLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 1 7 26
+                            ( Just
+                                ( BufSpan
+                                    { bufSpanStart = BufPos
+                                        { bufPos = 81 }
+                                    , bufSpanEnd = BufPos
+                                        { bufPos = 139 }
+                                    }
+                                )
+                            )
+                        )
+                        ( AnnListItem ( [] ) )
+                        ( EpaComments ( [] ) )
+                    )
+                    ( ValD ( NoExtField )
+                        ( FunBind ( NoExtField )
+                            ( L
+                                ( EpAnn
+                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 1 2
+                                        ( Just
+                                            ( BufSpan
+                                                { bufSpanStart = BufPos
+                                                    { bufPos = 81 }
+                                                , bufSpanEnd = BufPos
+                                                    { bufPos = 82 }
+                                                }
+                                            )
+                                        )
+                                    )
+                                    ( NameAnnTrailing ( [] ) )
+                                    ( EpaComments ( [] ) )
+                                )
+                                ( Unqual ( { abstract:OccName } ) )
+                            )
+                            ( MG ( FromSource )
+                                ( L
+                                    ( EpAnn
+                                        ( EpaSpan RealSrcSpan SrcSpanMultiLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 1 7 26
+                                            ( Just
+                                                ( BufSpan
+                                                    { bufSpanStart = BufPos
+                                                        { bufPos = 81 }
+                                                    , bufSpanEnd = BufPos
+                                                        { bufPos = 139 }
+                                                    }
+                                                )
+                                            )
+                                        )
+                                        ( AnnList ( Nothing ) ( Nothing ) ( Nothing ) ( [] ) ( [] ) )
+                                        ( EpaComments ( [] ) )
+                                    )
+                                    ( ( : )
+                                        ( L
+                                            ( EpAnn
+                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 1 33
+                                                    ( Just
+                                                        ( BufSpan
+                                                            { bufSpanStart = BufPos
+                                                                { bufPos = 81 }
+                                                            , bufSpanEnd = BufPos
+                                                                { bufPos = 113 }
+                                                            }
+                                                        )
+                                                    )
+                                                )
+                                                ( AnnListItem ( [] ) )
+                                                ( EpaComments ( [] ) )
+                                            )
+                                            ( Match ( [] )
+                                                ( FunRhs
+                                                    ( L
+                                                        ( EpAnn
+                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 1 2
+                                                                ( Just
+                                                                    ( BufSpan
+                                                                        { bufSpanStart = BufPos
+                                                                            { bufPos = 81 }
+                                                                        , bufSpanEnd = BufPos
+                                                                            { bufPos = 82 }
+                                                                        }
+                                                                    )
+                                                                )
+                                                            )
+                                                            ( NameAnnTrailing ( [] ) )
+                                                            ( EpaComments ( [] ) )
+                                                        )
+                                                        ( Unqual ( { abstract:OccName } ) )
+                                                    ) ( Prefix ) ( NoSrcStrict )
+                                                )
+                                                ( ( : )
+                                                    ( L
+                                                        ( EpAnn
+                                                            ( EpaDelta
+                                                                ( SameLine ( 1 ) ) ( [] )
+                                                            )
+                                                            ( AnnListItem ( [] ) )
+                                                            ( EpaComments ( [] ) )
+                                                        )
+                                                        ( LitPat ( NoExtField )
+                                                            ( HsString
+                                                                ( SourceText ""str"" ) "str"
+                                                            )
+                                                        )
+                                                    ) ( [] )
+                                                )
+                                                ( GRHSs
+                                                    ( EpaComments ( [] ) )
+                                                    ( ( : )
+                                                        ( L
+                                                            ( EpAnn
+                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 14 33
+                                                                    ( Just
+                                                                        ( BufSpan
+                                                                            { bufSpanStart = BufPos
+                                                                                { bufPos = 94 }
+                                                                            , bufSpanEnd = BufPos
+                                                                                { bufPos = 113 }
+                                                                            }
+                                                                        )
+                                                                    )
+                                                                ) ( NoEpAnns )
+                                                                ( EpaComments ( [] ) )
+                                                            )
+                                                            ( GRHS
+                                                                ( EpAnn
+                                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 14 33
+                                                                        ( Just
+                                                                            ( BufSpan
+                                                                                { bufSpanStart = BufPos
+                                                                                    { bufPos = 94 }
+                                                                                , bufSpanEnd = BufPos
+                                                                                    { bufPos = 113 }
+                                                                                }
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                    ( GrhsAnn ( Nothing )
+                                                                        ( AddEpAnn ( AnnEqual )
+                                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 14 15
+                                                                                ( Just
+                                                                                    ( BufSpan
+                                                                                        { bufSpanStart = BufPos
+                                                                                            { bufPos = 94 }
+                                                                                        , bufSpanEnd = BufPos
+                                                                                            { bufPos = 95 }
+                                                                                        }
+                                                                                    )
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                    ( EpaComments ( [] ) )
+                                                                ) ( [] )
+                                                                ( L
+                                                                    ( EpAnn
+                                                                        ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 16 33
+                                                                            ( Just
+                                                                                ( BufSpan
+                                                                                    { bufSpanStart = BufPos
+                                                                                        { bufPos = 96 }
+                                                                                    , bufSpanEnd = BufPos
+                                                                                        { bufPos = 113 }
+                                                                                    }
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                        ( AnnListItem ( [] ) )
+                                                                        ( EpaComments ( [] ) )
+                                                                    )
+                                                                    ( HsApp ( NoExtField )
+                                                                        ( L
+                                                                            ( EpAnn
+                                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 16 24
+                                                                                    ( Just
+                                                                                        ( BufSpan
+                                                                                            { bufSpanStart = BufPos
+                                                                                                { bufPos = 96 }
+                                                                                            , bufSpanEnd = BufPos
+                                                                                                { bufPos = 104 }
+                                                                                            }
+                                                                                        )
+                                                                                    )
+                                                                                )
+                                                                                ( AnnListItem ( [] ) )
+                                                                                ( EpaComments ( [] ) )
+                                                                            )
+                                                                            ( HsVar ( NoExtField )
+                                                                                ( L
+                                                                                    ( EpAnn
+                                                                                        ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 16 24
+                                                                                            ( Just
+                                                                                                ( BufSpan
+                                                                                                    { bufSpanStart = BufPos
+                                                                                                        { bufPos = 96 }
+                                                                                                    , bufSpanEnd = BufPos
+                                                                                                        { bufPos = 104 }
+                                                                                                    }
+                                                                                                )
+                                                                                            )
+                                                                                        )
+                                                                                        ( NameAnnTrailing ( [] ) )
+                                                                                        ( EpaComments ( [] ) )
+                                                                                    )
+                                                                                    ( Unqual ( { abstract:OccName } ) )
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                        ( L
+                                                                            ( EpAnn
+                                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 6 25 33
+                                                                                    ( Just
+                                                                                        ( BufSpan
+                                                                                            { bufSpanStart = BufPos
+                                                                                                { bufPos = 105 }
+                                                                                            , bufSpanEnd = BufPos
+                                                                                                { bufPos = 113 }
+                                                                                            }
+                                                                                        )
+                                                                                    )
+                                                                                )
+                                                                                ( AnnListItem ( [] ) )
+                                                                                ( EpaComments ( [] ) )
+                                                                            )
+                                                                            ( HsLit ( NoExtField )
+                                                                                ( HsString
+                                                                                    ( SourceText ""is str"" ) "is str"
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                )
+                                                            )
+                                                        ) ( [] )
+                                                    )
+                                                    ( EmptyLocalBinds ( NoExtField ) )
+                                                )
+                                            )
+                                        )
+                                        ( ( : )
+                                            ( L
+                                                ( EpAnn
+                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 1 26
+                                                        ( Just
+                                                            ( BufSpan
+                                                                { bufSpanStart = BufPos
+                                                                    { bufPos = 114 }
+                                                                , bufSpanEnd = BufPos
+                                                                    { bufPos = 139 }
+                                                                }
+                                                            )
+                                                        )
+                                                    )
+                                                    ( AnnListItem ( [] ) )
+                                                    ( EpaComments ( [] ) )
+                                                )
+                                                ( Match ( [] )
+                                                    ( FunRhs
+                                                        ( L
+                                                            ( EpAnn
+                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 1 2
+                                                                    ( Just
+                                                                        ( BufSpan
+                                                                            { bufSpanStart = BufPos
+                                                                                { bufPos = 114 }
+                                                                            , bufSpanEnd = BufPos
+                                                                                { bufPos = 115 }
+                                                                            }
+                                                                        )
+                                                                    )
+                                                                )
+                                                                ( NameAnnTrailing ( [] ) )
+                                                                ( EpaComments ( [] ) )
+                                                            )
+                                                            ( Unqual ( { abstract:OccName } ) )
+                                                        ) ( Prefix ) ( NoSrcStrict )
+                                                    )
+                                                    ( ( : )
+                                                        ( L
+                                                            ( EpAnn
+                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 3 4
+                                                                    ( Just
+                                                                        ( BufSpan
+                                                                            { bufSpanStart = BufPos
+                                                                                { bufPos = 116 }
+                                                                            , bufSpanEnd = BufPos
+                                                                                { bufPos = 117 }
+                                                                            }
+                                                                        )
+                                                                    )
+                                                                )
+                                                                ( AnnListItem ( [] ) )
+                                                                ( EpaComments ( [] ) )
+                                                            )
+                                                            ( WildPat ( NoExtField ) )
+                                                        ) ( [] )
+                                                    )
+                                                    ( GRHSs
+                                                        ( EpaComments ( [] ) )
+                                                        ( ( : )
+                                                            ( L
+                                                                ( EpAnn
+                                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 5 26
+                                                                        ( Just
+                                                                            ( BufSpan
+                                                                                { bufSpanStart = BufPos
+                                                                                    { bufPos = 118 }
+                                                                                , bufSpanEnd = BufPos
+                                                                                    { bufPos = 139 }
+                                                                                }
+                                                                            )
+                                                                        )
+                                                                    ) ( NoEpAnns )
+                                                                    ( EpaComments ( [] ) )
+                                                                )
+                                                                ( GRHS
+                                                                    ( EpAnn
+                                                                        ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 5 26
+                                                                            ( Just
+                                                                                ( BufSpan
+                                                                                    { bufSpanStart = BufPos
+                                                                                        { bufPos = 118 }
+                                                                                    , bufSpanEnd = BufPos
+                                                                                        { bufPos = 139 }
+                                                                                    }
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                        ( GrhsAnn ( Nothing )
+                                                                            ( AddEpAnn ( AnnEqual )
+                                                                                ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 5 6
+                                                                                    ( Just
+                                                                                        ( BufSpan
+                                                                                            { bufSpanStart = BufPos
+                                                                                                { bufPos = 118 }
+                                                                                            , bufSpanEnd = BufPos
+                                                                                                { bufPos = 119 }
+                                                                                            }
+                                                                                        )
+                                                                                    )
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                        ( EpaComments ( [] ) )
+                                                                    ) ( [] )
+                                                                    ( L
+                                                                        ( EpAnn
+                                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 7 26
+                                                                                ( Just
+                                                                                    ( BufSpan
+                                                                                        { bufSpanStart = BufPos
+                                                                                            { bufPos = 120 }
+                                                                                        , bufSpanEnd = BufPos
+                                                                                            { bufPos = 139 }
+                                                                                        }
+                                                                                    )
+                                                                                )
+                                                                            )
+                                                                            ( AnnListItem ( [] ) )
+                                                                            ( EpaComments ( [] ) )
+                                                                        )
+                                                                        ( HsApp ( NoExtField )
+                                                                            ( L
+                                                                                ( EpAnn
+                                                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 7 15
+                                                                                        ( Just
+                                                                                            ( BufSpan
+                                                                                                { bufSpanStart = BufPos
+                                                                                                    { bufPos = 120 }
+                                                                                                , bufSpanEnd = BufPos
+                                                                                                    { bufPos = 128 }
+                                                                                                }
+                                                                                            )
+                                                                                        )
+                                                                                    )
+                                                                                    ( AnnListItem ( [] ) )
+                                                                                    ( EpaComments ( [] ) )
+                                                                                )
+                                                                                ( HsVar ( NoExtField )
+                                                                                    ( L
+                                                                                        ( EpAnn
+                                                                                            ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 7 15
+                                                                                                ( Just
+                                                                                                    ( BufSpan
+                                                                                                        { bufSpanStart = BufPos
+                                                                                                            { bufPos = 120 }
+                                                                                                        , bufSpanEnd = BufPos
+                                                                                                            { bufPos = 128 }
+                                                                                                        }
+                                                                                                    )
+                                                                                                )
+                                                                                            )
+                                                                                            ( NameAnnTrailing ( [] ) )
+                                                                                            ( EpaComments ( [] ) )
+                                                                                        )
+                                                                                        ( Unqual ( { abstract:OccName } ) )
+                                                                                    )
+                                                                                )
+                                                                            )
+                                                                            ( L
+                                                                                ( EpAnn
+                                                                                    ( EpaSpan RealSrcSpan SrcSpanOneLine "/home/gthomas/code/haskell-language-server/plugins/hls-splice-plugin/test/testdata/TQQPat.hs" 7 16 26
+                                                                                        ( Just
+                                                                                            ( BufSpan
+                                                                                                { bufSpanStart = BufPos
+                                                                                                    { bufPos = 129 }
+                                                                                                , bufSpanEnd = BufPos
+                                                                                                    { bufPos = 139 }
+                                                                                                }
+                                                                                            )
+                                                                                        )
+                                                                                    )
+                                                                                    ( AnnListItem ( [] ) )
+                                                                                    ( EpaComments ( [] ) )
+                                                                                )
+                                                                                ( HsLit ( NoExtField )
+                                                                                    ( HsString
+                                                                                        ( SourceText "" not str"" ) " not str"
+                                                                                    )
+                                                                                )
+                                                                            )
+                                                                        )
+                                                                    )
+                                                                )
+                                                            ) ( [] )
+                                                        )
+                                                        ( EmptyLocalBinds ( NoExtField ) )
+                                                    )
+                                                )
+                                            ) ( [] )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                ) ( [] )
+            )
+        )
+    )
+)
