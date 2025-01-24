@@ -8,7 +8,7 @@ set -eux
 . .github/scripts/env.sh
 . .github/scripts/common.sh
 
-test_package="text-2.1.1"
+test_package="text-2.1.2"
 test_module="src/Data/Text.hs"
 
 create_cradle() {
@@ -60,7 +60,7 @@ test_all_hls() {
         fi
     done
     # install the recommended GHC version so the wrapper can launch HLS
-    ghcup install ghc --set recommended
+    ghcup install ghc --set 9.10.1
     "$bindir/haskell-language-server-wrapper${ext}" typecheck "${test_module}" || fail "failed to typecheck with HLS wrapper"
 }
 
