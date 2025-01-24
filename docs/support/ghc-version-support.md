@@ -17,8 +17,11 @@ Support status (see the support policy below for more details):
 
 | GHC version  | Last supporting HLS version                                                          | Support status                                                              |
 |--------------|--------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 9.10.1       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
-| 9.8.2        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
+| 9.10.1       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full
+support                                                                |
+| 9.8.4        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
+| 9.8.3        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
+| 9.8.2        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
 | 9.8.1        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | full support                                                                |
 | 9.6.6        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
 | 9.6.5        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.1)   | full support                                                                |
@@ -88,7 +91,7 @@ HLS will support major versions of GHC until they are older than _both_
 1. The major version of GHC used in the current Stackage LTS; and
 2. The major version of GHC recommended by GHCup
 
-For example, if 
+For example, if
 
 1. Stackage LTS uses GHC 9.2; and
 2. GHCUp recommends GHC 9.4
