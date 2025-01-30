@@ -8,13 +8,12 @@ import           Control.Monad
 import           Data.Hashable
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.Map             as Map
-import qualified Data.Text            as T
 import           Data.Typeable        (Typeable)
 import           Development.IDE      (RuleResult, action, define,
                                        getFilesOfInterestUntracked,
                                        getPluginConfigAction, ideErrorText,
                                        uses_)
-import           Development.IDE.Test (Cursor, expectDiagnostics)
+import           Development.IDE.Test (ExpectedDiagnostic, expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
@@ -67,8 +66,8 @@ genericConfigTests = testGroup "generic plugin config"
             expectDiagnostics standardDiagnostics
     ]
     where
-        standardDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Warning, (1,0), "Top-level binding")])]
-        testPluginDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Error, (0,0), "testplugin")])]
+        standardDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Warning, (1,0), "Top-level binding", Nothing)])]
+        testPluginDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Error, (0,0), "testplugin", Nothing)])]
 
         runConfigSession subdir session = do
           failIfSessionTimeout $
@@ -110,7 +109,7 @@ type instance RuleResult GetTestDiagnostics = ()
 
 expectDiagnosticsFail
   :: HasCallStack
-  => ExpectBroken 'Ideal [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])]
-  -> ExpectBroken 'Current [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])]
+  => ExpectBroken 'Ideal [(FilePath, [ExpectedDiagnostic])]
+  -> ExpectBroken 'Current [(FilePath, [ExpectedDiagnostic])]
   -> Session ()
 expectDiagnosticsFail _ = expectDiagnostics . unCurrent

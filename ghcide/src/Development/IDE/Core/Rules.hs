@@ -64,6 +64,7 @@ import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
+import           Control.Lens                                 ((%~), (&), (.~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Unlift
 import           Control.Monad.Reader
@@ -161,6 +162,7 @@ import           Ide.Types                                    (DynFlagsModificat
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
                                                                ShowMessageParams (ShowMessageParams))
+import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -486,17 +488,9 @@ reportImportCyclesRule recorder =
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
-          toDiag imp mods = (fp , ShowDiag , ) $ Diagnostic
-            { _range = rng
-            , _severity = Just DiagnosticSeverity_Error
-            , _source = Just "Import cycle detection"
-            , _message = "Cyclic module dependency between " <> showCycle mods
-            , _code = Nothing
-            , _relatedInformation = Nothing
-            , _tags = Nothing
-            , _codeDescription = Nothing
-            , _data_ = Nothing
-            }
+          toDiag imp mods =
+            ideErrorWithSource (Just "Import cycle detection") (Just DiagnosticSeverity_Error) fp ("Cyclic module dependency between " <> showCycle mods) Nothing
+              & fdLspDiagnosticL %~ JL.range .~ rng
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do

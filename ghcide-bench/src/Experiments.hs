@@ -266,7 +266,7 @@ experiments =
             flip allM docs $ \DocumentPositions{..} -> do
                 bottom <- pred . length . T.lines <$> documentContents doc
                 diags <- getCurrentDiagnostics doc
-                case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Nothing) of
+                case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Just "GHC-88464", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
         ),

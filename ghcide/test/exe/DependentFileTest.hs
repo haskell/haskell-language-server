@@ -46,7 +46,7 @@ tests = testGroup "addDependentFile"
         _fooDoc <- createDoc "Foo.hs" "haskell" fooContent
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
-            [("Foo.hs", [(DiagnosticSeverity_Error, (4,11), "Couldn't match type")])]
+            [("Foo.hs", [(DiagnosticSeverity_Error, (4,11), "Couldn't match type", Just "GHC-83865")])]
         -- Now modify the dependent file
         liftIO $ writeFile depFilePath "B"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams

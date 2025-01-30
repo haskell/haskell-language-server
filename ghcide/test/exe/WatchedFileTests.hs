@@ -60,7 +60,7 @@ tests = testGroup "watched files"
           ,"a :: ()"
           ,"a = b"
           ]
-        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'")])]
+        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'", Just "GHC-83865")])]
         -- modify B off editor
         liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
           ["module B where"
@@ -68,7 +68,7 @@ tests = testGroup "watched files"
           ,"b = 0"]
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "B.hs") FileChangeType_Changed ]
-        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'")])]
+        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'", Just "GHC-83865")])]
     ]
   ]
 

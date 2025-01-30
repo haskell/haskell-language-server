@@ -41,6 +41,6 @@ tests =
 
     expectDiagnostics
       [ ( "KnownNat.hs",
-          [(DiagnosticSeverity_Error, (9, 15), "Variable not in scope: c")]
+          [(DiagnosticSeverity_Error, (9, 15), "Variable not in scope: c", Just "GHC-88464")]
           )
       ]

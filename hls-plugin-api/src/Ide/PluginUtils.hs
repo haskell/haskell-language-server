@@ -28,6 +28,7 @@ module Ide.PluginUtils
     allLspCmdIds',
     installSigUsr1Handler,
     subRange,
+    rangesOverlap,
     positionInRange,
     usePropertyLsp,
     -- * Escape
@@ -276,6 +277,21 @@ fullRange s = Range startPos endPos
 
 subRange :: Range -> Range -> Bool
 subRange = isSubrangeOf
+
+
+-- | Check whether the two 'Range's overlap in any way.
+--
+-- >>> rangesOverlap (mkRange 1 0 1 4) (mkRange 1 2 1 5)
+-- True
+-- >>> rangesOverlap (mkRange 1 2 1 5) (mkRange 1 0 1 4)
+-- True
+-- >>> rangesOverlap (mkRange 1 0 1 6) (mkRange 1 2 1 4)
+-- True
+-- >>> rangesOverlap (mkRange 1 2 1 4) (mkRange 1 0 1 6)
+-- True
+rangesOverlap :: Range -> Range -> Bool
+rangesOverlap r1 r2 =
+  r1 ^. L.start <= r2 ^. L.end && r2 ^. L.start <= r1 ^. L.end
 
 -- ---------------------------------------------------------------------
 

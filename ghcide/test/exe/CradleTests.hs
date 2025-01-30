@@ -111,7 +111,7 @@ simpleSubDirectoryTest =
     mainSource <- liftIO $ readFileUtf8 mainPath
     _mdoc <- createDoc mainPath "haskell" mainSource
     expectDiagnosticsWithTags
-      [("a/src/Main.hs", [(DiagnosticSeverity_Warning,(2,0), "Top-level binding", Nothing)]) -- So that we know P has been loaded
+      [("a/src/Main.hs", [(DiagnosticSeverity_Warning,(2,0), "Top-level binding", Just "GHC-38417", Nothing)]) -- So that we know P has been loaded
       ]
     expectNoMoreDiagnostics 0.5
 
@@ -215,7 +215,7 @@ sessionDepsArePickedUp = testWithDummyPluginEmpty'
         "cradle: {direct: {arguments: []}}"
     -- Open without OverloadedStrings and expect an error.
     doc <- createDoc "Foo.hs" "haskell" fooContent
-    expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (3, 6), "Couldn't match type")])]
+    expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (3, 6), "Couldn't match type", Just "GHC-83865")])]
 
     -- Update hie.yaml to enable OverloadedStrings.
     liftIO $
