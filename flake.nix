@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    # for default.nix
+    # For default.nix
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -12,7 +12,7 @@
   };
 
   outputs =
-    inputs@{ self, nixpkgs, flake-utils, ... }:
+    { nixpkgs, flake-utils, ... }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]
     (system:
       let
@@ -50,15 +50,14 @@
 
         mkDevShell = hpkgs: with pkgs; mkShell {
           name = "haskell-language-server-dev-ghc${hpkgs.ghc.version}";
-          # For binary Haskell tools, we use the default nixpkgs GHC
-          # This removes a rebuild with a different GHC version
-          # The drawback of this approach is that our shell may pull two GHC
-          # version in scope.
+          # For binary Haskell tools, we use the default Nixpkgs GHC version.
+          # This removes a rebuild with a different GHC version. The drawback of
+          # this approach is that our shell may pull two GHC versions in scope.
           buildInputs = [
-            # our compiling toolchain
+            # Compiler toolchain
             hpkgs.ghc
             pkgs.haskellPackages.cabal-install
-            # Dependencies needed to build some parts of hackage
+            # Dependencies needed to build some parts of Hackage
             gmp zlib ncurses
             # Changelog tooling
             (gen-hls-changelogs pkgs.haskellPackages)
@@ -68,7 +67,6 @@
             hlint
             (pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.lib.dontCheck pkgs.haskellPackages.opentelemetry-extra))
             capstone
-            # ormolu
             stylish-haskell
             pre-commit
             ] ++ lib.optionals (!stdenv.isDarwin)
@@ -92,7 +90,7 @@
           '';
         };
 
-      in with pkgs; rec {
+      in rec {
         # Developement shell with only dev tools
         devShells = {
           default = mkDevShell pkgs.haskellPackages;
@@ -102,9 +100,7 @@
           shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
         };
 
-        packages = {
-          docs = docs;
-        };
+        packages = { inherit docs; };
 
         # The attributes for the default shell and package changed in recent versions of Nix,
         # these are here for backwards compatibility with the old versions.
