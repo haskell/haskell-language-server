@@ -63,8 +63,6 @@
             (gen-hls-changelogs pkgs.haskellPackages)
             # For the documentation
             pythonWithPackages
-            # @guibou: I'm not sure this is needed.
-            hlint
             (pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.lib.dontCheck pkgs.haskellPackages.opentelemetry-extra))
             capstone
             stylish-haskell
