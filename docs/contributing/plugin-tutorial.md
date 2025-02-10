@@ -1,7 +1,7 @@
 # Let’s write a Haskell Language Server plugin
 Originally written by Pepe Iborra, maintained by the Haskell community.
 
-Haskell Language Server is an LSP server for the Haskell programming language. It builds on several previous efforts
+Haskell Language Server (HLS) is an LSP server for the Haskell programming language. It builds on several previous efforts
 to create a Haskell IDE. You can find many more details on the history and architecture in the [IDE 2020](https://mpickering.github.io/ide/index.html) community page.
 
 In this article we are going to cover the creation of an HLS plugin from scratch: a code lens to display explicit import lists.
@@ -44,7 +44,7 @@ cabal update
 cabal build
 ```
 
-If you run into any issues trying to build the binaries, the #haskell-language-server IRC chat room in
+If you run into any issues trying to build the binaries, the `#haskell-language-server` IRC chat room in
 [Libera Chat](https://libera.chat/) is always a good place to ask for help.
 
 Once cabal is done take a note of the location of the `haskell-language-server` binary and point your LSP client to it. In VSCode this is done by editing the "Haskell Server Executable Path" setting. This way you can simply test your changes by reloading your editor after rebuilding the binary.
