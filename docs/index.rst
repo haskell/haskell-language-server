@@ -1,7 +1,7 @@
 haskell-language-server
 =======================
 
-Official Haskell Language Server implementation. :ref:`Read more<What is haskell-language-server?>`.
+Official Haskell Language Server implementation. :ref:`Read more<What is the Haskell Language Server?>`.
 
 .. toctree::
    :maxdepth: 2
