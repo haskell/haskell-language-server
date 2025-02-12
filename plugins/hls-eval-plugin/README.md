@@ -334,14 +334,7 @@ prop> \(l::[Int]) -> reverse (reverse l) == l
 
 ### Multiline Expressions
 
-```
- >>> :{
-  let
-    x = 1
-    y = 2
-  in x + y + multiline
- :}
-```
+Multiline expressions are not supported, see https://github.com/haskell/haskell-language-server/issues/1817
 
 # Acknowledgments
 
