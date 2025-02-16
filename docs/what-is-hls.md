@@ -1,6 +1,6 @@
-# What is haskell-language-server?
+# What is the Haskell Language Server?
 
-The `haskell-language-server` (HLS) project is an implementation of a server (a "language server") for the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) (LSP).
+The Haskell Language Server (HLS) is an implementation of a server (a "language server") for the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) (LSP).
 A language server talks to a client (typically an editor), which can ask the server to perform various operations, such as reporting errors or providing code completions.
 The advantage of this system is that clients and servers can interoperate more easily so long as they all speak the LSP protocol.
 In the case of HLS, that means that it can be used with many different editors, since editor support for the LSP protocol is now widespread.
@@ -35,7 +35,7 @@ Here are a few pieces of jargon that you may come across in the HLS docs or when
 - *Semantic highlighting*: Special syntax highlighting performed by the server.
 - *Method*: A LSP method is a function in the LSP protocol that the client can invoke to perform some action, e.g. ask for completions at a point.
 
-## haskell-language-server
+## Haskell Language Server
 
 ### HLS and its wrapper
 
@@ -51,7 +51,7 @@ Plugins can also be disabled independently to allow users to customize the behav
 
 These plugins all (currently) live in the HLS repository and are developed in tandem with the core HLS functionality.
 
-See the [configuration page](./configuration.md#generic-plugin-configuration) for more on configuring plugins.
+See the [configuration page](./configuration.md#Generic plugin configuration) for more on configuring plugins.
 
 ### hie-bios
 

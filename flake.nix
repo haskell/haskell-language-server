@@ -27,8 +27,10 @@
           name = "hls-docs";
           src = pkgs.lib.sourceFilesBySuffices ./. [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
           buildInputs = [ pythonWithPackages ];
-          # -n gives warnings on missing link targets, -W makes warnings into errors
-          buildPhase = ''cd docs; sphinx-build -n -W . $out'';
+          buildPhase = ''
+            cd docs
+            make --makefile=${./docs/Makefile} html BUILDDIR=$out
+            '';
           dontInstall = true;
         };
 
