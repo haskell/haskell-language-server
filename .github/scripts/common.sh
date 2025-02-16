@@ -182,6 +182,10 @@ error() { echo_color "${RED}" "$1"; }
 warn() { echo_color "${LT_BROWN}" "$1"; }
 info() { echo_color "${LT_BLUE}" "$1"; }
 
+fail_with_ghcup_logs() {
+  cat /github/workspace/.ghcup/logs/*
+  fail "$!"
+}
 fail() { error "error: $1"; exit 1; }
 
 run() {
