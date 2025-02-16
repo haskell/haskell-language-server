@@ -27,6 +27,7 @@ import           Ide.Types
 -- | Given a DidChangeConfigurationNotification message, this function returns the parsed
 -- Config object if possible.
 getConfigFromNotification :: IdePlugins s -> Config -> A.Value -> Either T.Text Config
+getConfigFromNotification _ defaultValue A.Null  = Right defaultValue
 getConfigFromNotification plugins defaultValue p =
   case A.parse (parseConfig plugins defaultValue) p of
     A.Success c -> Right c
