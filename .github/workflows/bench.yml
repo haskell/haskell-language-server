@@ -62,7 +62,7 @@ jobs:
     # change of the strategy may require changing the bootstrapping/run code
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
 
         # By default, the `pull_request` event has a `GITHUB_SHA` env variable
@@ -101,14 +101,14 @@ jobs:
         tar -czf cabal.tar.gz *
 
     - name: Upload workspace
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: workspace-${{ matrix.ghc }}-${{ matrix.os }}
         retention-days: 1
         path: workspace.tar.gz
 
     - name: Upload .cabal
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cabal-home-${{ matrix.ghc }}-${{ matrix.os }}
         retention-days: 1
@@ -134,13 +134,13 @@ jobs:
         enable-stack: false
 
     - name: Download cabal home
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: cabal-home-${{ matrix.ghc }}-${{ matrix.os }}
         path: .
 
     - name: Download workspace
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: workspace-${{ matrix.ghc }}-${{ matrix.os }}
         path: .
@@ -165,7 +165,7 @@ jobs:
       run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
 
     - name: Archive benchmarking artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bench-results-${{ matrix.example }}-${{ runner.os }}-${{ matrix.ghc }}
         path: benchmark-artifacts.tar.gz
@@ -175,7 +175,7 @@ jobs:
       run: find bench-results -name "*.log" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
 
     - name: Archive benchmark logs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bench-logs-${{ matrix.example }}-${{ runner.os }}-${{ matrix.ghc }}
         path: benchmark-logs.tar.gz

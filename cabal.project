@@ -62,3 +62,8 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
     ghc-lib-parser:filepath
   constraints:
     ghc-lib-parser==9.8.4.20241130
+
+source-repository-package
+  type: git
+  location: https://github.com/soulomoon/hie-bios.git
+  tag: 93582c21372af573e5103bad198777a3317a2df2
