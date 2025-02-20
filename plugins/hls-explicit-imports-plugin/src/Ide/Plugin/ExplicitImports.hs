@@ -31,7 +31,8 @@ import           Data.Functor                         ((<&>))
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
-import           Data.List                            (singleton)
+import           Data.List                            (singleton, sortBy)
+import           Data.List.NonEmpty                   (groupBy, head)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (isJust, isNothing,
                                                        listToMaybe, mapMaybe)
@@ -252,8 +253,13 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
                   (PluginRuleFailed "GetHieAst")
                   (getAsts hieAst Map.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp)
         hintsInfo <- liftIO $ getAllImportedPackagesHints (hscEnv hscEnvEq) (moduleName hieModule) ast
-        -- Filter out empty package names
-        let selectedHintsInfo = hintsInfo & filter (\(_, mbPkg) -> (not . T.null) mbPkg)
+        -- Sort the hints by position and group them by line
+        -- Show only first hint in each line
+        let selectedHintsInfo = hintsInfo
+                             & sortBy (\(Range (Position l1 c1) _, _) (Range (Position l2 c2) _, _) ->
+                                      compare l1 l2 <> compare c1 c2)
+                             & groupBy (\(Range (Position l1 _) _, _) (Range (Position l2 _) _, _) -> l1 == l2)
+                             & map Data.List.NonEmpty.head
         let inlayHints = [ generateInlayHint newRange txt
                          | (range, txt) <- selectedHintsInfo
                          , Just newRange <- [toCurrentRange pmap range]
