@@ -52,6 +52,11 @@ import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.GHC.Compat.Util      (mkFastString)
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
+import           GHC.Num                              (integerFromInt)
+import           GHC.Parser.Annotation                (EpAnn (entry),
+                                                       HasLoc (getHasLoc),
+                                                       realSrcSpan)
+import           GHC.Types.PkgQual                    (RawPkgQual (NoRawPkgQual))
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE,
                                                        handleMaybe)
@@ -252,6 +257,23 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
         ast <- handleMaybe
                   (PluginRuleFailed "GetHieAst")
                   (getAsts hieAst Map.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp)
+        parsedModule <- runActionE "GADT.GetParsedModuleWithComments" state $ useE GetParsedModule nfp
+        let (L _ hsImports) = hsmodImports <$> pm_parsed_source parsedModule
+
+        let isPackageImport :: ImportDecl GhcPs -> Bool
+            isPackageImport ImportDecl{ideclPkgQual = NoRawPkgQual} = False
+            isPackageImport _                                       = True
+
+            annotationToLineNumber :: EpAnn a -> Integer
+            annotationToLineNumber = integerFromInt . srcSpanEndLine . realSrcSpan . getHasLoc . entry
+
+            packageImportLineNumbers :: S.Set Integer
+            packageImportLineNumbers =
+                S.fromList $
+                    hsImports
+                        & filter (\(L _ importDecl) -> isPackageImport importDecl)
+                        & map (\(L annotation _) -> annotationToLineNumber annotation)
+
         hintsInfo <- liftIO $ getAllImportedPackagesHints (hscEnv hscEnvEq) (moduleName hieModule) ast
         -- Sort the hints by position and group them by line
         -- Show only first hint in each line
@@ -260,6 +282,8 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
                                       compare l1 l2 <> compare c1 c2)
                              & groupBy (\(Range (Position l1 _) _, _) (Range (Position l2 _) _, _) -> l1 == l2)
                              & map Data.List.NonEmpty.head
+                             -- adding 1 because RealSrcLoc begins with 1
+                             & filter (\(Range (Position l _) _, _) -> S.notMember (toInteger l + 1) packageImportLineNumbers)
         let inlayHints = [ generateInlayHint newRange txt
                          | (range, txt) <- selectedHintsInfo
                          , Just newRange <- [toCurrentRange pmap range]
