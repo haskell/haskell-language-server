@@ -29,7 +29,7 @@ suggestFillHole Diagnostic{_range=_range,..}
           Just (firstChr, _) ->
             let isInfixOperator = firstChr == '('
                 name' = getOperatorNotation isInfixHole isInfixOperator name in
-              ( "replace " <> holeName <> " with " <> name
+              ( "Replace " <> holeName <> " with " <> name
               , TextEdit _range (if parenthise then addParens name' else name')
               )
       getOperatorNotation True False name                    = addBackticks name

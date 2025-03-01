@@ -947,7 +947,7 @@ suggestModuleTypo Diagnostic{_range=_range,..}
     | "Could not find module" `T.isInfixOf` _message =
       case T.splitOn "Perhaps you meant" _message of
           [_, stuff] ->
-              [ ("replace with " <> modul, TextEdit _range modul)
+              [ ("Replace with " <> modul, TextEdit _range modul)
               | modul <- mapMaybe extractModule (T.lines stuff)
               ]
           _ -> []
