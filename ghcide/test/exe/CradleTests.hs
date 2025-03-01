@@ -132,6 +132,7 @@ simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtra
     liftIO $ assertBool "A should typecheck" ideResultSuccess
     WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
     liftIO $ assertBool "B should typecheck" ideResultSuccess
+    skipManyTill anyMessage $ isReferenceReady bPath
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
