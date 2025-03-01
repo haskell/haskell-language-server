@@ -1661,7 +1661,7 @@ fixModuleImportTypoTests = testGroup "fix module import typo"
     [ testSession "works when single module suggested" $ do
         doc <- createDoc "A.hs" "haskell" "import Data.Cha"
         _ <- waitForDiagnostics
-        action <- pickActionWithTitle "replace with Data.Char" =<< getCodeActions doc (R 0 0 0 10)
+        action <- pickActionWithTitle "Replace with Data.Char" =<< getCodeActions doc (R 0 0 0 10)
         executeCodeAction action
         contentAfterAction <- documentContents doc
         liftIO $ contentAfterAction @?= "import Data.Char"
@@ -1670,11 +1670,11 @@ fixModuleImportTypoTests = testGroup "fix module import typo"
         _ <- waitForDiagnostics
         actions <- getCodeActions doc (R 0 0 0 10)
         traverse_ (assertActionWithTitle actions)
-          [ "replace with Data.Eq"
-          , "replace with Data.Int"
-          , "replace with Data.Ix"
+          [ "Replace with Data.Eq"
+          , "Replace with Data.Int"
+          , "Replace with Data.Ix"
           ]
-        replaceWithDataEq <- pickActionWithTitle "replace with Data.Eq" actions
+        replaceWithDataEq <- pickActionWithTitle "Replace with Data.Eq" actions
         executeCodeAction replaceWithDataEq
         contentAfterAction <- documentContents doc
         liftIO $ contentAfterAction @?= "import Data.Eq"
@@ -2640,7 +2640,7 @@ importRenameActionTests = testGroup "import rename actions" $
   where
     check modname = checkCodeAction
       ("Data.Mape -> Data." <> T.unpack modname)
-      ("replace with Data." <> modname)
+      ("Replace with Data." <> modname)
       (T.unlines
         [ "module Testing where"
         , "import Data.Mape"
@@ -2686,33 +2686,33 @@ fillTypedHoleTests = let
     liftIO $ expectedCode @=? modifiedCode
   in
   testGroup "fill typed holes"
-  [ check "replace _ with show"
+  [ check "Replace _ with show"
           "_"    "n" "n"
           "show" "n" "n"
 
-  , check "replace _ with globalConvert"
+  , check "Replace _ with globalConvert"
           "_"             "n" "n"
           "globalConvert" "n" "n"
 
-  , check "replace _convertme with localConvert"
+  , check "Replace _convertme with localConvert"
           "_convertme"   "n" "n"
           "localConvert" "n" "n"
 
-  , check "replace _b with globalInt"
+  , check "Replace _b with globalInt"
           "_a" "_b"        "_c"
           "_a" "globalInt" "_c"
 
-  , check "replace _c with globalInt"
+  , check "Replace _c with globalInt"
           "_a" "_b"        "_c"
           "_a" "_b" "globalInt"
 
-  , check "replace _c with parameterInt"
+  , check "Replace _c with parameterInt"
           "_a" "_b" "_c"
           "_a" "_b"  "parameterInt"
-  , check "replace _ with foo _"
+  , check "Replace _ with foo _"
           "_" "n" "n"
           "(foo _)" "n" "n"
-  , testSession "replace _toException with E.toException" $ do
+  , testSession "Replace _toException with E.toException" $ do
       let mkDoc x = T.unlines
             [ "module Testing where"
             , "import qualified Control.Exception as E"
@@ -2721,7 +2721,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
-      chosen <- pickActionWithTitle "replace _toException with E.toException" actions
+      chosen <- pickActionWithTitle "Replace _toException with E.toException" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
@@ -2737,7 +2737,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
-      chosen <- pickActionWithTitle "replace _ with foo" actions
+      chosen <- pickActionWithTitle "Replace _ with foo" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "`foo`" @=? modifiedCode
@@ -2750,7 +2750,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
-      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
+      chosen <- pickActionWithTitle "Replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "(<$>)" @=? modifiedCode
@@ -2763,7 +2763,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
-      chosen <- pickActionWithTitle "replace _ with (<$>)" actions
+      chosen <- pickActionWithTitle "Replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "<$>" @=? modifiedCode
