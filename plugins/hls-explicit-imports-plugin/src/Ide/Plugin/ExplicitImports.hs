@@ -303,13 +303,10 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
             annToPosition ann = case importDeclAnnQualified ann of
                 Just loc -> (srcSpanToPosition $ getHasLoc loc)
                 _ -> (srcSpanToPosition $ getHasLoc $ importDeclAnnImport ann)
-
         in hsImports
             & filter (\(L _ importDecl) -> not $ isPackageImport importDecl)
             & map (\(L _ importDecl) ->
               (annToPosition $ anns $ ideclAnn $ ideclExt importDecl, unLoc $ ideclName importDecl))
-
-
 
 -- |For explicit imports: If there are any implicit imports, provide both one
 -- code action per import to make that specific import explicit, and one code
