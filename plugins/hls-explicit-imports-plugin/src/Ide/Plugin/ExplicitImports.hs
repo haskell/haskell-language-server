@@ -294,19 +294,26 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
             isPackageImport ImportDecl{ideclPkgQual = NoRawPkgQual} = False
             isPackageImport _                                       = True
 
-            (L _ hsImports) = hsmodImports <$> pm_parsed_source parsedModule
+            L _ hsImports = hsmodImports <$> pm_parsed_source parsedModule
 
             srcSpanToPosition :: SrcSpan -> Position
             srcSpanToPosition srcSpan = (realSrcSpanToRange . realSrcSpan $ srcSpan) ^. L.end
 
-            annToPosition :: EpAnnImportDecl -> Position
-            annToPosition ann = case importDeclAnnQualified ann of
-                Just loc -> (srcSpanToPosition $ getHasLoc loc)
-                _ -> (srcSpanToPosition $ getHasLoc $ importDeclAnnImport ann)
+            hintPosition :: ImportDecl GhcPs -> Position
+            hintPosition importDecl =
+              let importAnn = anns $ ideclAnn $ ideclExt importDecl
+                  importPosition = srcSpanToPosition $ getHasLoc $ importDeclAnnImport $ importAnn
+                  moduleNamePosition = srcSpanToPosition $ getHasLoc $ ideclName importDecl
+                  maybeQualifiedPosition = srcSpanToPosition . getHasLoc <$> importDeclAnnQualified importAnn
+              in case maybeQualifiedPosition of
+                  Just qualifiedPosition -> if qualifiedPosition < moduleNamePosition
+                                            then qualifiedPosition
+                                            else importPosition
+                  Nothing -> importPosition
         in hsImports
             & filter (\(L _ importDecl) -> not $ isPackageImport importDecl)
             & map (\(L _ importDecl) ->
-              (annToPosition $ anns $ ideclAnn $ ideclExt importDecl, unLoc $ ideclName importDecl))
+              (hintPosition importDecl, unLoc $ ideclName importDecl))
 
 -- |For explicit imports: If there are any implicit imports, provide both one
 -- code action per import to make that specific import explicit, and one code
