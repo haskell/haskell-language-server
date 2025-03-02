@@ -299,9 +299,16 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
             realSrcSpanToEndPosition :: RealSrcSpan -> Position
             realSrcSpanToEndPosition realSrcSpan = realSrcSpanToRange realSrcSpan ^. L.end
 
+            importAnnotation :: ImportDecl GhcPs -> EpAnnImportDecl
+#if MIN_VERSION_ghc(9,5,0)
+            importAnnotation = anns . ideclAnn . ideclExt
+#else
+            importAnnotation = anns . ideclExt
+#endif
+
             hintPosition :: ImportDecl GhcPs -> Position
             hintPosition importDecl =
-              let importAnn = anns $ ideclAnn $ ideclExt importDecl
+              let importAnn = importAnnotation importDecl
                   importPosition = realSrcSpanToEndPosition . epaLocationRealSrcSpan $ importDeclAnnImport importAnn
                   moduleNamePosition = realSrcSpanToEndPosition $ realSrcSpan $ getLoc $ ideclName importDecl
                   maybeQualifiedPosition = realSrcSpanToEndPosition . epaLocationRealSrcSpan <$> importDeclAnnQualified importAnn
