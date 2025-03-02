@@ -107,7 +107,27 @@ main = defaultTestRunner $ testGroup "import-actions"
               o = "(Athing, Bthing, ... (4 items))"
           in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
       ]
-    ]]
+    ],
+  testGroup
+    "Import package inlay hints"
+    [ testGroup "Without package imports"
+      [ inlayHintsTestWithCap "ImportUsual" 2 $ (@=?)
+          [mkInlayHintNoTextEdit (Position 2 6) "\"base\""]
+      , inlayHintsTestWithCap "ImportUsual" 3 $ (@=?)
+          [mkInlayHintNoTextEdit (Position 3 16) "\"containers\""]
+      , inlayHintsTestWithCap "ImportUsual" 4 $ (@=?) []
+      , inlayHintsTestWithoutCap "ImportUsual" 2 $ (@=?) []
+      , inlayHintsTestWithoutCap "ImportUsual" 3 $ (@=?) []
+      , inlayHintsTestWithoutCap "ImportUsual" 4 $ (@=?) []
+    ], testGroup "With package imports"
+      [ inlayHintsTestWithCap "ImportWithPackageImport" 3 $ (@=?) []
+      , inlayHintsTestWithCap "ImportWithPackageImport" 4 $ (@=?)
+          [mkInlayHintNoTextEdit (Position 4 16) "\"containers\""]
+      , inlayHintsTestWithCap "ImportWithPackageImport" 5 $ (@=?) []
+      , inlayHintsTestWithoutCap "ImportWithPackageImport" 3 $ (@=?) []
+      , inlayHintsTestWithoutCap "ImportWithPackageImport" 4 $ (@=?) []
+      , inlayHintsTestWithoutCap "ImportWithPackageImport" 5 $ (@=?) []
+    ]]]
 
 -- code action tests
 
@@ -247,6 +267,19 @@ mkInlayHint pos label textEdit =
   , _kind = Nothing
   , _textEdits = Just [textEdit]
   , _tooltip = Just $ InL "Make this import explicit"
+  , _paddingLeft = Just True
+  , _paddingRight = Nothing
+  , _data_ = Nothing
+  }
+
+mkInlayHintNoTextEdit :: Position -> Text -> InlayHint
+mkInlayHintNoTextEdit pos label =
+  InlayHint
+  { _position = pos
+  , _label = InL label
+  , _kind = Nothing
+  , _textEdits = Nothing
+  , _tooltip = Nothing
   , _paddingLeft = Just True
   , _paddingRight = Nothing
   , _data_ = Nothing
