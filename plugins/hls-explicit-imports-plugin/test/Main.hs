@@ -111,23 +111,39 @@ main = defaultTestRunner $ testGroup "import-actions"
   testGroup
     "Import package inlay hints"
     [ testGroup "Without package imports"
-      [ inlayHintsTestWithCap "ImportUsual" 2 $ (@=?)
-          [mkInlayHintNoTextEdit (Position 2 6) "\"base\""]
-      , inlayHintsTestWithCap "ImportUsual" 3 $ (@=?)
-          [mkInlayHintNoTextEdit (Position 3 16) "\"containers\""]
-      , inlayHintsTestWithCap "ImportUsual" 4 $ (@=?) []
-      , inlayHintsTestWithoutCap "ImportUsual" 2 $ (@=?) []
-      , inlayHintsTestWithoutCap "ImportUsual" 3 $ (@=?) []
-      , inlayHintsTestWithoutCap "ImportUsual" 4 $ (@=?) []
-    ], testGroup "With package imports"
-      [ inlayHintsTestWithCap "ImportWithPackageImport" 3 $ (@=?) []
-      , inlayHintsTestWithCap "ImportWithPackageImport" 4 $ (@=?)
-          [mkInlayHintNoTextEdit (Position 4 16) "\"containers\""]
-      , inlayHintsTestWithCap "ImportWithPackageImport" 5 $ (@=?) []
-      , inlayHintsTestWithoutCap "ImportWithPackageImport" 3 $ (@=?) []
-      , inlayHintsTestWithoutCap "ImportWithPackageImport" 4 $ (@=?) []
-      , inlayHintsTestWithoutCap "ImportWithPackageImport" 5 $ (@=?) []
-    ]]]
+      (let testWithCap = inlayHintsTestWithCap "ImportUsual"
+           testWithoutCap = inlayHintsTestWithoutCap "ImportUsual"
+      in
+        [ testWithCap 2 $ (@=?) [mkInlayHintNoTextEdit (Position 2 6) "\"base\""]
+        , testWithCap 3 $ (@=?) [mkInlayHintNoTextEdit (Position 3 16) "\"containers\""]
+        , testWithCap 4 $ (@=?) []
+        , testWithoutCap 2 $ (@=?) []
+        , testWithoutCap 3 $ (@=?) []
+        , testWithoutCap 4 $ (@=?) []
+        ])
+    , testGroup "With package imports"
+      (let testWithCap = inlayHintsTestWithCap "ImportWithPackageImport"
+           testWithoutCap = inlayHintsTestWithoutCap "ImportWithPackageImport"
+      in
+        [ testWithCap 3 $ (@=?) []
+        , testWithCap 4 $ (@=?) [mkInlayHintNoTextEdit (Position 4 16) "\"containers\""]
+        , testWithCap 5 $ (@=?) []
+        , testWithoutCap 3 $ (@=?) []
+        , testWithoutCap 4 $ (@=?) []
+        , testWithoutCap 5 $ (@=?) []
+        ])
+    , testGroup "When using ImportQualifiedPost"
+      (let testWithCap = inlayHintsTestWithCap "ImportWithQualifiedPost"
+           testWithoutCap = inlayHintsTestWithoutCap "ImportWithQualifiedPost"
+      in
+        [ testWithCap 3 $ (@=?) [mkInlayHintNoTextEdit (Position 3 6) "\"base\""]
+        , testWithCap 4 $ (@=?) [mkInlayHintNoTextEdit (Position 4 6) "\"containers\""]
+        , testWithCap 5 $ (@=?) []
+        , testWithoutCap 3 $ (@=?) []
+        , testWithoutCap 4 $ (@=?) []
+        , testWithoutCap 5 $ (@=?) []
+        ])
+    ]]
 
 -- code action tests
 
