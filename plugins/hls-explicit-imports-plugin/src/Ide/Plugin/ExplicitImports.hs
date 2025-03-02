@@ -50,7 +50,7 @@ import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           GHC.Parser.Annotation                (EpAnn (anns),
-                                                       HasLoc (getHasLoc),
+                                                       epaLocationRealSrcSpan,
                                                        realSrcSpan)
 import           GHC.Types.PkgQual                    (RawPkgQual (NoRawPkgQual))
 import           Ide.Plugin.Error                     (PluginError (..),
@@ -296,15 +296,15 @@ importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDo
 
             L _ hsImports = hsmodImports <$> pm_parsed_source parsedModule
 
-            srcSpanToPosition :: SrcSpan -> Position
-            srcSpanToPosition srcSpan = (realSrcSpanToRange . realSrcSpan $ srcSpan) ^. L.end
+            realSrcSpanToEndPosition :: RealSrcSpan -> Position
+            realSrcSpanToEndPosition realSrcSpan = realSrcSpanToRange realSrcSpan ^. L.end
 
             hintPosition :: ImportDecl GhcPs -> Position
             hintPosition importDecl =
               let importAnn = anns $ ideclAnn $ ideclExt importDecl
-                  importPosition = srcSpanToPosition $ getHasLoc $ importDeclAnnImport $ importAnn
-                  moduleNamePosition = srcSpanToPosition $ getHasLoc $ ideclName importDecl
-                  maybeQualifiedPosition = srcSpanToPosition . getHasLoc <$> importDeclAnnQualified importAnn
+                  importPosition = realSrcSpanToEndPosition . epaLocationRealSrcSpan $ importDeclAnnImport importAnn
+                  moduleNamePosition = realSrcSpanToEndPosition $ realSrcSpan $ getLoc $ ideclName importDecl
+                  maybeQualifiedPosition = realSrcSpanToEndPosition . epaLocationRealSrcSpan <$> importDeclAnnQualified importAnn
               in case maybeQualifiedPosition of
                   Just qualifiedPosition -> if qualifiedPosition < moduleNamePosition
                                             then qualifiedPosition
