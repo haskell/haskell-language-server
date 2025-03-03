@@ -94,8 +94,8 @@ newtype Step = Step Int
 ---------------------------------------------------------------------
 -- Keys
 
-
-
+shakeDatabaseDatabase :: ShakeDatabase -> Database
+shakeDatabaseDatabase (ShakeDatabase _ _ x) = x
 
 newtype Value = Value Dynamic
 
@@ -134,6 +134,11 @@ data Status
         runningResult :: Result,     -- LAZY
         runningPrev   :: !(Maybe Result)
         }
+
+instance Show Status where
+    show (Clean _)   = "Clean"
+    show (Dirty _)   = "Dirty"
+    show Running{..} = "Running " ++ show runningStep
 
 viewDirty :: Step -> Status -> Status
 viewDirty currentStep (Running s _ _ re) | currentStep /= s = Dirty re

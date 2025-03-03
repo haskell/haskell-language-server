@@ -139,11 +139,14 @@ import           Development.IDE.Graph                  hiding (ShakeValue,
                                                          action)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
+                                                         shakeDatabaseDatabase,
                                                          shakeGetBuildStep,
                                                          shakeGetDatabaseKeys,
                                                          shakeNewDatabase,
                                                          shakeProfileDatabase,
                                                          shakeRunDatabaseForKeys)
+import           Development.IDE.Graph.Internal.Types   (Status,
+                                                         getDatabaseValues)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
@@ -184,7 +187,7 @@ data Log
   | LogBuildSessionRestart !String ![DelayedActionInternal] !KeySet !Seconds !(Maybe FilePath)
   | LogBuildSessionRestartTakingTooLong !Seconds
   | LogDelayedAction !(DelayedAction ()) !Seconds
-  | LogBuildSessionFinish !(Maybe SomeException)
+  | LogBuildSessionFinish !(Maybe (SomeException, [(Key, Status)]))
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
   | LogDefineEarlyCutoffRuleNoDiagHasDiag !FileDiagnostic
   | LogDefineEarlyCutoffRuleCustomNewnessHasDiag !FileDiagnostic
@@ -214,10 +217,14 @@ instance Pretty Log where
       hsep
         [ "Finished:" <+> pretty (actionName delayedAct)
         , "Took:" <+> pretty (showDuration seconds) ]
-    LogBuildSessionFinish e ->
-      vcat
-        [ "Finished build session"
-        , pretty (fmap displayException e) ]
+    LogBuildSessionFinish mb
+        | Just (e, keyStatues) <- mb ->
+            vcat
+                [ "Finished build session"
+                , pretty $ displayException e
+                , vcat $ "Key statuses:": fmap pretty (show keyStatues)
+                ]
+        | otherwise -> "Finished build session"
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
@@ -890,11 +897,13 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
           res <- try @SomeException $
             restore $ shakeRunDatabaseForKeys (toListKeySet <$> allPendingKeys) shakeDb keysActs
           return $ do
-              let exception =
+              exceptionStatus <-
                     case res of
-                      Left e -> Just e
-                      _      -> Nothing
-              logWith recorder Debug $ LogBuildSessionFinish exception
+                      Left e -> do
+                        ds <- getDatabaseValues $ shakeDatabaseDatabase shakeDb
+                        return $ Just (e, ds)
+                      _      -> return Nothing
+              logWith recorder Debug $ LogBuildSessionFinish exceptionStatus
 
     -- Do the work in a background thread
     workThread <- asyncWithUnmask workRun
