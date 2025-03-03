@@ -222,7 +222,7 @@ instance Pretty Log where
             vcat
                 [ "Finished build session"
                 , pretty $ displayException e
-                , vcat $ "Key statuses:": fmap pretty (show keyStatues)
+                , vcat $ "Key statuses:": fmap (pretty . show) (keyStatues)
                 ]
         | otherwise -> "Finished build session"
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
