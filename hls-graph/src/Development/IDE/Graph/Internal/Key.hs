@@ -95,7 +95,9 @@ instance Eq Key where
 instance Hashable Key where
   hashWithSalt i (UnsafeMkKey x) = hashWithSalt i x
 instance Show Key where
-  show (Key x) = show x
+  show k@(UnsafeMkKey i) = case k of
+    Key x -> show i ++ " (Key " ++ show x ++ ")"
+    _     -> show i
 
 renderKey :: Key -> Text
 renderKey (lookupKeyValue -> KeyValue _ t) = t
