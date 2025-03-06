@@ -86,7 +86,9 @@ newKey k = unsafePerformIO $ do
 lookupKeyValue :: Key -> KeyValue
 lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
   GlobalKeyValueMap _ im _ <- readIORef keyMap
-  pure $! im IM.! x
+  case im IM.!? x of
+    Just v  -> pure $! v
+    Nothing -> error $ "lookupKeyValue: key not found: " ++ show x
 
 {-# NOINLINE lookupKeyValue #-}
 
