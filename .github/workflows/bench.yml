@@ -17,7 +17,6 @@ on:
 jobs:
   pre_job:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'performance')
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
@@ -40,7 +39,7 @@ jobs:
                          ]'
 
   bench_init:
-    if: needs.pre_job.outputs.should_skip != 'true'
+    if: needs.pre_job.outputs.should_skip != 'true' && contains(github.event.pull_request.labels.*.name, 'performance')
     needs: pre_job
     runs-on: ${{ matrix.os }}
 
