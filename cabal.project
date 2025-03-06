@@ -49,7 +49,6 @@ constraints:
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
 
--- https://github.com/haskell/haskell-language-server/issues/4324
 
 if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
   -- By depending on ghc-lib-parser and ghc, we are encountering
@@ -61,6 +60,8 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
   constraints:
     ghc-lib-parser==9.8.4.20241130
 
+-- We need to use a specific version of hp2pretty because of a bug
+-- https://github.com/haskell/haskell-language-server/issues/4324
 source-repository-package
   type: git
   location: https://github.com/soulomoon/hp2pretty.git
