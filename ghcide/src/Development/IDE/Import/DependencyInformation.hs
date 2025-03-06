@@ -115,7 +115,11 @@ idToPath :: PathIdMap -> FilePathId -> NormalizedFilePath
 idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap filePathId
 
 idToModLocation :: PathIdMap -> FilePathId -> ArtifactsLocation
-idToModLocation PathIdMap{idToPathMap} (FilePathId i) = idToPathMap IntMap.! i
+idToModLocation PathIdMap{idToPathMap} (FilePathId i) =
+    case idToPathMap IntMap.!? i of
+    Just x  -> x
+    Nothing -> error "idToModLocation: invariant violated"
+
 
 type BootIdMap = FilePathIdMap FilePathId
 
@@ -304,9 +308,10 @@ buildResultGraph g = propagatedErrors
                Just errs' -> ErrorNode (NonEmpty.map (ParentOfErrorNode . fst) errs')
         findImport :: FilePathId -> FilePathId -> Maybe (Located ModuleName)
         findImport (FilePathId file) importedFile =
-          case g IntMap.! file of
-            Left _ -> error "Tried to call findImport on a module with a parse error"
-            Right ModuleImports{moduleImports} ->
+          case g IntMap.!? file of
+            Nothing -> error "Tried to call findImport on a file that doesn't exist"
+            Just (Left _) -> error "Tried to call findImport on a module with a parse error"
+            Just (Right ModuleImports{moduleImports}) ->
               fmap fst $ find (\(_, resolvedImp) -> resolvedImp == Just importedFile) moduleImports
 
 graphEdges :: FilePathIdMap (Either ModuleParseError ModuleImports) -> [(FilePathId, FilePathId, [FilePathId])]

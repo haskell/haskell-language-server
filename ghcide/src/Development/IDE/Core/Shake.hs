@@ -187,7 +187,7 @@ data Log
   | LogBuildSessionRestart !String ![DelayedActionInternal] !KeySet !Seconds !(Maybe FilePath)
   | LogBuildSessionRestartTakingTooLong !Seconds
   | LogDelayedAction !(DelayedAction ()) !Seconds
-  | LogBuildSessionFinish !(Maybe (SomeException, [(Key, Status)]))
+  | LogBuildSessionFinish !(Maybe (SomeException, [(Key, Status)], Maybe [Key]))
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
   | LogDefineEarlyCutoffRuleNoDiagHasDiag !FileDiagnostic
   | LogDefineEarlyCutoffRuleCustomNewnessHasDiag !FileDiagnostic
@@ -218,11 +218,12 @@ instance Pretty Log where
         [ "Finished:" <+> pretty (actionName delayedAct)
         , "Took:" <+> pretty (showDuration seconds) ]
     LogBuildSessionFinish mb
-        | Just (e, keyStatues) <- mb ->
+        | Just (e, keyStatues, pendingKeys) <- mb ->
             vcat
                 [ "Finished build session"
                 , pretty $ displayException e
                 , vcat $ "Key statuses:": fmap (pretty . show) (keyStatues)
+                , "dirty keys keys:" <+> (maybe "None"  (vcat . fmap (pretty . show)) pendingKeys )
                 ]
         | otherwise -> "Finished build session"
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
@@ -901,7 +902,7 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
                     case res of
                       Left e -> do
                         ds <- getDatabaseValues $ shakeDatabaseDatabase shakeDb
-                        return $ Just (e, ds)
+                        return $ Just (e, ds, toListKeySet <$> allPendingKeys)
                       _      -> return Nothing
               logWith recorder Debug $ LogBuildSessionFinish exceptionStatus
 
