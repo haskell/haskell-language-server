@@ -39,7 +39,7 @@ jobs:
                          ]'
 
   bench_init:
-    if: needs.pre_job.outputs.should_skip != 'true' && contains(github.event.pull_request.labels.*.name, 'performance')
+    if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
 
@@ -114,6 +114,7 @@ jobs:
         path: ~/.cabal/cabal.tar.gz
 
   bench_example:
+    if: contains(github.event.pull_request.labels.*.name, 'performance')
     needs: [bench_init, pre_job]
     runs-on: ${{ matrix.os }}
 
