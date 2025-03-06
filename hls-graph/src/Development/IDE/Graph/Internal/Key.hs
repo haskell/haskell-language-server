@@ -45,6 +45,7 @@ import           Data.IORef
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Typeable
+import           Debug.Trace                   (trace, traceM)
 import           Development.IDE.Graph.Classes
 import           System.IO.Unsafe
 
@@ -74,6 +75,7 @@ keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
 newKey :: (Typeable a, Hashable a, Show a) => a -> Key
 newKey k = unsafePerformIO $ do
   let !newKey = KeyValue k (T.pack (show k))
+  _ <- trace ("newKey: " ++ show k) $ pure ()
   atomicModifyIORef' keyMap $ \km@(GlobalKeyValueMap hm im n) ->
     let new_key = Map.lookup newKey hm
     in case new_key of
