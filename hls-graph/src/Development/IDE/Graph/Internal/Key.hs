@@ -45,7 +45,8 @@ import           Data.IORef
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Typeable
-import           Debug.Trace                   (trace, traceM)
+import           Debug.Trace                   (trace, traceId, traceM,
+                                                traceShowId)
 import           Development.IDE.Graph.Classes
 import           System.IO.Unsafe
 
@@ -73,15 +74,17 @@ keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
 {-# NOINLINE keyMap #-}
 
 newKey :: (Typeable a, Hashable a, Show a) => a -> Key
-newKey k = unsafePerformIO $ do
+newKey k = traceShowId $ unsafePerformIO $ do
   let !newKey = KeyValue k (T.pack (show k))
-  atomicModifyIORef' keyMap $ \km@(GlobalKeyValueMap hm im n) ->
-    let new_key = Map.lookup newKey hm
-    in case new_key of
-          Just v  -> (km, v)
-          Nothing ->
-            let !new_index = UnsafeMkKey n
-            in trace ("index:"  ++ show new_index ++ ", newKey: " ++ show k ) $ (GlobalKeyValueMap (Map.insert newKey new_index hm) (IM.insert n newKey im) (n+1), new_index)
+  atomicModifyIORef' keyMap $
+            \km@(GlobalKeyValueMap hm im n) ->
+                let new_key = Map.lookup newKey hm
+                in case new_key of
+                    Just v  -> (km, v)
+                    Nothing ->
+                        let !new_index = UnsafeMkKey n
+                        in (GlobalKeyValueMap (Map.insert newKey new_index hm) (IM.insert n newKey im) (n+1), new_index)
+
 {-# NOINLINE newKey #-}
 
 lookupKeyValue :: Key -> KeyValue
