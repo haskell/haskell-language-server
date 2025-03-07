@@ -535,7 +535,7 @@ heapProfileRules build = do
     build -/- "*/*/*/*/*.heap.svg" %> \out -> do
       let hpFile = dropExtension2 out <.> "hp"
       need [hpFile]
-      cmd_ ("hp2pretty" :: String) [hpFile]
+      cmd_ ("eventlog2html" :: String) ["--heap-profile", hpFile]
       liftIO $ renameFile (dropExtension hpFile <.> "svg") out
 
 dropExtension2 :: FilePath -> FilePath

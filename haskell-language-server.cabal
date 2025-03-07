@@ -2100,7 +2100,7 @@ benchmark benchmark
     hs-source-dirs: bench
     build-tool-depends:
         haskell-language-server:ghcide-bench,
-        hp2pretty:hp2pretty,
+        eventlog2html:eventlog2html,
     default-extensions:
         LambdaCase
         RecordWildCards
