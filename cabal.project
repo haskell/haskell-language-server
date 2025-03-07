@@ -60,9 +60,3 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
   constraints:
     ghc-lib-parser==9.8.4.20241130
 
--- We need to use a specific version of hp2pretty because of a bug
--- https://github.com/haskell/haskell-language-server/issues/4324
-source-repository-package
-  type: git
-  location: https://github.com/soulomoon/hp2pretty.git
-  tag: 2c794fb0ef8cfae3fa6fcdaa6797fa381207d48e
