@@ -59,4 +59,3 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
     ghc-lib-parser:filepath
   constraints:
     ghc-lib-parser==9.8.4.20241130
-
