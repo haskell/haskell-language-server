@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.6', '9.8']
+        ghc: ['9.8', '9.10']
         os: [ubuntu-latest]
         cabal: ['3.10']
         example: ['cabal', 'lsp-types']
