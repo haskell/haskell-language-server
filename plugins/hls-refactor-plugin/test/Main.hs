@@ -300,6 +300,7 @@ codeActionTests = testGroup "code actions"
   , suggestImportClassMethodTests
   , suggestImportTests
   , suggestAddRecordFieldImportTests
+  , suggestAddCoerceMissingConstructorImportTests
   , suggestHideShadowTests
   , fixConstructorImportTests
   , fixModuleImportTypoTests
@@ -1867,6 +1868,30 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
       action <- pickActionWithTitle "Add foo to the import list of B" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+suggestAddCoerceMissingConstructorImportTests :: TestTree
+suggestAddCoerceMissingConstructorImportTests = testGroup "suggest imports of newtype constructor when using coerce"
+  [ testGroup "The newtype constructor is suggested when a matching representation error"
+    [ theTest
+    ]
+  ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject False
+      let before = T.unlines ["module A where", "import Data.Coerce (coerce)", "import Data.Semigroup (Sum)", "bar = coerce (10 :: Int) :: Sum Int"]
+          after = T.unlines ["module A where", "import Data.Coerce (coerce)", "import Data.Semigroup (Sum)", "import Data.Semigroup (Sum(..))", "bar = coerce (10 :: Int) :: Sum Int"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = 3
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- pickActionWithTitle "import Data.Semigroup (Sum(..))" actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction
