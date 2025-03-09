@@ -1840,6 +1840,8 @@ extractNotInScopeName x
   = Just $ NotInScopeDataConstructor name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
   = Just $ NotInScopeTypeConstructorOrClass name
+  | Just [name] <- matchRegexUnifySpaces x "of newtype ‘([^’]*)’ is not in scope"
+  = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: \\(([^‘ ]+)\\)"
   = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: ([^‘ ]+)"
