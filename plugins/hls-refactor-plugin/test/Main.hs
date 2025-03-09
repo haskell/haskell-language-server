@@ -301,6 +301,7 @@ codeActionTests = testGroup "code actions"
   , suggestImportTests
   , suggestAddRecordFieldImportTests
   , suggestAddCoerceMissingConstructorImportTests
+  , suggestAddGenericMissingConstructorImportTests
   , suggestHideShadowTests
   , fixConstructorImportTests
   , fixModuleImportTypoTests
@@ -1883,6 +1884,31 @@ suggestAddCoerceMissingConstructorImportTests = testGroup "suggest imports of ne
       configureCheckProject False
       let before = T.unlines ["module A where", "import Data.Coerce (coerce)", "import Data.Semigroup (Sum)", "bar = coerce (10 :: Int) :: Sum Int"]
           after = T.unlines ["module A where", "import Data.Coerce (coerce)", "import Data.Semigroup (Sum)", "import Data.Semigroup (Sum(..))", "bar = coerce (10 :: Int) :: Sum Int"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = 3
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- pickActionWithTitle "import Data.Semigroup (Sum(..))" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+suggestAddGenericMissingConstructorImportTests :: TestTree
+suggestAddGenericMissingConstructorImportTests = testGroup "suggest imports of type constructors when using generic deriving"
+  [ testGroup "The type constructors are suggested when not in scope"
+    [ theTest
+    ]
+  ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject False
+      let
+          before = T.unlines ["module A where", "import GHC.Generics", "import Data.Semigroup (Sum)", "deriving instance Generic (Sum Int)"]
+          after = T.unlines ["module A where", "import GHC.Generics", "import Data.Semigroup (Sum)", "import Data.Semigroup (Sum(..))", "deriving instance Generic (Sum Int)"]
           cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A]}}"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
       doc <- createDoc "Test.hs" "haskell" before
