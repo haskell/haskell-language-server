@@ -49,9 +49,6 @@ constraints:
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
 
-if impl(ghc >= 9.9)
-  -- https://github.com/haskell/haskell-language-server/issues/4324
-  benchmarks: False
 
 if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
   -- By depending on ghc-lib-parser and ghc, we are encountering

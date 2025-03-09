@@ -16,8 +16,6 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  if impl(ghc >= 9.10)
-    buildable: False
   exposed-modules:  Development.Benchmark.Rules
   hs-source-dirs:   src
   build-depends:
