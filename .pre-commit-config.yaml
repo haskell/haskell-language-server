@@ -1,32 +1,23 @@
-{
-  "repos": [
-    {
-      "hooks": [
-        {
-          "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^plugins/hls-refactor-plugin/src/Development/IDE/GHC/Compat/ExactPrint.hs$|^ghcide/src/Development/IDE/GHC/Compat/Core.hs$|^ghcide/src/Development/IDE/Spans/Pragmas.hs$|^ghcide/src/Development/IDE/LSP/Outline.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/src/Development/IDE/Core/Rules.hs$|^ghcide/src/Development/IDE/Core/Compile.hs$|^plugins/hls-refactor-plugin/src/Development/IDE/GHC/ExactPrint.hs$|^plugins/hls-refactor-plugin/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$)",
-          "files": "\\.l?hs$",
-          "id": "stylish-haskell",
-          "language": "system",
-          "name": "stylish-haskell",
-          "pass_filenames": true,
-          "types": [
-            "file"
-          ]
-        }
-      ],
-      "repo": "local"
-    },
-    {
-       "repo": "https://github.com/pre-commit/pre-commit-hooks",
-       "rev": "v4.1.0",
-       "hooks": [
-          {
-            "id": "mixed-line-ending",
-            "args": ["--fix", "lf"],
-            "exclude": "test/testdata/.*CRLF.*?\\.hs$"
-          }
-       ]
-    }
-  ]
-}
+# https://pre-commit.com/
+# https://github.com/pre-commit/pre-commit
+repos:
+  - hooks:
+      - entry: stylish-haskell --inplace
+        exclude: >-
+          (^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^plugins/hls-refactor-plugin/src/Development/IDE/GHC/Compat/ExactPrint.hs$|^ghcide/src/Development/IDE/GHC/Compat/Core.hs$|^ghcide/src/Development/IDE/Spans/Pragmas.hs$|^ghcide/src/Development/IDE/LSP/Outline.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/src/Development/IDE/Core/Rules.hs$|^ghcide/src/Development/IDE/Core/Compile.hs$|^plugins/hls-refactor-plugin/src/Development/IDE/GHC/ExactPrint.hs$|^plugins/hls-refactor-plugin/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$)
+        files: \.l?hs$
+        id: stylish-haskell
+        language: system
+        name: stylish-haskell
+        pass_filenames: true
+        types:
+          - file
+    repo: local
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0
+    hooks:
+      - id: mixed-line-ending
+        args:
+          - '--fix'
+          - lf
+        exclude: test/testdata/.*CRLF.*?\.hs$
