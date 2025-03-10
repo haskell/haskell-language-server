@@ -19,9 +19,7 @@ mkdir -p $CI_PROJECT_DIR/.brew_cache
 export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
 mkdir -p $CI_PROJECT_DIR/.brew_logs
 export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
-mkdir -p /private/tmp/.brew_tmp
-export HOMEBREW_TEMP=/private/tmp/.brew_tmp
+export HOMEBREW_TEMP=$(mktemp -d)
 
 #brew update
 brew install ${1+"$@"}
-
