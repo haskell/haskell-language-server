@@ -20,6 +20,7 @@ jobs:
     environment: CI
     runs-on: ubuntu-latest
     env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       S3_HOST: ${{ secrets.S3_HOST }}
@@ -30,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8"]
+        ghc: ["9.10.1", "9.8.4", "9.8.3", "9.6.6", "9.4.8"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -136,7 +137,16 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
-          - ghc: 9.8.2
+          - ghc: 9.8.3
+            platform:
+              { image: "rockylinux:8"
+              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
+          - ghc: 9.8.4
             platform:
               { image: "rockylinux:8"
               , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
@@ -213,7 +223,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8"]
+        ghc: ["9.10.1", "9.8.4", "9.8.3", "9.6.6", "9.4.8"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -273,7 +283,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8"]
+        ghc: ["9.10.1", "9.8.4", "9.8.3", "9.6.6", "9.4.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -318,7 +328,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8"]
+        ghc: ["9.10.1", "9.8.4", "9.8.3", "9.6.6", "9.4.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -363,7 +373,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.10.1", "9.8.2", "9.6.6", "9.4.8"]
+        ghc: ["9.10.1", "9.8.4", "9.8.3", "9.6.6", "9.4.8"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -401,6 +411,7 @@ jobs:
     runs-on: [self-hosted, linux-space, maerwald]
     needs: ["build-linux"]
     env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       TARBALL_EXT: tar.xz
       ARCH: 64
       DEBIAN_FRONTEND: noninteractive
@@ -696,6 +707,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: ["bindist-linux"]
     env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       TARBALL_EXT: tar.xz
       ARCH: 64
       DEBIAN_FRONTEND: noninteractive
