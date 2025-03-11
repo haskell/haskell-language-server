@@ -1851,8 +1851,14 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    [ ignoreForGhcVersions [GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    ([ ignoreForGhcVersions [GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
+    ++ [
+        theTestIndirect qualifiedGhcRecords polymorphicType
+        |
+        qualifiedGhcRecords <- [False, True]
+        , polymorphicType <- [False, True]
+        ])
   ]
   where
     theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
@@ -1869,6 +1875,34 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
       action <- pickActionWithTitle "Add foo to the import list of B" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+    theTestIndirect qualifiedGhcRecords polymorphicType = testGroup
+      ((if qualifiedGhcRecords then "qualified-" else "unqualified-")
+      <> ("HasField " :: String)
+      <>
+      (if polymorphicType then "polymorphic-" else "monomorphic-")
+      <> "type ")
+      . (\x -> [x]) $ testSessionWithExtraFiles "hover" def $ \dir -> do
+      -- Hopefully enable project indexing?
+      configureCheckProject True
+
+      let
+          before = T.unlines ["{-# LANGUAGE OverloadedRecordDot #-}", "module A where", if qualifiedGhcRecords then "" else "import GHC.Records", "import C (bar)", "spam = bar.foo"]
+          after = T.unlines ["{-# LANGUAGE OverloadedRecordDot #-}", "module A where", if qualifiedGhcRecords then "" else "import GHC.Records", "import C (bar)", "import B (Foo(..))", "spam = bar.foo"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, B, C]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["module B where", if polymorphicType then "data Foo x = Foo { foo :: x }" else "data Foo = Foo { foo :: Int }"]
+      liftIO $ writeFileUTF8 (dir </> "C.hs") $ unlines ["module C where", "import B", "bar = Foo 10" ]
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = 4
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- pickActionWithTitle "import B (Foo(..))" actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction

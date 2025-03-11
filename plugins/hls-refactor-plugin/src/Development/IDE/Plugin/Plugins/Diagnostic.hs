@@ -21,6 +21,9 @@ matchRegex message regex = case message =~~ regex of
     Nothing                                                -> Nothing
 
 -- | 'matchRegex' combined with 'unifySpaces'
+--
+-- >>> matchRegexUnifySpaces  "hello I'm a cow" "he(ll)o"
+-- Just ["ll"]
 matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegexUnifySpaces message = matchRegex (unifySpaces message)
 
