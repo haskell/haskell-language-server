@@ -1844,6 +1844,30 @@ extractNotInScopeName x
   = Just $ NotInScopeDataConstructor name
   | Just [name] <- matchRegexUnifySpaces x "of newtype ‘([^’]*)’ is not in scope"
   = Just $ NotInScopeThing name
+  -- Match for HasField "foo" Bar String in the context where, e.g. x.foo is
+  -- used, and x :: Bar.
+  --
+  -- This usually mean that the field is not in scope and the correct fix is to
+  -- import (Bar(foo)) or (Bar(..)).
+  --
+  -- However, it is more reliable to match for the type name instead of the field
+  -- name, and most of the time you'll want to import the complete type with all
+  -- their fields instead of the specific field.
+  --
+  -- The regex is convoluted because it accounts for:
+  --
+  -- - Qualified (or not) `HasField`
+  -- - The type bar is always qualified. If it is unqualified, it means that the
+  -- parent module is already imported, and in this context it uses an hint
+  -- already available in the GHC error message. However this regex accounts for
+  -- qualified or not, it does not cost much and should be more robust if the
+  -- hint changes in the future
+  -- - Next regex will account for polymorphic types, which appears as `HasField
+  -- "foo" (Bar Int)...`, e.g. see the parenthesis
+  | Just [_module, name] <- matchRegexUnifySpaces x "No instance for ‘.*HasField \"[^\"]+\" ([^ (.]+\\.)*([^ (.]+).*’"
+  = Just $ NotInScopeThing name
+  | Just [_module, name] <- matchRegexUnifySpaces x "No instance for ‘.*HasField \"[^\"]+\" \\(([^ .]+\\.)*([^ .]+)[^)]*\\).*’"
+  = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: \\(([^‘ ]+)\\)"
   = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: ([^‘ ]+)"
