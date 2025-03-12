@@ -1864,9 +1864,9 @@ extractNotInScopeName x
   -- hint changes in the future
   -- - Next regex will account for polymorphic types, which appears as `HasField
   -- "foo" (Bar Int)...`, e.g. see the parenthesis
-  | Just [_module, name] <- matchRegexUnifySpaces x "No instance for ‘.*HasField \"[^\"]+\" ([^ (.]+\\.)*([^ (.]+).*’"
+  | Just [_module, name] <- matchRegexUnifySpaces x "No instance for [‘(].*HasField \"[^\"]+\" ([^ (.]+\\.)*([^ (.]+).*[’)]"
   = Just $ NotInScopeThing name
-  | Just [_module, name] <- matchRegexUnifySpaces x "No instance for ‘.*HasField \"[^\"]+\" \\(([^ .]+\\.)*([^ .]+)[^)]*\\).*’"
+  | Just [_module, name] <- matchRegexUnifySpaces x "No instance for [‘(].*HasField \"[^\"]+\" \\(([^ .]+\\.)*([^ .]+)[^)]*\\).*[’)]"
   = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: \\(([^‘ ]+)\\)"
   = Just $ NotInScopeThing name
