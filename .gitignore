@@ -7,6 +7,9 @@ cabal.project.local
 
 .tasty-rerun-log
 
+# emacs
+/.dir-locals.el
+
 # shake build information
 _build/
 
