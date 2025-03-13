@@ -59,3 +59,10 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
     ghc-lib-parser:filepath
   constraints:
     ghc-lib-parser==9.8.4.20241130
+
+source-repository-package
+  type: git
+  location: https://github.com/haskell/hie-bios
+  tag: 65df091a4464b43043661d70c1dcfed1ed1fa9a9
+-- see https://github.com/haskell/haskell-language-server/pull/4445#issuecomment-2705787655
+allow-older: hie-bios:optparse-applicative
