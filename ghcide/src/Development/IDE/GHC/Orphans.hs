@@ -53,6 +53,7 @@ instance NFData SafeHaskellMode where rnf = rwhnf
 instance Show Linkable where show = unpack . printOutputable
 #if MIN_VERSION_ghc(9,11,0)
 instance NFData LinkableObjectSort where rnf = rwhnf
+instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
 #else
 instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
 #endif

@@ -52,7 +52,7 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location       (NormalizedFilePath)
+import           Development.IDE.Types.Location       (NormalizedFilePath, Range)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
@@ -62,6 +62,8 @@ import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
 import qualified StmContainers.Map                    as STM
+import qualified Language.LSP.Protocol.Lens  as L
+import Ide.Types (FormattingMethod, FormattingHandler, PluginHandlers, PluginMethodHandler, mkPluginHandler, FormattingType (FormatText, FormatRange))
 
 -- ----------------------------------------------------------------------------
 -- Action wrappers
@@ -180,6 +182,12 @@ fromCurrentRangeE mapping = maybeToExceptT (PluginInvalidUserState "fromCurrentR
 fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
 fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
 
+
+-- todo:9.12 same as Ide.PluginUtils (rangesOverlap), migrate later
+-- import           Ide.PluginUtils                      (rangesOverlap)
+rangesOverlap :: Range -> Range -> Bool
+rangesOverlap r1 r2 =
+  r1 ^. L.start <= r2 ^. L.end && r2 ^. L.start <= r1 ^. L.end
 -- ----------------------------------------------------------------------------
 -- Diagnostics
 -- ----------------------------------------------------------------------------

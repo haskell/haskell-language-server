@@ -338,10 +338,20 @@ type NameCacheUpdater = NameCache
 
 mkHieFile' :: ModSummary
            -> [Avail.AvailInfo]
+#if MIN_VERSION_ghc(9,11,0)
+           -> (HieASTs Type, NameEntityInfo)
+#else
            -> HieASTs Type
+#endif
            -> BS.ByteString
            -> Hsc HieFile
-mkHieFile' ms exports asts src = do
+mkHieFile' ms exports
+#if MIN_VERSION_ghc(9,11,0)
+            (asts, entityInfo)
+#else
+            asts
+#endif
+            src = do
   let Just src_file = ml_hs_file $ ms_location ms
       (asts',arr) = compressTypes asts
   return $ HieFile

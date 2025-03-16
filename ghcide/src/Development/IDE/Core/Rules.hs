@@ -519,7 +519,12 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
 
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
 getHieAstRuleDefinition f hsc tmr = do
-  (diags, masts) <- liftIO $ generateHieAsts hsc tmr
+#if MIN_VERSION_ghc(9,11,0)
+  (diags, mastsFull) <- liftIO $ generateHieAsts hsc tmr
+  let masts = fst <$> mastsFull
+#else
+  (diags, mastsFull@masts) <- liftIO $ generateHieAsts hsc tmr
+#endif
   se <- getShakeExtras
 
   isFoi <- use_ IsFileOfInterest f
@@ -529,7 +534,7 @@ getHieAstRuleDefinition f hsc tmr = do
         LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
           toJSON $ fromNormalizedFilePath f
       pure []
-    _ | Just asts <- masts -> do
+    _ | Just asts <- mastsFull -> do
           source <- getSourceFileSource f
           let exports = tcg_exports $ tmrTypechecked tmr
               modSummary = tmrModSummary tmr
@@ -1063,7 +1068,12 @@ getLinkableRule recorder =
               else pure Nothing
             case mobj_time of
               Just obj_t
-                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ LM (posixSecondsToUTCTime obj_t) (ms_mod hirModSummary) [DotO obj_file]))
+                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ LM (posixSecondsToUTCTime obj_t) (ms_mod hirModSummary)
+                                        $ pure (DotO obj_file
+#if MIN_VERSION_ghc(9,11,0)
+                                        ModuleObject
+#endif
+                                    )))
               _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core (error "object doesn't have time")
         -- Record the linkable so we know not to unload it, and unload old versions
         whenJust ((homeModInfoByteCode =<< hmi) <|> (homeModInfoObject =<< hmi)) $ \(LM time mod _) -> do
@@ -1080,7 +1090,13 @@ getLinkableRule recorder =
               --just before returning it to be loaded. This has a substantial effect on recompile
               --times as the number of loaded modules and splices increases.
               --
-              unload (hscEnv session) (map (\(mod', time') -> LM time' mod' []) $ moduleEnvToList to_keep)
+              unload (hscEnv session) (map (\(mod', time') -> LM time' mod'
+#if MIN_VERSION_ghc(9,11,0)
+                    $ pure (DotO obj_file ModuleObject))
+#else
+                    $ pure (DotO obj_file))
+#endif
+                    $ moduleEnvToList to_keep)
               return (to_keep, ())
         return (fileHash <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash))
 

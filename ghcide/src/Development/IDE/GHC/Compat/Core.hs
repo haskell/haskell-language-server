@@ -167,6 +167,7 @@ module Development.IDE.GHC.Compat.Core (
     Development.IDE.GHC.Compat.Core.initTidyOpts,
     driverNoStop,
     tidyProgram,
+    tidyOpenType,
     ImportedModsVal(..),
     importedByUser,
     GHC.TypecheckedSource,
@@ -427,7 +428,8 @@ import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
 import qualified GHC.Core.TyCo.Rep           as TyCoRep
 import           GHC.Core.TyCon
-import           GHC.Core.Type
+import           GHC.Core.Type              hiding (tidyOpenType)
+import qualified GHC.Core.Type              as GHC.Core.Type
 import           GHC.Core.Unify
 import           GHC.Core.Utils
 import           GHC.Driver.CmdLine          (Warn (..))
@@ -547,6 +549,7 @@ import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
+import GHC.Types.Var.Env (TidyEnv)
 #if MIN_VERSION_ghc(9,11,0)
 import           System.OsPath.Types (OsPath)
 import           System.OsPath (unsafeEncodeUtf)
@@ -814,6 +817,15 @@ lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevan
 #if MIN_VERSION_ghc(9,11,0)
 type Unlinked = LinkablePart
 pattern LM a b c = Linkable a b c
+{-# COMPLETE LM #-}
+-- state that it is complete
 #endif
 -- pattern LM :: Linkable -> [Linkable] -> [Linkable] -> Linkable
 
+
+tidyOpenType :: TidyEnv -> Type -> Type
+#if !MIN_VERSION_ghc(9,11,0)
+tidyOpenType x = snd . GHC.Core.Type.tidyOpenType x
+#else
+tidyOpenType = GHC.Core.Type.tidyOpenType
+#endif
