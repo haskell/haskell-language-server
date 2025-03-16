@@ -230,7 +230,12 @@ module Development.IDE.GHC.Compat.Core (
     ModuleOrigin(..),
     PackageName(..),
     -- * Linker
+#if !MIN_VERSION_ghc(9,11,0)
     Unlinked(..),
+#else
+    LinkablePart(..),
+    Unlinked,
+#endif
     Linkable(..),
     unload,
     -- * Hooks
@@ -537,6 +542,9 @@ import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
+#if MIN_VERSION_ghc(9,11,0)
+import           System.OsPath.Types (OsPath)
+#endif
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -549,7 +557,11 @@ import           GHC.Types.Avail             (greNamePrintableName)
 import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
+#if !MIN_VERSION_ghc(9,11,0)
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
+#else
+mkHomeModLocation :: DynFlags -> ModuleName -> OsPath -> IO Module.ModLocation
+#endif
 mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
@@ -709,7 +721,7 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
 #endif
     ,gre_par, gre_lcl, gre_imp = (toList -> gre_imp)}
 
-collectHsBindsBinders :: CollectPass p => Bag (XRec p (HsBindLR p idR)) -> [IdP p]
+collectHsBindsBinders :: CollectPass p => LHsBinds p -> [IdP p]
 collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 
 
@@ -789,4 +801,9 @@ mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Noth
 
 #if MIN_VERSION_ghc(9,7,0)
 lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevantGREs)
+#endif
+
+
+#if MIN_VERSION_ghc(9,11,0)
+type Unlinked = LinkablePart
 #endif

@@ -470,7 +470,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
             core_file = codeGutsToCoreFile iface_hash guts
             iface_hash = getModuleHash final_iface
         core_hash1 <- atomicFileWrite se core_fp $ \fp ->
-          writeBinCoreFile fp core_file
+          writeBinCoreFile (ms_hspp_opts ms) fp core_file
         -- We want to drop references to guts and read in a serialized, compact version
         -- of the core file from disk (as it is deserialised lazily)
         -- This is because we don't want to keep the guts in memory for every file in

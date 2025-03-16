@@ -87,14 +87,18 @@ readBinCoreFile name_cache fat_hi_path = do
     return (file, fp)
 
 -- | Write a core file
-writeBinCoreFile :: FilePath -> CoreFile -> IO Fingerprint
-writeBinCoreFile core_path fat_iface = do
+writeBinCoreFile :: DynFlags -> FilePath -> CoreFile -> IO Fingerprint
+writeBinCoreFile dflag core_path fat_iface = do
     bh <- openBinMem initBinMemSize
 
     let quietTrace =
           QuietBinIFace
 
+#if !MIN_VERSION_ghc(9,11,0)
     putWithUserData quietTrace bh fat_iface
+#else
+    putWithUserData (Iface.flagsToIfCompression dflag) quietTrace bh fat_iface
+#endif
 
     -- And send the result to the file
     writeBinMem bh core_path

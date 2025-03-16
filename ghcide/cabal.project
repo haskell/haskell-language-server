@@ -1,0 +1,6 @@
+packages:
+         ./
+
+allow-newer:
+  base
+  , ghc
