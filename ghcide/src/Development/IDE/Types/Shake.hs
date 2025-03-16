@@ -33,10 +33,9 @@ import           GHC.Generics
 import           HieDb.Types                          (HieDb)
 import qualified StmContainers.Map                    as STM
 import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
-                                                       pattern App, pattern Con,
-                                                       typeOf, typeRep,
-                                                       typeRepTyCon)
-import           Unsafe.Coerce                        (unsafeCoerce)
+                                                       eqTypeRep, pattern App,
+                                                       type (:~~:) (HRefl),
+                                                       typeOf, typeRep)
 
 -- | Intended to represent HieDb calls wrapped with (currently) retry
 -- functionality
@@ -86,11 +85,12 @@ fromKey (Key k)
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
 fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
-fromKeyType (Key k) = case typeOf k of
-    App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
-        -> case unsafeCoerce k of
-         Q (_ :: (), f) -> Just (SomeTypeRep a, f)
-    _ -> Nothing
+fromKeyType (Key k)
+  | App tc a <- typeOf k
+  , Just HRefl <- tc `eqTypeRep` (typeRep @Q)
+  , Q (_, f) <- k
+  = Just (SomeTypeRep a, f)
+  | otherwise = Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
 toNoFileKey k = newKey $ Q (k, emptyFilePath)
@@ -101,12 +101,10 @@ newtype Q k = Q (k, NormalizedFilePath)
 instance Show k => Show (Q k) where
     show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
 
--- | Invariant: the 'v' must be in normal form (fully evaluated).
+-- | Invariant: the @v@ must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
 newtype A v = A (Value v)
     deriving Show
-
-instance NFData (A v) where rnf (A v) = v `seq` ()
 
 -- In the Shake database we only store one type of key/result pairs,
 -- namely Q (question) / A (answer).
