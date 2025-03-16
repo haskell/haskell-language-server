@@ -207,6 +207,15 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
+lookupCache :: HscEnv -> InstalledModule -> IO (Maybe InstalledFindResult)
+lookupCache hsc_env installedMod = do
+#if MIN_VERSION_ghc(9,11,0)
+           lookupFinderCache (hsc_FC hsc_env) installedMod
+#else
+           ; moduleLocs <- readIORef (fcModuleCache $ hsc_FC hsc_env)
+           ; return $ lookupInstalledModuleEnv moduleLocs installedMod
+#endif
+
 -- | Install hooks to capture the splices as well as the runtime module dependencies
 captureSplicesAndDeps :: TypecheckHelpers -> HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, ModuleEnv BS.ByteString)
 captureSplicesAndDeps TypecheckHelpers{..} env k = do
@@ -294,14 +303,17 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                  mods_transitive_list =
                                          mapMaybe nodeKeyToInstalledModule $ Set.toList mods_transitive
 
-            -- todo: 9.12
-           ; moduleLocs <- readIORef (fcModuleCache $ hsc_FC hsc_env)
-           ; lbs <- getLinkables [toNormalizedFilePath' file
+            -- todo: 9.12 this is inefficient
+
+           ; lbs <- getLinkables =<<
+                           sequence
+                            [toNormalizedFilePath' <$> file
                                  | installedMod <- mods_transitive_list
-                                 , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs installedMod
-                                       file = case ifr of
-                                         InstalledFound loc _ ->
-                                           fromJust $ ml_hs_file loc
+                                 , let file :: IO FilePath
+                                       file = do
+                                        ifr'<- lookupCache hsc_env installedMod
+                                        case ifr' of
+                                         Just (InstalledFound loc _) | Just l <- ml_hs_file loc -> return l
                                          _ -> panic "hscCompileCoreExprHook: module not found"
                                  ]
            ; let hsc_env' = loadModulesHome (map linkableHomeMod lbs) hsc_env
@@ -920,14 +932,19 @@ handleGenerationErrors' dflags source action =
 -- transitive dependencies will be contained in envs)
 mergeEnvs :: HscEnv -> ModuleGraph -> ModSummary -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
 mergeEnvs env mg ms extraMods envs = do
+#if !MIN_VERSION_ghc(9,11,0)
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
+
     newFinderCache <- concatFC curFinderCache (map hsc_FC envs)
+#endif
     return $! loadModulesHome extraMods $
       let newHug = foldl' mergeHUG (hsc_HUG env) (map hsc_HUG envs) in
       (hscUpdateHUG (const newHug) env){
+#if !MIN_VERSION_ghc(9,11,0)
           hsc_FC = newFinderCache,
+#endif
           hsc_mod_graph = mg
       }
 
@@ -940,6 +957,7 @@ mergeEnvs env mg ms extraMods envs = do
           | HsSrcFile <- mi_hsc_src (hm_iface a) = a
           | otherwise = b
 
+#if !MIN_VERSION_ghc(9,11,0)
         -- Prefer non-boot files over non-boot files
         -- otherwise we can get errors like https://gitlab.haskell.org/ghc/ghc/-/issues/19816
         -- if a boot file shadows over a non-boot file
@@ -953,6 +971,7 @@ mergeEnvs env mg ms extraMods envs = do
           fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv combineModuleLocations) cur fcModules
           fcFiles' <- newIORef $! Map.unions fcFiles
           pure $ FinderCache fcModules' fcFiles'
+#endif
 
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
@@ -1384,15 +1403,14 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- See Note [Recompilation avoidance in the presence of TH]
 checkLinkableDependencies :: MonadIO m => HscEnv -> ([NormalizedFilePath] -> m [BS.ByteString]) -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
 checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
-  moduleLocs <- liftIO $ readIORef (fcModuleCache $ hsc_FC hsc_env)
   let go (mod, hash) = do
-        ifr <- lookupInstalledModuleEnv moduleLocs $ Compat.installedModule (toUnitId $ moduleUnit mod) (moduleName mod)
+        ifr <- lookupCache hsc_env $ Compat.installedModule (toUnitId $ moduleUnit mod) (moduleName mod)
         case ifr of
-          InstalledFound loc _ -> do
-            hs <- ml_hs_file loc
-            pure (toNormalizedFilePath' hs,hash)
-          _ -> Nothing
-      hs_files = mapM go (moduleEnvToList runtime_deps)
+          Just (InstalledFound loc _) | Just hs <- ml_hs_file loc ->
+            pure $ Just (toNormalizedFilePath' hs,hash)
+          _ -> return Nothing
+      hs_files' = liftIO $ mapM go (moduleEnvToList runtime_deps)
+  hs_files <- fmap sequence hs_files'
   case hs_files of
     Nothing -> error "invalid module graph"
     Just fs -> do
