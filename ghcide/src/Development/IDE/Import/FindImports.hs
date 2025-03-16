@@ -26,6 +26,9 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Types.PkgQual
 import           GHC.Unit.State
+#if MIN_VERSION_ghc(9,11,0)
+import           GHC.Driver.DynFlags
+#endif
 import           System.FilePath
 
 
@@ -91,13 +94,19 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
       | isSource = ext ++ "-boot"
       | otherwise = ext
 
+reexportedModulesFrom :: DynFlags -> S.Set ModuleName
+reexportedModulesFrom flag =
+#if MIN_VERSION_ghc(9,11,0)
+    S.fromList $ reexportFrom <$>
+#endif
+        reexportedModules flag
+
 -- | This function is used to map a package name to a set of import paths.
 -- It only returns Just for unit-ids which are possible to import into the
 -- current module. In particular, it will return Nothing for 'main' components
 -- as they can never be imported into another package.
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, ([FilePath], S.Set ModuleName))
-mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModules flags))
-
+mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModulesFrom flags))
 -- | locate a module in either the file system or the package database. Where we go from *daml to
 -- Haskell
 locateModule
@@ -146,7 +155,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       -- about which module unit a imports.
       -- Without multi-component support it is hard to recontruct the dependency environment so
       -- unit a will have both unit b and unit c in scope.
-      map (\uid -> let this_df = homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue) in (uid, importPaths this_df, reexportedModules this_df)) hpt_deps
+      map (\uid -> let this_df = homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue) in (uid, importPaths this_df, reexportedModulesFrom this_df)) hpt_deps
     ue = hsc_unit_env env
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
     hpt_deps :: [UnitId]

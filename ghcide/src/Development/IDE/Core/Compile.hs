@@ -294,6 +294,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                  mods_transitive_list =
                                          mapMaybe nodeKeyToInstalledModule $ Set.toList mods_transitive
 
+            -- todo: 9.12
            ; moduleLocs <- readIORef (fcModuleCache $ hsc_FC hsc_env)
            ; lbs <- getLinkables [toNormalizedFilePath' file
                                  | installedMod <- mods_transitive_list
@@ -430,7 +431,14 @@ mkHiFileResultNoCompile session tcm = do
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
   iface' <- mkIfaceTc hsc_env_tmp sf details ms Nothing tcGblEnv
-  let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
+#if MIN_VERSION_ghc(9,11,0)
+  let iface = set_mi_top_env Nothing iface'
+  -- todo: 9.12, since usages are not expose anymore, we can't update mi_usages.
+#else
+  let iface = iface' {
+        mi_globals = Nothing
+        , mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
+#endif
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -462,7 +470,13 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
-  let final_iface = final_iface' {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
+  let final_iface = final_iface' {
+#if MIN_VERSION_ghc(9,11,0)
+    mi_top_env = Nothing
+#else
+    mi_globals = Nothing
+#endif
+    , mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- do

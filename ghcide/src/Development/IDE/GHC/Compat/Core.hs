@@ -68,6 +68,7 @@ module Development.IDE.GHC.Compat.Core (
     IfaceExport,
     IfaceTyCon(..),
     ModIface,
+    pattern GHC.ModIface,
     ModIface_(..),
     HscSource(..),
     WhereFrom(..),
@@ -365,6 +366,10 @@ module Development.IDE.GHC.Compat.Core (
     getKey,
     module GHC.Driver.Env.KnotVars,
     module GHC.Linker.Types,
+#if MIN_VERSION_ghc(9,11,0)
+    pattern LM,
+#endif
+
     module GHC.Types.Unique.Map,
     module GHC.Utils.TmpFs,
     module GHC.Unit.Finder.Types,
@@ -544,6 +549,7 @@ import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
 #if MIN_VERSION_ghc(9,11,0)
 import           System.OsPath.Types (OsPath)
+import           System.OsPath (unsafeEncodeUtf)
 #endif
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -557,12 +563,13 @@ import           GHC.Types.Avail             (greNamePrintableName)
 import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
-#if !MIN_VERSION_ghc(9,11,0)
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
-#else
-mkHomeModLocation :: DynFlags -> ModuleName -> OsPath -> IO Module.ModLocation
+mkHomeModLocation df mn f = do
+#if MIN_VERSION_ghc(9,11,0)
+    f <- return $ unsafeEncodeUtf f
 #endif
-mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
+    pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
+
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
 
@@ -806,4 +813,7 @@ lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevan
 
 #if MIN_VERSION_ghc(9,11,0)
 type Unlinked = LinkablePart
+pattern LM a b c = Linkable a b c
 #endif
+-- pattern LM :: Linkable -> [Linkable] -> [Linkable] -> Linkable
+

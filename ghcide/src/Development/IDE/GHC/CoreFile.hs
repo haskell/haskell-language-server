@@ -25,7 +25,7 @@ import           GHC.Core
 import           GHC.CoreToIface
 import           GHC.Fingerprint
 #if MIN_VERSION_ghc(9,11,0)
-import qualified GHC.Iface.Load                        as Iface
+import qualified GHC.Iface.Load                  as Iface
 #endif
 import           GHC.Iface.Binary
 import           GHC.Iface.Env
@@ -91,7 +91,7 @@ readBinCoreFile name_cache fat_hi_path = do
 
 -- | Write a core file
 writeBinCoreFile :: DynFlags -> FilePath -> CoreFile -> IO Fingerprint
-writeBinCoreFile dflag core_path fat_iface = do
+writeBinCoreFile _dflag core_path fat_iface = do
     bh <- openBinMem initBinMemSize
 
     let quietTrace =
@@ -100,7 +100,7 @@ writeBinCoreFile dflag core_path fat_iface = do
 #if !MIN_VERSION_ghc(9,11,0)
     putWithUserData quietTrace bh fat_iface
 #else
-    putWithUserData quietTrace (Iface.flagsToIfCompression dflag) bh fat_iface
+    putWithUserData quietTrace (Iface.flagsToIfCompression _dflag) bh fat_iface
 #endif
 
     -- And send the result to the file
