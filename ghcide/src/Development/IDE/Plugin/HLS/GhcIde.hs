@@ -51,8 +51,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
                       Hover.gotoDefinition recorder ide TextDocumentPositionParams{..})
                   <> mkPluginHandler SMethod_TextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
                       Hover.gotoTypeDefinition recorder ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler SMethod_TextDocumentImplementation (\ide _ ImplementationParams{..} ->
-                      Hover.gotoImplementation recorder ide TextDocumentPositionParams{..})
+                --   <> mkPluginHandler SMethod_TextDocumentImplementation (\ide _ ImplementationParams{..} ->
+                --       Hover.gotoImplementation recorder ide TextDocumentPositionParams{..})
                   <> mkPluginHandler SMethod_TextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
                       Hover.documentHighlight recorder ide TextDocumentPositionParams{..})
                   <> mkPluginHandler SMethod_TextDocumentReferences (Hover.references recorder)
