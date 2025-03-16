@@ -24,6 +24,9 @@ import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.Core
 import           GHC.CoreToIface
 import           GHC.Fingerprint
+#if MIN_VERSION_ghc(9,11,0)
+import qualified GHC.Iface.Load                        as Iface
+#endif
 import           GHC.Iface.Binary
 import           GHC.Iface.Env
 import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
@@ -97,7 +100,7 @@ writeBinCoreFile dflag core_path fat_iface = do
 #if !MIN_VERSION_ghc(9,11,0)
     putWithUserData quietTrace bh fat_iface
 #else
-    putWithUserData (Iface.flagsToIfCompression dflag) quietTrace bh fat_iface
+    putWithUserData quietTrace (Iface.flagsToIfCompression dflag) bh fat_iface
 #endif
 
     -- And send the result to the file
