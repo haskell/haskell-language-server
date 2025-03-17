@@ -207,20 +207,6 @@ library
     ghc-options:
       -Werror
 
-flag test-exe
-  description: Build the ghcide-test-preprocessor executable
-  default:     True
-
-executable ghcide-test-preprocessor
-  import: warnings
-  default-language:   GHC2021
-  hs-source-dirs:   test/preprocessor
-  main-is:          Main.hs
-  build-depends:    base >=4 && <5
-
-  if !flag(test-exe)
-    buildable: False
-
 flag executable
   description: Build the ghcide executable
   default:     True
