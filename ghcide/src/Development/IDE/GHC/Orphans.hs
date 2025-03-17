@@ -65,12 +65,12 @@ instance NFData Unlinked where
 #else
   rnf (DotO f)           = rnf f
   rnf (BCOs a b)         = seqCompiledByteCode a `seq` liftRnf rwhnf b
-  rnf (LoadedBCOs us)    = rnf us
 #endif
   rnf (DotA f)           = rnf f
   rnf (DotDLL f)         = rnf f
 #if MIN_VERSION_ghc(9,5,0)
   rnf (CoreBindings wcb) = rnf wcb
+  rnf (LoadedBCOs us)    = rnf us
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
