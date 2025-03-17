@@ -28,9 +28,11 @@ import           Network.URI
 import qualified Progress
 import           System.IO.Extra                   hiding (withTempDir)
 import           System.Mem                        (performGC)
-import           Test.Hls                          (IdeState, def,
+import           Test.Hls                          (GhcVersion (GHC912),
+                                                    IdeState, def,
+                                                    knownBrokenForGhcVersions,
                                                     runSessionWithServerInTmpDir,
-                                                    waitForProgressDone, GhcVersion (GHC912), knownBrokenForGhcVersions)
+                                                    waitForProgressDone)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
