@@ -59,7 +59,7 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
   constraints:
     ghc-lib-parser==9.8.4.20241130
 
-if impl(ghc >= 9.12.2)
+if impl(ghc >= 9.12.0)
   allow-newer:
     base
     , ghc
