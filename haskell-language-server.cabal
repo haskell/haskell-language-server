@@ -106,10 +106,10 @@ flag dynamic
 flag cabalfmt
   description: Enable cabal-fmt plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common cabalfmt
-  if flag(cabalfmt)
+  if flag(cabalfmt) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-cabal-fmt-plugin
     cpp-options: -Dhls_cabalfmt
 
@@ -140,7 +140,7 @@ library hls-cabal-fmt-plugin
 -- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-fmt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(cabalfmt)
+  if !flag(cabalfmt) || !flag(cabal)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/test
@@ -165,7 +165,7 @@ test-suite hls-cabal-fmt-plugin-tests
 flag cabalgild
   description: Enable cabal-gild plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common cabalgild
   if flag(cabalgild)
@@ -198,7 +198,7 @@ library hls-cabal-gild-plugin
 -- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(cabalgild)
+  if !flag(cabalgild) || !flag(cabal)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
@@ -224,7 +224,7 @@ test-suite hls-cabal-gild-plugin-tests
 flag cabal
   description: Enable cabal plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common cabal
   if flag(cabal)
@@ -322,7 +322,7 @@ test-suite hls-cabal-plugin-tests
 flag class
   description: Enable class plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common class
   if flag(class)
@@ -384,7 +384,7 @@ test-suite hls-class-plugin-tests
 flag callHierarchy
   description: Enable call hierarchy plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common callHierarchy
   if flag(callHierarchy)
@@ -444,7 +444,7 @@ test-suite hls-call-hierarchy-plugin-tests
 flag eval
   description: Enable eval plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common eval
   if flag(eval)
@@ -533,7 +533,7 @@ common importLens
 flag importLens
   description: Enable importLens plugin
   default:     True
-  manual:      True
+  manual:      False
 
 library hls-explicit-imports-plugin
   import:           defaults, pedantic, warnings
@@ -583,7 +583,7 @@ test-suite hls-explicit-imports-plugin-tests
 flag rename
   description: Enable rename plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common rename
   if flag(rename)
@@ -641,7 +641,7 @@ test-suite hls-rename-plugin-tests
 flag retrie
   description: Enable retrie plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common retrie
   if flag(retrie) && impl(ghc < 9.10)
@@ -710,7 +710,7 @@ flag ghc-lib
 flag hlint
   description: Enable hlint plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common hlint
   if flag(hlint) && impl(ghc < 9.10)
@@ -791,7 +791,7 @@ test-suite hls-hlint-plugin-tests
 flag stan
   description: Enable stan plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common stan
   if flag(stan)
@@ -854,7 +854,7 @@ test-suite hls-stan-plugin-tests
 flag moduleName
   description: Enable moduleName plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common moduleName
   if flag(moduleName)
@@ -900,7 +900,7 @@ test-suite hls-module-name-plugin-tests
 flag pragmas
   description: Enable pragmas plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common pragmas
   if flag(pragmas)
@@ -951,7 +951,7 @@ test-suite hls-pragmas-plugin-tests
 flag splice
   description: Enable splice plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common splice
   if flag(splice) && impl(ghc < 9.10)
@@ -1008,7 +1008,7 @@ test-suite hls-splice-plugin-tests
 flag alternateNumberFormat
   description: Enable Alternate Number Format plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common alternateNumberFormat
   if flag(alternateNumberFormat)
@@ -1072,7 +1072,7 @@ test-suite hls-alternate-number-format-plugin-tests
 flag qualifyImportedNames
   description: Enable qualifyImportedNames plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common qualifyImportedNames
   if flag(qualifyImportedNames)
@@ -1121,7 +1121,7 @@ test-suite hls-qualify-imported-names-plugin-tests
 flag codeRange
   description: Enable Code Range plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common codeRange
   if flag(codeRange)
@@ -1182,7 +1182,7 @@ test-suite hls-code-range-plugin-tests
 flag changeTypeSignature
   description: Enable changeTypeSignature plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common changeTypeSignature
   if flag(changeTypeSignature)
@@ -1237,7 +1237,7 @@ test-suite hls-change-type-signature-plugin-tests
 flag gadt
   description: Enable gadt plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common gadt
   if flag(gadt)
@@ -1290,7 +1290,7 @@ test-suite hls-gadt-plugin-tests
 flag explicitFixity
   description: Enable explicitFixity plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common explicitFixity
   if flag(explicitFixity)
@@ -1337,7 +1337,7 @@ test-suite hls-explicit-fixity-plugin-tests
 flag explicitFields
   description: Enable explicitFields plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common explicitFields
   if flag(explicitFields)
@@ -1388,7 +1388,7 @@ test-suite hls-explicit-record-fields-plugin-tests
 flag overloadedRecordDot
   description: Enable overloadedRecordDot plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common overloadedRecordDot
   if flag(overloadedRecordDot)
@@ -1437,7 +1437,7 @@ test-suite hls-overloaded-record-dot-plugin-tests
 flag floskell
   description: Enable floskell plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common floskell
   if flag(floskell) && impl(ghc < 9.10)
@@ -1481,7 +1481,7 @@ test-suite hls-floskell-plugin-tests
 flag fourmolu
   description: Enable fourmolu plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common fourmolu
   if flag(fourmolu)
@@ -1537,7 +1537,7 @@ test-suite hls-fourmolu-plugin-tests
 flag ormolu
   description: Enable ormolu plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common ormolu
   if flag(ormolu)
@@ -1594,7 +1594,7 @@ test-suite hls-ormolu-plugin-tests
 flag stylishHaskell
   description: Enable stylishHaskell plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common stylishHaskell
   if flag(stylishHaskell) && impl(ghc < 9.10)
@@ -1641,7 +1641,7 @@ test-suite hls-stylish-haskell-plugin-tests
 flag refactor
   description: Enable refactor plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common refactor
   if flag(refactor)
@@ -1744,7 +1744,7 @@ test-suite hls-refactor-plugin-tests
 flag semanticTokens
   description: Enable semantic tokens plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common semanticTokens
   if flag(semanticTokens)
@@ -1823,7 +1823,7 @@ test-suite hls-semantic-tokens-plugin-tests
 flag notes
   description: Enable notes plugin
   default:     True
-  manual:      True
+  manual:      False
 
 common notes
   if flag(notes)
