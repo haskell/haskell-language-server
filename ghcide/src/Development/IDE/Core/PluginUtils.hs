@@ -56,12 +56,12 @@ import           Development.IDE.Types.Location       (NormalizedFilePath, Range
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
+import           Ide.Types (FormattingHandler, PluginHandlers, FormattingMethod, PluginMethodHandler, mkPluginHandler, FormattingType (..))
+import           Ide.PluginUtils (rangesOverlap)
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
 import qualified StmContainers.Map                    as STM
-import           Ide.Types (FormattingHandler, PluginHandlers, FormattingMethod, PluginMethodHandler, mkPluginHandler, FormattingType (..))
-import           Ide.PluginUtils (rangesOverlap)
 
 -- ----------------------------------------------------------------------------
 -- Action wrappers
