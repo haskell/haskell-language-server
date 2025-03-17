@@ -70,6 +70,8 @@ instance NFData Unlinked where
   rnf (DotDLL f)         = rnf f
 #if MIN_VERSION_ghc(9,5,0)
   rnf (CoreBindings wcb) = rnf wcb
+#endif
+#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,11,0)
   rnf (LoadedBCOs us)    = rnf us
 #endif
 
