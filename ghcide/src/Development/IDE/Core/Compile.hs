@@ -1110,7 +1110,7 @@ mergeEnvs env mg dep_info ms extraMods envs = do
           | HsSrcFile <- mi_hsc_src (hm_iface a) = a
           | otherwise = b
 
-#elif MIN_VERSION_ghc(9,3,0)
+#else
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
@@ -1144,31 +1144,6 @@ mergeEnvs env mg dep_info ms extraMods envs = do
           fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv combineModuleLocations) cur fcModules
           fcFiles' <- newIORef $! Map.unions fcFiles
           pure $ FinderCache fcModules' fcFiles'
-
-#else
-    prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
-    let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
-        ifr = InstalledFound (ms_location ms) im
-    newFinderCache <- newIORef $! Compat.extendInstalledModuleEnv prevFinderCache im ifr
-    return $! loadModulesHome extraMods $
-      env{
-          hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
-          hsc_FC = newFinderCache,
-          hsc_mod_graph = mg
-      }
-
-    where
-        mergeUDFM = plusUDFM_C combineModules
-        combineModules a b
-          | HsSrcFile <- mi_hsc_src (hm_iface a) = a
-          | otherwise = b
-    -- required because 'FinderCache':
-    --  1) doesn't have a 'Monoid' instance,
-    --  2) is abstract and doesn't export constructors
-    -- To work around this, we coerce to the underlying type
-    -- To remove this, I plan to upstream the missing Monoid instance
-        concatFC :: [FinderCache] -> FinderCache
-        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
 #endif
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
