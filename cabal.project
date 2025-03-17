@@ -8,7 +8,6 @@ packages:
          ./hls-test-utils
 
 
-index-state:  2024-12-02T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -59,3 +58,7 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
     ghc-lib-parser:filepath
   constraints:
     ghc-lib-parser==9.8.4.20241130
+
+allow-newer:
+  base
+  , ghc
