@@ -548,6 +548,9 @@ import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
                                               ModIface_ (..), mi_fix
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Hs                      (SrcSpanAnn')
+#endif
 #if MIN_VERSION_ghc(9,11,0)
                                              , pattern ModIface
                                              , set_mi_top_env
