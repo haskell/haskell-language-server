@@ -52,12 +52,18 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location       (NormalizedFilePath, Range)
+import           Development.IDE.Types.Location       (NormalizedFilePath,
+                                                       Range)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
-import           Ide.PluginUtils (rangesOverlap)
-import           Ide.Types (FormattingHandler, PluginHandlers, FormattingMethod, PluginMethodHandler, mkPluginHandler, FormattingType (..))
+import           Ide.PluginUtils                      (rangesOverlap)
+import           Ide.Types                            (FormattingHandler,
+                                                       FormattingMethod,
+                                                       FormattingType (..),
+                                                       PluginHandlers,
+                                                       PluginMethodHandler,
+                                                       mkPluginHandler)
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
