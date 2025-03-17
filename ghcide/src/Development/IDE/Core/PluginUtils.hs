@@ -60,8 +60,8 @@ import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
 import qualified Language.LSP.Protocol.Types          as LSP
 import qualified StmContainers.Map                    as STM
-import qualified Language.LSP.Protocol.Lens  as L
-import Ide.Types (FormattingHandler, PluginHandlers, FormattingMethod, PluginMethodHandler, mkPluginHandler, FormattingType (..))
+import           Ide.Types (FormattingHandler, PluginHandlers, FormattingMethod, PluginMethodHandler, mkPluginHandler, FormattingType (..))
+import           Ide.PluginUtils (rangesOverlap)
 
 -- ----------------------------------------------------------------------------
 -- Action wrappers
@@ -181,11 +181,6 @@ fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Ra
 fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
 
 
--- todo:9.12 same as Ide.PluginUtils (rangesOverlap), migrate later
--- import           Ide.PluginUtils                      (rangesOverlap)
-rangesOverlap :: Range -> Range -> Bool
-rangesOverlap r1 r2 =
-  r1 ^. L.start <= r2 ^. L.end && r2 ^. L.start <= r1 ^. L.end
 -- ----------------------------------------------------------------------------
 -- Diagnostics
 -- ----------------------------------------------------------------------------
