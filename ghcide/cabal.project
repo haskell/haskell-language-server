@@ -1,6 +1,7 @@
 packages:
          ./
 
-allow-newer:
-  base
-  , ghc
+if impl(ghc >= 9.12.0)
+  allow-newer:
+    base
+    , ghc
