@@ -154,7 +154,7 @@ get_defn identifier = NonRec identifier templ
   where
     templ = case maybeUnfoldingTemplate (realIdUnfolding identifier) of
               Nothing -> error "get_dfn: no unfolding template"
-              Just x -> x
+              Just x  -> x
 
 toIfaceTopBndr1 :: Module -> Id -> IfaceId
 toIfaceTopBndr1 mod identifier
