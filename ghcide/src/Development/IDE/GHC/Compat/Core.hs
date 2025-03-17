@@ -68,8 +68,12 @@ module Development.IDE.GHC.Compat.Core (
     IfaceExport,
     IfaceTyCon(..),
     ModIface,
-    pattern GHC.ModIface,
     ModIface_(..),
+#if MIN_VERSION_ghc(9,11,0)
+    pattern ModIface,
+    set_mi_top_env,
+    set_mi_usages,
+#endif
     HscSource(..),
     WhereFrom(..),
     loadInterface,
@@ -543,17 +547,19 @@ import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
-                                              ModIface_ (..), mi_fix)
+                                              ModIface_ (..), mi_fix
+#if MIN_VERSION_ghc(9,11,0)
+                                             , pattern ModIface
+                                             , set_mi_top_env
+                                             , set_mi_usages
+#endif
+                                             )
 import           GHC.Unit.Module.ModSummary  (ModSummary (..))
 import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
 import GHC.Types.Var.Env (TidyEnv)
-#if MIN_VERSION_ghc(9,11,0)
-import           System.OsPath.Types (OsPath)
-import           System.OsPath (unsafeEncodeUtf)
-#endif
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -562,16 +568,26 @@ import           System.OsPath (unsafeEncodeUtf)
 import           GHC.Types.Avail             (greNamePrintableName)
 #endif
 
-#if !MIN_VERSION_ghc(9,9,0)
-import           GHC.Hs                      (SrcSpanAnn')
+#if MIN_VERSION_ghc(9,12,0)
+import System.OsString
+import System.FilePath (splitExtension)
+#endif
+
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Unit.Home.PackageTable
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
-mkHomeModLocation df mn f = do
-#if MIN_VERSION_ghc(9,11,0)
-    f <- return $ unsafeEncodeUtf f
+#if MIN_VERSION_ghc(9,13,0)
+mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn (unsafeEncodeUtf basename) (unsafeEncodeUtf ext) HsSrcFile
+  where
+    (basename, ext) = splitExtension f
+#elif MIN_VERSION_ghc(9,11,0)
+mkHomeModLocation df mn f =
+  pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn (unsafeEncodeUtf f)
+#else
+mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
 #endif
-    pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
 
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan

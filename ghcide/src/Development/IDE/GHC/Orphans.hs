@@ -71,16 +71,22 @@ instance NFData Unlinked where
   rnf (DotDLL f)         = rnf f
 #if MIN_VERSION_ghc(9,5,0)
   rnf (CoreBindings wcb) = rnf wcb
-instance NFData ModLocation where
-    rnf (ModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
 #endif
 
-#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,5,0)
 instance NFData WholeCoreBindings where
-  rnf (WholeCoreBindings bs m ml) = rnf bs `seq` rnf m `seq` rnf ml
+#if MIN_VERSION_ghc(9,11,0)
+  rnf (WholeCoreBindings bs m ml f) = rnf bs `seq` rnf m `seq` rnf ml `seq` rnf f
 #else
-instance NFData WholeCoreBindings where
-  rnf (WholeCoreBindings bs m ml wf) = rnf bs `seq` rnf m `seq` rnf ml `seq` rnf wf
+  rnf (WholeCoreBindings bs m ml) = rnf bs `seq` rnf m `seq` rnf ml
+#endif
+
+instance NFData ModLocation where
+#if MIN_VERSION_ghc(9,11,0)
+    rnf (OsPathModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
+#else
+    rnf (ModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
+#endif
 #endif
 
 instance Show PackageFlag where show = unpack . printOutputable

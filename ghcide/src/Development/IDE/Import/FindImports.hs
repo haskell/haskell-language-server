@@ -106,7 +106,12 @@ reexportedModulesFrom flag =
 -- current module. In particular, it will return Nothing for 'main' components
 -- as they can never be imported into another package.
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, ([FilePath], S.Set ModuleName))
-mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModulesFrom flags))
+#if MIN_VERSION_ghc(9,11,0)
+mkImportDirs _env (i, flags) = Just (i, (importPaths flags, S.fromList $ map reexportTo $ reexportedModules flags))
+#else
+mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModules flags))
+#endif
+
 -- | locate a module in either the file system or the package database. Where we go from *daml to
 -- Haskell
 locateModule

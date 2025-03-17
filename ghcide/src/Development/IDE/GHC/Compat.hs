@@ -180,13 +180,18 @@ import           GHC.StgToByteCode
 import           GHC.Types.CostCentre
 import           GHC.Types.IPE
 import           GHC.Types.SrcLoc                        (combineRealSrcSpans)
+#if !MIN_VERSION_ghc(9,13,0)
 import           GHC.Unit.Home.ModInfo                   (HomePackageTable,
                                                           lookupHpt)
-import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
-                                                          Usage (..))
+#endif
 import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+
+import           GHC.Driver.Config.Stg.Pipeline
+import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
+                                                          Usage (..))
 
 #if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Core.Lint                           (lintInteractiveExpr)
@@ -203,6 +208,13 @@ import           GHC.Driver.Config.CoreToStg.Prep        (initCorePrepConfig)
 #if MIN_VERSION_ghc(9,7,0)
 import           GHC.Tc.Zonk.TcType                      (tcInitTidyEnv)
 #endif
+
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Unit.Home.PackageTable (lookupHpt, HomePackageTable)
+import           GHC.Unit.Home.Graph
+import           Control.Monad (forM_)
+#endif
+
 
 #if !MIN_VERSION_ghc(9,7,0)
 liftZonkM :: a -> a
@@ -501,9 +513,18 @@ mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
 loadModulesHome
     :: [HomeModInfo]
     -> HscEnv
+#if MIN_VERSION_ghc(9,13,0)
+    -> IO ()
+#else
     -> HscEnv
+#endif
 loadModulesHome mod_infos e =
+#if MIN_VERSION_ghc(9,13,0)
+  forM_ mod_infos $
+    flip hscInsertHPT (e { hsc_type_env_vars = emptyKnotVars })
+#else
   hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+#endif
 
 recDotDot :: HsRecFields (GhcPass p) arg -> Maybe Int
 recDotDot x =
