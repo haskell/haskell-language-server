@@ -7,7 +7,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state:  2025-03-17T00:00:00Z
+index-state:  2025-03-17T11:03:01Z
 
 tests: True
 test-show-details: direct
@@ -59,7 +59,21 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
   constraints:
     ghc-lib-parser==9.8.4.20241130
 
-if impl(ghc >= 9.11.0)
+-- keep it here for easy debugging when trying to support new GHC versions
+if impl(ghc >= 9.13.0)
   allow-newer:
     base
     , ghc
+
+source-repository-package
+  type: git
+  location: https://github.com/soulomoon/HieDb.git
+  tag: 9111fd0f2e4d2d5186c4de7afb7ea9f3a2941105
+-- todo remove this once the PR is released
+-- https://github.com/wz1000/HieDb/pull/80
+
+
+source-repository-package
+  type: git
+  location: https://github.com/maoe/ghc-trace-events.git
+  tag: f18107dec920564f7cbcde52e17d0b4b41add5a3

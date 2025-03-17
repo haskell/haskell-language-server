@@ -2090,6 +2090,8 @@ test-suite wrapper-test
 
 benchmark benchmark
     import:           defaults, warnings
+    if impl(ghc > 9.11)
+      buildable: False
     -- Depends on shake-bench which is unbuildable after this point
     type: exitcode-stdio-1.0
     ghc-options: -threaded
