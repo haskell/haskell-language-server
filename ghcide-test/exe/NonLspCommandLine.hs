@@ -44,7 +44,7 @@ withTempDir f = System.IO.Extra.withTempDir $ canonicalizePath >=> f
 copyTestDataFiles :: FilePath -> FilePath -> IO ()
 copyTestDataFiles dir prefix = do
   -- Copy all the test data files to the temporary workspace
-  testDataFiles <- getDirectoryFilesIO ("ghcide/test/data" </> prefix) ["//*"]
+  testDataFiles <- getDirectoryFilesIO ("ghcide-test/test/data" </> prefix) ["//*"]
   for_ testDataFiles $ \f -> do
     createDirectoryIfMissing True $ dir </> takeDirectory f
-    copyFile ("ghcide/test/data" </> prefix </> f) (dir </> f)
+    copyFile ("ghcide-test/test/data" </> prefix </> f) (dir </> f)

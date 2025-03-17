@@ -2027,7 +2027,7 @@ test-suite func-test
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server,
-    ghcide:ghcide-test-preprocessor
+    -- ghcide:ghcide-test-preprocessor
 
   build-depends:
     , aeson
@@ -2131,7 +2131,7 @@ test-suite ghcide-tests
   default-language:   GHC2021
   build-tool-depends:
     , ghcide:ghcide
-    , ghcide:ghcide-test-preprocessor
+    -- , ghcide:ghcide-test-preprocessor
     , implicit-hie:gen-hie
 
   build-depends:
@@ -2174,7 +2174,7 @@ test-suite ghcide-tests
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
 
-  hs-source-dirs:     ghcide/test/exe
+  hs-source-dirs:     ghcide-test/exe
   ghc-options:        -threaded -O0
 
   main-is:            Main.hs
