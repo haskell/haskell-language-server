@@ -188,8 +188,6 @@ import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-
-import           GHC.Driver.Config.Stg.Pipeline
 import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
                                                           Usage (..))
 
