@@ -28,6 +28,7 @@ module Config(
     , withLongTimeout
     , lspTestCaps
     , lspTestCapsNoFileWatches
+    , testDataDir
     ) where
 
 import           Control.Exception           (bracket_)
@@ -47,7 +48,7 @@ import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
 
 testDataDir :: FilePath
-testDataDir = "ghcide" </> "test" </> "data"
+testDataDir = "ghcide-test" </> "data"
 
 mkIdeTestFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkIdeTestFs = FS.mkVirtualFileTree testDataDir
