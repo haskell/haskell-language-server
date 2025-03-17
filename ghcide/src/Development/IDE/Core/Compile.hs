@@ -1188,25 +1188,15 @@ getModSummaryFromImports env fp _modTime mContents = do
                                          implicit_prelude imps
 
 
-        convImport (L _ i) = (
-#if !MIN_VERSION_ghc(9,3,0)
-                               fmap sl_fs
-#endif
-                               (ideclPkgQual i)
-                             , reLoc $ ideclName i)
+        convImport (L _ i) = (ideclPkgQual i, reLoc $ ideclName i)
 
         msrImports = implicit_imports ++ imps
 
-#if MIN_VERSION_ghc(9,3,0)
         rn_pkg_qual = renameRawPkgQual (hsc_unit_env ppEnv)
         rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
         srcImports = rn_imps $ map convImport src_idecls
         textualImports = rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
         ghc_prim_import = not (null _ghc_prim_imports)
-#else
-        srcImports = map convImport src_idecls
-        textualImports = map convImport (implicit_imports ++ ordinary_imps)
-#endif
 
 
     -- Force bits that might keep the string buffer and DynFlags alive unnecessarily
