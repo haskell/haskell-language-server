@@ -2027,7 +2027,7 @@ test-suite func-test
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server,
-    -- ghcide:ghcide-test-preprocessor
+    haskell-language-server:ghcide-test-preprocessor
 
   build-depends:
     , aeson
