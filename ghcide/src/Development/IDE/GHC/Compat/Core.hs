@@ -537,6 +537,7 @@ import           GHC.Types.TyThing
 import           GHC.Types.TyThing.Ppr
 import           GHC.Types.Unique
 import           GHC.Types.Unique.Map
+import           GHC.Types.Var.Env           (TidyEnv)
 import           GHC.Unit.Env
 import           GHC.Unit.Finder             hiding (mkHomeModLocation)
 import qualified GHC.Unit.Finder             as GHC
@@ -548,9 +549,6 @@ import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
                                               ModIface_ (..), mi_fix
-#if !MIN_VERSION_ghc(9,9,0)
-import           GHC.Hs                      (SrcSpanAnn')
-#endif
 #if MIN_VERSION_ghc(9,11,0)
                                              , pattern ModIface
                                              , set_mi_top_env
@@ -562,13 +560,14 @@ import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
-import GHC.Types.Var.Env (TidyEnv)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
+#endif
+
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)
