@@ -372,6 +372,9 @@ mkHieFile' ms exports
       -- mkIfaceExports sorts the AvailInfos for stability
       , hie_exports = mkIfaceExports exports
       , hie_hs_src = src
+#if MIN_VERSION_ghc(9,11,0)
+      , hie_entity_infos = entityInfo
+#endif
       }
 
 addIncludePathsQuote :: FilePath -> DynFlags -> DynFlags
