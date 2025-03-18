@@ -32,6 +32,12 @@ extra-source-files:
   plugins/**/*.txt
   plugins/**/*.hs
 
+  ghcide-test/data/**/*.cabal
+  ghcide-test/data/**/*.hs
+  ghcide-test/data/**/*.hs-boot
+  ghcide-test/data/**/*.project
+  ghcide-test/data/**/*.yaml
+
   bindist/wrapper.in
 
 source-repository head
