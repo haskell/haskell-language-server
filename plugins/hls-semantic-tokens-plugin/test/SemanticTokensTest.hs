@@ -10,7 +10,7 @@ import           Data.Functor                       (void)
 import qualified Data.List                          as T
 import           Data.Map.Strict                    as Map hiding (map)
 import           Data.String                        (fromString)
-import           Data.Text                          hiding (length, map,
+import           Data.Text                          hiding (length, map, show,
                                                      unlines)
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope

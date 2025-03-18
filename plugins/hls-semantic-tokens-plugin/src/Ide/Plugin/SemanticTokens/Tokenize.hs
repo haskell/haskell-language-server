@@ -20,7 +20,17 @@ import qualified Data.Text.Rope                   as Char
 import qualified Data.Text.Utf16.Rope             as Utf16
 import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat       (HieAST (nodeChildren, nodeSpan, sourcedNodeInfo),
+                                                   Identifier,
+                                                   NodeInfo (NodeInfo),
+                                                   NodeOrigin (SourceInfo),
+                                                   RealSrcLoc, RealSrcSpan,
+                                                   SourcedNodeInfo (getSourcedNodeInfo),
+                                                   nameOccName, occNameString,
+                                                   realSrcSpanEnd,
+                                                   realSrcSpanStart, srcLocCol,
+                                                   srcLocLine, srcSpanEndLine,
+                                                   srcSpanStartLine)
 import           Development.IDE.GHC.Error        (realSrcSpanToCodePointRange)
 import           Ide.Plugin.SemanticTokens.Types  (HsSemanticTokenType (TModule),
                                                    RangeHsSemanticTokenTypes (..))

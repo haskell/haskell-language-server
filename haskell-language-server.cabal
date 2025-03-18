@@ -1744,13 +1744,13 @@ flag semanticTokens
   manual:      True
 
 common semanticTokens
-  if flag(semanticTokens) && impl(ghc < 9.11)
+  if flag(semanticTokens) && impl(ghc < 9.13)
     build-depends: haskell-language-server:hls-semantic-tokens-plugin
     cpp-options: -Dhls_semanticTokens
 
 library hls-semantic-tokens-plugin
   import: defaults, pedantic, warnings
-  if !flag(semanticTokens) || impl(ghc > 9.11)
+  if !flag(semanticTokens) || impl(ghc > 9.13)
     buildable: False
   exposed-modules:
     Ide.Plugin.SemanticTokens
@@ -1791,7 +1791,7 @@ library hls-semantic-tokens-plugin
 
 test-suite hls-semantic-tokens-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(semanticTokens) || impl(ghc > 9.11)
+  if !flag(semanticTokens) || impl(ghc > 9.13)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-semantic-tokens-plugin/test
@@ -1823,13 +1823,13 @@ flag notes
   manual:      True
 
 common notes
-  if flag(notes) && impl(ghc < 9.11)
+  if flag(notes) && impl(ghc < 9.13)
     build-depends: haskell-language-server:hls-notes-plugin
     cpp-options: -Dhls_notes
 
 library hls-notes-plugin
   import: defaults, pedantic, warnings
-  if !flag(notes) || impl(ghc > 9.11)
+  if !flag(notes) || impl(ghc > 9.13)
     buildable: False
   exposed-modules:
     Ide.Plugin.Notes
@@ -1857,7 +1857,7 @@ library hls-notes-plugin
 
 test-suite hls-notes-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(notes) || impl(ghc > 9.11)
+  if !flag(notes) || impl(ghc > 9.13)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-notes-plugin/test
