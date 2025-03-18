@@ -125,7 +125,7 @@ import           Compat.HieUtils
 import           Control.Applicative                     ((<|>))
 import qualified Data.ByteString                         as BS
 import           Data.Coerce                             (coerce)
-#if !MIN_VERSION_ghc(9,7,0)
+#if !MIN_VERSION_ghc(9,9,0)
 import           Data.List                               (foldl')
 #endif
 import qualified Data.Map                                as Map
