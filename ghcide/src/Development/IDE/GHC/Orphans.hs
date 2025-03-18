@@ -25,8 +25,10 @@ import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer             as SB
 import           GHC.Parser.Annotation
+#if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Types.FieldLabel              (DuplicateRecordFields (DuplicateRecordFields, NoDuplicateRecordFields),
                                                     FieldSelectors (FieldSelectors, NoFieldSelectors))
+#endif
 import           GHC.Types.PkgQual
 import           GHC.Types.SrcLoc
 
