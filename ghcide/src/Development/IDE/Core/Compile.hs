@@ -353,7 +353,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
              {- load it -}
 #if MIN_VERSION_ghc(9,11,0)
            ; bco_time <- getCurrentTime
-           ; (fv_hvs, lbss, pkgs) <- loadDecls (hscInterp hsc_env) hsc_env srcspan $
+           ; (fv_hvs, lbss, pkgs) <- loadDecls (hscInterp hsc_env') hsc_env' srcspan $
                    Linkable bco_time (icInteractiveModule ictxt) $ NE.singleton $ BCOs bcos
            ; let hval = ((expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs), lbss, pkgs)
 #else
@@ -733,11 +733,13 @@ generateByteCode (CoreFileTime time) hscEnv summary guts = do
               (warnings, (_, bytecode, sptEntries)) <-
 #endif
                 withWarnings "bytecode" $ \_tweak -> do
-                      let session = _tweak (hscSetFlags (ms_hspp_opts summary) hscEnv)
-                          -- TODO: maybe settings ms_hspp_opts is unnecessary?
-                          summary' = summary { ms_hspp_opts = hsc_dflags session }
-                      hscInteractive session (mkCgInteractiveGuts guts)
-                                (ms_location summary')
+                  let session = _tweak (hscSetFlags (ms_hspp_opts summary) hscEnv)
+                      -- TODO: maybe settings ms_hspp_opts is unnecessary?
+                      summary' = summary {ms_hspp_opts = hsc_dflags session}
+                  hscInteractive
+                    session
+                    (mkCgInteractiveGuts guts)
+                    (ms_location summary')
 #if MIN_VERSION_ghc(9,11,0)
               let unlinked = BCOs bytecode
 #else
@@ -1630,14 +1632,14 @@ coreFileToCgGuts session iface details core_file = do
         })
   core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
       -- Implicit binds aren't saved, so we need to regenerate them ourselves.
-  let _implicit_binds = concatMap getImplicitBinds tyCons -- only used if GHC < 9.6
-      tyCons = typeEnvTyCons (md_types details)
+  let tyCons = typeEnvTyCons (md_types details)
 #if MIN_VERSION_ghc(9,11,0)
   pure $ CgGuts this_mod tyCons core_binds [] NoStubs [] mempty Nothing []
 #elif MIN_VERSION_ghc(9,5,0)
   -- In GHC 9.6, the implicit binds are tidied and part of core_binds
   pure $ CgGuts this_mod tyCons core_binds [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #else
+  let _implicit_binds = concatMap getImplicitBinds tyCons -- only used if GHC < 9.6
   pure $ CgGuts this_mod tyCons (_implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #endif
 
