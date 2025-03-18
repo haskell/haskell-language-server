@@ -26,6 +26,9 @@ import           GHC.CoreToIface
 import           GHC.Fingerprint
 import           GHC.Iface.Binary
 import           GHC.Iface.Env
+#if MIN_VERSION_ghc(9,11,0)
+import qualified GHC.Iface.Load                  as Iface
+#endif
 import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
@@ -87,14 +90,20 @@ readBinCoreFile name_cache fat_hi_path = do
     return (file, fp)
 
 -- | Write a core file
-writeBinCoreFile :: FilePath -> CoreFile -> IO Fingerprint
-writeBinCoreFile core_path fat_iface = do
+writeBinCoreFile :: DynFlags -> FilePath -> CoreFile -> IO Fingerprint
+writeBinCoreFile _dflags core_path fat_iface = do
     bh <- openBinMem initBinMemSize
 
     let quietTrace =
           QuietBinIFace
 
-    putWithUserData quietTrace bh fat_iface
+    putWithUserData
+      quietTrace
+#if MIN_VERSION_ghc(9,11,0)
+      (Iface.flagsToIfCompression _dflags)
+#endif
+      bh
+      fat_iface
 
     -- And send the result to the file
     writeBinMem bh core_path
@@ -141,7 +150,11 @@ getClassImplicitBinds cls
     | (op, val_index) <- classAllSelIds cls `zip` [0..] ]
 
 get_defn :: Id -> CoreBind
-get_defn identifier = NonRec identifier (unfoldingTemplate (realIdUnfolding identifier))
+get_defn identifier = NonRec identifier templ
+  where
+    templ = case maybeUnfoldingTemplate (realIdUnfolding identifier) of
+              Nothing -> error "get_dfn: no unfolding template"
+              Just x  -> x
 
 toIfaceTopBndr1 :: Module -> Id -> IfaceId
 toIfaceTopBndr1 mod identifier

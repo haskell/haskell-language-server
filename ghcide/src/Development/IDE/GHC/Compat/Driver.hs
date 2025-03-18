@@ -40,10 +40,12 @@ import           GHC.Utils.Logger
 import           GHC.Utils.Outputable
 import           GHC.Utils.Panic.Plain
 
+#if !MIN_VERSION_ghc(9,11,0)
 hscTypecheckRenameWithDiagnostics :: HscEnv -> ModSummary -> HsParsedModule
                    -> IO ((TcGblEnv, RenamedStuff), Messages GhcMessage)
 hscTypecheckRenameWithDiagnostics hsc_env mod_summary rdr_module =
     runHsc' hsc_env $ hsc_typecheck True mod_summary (Just rdr_module)
+#endif
 
 -- ============================================================================
 -- DO NOT EDIT - Refer to top of file

@@ -25,8 +25,10 @@ import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer             as SB
 import           GHC.Parser.Annotation
+#if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Types.FieldLabel              (DuplicateRecordFields (DuplicateRecordFields, NoDuplicateRecordFields),
                                                     FieldSelectors (FieldSelectors, NoFieldSelectors))
+#endif
 import           GHC.Types.PkgQual
 import           GHC.Types.SrcLoc
 
@@ -51,22 +53,44 @@ instance Show ModDetails where show = const "<moddetails>"
 instance NFData ModDetails where rnf = rwhnf
 instance NFData SafeHaskellMode where rnf = rwhnf
 instance Show Linkable where show = unpack . printOutputable
+#if MIN_VERSION_ghc(9,11,0)
+instance NFData LinkableObjectSort where rnf = rwhnf
 instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
+#else
+instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
+#endif
 instance NFData Unlinked where
+#if MIN_VERSION_ghc(9,11,0)
+  rnf (DotO f l)         = rnf f `seq` rnf l
+  rnf (LazyBCOs a b)     = seqCompiledByteCode a `seq` liftRnf rwhnf b
+  rnf (BCOs a)           = seqCompiledByteCode a
+#else
   rnf (DotO f)           = rnf f
+  rnf (BCOs a b)         = seqCompiledByteCode a `seq` liftRnf rwhnf b
+#endif
   rnf (DotA f)           = rnf f
   rnf (DotDLL f)         = rnf f
-  rnf (BCOs a b)         = seqCompiledByteCode a `seq` liftRnf rwhnf b
 #if MIN_VERSION_ghc(9,5,0)
   rnf (CoreBindings wcb) = rnf wcb
+#endif
+#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,11,0)
   rnf (LoadedBCOs us)    = rnf us
+#endif
 
+#if MIN_VERSION_ghc(9,5,0)
 instance NFData WholeCoreBindings where
+#if MIN_VERSION_ghc(9,11,0)
+  rnf (WholeCoreBindings bs m ml f) = rnf bs `seq` rnf m `seq` rnf ml `seq` rnf f
+#else
   rnf (WholeCoreBindings bs m ml) = rnf bs `seq` rnf m `seq` rnf ml
+#endif
 
 instance NFData ModLocation where
+#if MIN_VERSION_ghc(9,11,0)
+    rnf (OsPathModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
+#else
     rnf (ModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
-
+#endif
 #endif
 
 instance Show PackageFlag where show = unpack . printOutputable

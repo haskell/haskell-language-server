@@ -125,7 +125,9 @@ import           Compat.HieUtils
 import           Control.Applicative                     ((<|>))
 import qualified Data.ByteString                         as BS
 import           Data.Coerce                             (coerce)
+#if !MIN_VERSION_ghc(9,9,0)
 import           Data.List                               (foldl')
+#endif
 import qualified Data.Map                                as Map
 import qualified Data.Set                                as S
 import           Data.String                             (IsString (fromString))
@@ -180,13 +182,16 @@ import           GHC.StgToByteCode
 import           GHC.Types.CostCentre
 import           GHC.Types.IPE
 import           GHC.Types.SrcLoc                        (combineRealSrcSpans)
+#if !MIN_VERSION_ghc(9,13,0)
 import           GHC.Unit.Home.ModInfo                   (HomePackageTable,
                                                           lookupHpt)
-import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
-                                                          Usage (..))
+#endif
 import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+import           GHC.Unit.Module.Deps                    (Dependencies (dep_direct_mods),
+                                                          Usage (..))
 
 #if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Core.Lint                           (lintInteractiveExpr)
@@ -203,6 +208,13 @@ import           GHC.Driver.Config.CoreToStg.Prep        (initCorePrepConfig)
 #if MIN_VERSION_ghc(9,7,0)
 import           GHC.Tc.Zonk.TcType                      (tcInitTidyEnv)
 #endif
+
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Unit.Home.PackageTable (lookupHpt, HomePackageTable)
+import           GHC.Unit.Home.Graph
+import           Control.Monad (forM_)
+#endif
+
 
 #if !MIN_VERSION_ghc(9,7,0)
 liftZonkM :: a -> a
@@ -338,10 +350,20 @@ type NameCacheUpdater = NameCache
 
 mkHieFile' :: ModSummary
            -> [Avail.AvailInfo]
+#if MIN_VERSION_ghc(9,11,0)
+           -> (HieASTs Type, NameEntityInfo)
+#else
            -> HieASTs Type
+#endif
            -> BS.ByteString
            -> Hsc HieFile
-mkHieFile' ms exports asts src = do
+mkHieFile' ms exports
+#if MIN_VERSION_ghc(9,11,0)
+            (asts, entityInfo)
+#else
+            asts
+#endif
+            src = do
   let Just src_file = ml_hs_file $ ms_location ms
       (asts',arr) = compressTypes asts
   return $ HieFile
@@ -352,6 +374,9 @@ mkHieFile' ms exports asts src = do
       -- mkIfaceExports sorts the AvailInfos for stability
       , hie_exports = mkIfaceExports exports
       , hie_hs_src = src
+#if MIN_VERSION_ghc(9,11,0)
+      , hie_entity_infos = entityInfo
+#endif
       }
 
 addIncludePathsQuote :: FilePath -> DynFlags -> DynFlags
@@ -444,13 +469,16 @@ data GhcVersion
   | GHC96
   | GHC98
   | GHC910
+  | GHC912
   deriving (Eq, Ord, Show, Enum)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_GLASGOW_HASKELL(9,10,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,12,0,0)
+ghcVersion = GHC912
+#elif MIN_VERSION_GLASGOW_HASKELL(9,10,0,0)
 ghcVersion = GHC910
 #elif MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
 ghcVersion = GHC98
@@ -488,9 +516,18 @@ mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
 loadModulesHome
     :: [HomeModInfo]
     -> HscEnv
+#if MIN_VERSION_ghc(9,13,0)
+    -> IO ()
+#else
     -> HscEnv
+#endif
 loadModulesHome mod_infos e =
+#if MIN_VERSION_ghc(9,13,0)
+  forM_ mod_infos $
+    flip hscInsertHPT (e { hsc_type_env_vars = emptyKnotVars })
+#else
   hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+#endif
 
 recDotDot :: HsRecFields (GhcPass p) arg -> Maybe Int
 recDotDot x =

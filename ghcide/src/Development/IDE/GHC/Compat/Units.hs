@@ -81,6 +81,48 @@ type PreloadUnitClosure = UniqSet UnitId
 unitState :: HscEnv -> UnitState
 unitState = ue_units . hsc_unit_env
 
+#if MIN_VERSION_ghc(9,13,0)
+createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> IO HomeUnitGraph
+createUnitEnvFromFlags unitDflags = do
+  emptyHpt <- emptyHomePackageTable
+  let
+    newInternalUnitEnv dflags = mkHomeUnitEnv emptyUnitState Nothing dflags emptyHpt Nothing
+    unitEnvList = NE.map (\dflags -> (homeUnitId_ dflags, newInternalUnitEnv dflags)) unitDflags
+  return $
+    unitEnv_new (Map.fromList (NE.toList (unitEnvList)))
+
+initUnits :: [DynFlags] -> HscEnv -> IO HscEnv
+initUnits unitDflags env = do
+  let dflags0         = hsc_dflags env
+  -- additionally, set checked dflags so we don't lose fixes
+  initial_home_graph <- createUnitEnvFromFlags (dflags0 NE.:| unitDflags)
+  let home_units = unitEnv_keys initial_home_graph
+  home_unit_graph <- forM initial_home_graph $ \homeUnitEnv -> do
+    let cached_unit_dbs = homeUnitEnv_unit_dbs homeUnitEnv
+        dflags = homeUnitEnv_dflags homeUnitEnv
+        old_hpt = homeUnitEnv_hpt homeUnitEnv
+
+    (dbs,unit_state,home_unit,mconstants) <- State.initUnits (hsc_logger env) dflags cached_unit_dbs home_units
+
+    updated_dflags <- DynFlags.updatePlatformConstants dflags mconstants
+    pure HomeUnitEnv
+      { homeUnitEnv_units = unit_state
+      , homeUnitEnv_unit_dbs = Just dbs
+      , homeUnitEnv_dflags = updated_dflags
+      , homeUnitEnv_hpt = old_hpt
+      , homeUnitEnv_home_unit = Just home_unit
+      }
+
+  let dflags1 = homeUnitEnv_dflags $ unitEnv_lookup (homeUnitId_ dflags0) home_unit_graph
+  let unit_env = UnitEnv
+        { ue_platform        = targetPlatform dflags1
+        , ue_namever         = GHC.ghcNameVersion dflags1
+        , ue_home_unit_graph = home_unit_graph
+        , ue_current_unit    = homeUnitId_ dflags0
+        , ue_eps             = ue_eps (hsc_unit_env env)
+        }
+  pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
+#else
 createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> HomeUnitGraph
 createUnitEnvFromFlags unitDflags =
   let
@@ -120,7 +162,7 @@ initUnits unitDflags env = do
         , ue_eps             = ue_eps (hsc_unit_env env)
         }
   pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
-
+#endif
 
 explicitUnits :: UnitState -> [Unit]
 explicitUnits ue =

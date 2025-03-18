@@ -69,6 +69,11 @@ module Development.IDE.GHC.Compat.Core (
     IfaceTyCon(..),
     ModIface,
     ModIface_(..),
+#if MIN_VERSION_ghc(9,11,0)
+    pattern ModIface,
+    set_mi_top_env,
+    set_mi_usages,
+#endif
     HscSource(..),
     WhereFrom(..),
     loadInterface,
@@ -166,6 +171,7 @@ module Development.IDE.GHC.Compat.Core (
     Development.IDE.GHC.Compat.Core.initTidyOpts,
     driverNoStop,
     tidyProgram,
+    tidyOpenType,
     ImportedModsVal(..),
     importedByUser,
     GHC.TypecheckedSource,
@@ -230,7 +236,12 @@ module Development.IDE.GHC.Compat.Core (
     ModuleOrigin(..),
     PackageName(..),
     -- * Linker
+#if !MIN_VERSION_ghc(9,11,0)
     Unlinked(..),
+#else
+    LinkablePart(..),
+    Unlinked,
+#endif
     Linkable(..),
     unload,
     -- * Hooks
@@ -360,6 +371,10 @@ module Development.IDE.GHC.Compat.Core (
     getKey,
     module GHC.Driver.Env.KnotVars,
     module GHC.Linker.Types,
+#if MIN_VERSION_ghc(9,11,0)
+    pattern LM,
+#endif
+
     module GHC.Types.Unique.Map,
     module GHC.Utils.TmpFs,
     module GHC.Unit.Finder.Types,
@@ -417,7 +432,8 @@ import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
 import qualified GHC.Core.TyCo.Rep           as TyCoRep
 import           GHC.Core.TyCon
-import           GHC.Core.Type
+import           GHC.Core.Type              hiding (tidyOpenType)
+import qualified GHC.Core.Type              as GHC.Core.Type
 import           GHC.Core.Unify
 import           GHC.Core.Utils
 import           GHC.Driver.CmdLine          (Warn (..))
@@ -521,6 +537,7 @@ import           GHC.Types.TyThing
 import           GHC.Types.TyThing.Ppr
 import           GHC.Types.Unique
 import           GHC.Types.Unique.Map
+import           GHC.Types.Var.Env           (TidyEnv)
 import           GHC.Unit.Env
 import           GHC.Unit.Finder             hiding (mkHomeModLocation)
 import qualified GHC.Unit.Finder             as GHC
@@ -531,7 +548,13 @@ import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
-                                              ModIface_ (..), mi_fix)
+                                              ModIface_ (..), mi_fix
+#if MIN_VERSION_ghc(9,11,0)
+                                             , pattern ModIface
+                                             , set_mi_top_env
+                                             , set_mi_usages
+#endif
+                                             )
 import           GHC.Unit.Module.ModSummary  (ModSummary (..))
 import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
@@ -539,8 +562,6 @@ import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
 #endif
@@ -549,8 +570,27 @@ import           GHC.Types.Avail             (greNamePrintableName)
 import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
+#if MIN_VERSION_ghc(9,12,0)
+import System.OsString
+import System.FilePath (splitExtension)
+#endif
+
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Unit.Home.PackageTable
+#endif
+
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
+#if MIN_VERSION_ghc(9,13,0)
+mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn (unsafeEncodeUtf basename) (unsafeEncodeUtf ext) HsSrcFile
+  where
+    (basename, ext) = splitExtension f
+#elif MIN_VERSION_ghc(9,11,0)
+mkHomeModLocation df mn f =
+  pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn (unsafeEncodeUtf f)
+#else
 mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
+#endif
+
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
 
@@ -709,7 +749,7 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
 #endif
     ,gre_par, gre_lcl, gre_imp = (toList -> gre_imp)}
 
-collectHsBindsBinders :: CollectPass p => Bag (XRec p (HsBindLR p idR)) -> [IdP p]
+collectHsBindsBinders :: CollectPass p => LHsBinds p -> [IdP p]
 collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 
 
@@ -789,4 +829,21 @@ mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Noth
 
 #if MIN_VERSION_ghc(9,7,0)
 lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevantGREs)
+#endif
+
+
+#if MIN_VERSION_ghc(9,11,0)
+type Unlinked = LinkablePart
+pattern LM a b c = Linkable a b c
+{-# COMPLETE LM #-}
+-- state that it is complete
+#endif
+-- pattern LM :: Linkable -> [Linkable] -> [Linkable] -> Linkable
+
+
+tidyOpenType :: TidyEnv -> Type -> Type
+#if !MIN_VERSION_ghc(9,11,0)
+tidyOpenType x = snd . GHC.Core.Type.tidyOpenType x
+#else
+tidyOpenType = GHC.Core.Type.tidyOpenType
 #endif

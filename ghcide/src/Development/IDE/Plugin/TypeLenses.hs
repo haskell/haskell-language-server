@@ -321,7 +321,7 @@ gblBindingType (Just hsc) (Just gblEnv) = do
         let name = idName identifier
         hasSig name $ do
           env <- tcInitTidyEnv
-          let (_, ty) = tidyOpenType env (idType identifier)
+          let ty = tidyOpenType env (idType identifier)
           pure $ GlobalBindingTypeSig name (printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p

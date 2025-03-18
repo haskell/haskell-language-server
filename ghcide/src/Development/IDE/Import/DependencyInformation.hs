@@ -20,6 +20,7 @@ module Development.IDE.Import.DependencyInformation
   , insertImport
   , pathToId
   , idToPath
+  , idToModLocation
   , reachableModules
   , processDependencyInformation
   , transitiveDeps
