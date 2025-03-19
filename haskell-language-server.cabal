@@ -1,7 +1,7 @@
 cabal-version:      3.4
 category:           Development
 name:               haskell-language-server
-version:            2.9.0.1
+version:            2.10.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -135,8 +135,8 @@ library hls-cabal-fmt-plugin
     , base            >=4.12 && <5
     , directory
     , filepath
-    , ghcide          == 2.9.0.1
-    , hls-plugin-api  == 2.9.0.1
+    , ghcide          == 2.10.0.0
+    , hls-plugin-api  == 2.10.0.0
     , lens
     , lsp-types
     , mtl
@@ -157,8 +157,8 @@ test-suite hls-cabal-fmt-plugin-tests
     , filepath
     , haskell-language-server:hls-cabal-plugin
     , haskell-language-server:hls-cabal-fmt-plugin
-    , hls-plugin-api        == 2.9.0.1
-    , hls-test-utils        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
+    , hls-test-utils        == 2.10.0.0
 
   if flag(isolateCabalfmtTests)
     build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.12
@@ -194,8 +194,8 @@ library hls-cabal-gild-plugin
     , base            >=4.12 && <5
     , directory
     , filepath
-    , ghcide          == 2.9.0.1
-    , hls-plugin-api  == 2.9.0.1
+    , ghcide          == 2.10.0.0
+    , hls-plugin-api  == 2.10.0.0
     , lsp-types
     , text
     , mtl
@@ -215,8 +215,8 @@ test-suite hls-cabal-gild-plugin-tests
     , filepath
     , haskell-language-server:hls-cabal-plugin
     , haskell-language-server:hls-cabal-gild-plugin
-    , hls-plugin-api        == 2.9.0.1
-    , hls-test-utils        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
+    , hls-test-utils        == 2.10.0.0
 
   if flag(isolateCabalGildTests)
     -- https://github.com/tfausak/cabal-gild/issues/89
@@ -272,10 +272,10 @@ library hls-cabal-plugin
     , directory
     , filepath
     , extra                 >=1.7.4
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hashable
-    , hls-plugin-api        == 2.9.0.1
-    , hls-graph             == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
+    , hls-graph             == 2.10.0.0
     , lens
     , lsp                   ^>=2.7
     , lsp-types             ^>=2.3
@@ -315,7 +315,7 @@ test-suite hls-cabal-plugin-tests
     , filepath
     , ghcide
     , haskell-language-server:hls-cabal-plugin
-    , hls-test-utils    == 2.9.0.1
+    , hls-test-utils    == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -354,9 +354,9 @@ library hls-class-plugin
     , extra
     , ghc
     , ghc-exactprint  >= 1.5 && < 1.10.0.0
-    , ghcide          == 2.9.0.1
+    , ghcide          == 2.10.0.0
     , hls-graph
-    , hls-plugin-api  == 2.9.0.1
+    , hls-plugin-api  == 2.10.0.0
     , lens
     , lsp
     , mtl
@@ -378,7 +378,7 @@ test-suite hls-class-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-class-plugin
-    , hls-test-utils     == 2.9.0.1
+    , hls-test-utils     == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -413,9 +413,9 @@ library hls-call-hierarchy-plugin
     , base                  >=4.12 && <5
     , containers
     , extra
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hiedb                 ^>= 0.6.0.0
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp                    >=2.7
     , sqlite-simple
@@ -437,7 +437,7 @@ test-suite hls-call-hierarchy-plugin-tests
     , extra
     , filepath
     , haskell-language-server:hls-call-hierarchy-plugin
-    , hls-test-utils        == 2.9.0.1
+    , hls-test-utils        == 2.10.0.0
     , lens
     , lsp
     , lsp-test
@@ -488,9 +488,9 @@ library hls-eval-plugin
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hls-graph
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp
     , lsp-types
@@ -522,7 +522,7 @@ test-suite hls-eval-plugin-tests
     , filepath
     , haskell-language-server:hls-eval-plugin
     , hls-plugin-api
-    , hls-test-utils   == 2.9.0.1
+    , hls-test-utils   == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -553,9 +553,9 @@ library hls-explicit-imports-plugin
     , containers
     , deepseq
     , ghc
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hls-graph
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp
     , mtl
@@ -577,7 +577,7 @@ test-suite hls-explicit-imports-plugin-tests
     , extra
     , filepath
     , haskell-language-server:hls-explicit-imports-plugin
-    , hls-test-utils   == 2.9.0.1
+    , hls-test-utils   == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -605,11 +605,11 @@ library hls-rename-plugin
   build-depends:
     , base                  >=4.12    && <5
     , containers
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hashable
     , hiedb                 ^>= 0.6.0.0
     , hie-compat
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp-types
@@ -635,7 +635,7 @@ test-suite hls-rename-plugin-tests
     , filepath
     , hls-plugin-api
     , haskell-language-server:hls-rename-plugin
-    , hls-test-utils             == 2.9.0.1
+    , hls-test-utils             == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -667,9 +667,9 @@ library hls-retrie-plugin
     , containers
     , extra
     , ghc
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hashable
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp
@@ -699,7 +699,7 @@ test-suite hls-retrie-plugin-tests
     , filepath
     , hls-plugin-api
     , haskell-language-server:{hls-refactor-plugin, hls-retrie-plugin}
-    , hls-test-utils             == 2.9.0.1
+    , hls-test-utils             == 2.10.0.0
     , text
 
 -----------------------------
@@ -737,10 +737,10 @@ library hls-hlint-plugin
     , containers
     , deepseq
     , filepath
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hashable
     , hlint                 >= 3.5 && < 3.9
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , mtl
     , refact
@@ -785,7 +785,7 @@ test-suite hls-hlint-plugin-tests
     , filepath
     , haskell-language-server:hls-hlint-plugin
     , hls-plugin-api
-    , hls-test-utils      == 2.9.0.1
+    , hls-test-utils      == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -846,7 +846,7 @@ test-suite hls-stan-plugin-tests
     , filepath
     , haskell-language-server:hls-stan-plugin
     , hls-plugin-api
-    , hls-test-utils      == 2.9.0.1
+    , hls-test-utils      == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -878,8 +878,8 @@ library hls-module-name-plugin
     , base                  >=4.12 && <5
     , containers
     , filepath
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , lsp
     , text
     , text-rope
@@ -897,7 +897,7 @@ test-suite hls-module-name-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-module-name-plugin
-    , hls-test-utils          == 2.9.0.1
+    , hls-test-utils          == 2.10.0.0
 
 -----------------------------
 -- pragmas plugin
@@ -924,8 +924,8 @@ library hls-pragmas-plugin
     , aeson
     , extra
     , fuzzy
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , lens-aeson
     , lsp
@@ -945,7 +945,7 @@ test-suite hls-pragmas-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-pragmas-plugin
-    , hls-test-utils      == 2.9.0.1
+    , hls-test-utils      == 2.10.0.0
     , lens
     , lsp-types
     , text
@@ -979,8 +979,8 @@ library hls-splice-plugin
     , extra
     , foldl
     , ghc
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp
@@ -1004,7 +1004,7 @@ test-suite hls-splice-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-splice-plugin
-    , hls-test-utils == 2.9.0.1
+    , hls-test-utils == 2.10.0.0
     , text
 
 -----------------------------
@@ -1032,10 +1032,10 @@ library hls-alternate-number-format-plugin
     , base                 >=4.12 && < 5
     , containers
     , extra
-    , ghcide               == 2.9.0.1
+    , ghcide               == 2.10.0.0
     , ghc-boot-th
     , hls-graph
-    , hls-plugin-api       == 2.9.0.1
+    , hls-plugin-api       == 2.10.0.0
     , lens
     , lsp                  ^>=2.7
     , mtl
@@ -1061,7 +1061,7 @@ test-suite hls-alternate-number-format-plugin-tests
     , base                 >=4.12 && < 5
     , filepath
     , haskell-language-server:hls-alternate-number-format-plugin
-    , hls-test-utils       == 2.9.0.1
+    , hls-test-utils       == 2.10.0.0
     , regex-tdfa
     , tasty-quickcheck
     , text
@@ -1094,8 +1094,8 @@ library hls-qualify-imported-names-plugin
   build-depends:
     , base                  >=4.12 && <5
     , containers
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp
     , text
@@ -1118,7 +1118,7 @@ test-suite hls-qualify-imported-names-plugin-tests
     , text
     , filepath
     , haskell-language-server:hls-qualify-imported-names-plugin
-    , hls-test-utils             == 2.9.0.1
+    , hls-test-utils             == 2.10.0.0
 
 -----------------------------
 -- code range plugin
@@ -1149,9 +1149,9 @@ library hls-code-range-plugin
     , containers
     , deepseq
     , extra
-    , ghcide           == 2.9.0.1
+    , ghcide           == 2.10.0.0
     , hashable
-    , hls-plugin-api   == 2.9.0.1
+    , hls-plugin-api   == 2.10.0.0
     , lens
     , lsp
     , mtl
@@ -1174,7 +1174,7 @@ test-suite hls-code-range-plugin-tests
     , bytestring
     , filepath
     , haskell-language-server:hls-code-range-plugin
-    , hls-test-utils             == 2.9.0.1
+    , hls-test-utils             == 2.10.0.0
     , lens
     , lsp
     , lsp-test
@@ -1203,8 +1203,8 @@ library hls-change-type-signature-plugin
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/src
   build-depends:
     , base             >=4.12 && < 5
-    , ghcide           == 2.9.0.1
-    , hls-plugin-api   == 2.9.0.1
+    , ghcide           == 2.10.0.0
+    , hls-plugin-api   == 2.10.0.0
     , lsp-types
     , regex-tdfa
     , syb
@@ -1229,7 +1229,7 @@ test-suite hls-change-type-signature-plugin-tests
     , base                 >=4.12 && < 5
     , filepath
     , haskell-language-server:hls-change-type-signature-plugin
-    , hls-test-utils       == 2.9.0.1
+    , hls-test-utils       == 2.10.0.0
     , regex-tdfa
     , text
   default-extensions:
@@ -1263,9 +1263,9 @@ library hls-gadt-plugin
     , containers
     , extra
     , ghc
-    , ghcide                 == 2.9.0.1
+    , ghcide                 == 2.10.0.0
     , ghc-exactprint
-    , hls-plugin-api         == 2.9.0.1
+    , hls-plugin-api         == 2.10.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp                    >=2.7
@@ -1286,7 +1286,7 @@ test-suite hls-gadt-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-gadt-plugin
-    , hls-test-utils              == 2.9.0.1
+    , hls-test-utils              == 2.10.0.0
     , text
 
 -----------------------------
@@ -1314,9 +1314,9 @@ library hls-explicit-fixity-plugin
     , containers
     , deepseq
     , extra
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , hashable
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , lsp                   >=2.7
     , text
 
@@ -1333,7 +1333,7 @@ test-suite hls-explicit-fixity-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-explicit-fixity-plugin
-    , hls-test-utils              == 2.9.0.1
+    , hls-test-utils              == 2.10.0.0
     , text
 
 -----------------------------
@@ -1357,8 +1357,8 @@ library hls-explicit-record-fields-plugin
   exposed-modules:  Ide.Plugin.ExplicitFields
   build-depends:
     , base                  >=4.12 && <5
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , lsp
     , lens
     , hls-graph
@@ -1385,7 +1385,7 @@ test-suite hls-explicit-record-fields-plugin-tests
     , text
     , ghcide
     , haskell-language-server:hls-explicit-record-fields-plugin
-    , hls-test-utils              == 2.9.0.1
+    , hls-test-utils              == 2.10.0.0
 
 -----------------------------
 -- overloaded record dot plugin
@@ -1433,7 +1433,7 @@ test-suite hls-overloaded-record-dot-plugin-tests
     , filepath
     , text
     , haskell-language-server:hls-overloaded-record-dot-plugin
-    , hls-test-utils              == 2.9.0.1
+    , hls-test-utils              == 2.10.0.0
 
 
 -----------------------------
@@ -1460,8 +1460,8 @@ library hls-floskell-plugin
   build-depends:
     , base            >=4.12 && <5
     , floskell        ^>=0.11.0
-    , ghcide          == 2.9.0.1
-    , hls-plugin-api  == 2.9.0.1
+    , ghcide          == 2.10.0.0
+    , hls-plugin-api  == 2.10.0.0
     , lsp-types       ^>=2.3
     , mtl
     , text
@@ -1478,7 +1478,7 @@ test-suite hls-floskell-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-floskell-plugin
-    , hls-test-utils       == 2.9.0.1
+    , hls-test-utils       == 2.10.0.0
 
 -----------------------------
 -- fourmolu plugin
@@ -1505,8 +1505,8 @@ library hls-fourmolu-plugin
     , filepath
     , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16
     , ghc-boot-th
-    , ghcide          == 2.9.0.1
-    , hls-plugin-api  == 2.9.0.1
+    , ghcide          == 2.10.0.0
+    , hls-plugin-api  == 2.10.0.0
     , lens
     , lsp
     , mtl
@@ -1533,7 +1533,7 @@ test-suite hls-fourmolu-plugin-tests
     , filepath
     , haskell-language-server:hls-fourmolu-plugin
     , hls-plugin-api
-    , hls-test-utils       == 2.9.0.1
+    , hls-test-utils       == 2.10.0.0
     , lsp-test
 
 -----------------------------
@@ -1561,8 +1561,8 @@ library hls-ormolu-plugin
     , extra
     , filepath
     , ghc-boot-th
-    , ghcide          == 2.9.0.1
-    , hls-plugin-api  == 2.9.0.1
+    , ghcide          == 2.10.0.0
+    , hls-plugin-api  == 2.10.0.0
     , lsp
     , mtl
     , process-extras  >= 0.7.1
@@ -1589,7 +1589,7 @@ test-suite hls-ormolu-plugin-tests
     , filepath
     , haskell-language-server:hls-ormolu-plugin
     , hls-plugin-api
-    , hls-test-utils     == 2.9.0.1
+    , hls-test-utils     == 2.10.0.0
     , lsp-types
     , ormolu
 
@@ -1619,8 +1619,8 @@ library hls-stylish-haskell-plugin
     , directory
     , filepath
     , ghc-boot-th
-    , ghcide           == 2.9.0.1
-    , hls-plugin-api   == 2.9.0.1
+    , ghcide           == 2.10.0.0
+    , hls-plugin-api   == 2.10.0.0
     , lsp-types
     , mtl
     , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
@@ -1638,7 +1638,7 @@ test-suite hls-stylish-haskell-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-stylish-haskell-plugin
-    , hls-test-utils              == 2.9.0.1
+    , hls-test-utils              == 2.10.0.0
 
 -----------------------------
 -- refactor plugin
@@ -1691,8 +1691,8 @@ library hls-refactor-plugin
     , bytestring
     , ghc-boot
     , regex-tdfa
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , lsp
     , text
     , text-rope
@@ -1731,7 +1731,7 @@ test-suite hls-refactor-plugin-tests
     , filepath
     , ghcide:ghcide
     , haskell-language-server:hls-refactor-plugin
-    , hls-test-utils      == 2.9.0.1
+    , hls-test-utils      == 2.10.0.0
     , lens
     , lsp-test
     , lsp-types
@@ -1779,8 +1779,8 @@ library hls-semantic-tokens-plugin
     , extra
     , text-rope
     , mtl                   >= 2.2
-    , ghcide                == 2.9.0.1
-    , hls-plugin-api        == 2.9.0.1
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp                    >=2.6
     , text
@@ -1790,7 +1790,7 @@ library hls-semantic-tokens-plugin
     , array
     , deepseq
     , dlist
-    , hls-graph == 2.9.0.1
+    , hls-graph == 2.10.0.0
     , template-haskell
     , data-default
     , stm
@@ -1812,10 +1812,10 @@ test-suite hls-semantic-tokens-plugin-tests
     , containers
     , data-default
     , filepath
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , haskell-language-server:hls-semantic-tokens-plugin
-    , hls-plugin-api        == 2.9.0.1
-    , hls-test-utils        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
+    , hls-test-utils        == 2.10.0.0
     , lens
     , lsp
     , lsp-test
@@ -1846,9 +1846,9 @@ library hls-notes-plugin
   build-depends:
     , base >=4.12 && <5
     , array
-    , ghcide == 2.9.0.1
-    , hls-graph == 2.9.0.1
-    , hls-plugin-api == 2.9.0.1
+    , ghcide == 2.10.0.0
+    , hls-graph == 2.10.0.0
+    , hls-plugin-api == 2.10.0.0
     , lens
     , lsp >=2.7
     , mtl >= 2.2
@@ -1875,7 +1875,7 @@ test-suite hls-notes-plugin-tests
     , base
     , filepath
     , haskell-language-server:hls-notes-plugin
-    , hls-test-utils == 2.9.0.1
+    , hls-test-utils == 2.10.0.0
   default-extensions: OverloadedStrings
 
 ----------------------------
@@ -1936,10 +1936,10 @@ library
     , extra
     , filepath
     , ghc
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.10.0.0
     , githash               >=0.1.6.1
     , hie-bios
-    , hls-plugin-api        == 2.9.0.1
+    , hls-plugin-api        == 2.10.0.0
     , optparse-applicative
     , optparse-simple
     , prettyprinter         >= 1.7
@@ -2045,7 +2045,7 @@ test-suite func-test
     , ghcide:ghcide
     , hashable
     , hls-plugin-api
-    , hls-test-utils == 2.9.0.1
+    , hls-test-utils == 2.10.0.0
     , lens
     , lsp-test
     , lsp-types
@@ -2090,7 +2090,7 @@ test-suite wrapper-test
   build-depends:
     , base       >=4.16 && <5
     , extra
-    , hls-test-utils              == 2.9.0.1
+    , hls-test-utils              == 2.10.0.0
     , process
 
   hs-source-dirs:     test/wrapper
@@ -2187,7 +2187,7 @@ test-suite ghcide-tests
     , text
     , text-rope
     , unordered-containers
-    , hls-test-utils == 2.9.0.1
+    , hls-test-utils == 2.10.0.0
 
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
