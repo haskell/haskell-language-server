@@ -14,6 +14,7 @@ import           System.Process.Extra     (CreateProcess (cwd), proc,
                                            readCreateProcessWithExitCode)
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           Config                   (testDataDir)
 
 
 -- A test to ensure that the command line ghcide workflow stays working
@@ -44,7 +45,7 @@ withTempDir f = System.IO.Extra.withTempDir $ canonicalizePath >=> f
 copyTestDataFiles :: FilePath -> FilePath -> IO ()
 copyTestDataFiles dir prefix = do
   -- Copy all the test data files to the temporary workspace
-  testDataFiles <- getDirectoryFilesIO ("ghcide/test/data" </> prefix) ["//*"]
+  testDataFiles <- getDirectoryFilesIO (testDataDir </> prefix) ["//*"]
   for_ testDataFiles $ \f -> do
     createDirectoryIfMissing True $ dir </> takeDirectory f
-    copyFile ("ghcide/test/data" </> prefix </> f) (dir </> f)
+    copyFile (testDataDir </> prefix </> f) (dir </> f)
