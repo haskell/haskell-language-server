@@ -56,6 +56,7 @@ import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        HsExpr (HsApp, HsVar, XExpr),
                                                        HsFieldBind (hfbLHS),
                                                        HsRecFields (..),
+                                                       HsWrap (HsWrap),
                                                        Identifier, LPat,
                                                        Located,
                                                        NamedThing (getName),
@@ -577,13 +578,19 @@ getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
       [ RecordInfoApp realSpan' appExpr | RealSrcSpan realSpan' _ <- [ getLoc expr ] ]
 
     getFields :: HsExpr GhcTc -> [LHsExpr GhcTc] -> Maybe RecordAppExpr
-    getFields (HsApp _ constr@(unLoc -> (XExpr (ConLikeTc (conLikeFieldLabels -> fls) _ _))) arg) args
+    getFields (HsApp _ constr@(unLoc -> expr) arg) args
       | not (null fls)
       = Just (RecordAppExpr constr labelWithArgs)
-      where labelWithArgs = zipWith mkLabelWithArg fls (arg : args)
+      where fls = getExprFields expr
+            labelWithArgs = zipWith mkLabelWithArg fls (arg : args)
             mkLabelWithArg label arg = (L (getLoc arg) label, unLoc arg)
     getFields (HsApp _ constr arg) args = getFields (unLoc constr) (arg : args)
     getFields _ _ = Nothing
+
+    getExprFields :: HsExpr GhcTc -> [FieldLabel]
+    getExprFields (XExpr (ConLikeTc (conLikeFieldLabels -> fls) _ _)) = fls
+    getExprFields (XExpr (WrapExpr (HsWrap _ expr))) = getExprFields expr
+    getExprFields _ = []
 getRecCons _ = ([], False)
 
 getRecPatterns :: LPat GhcTc -> ([RecordInfo], Bool)
