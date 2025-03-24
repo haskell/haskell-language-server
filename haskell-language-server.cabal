@@ -387,13 +387,13 @@ flag callHierarchy
   manual:      True
 
 common callHierarchy
-  if flag(callHierarchy) && impl(ghc < 9.11)
+  if flag(callHierarchy) && impl(ghc < 9.13)
     build-depends: haskell-language-server:hls-call-hierarchy-plugin
     cpp-options: -Dhls_callHierarchy
 
 library hls-call-hierarchy-plugin
   import: defaults, pedantic, warnings
-  if !flag(callHierarchy) || impl(ghc > 9.11)
+  if !flag(callHierarchy) || impl(ghc > 9.13)
     buildable: False
   exposed-modules:    Ide.Plugin.CallHierarchy
   other-modules:
@@ -419,7 +419,7 @@ library hls-call-hierarchy-plugin
 
 test-suite hls-call-hierarchy-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(callHierarchy) || impl(ghc > 9.11)
+  if !flag(callHierarchy) || impl(ghc > 9.13)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-call-hierarchy-plugin/test
@@ -1778,6 +1778,7 @@ library hls-semantic-tokens-plugin
     , transformers
     , bytestring
     , syb
+    , time
     , array
     , deepseq
     , dlist
