@@ -279,7 +279,9 @@ data Config = MkConfig Arch Opsys [GHC]
 instance ToJSON CI where
   toJSON (CI cs) = object
     [ "name" .= str "Build and release"
-    , "on" .= [ str "push" ]
+    , "on" .= object [ "push" .= [object ["tags" .= [str "*"]]]
+                       , "schedule" .= [object ["cron" .= str "0 2 * * 1"]]
+                     ]
     , "env" .= object
       [ "CABAL_CACHE_DISABLE" .= str "${{ vars.CABAL_CACHE_DISABLE }}"
       , "CABAL_CACHE_NONFATAL" .= str "${{ vars.CABAL_CACHE_NONFATAL }}"

@@ -3589,4 +3589,8 @@ jobs:
       shell: pwsh
 name: Build and release
 'on':
-- push
+  push:
+  - tags:
+    - '*'
+  schedule:
+  - cron: 0 2 * * 1
