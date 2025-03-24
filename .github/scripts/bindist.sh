@@ -5,10 +5,7 @@ set -eux
 . .github/scripts/env.sh
 . .github/scripts/common.sh
 
-# ensure ghcup
-if ! command -v ghcup ; then
-	install_ghcup
-fi
+install_ghcup
 
 # create tarball/zip
 case "${TARBALL_EXT}" in
@@ -24,8 +21,8 @@ case "${TARBALL_EXT}" in
 		# from the oldest version in the list
 		: "${GHCS:="$(cd "$CI_PROJECT_DIR/out/${ARTIFACT}" && rm -f ./*.json && for ghc in * ; do printf "%s\n" "$ghc" ; done | sort -r | tr '\n' ' ')"}"
 		emake --version
-		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist
-		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar
+		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist     || fail_with_ghcup_logs "make bindist failed"
+		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar || fail_with_ghcup_logs "make bindist failed"
         ;;
     *)
         fail "Unknown TARBALL_EXT: ${TARBALL_EXT}"

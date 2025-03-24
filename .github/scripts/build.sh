@@ -11,7 +11,9 @@ uname
 pwd
 env
 
-# ensure ghcup
+# Ensure ghcup is present and properly configured.
+# Sets up the vanilla channel, as HLS CI provides binaries
+# for GHCup's vanilla channel.
 install_ghcup
 
 # ensure cabal-cache
@@ -19,7 +21,7 @@ download_cabal_cache "$HOME/.local/bin/cabal-cache"
 
 
 # build
-ghcup install ghc "${GHC_VERSION}"
+ghcup install ghc "${GHC_VERSION}" || fail_with_ghcup_logs "install ghc"
 ghcup set ghc "${GHC_VERSION}"
 sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
 ecabal update
