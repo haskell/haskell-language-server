@@ -857,11 +857,9 @@ getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
 getRebuildsCount :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Int)
 getRebuildsCount = tryCallTestPlugin GetRebuildsCount
 
--- Copy&paste from ghcide/test/Development.IDE.Test
 getStoredKeys :: Session [Text]
 getStoredKeys = callTestPlugin GetStoredKeys
 
--- Copy&paste from ghcide/test/Development.IDE.Test
 tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
 tryCallTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
@@ -873,7 +871,6 @@ tryCallTestPlugin cmd = do
              A.Success a -> Right a
              A.Error e   -> error e
 
--- Copy&paste from ghcide/test/Development.IDE.Test
 callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     res <- tryCallTestPlugin cmd
