@@ -1,0 +1,110 @@
+{
+    "cabalFormattingProvider": "cabal-gild",
+    "checkParents": "CheckOnSave",
+    "checkProject": true,
+    "formattingProvider": "ormolu",
+    "maxCompletions": 40,
+    "plugin": {
+        "alternateNumberFormat": {
+            "globalOn": true
+        },
+        "cabal": {
+            "codeActionsOn": true,
+            "completionOn": true,
+            "diagnosticsOn": true,
+            "hoverOn": true,
+            "symbolsOn": true
+        },
+        "cabal-fmt": {
+            "config": {
+                "path": "cabal-fmt"
+            }
+        },
+        "cabalHaskellIntegration": {
+            "globalOn": true
+        },
+        "callHierarchy": {
+            "globalOn": true
+        },
+        "changeTypeSignature": {
+            "globalOn": true
+        },
+        "class": {
+            "codeActionsOn": true,
+            "codeLensOn": true
+        },
+        "eval": {
+            "config": {
+                "diff": true,
+                "exception": false
+            },
+            "globalOn": true
+        },
+        "explicit-fields": {
+            "codeActionsOn": true,
+            "inlayHintsOn": true
+        },
+        "explicit-fixity": {
+            "globalOn": true
+        },
+        "ghcide-completions": {
+            "config": {
+                "autoExtendOn": true,
+                "snippetsOn": true
+            },
+            "globalOn": true
+        },
+        "ghcide-hover-and-symbols": {
+            "hoverOn": true,
+            "symbolsOn": true
+        },
+        "ghcide-type-lenses": {
+            "config": {
+                "mode": "always"
+            },
+            "globalOn": true
+        },
+        "importLens": {
+            "codeActionsOn": true,
+            "codeLensOn": true,
+            "inlayHintsOn": true
+        },
+        "moduleName": {
+            "globalOn": true
+        },
+        "overloaded-record-dot": {
+            "globalOn": true
+        },
+        "pragmas-completion": {
+            "globalOn": true
+        },
+        "pragmas-disable": {
+            "globalOn": true
+        },
+        "pragmas-suggest": {
+            "globalOn": true
+        },
+        "qualifyImportedNames": {
+            "globalOn": true
+        },
+        "semanticTokens": {
+            "config": {
+                "classMethodToken": "method",
+                "classToken": "class",
+                "dataConstructorToken": "enumMember",
+                "functionToken": "function",
+                "moduleToken": "namespace",
+                "operatorToken": "operator",
+                "patternSynonymToken": "macro",
+                "recordFieldToken": "property",
+                "typeConstructorToken": "enum",
+                "typeFamilyToken": "interface",
+                "typeSynonymToken": "type",
+                "typeVariableToken": "typeParameter",
+                "variableToken": "variable"
+            },
+            "globalOn": false
+        }
+    },
+    "sessionLoading": "singleComponent"
+}
