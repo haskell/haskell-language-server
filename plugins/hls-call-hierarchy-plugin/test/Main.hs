@@ -114,13 +114,13 @@ prepareCallHierarchyTests =
       [ testCase "1" $ do
           let contents = T.unlines ["{-# LANGUAGE TypeFamilies #-}", "data family A"]
               -- Since GHC 9.10 the range also includes the family name (and its parameters if any)
-              range = mkRange 1 0 1 (if ghcVersion == GHC910 then 13 else 11)
+              range = mkRange 1 0 1 (if ghcVersion >= GHC910 then 13 else 11)
               selRange = mkRange 1 12 1 13
               expected = mkCallHierarchyItemT "A" SymbolKind_Function range selRange
           oneCaseWithCreate contents 1 12 expected
       , testCase "2" $ do
           let contents = T.unlines [ "{-# LANGUAGE TypeFamilies #-}" , "data family A a"]
-              range = mkRange 1 0 1 (if ghcVersion == GHC910 then 15 else 11)
+              range = mkRange 1 0 1 (if ghcVersion >= GHC910 then 15 else 11)
               selRange = mkRange 1 12 1 13
               expected = mkCallHierarchyItemT "A" SymbolKind_Function range selRange
           oneCaseWithCreate contents 1 12 expected
