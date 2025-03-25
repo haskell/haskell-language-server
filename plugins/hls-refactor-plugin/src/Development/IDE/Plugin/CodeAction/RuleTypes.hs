@@ -5,7 +5,6 @@ module Development.IDE.Plugin.CodeAction.RuleTypes
 
 import           Control.DeepSeq                (NFData)
 import           Data.Hashable                  (Hashable)
-import           Data.Typeable                  (Typeable)
 import           Development.IDE.Graph          (RuleResult)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq (HscEnvEq)
@@ -15,7 +14,7 @@ import           GHC.Generics                   (Generic)
 type instance RuleResult PackageExports = ExportsMap
 
 newtype PackageExports = PackageExports HscEnvEq
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 
 instance Hashable PackageExports
 instance NFData   PackageExports

@@ -8,7 +8,6 @@ import           Control.Monad
 import           Data.Hashable
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.Map             as Map
-import           Data.Typeable        (Typeable)
 import           Development.IDE      (RuleResult, action, define,
                                        getFilesOfInterestUntracked,
                                        getPluginConfigAction, ideErrorText,
@@ -102,7 +101,7 @@ genericConfigTests = testGroup "generic plugin config"
 
 
 data GetTestDiagnostics = GetTestDiagnostics
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable GetTestDiagnostics
 instance NFData   GetTestDiagnostics
 type instance RuleResult GetTestDiagnostics = ()

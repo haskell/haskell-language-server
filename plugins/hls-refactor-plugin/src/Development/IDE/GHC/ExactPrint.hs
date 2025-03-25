@@ -140,7 +140,7 @@ instance Pretty Log where
     LogShake shakeLog -> pretty shakeLog
 
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
-  deriving (Eq, Show, Typeable, GHC.Generic)
+  deriving (Eq, Show, GHC.Generic)
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource

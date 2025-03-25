@@ -227,7 +227,7 @@ data GraphException = forall e. Exception e => GraphException {
     stack  :: [String], -- ^ The stack of keys that led to this exception
     inner  :: e -- ^ The underlying exception
 }
-  deriving (Typeable, Exception)
+  deriving (Exception)
 
 instance Show GraphException where
     show GraphException{..} = unlines $
@@ -249,7 +249,7 @@ instance Show Stack where
     show (Stack kk _) = "Stack: " <> intercalate " -> " (map show kk)
 
 newtype StackException = StackException Stack
-  deriving (Typeable, Show)
+  deriving (Show)
 
 instance Exception StackException where
     fromException = fromGraphException

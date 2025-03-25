@@ -10,7 +10,6 @@ module Ide.Plugin.SemanticTokens.Types where
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Default                  (Default (def))
-import           Data.Generics                 (Typeable)
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
@@ -108,7 +107,7 @@ instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
 data GetSemanticTokens = GetSemanticTokens
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 
 instance Hashable GetSemanticTokens
 

@@ -40,7 +40,6 @@ import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Typeable                                (Typeable)
 import           Development.IDE.Core.FileStore               (getUriContents)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
@@ -655,7 +654,6 @@ data GhciLikeCmdException = GhciLikeCmdNotImplemented
     { ghciCmdName :: Text
     , ghciCmdArg  :: Text
     }
-    deriving (Typeable)
 
 instance Show GhciLikeCmdException where
     showsPrec _ GhciLikeCmdNotImplemented{..} =

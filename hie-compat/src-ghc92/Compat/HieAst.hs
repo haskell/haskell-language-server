@@ -72,7 +72,7 @@ import qualified Data.Array as A
 import qualified Data.ByteString as BS
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.Data                  ( Data, Typeable )
+import Data.Data                  ( Data )
 import Data.Void                  ( Void, absurd )
 import Control.Monad              ( forM_ )
 import Control.Monad.Trans.State.Strict
@@ -469,7 +469,7 @@ data PScoped a = PS (Maybe Span)
                     Scope       -- ^ use site of the pattern
                     Scope       -- ^ pattern to the right of a, not including a
                     a
-  deriving (Typeable, Data) -- Pattern Scope
+  deriving (Data) -- Pattern Scope
 
 {- Note [TyVar Scopes]
    ~~~~~~~~~~~~~~~~~~~

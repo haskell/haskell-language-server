@@ -29,7 +29,6 @@ import           Control.Monad.Trans.Maybe          (MaybeT (MaybeT),
                                                      maybeToExceptT)
 import           Control.Monad.Trans.Writer.CPS
 import           Data.Coerce                        (coerce)
-import           Data.Data                          (Typeable)
 import           Data.Foldable                      (traverse_)
 import           Data.Function                      (on, (&))
 import           Data.Hashable
@@ -158,7 +157,7 @@ simplify r =
     withChildrenSimplified = r { _codeRange_children = simplify <$> _codeRange_children r }
 
 data GetCodeRange = GetCodeRange
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 
 instance Hashable GetCodeRange
 instance NFData   GetCodeRange

@@ -131,7 +131,7 @@ type RuleResultForExample e =
     , IsExample e)
 
 data Configuration = Configuration {confName :: String, confValue :: ByteString}
-    deriving (Binary, Eq, Generic, Hashable, NFData, Show, Typeable)
+    deriving (Binary, Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult GetConfigurations = [Configuration]
 
 -- | Knowledge needed to run an example

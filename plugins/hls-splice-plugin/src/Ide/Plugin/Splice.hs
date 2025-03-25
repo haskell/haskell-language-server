@@ -466,7 +466,7 @@ unRenamedE dflags expr = do
 
 data SearchResult r =
     Continue | Stop | Here r
-    deriving (Read, Show, Eq, Ord, Data, Typeable)
+    deriving (Read, Show, Eq, Ord, Data)
 
 fromSearchResult :: SearchResult a -> Maybe a
 fromSearchResult (Here r) = Just r

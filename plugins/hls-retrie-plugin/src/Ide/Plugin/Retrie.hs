@@ -502,7 +502,7 @@ data CallRetrieError
   | NoParse NormalizedFilePath
   | GHCParseError NormalizedFilePath String
   | NoTypeCheck NormalizedFilePath
-  deriving (Eq, Typeable)
+  deriving (Eq)
 
 instance Show CallRetrieError where
   show (CallRetrieInternalError msg f) = msg <> " - " <> fromNormalizedFilePath f
