@@ -48,6 +48,8 @@ common defaults
   default-language: GHC2021
   -- Should have been in GHC2021, an oversight
   default-extensions: ExplicitNamespaces
+  build-depends:
+    , base >=4.12 && <5
 
 common test-defaults
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -132,7 +134,6 @@ library hls-cabal-fmt-plugin
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
   build-depends:
-    , base            >=4.12 && <5
     , directory
     , filepath
     , ghcide          == 2.9.0.1
@@ -152,7 +153,6 @@ test-suite hls-cabal-fmt-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , directory
     , filepath
     , haskell-language-server:hls-cabal-plugin
@@ -191,7 +191,6 @@ library hls-cabal-gild-plugin
   exposed-modules:  Ide.Plugin.CabalGild
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
   build-depends:
-    , base            >=4.12 && <5
     , directory
     , filepath
     , ghcide          == 2.9.0.1
@@ -210,7 +209,6 @@ test-suite hls-cabal-gild-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , directory
     , filepath
     , haskell-language-server:hls-cabal-plugin
@@ -264,7 +262,6 @@ library hls-cabal-plugin
 
 
   build-depends:
-    , base                  >=4.12     && <5
     , bytestring
     , Cabal-syntax          >= 3.7
     , containers
@@ -308,7 +305,6 @@ test-suite hls-cabal-plugin-tests
     Outline
     Utils
   build-depends:
-    , base
     , bytestring
     , Cabal-syntax          >= 3.7
     , extra
@@ -348,7 +344,6 @@ library hls-class-plugin
   hs-source-dirs:     plugins/hls-class-plugin/src
   build-depends:
     , aeson
-    , base            >=4.12 && <5
     , containers
     , deepseq
     , extra
@@ -375,7 +370,6 @@ test-suite hls-class-plugin-tests
   hs-source-dirs:   plugins/hls-class-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-class-plugin
     , hls-test-utils     == 2.9.0.1
@@ -410,7 +404,6 @@ library hls-call-hierarchy-plugin
   hs-source-dirs:     plugins/hls-call-hierarchy-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12 && <5
     , containers
     , extra
     , ghcide                == 2.9.0.1
@@ -432,7 +425,6 @@ test-suite hls-call-hierarchy-plugin-tests
   main-is:          Main.hs
   build-depends:
     , aeson
-    , base
     , containers
     , extra
     , filepath
@@ -478,7 +470,6 @@ library hls-eval-plugin
 
   build-depends:
     , aeson
-    , base                  >=4.12  && <5
     , bytestring
     , containers
     , deepseq
@@ -516,7 +507,6 @@ test-suite hls-eval-plugin-tests
   ghc-options:      -fno-ignore-asserts
   build-depends:
     , aeson
-    , base
     , containers
     , extra
     , filepath
@@ -549,7 +539,6 @@ library hls-explicit-imports-plugin
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12 && <5
     , containers
     , deepseq
     , ghc
@@ -573,7 +562,6 @@ test-suite hls-explicit-imports-plugin-tests
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , extra
     , filepath
     , haskell-language-server:hls-explicit-imports-plugin
@@ -603,7 +591,6 @@ library hls-rename-plugin
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
-    , base                  >=4.12    && <5
     , containers
     , ghcide                == 2.9.0.1
     , hashable
@@ -630,7 +617,6 @@ test-suite hls-rename-plugin-tests
   main-is:          Main.hs
   build-depends:
     , aeson
-    , base
     , containers
     , filepath
     , hls-plugin-api
@@ -662,7 +648,6 @@ library hls-retrie-plugin
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12    && <5
     , bytestring
     , containers
     , extra
@@ -694,7 +679,6 @@ test-suite hls-retrie-plugin-tests
   hs-source-dirs:   plugins/hls-retrie-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , containers
     , filepath
     , hls-plugin-api
@@ -732,7 +716,6 @@ library hls-hlint-plugin
   hs-source-dirs:   plugins/hls-hlint-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12    && <5
     , bytestring
     , containers
     , deepseq
@@ -780,7 +763,6 @@ test-suite hls-hlint-plugin-tests
     ghc-options: -optl-Wl,-ld_classic
   build-depends:
       aeson
-    , base
     , containers
     , filepath
     , haskell-language-server:hls-hlint-plugin
@@ -813,7 +795,6 @@ library hls-stan-plugin
   exposed-modules:    Ide.Plugin.Stan
   hs-source-dirs:     plugins/hls-stan-plugin/src
   build-depends:
-      base
     , deepseq
     , hashable
     , hie-compat
@@ -842,7 +823,6 @@ test-suite hls-stan-plugin-tests
   hs-source-dirs:   plugins/hls-stan-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-stan-plugin
     , hls-plugin-api
@@ -875,7 +855,6 @@ library hls-module-name-plugin
   hs-source-dirs:   plugins/hls-module-name-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12 && <5
     , containers
     , filepath
     , ghcide                == 2.9.0.1
@@ -894,7 +873,6 @@ test-suite hls-module-name-plugin-tests
   hs-source-dirs:   plugins/hls-module-name-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-module-name-plugin
     , hls-test-utils          == 2.9.0.1
@@ -920,7 +898,6 @@ library hls-pragmas-plugin
   exposed-modules:  Ide.Plugin.Pragmas
   hs-source-dirs:   plugins/hls-pragmas-plugin/src
   build-depends:
-    , base                  >=4.12 && <5
     , aeson
     , extra
     , fuzzy
@@ -942,7 +919,6 @@ test-suite hls-pragmas-plugin-tests
   main-is:          Main.hs
   build-depends:
     , aeson
-    , base
     , filepath
     , haskell-language-server:hls-pragmas-plugin
     , hls-test-utils      == 2.9.0.1
@@ -975,7 +951,6 @@ library hls-splice-plugin
   hs-source-dirs:     plugins/hls-splice-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12 && <5
     , extra
     , foldl
     , ghc
@@ -1001,7 +976,6 @@ test-suite hls-splice-plugin-tests
   hs-source-dirs:   plugins/hls-splice-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-splice-plugin
     , hls-test-utils == 2.9.0.1
@@ -1029,7 +1003,6 @@ library hls-alternate-number-format-plugin
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/src
   build-depends:
-    , base                 >=4.12 && < 5
     , containers
     , extra
     , ghcide               == 2.9.0.1
@@ -1058,7 +1031,6 @@ test-suite hls-alternate-number-format-plugin-tests
   main-is:          Main.hs
   ghc-options:      -fno-ignore-asserts
   build-depends:
-    , base                 >=4.12 && < 5
     , filepath
     , haskell-language-server:hls-alternate-number-format-plugin
     , hls-test-utils       == 2.9.0.1
@@ -1092,7 +1064,6 @@ library hls-qualify-imported-names-plugin
   exposed-modules:  Ide.Plugin.QualifyImportedNames
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/src
   build-depends:
-    , base                  >=4.12 && <5
     , containers
     , ghcide                == 2.9.0.1
     , hls-plugin-api        == 2.9.0.1
@@ -1114,7 +1085,6 @@ test-suite hls-qualify-imported-names-plugin-tests
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , text
     , filepath
     , haskell-language-server:hls-qualify-imported-names-plugin
@@ -1145,7 +1115,6 @@ library hls-code-range-plugin
     Ide.Plugin.CodeRange.ASTPreProcess
   hs-source-dirs: plugins/hls-code-range-plugin/src
   build-depends:
-    , base             >=4.12 && <5
     , containers
     , deepseq
     , extra
@@ -1170,7 +1139,6 @@ test-suite hls-code-range-plugin-tests
     Ide.Plugin.CodeRangeTest
     Ide.Plugin.CodeRange.RulesTest
   build-depends:
-    , base
     , bytestring
     , filepath
     , haskell-language-server:hls-code-range-plugin
@@ -1202,7 +1170,6 @@ library hls-change-type-signature-plugin
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/src
   build-depends:
-    , base             >=4.12 && < 5
     , ghcide           == 2.9.0.1
     , hls-plugin-api   == 2.9.0.1
     , lsp-types
@@ -1226,7 +1193,6 @@ test-suite hls-change-type-signature-plugin-tests
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base                 >=4.12 && < 5
     , filepath
     , haskell-language-server:hls-change-type-signature-plugin
     , hls-test-utils       == 2.9.0.1
@@ -1259,7 +1225,6 @@ library hls-gadt-plugin
   hs-source-dirs:   plugins/hls-gadt-plugin/src
   build-depends:
     , aeson
-    , base                  >=4.12 && <5
     , containers
     , extra
     , ghc
@@ -1283,7 +1248,6 @@ test-suite hls-gadt-plugin-tests
   hs-source-dirs:   plugins/hls-gadt-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-gadt-plugin
     , hls-test-utils              == 2.9.0.1
@@ -1310,7 +1274,6 @@ library hls-explicit-fixity-plugin
   exposed-modules:  Ide.Plugin.ExplicitFixity
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
-      base                  >=4.12 && <5
     , containers
     , deepseq
     , extra
@@ -1330,7 +1293,6 @@ test-suite hls-explicit-fixity-plugin-tests
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-explicit-fixity-plugin
     , hls-test-utils              == 2.9.0.1
@@ -1356,7 +1318,6 @@ library hls-explicit-record-fields-plugin
     buildable: False
   exposed-modules:  Ide.Plugin.ExplicitFields
   build-depends:
-    , base                  >=4.12 && <5
     , ghcide                == 2.9.0.1
     , hls-plugin-api        == 2.9.0.1
     , lsp
@@ -1380,7 +1341,6 @@ test-suite hls-explicit-record-fields-plugin-tests
   hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , text
     , ghcide
@@ -1407,7 +1367,6 @@ library hls-overloaded-record-dot-plugin
     buildable: False
   exposed-modules:  Ide.Plugin.OverloadedRecordDot
   build-depends:
-    , base                  >=4.16 && <5
     , aeson
     , ghcide
     , hls-plugin-api
@@ -1429,7 +1388,6 @@ test-suite hls-overloaded-record-dot-plugin-tests
   hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , text
     , haskell-language-server:hls-overloaded-record-dot-plugin
@@ -1458,7 +1416,6 @@ library hls-floskell-plugin
   exposed-modules:  Ide.Plugin.Floskell
   hs-source-dirs:   plugins/hls-floskell-plugin/src
   build-depends:
-    , base            >=4.12 && <5
     , floskell        ^>=0.11.0
     , ghcide          == 2.9.0.1
     , hls-plugin-api  == 2.9.0.1
@@ -1475,7 +1432,6 @@ test-suite hls-floskell-plugin-tests
   hs-source-dirs:   plugins/hls-floskell-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-floskell-plugin
     , hls-test-utils       == 2.9.0.1
@@ -1501,7 +1457,6 @@ library hls-fourmolu-plugin
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
   build-depends:
-    , base            >=4.12 && <5
     , filepath
     , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16
     , ghc-boot-th
@@ -1528,7 +1483,6 @@ test-suite hls-fourmolu-plugin-tests
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
-    , base            >=4.12 && <5
     , aeson
     , filepath
     , haskell-language-server:hls-fourmolu-plugin
@@ -1557,7 +1511,6 @@ library hls-ormolu-plugin
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
   build-depends:
-    , base            >=4.12  && <5
     , extra
     , filepath
     , ghc-boot-th
@@ -1584,7 +1537,6 @@ test-suite hls-ormolu-plugin-tests
   build-tool-depends:
     ormolu:ormolu
   build-depends:
-    , base
     , aeson
     , filepath
     , haskell-language-server:hls-ormolu-plugin
@@ -1615,7 +1567,6 @@ library hls-stylish-haskell-plugin
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
   build-depends:
-    , base             >=4.12 && <5
     , directory
     , filepath
     , ghc-boot-th
@@ -1635,7 +1586,6 @@ test-suite hls-stylish-haskell-plugin-tests
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
   main-is:          Main.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-stylish-haskell-plugin
     , hls-test-utils              == 2.9.0.1
@@ -1686,7 +1636,6 @@ library hls-refactor-plugin
     ViewPatterns
   hs-source-dirs:   plugins/hls-refactor-plugin/src
   build-depends:
-    , base                  >=4.12 && <5
     , ghc
     , bytestring
     , ghc-boot
@@ -1724,7 +1673,6 @@ test-suite hls-refactor-plugin-tests
   other-modules:    Test.AddArgument
   ghc-options:      -O0
   build-depends:
-    , base
     , data-default
     , directory
     , extra
@@ -1774,7 +1722,6 @@ library hls-semantic-tokens-plugin
 
   hs-source-dirs:     plugins/hls-semantic-tokens-plugin/src
   build-depends:
-    , base                  >=4.12 && <5
     , containers
     , extra
     , text-rope
@@ -1808,7 +1755,6 @@ test-suite hls-semantic-tokens-plugin-tests
 
   build-depends:
     , aeson
-    , base
     , containers
     , data-default
     , filepath
@@ -1844,7 +1790,6 @@ library hls-notes-plugin
     Ide.Plugin.Notes
   hs-source-dirs:     plugins/hls-notes-plugin/src
   build-depends:
-    , base >=4.12 && <5
     , array
     , ghcide == 2.9.0.1
     , hls-graph == 2.9.0.1
@@ -1872,7 +1817,6 @@ test-suite hls-notes-plugin-tests
   hs-source-dirs:   plugins/hls-notes-plugin/test
   main-is:          NotesTest.hs
   build-depends:
-    , base
     , filepath
     , haskell-language-server:hls-notes-plugin
     , hls-test-utils == 2.9.0.1
@@ -1930,7 +1874,6 @@ library
   hs-source-dirs:   src
   build-depends:
     , aeson-pretty
-    , base                  >=4.16 && <5
     , data-default
     , directory
     , extra
@@ -1976,7 +1919,6 @@ executable haskell-language-server
     ghc-options: -dynamic
 
   build-depends:
-    , base                    >=4.16 && <5
     , haskell-language-server
     , hls-plugin-api
     , lsp
@@ -2002,7 +1944,6 @@ executable haskell-language-server-wrapper
     "-with-rtsopts=-I0 -A128M"
 
   build-depends:
-    , base       >=4.16 && <5
     , data-default
     , directory
     , extra
@@ -2036,7 +1977,6 @@ test-suite func-test
 
   build-depends:
     , aeson
-    , base            >=4.16 && <5
     , bytestring
     , containers
     , deepseq
@@ -2088,7 +2028,6 @@ test-suite wrapper-test
     haskell-language-server:haskell-language-server
 
   build-depends:
-    , base       >=4.16 && <5
     , extra
     , hls-test-utils              == 2.9.0.1
     , process
@@ -2113,7 +2052,6 @@ benchmark benchmark
 
     build-depends:
       , aeson
-      , base       >=4.16 && <5
       , containers
       , data-default
       , directory
@@ -2144,7 +2082,7 @@ executable ghcide-test-preprocessor
     buildable: False
 
 test-suite ghcide-tests
-  import: warnings
+  import: warnings, defaults
   type:               exitcode-stdio-1.0
   default-language:   GHC2021
   build-tool-depends:
@@ -2154,7 +2092,6 @@ test-suite ghcide-tests
 
   build-depends:
     , aeson
-    , base
     , containers
     , data-default
     , directory
@@ -2243,10 +2180,9 @@ test-suite ghcide-tests
 
 
 executable ghcide-bench
-    default-language: GHC2021
+    import: defaults
     build-depends:
         aeson,
-        base,
         bytestring,
         containers,
         data-default,
@@ -2275,7 +2211,7 @@ executable ghcide-bench
         ViewPatterns
 
 library ghcide-bench-lib
-    default-language: GHC2021
+    import: defaults
     hs-source-dirs: ghcide-bench/src
     ghc-options: -Wall -Wno-name-shadowing
     exposed-modules:
@@ -2284,7 +2220,6 @@ library ghcide-bench-lib
     build-depends:
         aeson,
         async,
-        base == 4.*,
         binary,
         bytestring,
         deepseq,
@@ -2311,8 +2246,8 @@ library ghcide-bench-lib
 
 
 test-suite ghcide-bench-test
+    import: defaults
     type: exitcode-stdio-1.0
-    default-language: GHC2021
     build-tool-depends:
         ghcide:ghcide,
     main-is: Main.hs
@@ -2320,7 +2255,6 @@ test-suite ghcide-bench-test
     ghc-options: -Wunused-packages
     ghc-options: -threaded -Wall
     build-depends:
-        base,
         extra,
         haskell-language-server:ghcide-bench-lib,
         lsp-test ^>= 0.17,
