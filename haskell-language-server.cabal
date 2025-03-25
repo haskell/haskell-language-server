@@ -960,13 +960,13 @@ flag splice
   manual:      True
 
 common splice
-  if flag(splice) && impl(ghc < 9.10)
+  if flag(splice)
     build-depends: haskell-language-server:hls-splice-plugin
     cpp-options: -Dhls_splice
 
 library hls-splice-plugin
   import:           defaults, pedantic, warnings
-  if !(flag(splice) && impl(ghc < 9.10))
+  if !(flag(splice))
     buildable: False
   exposed-modules:
     Ide.Plugin.Splice
@@ -995,7 +995,7 @@ library hls-splice-plugin
 
 test-suite hls-splice-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !(flag(splice) && impl(ghc < 9.10))
+  if !(flag(splice))
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-splice-plugin/test

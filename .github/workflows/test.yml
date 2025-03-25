@@ -155,8 +155,7 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin-tests || cabal test hls-eval-plugin-tests
 
-      # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10'
+      - if: matrix.test
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin-tests || cabal test hls-splice-plugin-tests
 

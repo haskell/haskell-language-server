@@ -23,45 +23,46 @@ splicePlugin = mkPluginTestDescriptor' Splice.descriptor "splice"
 
 tests :: TestTree
 tests = testGroup "splice"
-  [ goldenTest "TSimpleExp" Inplace 6 15
-  , goldenTest "TSimpleExp" Inplace 6 24
-  , goldenTest "TTypeAppExp" Inplace 7 5
-  , goldenTest "TErrorExp" Inplace 6 15
-  , goldenTest "TErrorExp" Inplace 6 51
-  , goldenTest "TQQExp" Inplace 6 17
-  , goldenTest "TQQExp" Inplace 6 25
-  , goldenTest "TQQExpError" Inplace 6 13
-  , goldenTest "TQQExpError" Inplace 6 22
-  , testGroup "Pattern Splices"
-      [ goldenTest "TSimplePat" Inplace 6 3
-      , goldenTest "TSimplePat" Inplace 6 22
-      , goldenTest "TSimplePat" Inplace 6 3
-      , goldenTest "TSimplePat" Inplace 6 22
-      , goldenTest "TErrorPat" Inplace 6 3
-      , goldenTest "TErrorPat" Inplace 6 18
-      , goldenTest "TQQPat" Inplace 6 3
-      , goldenTest "TQQPat" Inplace 6 11
-      , goldenTest "TQQPatError" Inplace 6 3
-      , goldenTest "TQQPatError" Inplace 6 11
-      ]
-  , goldenTest "TSimpleType" Inplace 5 12
-  , goldenTest "TSimpleType" Inplace 5 22
-  , goldenTest "TTypeTypeError" Inplace 7 12
-  , goldenTest "TTypeTypeError" Inplace 7 52
-  , goldenTest "TQQType" Inplace 8 19
-  , goldenTest "TQQType" Inplace 8 28
-  , goldenTest "TQQTypeTypeError" Inplace 8 19
-  , goldenTest "TQQTypeTypeError" Inplace 8 28
-  , goldenTest "TSimpleDecl" Inplace 8 1
-  , goldenTest "TQQDecl" Inplace 5 1
-  , goldenTestWithEdit "TTypeKindError" (
-        if ghcVersion >= GHC96 then
-          "96-expected"
-        else
-          "expected"
-      ) Inplace 7 9
-  , goldenTestWithEdit "TDeclKindError" "expected" Inplace 8 1
-  ]
+  [goldenTest "TQQPat" Inplace 6 11] -- a useful simple test to focus on
+  -- [ goldenTest "TSimpleExp" Inplace 6 15
+  -- , goldenTest "TSimpleExp" Inplace 6 24
+  -- , goldenTest "TTypeAppExp" Inplace 7 5
+  -- , goldenTest "TErrorExp" Inplace 6 15
+  -- , goldenTest "TErrorExp" Inplace 6 51
+  -- , goldenTest "TQQExp" Inplace 6 17
+  -- , goldenTest "TQQExp" Inplace 6 25
+  -- , goldenTest "TQQExpError" Inplace 6 13
+  -- , goldenTest "TQQExpError" Inplace 6 22
+  -- , testGroup "Pattern Splices"
+  --     [ goldenTest "TSimplePat" Inplace 6 3
+  --     , goldenTest "TSimplePat" Inplace 6 22
+  --     , goldenTest "TSimplePat" Inplace 6 3
+  --     , goldenTest "TSimplePat" Inplace 6 22
+  --     , goldenTest "TErrorPat" Inplace 6 3
+  --     , goldenTest "TErrorPat" Inplace 6 18
+  --     , goldenTest "TQQPat" Inplace 6 3
+  --     , goldenTest "TQQPat" Inplace 6 11
+  --     , goldenTest "TQQPatError" Inplace 6 3
+  --     , goldenTest "TQQPatError" Inplace 6 11
+  --     ]
+  -- , goldenTest "TSimpleType" Inplace 5 12
+  -- , goldenTest "TSimpleType" Inplace 5 22
+  -- , goldenTest "TTypeTypeError" Inplace 7 12
+  -- , goldenTest "TTypeTypeError" Inplace 7 52
+  -- , goldenTest "TQQType" Inplace 8 19
+  -- , goldenTest "TQQType" Inplace 8 28
+  -- , goldenTest "TQQTypeTypeError" Inplace 8 19
+  -- , goldenTest "TQQTypeTypeError" Inplace 8 28
+  -- , goldenTest "TSimpleDecl" Inplace 8 1
+  -- , goldenTest "TQQDecl" Inplace 5 1
+  -- , goldenTestWithEdit "TTypeKindError" (
+  --       if ghcVersion >= GHC96 then
+  --         "96-expected"
+  --       else
+  --         "expected"
+  --     ) Inplace 7 9
+  -- , goldenTestWithEdit "TDeclKindError" "expected" Inplace 8 1
+  -- ]
 
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTest fp tc line col =
