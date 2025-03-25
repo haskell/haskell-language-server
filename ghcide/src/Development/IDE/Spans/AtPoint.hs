@@ -36,9 +36,9 @@ import           Language.LSP.Protocol.Types          hiding
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
+import           Development.IDE.Core.Compile         (setNonHomeFCHook)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Compile         (setNonHomeFCHook)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.GHC.Util             (printOutputable)

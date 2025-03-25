@@ -1,7 +1,7 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeFamilies     #-}
-{-# LANGUAGE CPP              #-}
 
 -- | An HLS plugin to provide code lenses for type signatures
 module Development.IDE.Plugin.TypeLenses (

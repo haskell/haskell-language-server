@@ -14,6 +14,8 @@ import           Control.DeepSeq                 (force, rwhnf)
 import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Data.Either                     (fromRight)
+import           Data.IORef
+import qualified Data.Map                        as M
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
 import           Development.IDE.GHC.Compat      hiding (newUnique)
@@ -22,12 +24,10 @@ import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           GHC.Driver.Env                  (hsc_all_home_unit_ids)
+import           Ide.PluginUtils                 (toAbsolute)
 import           OpenTelemetry.Eventlog          (withSpan)
 import           System.Directory                (makeAbsolute)
-import qualified Data.Map as M
-import Data.IORef
-import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
-import           Ide.PluginUtils                 (toAbsolute)
 
 
 -- | An 'HscEnv' with equality. Two values are considered equal

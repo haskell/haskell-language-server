@@ -14,7 +14,7 @@ module Development.IDE.GHC.Compat.Driver
 
 #if MIN_VERSION_ghc(9,11,0)
 
-import GHC.Driver.Main (hscTypecheckRenameWithDiagnostics)
+import           GHC.Driver.Main            (hscTypecheckRenameWithDiagnostics)
 
 #else
 
