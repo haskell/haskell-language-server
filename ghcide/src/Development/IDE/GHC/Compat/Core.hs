@@ -461,7 +461,7 @@ import           GHC.Tc.Types.Evidence       hiding ((<.>))
 import           GHC.Tc.Utils.Env
 import           GHC.Tc.Utils.Monad          hiding (Applicative (..), IORef,
                                               MonadFix (..), MonadIO (..), allM,
-                                              anyM, concatMapM, mapMaybeM,
+                                              anyM, concatMapM, mapMaybeM, foldMapM,
                                               (<$>))
 import           GHC.Tc.Utils.TcType         as TcType
 import qualified GHC.Types.Avail             as Avail
@@ -573,7 +573,7 @@ import           GHC.Hs                      (SrcSpanAnn')
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
 #if MIN_VERSION_ghc(9,11,0)
-mkHomeModLocation df mn f = 
+mkHomeModLocation df mn f =
   let osf = unsafeEncodeUtf f
   in pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn osf
 #else
