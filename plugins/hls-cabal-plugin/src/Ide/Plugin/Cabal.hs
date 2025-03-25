@@ -249,10 +249,12 @@ cabalRules recorder plId = do
         let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do
-            let regex :: T.Text
+            let regexUnknownCabalBefore310 :: T.Text
                 -- We don't support the cabal version, this should not be an error, as the
                 -- user did not do anything wrong. Instead we cast it to a warning
-                regex = "Unsupported cabal-version [0-9]+.[0-9]*"
+                regexUnknownCabalBefore310 = "Unsupported cabal-version [0-9]+.[0-9]*"
+                regexUnknownCabalVersion :: T.Text
+                regexUnknownCabalVersion = "Unsupported cabal format version in cabal-version field: [0-9]+.[0-9]+"
                 unsupportedCabalHelpText = unlines
                   [ "The used `cabal-version` is not fully supported by this `HLS` binary."
                   , "Either the `cabal-version` is unknown, or too new for this executable."
@@ -267,7 +269,10 @@ cabalRules recorder plId = do
                   NE.toList $
                     NE.map
                       ( \pe@(PError pos text) ->
-                          if text =~ regex
+                          if any (text =~)
+                                [ regexUnknownCabalBefore310
+                                , regexUnknownCabalVersion
+                                ]
                             then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos $
                                   unlines
                                     [ text

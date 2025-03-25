@@ -110,7 +110,7 @@ pluginTests =
             ,   runCabalTestCaseSession "Publishes Diagnostics on unsupported cabal version as Warning" "" $ do
                 _ <- openDoc "unsupportedVersion.cabal" "cabal"
                 diags <- cabalCaptureKick
-                unknownVersionDiag <- liftIO $ inspectDiagnostic diags ["Unsupported cabal-version 99999.0"]
+                unknownVersionDiag <- liftIO $ inspectDiagnosticAny diags ["Unsupported cabal-version 99999.0", "Unsupported cabal format version in cabal-version field: 99999.0"]
                 liftIO $ do
                     length diags @?= 1
                     unknownVersionDiag ^. L.range @?= Range (Position 0 0) (Position 1 0)
