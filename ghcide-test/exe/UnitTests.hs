@@ -99,7 +99,7 @@ tests = do
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
-     , ignoreForGhcVersions [GHC912] "Fuzzy search: ignore since referenceImplementation get stuck for ghc912" $ FuzzySearch.tests
+     , FuzzySearch.tests
      ]
 
 findResolution_us :: Int -> IO Int
