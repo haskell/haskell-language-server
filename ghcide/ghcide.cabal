@@ -2,7 +2,7 @@ cabal-version:      3.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.9.0.1
+version:            2.10.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -76,8 +76,8 @@ library
     , hie-bios                     ^>=0.14.0
     , hie-compat                   ^>=0.3.0.0
     , hiedb                        ^>= 0.6.0.0
-    , hls-graph                    == 2.9.0.1
-    , hls-plugin-api               == 2.9.0.1
+    , hls-graph                    == 2.10.0.0
+    , hls-plugin-api               == 2.10.0.0
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , lens-aeson
