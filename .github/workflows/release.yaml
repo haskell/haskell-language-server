@@ -4195,7 +4195,7 @@ jobs:
 name: Build and release
 'on':
   push:
-  - tags:
+    tags:
     - '*'
   schedule:
   - cron: 0 2 * * 1
