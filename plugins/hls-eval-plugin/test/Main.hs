@@ -126,7 +126,7 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
-  , knownBrokenInEnv [HostOS Windows] "The output has path separators in it, which on Windows look different. Just skip it there" $
+  , knownBrokenInWindowsBeforeGHC912 "The output has path separators in it, which on Windows look different. Just skip it there" $
       goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" $
         case ghcVersion of
           GHC912 -> "ghc912.expected"
@@ -210,6 +210,12 @@ tests =
         let ifaceKeys = filter ("GetModIface" `T.isPrefixOf`) keys
         liftIO $ ifaceKeys @?= []
   ]
+  where
+    knownBrokenInWindowsBeforeGHC912 msg =
+        foldl (.) id
+           [ knownBrokenInSpecificEnv [GhcVer ghcVer, HostOS Windows] msg
+           | ghcVer <- [GHC94 .. GHC910]
+           ]
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =
