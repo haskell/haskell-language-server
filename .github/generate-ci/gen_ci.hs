@@ -62,16 +62,18 @@ artifactName arch opsys = archName arch ++ "-" ++ case opsys of
 
 data GHC
   = GHC948
-  | GHC966
+  | GHC967
   | GHC984
   | GHC9101
+  | GHC9122
   deriving (Eq, Enum, Bounded)
 
 ghcVersion :: GHC -> String
 ghcVersion GHC948 = "9.4.8"
-ghcVersion GHC966 = "9.6.6"
+ghcVersion GHC967 = "9.6.7"
 ghcVersion GHC984 = "9.8.4"
 ghcVersion GHC9101 = "9.10.1"
+ghcVersion GHC9122 = "9.12.2"
 
 ghcVersionIdent :: GHC -> String
 ghcVersionIdent = filter (/= '.') . ghcVersion
