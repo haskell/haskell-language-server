@@ -147,7 +147,7 @@ library hls-cabal-fmt-plugin
 -- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-fmt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(cabalfmt)
+  if !flag(cabalfmt) || !flag(cabal)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/test
@@ -174,7 +174,7 @@ flag cabalgild
   manual:      True
 
 common cabalgild
-  if flag(cabalgild)
+  if flag(cabalgild) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-cabal-gild-plugin
     cpp-options: -Dhls_cabalgild
 
@@ -186,7 +186,7 @@ flag isolateCabalGildTests
 
 library hls-cabal-gild-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabalgild)
+  if !flag(cabalgild) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:  Ide.Plugin.CabalGild
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
@@ -203,7 +203,7 @@ library hls-cabal-gild-plugin
 -- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(cabalgild)
+  if !flag(cabalgild) || !flag(cabal) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
@@ -348,7 +348,7 @@ library hls-class-plugin
     , deepseq
     , extra
     , ghc
-    , ghc-exactprint  >= 1.5 && < 1.10.0.0
+    , ghc-exactprint  >= 1.5 && < 1.13.0.0
     , ghcide          == 2.9.0.1
     , hls-graph
     , hls-plugin-api  == 2.9.0.1
@@ -521,15 +521,15 @@ test-suite hls-eval-plugin-tests
 -- import lens plugin
 -----------------------------
 
+flag importLens
+  description: Enable importLens plugin
+  default:     True
+  manual:      False
+
 common importLens
   if flag(importLens)
     build-depends: haskell-language-server:hls-explicit-imports-plugin
     cpp-options: -Dhls_importLens
-
-flag importLens
-  description: Enable importLens plugin
-  default:     True
-  manual:      True
 
 library hls-explicit-imports-plugin
   import:           defaults, pedantic, warnings
@@ -580,13 +580,13 @@ flag rename
   manual:      True
 
 common rename
-  if flag(rename)
+  if flag(rename) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-rename-plugin
     cpp-options: -Dhls_rename
 
 library hls-rename-plugin
   import:           defaults, pedantic, warnings
-  if !flag(rename)
+  if !flag(rename) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
@@ -610,7 +610,7 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(rename)
+  if !flag(rename) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-rename-plugin/test
@@ -710,7 +710,7 @@ common hlint
 library hls-hlint-plugin
   import:           defaults, pedantic, warnings
   -- https://github.com/ndmitchell/hlint/pull/1594
-  if !(flag(hlint) && impl(ghc < 9.10))
+  if !(flag(hlint)) || impl(ghc > 9.10)
     buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
@@ -753,7 +753,7 @@ library hls-hlint-plugin
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !(flag(hlint) && impl(ghc < 9.10))
+  if (!flag(hlint)) || impl(ghc > 9.10)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
@@ -782,15 +782,13 @@ flag stan
   manual:      True
 
 common stan
-  if flag(stan)
+  if flag(stan) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-stan-plugin
     cpp-options: -Dhls_stan
 
 library hls-stan-plugin
   import:           defaults, pedantic, warnings
-  if flag(stan)
-    buildable: True
-  else
+  if !flag(stan) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:    Ide.Plugin.Stan
   hs-source-dirs:     plugins/hls-stan-plugin/src
@@ -815,9 +813,7 @@ library hls-stan-plugin
 
 test-suite hls-stan-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if flag(stan)
-    buildable: True
-  else
+  if !flag(stan) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-stan-plugin/test
@@ -1212,13 +1208,13 @@ flag gadt
   manual:      True
 
 common gadt
-  if flag(gadt)
+  if flag(gadt) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-gadt-plugin
     cpp-options: -Dhls_gadt
 
 library hls-gadt-plugin
   import:           defaults, pedantic, warnings
-  if !flag(gadt)
+  if !flag(gadt) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:  Ide.Plugin.GADT
   other-modules:    Ide.Plugin.GHC
@@ -1242,7 +1238,7 @@ library hls-gadt-plugin
 
 test-suite hls-gadt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(gadt)
+  if !flag(gadt) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-gadt-plugin/test
@@ -1446,13 +1442,13 @@ flag fourmolu
   manual:      True
 
 common fourmolu
-  if flag(fourmolu)
+  if flag(fourmolu) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-fourmolu-plugin
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
-  if !flag(fourmolu)
+  if !flag(fourmolu) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
@@ -1472,7 +1468,7 @@ library hls-fourmolu-plugin
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(fourmolu)
+  if !flag(fourmolu) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
@@ -1500,13 +1496,13 @@ flag ormolu
   manual:      True
 
 common ormolu
-  if flag(ormolu)
+  if flag(ormolu) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-ormolu-plugin
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
-  if !flag(ormolu)
+  if !flag(ormolu) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
@@ -1526,7 +1522,7 @@ library hls-ormolu-plugin
 
 test-suite hls-ormolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(ormolu)
+  if !flag(ormolu) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
@@ -1600,13 +1596,13 @@ flag refactor
   manual:      True
 
 common refactor
-  if flag(refactor)
+  if flag(refactor) && impl(ghc < 9.11)
     build-depends: haskell-language-server:hls-refactor-plugin
     cpp-options: -Dhls_refactor
 
 library hls-refactor-plugin
   import:           defaults, pedantic, warnings
-  if !flag(refactor)
+  if !flag(refactor) || impl(ghc > 9.11)
     buildable: False
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
@@ -1665,7 +1661,7 @@ library hls-refactor-plugin
 
 test-suite hls-refactor-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(refactor)
+  if !flag(refactor) || impl(ghc > 9.11)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-refactor-plugin/test
@@ -2013,9 +2009,9 @@ test-suite func-test
 -- formatters
   if flag(floskell) && impl(ghc < 9.10)
     cpp-options: -Dhls_floskell
-  if flag(fourmolu)
+  if flag(fourmolu) && impl(ghc < 9.11)
     cpp-options: -Dhls_fourmolu
-  if flag(ormolu)
+  if flag(ormolu) && impl(ghc < 9.11)
     cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test

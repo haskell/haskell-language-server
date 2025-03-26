@@ -291,12 +291,20 @@ getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
 #endif
 -- applied record selection: "selector record" or "selector (record)" or
 -- "selector selector2.record2"
+#if __GLASGOW_HASKELL__ >= 911
+getRecSels e@(unLoc -> HsApp _ se@(unLoc -> XExpr (HsRecSelRn _)) re) =
+#else
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
+#endif
     ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
 -- Record selection where the field is being applied with the "$" operator:
 -- "selector $ record"
+#if __GLASGOW_HASKELL__ >= 911
+getRecSels e@(unLoc -> OpApp _ se@(unLoc -> XExpr (HsRecSelRn _))
+#else
 getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
+#endif
                         (unLoc -> HsVar _ (unLoc -> d)) re) | d == dollarName =
     ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )

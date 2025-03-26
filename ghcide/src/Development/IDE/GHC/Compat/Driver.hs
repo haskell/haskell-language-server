@@ -12,6 +12,12 @@ module Development.IDE.GHC.Compat.Driver
     ( hscTypecheckRenameWithDiagnostics
     ) where
 
+#if MIN_VERSION_ghc(9,11,0)
+
+import           GHC.Driver.Main            (hscTypecheckRenameWithDiagnostics)
+
+#else
+
 import           Control.Monad
 import           GHC.Core
 import           GHC.Data.FastString
@@ -144,4 +150,6 @@ hscSimpleIface :: HscEnv
                -> IO (ModIface, ModDetails)
 hscSimpleIface hsc_env tc_result summary
     = runHsc hsc_env $ hscSimpleIface' tc_result summary
+#endif
+
 #endif

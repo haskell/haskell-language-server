@@ -8,7 +8,7 @@ import           Control.Monad.Error.Class         (MonadError (throwError))
 import           Control.Monad.IO.Class            (liftIO)
 import qualified Data.Aeson                        as A
 import           Data.Default                      (Default (..))
-import           Data.Text                         as T
+import qualified Data.Text                         as T
 import           Development.IDE.Core.Shake        (IdeState (..))
 import qualified Development.IDE.LSP.Notifications as Notifications
 import           Development.IDE.Plugin.HLS        (toResponseError)

@@ -38,7 +38,7 @@ ruleBool = addRule $ \Rule _old _mode -> do
 
 
 data CondRule = CondRule
-    deriving (Eq, Generic, Hashable, NFData, Show, Typeable)
+    deriving (Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult CondRule = Bool
 
 
@@ -48,7 +48,7 @@ ruleCond mv = addRule $ \CondRule _old _mode -> do
     return $ RunResult ChangedRecomputeDiff "" r (return ())
 
 data BranchedRule = BranchedRule
-    deriving (Eq, Generic, Hashable, NFData, Show, Typeable)
+    deriving (Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult BranchedRule = Int
 
 ruleWithCond :: Rules ()
@@ -61,7 +61,7 @@ ruleWithCond = addRule $ \BranchedRule _old _mode -> do
             return $ RunResult ChangedRecomputeDiff "" (2 :: Int) (return ())
 
 data SubBranchRule = SubBranchRule
-    deriving (Eq, Generic, Hashable, NFData, Show, Typeable)
+    deriving (Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult SubBranchRule = Int
 
 ruleSubBranch :: C.MVar Int -> Rules ()
@@ -70,5 +70,5 @@ ruleSubBranch mv = addRule $ \SubBranchRule _old _mode -> do
     return $ RunResult ChangedRecomputeDiff "" r (return ())
 
 data CountRule = CountRule
-    deriving (Eq, Generic, Hashable, NFData, Show, Typeable)
+    deriving (Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult CountRule = Int

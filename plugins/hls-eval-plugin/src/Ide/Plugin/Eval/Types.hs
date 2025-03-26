@@ -157,14 +157,14 @@ data Test
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
 data IsEvaluating = IsEvaluating
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable IsEvaluating
 instance NFData   IsEvaluating
 
 type instance RuleResult IsEvaluating = Bool
 
 data GetEvalComments = GetEvalComments
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable GetEvalComments
 instance NFData   GetEvalComments
 

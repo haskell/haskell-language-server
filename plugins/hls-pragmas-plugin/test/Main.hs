@@ -73,10 +73,10 @@ codeActionTests =
   , codeActionTestWithPragmasSuggest "adds TypeApplications pragma" "TypeApplications" [("Add \"TypeApplications\"", "Contains TypeApplications code action")]
   , codeActionTestWithPragmasSuggest "after shebang" "AfterShebang" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
   , codeActionTestWithPragmasSuggest "append to existing pragmas" "AppendToExisting" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTestWithPragmasSuggest "before doc comments" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "before doc comments NamedFieldPuns" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
   , codeActionTestWithPragmasSuggest "adds TypeSynonymInstances pragma" "NeedsPragmas" [("Add \"TypeSynonymInstances\"", "Contains TypeSynonymInstances code action"), ("Add \"FlexibleInstances\"", "Contains FlexibleInstances code action")]
-  , codeActionTestWithDisableWarning "before doc comments" "MissingSignatures" [("Disable \"missing-signatures\" warnings", "Contains missing-signatures code action")]
-  , codeActionTestWithDisableWarning "before doc comments" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
+  , codeActionTestWithDisableWarning "before doc comments missing-signatures" "MissingSignatures" [("Disable \"missing-signatures\" warnings", "Contains missing-signatures code action")]
+  , codeActionTestWithDisableWarning "before doc comments unused-imports" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
   ]
 
 codeActionTestWithPragmasSuggest :: String -> FilePath -> [(T.Text, String)] -> TestTree

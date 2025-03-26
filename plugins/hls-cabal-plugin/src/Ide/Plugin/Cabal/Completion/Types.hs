@@ -8,7 +8,6 @@ import           Control.DeepSeq                 (NFData)
 import           Control.Lens                    ((^.))
 import           Data.Hashable
 import qualified Data.Text                       as T
-import           Data.Typeable
 import           Development.IDE                 as D
 import qualified Distribution.Fields             as Syntax
 import qualified Distribution.PackageDescription as PD
@@ -44,7 +43,7 @@ instance Pretty Log where
 type instance RuleResult ParseCabalFile = PD.GenericPackageDescription
 
 data ParseCabalFile = ParseCabalFile
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 
 instance Hashable ParseCabalFile
 
@@ -53,7 +52,7 @@ instance NFData ParseCabalFile
 type instance RuleResult ParseCabalFields = [Syntax.Field Syntax.Position]
 
 data ParseCabalFields = ParseCabalFields
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 
 instance Hashable ParseCabalFields
 
@@ -62,7 +61,7 @@ instance NFData ParseCabalFields
 type instance RuleResult ParseCabalCommonSections = [Syntax.Field Syntax.Position]
 
 data ParseCabalCommonSections = ParseCabalCommonSections
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 
 instance Hashable ParseCabalCommonSections
 

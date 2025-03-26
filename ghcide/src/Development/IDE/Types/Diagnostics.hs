@@ -37,7 +37,7 @@ import           Control.Lens
 import qualified Data.Aeson                     as JSON
 import qualified Data.Aeson.Lens                as JSON
 import           Data.ByteString                (ByteString)
-import           Data.List
+import           Data.Foldable
 import           Data.Maybe                     as Maybe
 import qualified Data.Text                      as T
 import           Development.IDE.GHC.Compat     (GhcMessage, MsgEnvelope,
@@ -146,7 +146,10 @@ attachReason Nothing = id
 attachReason (Just wr) = attachedReason .~ fmap JSON.toJSON (showReason wr)
  where
   showReason = \case
-    WarningWithFlag flag -> showFlag flag
+    WarningWithFlag flag -> Just $ catMaybes [showFlag flag]
+#if MIN_VERSION_ghc(9,7,0)
+    WarningWithFlags flags -> Just $ catMaybes (fmap showFlag $ toList flags)
+#endif
     _                    -> Nothing
 
 showFlag :: WarningFlag -> Maybe T.Text

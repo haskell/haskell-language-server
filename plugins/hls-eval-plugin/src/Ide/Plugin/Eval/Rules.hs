@@ -65,7 +65,13 @@ unqueueForEvaluation ide nfp = do
 apiAnnComments' :: ParsedModule -> [SrcLoc.RealLocated EpaCommentTok]
 apiAnnComments' pm = do
   L span (EpaComment c _) <- getEpaComments $ pm_parsed_source pm
-  pure (L (anchor span) c)
+  pure (L (
+#if MIN_VERSION_ghc(9,11,0)
+            epaLocationRealSrcSpan
+#else
+            anchor
+#endif
+            span) c)
   where
 #if MIN_VERSION_ghc(9,5,0)
     getEpaComments :: Development.IDE.GHC.Compat.Located (HsModule GhcPs) -> [LEpaComment]

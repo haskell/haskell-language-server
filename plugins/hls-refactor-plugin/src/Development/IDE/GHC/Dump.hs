@@ -42,9 +42,13 @@ showAstDataHtml a0 = html $
       generic
               `ext1Q` list
               `extQ` string `extQ` fastString `extQ` srcSpan `extQ` realSrcSpan
+#if !MIN_VERSION_ghc(9,11,0)
               `extQ` annotation
+#endif
               `extQ` annotationModule
+#if !MIN_VERSION_ghc(9,11,0)
               `extQ` annotationAddEpAnn
+#endif
               `extQ` annotationGrhsAnn
               `extQ` annotationEpAnnHsCase
               `extQ` annotationEpAnnHsLet
@@ -53,7 +57,9 @@ showAstDataHtml a0 = html $
               `extQ` annotationAnnParen
               `extQ` annotationTrailingAnn
               `extQ` annotationEpaLocation
+#if !MIN_VERSION_ghc(9,11,0)
               `extQ` addEpAnn
+#endif
               `extQ` lit `extQ` litr `extQ` litt
               `extQ` sourceText
               `extQ` deltaPos
@@ -135,7 +141,11 @@ showAstDataHtml a0 = html $
 #else
             epaAnchor (EpaSpan r)  = text "EpaSpan" <+> realSrcSpan r
 #endif
+#if MIN_VERSION_ghc(9,11,0)
+            epaAnchor (EpaDelta s d cs) = text "EpaDelta" <+> srcSpan s <+> deltaPos d <+> showAstDataHtml' cs
+#else
             epaAnchor (EpaDelta d cs) = text "EpaDelta" <+> deltaPos d <+> showAstDataHtml' cs
+#endif
 
 #if !MIN_VERSION_ghc(9,9,0)
             anchorOp :: AnchorOperation -> SDoc
@@ -169,8 +179,10 @@ showAstDataHtml a0 = html $
                                    -- TODO: show annotations here
                                    (text "")
 
+#if !MIN_VERSION_ghc(9,11,0)
             addEpAnn :: AddEpAnn -> SDoc
             addEpAnn (AddEpAnn a s) = text "AddEpAnn" <+> ppr a <+> epaAnchor s
+#endif
 
             var  :: Var -> SDoc
             var v      = braces $ text "Var:" <+> ppr v
@@ -208,14 +220,18 @@ showAstDataHtml a0 = html $
 
             -- -------------------------
 
+#if !MIN_VERSION_ghc(9,11,0)
             annotation :: EpAnn [AddEpAnn] -> SDoc
             annotation = annotation' (text "EpAnn [AddEpAnn]")
+#endif
 
             annotationModule :: EpAnn AnnsModule -> SDoc
             annotationModule = annotation' (text "EpAnn AnnsModule")
 
+#if !MIN_VERSION_ghc(9,11,0)
             annotationAddEpAnn :: EpAnn AddEpAnn -> SDoc
             annotationAddEpAnn = annotation' (text "EpAnn AddEpAnn")
+#endif
 
             annotationGrhsAnn :: EpAnn GrhsAnn -> SDoc
             annotationGrhsAnn = annotation' (text "EpAnn GrhsAnn")
@@ -231,7 +247,11 @@ showAstDataHtml a0 = html $
             annotationEpAnnHsLet = annotation' (text "EpAnn AnnsLet")
 #endif
 
+#if MIN_VERSION_ghc(9,11,0)
+            annotationAnnList :: EpAnn (AnnList ()) -> SDoc
+#else
             annotationAnnList :: EpAnn AnnList -> SDoc
+#endif
             annotationAnnList = annotation' (text "EpAnn AnnList")
 
             annotationEpAnnImportDecl :: EpAnn EpAnnImportDecl -> SDoc
@@ -256,7 +276,11 @@ showAstDataHtml a0 = html $
             srcSpanAnnA :: EpAnn AnnListItem -> SDoc
             srcSpanAnnA = locatedAnn'' (text "SrcSpanAnnA")
 
+#if MIN_VERSION_ghc(9,11,0)
+            srcSpanAnnL :: EpAnn (AnnList ()) -> SDoc
+#else
             srcSpanAnnL :: EpAnn AnnList -> SDoc
+#endif
             srcSpanAnnL = locatedAnn'' (text "SrcSpanAnnL")
 
             srcSpanAnnP :: EpAnn AnnPragma -> SDoc

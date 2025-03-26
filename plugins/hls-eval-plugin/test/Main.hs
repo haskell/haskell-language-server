@@ -75,7 +75,7 @@ tests =
         else
           "-- No instance for (Num String) arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
 
-      evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
+      evalInFile "T8.hs" "-- >>> \"" (if ghcVersion >= GHC912 then "-- lexical error at end of input" else "-- lexical error in string/character literal at end of input")
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval "Evaluate a type with :kind!" "T10" "hs"
@@ -126,9 +126,10 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
-  , knownBrokenInEnv [HostOS Windows] "The output has path separators in it, which on Windows look different. Just skip it there" $
+  , knownBrokenInWindowsBeforeGHC912 "The output has path separators in it, which on Windows look different. Just skip it there" $
       goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" $
         case ghcVersion of
+          GHC912 -> "ghc912.expected"
           GHC910 -> "ghc910.expected"
           GHC98  -> "ghc98.expected"
           GHC96  -> "ghc96.expected"
@@ -209,6 +210,12 @@ tests =
         let ifaceKeys = filter ("GetModIface" `T.isPrefixOf`) keys
         liftIO $ ifaceKeys @?= []
   ]
+  where
+    knownBrokenInWindowsBeforeGHC912 msg =
+        foldl (.) id
+           [ knownBrokenInSpecificEnv [GhcVer ghcVer, HostOS Windows] msg
+           | ghcVer <- [GHC94 .. GHC910]
+           ]
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =

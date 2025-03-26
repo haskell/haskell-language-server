@@ -87,6 +87,7 @@ library
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
+    , os-string
     , parallel
     , prettyprinter                >=1.7
     , prettyprinter-ansi-terminal

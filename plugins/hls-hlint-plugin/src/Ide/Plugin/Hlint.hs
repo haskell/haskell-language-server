@@ -178,7 +178,7 @@ descriptor recorder plId =
 -- This rule only exists for generating file diagnostics
 -- so the RuleResult is empty
 data GetHlintDiagnostics = GetHlintDiagnostics
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable GetHlintDiagnostics
 instance NFData   GetHlintDiagnostics
 
@@ -331,7 +331,7 @@ getExtensions nfp = do
 -- ---------------------------------------------------------------------
 
 data GetHlintSettings = GetHlintSettings
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable GetHlintSettings
 instance NFData   GetHlintSettings
 instance NFData Hint where rnf = rwhnf

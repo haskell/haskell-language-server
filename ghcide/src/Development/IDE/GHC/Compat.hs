@@ -338,10 +338,20 @@ type NameCacheUpdater = NameCache
 
 mkHieFile' :: ModSummary
            -> [Avail.AvailInfo]
+#if MIN_VERSION_ghc(9,11,0)
+           -> (HieASTs Type, NameEntityInfo)
+#else
            -> HieASTs Type
+#endif
            -> BS.ByteString
            -> Hsc HieFile
-mkHieFile' ms exports asts src = do
+mkHieFile' ms exports
+#if MIN_VERSION_ghc(9,11,0)
+            (asts, entityInfo)
+#else
+            asts
+#endif
+            src = do
   let Just src_file = ml_hs_file $ ms_location ms
       (asts',arr) = compressTypes asts
   return $ HieFile
@@ -349,6 +359,9 @@ mkHieFile' ms exports asts src = do
       , hie_module = ms_mod ms
       , hie_types = arr
       , hie_asts = asts'
+#if MIN_VERSION_ghc(9,11,0)
+      , hie_entity_infos = entityInfo
+#endif
       -- mkIfaceExports sorts the AvailInfos for stability
       , hie_exports = mkIfaceExports exports
       , hie_hs_src = src
@@ -444,13 +457,16 @@ data GhcVersion
   | GHC96
   | GHC98
   | GHC910
+  | GHC912
   deriving (Eq, Ord, Show, Enum)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_GLASGOW_HASKELL(9,10,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,12,0,0)
+ghcVersion = GHC912
+#elif MIN_VERSION_GLASGOW_HASKELL(9,10,0,0)
 ghcVersion = GHC910
 #elif MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
 ghcVersion = GHC98

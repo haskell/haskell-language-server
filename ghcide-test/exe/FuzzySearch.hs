@@ -88,7 +88,7 @@ referenceImplementation :: forall s t.
   (t -> s) ->
   -- | The original value, rendered string and score.
   Maybe (Fuzzy t s)
-referenceImplementation pat t pre post extract =
+referenceImplementation pat' t pre post extract =
   if null pat then Just (Fuzzy t result totalScore) else Nothing
   where
     null :: (T.TextualMonoid s) => s -> Bool
@@ -119,7 +119,7 @@ referenceImplementation pat t pre post extract =
         ( 0,
           1, -- matching at the start gives a bonus (cur = 1)
           mempty,
-          pat,
+          pat',
           True
         )
         s

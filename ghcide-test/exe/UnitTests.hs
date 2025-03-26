@@ -29,6 +29,8 @@ import qualified Progress
 import           System.IO.Extra                   hiding (withTempDir)
 import           System.Mem                        (performGC)
 import           Test.Hls                          (IdeState, def,
+                                                    ignoreForGhcVersions,
+                                                    GhcVersion(..),
                                                     runSessionWithServerInTmpDir,
                                                     waitForProgressDone)
 import           Test.Tasty

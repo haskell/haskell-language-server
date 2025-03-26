@@ -16,7 +16,6 @@ import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Hashable                (Hashable)
 import           Data.Text                    (Text)
-import           Data.Typeable                (Typeable)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
 import           Development.IDE.Spans.Common ()
@@ -31,12 +30,12 @@ type instance RuleResult LocalCompletions = CachedCompletions
 type instance RuleResult NonLocalCompletions = CachedCompletions
 
 data LocalCompletions = LocalCompletions
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable LocalCompletions
 instance NFData   LocalCompletions
 
 data NonLocalCompletions = NonLocalCompletions
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable NonLocalCompletions
 instance NFData   NonLocalCompletions
 

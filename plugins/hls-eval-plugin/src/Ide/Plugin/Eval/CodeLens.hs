@@ -40,7 +40,6 @@ import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Typeable                                (Typeable)
 import           Development.IDE.Core.FileStore               (getUriContents)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
@@ -122,6 +121,10 @@ import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
+#if MIN_VERSION_ghc(9,11,0)
+import           GHC.Unit.Module.ModIface                     (IfaceTopEnv (..))
+#endif
+
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -240,17 +243,22 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     -- However, the eval plugin (setContext specifically) requires the rdr_env
     -- for the current module - so get it from the Typechecked Module and add
     -- it back to the iface for the current module.
-    rdr_env <- tcg_rdr_env . tmrTypechecked <$> use_ TypeCheck nfp
+    tm <- tmrTypechecked <$> use_ TypeCheck nfp
+    let rdr_env = tcg_rdr_env tm
     let linkable_hsc = loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
         addRdrEnv hmi
           | iface <- hm_iface hmi
           , ms_mod ms == mi_module iface
+#if MIN_VERSION_ghc(9,11,0)
+          = hmi { hm_iface = set_mi_top_env (Just $ IfaceTopEnv (forceGlobalRdrEnv (globalRdrEnvLocal rdr_env)) (mkIfaceImports $ tcg_import_decls tm)) iface}
+#else
           = hmi { hm_iface = iface { mi_globals = Just $!
 #if MIN_VERSION_ghc(9,8,0)
                     forceGlobalRdrEnv
 #endif
                       rdr_env
                 }}
+#endif
           | otherwise = hmi
 
     return (ms, linkable_hsc)
@@ -270,6 +278,15 @@ initialiseSessionForEval needs_quickcheck st nfp = do
             when needs_quickcheck $ void $ addPackages ["QuickCheck"]
             getSession
   return env2
+
+#if MIN_VERSION_ghc(9,11,0)
+mkIfaceImports :: [ImportUserSpec] -> [IfaceImport]
+mkIfaceImports = map go
+  where
+    go (ImpUserSpec decl ImpUserAll) = IfaceImport decl ImpIfaceAll
+    go (ImpUserSpec decl (ImpUserExplicit env)) = IfaceImport decl (ImpIfaceExplicit (forceGlobalRdrEnv env))
+    go (ImpUserSpec decl (ImpUserEverythingBut ns)) = IfaceImport decl (ImpIfaceEverythingBut ns)
+#endif
 
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
 addFinalReturn mdlText edits
@@ -497,7 +514,7 @@ singleLine s = [T.pack s]
 errorLines :: String -> [Text]
 errorLines =
         dropWhileEnd T.null
-        . takeWhile (not . ("CallStack" `T.isPrefixOf`))
+        . takeWhile (not . (\x -> "CallStack" `T.isPrefixOf` x || "HasCallStack" `T.isPrefixOf` x))
         . T.lines
         . T.pack
 
@@ -637,7 +654,6 @@ data GhciLikeCmdException = GhciLikeCmdNotImplemented
     { ghciCmdName :: Text
     , ghciCmdArg  :: Text
     }
-    deriving (Typeable)
 
 instance Show GhciLikeCmdException where
     showsPrec _ GhciLikeCmdNotImplemented{..} =

@@ -20,7 +20,6 @@ import           Control.Monad
 import           Data.IORef
 import qualified Data.Map.Strict        as M
 import           Data.Time              (getCurrentTime)
-import           Data.Typeable          (Typeable)
 import           GHC.Conc               (unsafeIOToSTM)
 import           System.IO
 import           System.IO.Unsafe
@@ -151,7 +150,6 @@ trackSTMConf (TrackSTMConf {..}) name txm = do
 -- 'BlockedIndefinitelyOnNamedSTM', carrying the name of the transaction and
 -- thus giving more helpful error messages.
 newtype BlockedIndefinitelyOnNamedSTM = BlockedIndefinitelyOnNamedSTM String
-    deriving (Typeable)
 
 instance Show BlockedIndefinitelyOnNamedSTM where
     showsPrec _ (BlockedIndefinitelyOnNamedSTM name) =

@@ -16,7 +16,9 @@ module Development.IDE.GHC.Compat.Parser (
     Development.IDE.GHC.Compat.Parser.pm_mod_summary,
     Development.IDE.GHC.Compat.Parser.pm_extra_src_files,
     -- * API Annotations
+#if !MIN_VERSION_ghc(9,11,0)
     Anno.AnnKeywordId(..),
+#endif
     pattern EpaLineComment,
     pattern EpaBlockComment
     ) where

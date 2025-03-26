@@ -90,7 +90,7 @@ import           GHC                                     (DeltaPos (..),
 
 #if !MIN_VERSION_ghc(9,9,0)
 import           Data.Default                            (Default)
-import           GHC                                     (Anchor (..),
+import           GHC                                     ( Anchor (..),
                                                           AnchorOperation,
                                                           EpAnn (..),
                                                           NameAdornment (NameParens),
@@ -108,7 +108,10 @@ import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
-import           GHC                                     (Anchor,
+import           GHC                                     (
+#if !MIN_VERSION_ghc(9,11,0)
+                                                          Anchor,
+#endif
                                                           AnnContext (..),
                                                           EpAnn (..),
                                                           EpaLocation,
@@ -137,7 +140,7 @@ instance Pretty Log where
     LogShake shakeLog -> pretty shakeLog
 
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
-  deriving (Eq, Show, Typeable, GHC.Generic)
+  deriving (Eq, Show, GHC.Generic)
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
@@ -578,9 +581,17 @@ modifyDeclsT' :: (HasDecls t, HasTransform m)
              => ([LHsDecl GhcPs] -> m ([LHsDecl GhcPs], r))
              -> t -> m (t, r)
 modifyDeclsT' action t = do
+#if MIN_VERSION_ghc_exactprint(1,10,0)
+  decls <- pure $ hsDecls t
+#else
   decls <- liftT $ hsDecls t
+#endif
   (decls', r) <- action decls
+#if MIN_VERSION_ghc_exactprint(1,10,0)
+  t' <- pure $ replaceDecls t decls'
+#else
   t' <- liftT $ replaceDecls t decls'
+#endif
   pure (t', r)
 
 -- | Modify each LMatch in a MatchGroup

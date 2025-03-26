@@ -36,6 +36,7 @@ import           Language.LSP.Protocol.Types          hiding
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
+import           Development.IDE.Core.Compile         (setNonHomeFCHook)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
@@ -306,7 +307,7 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         -- the package(with version) this `ModuleName` belongs to.
         packageNameForImportStatement :: ModuleName -> IO T.Text
         packageNameForImportStatement mod = do
-          mpkg <- findImportedModule env mod :: IO (Maybe Module)
+          mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
           let moduleName = printOutputable mod
           case mpkg >>= packageNameWithVersion of
             Nothing             -> pure moduleName

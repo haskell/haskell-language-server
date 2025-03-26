@@ -20,11 +20,11 @@ import qualified Data.HashMap.Strict                           as HashMap
 import qualified Data.List                                     as List
 import qualified Data.List.NonEmpty                            as NE
 import qualified Data.Maybe                                    as Maybe
+import           Data.Proxy
 import qualified Data.Text                                     ()
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as Encoding
 import           Data.Text.Utf16.Rope.Mixed                    as Rope
-import           Data.Typeable
 import           Development.IDE                               as D
 import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
@@ -249,10 +249,12 @@ cabalRules recorder plId = do
         let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do
-            let regex :: T.Text
+            let regexUnknownCabalBefore310 :: T.Text
                 -- We don't support the cabal version, this should not be an error, as the
                 -- user did not do anything wrong. Instead we cast it to a warning
-                regex = "Unsupported cabal-version [0-9]+.[0-9]*"
+                regexUnknownCabalBefore310 = "Unsupported cabal-version [0-9]+.[0-9]*"
+                regexUnknownCabalVersion :: T.Text
+                regexUnknownCabalVersion = "Unsupported cabal format version in cabal-version field: [0-9]+.[0-9]+"
                 unsupportedCabalHelpText = unlines
                   [ "The used `cabal-version` is not fully supported by this `HLS` binary."
                   , "Either the `cabal-version` is unknown, or too new for this executable."
@@ -267,7 +269,10 @@ cabalRules recorder plId = do
                   NE.toList $
                     NE.map
                       ( \pe@(PError pos text) ->
-                          if text =~ regex
+                          if any (text =~)
+                                [ regexUnknownCabalBefore310
+                                , regexUnknownCabalVersion
+                                ]
                             then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos $
                                   unlines
                                     [ text
@@ -437,14 +442,14 @@ newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath
 instance Shake.IsIdeGlobal OfInterestCabalVar
 
 data IsCabalFileOfInterest = IsCabalFileOfInterest
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 instance Hashable IsCabalFileOfInterest
 instance NFData IsCabalFileOfInterest
 
 type instance RuleResult IsCabalFileOfInterest = CabalFileOfInterestResult
 
 data CabalFileOfInterestResult = NotCabalFOI | IsCabalFOI FileOfInterestStatus
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 instance Hashable CabalFileOfInterestResult
 instance NFData CabalFileOfInterestResult
 

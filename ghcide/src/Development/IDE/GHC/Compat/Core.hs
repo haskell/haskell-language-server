@@ -69,6 +69,11 @@ module Development.IDE.GHC.Compat.Core (
     IfaceTyCon(..),
     ModIface,
     ModIface_(..),
+#if MIN_VERSION_ghc(9,11,0)
+    pattern ModIface,
+    set_mi_top_env,
+    set_mi_usages,
+#endif
     HscSource(..),
     WhereFrom(..),
     loadInterface,
@@ -230,7 +235,11 @@ module Development.IDE.GHC.Compat.Core (
     ModuleOrigin(..),
     PackageName(..),
     -- * Linker
+#if MIN_VERSION_ghc(9,11,0)
+    LinkablePart(..),
+#else
     Unlinked(..),
+#endif
     Linkable(..),
     unload,
     -- * Hooks
@@ -452,7 +461,7 @@ import           GHC.Tc.Types.Evidence       hiding ((<.>))
 import           GHC.Tc.Utils.Env
 import           GHC.Tc.Utils.Monad          hiding (Applicative (..), IORef,
                                               MonadFix (..), MonadIO (..), allM,
-                                              anyM, concatMapM, mapMaybeM,
+                                              anyM, concatMapM, mapMaybeM, foldMapM,
                                               (<$>))
 import           GHC.Tc.Utils.TcType         as TcType
 import qualified GHC.Types.Avail             as Avail
@@ -530,16 +539,29 @@ import           GHC.Unit.Module.Graph
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
+#if !MIN_VERSION_ghc(9,9,0)
+import           GHC.Hs                      (SrcSpanAnn')
+#endif
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
-                                              ModIface_ (..), mi_fix)
+                                              ModIface_ (..), mi_fix
+#if MIN_VERSION_ghc(9,11,0)
+                                             , pattern ModIface
+                                             , set_mi_top_env
+                                             , set_mi_usages
+#endif
+                                             )
 import           GHC.Unit.Module.ModSummary  (ModSummary (..))
 import           GHC.Utils.Error             (mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic
 import           GHC.Utils.TmpFs
 import           Language.Haskell.Syntax     hiding (FunDep)
 
+
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
+#if MIN_VERSION_ghc(9,11,0)
+import System.OsPath
+#endif
 
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
@@ -550,7 +572,13 @@ import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
+#if MIN_VERSION_ghc(9,11,0)
+mkHomeModLocation df mn f =
+  let osf = unsafeEncodeUtf f
+  in pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn osf
+#else
 mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
+#endif
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
 
@@ -709,7 +737,7 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
 #endif
     ,gre_par, gre_lcl, gre_imp = (toList -> gre_imp)}
 
-collectHsBindsBinders :: CollectPass p => Bag (XRec p (HsBindLR p idR)) -> [IdP p]
+collectHsBindsBinders :: CollectPass p => LHsBindsLR p idR -> [IdP p]
 collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 
 

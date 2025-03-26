@@ -36,6 +36,7 @@ module Test.Hls.Util
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
+    , inspectDiagnosticAny
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
@@ -246,6 +247,10 @@ noMatch as predicate err = bool (pure ()) (fail err) (any predicate as)
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
 inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
     where err = "expected diagnostic matching '" ++ show s ++ "' but did not find one"
+
+inspectDiagnosticAny :: [Diagnostic] -> [T.Text] -> IO Diagnostic
+inspectDiagnosticAny diags s = onMatch diags (\ca -> any (`T.isInfixOf` (ca ^. L.message)) s) err
+    where err = "expected diagnostic matching one of'" ++ show s ++ "' but did not find one"
 
 expectDiagnostic :: [Diagnostic] -> [T.Text] -> IO ()
 expectDiagnostic diags s = void $ inspectDiagnostic diags s

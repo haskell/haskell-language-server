@@ -19,6 +19,7 @@ import           Control.Lens                             hiding (List)
 import           Control.Monad.IO.Class                   (MonadIO (liftIO))
 import qualified Data.Aeson                               as JSON
 import           Data.Char                                (isAlphaNum)
+import qualified Data.Foldable                            as Foldable
 import           Data.List.Extra                          (nubOrdOn)
 import qualified Data.Map                                 as M
 import           Data.Maybe                               (mapMaybe)
@@ -122,10 +123,13 @@ suggest dflags diag =
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning diagnostic
-  | Just (Just (JSON.String attachedReason)) <- diagnostic ^? attachedReason
-  , Just w <- T.stripPrefix "-W" attachedReason
-  , w `notElem` warningBlacklist =
-    pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
+  | Just (Just (JSON.Array attachedReasons)) <- diagnostic ^? attachedReason
+    =
+    [ ("Disable \"" <> w <> "\" warnings", OptGHC w)
+    | JSON.String attachedReason <- Foldable.toList attachedReasons
+    , Just w <- [T.stripPrefix "-W" attachedReason]
+    , w `notElem` warningBlacklist
+    ]
   | otherwise = []
 
 warningBlacklist :: [T.Text]
