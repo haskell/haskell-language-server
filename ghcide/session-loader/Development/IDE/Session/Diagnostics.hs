@@ -28,7 +28,7 @@ data CradleErrorDetails =
   Depicts the cradle error in a user-friendly way.
 -}
 renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
-renderCradleError (CradleError deps _ec ms) cradle nfp =
+renderCradleError (CradleError deps _ec ms _attemptToLoadFiles) cradle nfp =
   let noDetails =
         ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines $ map T.pack userFriendlyMessage) Nothing
   in
