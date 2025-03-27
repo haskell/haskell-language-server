@@ -131,3 +131,9 @@ runs:
       if: runner.os == 'Linux'
       run: ghcup gc --ghc-old --share-dir --hls-no-ghc --cache --tmpdirs --unset
       shell: bash
+
+    # wamerican package provides "/usr/share/dict/words" needed by FuzzySearch tests
+    - name: "Install wamerican package"
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y wamerican
+      shell: bash

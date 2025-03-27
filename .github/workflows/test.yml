@@ -55,9 +55,6 @@ jobs:
                          , "test/**"
                          , "shake-bench/**"
                          ]'
-      # Ensure "/usr/share/dict/words" used by FuzzySearch tests is installed
-      - id: install_words
-        run: sudo apt-get update && sudo apt-get install -y wamerican
 
   test:
     if: needs.pre_job.outputs.should_skip != 'true'
