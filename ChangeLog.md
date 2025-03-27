@@ -1,5 +1,159 @@
 # Changelog for haskell-language-server
 
+## 2.10.0.0
+
+- Bindists for GHC 9.12.2
+  - This is only basic support, many plugins are not yet compatible.
+- Bindists for GHC 9.8.4
+- Bindists for GHC 9.6.7
+- `hls-cabal-plugin` features
+  - Support for `cabal-add`
+  - Goto Definition for common sections
+  - Outline of .cabal files
+- Fix handling of LSP resolve requests
+- Display Inlay Hints
+  - Records
+  - Imports
+
+### Pull Requests
+
+- Fix cabal check for Hackage release
+  ([#4528](https://github.com/haskell/haskell-language-server/pull/4528)) by @fendor
+- GHC 9.12 support
+  ([#4527](https://github.com/haskell/haskell-language-server/pull/4527)) by @wz1000
+- Bump cachix/install-nix-action from 30 to 31
+  ([#4525](https://github.com/haskell/haskell-language-server/pull/4525)) by @dependabot[bot]
+- Bump cachix/cachix-action from 15 to 16
+  ([#4523](https://github.com/haskell/haskell-language-server/pull/4523)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.9 to 2.7.10
+  ([#4522](https://github.com/haskell/haskell-language-server/pull/4522)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.9 to 2.7.10 in /.github/actions/setup-build
+  ([#4521](https://github.com/haskell/haskell-language-server/pull/4521)) by @dependabot[bot]
+- Move ghcide-test to stand alone dir
+  ([#4520](https://github.com/haskell/haskell-language-server/pull/4520)) by @soulomoon
+- refactor: remove unnecessary instance and use of unsafeCoerce
+  ([#4518](https://github.com/haskell/haskell-language-server/pull/4518)) by @MangoIV
+- convert `pre-commit-config.yaml` from JSON to YAML
+  ([#4513](https://github.com/haskell/haskell-language-server/pull/4513)) by @peterbecich
+- Enable bench for 9.10
+  ([#4512](https://github.com/haskell/haskell-language-server/pull/4512)) by @soulomoon
+- Bugfix: Explicit record fields inlay hints for polymorphic records
+  ([#4510](https://github.com/haskell/haskell-language-server/pull/4510)) by @wczyz
+- Capitalization of "Replace"
+  ([#4509](https://github.com/haskell/haskell-language-server/pull/4509)) by @dschrempf
+- document eval plugin not supporting multiline expressions
+  ([#4495](https://github.com/haskell/haskell-language-server/pull/4495)) by @noughtmare
+- Documentation: Imrpove "Contributing" (and amend Sphinx builders)
+  ([#4494](https://github.com/haskell/haskell-language-server/pull/4494)) by @dschrempf
+- Documentation: HLS plugin tutorial improvements
+  ([#4491](https://github.com/haskell/haskell-language-server/pull/4491)) by @dschrempf
+- Nix tooling (minor changes)
+  ([#4490](https://github.com/haskell/haskell-language-server/pull/4490)) by @dschrempf
+- Bump haskell-actions/setup from 2.7.8 to 2.7.9
+  ([#4483](https://github.com/haskell/haskell-language-server/pull/4483)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.8 to 2.7.9 in /.github/actions/setup-build
+  ([#4482](https://github.com/haskell/haskell-language-server/pull/4482)) by @dependabot[bot]
+- Rework bindist CI
+  ([#4481](https://github.com/haskell/haskell-language-server/pull/4481)) by @wz1000
+- Remove Unsafe Dynflags deadcode, they don't exist any more!
+  ([#4480](https://github.com/haskell/haskell-language-server/pull/4480)) by @fendor
+- Implement fallback handler for `*/resolve` requests
+  ([#4478](https://github.com/haskell/haskell-language-server/pull/4478)) by @fendor
+- Bump haskell-actions/setup from 2.7.7 to 2.7.8
+  ([#4477](https://github.com/haskell/haskell-language-server/pull/4477)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.7 to 2.7.8 in /.github/actions/setup-build
+  ([#4476](https://github.com/haskell/haskell-language-server/pull/4476)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.6 to 2.7.7
+  ([#4471](https://github.com/haskell/haskell-language-server/pull/4471)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.6 to 2.7.7 in /.github/actions/setup-build
+  ([#4470](https://github.com/haskell/haskell-language-server/pull/4470)) by @dependabot[bot]
+- Allow building with GHC 9.8.4
+  ([#4459](https://github.com/haskell/haskell-language-server/pull/4459)) by @fendor
+- Update python read-the-docs dependencies to latest
+  ([#4457](https://github.com/haskell/haskell-language-server/pull/4457)) by @fendor
+- More tests and better docs for cabal-add
+  ([#4455](https://github.com/haskell/haskell-language-server/pull/4455)) by @VenInf
+- ci(mergify): upgrade configuration to current format
+  ([#4454](https://github.com/haskell/haskell-language-server/pull/4454)) by @mergify[bot]
+- Support record positional construction inlay hints
+  ([#4447](https://github.com/haskell/haskell-language-server/pull/4447)) by @jetjinser
+- Build HLS with GHC 9.8.3
+  ([#4444](https://github.com/haskell/haskell-language-server/pull/4444)) by @fendor
+- Don't suggest -Wno-deferred-out-of-scope-variables
+  ([#4441](https://github.com/haskell/haskell-language-server/pull/4441)) by @jeukshi
+- Enable hls-stan-plugin for GHC 9.10.1
+  ([#4437](https://github.com/haskell/haskell-language-server/pull/4437)) by @fendor
+- Enhance formatting of the `cabal-version` error message
+  ([#4436](https://github.com/haskell/haskell-language-server/pull/4436)) by @fendor
+- Support structured diagnostics 2
+  ([#4433](https://github.com/haskell/haskell-language-server/pull/4433)) by @noughtmare
+- Cabal ignore if for completions (#4289)
+  ([#4427](https://github.com/haskell/haskell-language-server/pull/4427)) by @SamuelLess
+- Fix cabal-add testdata for hls-cabal-plugin-tests
+  ([#4426](https://github.com/haskell/haskell-language-server/pull/4426)) by @fendor
+- gracefully handle errors for unsupported cabal version
+  ([#4425](https://github.com/haskell/haskell-language-server/pull/4425)) by @fridewald
+- Fix pre-commit in CI
+  ([#4424](https://github.com/haskell/haskell-language-server/pull/4424)) by @fendor
+- link executables dynamically to speed up linking
+  ([#4423](https://github.com/haskell/haskell-language-server/pull/4423)) by @develop7
+- Cabal plugin: implement check for package.yaml in a stack project
+  ([#4422](https://github.com/haskell/haskell-language-server/pull/4422)) by @JMoss-dev
+- Fix exporting operator pattern synonym
+  ([#4420](https://github.com/haskell/haskell-language-server/pull/4420)) by @pbrinkmeier
+- Add docs about running tests for new contributors
+  ([#4418](https://github.com/haskell/haskell-language-server/pull/4418)) by @pbrinkmeier
+- Bump cachix/install-nix-action from 29 to 30
+  ([#4413](https://github.com/haskell/haskell-language-server/pull/4413)) by @dependabot[bot]
+- Bump cachix/install-nix-action from V27 to 29
+  ([#4411](https://github.com/haskell/haskell-language-server/pull/4411)) by @dependabot[bot]
+- Avoid expectFail in the test suite
+  ([#4402](https://github.com/haskell/haskell-language-server/pull/4402)) by @sgillespie
+- Fix typos in hls-cabal-fmt-plugin
+  ([#4399](https://github.com/haskell/haskell-language-server/pull/4399)) by @fendor
+- Jump to instance definition and explain typeclass evidence
+  ([#4392](https://github.com/haskell/haskell-language-server/pull/4392)) by @fendor
+- Update cabal-add dependency
+  ([#4389](https://github.com/haskell/haskell-language-server/pull/4389)) by @VenInf
+- Improve error message for `--probe-tools`
+  ([#4387](https://github.com/haskell/haskell-language-server/pull/4387)) by @sgillespie
+- Documentation for build-depends on hover
+  ([#4385](https://github.com/haskell/haskell-language-server/pull/4385)) by @VenInf
+- Bump haskell-actions/setup from 2.7.3 to 2.7.6
+  ([#4384](https://github.com/haskell/haskell-language-server/pull/4384)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.7.5 to 2.7.6 in /.github/actions/setup-build
+  ([#4383](https://github.com/haskell/haskell-language-server/pull/4383)) by @dependabot[bot]
+- Clear GHCup caches in CI to not run out of space in CI
+  ([#4382](https://github.com/haskell/haskell-language-server/pull/4382)) by @fendor
+- Cabal go to module's definition
+  ([#4380](https://github.com/haskell/haskell-language-server/pull/4380)) by @VenInf
+- Add Goto Definition for cabal common sections
+  ([#4375](https://github.com/haskell/haskell-language-server/pull/4375)) by @ChristophHochrainer
+- cabal-add integration as a CodeAction
+  ([#4360](https://github.com/haskell/haskell-language-server/pull/4360)) by @VenInf
+- Bump haskell-actions/setup from 2.7.3 to 2.7.5 in /.github/actions/setup-build
+  ([#4354](https://github.com/haskell/haskell-language-server/pull/4354)) by @dependabot[bot]
+- Support Inlay hints for record wildcards
+  ([#4351](https://github.com/haskell/haskell-language-server/pull/4351)) by @jetjinser
+- Remove componentInternalUnits
+  ([#4350](https://github.com/haskell/haskell-language-server/pull/4350)) by @soulomoon
+- Fix core file location in `GetLinkable`
+  ([#4347](https://github.com/haskell/haskell-language-server/pull/4347)) by @soulomoon
+- Release 2.9.0.1
+  ([#4346](https://github.com/haskell/haskell-language-server/pull/4346)) by @wz1000
+- Using captureKicksDiagnostics to speed up multiple plugin tests
+  ([#4339](https://github.com/haskell/haskell-language-server/pull/4339)) by @komikat
+- Get files from Shake VFS from within plugin handlers
+  ([#4328](https://github.com/haskell/haskell-language-server/pull/4328)) by @awjchen
+- Cabal plugin outline view
+  ([#4323](https://github.com/haskell/haskell-language-server/pull/4323)) by @VenInf
+- Add missing documentation for cabal formatters
+  ([#4322](https://github.com/haskell/haskell-language-server/pull/4322)) by @fendor
+- Provide explicit import in inlay hints
+  ([#4235](https://github.com/haskell/haskell-language-server/pull/4235)) by @jetjinser
+- Add codeactions for cabal field names
+  ([#3273](https://github.com/haskell/haskell-language-server/pull/3273)) by @dyniec
+
 ## 2.9.0.1
 
 - Bindists for GHC 9.6.6

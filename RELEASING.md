@@ -3,10 +3,9 @@
 ## Release checklist
 
 - [ ] check ghcup supports new GHC releases if any
-- [ ] set the supported GHCs in workflow file `.github/workflows/release.yaml`
-  - There is currently a list of GHC versions for each major platform. Search for `ghc: [` to find all lists.
-  - Look for `TODO:` to find locations that require extra care for GHC versions.
 - [ ] check all plugins still work if release includes code changes
+- [ ] set the supported GHCs in workflow file `.github/generate-ci/gen_ci.hs`
+- [ ] regenerate the CI via `./.github/generate-ci/generate-jobs`
 - [ ] bump package versions in all `*.cabal` files (same version as hls)
   - HLS uses lockstep versioning. The core packages and all plugins use the same version number, and only support exactly this version.
     - Exceptions:

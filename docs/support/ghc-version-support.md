@@ -15,41 +15,44 @@ Support status (see the support policy below for more details):
 - "full support": this GHC version is currently actively supported, and most [tier 2 plugins](./plugin-support.md) work
 - "deprecated": this GHC version was supported in the past, but is now deprecated
 
-| GHC version  | Last supporting HLS version                                                          | Support status                                                              |
-|--------------|--------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 9.10.1       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
-| 9.8.2        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
-| 9.8.1        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | full support                                                                |
-| 9.6.6        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
-| 9.6.5        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.1)   | full support                                                                |
-| 9.6.4        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | full support                                                                |
-| 9.6.3        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | full support                                                                |
-| 9.6.2        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated                                                                  |
-| 9.6.1        | [2.0.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.0.0.0)   | deprecated                                                                  |
-| 9.4.8        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support                                                                |
-| 9.4.7        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | deprecated                                                                  |
-| 9.4.6        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated                                                                  |
-| 9.4.5        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated                                                                  |
-| 9.4.4        | [1.10.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.10.0.0) | deprecated                                                                  |
-| 9.4.3        | [1.9.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.9.1.0)   | deprecated                                                                  |
-| 9.4.(1,2)    | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0)   | deprecated                                                                  |
-| 9.2.8        | [2.9.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.0)   | deprecated                                                                  |
-| 9.2.7        | [2.0.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.0.0.1)   | deprecated                                                                  |
-| 9.2.(5,6)    | [1.9.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.9.1.0)   | deprecated                                                                  |
-| 9.2.(3,4)    | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0)   | deprecated                                                                  |
-| 9.2.(1,2)    | [1.7.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.7.0.0)   | deprecated                                                                  |
-| 9.0.2        | [2.4.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.4.0.0)   | deprecated                                                                  |
-| 9.0.1        | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)   | deprecated                                                                  |
-| 8.10.7       | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated                                                                  |
-| 8.10.6       | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)   | deprecated                                                                  |
-| 8.10.5       | [1.5.1](https://github.com/haskell/haskell-language-server/releases/tag/1.5.1)       | deprecated                                                                  |
-| 8.10.(4,3,2) | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)       | deprecated                                                                  |
-| 8.10.1       | [0.9.0](https://github.com/haskell/haskell-language-server/releases/tag/0.9.0)       | deprecated                                                                  |
-| 8.8.4        | [1.8.0](https://github.com/haskell/haskell-language-server/releases/1.8.0)           | deprecated                                                                  |
-| 8.8.3        | [1.5.1](https://github.com/haskell/haskell-language-server/releases/1.5.1)           | deprecated                                                                  |
-| 8.8.2        | [1.2.0](https://github.com/haskell/haskell-language-server/releases/tag/1.2.0)       | deprecated                                                                  |
-| 8.6.5        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0)   | deprecated                                                                  |
-| 8.6.4        | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)       | deprecated                                                                  |
+| GHC version  | Last supporting HLS version                                                          | Support status |
+| ------------ | ------------------------------------------------------------------------------------ | -------------- |
+| 9.12.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | basic support  |
+| 9.10.1       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
+| 9.8.4        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
+| 9.8.2        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.1)   | deprecated     |
+| 9.8.1        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | deprecated   |
+| 9.6.7        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
+| 9.6.6        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.1)   | deprecated   |
+| 9.6.5        | [2.9.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.1)   | deprecated     |
+| 9.6.4        | [2.6.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.6.0.0)   | deprecated     |
+| 9.6.3        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | deprecated     |
+| 9.6.2        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
+| 9.6.1        | [2.0.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.0.0.0)   | deprecated     |
+| 9.4.8        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
+| 9.4.7        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | deprecated     |
+| 9.4.6        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
+| 9.4.5        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
+| 9.4.4        | [1.10.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.10.0.0) | deprecated     |
+| 9.4.3        | [1.9.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.9.1.0)   | deprecated     |
+| 9.4.(1,2)    | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0)   | deprecated     |
+| 9.2.8        | [2.9.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.9.0.0)   | deprecated     |
+| 9.2.7        | [2.0.0.1](https://github.com/haskell/haskell-language-server/releases/tag/2.0.0.1)   | deprecated     |
+| 9.2.(5,6)    | [1.9.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.9.1.0)   | deprecated     |
+| 9.2.(3,4)    | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0)   | deprecated     |
+| 9.2.(1,2)    | [1.7.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.7.0.0)   | deprecated     |
+| 9.0.2        | [2.4.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.4.0.0)   | deprecated     |
+| 9.0.1        | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)   | deprecated     |
+| 8.10.7       | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
+| 8.10.6       | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)   | deprecated     |
+| 8.10.5       | [1.5.1](https://github.com/haskell/haskell-language-server/releases/tag/1.5.1)       | deprecated     |
+| 8.10.(4,3,2) | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)       | deprecated     |
+| 8.10.1       | [0.9.0](https://github.com/haskell/haskell-language-server/releases/tag/0.9.0)       | deprecated     |
+| 8.8.4        | [1.8.0](https://github.com/haskell/haskell-language-server/releases/1.8.0)           | deprecated     |
+| 8.8.3        | [1.5.1](https://github.com/haskell/haskell-language-server/releases/1.5.1)           | deprecated     |
+| 8.8.2        | [1.2.0](https://github.com/haskell/haskell-language-server/releases/tag/1.2.0)       | deprecated     |
+| 8.6.5        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0)   | deprecated     |
+| 8.6.4        | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)       | deprecated     |
 
 GHC versions not in the list have never been supported by HLS.
 LTS stands for [Stackage](https://www.stackage.org/) Long Term Support.
@@ -88,7 +91,7 @@ HLS will support major versions of GHC until they are older than _both_
 1. The major version of GHC used in the current Stackage LTS; and
 2. The major version of GHC recommended by GHCup
 
-For example, if 
+For example, if
 
 1. Stackage LTS uses GHC 9.2; and
 2. GHCUp recommends GHC 9.4

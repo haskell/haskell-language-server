@@ -139,7 +139,7 @@ install_ghcup() {
 		source "$(dirname "${GHCUP_BIN}")/env"
 		# make sure we use the vanilla channel for installing binaries
 		# see https://github.com/haskell/ghcup-metadata/pull/166#issuecomment-1893075575
-		ghcup config set url-source https://raw.githubusercontent.com/haskell/ghcup-metadata/master/ghcup-vanilla-0.0.8.yaml
+		ghcup config set url-source https://raw.githubusercontent.com/haskell/ghcup-metadata/refs/heads/master/ghcup-vanilla-0.0.9.yaml
 		ghcup install cabal --set "${BOOTSTRAP_HASKELL_CABAL_VERSION}"
 	fi
 }

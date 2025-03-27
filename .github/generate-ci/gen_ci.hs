@@ -62,16 +62,18 @@ artifactName arch opsys = archName arch ++ "-" ++ case opsys of
 
 data GHC
   = GHC948
-  | GHC966
+  | GHC967
   | GHC984
   | GHC9101
+  | GHC9122
   deriving (Eq, Enum, Bounded)
 
 ghcVersion :: GHC -> String
 ghcVersion GHC948 = "9.4.8"
-ghcVersion GHC966 = "9.6.6"
+ghcVersion GHC967 = "9.6.7"
 ghcVersion GHC984 = "9.8.4"
 ghcVersion GHC9101 = "9.10.1"
+ghcVersion GHC9122 = "9.12.2"
 
 ghcVersionIdent :: GHC -> String
 ghcVersionIdent = filter (/= '.') . ghcVersion
@@ -186,6 +188,15 @@ runner AArch64 Darwin = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows = ["windows-latest"]
 runner AArch64 Windows = error "aarch64 windows not supported"
 
+-- | Runner selection for bindist jobs
+bindistRunner :: Arch -> Opsys -> [Value]
+bindistRunner Amd64 (Linux _) = ["self-hosted", "linux-space", "maerwald"]
+bindistRunner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
+bindistRunner Amd64 Darwin = ["macOS-13"]
+bindistRunner AArch64 Darwin = ["self-hosted", "macOS", "ARM64"]
+bindistRunner Amd64 Windows = ["windows-latest"]
+bindistRunner AArch64 Windows = error "aarch64 windows not supported"
+
 -------------------------------------------------------------------------------
 -- Action generatation
 -------------------------------------------------------------------------------
@@ -279,8 +290,8 @@ data Config = MkConfig Arch Opsys [GHC]
 instance ToJSON CI where
   toJSON (CI cs) = object
     [ "name" .= str "Build and release"
-    , "on" .= object [ "push" .= [object ["tags" .= [str "*"]]]
-                       , "schedule" .= [object ["cron" .= str "0 2 * * 1"]]
+    , "on" .= object [ "push" .=      object ["tags" .= [str "*"]]
+                      , "schedule" .= [object ["cron" .= str "0 2 * * 1"]]
                      ]
     , "env" .= object
       [ "CABAL_CACHE_DISABLE" .= str "${{ vars.CABAL_CACHE_DISABLE }}"
@@ -415,7 +426,7 @@ buildJob arch os v =
 mkBindistJob :: Arch -> Opsys -> [GHC] -> Job
 mkBindistJob arch os vs =
   K.fromString (bindistJobName arch os) .= object
-      [ "runs-on" .= runner arch os
+      [ "runs-on" .= bindistRunner arch os
       , "name" .= (bindistJobName arch os ++ " (Prepare bindist)")
       , "needs" .= [buildJobName arch os ver | ver <- vs]
       , "env" .= thisEnv
