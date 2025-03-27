@@ -174,7 +174,9 @@ jobs:
     - build-x86_64-linux-centos7-9101
     - build-x86_64-linux-centos7-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -236,7 +238,9 @@ jobs:
     - build-x86_64-linux-deb10-9101
     - build-x86_64-linux-deb10-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -298,7 +302,9 @@ jobs:
     - build-x86_64-linux-deb11-9101
     - build-x86_64-linux-deb11-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -360,7 +366,9 @@ jobs:
     - build-x86_64-linux-deb9-9101
     - build-x86_64-linux-deb9-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -422,7 +430,9 @@ jobs:
     - build-x86_64-linux-fedora27-9101
     - build-x86_64-linux-fedora27-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -484,7 +494,9 @@ jobs:
     - build-x86_64-linux-fedora33-9101
     - build-x86_64-linux-fedora33-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -546,7 +558,9 @@ jobs:
     - build-x86_64-linux-mint193-9101
     - build-x86_64-linux-mint193-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -608,7 +622,9 @@ jobs:
     - build-x86_64-linux-mint202-9101
     - build-x86_64-linux-mint202-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -670,7 +686,9 @@ jobs:
     - build-x86_64-linux-ubuntu1804-9101
     - build-x86_64-linux-ubuntu1804-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -732,7 +750,9 @@ jobs:
     - build-x86_64-linux-ubuntu2004-9101
     - build-x86_64-linux-ubuntu2004-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -794,7 +814,9 @@ jobs:
     - build-x86_64-linux-ubuntu2204-9101
     - build-x86_64-linux-ubuntu2204-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -856,7 +878,9 @@ jobs:
     - build-x86_64-linux-unknown-9101
     - build-x86_64-linux-unknown-9122
     runs-on:
-    - ubuntu-latest
+    - self-hosted
+    - linux-space
+    - maerwald
     steps:
     - name: Checkout
       uses: actions/checkout@v4

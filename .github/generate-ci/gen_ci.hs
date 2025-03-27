@@ -188,6 +188,15 @@ runner AArch64 Darwin = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows = ["windows-latest"]
 runner AArch64 Windows = error "aarch64 windows not supported"
 
+-- | Runner selection for bindist jobs
+bindistRunner :: Arch -> Opsys -> [Value]
+bindistRunner Amd64 (Linux _) = ["self-hosted", "linux-space", "maerwald"]
+bindistRunner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
+bindistRunner Amd64 Darwin = ["macOS-13"]
+bindistRunner AArch64 Darwin = ["self-hosted", "macOS", "ARM64"]
+bindistRunner Amd64 Windows = ["windows-latest"]
+bindistRunner AArch64 Windows = error "aarch64 windows not supported"
+
 -------------------------------------------------------------------------------
 -- Action generatation
 -------------------------------------------------------------------------------
@@ -417,7 +426,7 @@ buildJob arch os v =
 mkBindistJob :: Arch -> Opsys -> [GHC] -> Job
 mkBindistJob arch os vs =
   K.fromString (bindistJobName arch os) .= object
-      [ "runs-on" .= runner arch os
+      [ "runs-on" .= bindistRunner arch os
       , "name" .= (bindistJobName arch os ++ " (Prepare bindist)")
       , "needs" .= [buildJobName arch os ver | ver <- vs]
       , "env" .= thisEnv
