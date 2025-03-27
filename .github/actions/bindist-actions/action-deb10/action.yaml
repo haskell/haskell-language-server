@@ -16,6 +16,6 @@ runs:
     TOOLS: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev
       git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc
       autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5
-      libtinfo5 patchelf
+      libtinfo5 patchelf wamerican
   image: debian:10
   using: docker
