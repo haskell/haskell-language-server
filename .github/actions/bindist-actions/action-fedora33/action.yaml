@@ -16,6 +16,6 @@ runs:
     TOOLS: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs
       findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs
       ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which
-      xz zlib-devel patchelf
+      xz zlib-devel patchelf words
   image: fedora:33
   using: docker
