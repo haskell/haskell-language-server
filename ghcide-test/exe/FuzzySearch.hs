@@ -29,7 +29,7 @@ tests =
           ]
     ]
 
-test :: Text -> Bool
+test :: Text -> Property
 test candidate = do
   let previous =
         catMaybes
@@ -38,7 +38,7 @@ test candidate = do
             | d <- dictionary
           ]
       new = catMaybes [(d,) <$> match candidate d | d <- dictionary]
-  previous == new
+  previous === new
 
 propLegit :: Property
 propLegit = forAll (elements dictionary) test
@@ -91,7 +91,7 @@ referenceImplementation :: forall s t.
 referenceImplementation pat' t pre post extract =
   if null pat then Just (Fuzzy t result totalScore) else Nothing
   where
-    null :: (T.TextualMonoid s) => s -> Bool
+    null :: s -> Bool
     null = not . T.any (const True)
 
     s = extract t
