@@ -1,130 +1,52 @@
 module FuzzySearch (tests) where
 
-import           Data.Char                  (toLower)
-import           Data.Maybe                 (catMaybes)
-import qualified Data.Monoid.Textual        as T
-import           Data.Text                  (Text, inits, pack)
-import qualified Data.Text                  as Text
-import           Prelude                    hiding (filter)
-import           System.Directory           (doesFileExist)
-import           System.IO.Unsafe           (unsafePerformIO)
-import           Test.QuickCheck
+import           Data.Maybe            (isJust, mapMaybe)
+import           Data.Text             (Text)
+import qualified Data.Text             as Text
+import           Prelude               hiding (filter)
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure
-import           Test.Tasty.QuickCheck      (testProperty)
-import qualified Text.Fuzzy                 as Fuzzy
-import           Text.Fuzzy                 (Fuzzy (..))
+import           Test.Tasty.HUnit
+import           Test.Tasty.QuickCheck
 import           Text.Fuzzy.Parallel
 
 tests :: TestTree
 tests =
   testGroup
     "Fuzzy search"
-    [ needDictionary $
-        testGroup
-          "match works as expected on the english dictionary"
-          [ testProperty "for legit words" propLegit,
-            testProperty "for prefixes" propPrefix,
-            testProperty "for typos" propTypo
-          ]
+    [ testGroup "match"
+        [ testCase "empty" $
+            match "" "" @?= Just 0
+        , testCase "camel case" $
+            match "myImportantField" "myImportantField" @?= Just 262124
+        , testCase "a" $
+            mapMaybe (matchInput "a") ["", "a", "aa", "aaa", "A", "AA", "aA", "Aa"]
+              @?= [("a",3),("aa",3),("aaa",3),("aA",3),("Aa",1)]
+        ,  testCase "lowercase words" $
+            mapMaybe (matchInput "abc") ["abc", "abcd", "axbc", "axbxc", "def"]
+              @?= [("abc", 25), ("abcd", 25), ("axbc", 7), ("axbxc", 5)]
+        , testCase "lower upper mix" $
+            mapMaybe (matchInput "abc") ["abc", "aBc", "axbC", "axBxC", "def"]
+              @?= [("abc", 25), ("aBc", 25), ("axbC", 7), ("axBxC", 5)]
+        , testCase "prefixes" $
+            mapMaybe (matchInput "alpha") (Text.inits "alphabet")
+              @?= [("alpha", 119), ("alphab", 119), ("alphabe", 119), ("alphabet", 119)]
+        , testProperty "x `isSubsequenceOf` y => match x y returns Just"
+            prop_matchIfSubsequence
+        ]
     ]
-
-test :: Text -> Bool
-test candidate = do
-  let previous =
-        catMaybes
-          [ (d,) . Fuzzy.score
-              <$> referenceImplementation candidate d "" "" id
-            | d <- dictionary
-          ]
-      new = catMaybes [(d,) <$> match candidate d | d <- dictionary]
-  previous == new
-
-propLegit :: Property
-propLegit = forAll (elements dictionary) test
-
-propPrefix :: Property
-propPrefix = forAll (elements dictionary >>= elements . inits) test
-
-propTypo :: Property
-propTypo = forAll typoGen test
-
-typoGen :: Gen Text
-typoGen = do
-  w <- elements dictionary
-  l <- elements [0 .. Text.length w -1]
-  let wl = Text.index w l
-  c <- elements [ c | c <- ['a' .. 'z'], c /= wl]
-  return $ replaceAt w l c
-
-replaceAt :: Text -> Int -> Char -> Text
-replaceAt t i c =
-  let (l, r) = Text.splitAt i t
-   in l <> Text.singleton c <> r
-
-dictionaryPath :: FilePath
-dictionaryPath = "/usr/share/dict/words"
-
-{-# ANN dictionary ("HLint: ignore Avoid restricted function" :: String) #-}
-{-# NOINLINE dictionary #-}
-dictionary :: [Text]
-dictionary = unsafePerformIO $ do
-  existsDictionary <- doesFileExist dictionaryPath
-  if existsDictionary
-    then map pack . words <$> readFile dictionaryPath
-    else pure []
-
-referenceImplementation :: forall s t.
-  (T.TextualMonoid s) =>
-  -- | Pattern in lowercase except for first character
-  s ->
-  -- | The value containing the text to search in.
-  t ->
-  -- | The text to add before each match.
-  s ->
-  -- | The text to add after each match.
-  s ->
-  -- | The function to extract the text from the container.
-  (t -> s) ->
-  -- | The original value, rendered string and score.
-  Maybe (Fuzzy t s)
-referenceImplementation pat' t pre post extract =
-  if null pat then Just (Fuzzy t result totalScore) else Nothing
   where
-    null :: (T.TextualMonoid s) => s -> Bool
-    null = not . T.any (const True)
+    matchInput :: Text -> Text -> Maybe (Text, Int)
+    matchInput needle candidate = (candidate,) <$> match needle candidate
 
-    s = extract t
-    (totalScore, _currScore, result, pat, _) =
-      T.foldl'
-        undefined
-        ( \(tot, cur, res, pat, isFirst) c ->
-            case T.splitCharacterPrefix pat of
-              Nothing -> (tot, 0, res <> T.singleton c, pat, isFirst)
-              Just (x, xs) ->
-                -- the case of the first character has to match
-                -- otherwise use lower case since the pattern is assumed lower
-                let !c' = if isFirst then c else toLower c
-                 in if x == c'
-                      then
-                        let cur' = cur * 2 + 1
-                         in ( tot + cur',
-                              cur',
-                              res <> pre <> T.singleton c <> post,
-                              xs,
-                              False
-                            )
-                      else (tot, 0, res <> T.singleton c, pat, isFirst)
-        )
-        ( 0,
-          1, -- matching at the start gives a bonus (cur = 1)
-          mempty,
-          pat',
-          True
-        )
-        s
+prop_matchIfSubsequence :: Property
+prop_matchIfSubsequence =
+  forAll genNonEmptyText $ \haystack ->
+    forAll (genSubsequence haystack) $ \needle ->
+        isJust (match needle haystack)
+  where
+    genNonEmptyText =
+      Text.pack <$> listOf1 (elements $ ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'])
 
-needDictionary :: TestTree -> TestTree
-needDictionary
-  | null dictionary = ignoreTestBecause ("not found: " <> dictionaryPath)
-  | otherwise = id
+    genSubsequence :: Text -> Gen Text
+    genSubsequence =
+        fmap Text.pack . sublistOf . Text.unpack

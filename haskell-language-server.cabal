@@ -2094,7 +2094,6 @@ test-suite ghcide-tests
     , enummapset
     , extra
     , filepath
-    , fuzzy
     , ghcide
     , hls-plugin-api
     , lens
@@ -2102,7 +2101,6 @@ test-suite ghcide-tests
     , lsp
     , lsp-test                ^>=0.17.1
     , lsp-types
-    , monoid-subclasses
     , mtl
     , network-uri
     , QuickCheck
