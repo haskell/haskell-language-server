@@ -12,7 +12,9 @@ module Development.IDE.Plugin.CodeAction
     fillHolePluginDescriptor,
     extendImportPluginDescriptor,
     -- * For testing
-    matchRegExMultipleImports
+    matchRegExMultipleImports,
+    extractNotInScopeName,
+    NotInScope(..)
     ) where
 
 import           Control.Applicative                               ((<|>))
@@ -1825,7 +1827,7 @@ data NotInScope
     = NotInScopeDataConstructor T.Text
     | NotInScopeTypeConstructorOrClass T.Text
     | NotInScopeThing T.Text
-    deriving Show
+    deriving (Show, Eq)
 
 notInScope :: NotInScope -> T.Text
 notInScope (NotInScopeDataConstructor t)        = t
