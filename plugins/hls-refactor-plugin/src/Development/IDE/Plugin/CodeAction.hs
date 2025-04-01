@@ -1870,6 +1870,10 @@ extractNotInScopeName x
   = Just $ NotInScopeThing name
   | Just [_module, name] <- matchRegexUnifySpaces x "No instance for [‘(].*HasField \"[^\"]+\" \\(([^ .]+\\.)*([^ .]+)[^)]*\\).*[’)]"
   = Just $ NotInScopeThing name
+  -- The order of the "Not in scope" is important, for example, some of the
+  -- matcher may catch the "record" value instead of the value later.
+  | Just [name] <- matchRegexUnifySpaces x "Not in scope: record field ‘([^’]*)’"
+  = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: \\(([^‘ ]+)\\)"
   = Just $ NotInScopeThing name
   | Just [name] <- matchRegexUnifySpaces x "ot in scope: ([^‘ ]+)"
