@@ -320,6 +320,7 @@ codeActionTests = testGroup "code actions"
   , addImplicitParamsConstraintTests
   , removeExportTests
   , Test.AddArgument.tests
+  , suggestAddRecordFieldUpdateImportTests
   ]
 
 insertImportTests :: TestTree
@@ -1909,9 +1910,40 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction
 
+suggestAddRecordFieldUpdateImportTests :: TestTree
+suggestAddRecordFieldUpdateImportTests = testGroup "suggest imports of record fields in update"
+  [ testGroup "implicit import of type" [theTest ] ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject True
+
+      let
+          before = T.unlines ["module C where", "import B", "biz = bar { foo = 100 }"]
+          after = T.unlines ["module C where", "import B", "import A (Foo(..))", "biz = bar { foo = 100 }"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, B, C]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "A.hs") $ unlines ["module A where", "data Foo = Foo { foo :: Int }"]
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["module B where", "import A", "bar = Foo 10" ]
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      diags <- waitForDiagnostics
+      liftIO $ print diags
+      let defLine = 2
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      liftIO $ print actions
+      action <- pickActionWithTitle "import A (Foo(..))" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
 extractNotInScopeNameTests :: TestTree
 extractNotInScopeNameTests =
   testGroup "extractNotInScopeName" [
+      testGroup "record field" [
+            testCase ">=ghc 910" $ Refactor.extractNotInScopeName "Not in scope: ‘foo’"  @=? Just (NotInScopeThing "foo"),
+            testCase "<ghc 910" $ Refactor.extractNotInScopeName "Not in scope: record field ‘foo’"  @=? Just (NotInScopeThing "foo")
+            ],
       testGroup "HasField" [
         testGroup "unqualified" [
           testGroup "nice ticks" [
