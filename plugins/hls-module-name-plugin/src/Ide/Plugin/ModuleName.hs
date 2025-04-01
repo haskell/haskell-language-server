@@ -150,7 +150,7 @@ pathModuleNames recorder state normFilePath filePath
       -- TODO, this can be avoid if the filePath is already absolute,
       -- we can avoid the toAbsolute call in the future.
       -- see Note [Root Directory]
-      let mdlPath = (toAbsolute $ rootDir state) filePath
+      let mdlPath = normalise $ (toAbsolute $ rootDir state) filePath
       logWith recorder Debug (AbsoluteFilePath mdlPath)
 
       let suffixes = mapMaybe (`stripPrefix` mdlPath) paths

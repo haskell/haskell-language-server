@@ -40,8 +40,31 @@ completerTests =
       completionHelperTests,
       filePathExposedModulesTests,
       exposedModuleCompleterTests,
-      importCompleterTests
+      importCompleterTests,
+      autogenModulesCompletionTests
     ]
+
+autogenModulesCompletionTests :: TestTree
+autogenModulesCompletionTests =
+  testGroup
+    "Autogen modules completion"
+    [ checkCompletion "library"     (Position 4 4)  ["autogen-modules:", "autogen-includes:"]
+    , checkCompletion "executable"  (Position 8 4) ["autogen-modules:"]
+    , checkCompletion "test-suite"  (Position 13 4) ["autogen-modules:", "autogen-includes:"]
+    , checkCompletion "benchmark"   (Position 18 4) ["autogen-modules:", "autogen-includes:"]
+    ]
+  where
+    checkCompletion :: String -> Position -> [T.Text] -> TestTree
+    checkCompletion name pos expectedLabels =
+      runCabalTestCaseSession ("Completes autogen fields in " ++ name ++ " stanza") "" $ do
+        doc <- openDoc "completions/autogen-completions.cabal" "cabal"
+        completions <- getCompletions doc pos
+        liftIO $ mapM_ (\label ->
+          assertBool (T.unpack label ++ " should be in completions") $
+            any (\c -> T.isInfixOf label (c ^. L.label)) completions
+          ) expectedLabels
+
+
 
 basicCompleterTests :: TestTree
 basicCompleterTests =

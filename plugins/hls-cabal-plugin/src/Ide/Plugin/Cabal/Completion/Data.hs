@@ -71,12 +71,12 @@ cabalKeywords =
 stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
 stanzaKeywordMap =
   Map.fromList
-    [ ("library", libraryFields <> libExecTestBenchCommons),
-      ("executable", executableFields <> libExecTestBenchCommons),
-      ("test-suite", testSuiteFields <> libExecTestBenchCommons),
-      ("benchmark", benchmarkFields <> libExecTestBenchCommons),
-      ("foreign-library", foreignLibraryFields <> libExecTestBenchCommons),
-      ("common", libExecTestBenchCommons),
+    [ ("library", libraryFields <> libExecTestBenchCommons "library"),
+      ("executable", executableFields <> libExecTestBenchCommons "executable"),
+      ("test-suite", testSuiteFields <> libExecTestBenchCommons "test-suite"),
+      ("benchmark", benchmarkFields <> libExecTestBenchCommons "benchmark"),
+      ("foreign-library", foreignLibraryFields <> libExecTestBenchCommons "benchmark"),
+      ("common", libExecTestBenchCommons "library"),
       ("flag", flagFields),
       ("source-repository", sourceRepositoryFields)
     ]
@@ -91,6 +91,7 @@ libraryFields =
       ("reexported-modules:", noopCompleter),
       ("signatures:", noopCompleter),
       ("other-modules:", modulesCompleter sourceDirsExtractionLibrary)
+
     ]
 
 executableFields :: Map KeyWordName Completer
@@ -162,8 +163,20 @@ flagFields =
       ("lib-version-linux:", noopCompleter)
     ]
 
-libExecTestBenchCommons :: Map KeyWordName Completer
-libExecTestBenchCommons =
+libExecTestBenchCommons :: StanzaType -> Map KeyWordName Completer
+libExecTestBenchCommons stanza =
+  Map.insert "autogen-modules:" (modulesCompleter extractor) $
+  Map.insert "autogen-includes:" filePathCompleter baseBenchCommons
+  where
+    extractor = case stanza of
+      "library"    -> sourceDirsExtractionLibrary
+      "executable" -> sourceDirsExtractionExecutable
+      "test-suite" -> sourceDirsExtractionTestSuite
+      "benchmark"  -> sourceDirsExtractionBenchmark
+      _            -> sourceDirsExtractionLibrary
+
+baseBenchCommons :: Map KeyWordName Completer
+baseBenchCommons =
   Map.fromList
     [ ("import:", importCompleter),
       ("build-depends:", noopCompleter),
