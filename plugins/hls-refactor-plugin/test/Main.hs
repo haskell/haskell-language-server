@@ -46,6 +46,7 @@ import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImp
 import           Test.Hls
 
 import qualified Development.IDE.GHC.ExactPrint
+import           Development.IDE.Plugin.CodeAction        (NotInScope (..))
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Test.AddArgument
 
@@ -68,6 +69,7 @@ tests =
   , codeActionTests
   , codeActionHelperFunctionTests
   , completionTests
+  , extractNotInScopeNameTests
   ]
 
 initializeTests :: TestTree
@@ -1907,6 +1909,36 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction
 
+extractNotInScopeNameTests :: TestTree
+extractNotInScopeNameTests =
+  testGroup "extractNotInScopeName" [
+      testGroup "HasField" [
+        testGroup "unqualified" [
+          testGroup "nice ticks" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"baz\" Cheval Bool’"  @=? Just (NotInScopeThing "Cheval"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"bar\" (Hibou Int) a0’"  @=? Just (NotInScopeThing "Hibou"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"foo\" (Tortue Int) Int’"  @=? Just (NotInScopeThing "Tortue")
+            ],
+          testGroup "parenthesis" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"blup\" Calamar Bool’"  @=? Just (NotInScopeThing "Calamar"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"biz\" (Ornithorink Int) a0’"  @=? Just (NotInScopeThing "Ornithorink"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"blork\" (Salamandre Int) Int’"  @=? Just (NotInScopeThing "Salamandre")
+            ]
+          ],
+        testGroup "qualified" [
+          testGroup "nice ticks" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘GHC.HasField \"baz\" Cheval Bool’"  @=? Just (NotInScopeThing "Cheval"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Record.HasField \"bar\" (Hibou Int) a0’"  @=? Just (NotInScopeThing "Hibou"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Youpi.HasField \"foo\" (Tortue Int) Int’"  @=? Just (NotInScopeThing "Tortue")
+            ],
+          testGroup "parenthesis" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘GHC.Tortue.HasField \"blup\" Calamar Bool’"  @=? Just (NotInScopeThing "Calamar"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Youpi.Salamandre.HasField \"biz\" (Ornithorink Int) a0’"  @=? Just (NotInScopeThing "Ornithorink"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Foo.Bar.HasField \"blork\" (Salamandre Int) Int’"  @=? Just (NotInScopeThing "Salamandre")
+            ]
+          ]
+        ]
+    ]
 suggestAddCoerceMissingConstructorImportTests :: TestTree
 suggestAddCoerceMissingConstructorImportTests = testGroup "suggest imports of newtype constructor when using coerce"
   [ testGroup "The newtype constructor is suggested when a matching representation error"
