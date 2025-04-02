@@ -7,6 +7,7 @@ import           Distribution.PackageDescription   (Benchmark (..),
                                                     BuildInfo (..),
                                                     CondTree (condTreeData),
                                                     Executable (..),
+                                                    ForeignLib (..),
                                                     GenericPackageDescription (..),
                                                     Library (..),
                                                     UnqualComponentName,
@@ -117,6 +118,10 @@ sourceDirsExtractionTestSuite name gpd = extractRelativeDirsFromStanza name gpd 
 -- | Extracts the source directories of benchmark stanza with the given name.
 sourceDirsExtractionBenchmark :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
 sourceDirsExtractionBenchmark name gpd = extractRelativeDirsFromStanza name gpd condBenchmarks benchmarkBuildInfo
+
+-- | Extracts the source directories of foreign-lib stanza with the given name.
+sourceDirsExtractionForeignLib :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
+sourceDirsExtractionForeignLib name gpd = extractRelativeDirsFromStanza name gpd condForeignLibs foreignLibBuildInfo
 
 {- | Takes a possible stanza name, a GenericPackageDescription,
   a function to access the stanza information we are interested in
