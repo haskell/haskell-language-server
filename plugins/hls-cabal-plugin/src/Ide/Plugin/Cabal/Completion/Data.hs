@@ -23,6 +23,9 @@ import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 -- Completion Data
 -- ----------------------------------------------------------------
 
+supportedCabalVersions :: [CabalSpecVersion]
+supportedCabalVersions = [CabalSpecV2_2 .. maxBound]
+
 -- | Keyword for cabal version; required to be the top line in a cabal file
 cabalVersionKeyword :: Map KeyWordName Completer
 cabalVersionKeyword =
@@ -30,7 +33,7 @@ cabalVersionKeyword =
     constantCompleter $
       -- We only suggest cabal versions newer than 2.2
       -- since we don't recommend using older ones.
-      map (T.pack . showCabalSpecVersion) [CabalSpecV2_2 .. maxBound]
+      map (T.pack . showCabalSpecVersion) supportedCabalVersions
 
 -- | Top level keywords of a cabal file.
 --
@@ -87,7 +90,6 @@ libraryFields =
       ("visibility:", constantCompleter ["private", "public"]),
       ("reexported-modules:", noopCompleter),
       ("signatures:", noopCompleter),
-      ("autogen-modules:", modulesCompleter sourceDirsExtractionLibrary),
       ("other-modules:", modulesCompleter sourceDirsExtractionLibrary)
     ]
 
@@ -96,7 +98,6 @@ executableFields =
   Map.fromList
     [ ("main-is:", mainIsCompleter sourceDirsExtractionExecutable),
       ("scope:", constantCompleter ["public", "private"]),
-      ("autogen-modules:", modulesCompleter sourceDirsExtractionExecutable),
       ("other-modules:", modulesCompleter sourceDirsExtractionExecutable)
     ]
 
@@ -104,7 +105,6 @@ testSuiteFields :: Map KeyWordName Completer
 testSuiteFields =
   Map.fromList
     [ ("type:", constantCompleter ["exitcode-stdio-1.0", "detailed-0.9"]),
-      ("autogen-modules:", modulesCompleter sourceDirsExtractionTestSuite),
       ("main-is:", mainIsCompleter sourceDirsExtractionTestSuite),
       ("other-modules:", modulesCompleter sourceDirsExtractionTestSuite)
     ]
@@ -113,7 +113,6 @@ benchmarkFields :: Map KeyWordName Completer
 benchmarkFields =
   Map.fromList
     [ ("type:", noopCompleter),
-      ("autogen-modules:", modulesCompleter sourceDirsExtractionBenchmark),
       ("main-is:", mainIsCompleter sourceDirsExtractionBenchmark),
       ("other-modules:", modulesCompleter sourceDirsExtractionBenchmark)
     ]
@@ -166,7 +165,8 @@ flagFields =
 libExecTestBenchCommons :: Map KeyWordName Completer
 libExecTestBenchCommons =
   Map.fromList
-    [ ("build-depends:", noopCompleter),
+    [ ("import:", importCompleter),
+      ("build-depends:", noopCompleter),
       ("hs-source-dirs:", directoryCompleter),
       ("default-extensions:", noopCompleter),
       ("other-extensions:", noopCompleter),
@@ -181,9 +181,10 @@ libExecTestBenchCommons =
       ("ghcjs-prof-options:", constantCompleter ghcOptions),
       ("ghcjs-shared-options:", constantCompleter ghcOptions),
       ("includes:", filePathCompleter),
-      ("autogen-includes:", filePathCompleter),
       ("install-includes:", filePathCompleter),
       ("include-dirs:", directoryCompleter),
+      ("autogen-includes:", filePathCompleter),
+      ("autogen-modules:", filePathCompleter),
       ("c-sources:", filePathCompleter),
       ("cxx-sources:", filePathCompleter),
       ("asm-sources:", filePathCompleter),
@@ -265,6 +266,3 @@ weightedLicenseNames =
 
 ghcOptions :: [T.Text]
 ghcOptions = map T.pack $ flagsForCompletion False
-
-supportedCabalVersions :: [CabalSpecVersion]
-supportedCabalVersions = [CabalSpecV2_2 .. maxBound]
