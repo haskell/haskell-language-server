@@ -345,7 +345,7 @@ autogenFieldCompletionTests =
     , testAutogenField "executable"      "autogen-completion/autogen-completion.cabal" (Position 11 9) ["autogen-modules:", "autogen-includes:"]
     , testAutogenField "test-suite"      "autogen-completion/autogen-completion.cabal" (Position 16 9) ["autogen-modules:", "autogen-includes:"]
     , testAutogenField "benchmark"       "autogen-completion/autogen-completion.cabal" (Position 21 9) ["autogen-modules:", "autogen-includes:"]
-    , testAutogenField "common"          "autogen-completion/autogen-completion.cabal" (Position 29 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "common"          "autogen-completion/autogen-completion.cabal" (Position 24 9) ["autogen-modules:", "autogen-includes:"]
     ]
 
   where

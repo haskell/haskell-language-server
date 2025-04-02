@@ -21,10 +21,5 @@ benchmark autobench
   hs-source-dirs: src
   autogen-
 
-foreign-library autoforeign
-  type: native-shared
-  hs-source-dirs: src
-  autogen-
-
 common defaults
   autogen-
