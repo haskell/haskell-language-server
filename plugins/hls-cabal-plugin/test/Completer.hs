@@ -341,11 +341,11 @@ importCompleterTests =
 autogenFieldCompletionTests :: TestTree
 autogenFieldCompletionTests =
   testGroup "Autogen Field Completer Tests"
-    [ testAutogenField "library"         "autogen-completion/autogen-completion.cabal" (Position 6 9)  ["autogen-modules:", "autogen-includes:"]
-    , testAutogenField "executable"      "autogen-completion/autogen-completion.cabal" (Position 11 9) ["autogen-modules:", "autogen-includes:"]
-    , testAutogenField "test-suite"      "autogen-completion/autogen-completion.cabal" (Position 16 9) ["autogen-modules:", "autogen-includes:"]
-    , testAutogenField "benchmark"       "autogen-completion/autogen-completion.cabal" (Position 21 9) ["autogen-modules:", "autogen-includes:"]
-    , testAutogenField "common"          "autogen-completion/autogen-completion.cabal" (Position 24 9) ["autogen-modules:", "autogen-includes:"]
+    [ testAutogenField "library"         "completion/autogen-completion.cabal" (Position 6 9)  ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "executable"      "completion/autogen-completion.cabal" (Position 11 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "test-suite"      "completion/autogen-completion.cabal" (Position 16 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "benchmark"       "completion/autogen-completion.cabal" (Position 21 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "common"          "completion/autogen-completion.cabal" (Position 24 9) ["autogen-modules:", "autogen-includes:"]
     ]
 
   where
