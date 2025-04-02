@@ -120,14 +120,16 @@ built against the official Fedora ghc package.
 
 ## FreeBSD
 
-HLS is available for installation from official binary packages. Use
+HLS is available for installation via [devel/hs-haskell-language-server](https://www.freshports.org/devel/hs-haskell-language-server)
+port or from official binary packages. Use
 
 ```bash
 pkg install hs-haskell-language-server
 ```
 
-to install it. At the moment, HLS installed this way only supports the same GHC
-version as the ports one.
+to install it. HLS installed this way targets the same GHC version that the [lang/ghc](https://www.freshports.org/lang/ghc)
+port produces. Use the `pkg search haskell-language` command to list HLS packages
+for other GHCs.
 
 ## Gentoo
 
