@@ -1,7 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Redundant bracket" #-}
 
 module Ide.Plugin.Cabal.Completion.Data where
 
@@ -18,6 +15,17 @@ import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
 import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
+
+-- | Ad-hoc data type for modelling the available top-level stanzas.
+-- Not intended right now for anything else but to avoid string
+-- comparisons in 'stanzaKeywordMap' and 'libExecTestBenchCommons'.
+data TopLevelStanza
+  = Library
+  | Executable
+  | TestSuite
+  | Benchmark
+  | ForeignLib
+  | Common
 
 -- ----------------------------------------------------------------
 -- Completion Data
@@ -71,12 +79,13 @@ cabalKeywords =
 stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
 stanzaKeywordMap =
   Map.fromList
-    [ ("library", libraryFields <> libExecTestBenchCommons),
-      ("executable", executableFields <> libExecTestBenchCommons),
-      ("test-suite", testSuiteFields <> libExecTestBenchCommons),
-      ("benchmark", benchmarkFields <> libExecTestBenchCommons),
-      ("foreign-library", foreignLibraryFields <> libExecTestBenchCommons),
-      ("common", libExecTestBenchCommons),
+    [ ("library", libraryFields <> libExecTestBenchCommons Library),
+      ("executable", executableFields <> libExecTestBenchCommons Executable),
+      ("test-suite", testSuiteFields <> libExecTestBenchCommons TestSuite),
+      ("benchmark", benchmarkFields <> libExecTestBenchCommons Benchmark),
+      ("foreign-library", foreignLibraryFields <> libExecTestBenchCommons ForeignLib),
+      ("common", libExecTestBenchCommons Library),
+      ("common", libExecTestBenchCommons Common),
       ("flag", flagFields),
       ("source-repository", sourceRepositoryFields)
     ]
@@ -162,8 +171,8 @@ flagFields =
       ("lib-version-linux:", noopCompleter)
     ]
 
-libExecTestBenchCommons :: Map KeyWordName Completer
-libExecTestBenchCommons =
+libExecTestBenchCommons :: TopLevelStanza -> Map KeyWordName Completer
+libExecTestBenchCommons st =
   Map.fromList
     [ ("import:", importCompleter),
       ("build-depends:", noopCompleter),
@@ -183,6 +192,8 @@ libExecTestBenchCommons =
       ("includes:", filePathCompleter),
       ("install-includes:", filePathCompleter),
       ("include-dirs:", directoryCompleter),
+      ("autogen-includes:", filePathCompleter),
+      ("autogen-modules:", moduleCompleterByTopLevelStanza),
       ("c-sources:", filePathCompleter),
       ("cxx-sources:", filePathCompleter),
       ("asm-sources:", filePathCompleter),
@@ -203,6 +214,26 @@ libExecTestBenchCommons =
       ("extra-framework-dirs:", directoryCompleter),
       ("mixins:", noopCompleter)
     ]
+  where
+    --
+    moduleCompleterByTopLevelStanza = case st of
+      Library -> modulesCompleter sourceDirsExtractionLibrary
+      Executable -> modulesCompleter sourceDirsExtractionExecutable
+      TestSuite -> modulesCompleter sourceDirsExtractionTestSuite
+      Benchmark -> modulesCompleter sourceDirsExtractionBenchmark
+      ForeignLib -> modulesCompleter sourceDirsExtractionForeignLib
+      Common ->
+        -- TODO: We can't provide a module completer because we provide
+        -- module completions based on the "hs-source-dirs" after parsing the file,
+        -- i.e. based on the 'PackageDescription'.
+        -- "common" stanzas are erased in the 'PackageDescription' representation,
+        -- thus we can't provide accurate module completers right now, as we don't
+        -- know what the 'hs-source-dirs' in the "common" stanza are.
+        --
+        -- A potential fix would be to introduce an intermediate representation that
+        -- parses the '.cabal' file s.t. that we have access to the 'hs-source-dirs',
+        -- but not have erased the "common" stanza.
+        noopCompleter
 
 -- | Contains a map of the most commonly used licenses, weighted by their popularity.
 --
