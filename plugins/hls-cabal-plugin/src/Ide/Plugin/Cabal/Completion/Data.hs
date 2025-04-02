@@ -184,7 +184,7 @@ libExecTestBenchCommons =
       ("install-includes:", filePathCompleter),
       ("include-dirs:", directoryCompleter),
       ("autogen-includes:", filePathCompleter),
-      ("autogen-modules:", filePathCompleter),
+      ("autogen-modules:", modulesCompleter sourceDirsExtractionLibrary),
       ("c-sources:", filePathCompleter),
       ("cxx-sources:", filePathCompleter),
       ("asm-sources:", filePathCompleter),
