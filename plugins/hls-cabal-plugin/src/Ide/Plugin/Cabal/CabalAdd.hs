@@ -221,7 +221,7 @@ hiddenPackageSuggestion diag = getMatch (msg =~ regex)
     getMatch (_, _, _, []) = []
     getMatch (_, _, _, [dependency, _, cleanVersion, "", "", ""]) = [(dependency, cleanVersion)]
     getMatch (_, _, _, ["", "", "", dependency, _, cleanVersion]) = [(dependency, cleanVersion)]
-    getMatch (_, _, _, _) = error "Impossible pattern matching case"
+    getMatch (_, _, _, _) = []
 
 command :: Recorder (WithPriority Log) -> CommandFunction IdeState CabalAddCommandParams
 command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do
