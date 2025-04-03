@@ -2172,9 +2172,14 @@ test-suite ghcide-tests
     RecordWildCards
     ViewPatterns
 
+flag ghcide-bench
+  description: Build the ghcide-bench executable
+  default:     True
 
 executable ghcide-bench
     import: defaults
+    if !flag(ghcide-bench)
+      buildable: False
     build-depends:
         aeson,
         bytestring,
