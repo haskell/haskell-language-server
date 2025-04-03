@@ -134,7 +134,7 @@ jobs:
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: cabal test wrapper-test
 
-      - if: matrix.test && matrix.ghc != '9.12'
+      - if: matrix.test
         name: Test hls-refactor-plugin
         run: cabal test hls-refactor-plugin-tests || cabal test hls-refactor-plugin-tests
 
@@ -185,7 +185,7 @@ jobs:
         name: Test hls-call-hierarchy-plugin test suite
         run: cabal test hls-call-hierarchy-plugin-tests || cabal test hls-call-hierarchy-plugin-tests
 
-      - if: matrix.test && matrix.os != 'windows-latest' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.os != 'windows-latest'
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin-tests || cabal test hls-rename-plugin-tests
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -2687,14 +2688,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
           [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint", Nothing)
           , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint", Nothing)
           ])
-      "Add type annotation ‘String’ to ‘\"debug\"’"
+      ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f = seq (\"debug\" :: String) traceShow \"debug\""
+      , "f = seq (\"debug\" :: "<> stringLit <> ") traceShow \"debug\""
       ]
   , testSession "add default type to satisfy two constraints" $
     testFor
@@ -2709,14 +2710,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       (if ghcVersion >= GHC94
         then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
         else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint", Nothing) ])
-      "Add type annotation ‘String’ to ‘\"debug\"’"
+      ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f a = traceShow (\"debug\" :: String) a"
+      , "f a = traceShow (\"debug\" :: " <> stringLit <> ") a"
       ]
   , testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
@@ -2731,17 +2732,18 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       (if ghcVersion >= GHC94
         then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
         else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint", Nothing) ])
-      "Add type annotation ‘String’ to ‘\"debug\"’"
+      ("Add type annotation ‘"<> stringLit <>"’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: String)))"
+      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: "<> stringLit <> ")))"
       ]
   ]
   where
+    stringLit = if ghcVersion >= GHC912 then "[Char]" else "String"
     testFor sourceLines diag expectedTitle expectedLines = do
       docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
       expectDiagnostics [ ("A.hs", diag) ]
@@ -3357,6 +3359,10 @@ addSigActionTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
+  issue806 = if ghcVersion >= GHC912 then
+                  "hello = print"           >:: "hello :: GHC.Types.ZonkAny 0 -> IO ()" -- GHC now returns ZonkAny 0 instead of Any. https://gitlab.haskell.org/ghc/ghc/-/issues/25895
+                else
+                  "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
   in
   testGroup "add signature"
     [ "abc = True"              >:: "abc :: Bool"
@@ -3365,7 +3371,7 @@ addSigActionTests = let
     , "(!!!) a b = a > b"       >:: "(!!!) :: Ord a => a -> a -> Bool"
     , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
     , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
-    , "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
+    , issue806
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a\n  where Some a = Just a" >:: "pattern Some :: a -> Maybe a"
@@ -4042,8 +4048,7 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 -- Which we need to do on macOS since the $TMPDIR can be in @/private/var@ or
 -- @/var@
 withTempDir :: (FilePath -> IO a) -> IO a
-withTempDir f = System.IO.Extra.withTempDir $ \dir ->
-  canonicalizePath dir >>= f
+withTempDir f = System.IO.Extra.withTempDir $ (canonicalizePath >=> f)
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
