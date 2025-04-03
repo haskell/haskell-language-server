@@ -190,6 +190,12 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
 -- > It is a member of the hidden package ‘split-0.2.5’.
 -- > Perhaps you need to add ‘split’ to the build-depends in your .cabal file."
 --
+-- or this if PackageImports extension is used:
+--
+-- > "Could not find module ‘Data.List.Split’
+-- > Perhaps you meant
+-- >   Data.List.Split (needs flag -package-id split-0.2.5)"
+--
 -- It extracts mentioned package names and version numbers.
 -- In this example, it will be @[("split", "0.2.5")]@
 --
@@ -204,13 +210,18 @@ hiddenPackageSuggestion diag = getMatch (msg =~ regex)
     msg :: T.Text
     msg = _message diag
     regex :: T.Text -- TODO: Support multiple packages suggestion
-    regex = "It is a member of the hidden package [\8216']([a-zA-Z0-9-]*[a-zA-Z0-9])(-([0-9\\.]*))?[\8217']"
+    regex =
+        let regex' = "([a-zA-Z0-9-]*[a-zA-Z0-9])(-([0-9\\.]*))?"
+        in "It is a member of the hidden package [\8216']" <> regex' <> "[\8217']"
+           <> "|"
+           <> "needs flag -package-id " <> regex'
     -- Have to do this matching because `Regex.TDFA` doesn't(?) support
     -- not-capturing groups like (?:message)
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [(T.Text, T.Text)]
     getMatch (_, _, _, []) = []
-    getMatch (_, _, _, [dependency, _, cleanVersion]) = [(dependency, cleanVersion)]
-    getMatch (_, _, _, _) = error "Impossible pattern matching case"
+    getMatch (_, _, _, [dependency, _, cleanVersion, "", "", ""]) = [(dependency, cleanVersion)]
+    getMatch (_, _, _, ["", "", "", dependency, _, cleanVersion]) = [(dependency, cleanVersion)]
+    getMatch (_, _, _, _) = []
 
 command :: Recorder (WithPriority Log) -> CommandFunction IdeState CabalAddCommandParams
 command recorder state _ params@(CabalAddCommandParams {cabalPath = path, verTxtDocId = verTxtDocId, buildTarget = target, dependency = dep, version = mbVer}) = do

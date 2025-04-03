@@ -33,6 +33,8 @@ cabalAddTests =
         (generateAddDependencyTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
         (generateAddDependencyTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
+    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test with PackageImports" ("cabal-add-testdata" </> "cabal-add-tests")
+        (generateAddDependencyTestSession "cabal-add-tests.cabal" ("test" </> "MainPackageImports.hs") "split" [731])
     , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
         (generateAddDependencyTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
 
@@ -121,6 +123,23 @@ cabalAddTests =
                                    ]
                                    [ ("3d-graphics-examples", T.empty)
                                    , ("3d-graphics-examples", "1.1.6")
+                                   ]
+    , testHiddenPackageSuggestions "Check CabalAdd's parser, with version, with PackageImports"
+                                   [ "(needs flag -package-id base-0.1.0.0)"
+                                   , "(needs flag -package-id Blammo-wai-0.11.0)"
+                                   , "(needs flag -package-id BlastHTTP-2.6.4.3)"
+                                   , "(needs flag -package-id CC-delcont-ref-tf-0.0.0.2)"
+                                   , "(needs flag -package-id 3d-graphics-examples-1.1.6)"
+                                   , "(needs flag -package-id AAI-0.1)"
+                                   , "(needs flag -package-id AWin32Console-1.19.1)"
+                                   ]
+                                   [ ("base","0.1.0.0")
+                                   , ("Blammo-wai", "0.11.0")
+                                   , ("BlastHTTP", "2.6.4.3")
+                                   , ("CC-delcont-ref-tf", "0.0.0.2")
+                                   , ("3d-graphics-examples", "1.1.6")
+                                   , ("AAI", "0.1")
+                                   , ("AWin32Console", "1.19.1")
                                    ]
     ]
  where
