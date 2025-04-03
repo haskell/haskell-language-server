@@ -1574,13 +1574,34 @@ extractQualifiedModuleNameFromMissingName (T.strip -> missing)
         modNameP = fmap snd $ RE.withMatched $ conIDP `sepBy1` RE.sym '.'
 
 
+-- | A Backward compatible implementation of `lookupOccEnv_AllNameSpaces` for
+-- GHC <=9.6
+--
+-- It looks for a symbol name in all known namespaces, including types,
+-- variables, and fieldnames.
+--
+-- Note that on GHC >= 9.8, the record selectors are not in the `mkVarOrDataOcc`
+-- anymore, but are in a custom namespace, see
+-- https://gitlab.haskell.org/ghc/ghc/-/wikis/migration/9.8#new-namespace-for-record-fields,
+-- hence we need to use this "AllNamespaces" implementation, otherwise we'll
+-- miss them.
+lookupOccEnvAllNamespaces :: ExportsMap -> T.Text -> [IdentInfo]
+#if MIN_VERSION_ghc(9,7,0)
+lookupOccEnvAllNamespaces exportsMap name = Set.toList $ mconcat (lookupOccEnv_AllNameSpaces (getExportsMap exportsMap) (mkTypeOcc name))
+#else
+lookupOccEnvAllNamespaces exportsMap name = maybe [] Set.toList $
+                            lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)
+                          <> lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name) -- look up the modified unknown name in the export map
+#endif
+
+
 constructNewImportSuggestions
   :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> QualifiedImportStyle -> [ImportSuggestion]
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules qis = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
-  , identInfo <- maybe [] Set.toList $ lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)
-                                    <> lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name) -- look up the modified unknown name in the export map
+
+  , identInfo <- lookupOccEnvAllNamespaces exportsMap name -- look up the modified unknown name in the export map
   , canUseIdent thingMissing identInfo                                              -- check if the identifier information retrieved can be used
   , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules                 -- check if the module of the identifier is allowed
   , suggestion <- renderNewImport identInfo                                         -- creates a list of import suggestions for the retrieved identifier information
