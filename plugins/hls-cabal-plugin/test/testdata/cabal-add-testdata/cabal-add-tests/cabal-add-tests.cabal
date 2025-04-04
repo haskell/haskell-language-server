@@ -16,3 +16,11 @@ test-suite cabal-add-tests-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:    base
+
+test-suite cabal-add-tests-test-package-imports
+    import:           warnings
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          MainPackageImports.hs
+    build-depends:    base
