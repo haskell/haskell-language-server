@@ -1,0 +1,19 @@
+cabal-version: 3.2
+name: test-project
+
+library
+  autogen
+
+executable exe
+  main-is: Main.hs
+  autogen
+
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Test.hs
+  autogen
+
+benchmark bench
+  type: exitcode-stdio-1.0
+  main-is: Bench.hs
+  autogen
