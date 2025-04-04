@@ -34,26 +34,26 @@ cat <<EOF > /dev/stdout
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb11.tar.xz" | awk '{ print $1 }')
           Linux_Ubuntu:
             '( >= 16 && < 19 )': &hls-${RELEASE//./}-64-ubuntu18
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-ubuntu18.04.tar.xz
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-ubuntu1804.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-ubuntu18.04.tar.xz" | awk '{ print $1 }')
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-ubuntu1804.tar.xz" | awk '{ print $1 }')
             '( >= 20 && < 22 )': &hls-${RELEASE//./}-64-ubuntu20
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-ubuntu20.04.tar.xz
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-ubuntu2004.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-ubuntu20.04.tar.xz" | awk '{ print $1 }')
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-ubuntu2004.tar.xz" | awk '{ print $1 }')
             unknown_versioning: &hls-${RELEASE//./}-64-ubuntu22
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-ubuntu22.04.tar.xz
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-ubuntu2204.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-ubuntu22.04.tar.xz" | awk '{ print $1 }')
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-ubuntu2204.tar.xz" | awk '{ print $1 }')
           Linux_Mint:
             '< 20':
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-mint19.3.tar.xz
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-mint193.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-mint19.3.tar.xz" | awk '{ print $1 }')
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-mint193.tar.xz" | awk '{ print $1 }')
             '(>= 20 && < 21)':
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-mint20.2.tar.xz
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-mint202.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-mint20.2.tar.xz" | awk '{ print $1 }')
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-mint202.tar.xz" | awk '{ print $1 }')
             '>= 21': *hls-${RELEASE//./}-64-ubuntu22
           Linux_Fedora:
             '< 33': &hls-${RELEASE//./}-64-fedora27
@@ -95,9 +95,9 @@ cat <<EOF > /dev/stdout
         A_ARM64:
           Linux_UnknownLinux:
             unknown_versioning:
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-aarch64-linux-ubuntu20.tar.xz
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-aarch64-linux-ubuntu2004.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-aarch64-linux-ubuntu20.tar.xz" | awk '{ print $1 }')
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-aarch64-linux-ubuntu2004.tar.xz" | awk '{ print $1 }')
           Darwin:
             unknown_versioning:
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-aarch64-apple-darwin.tar.xz
