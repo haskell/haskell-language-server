@@ -61,7 +61,7 @@ Plugins have a generic config to control their behaviour. The schema of such con
     - `haskell.plugin.eval.config.diff`, default true: When reloading haddock test results in changes, mark it with WAS/NOW.
     - `haskell.plugin.eval.config.exception`, default false: When the command results in an exception, mark it with `*** Exception:`.
   - `rename`:
-    - `haskell.plugin.rename.config.diff`, default false: Enables renaming across modules (experimental)
+    - `haskell.plugin.rename.config.crossModule`, default false: Enables renaming across modules (experimental)
   - `ghcide-completions`:
     - `haskell.plugin.ghcide-completions.config.snippetsOn`, default true: Inserts snippets when using code completions.
     - `haskell.plugin.ghcide-completions.config.autoExtendOn`, default true: Extends the import list automatically when completing a out-of-scope identifier.
