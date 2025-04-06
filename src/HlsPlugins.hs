@@ -97,6 +97,10 @@ import qualified Ide.Plugin.OverloadedRecordDot    as OverloadedRecordDot
 import qualified Ide.Plugin.Notes                  as Notes
 #endif
 
+#if hls_cabalProject
+import qualified Ide.Plugin.CabalProject as CabalProject
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -247,6 +251,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_notes
       let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_cabalProject
+      let pId = "cabal-project" in CabalProject.descriptor (pluginRecorder pId) pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
 
