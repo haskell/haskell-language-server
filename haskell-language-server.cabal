@@ -1208,13 +1208,13 @@ flag gadt
   manual:      True
 
 common gadt
-  if flag(gadt) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(gadt)
     build-depends: haskell-language-server:hls-gadt-plugin
     cpp-options: -Dhls_gadt
 
 library hls-gadt-plugin
   import:           defaults, pedantic, warnings
-  if !flag(gadt) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(gadt)
     buildable: False
   exposed-modules:  Ide.Plugin.GADT
   other-modules:    Ide.Plugin.GHC
@@ -1238,7 +1238,7 @@ library hls-gadt-plugin
 
 test-suite hls-gadt-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(gadt) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(gadt)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-gadt-plugin/test

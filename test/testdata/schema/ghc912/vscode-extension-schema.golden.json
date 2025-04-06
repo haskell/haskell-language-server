@@ -131,6 +131,12 @@
         "scope": "resource",
         "type": "string"
     },
+    "haskell.plugin.gadt.globalOn": {
+        "default": true,
+        "description": "Enables gadt plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.ghcide-code-actions-bindings.globalOn": {
         "default": true,
         "description": "Enables ghcide-code-actions-bindings plugin",

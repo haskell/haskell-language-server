@@ -59,6 +59,9 @@
                 "path": "fourmolu"
             }
         },
+        "gadt": {
+            "globalOn": true
+        },
         "ghcide-code-actions-bindings": {
             "globalOn": true
         },
