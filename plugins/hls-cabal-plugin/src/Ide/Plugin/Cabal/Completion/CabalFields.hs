@@ -52,20 +52,24 @@ findStanzaForColumn col ctx = case NE.uncons ctx of
 --
 -- This only looks at the row of the cursor and not at the cursor's
 -- position within the row.
---
--- TODO: we do not handle braces correctly. Add more tests!
 findFieldSection :: Syntax.Position -> [Syntax.Field Syntax.Position] -> Maybe (Syntax.Field Syntax.Position)
 findFieldSection _cursor [] = Nothing
-findFieldSection _cursor [x] =
-  -- Last field. We decide later, whether we are starting
-  -- a new section.
-  Just x
+findFieldSection _cursor [x] = Just x
 findFieldSection cursor (x:y:ys)
     | Syntax.positionRow (getAnnotation x) <= cursorLine && cursorLine < Syntax.positionRow (getAnnotation y)
     = Just x
+    | Syntax.positionRow (getAnnotation x) == cursorLine && Syntax.positionRow (getAnnotation y) == cursorLine
+    = case (x, y) of
+        (Syntax.Field _ fieldLines, Syntax.Field _ nextFieldLines) ->
+            -- Handle multi-line fields with braces
+            if any (isBraceField . Syntax.fieldLineName) fieldLines
+                then Just x
+                else findFieldSection cursor (y:ys)
+        _ -> findFieldSection cursor (y:ys)
     | otherwise = findFieldSection cursor (y:ys)
   where
     cursorLine = Syntax.positionRow cursor
+    isBraceField name = name == "extra-libraries:" || name == "extra-frameworks:" || name == "extra-lib-dirs:"
 
 -- | Determine the field line the cursor is currently a part of.
 --
@@ -301,3 +305,7 @@ getFieldLSPRange field = LSP.Range startLSPPos endLSPPos
   where
     startLSPPos = cabalPositionToLSPPosition $ getAnnotation field
     endLSPPos   = cabalPositionToLSPPosition $ getFieldEndPosition field
+
+-- | Helper function to check if a field line contains a brace
+isBraceField :: T.Text -> Bool
+isBraceField name = name `elem` ["extra-libraries:", "extra-frameworks:", "extra-lib-dirs:", "extra-framework-dirs:"]
