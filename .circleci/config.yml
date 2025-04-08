@@ -60,14 +60,14 @@ version: 2
 jobs:
   stackage-lts22:
     docker:
-      - image: haskell:9.6.5-slim-buster
+      - image: haskell:9.6.6-slim-buster
     environment:
       - STACK_FILE: "stack-lts22.yaml"
     <<: *defaults
 
   stackage-nightly:
     docker:
-      - image: haskell:9.8.2-slim-buster
+      - image: haskell:9.8.4-slim-buster
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
