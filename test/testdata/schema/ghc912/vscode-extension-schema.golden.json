@@ -11,6 +11,12 @@
         "scope": "resource",
         "type": "string"
     },
+    "haskell.plugin.cabal-gild.config.path": {
+        "default": "cabal-gild",
+        "markdownDescription": "Set path to 'cabal-gild' executable",
+        "scope": "resource",
+        "type": "string"
+    },
     "haskell.plugin.cabal.codeActionsOn": {
         "default": true,
         "description": "Enables cabal code actions",

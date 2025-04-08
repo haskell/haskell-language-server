@@ -117,7 +117,7 @@ flag cabalfmt
   manual:      True
 
 common cabalfmt
-  if flag(cabalfmt)
+  if flag(cabalfmt) && flag(cabal)
     build-depends: haskell-language-server:hls-cabal-fmt-plugin
     cpp-options: -Dhls_cabalfmt
 
@@ -129,7 +129,7 @@ flag isolateCabalfmtTests
 
 library hls-cabal-fmt-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabalfmt)
+  if !flag(cabalfmt) || !flag(cabal)
     buildable: False
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
@@ -174,7 +174,7 @@ flag cabalgild
   manual:      True
 
 common cabalgild
-  if flag(cabalgild) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(cabalgild) && flag(cabal)
     build-depends: haskell-language-server:hls-cabal-gild-plugin
     cpp-options: -Dhls_cabalgild
 
@@ -186,7 +186,7 @@ flag isolateCabalGildTests
 
 library hls-cabal-gild-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabalgild) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(cabalgild) || !flag(cabal)
     buildable: False
   exposed-modules:  Ide.Plugin.CabalGild
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
@@ -203,7 +203,7 @@ library hls-cabal-gild-plugin
 -- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(cabalgild) || !flag(cabal) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(cabalgild) || !flag(cabal)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
