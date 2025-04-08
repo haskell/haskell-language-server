@@ -1,4 +1,4 @@
-resolver: nightly-2024-06-12 # ghc-9.8.2
+resolver: lts-23.18 # ghc-9.8.4
 
 packages:
   - .
@@ -20,15 +20,10 @@ allow-newer-deps:
 
 extra-deps:
   - floskell-0.11.1
-  - hiedb-0.6.0.1
-  - hie-bios-0.14.0
+  - hiedb-0.6.0.2
   - implicit-hie-0.1.4.0
   - hw-fingertree-0.1.2.1
-  - lsp-2.7.0.0
-  - lsp-test-0.17.1.0
-  - lsp-types-2.3.0.0
   - monad-dijkstra-0.1.1.5
-  - stylish-haskell-0.14.6.0
   - retrie-1.2.3
 
   # stan dependencies not found in the stackage snapshot
@@ -38,8 +33,6 @@ extra-deps:
   - trial-0.0.0.0
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
-  - cabal-add-0.1
-  - cabal-install-parsers-0.6.1.1
 
 configure-options:
   ghcide:
