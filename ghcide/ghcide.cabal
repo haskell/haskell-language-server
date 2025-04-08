@@ -75,7 +75,7 @@ library
     , hashable
     , hie-bios                     ^>=0.14.0
     , hie-compat                   ^>=0.3.0.0
-    , hiedb                        ^>= 0.6.0.0
+    , hiedb                        ^>= 0.6.0.2
     , hls-graph                    == 2.10.0.0
     , hls-plugin-api               == 2.10.0.0
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5

@@ -407,7 +407,7 @@ library hls-call-hierarchy-plugin
     , containers
     , extra
     , ghcide                == 2.10.0.0
-    , hiedb                 ^>= 0.6.0.0
+    , hiedb                 ^>= 0.6.0.2
     , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp                    >=2.7
@@ -594,7 +594,7 @@ library hls-rename-plugin
     , containers
     , ghcide                == 2.10.0.0
     , hashable
-    , hiedb                 ^>= 0.6.0.0
+    , hiedb                 ^>= 0.6.0.2
     , hie-compat
     , hls-plugin-api        == 2.10.0.0
     , haskell-language-server:hls-refactor-plugin
@@ -1596,7 +1596,7 @@ flag refactor
   manual:      True
 
 common refactor
-  if flag(refactor) 
+  if flag(refactor)
     build-depends: haskell-language-server:hls-refactor-plugin
     cpp-options: -Dhls_refactor
 

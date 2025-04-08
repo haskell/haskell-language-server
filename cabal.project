@@ -8,7 +8,7 @@ packages:
          ./hls-test-utils
 
 
-index-state:  2025-03-20T00:00:00Z
+index-state:  2025-04-08T01:30:37Z
 
 tests: True
 test-show-details: direct
@@ -57,8 +57,6 @@ if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
 if impl(ghc >= 9.11)
   benchmarks: False
   allow-newer:
-    hiedb:base,
-    hiedb:ghc,
     hie-bios:ghc,
     ghc-trace-events:base,
     tasty-hspec:base,
