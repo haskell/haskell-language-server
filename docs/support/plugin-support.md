@@ -37,34 +37,34 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 
 ## Current plugin support tiers
 
-| Plugin                              | Tier | Unsupported GHC versions |
-| ----------------------------------- | ---- | ------------------------ |
-| ghcide core plugins                 | 1    |                          |
-| `hls-call-hierarchy-plugin`         | 1    |                          |
-| `hls-code-range-plugin`             | 1    |                          |
-| `hls-explicit-imports-plugin`       | 1    |                          |
-| `hls-pragmas-plugin`                | 1    |                          |
-| `hls-refactor-plugin`               | 1    |                          |
-| `hls-alternate-number-plugin`       | 2    |                          |
-| `hls-cabal-fmt-plugin`              | 2    |                          |
-| `hls-cabal-gild-plugin`             | 2    |                          |
-| `hls-class-plugin`                  | 2    |                          |
-| `hls-change-type-signature-plugin`  | 2    |                          |
-| `hls-eval-plugin`                   | 2    |                          |
-| `hls-explicit-fixity-plugin`        | 2    |                          |
-| `hls-explicit-record-fields-plugin` | 2    |                          |
-| `hls-fourmolu-plugin`               | 2    |                          |
-| `hls-gadt-plugin`                   | 2    |                          |
-| `hls-hlint-plugin`                  | 2    | 9.10.1                   |
-| `hls-module-name-plugin`            | 2    |                          |
-| `hls-notes-plugin`                  | 2    |                          |
-| `hls-qualify-imported-names-plugin` | 2    |                          |
-| `hls-ormolu-plugin`                 | 2    |                          |
-| `hls-rename-plugin`                 | 2    |                          |
-| `hls-stylish-haskell-plugin`        | 2    | 9.10.1                   |
-| `hls-overloaded-record-dot-plugin`  | 2    |                          |
-| `hls-semantic-tokens-plugin`        | 2    |                          |
-| `hls-floskell-plugin`               | 3    | 9.10.1                   |
-| `hls-stan-plugin`                   | 3    |                          |
-| `hls-retrie-plugin`                 | 3    | 9.10.1                   |
-| `hls-splice-plugin`                 | 3    | 9.10.1                   |
+| Plugin                               | Tier | Unsupported GHC versions |
+| ------------------------------------ | ---- | ------------------------ |
+| ghcide core plugins                  | 1    |                          |
+| `hls-call-hierarchy-plugin`          | 1    |                          |
+| `hls-code-range-plugin`              | 1    |                          |
+| `hls-explicit-imports-plugin`        | 1    |                          |
+| `hls-pragmas-plugin`                 | 1    |                          |
+| `hls-refactor-plugin`                | 2    | 9.12.2                   |
+| `hls-alternate-number-format-plugin` | 2    |                          |
+| `hls-cabal-fmt-plugin`               | 2    |                          |
+| `hls-cabal-gild-plugin`              | 2    | 9.12.2                   |
+| `hls-class-plugin`                   | 2    |                          |
+| `hls-change-type-signature-plugin`   | 2    |                          |
+| `hls-eval-plugin`                    | 2    |                          |
+| `hls-explicit-fixity-plugin`         | 2    |                          |
+| `hls-explicit-record-fields-plugin`  | 2    |                          |
+| `hls-fourmolu-plugin`                | 2    | 9.12.2                   |
+| `hls-gadt-plugin`                    | 2    | 9.12.2                   |
+| `hls-hlint-plugin`                   | 2    | 9.10.1, 9.12.2           |
+| `hls-module-name-plugin`             | 2    |                          |
+| `hls-notes-plugin`                   | 2    |                          |
+| `hls-qualify-imported-names-plugin`  | 2    |                          |
+| `hls-ormolu-plugin`                  | 2    | 9.12.2                   |
+| `hls-rename-plugin`                  | 2    |                          |
+| `hls-stylish-haskell-plugin`         | 2    | 9.10.1,  9.12.2          |
+| `hls-overloaded-record-dot-plugin`   | 2    |                          |
+| `hls-semantic-tokens-plugin`         | 2    |                          |
+| `hls-floskell-plugin`                | 3    | 9.10.1, 9.12.2           |
+| `hls-stan-plugin`                    | 3    | 9.12.2                   |
+| `hls-retrie-plugin`                  | 3    | 9.10.1, 9.12.2           |
+| `hls-splice-plugin`                  | 3    | 9.10.1, 9.12.2           |
