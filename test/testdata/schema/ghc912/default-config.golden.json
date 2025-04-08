@@ -20,6 +20,11 @@
                 "path": "cabal-fmt"
             }
         },
+        "cabal-gild": {
+            "config": {
+                "path": "cabal-gild"
+            }
+        },
         "cabalHaskellIntegration": {
             "globalOn": true
         },
