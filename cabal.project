@@ -44,15 +44,13 @@ constraints:
   bitvec -simd,
 
 
-if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
-  -- By depending on ghc-lib-parser and ghc, we are encountering
-  -- a constraint conflict, ghc-9.8.4 comes with `filepath-1.4.301.0`,
-  -- and `ghc-lib-parser-9.8.4.20241130` specifies `filepath >=1.5 && < 1.6.
-  -- See https://github.com/digital-asset/ghc-lib/issues/572 for details.
-  allow-older:
-    ghc-lib-parser:filepath
-  constraints:
-    ghc-lib-parser==9.8.4.20241130
+-- Some of the formatters need the latest Cabal-syntax version,
+-- but 'cabal-install-parsers-0.6.2' only has Cabal-syntax (>=3.12.0.0 && <3.13).
+-- So, we relax the upper bounds here.
+-- fourmolu-0.18.0 and ormolu-0.8 depend on Cabal-syntax == 3.14.*, while
+-- cabal-add depends on cabal-install-parsers.
+allow-newer:
+  cabal-install-parsers:Cabal-syntax,
 
 if impl(ghc >= 9.11)
   benchmarks: False
