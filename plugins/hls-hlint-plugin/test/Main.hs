@@ -276,14 +276,24 @@ suggestionsTests =
                              , "g = 2"
                              , "#endif", ""
                              ]
-        expectedComments =  [ "-- comment before header"
-                             , "module Comments where", ""
-                             , "{-# standalone annotation #-}", ""
-                             , "-- standalone comment", ""
-                             , "-- | haddock comment"
-                             , "f = {- inline comment -} {- inline comment inside refactored code -}1 -- ending comment", ""
-                             , "-- final comment"
-                             ]
+        expectedComments = case ghcVersion of
+                             GHC912 -> [ "-- comment before header"
+                              , "module Comments where", ""
+                              , "{-# standalone annotation #-}", ""
+                              , "-- standalone comment", ""
+                              , "-- | haddock comment"
+                              , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
+                              , "-- final comment"
+                              ]
+
+                             _ -> [ "-- comment before header"
+                              , "module Comments where", ""
+                              , "{-# standalone annotation #-}", ""
+                              , "-- standalone comment", ""
+                              , "-- | haddock comment"
+                              , "f = {- inline comment -} {- inline comment inside refactored code -}1 -- ending comment", ""
+                              , "-- final comment"
+                              ]
         expectedComments2 =  [ "module TwoHintsAndComment where"
                              , "biggest = foldr1 max -- the line above will show two hlint hints, \"eta reduce\" and \"use maximum\""
                              ]

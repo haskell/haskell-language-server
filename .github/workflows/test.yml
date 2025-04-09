@@ -190,7 +190,7 @@ jobs:
         run: cabal test hls-rename-plugin-tests || cabal test hls-rename-plugin-tests
 
       # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.ghc != '9.10'
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin-tests || cabal test hls-hlint-plugin-tests
 

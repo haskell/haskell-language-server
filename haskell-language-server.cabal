@@ -703,14 +703,14 @@ flag hlint
   manual:      True
 
 common hlint
-  if flag(hlint) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds))
+  if flag(hlint) && ((impl(ghc < 9.10) || impl(ghc > 9.11)) || flag(ignore-plugins-ghc-bounds))
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
   import:           defaults, pedantic, warnings
   -- https://github.com/ndmitchell/hlint/pull/1594
-  if !(flag(hlint)) || (impl(ghc > 9.10) && !flag(ignore-plugins-ghc-bounds))
+  if !(flag(hlint)) || ((impl(ghc >= 9.10) && impl(ghc < 9.11)) && !flag(ignore-plugins-ghc-bounds))
     buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
@@ -722,7 +722,7 @@ library hls-hlint-plugin
     , filepath
     , ghcide                == 2.10.0.0
     , hashable
-    , hlint                 >= 3.5 && < 3.9
+    , hlint                 >= 3.5 && < 3.11
     , hls-plugin-api        == 2.10.0.0
     , lens
     , mtl
@@ -753,7 +753,7 @@ library hls-hlint-plugin
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if (!flag(hlint)) || (impl(ghc > 9.10) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(hlint) || ((impl(ghc >= 9.10) && impl(ghc < 9.11)) && !flag(ignore-plugins-ghc-bounds))
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
