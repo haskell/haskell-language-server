@@ -117,7 +117,7 @@ flag cabalfmt
   manual:      True
 
 common cabalfmt
-  if flag(cabalfmt)
+  if flag(cabalfmt) && flag(cabal)
     build-depends: haskell-language-server:hls-cabal-fmt-plugin
     cpp-options: -Dhls_cabalfmt
 
@@ -129,7 +129,7 @@ flag isolateCabalfmtTests
 
 library hls-cabal-fmt-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabalfmt)
+  if !flag(cabalfmt) || !flag(cabal)
     buildable: False
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
@@ -174,7 +174,7 @@ flag cabalgild
   manual:      True
 
 common cabalgild
-  if flag(cabalgild) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(cabalgild) && flag(cabal)
     build-depends: haskell-language-server:hls-cabal-gild-plugin
     cpp-options: -Dhls_cabalgild
 
@@ -186,7 +186,7 @@ flag isolateCabalGildTests
 
 library hls-cabal-gild-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabalgild) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(cabalgild) || !flag(cabal)
     buildable: False
   exposed-modules:  Ide.Plugin.CabalGild
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
@@ -203,7 +203,7 @@ library hls-cabal-gild-plugin
 -- The `hls-cabal-plugin` is needed for tests, as we need to install notification handlers
 test-suite hls-cabal-gild-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(cabalgild) || !flag(cabal) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(cabalgild) || !flag(cabal)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
@@ -407,7 +407,7 @@ library hls-call-hierarchy-plugin
     , containers
     , extra
     , ghcide                == 2.10.0.0
-    , hiedb                 ^>= 0.6.0.0
+    , hiedb                 ^>= 0.6.0.2
     , hls-plugin-api        == 2.10.0.0
     , lens
     , lsp                    >=2.7
@@ -580,13 +580,13 @@ flag rename
   manual:      True
 
 common rename
-  if flag(rename) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(rename)
     build-depends: haskell-language-server:hls-rename-plugin
     cpp-options: -Dhls_rename
 
 library hls-rename-plugin
   import:           defaults, pedantic, warnings
-  if !flag(rename) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(rename)
     buildable: False
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
@@ -594,7 +594,7 @@ library hls-rename-plugin
     , containers
     , ghcide                == 2.10.0.0
     , hashable
-    , hiedb                 ^>= 0.6.0.0
+    , hiedb                 ^>= 0.6.0.2
     , hie-compat
     , hls-plugin-api        == 2.10.0.0
     , haskell-language-server:hls-refactor-plugin
@@ -610,7 +610,7 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(rename) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(rename)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-rename-plugin/test
@@ -1596,13 +1596,13 @@ flag refactor
   manual:      True
 
 common refactor
-  if flag(refactor) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(refactor)
     build-depends: haskell-language-server:hls-refactor-plugin
     cpp-options: -Dhls_refactor
 
 library hls-refactor-plugin
   import:           defaults, pedantic, warnings
-  if !flag(refactor) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(refactor)
     buildable: False
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
@@ -1661,7 +1661,7 @@ library hls-refactor-plugin
 
 test-suite hls-refactor-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(refactor) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(refactor)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-refactor-plugin/test

@@ -35,7 +35,7 @@ tests =
       mkGoldenAddArgTest "AddArgFromLet" (r 2 0 2 50),
       mkGoldenAddArgTest "AddArgFromWhere" (r 3 0 3 50),
       -- TODO can we make this work for GHC 9.10?
-      knownBrokenForGhcVersions [GHC910] "In GHC 9.10 end-of-line comment annotation is in different place" $
+      knownBrokenForGhcVersions [GHC910, GHC912] "In GHC 9.10 and 9.12 end-of-line comment annotation is in different place" $
           mkGoldenAddArgTest "AddArgFromWhereComments" (r 3 0 3 50),
       mkGoldenAddArgTest "AddArgWithTypeSynSig" (r 2 0 2 50),
       mkGoldenAddArgTest "AddArgWithTypeSynSigContravariant" (r 2 0 2 50),

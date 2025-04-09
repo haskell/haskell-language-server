@@ -20,6 +20,11 @@
                 "path": "cabal-fmt"
             }
         },
+        "cabal-gild": {
+            "config": {
+                "path": "cabal-gild"
+            }
+        },
         "cabalHaskellIntegration": {
             "globalOn": true
         },
@@ -45,6 +50,18 @@
             "inlayHintsOn": true
         },
         "explicit-fixity": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-bindings": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-fill-holes": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-imports-exports": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-type-signatures": {
             "globalOn": true
         },
         "ghcide-completions": {
@@ -85,6 +102,12 @@
             "globalOn": true
         },
         "qualifyImportedNames": {
+            "globalOn": true
+        },
+        "rename": {
+            "config": {
+                "crossModule": false
+            },
             "globalOn": true
         },
         "semanticTokens": {

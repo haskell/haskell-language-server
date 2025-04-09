@@ -50,7 +50,9 @@ import           GHC                                       (DeltaPos (..),
                                                             IsUnicodeSyntax (NormalSyntax))
 import           Language.Haskell.GHC.ExactPrint           (d1, setEntryDP)
 #endif
-
+#if MIN_VERSION_ghc(9,11,0)
+import GHC.Parser.Annotation (EpToken(..))
+#endif
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
@@ -77,19 +79,28 @@ plugin parsedModule Diagnostic {_message, _range}
 --      addArgToMatch "foo" `bar arg1 arg2 = ...`
 --   => (`bar arg1 arg2 foo = ...`, 2)
 addArgToMatch :: T.Text -> GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))) -> (GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))), Int)
+#if MIN_VERSION_ghc(9,11,0)
+addArgToMatch name (L locMatch (Match xMatch ctxMatch (L l pats) rhs)) =
+#else
 addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
-  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
+#endif
 #if MIN_VERSION_ghc(9,9,0)
+  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
       newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
       -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
       -- the newly added pattern and the rest
       indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
       indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
 #else
+  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
       indentRhs = id
 #endif
+#if MIN_VERSION_ghc(9,11,0)
+  in (L locMatch (Match xMatch ctxMatch (L l (pats <> [newPat])) (indentRhs rhs)), Prelude.length pats)
+#else
   in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
+#endif
 
 -- Attempt to insert a binding pattern into each match for the given LHsDecl; succeeds only if the function is a FunBind.
 -- Also return:
@@ -171,7 +182,11 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
           ( noAnn
           , noExtField
           , HsUnrestrictedArrow (EpUniTok d1 NormalSyntax)
+#if MIN_VERSION_ghc(9,11,0)
+          , L wildCardAnn $ HsWildCardTy NoEpTok
+#else
           , L wildCardAnn $ HsWildCardTy noExtField
+#endif 
           )
 #elif MIN_VERSION_ghc(9,4,0)
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem []) emptyComments) generatedSrcSpan

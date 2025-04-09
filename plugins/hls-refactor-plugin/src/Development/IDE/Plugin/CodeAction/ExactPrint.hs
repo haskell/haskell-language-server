@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs        #-}
 {-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Plugin.CodeAction.ExactPrint (
@@ -35,10 +36,8 @@ import           Control.Lens                           (_head, _last, over)
 import           Data.Bifunctor                         (first)
 import           Data.Maybe                             (fromMaybe, mapMaybe)
 import           Development.IDE.Plugin.CodeAction.Util
-import           GHC                                    (AddEpAnn (..),
-                                                         AnnContext (..),
+import           GHC                                    (AnnContext (..),
                                                          AnnList (..),
-                                                         AnnParen (..),
                                                          DeltaPos (SameLine),
                                                          EpAnn (..),
                                                          IsUnicodeSyntax (NormalSyntax),
@@ -46,8 +45,17 @@ import           GHC                                    (AddEpAnn (..),
                                                          TrailingAnn (AddCommaAnn),
                                                          emptyComments, reAnnL)
 
+
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
+#if MIN_VERSION_ghc(9,11,0)
+import GHC (EpToken (..)
+           , AnnListBrackets (..)
+           , EpUniToken (..))
+#else
+import GHC (AddEpAnn (..),
+                                                         AnnParen (..))
+#endif
 #if !MIN_VERSION_ghc(9,9,0)
 import           Data.Default                           (Default (..))
 import           GHC                                    (addAnns, ann)
@@ -179,7 +187,9 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
     -- For singleton constraints, the close Paren DP is attached to an HsPar wrapping the constraint
     -- we have to reposition it manually into the AnnContext
         close_dp = case ctxt of
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+            [L _ (HsParTy (_, (EpTok ap_close)) _)] -> Just ap_close
+#elif MIN_VERSION_ghc(9,9,0)
             [L _ (HsParTy AnnParen{ap_close} _)] -> Just ap_close
 #else
             [L _ (HsParTy EpAnn{anns=AnnParen{ap_close}} _)] -> Just ap_close
@@ -203,7 +213,11 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
 #else
     let context = Just $ reAnnL annCtxt emptyComments $ L lContext [resetEntryDP constraint]
 #endif
+#if MIN_VERSION_ghc(9,11,0)
+        annCtxt = AnnContext (Just (EpUniTok (epl 1) NormalSyntax)) [EpTok (epl 0) | needsParens] [EpTok (epl 0) | needsParens]
+#else
         annCtxt = AnnContext (Just (NormalSyntax, epl 1)) [epl 0 | needsParens] [epl 0 | needsParens]
+#endif
         needsParens = hsTypeNeedsParens sigPrec $ unLoc constraint
     ast <- pure $ setEntryDP (makeDeltaAst ast) (SameLine 1)
 
@@ -346,7 +360,9 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
                                              childRdr
           x :: LIE GhcPs = L ll' $ IEThingWith
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+                                     (Nothing, (EpTok d1, NoEpTok, NoEpTok, EpTok noAnn))
+#elif MIN_VERSION_ghc(9,9,0)
                                      (Nothing, [AddEpAnn AnnOpenP d1, AddEpAnn AnnCloseP noAnn])
 #elif MIN_VERSION_ghc(9,7,0)
                                      (Nothing, addAnns mempty [AddEpAnn AnnOpenP d1, AddEpAnn AnnCloseP def] emptyComments)
@@ -384,6 +400,8 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
 #if MIN_VERSION_ghc(9,7,0) && !MIN_VERSION_ghc(9,9,0)
             newl = fmap (\ann -> ann ++ [AddEpAnn AnnDotdot d0]) <$> l'''
+#elif MIN_VERSION_ghc(9,11,0)
+            newl = (\(open, _, comma, close)  -> (open, EpTok d0, comma, close)) <$> l'''
 #else
             newl = (\ann -> ann ++ [AddEpAnn AnnDotdot d0]) <$> l'''
 #endif
@@ -427,21 +445,31 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       parentRdr <- liftParseAST df parent
       let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
           isParentOperator = hasParen parent
+#if MIN_VERSION_ghc(9,11,0)
+      let parentLIE = reLocA $ L srcParent $ if isParentOperator then IEType (EpTok (epl 0)) parentRdr'
+#else
       let parentLIE = reLocA $ L srcParent $ if isParentOperator then IEType (epl 0) parentRdr'
+#endif
                                                else IEName
 #if MIN_VERSION_ghc(9,5,0)
                                                       noExtField
 #endif
                                                       parentRdr'
           parentRdr' = modifyAnns parentRdr $ \case
+#if MIN_VERSION_ghc(9,11,0)
+              it@NameAnn{nann_adornment = NameParens _ _} -> it{nann_adornment=NameParens (EpTok (epl 1)) (EpTok (epl 0))}
+#else
               it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1, nann_close = epl 0}
+#endif
               other -> other
           childLIE = reLocA $ L srcChild $ IEName
 #if MIN_VERSION_ghc(9,5,0)
                                              noExtField
 #endif
                                              childRdr
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+          listAnn = (Nothing, (EpTok (epl 1), NoEpTok, NoEpTok, EpTok (epl 0)))
+#elif MIN_VERSION_ghc(9,9,0)
           listAnn = (Nothing, [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)])
 #elif MIN_VERSION_ghc(9,7,0)
           listAnn = (Nothing, epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)])
@@ -538,7 +566,10 @@ extendHiding ::
 extendHiding symbol (L l idecls) mlies df = do
   L l' lies <- case mlies of
     Nothing -> do
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+        let ann :: EpAnn (AnnList (EpToken "hiding", [EpToken ","]))
+            ann = noAnnSrcSpanDP0 
+#elif MIN_VERSION_ghc(9,9,0)
         let ann = noAnnSrcSpanDP0
 #else
         src <- uniqueSrcSpanT
@@ -549,9 +580,14 @@ extendHiding symbol (L l idecls) mlies df = do
 #else
             ann' = flip (fmap.fmap) ann $ \x -> x
 #endif
+#if MIN_VERSION_ghc(9,11,0)
+                {al_rest = (EpTok (epl 1), [NoEpTok])
+                ,al_brackets=ListParens (EpTok (epl 1)) (EpTok (epl 0))
+#else
                 {al_rest = [AddEpAnn AnnHiding (epl 1)]
                 ,al_open = Just $ AddEpAnn AnnOpenP (epl 1)
                 ,al_close = Just $ AddEpAnn AnnCloseP (epl 0)
+#endif
                 }
         return $ L ann' []
     Just pr -> pure pr

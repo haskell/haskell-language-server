@@ -1,4 +1,4 @@
-resolver: lts-22.25 # ghc-9.6.5
+resolver: lts-22.43 # ghc-9.6.6
 
 packages:
   - .
@@ -19,7 +19,7 @@ allow-newer-deps:
 extra-deps:
   - Diff-0.5
   - floskell-0.11.1
-  - hiedb-0.6.0.1
+  - hiedb-0.6.0.2
   - hie-bios-0.14.0
   - implicit-hie-0.1.4.0
   - lsp-2.7.0.0

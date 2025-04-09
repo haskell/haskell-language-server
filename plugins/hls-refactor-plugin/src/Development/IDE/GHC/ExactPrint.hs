@@ -106,6 +106,9 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           deltaPos)
 import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 #endif
+#if MIN_VERSION_ghc(9,11,0)
+import           GHC.Types.SrcLoc (UnhelpfulSpanReason(..))
+#endif
 
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC                                     (
@@ -116,6 +119,9 @@ import           GHC                                     (
                                                           EpAnn (..),
                                                           EpaLocation,
                                                           EpaLocation' (..),
+#if MIN_VERSION_ghc(9,11,0)
+                                                          EpToken (..),
+#endif
                                                           NameAdornment (..),
                                                           NameAnn (..),
                                                           SrcSpanAnnA,
@@ -124,7 +130,6 @@ import           GHC                                     (
                                                           emptyComments,
                                                           spanAsAnchor)
 #endif
-
 setPrecedingLines ::
 #if !MIN_VERSION_ghc(9,9,0)
      Default t =>
@@ -166,6 +171,10 @@ annotateParsedSource (ParsedModule _ ps _) =
     ps
 #else
     (makeDeltaAst ps)
+#endif
+
+#if MIN_VERSION_ghc(9,11,0)
+type Anchor = EpaLocation
 #endif
 
 ------------------------------------------------------------------------------
@@ -466,7 +475,10 @@ modifySmallestDeclWithM validSpan f a = do
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,11,0)
+generatedAnchor :: DeltaPos -> Anchor
+generatedAnchor dp = EpaDelta (UnhelpfulSpan UnhelpfulNoLocationInfo) dp []
+#elif MIN_VERSION_ghc(9,9,0)
 generatedAnchor :: DeltaPos -> Anchor
 generatedAnchor dp = EpaDelta dp []
 #else
@@ -766,15 +778,28 @@ eqSrcSpan l r = leftmost_smallest l r == EQ
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
 addParensToCtxt close_dp = addOpen . addClose
   where
+#if MIN_VERSION_ghc(9,11,0)
+      addOpen it@AnnContext{ac_open = []} = it{ac_open = [EpTok (epl 0)]}
+#else
       addOpen it@AnnContext{ac_open = []} = it{ac_open = [epl 0]}
+#endif
       addOpen other                       = other
       addClose it
+#if MIN_VERSION_ghc(9,11,0)
+        | Just c <- close_dp = it{ac_close = [EpTok c]}
+        | AnnContext{ac_close = []} <- it = it{ac_close = [EpTok (epl 0)]}
+#else
         | Just c <- close_dp = it{ac_close = [c]}
         | AnnContext{ac_close = []} <- it = it{ac_close = [epl 0]}
+#endif
         | otherwise = it
 
 epl :: Int -> EpaLocation
+#if MIN_VERSION_ghc(9,11,0)
+epl n = EpaDelta (UnhelpfulSpan UnhelpfulNoLocationInfo) (SameLine n) []
+#else
 epl n = EpaDelta (SameLine n) []
+#endif
 
 epAnn :: SrcSpan -> ann -> EpAnn ann
 epAnn srcSpan anns = EpAnn (spanAsAnchor srcSpan) anns emptyComments
@@ -803,14 +828,25 @@ removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
 #endif
 
 addParens :: Bool -> GHC.NameAnn -> GHC.NameAnn
+#if MIN_VERSION_ghc(9,11,0)
 addParens True it@NameAnn{} =
-        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+        it{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)) }
 addParens True it@NameAnnCommas{} =
-        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+        it{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)) }
 addParens True it@NameAnnOnly{} =
-        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+        it{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)) }
+addParens True it@NameAnnTrailing{} =
+  NameAnn{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)), nann_name = epl 0, nann_trailing = nann_trailing it}
+#else
+addParens True it@NameAnn{} =
+        it{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0 }
+addParens True it@NameAnnCommas{} =
+        it{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0 }
+addParens True it@NameAnnOnly{} =
+        it{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0 }
 addParens True NameAnnTrailing{..} =
-        NameAnn{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0, nann_name = epl 0, ..}
+        NameAnn{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0, nann_name = epl 0, ..}
+#endif
 addParens _ it = it
 
 removeTrailingComma :: GenLocated SrcSpanAnnA ast -> GenLocated SrcSpanAnnA ast
