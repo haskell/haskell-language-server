@@ -169,11 +169,11 @@ jobs:
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin-tests || cabal test hls-stylish-haskell-plugin-tests
 
-      - if: matrix.test && matrix.ghc != '9.12'
+      - if: matrix.test
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin-tests || cabal test hls-ormolu-plugin-tests
 
-      - if: matrix.test && matrix.ghc != '9.12'
+      - if: matrix.test
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin-tests || cabal test hls-fourmolu-plugin-tests
 

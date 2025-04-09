@@ -1442,19 +1442,19 @@ flag fourmolu
   manual:      True
 
 common fourmolu
-  if flag(fourmolu) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     build-depends: haskell-language-server:hls-fourmolu-plugin
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
-  if !flag(fourmolu) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(fourmolu)
     buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
   build-depends:
     , filepath
-    , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16
+    , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16 || ^>=0.17 || ^>=0.18
     , ghc-boot-th
     , ghcide          == 2.10.0.0
     , hls-plugin-api  == 2.10.0.0
@@ -1468,7 +1468,7 @@ library hls-fourmolu-plugin
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(fourmolu) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(fourmolu)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
@@ -1496,13 +1496,13 @@ flag ormolu
   manual:      True
 
 common ormolu
-  if flag(ormolu) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(ormolu)
     build-depends: haskell-language-server:hls-ormolu-plugin
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
-  if !flag(ormolu) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(ormolu)
     buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
@@ -1515,14 +1515,14 @@ library hls-ormolu-plugin
     , lsp
     , mtl
     , process-extras  >= 0.7.1
-    , ormolu          ^>=0.1.2 || ^>= 0.2 || ^>= 0.3 || ^>= 0.5 || ^>= 0.6 || ^>= 0.7
+    , ormolu          ^>=0.5.3 || ^>= 0.6 || ^>= 0.7 || ^>=0.8
     , text
     , transformers
 
 
 test-suite hls-ormolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(ormolu) || (impl(ghc > 9.11) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(ormolu)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
@@ -2009,9 +2009,9 @@ test-suite func-test
 -- formatters
   if flag(floskell) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dhls_floskell
-  if flag(fourmolu) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
-  if flag(ormolu) && (impl(ghc < 9.11) || flag(ignore-plugins-ghc-bounds))
+  if flag(ormolu)
     cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test

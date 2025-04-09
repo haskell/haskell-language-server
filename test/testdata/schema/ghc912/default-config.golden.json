@@ -52,6 +52,12 @@
         "explicit-fixity": {
             "globalOn": true
         },
+        "fourmolu": {
+            "config": {
+                "external": false,
+                "path": "fourmolu"
+            }
+        },
         "ghcide-code-actions-bindings": {
             "globalOn": true
         },
@@ -88,6 +94,11 @@
         },
         "moduleName": {
             "globalOn": true
+        },
+        "ormolu": {
+            "config": {
+                "external": false
+            }
         },
         "overloaded-record-dot": {
             "globalOn": true
