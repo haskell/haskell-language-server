@@ -12,7 +12,8 @@ A plugin inspired by the REPLoid feature of <https://github.com/jyp/dante Dante>
 
 For a full example see the "Ide.Plugin.Eval.Tutorial" module.
 -}
-module Ide.Plugin.Eval.CodeLens (
+module Ide.Plugin.Eval.Handlers (
+    codeAction,
     codeLens,
     evalCommand,
 ) where
@@ -125,17 +126,35 @@ import           Language.LSP.Server
 import           GHC.Unit.Module.ModIface                     (IfaceTopEnv (..))
 #endif
 
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
+codeAction recorder st plId CodeActionParams{_textDocument,_range} = do
+    rangeCommands <- mkRangeCommands recorder st plId _textDocument
+    pure
+        $ InL
+            [ InL command
+            | (testRange, command) <- rangeCommands
+            , _range `isSubrangeOf` testRange
+            ]
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
 codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens recorder st plId CodeLensParams{_textDocument} =
+codeLens recorder st plId CodeLensParams{_textDocument} = do
+    rangeCommands <- mkRangeCommands recorder st plId _textDocument
+    pure
+        $ InL
+            [ CodeLens range (Just command) Nothing
+            | (range, command) <- rangeCommands
+            ]
+
+mkRangeCommands :: Recorder (WithPriority Log) -> IdeState -> PluginId -> TextDocumentIdentifier -> ExceptT PluginError (HandlerM Config) [(Range, Command)]
+mkRangeCommands recorder st plId textDocument =
     let dbg = logWith recorder Debug
         perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
-     in perf "codeLens" $
+     in perf "evalMkRangeCommands" $
             do
-                let TextDocumentIdentifier uri = _textDocument
+                let TextDocumentIdentifier uri = textDocument
                 fp <- uriToFilePathE uri
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
@@ -148,11 +167,11 @@ codeLens recorder st plId CodeLensParams{_textDocument} =
                 let Sections{..} = commentsToSections isLHS comments
                     tests = testsBySection nonSetupSections
                     cmd = mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
-                let lenses =
-                        [ CodeLens testRange (Just cmd') Nothing
+                let rangeCommands =
+                        [ (testRange, cmd')
                         | (section, ident, test) <- tests
                         , let (testRange, resultRange) = testRanges test
-                              args = EvalParams (setupSections ++ [section]) _textDocument ident
+                              args = EvalParams (setupSections ++ [section]) textDocument ident
                               cmd' =
                                 (cmd :: Command)
                                     { _arguments = Just [toJSON args]
@@ -168,9 +187,9 @@ codeLens recorder st plId CodeLensParams{_textDocument} =
                             (length tests)
                             (length nonSetupSections)
                             (length setupSections)
-                            (length lenses)
+                            (length rangeCommands)
 
-                return $ InL lenses
+                pure rangeCommands
   where
     trivial (Range p p') = p == p'
 
