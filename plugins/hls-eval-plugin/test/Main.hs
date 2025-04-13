@@ -6,13 +6,15 @@ module Main
   ) where
 
 import           Control.Lens               (_Just, folded, preview, view, (^.),
-                                             (^..))
+                                             (^..), (^?))
+import           Control.Monad              (join)
 import           Data.Aeson                 (Value (Object), fromJSON, object,
                                              (.=))
 import           Data.Aeson.Types           (Pair, Result (Success))
 import           Data.List                  (isInfixOf)
 import           Data.List.Extra            (nubOrdOn)
 import qualified Data.Map                   as Map
+import qualified Data.Maybe                 as Maybe
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (Config)
 import qualified Ide.Plugin.Config          as Plugin
@@ -58,6 +60,9 @@ tests =
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
+
+  , goldenWithEvalForCodeAction "Evaluation of expressions via code action" "T1" "hs"
+  , goldenWithEvalForCodeAction "Reevaluation of expressions via code action" "T2" "hs"
 
   , goldenWithEval "Evaluation of expressions" "T1" "hs"
   , goldenWithEval "Reevaluation of expressions" "T2" "hs"
@@ -221,6 +226,10 @@ goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =
   goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs $ FS.directProject (path <.> ext)) path "expected" ext executeLensesBackwards
 
+goldenWithEvalForCodeAction :: TestName -> FilePath -> FilePath -> TestTree
+goldenWithEvalForCodeAction title path ext =
+  goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs $ FS.directProject (path <.> ext)) path "expected" ext executeCodeActionsBackwards
+
 goldenWithEvalAndFs :: TestName -> [FS.FileTree] -> FilePath -> FilePath -> TestTree
 goldenWithEvalAndFs title tree path ext =
   goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs tree) path  "expected" ext executeLensesBackwards
@@ -239,14 +248,24 @@ goldenWithEvalAndFs' title tree path ext expected =
 -- | Execute lenses backwards, to avoid affecting their position in the source file
 executeLensesBackwards :: TextDocumentIdentifier -> Session ()
 executeLensesBackwards doc = do
-  codeLenses <- reverse <$> getCodeLenses doc
+  codeLenses <- getCodeLenses doc
   -- liftIO $ print codeLenses
+  executeCmdsBackwards [c | CodeLens{_command = Just c} <- codeLenses]
 
-  -- Execute sequentially, nubbing elements to avoid
-  -- evaluating the same section with multiple tests
-  -- more than twice
-  mapM_ executeCmd $
-    nubOrdOn actSectionId [c | CodeLens{_command = Just c} <- codeLenses]
+executeCodeActionsBackwards :: TextDocumentIdentifier -> Session ()
+executeCodeActionsBackwards doc = do
+  codeLenses <- getCodeLenses doc
+  let ranges = [_range | CodeLens{_range} <- codeLenses]
+  -- getAllCodeActions cannot get our code actions because they have no diagnostics
+  codeActions <- join <$> traverse (getCodeActions doc) ranges
+  let cmds = Maybe.mapMaybe (^? _L) codeActions
+  executeCmdsBackwards cmds
+
+-- Execute commands backwards, nubbing elements to avoid
+-- evaluating the same section with multiple tests
+-- more than twice
+executeCmdsBackwards :: [Command] -> Session ()
+executeCmdsBackwards = mapM_ executeCmd . nubOrdOn actSectionId . reverse
 
 actSectionId :: Command -> Int
 actSectionId Command{_arguments = Just [fromJSON -> Success EvalParams{..}]} = evalId

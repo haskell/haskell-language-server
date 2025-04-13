@@ -39,11 +39,12 @@
             "codeLensOn": true
         },
         "eval": {
+            "codeActionsOn": true,
+            "codeLensOn": true,
             "config": {
                 "diff": true,
                 "exception": false
-            },
-            "globalOn": true
+            }
         },
         "explicit-fields": {
             "codeActionsOn": true,

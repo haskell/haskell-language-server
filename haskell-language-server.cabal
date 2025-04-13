@@ -460,9 +460,9 @@ library hls-eval-plugin
   hs-source-dirs:     plugins/hls-eval-plugin/src
   other-modules:
     Ide.Plugin.Eval.Code
-    Ide.Plugin.Eval.CodeLens
     Ide.Plugin.Eval.Config
     Ide.Plugin.Eval.GHC
+    Ide.Plugin.Eval.Handlers
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
     Ide.Plugin.Eval.Rules

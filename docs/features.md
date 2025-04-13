@@ -346,7 +346,7 @@ Shows the type signature for bindings without type signatures, and adds it with 
 
 Provided by: `hls-eval-plugin`
 
-Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
+Evaluates code blocks in comments with a click.  A code action is also provided. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
 ![Eval Demo](../plugins/hls-eval-plugin/demo.gif)
 
