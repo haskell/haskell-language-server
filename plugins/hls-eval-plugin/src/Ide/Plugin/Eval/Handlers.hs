@@ -85,6 +85,7 @@ import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
+import           Data.List.Extra                              (unsnoc)
 import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
@@ -317,7 +318,7 @@ finalReturn :: Text -> TextEdit
 finalReturn txt =
     let ls = T.lines txt
         l = fromIntegral $ length ls -1
-        c = fromIntegral $ T.length . last $ ls
+        c = fromIntegral $ T.length $ maybe T.empty snd (unsnoc ls)
         p = Position l c
      in TextEdit (Range p p) "\n"
 
