@@ -6,6 +6,7 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+         ../cabal-add
 
 
 index-state: 2025-05-12T13:26:29Z
