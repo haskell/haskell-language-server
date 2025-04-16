@@ -254,8 +254,13 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.Definition
     Ide.Plugin.Cabal.FieldSuggest
+    Ide.Plugin.Cabal.Files
+    Ide.Plugin.Cabal.OfInterest
     Ide.Plugin.Cabal.LicenseSuggest
-    Ide.Plugin.Cabal.CabalAdd
+    Ide.Plugin.Cabal.Rules
+    Ide.Plugin.Cabal.CabalAdd.Command
+    Ide.Plugin.Cabal.CabalAdd.CodeAction
+    Ide.Plugin.Cabal.CabalAdd.Types
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
     Ide.Plugin.Cabal.Parse
@@ -276,14 +281,14 @@ library hls-cabal-plugin
     , lens
     , lsp                   ^>=2.7
     , lsp-types             ^>=2.3
+    , mtl
     , regex-tdfa            ^>=1.3.1
     , text
     , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
-    , cabal-add             ^>=0.1
-    , process
+    , cabal-add             ^>=0.2
     , aeson
     , Cabal
     , pretty
@@ -315,7 +320,6 @@ test-suite hls-cabal-plugin-tests
     , lens
     , lsp-types
     , text
-    , hls-plugin-api
 
 -----------------------------
 -- class plugin

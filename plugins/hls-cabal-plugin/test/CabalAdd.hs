@@ -1,56 +1,112 @@
-{-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 module CabalAdd (
-  cabalAddTests,
+    cabalAddDependencyTests,
+    cabalAddModuleTests,
 ) where
 
-import           Control.Lens                ((^.))
-import           Control.Lens.Fold           ((^?))
-import qualified Data.Maybe                  as Maybe
-import qualified Data.Text                   as T
-import qualified Data.Text.Internal.Search   as T
-import           Distribution.Utils.Generic  (safeHead)
-import           Ide.Plugin.Cabal.CabalAdd   (hiddenPackageSuggestion)
-import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types (Diagnostic (..), mkRange)
+import           Control.Lens                                  ((^.))
+import           Control.Lens.Fold                             ((^?))
+import qualified Data.Maybe                                    as Maybe
+import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as T
+import qualified Data.Text.Internal.Search                     as T
+import           Distribution.ModuleName                       (fromString)
+import           Distribution.PackageDescription
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import qualified Distribution.Pretty                           as Pretty
+import           Distribution.Types.Component
+import           Distribution.Utils.Generic                    (safeHead)
+import           Ide.Plugin.Cabal.CabalAdd.CodeAction          (hiddenPackageSuggestion)
+import           Ide.Plugin.Cabal.Parse                        (parseCabalFileContents)
+import qualified Language.LSP.Protocol.Lens                    as L
+import qualified Language.LSP.Protocol.Types                   as J
 import           System.FilePath
-import           Test.Hls                    (Session, TestTree, _R, anyMessage,
-                                              assertEqual, documentContents,
-                                              executeCodeAction,
-                                              getAllCodeActions,
-                                              getDocumentEdit, liftIO, openDoc,
-                                              skipManyTill, testCase, testGroup,
-                                              waitForDiagnosticsFrom, (@?=))
+import           Test.Hls
 import           Utils
 
-cabalAddTests :: TestTree
-cabalAddTests =
+cabalAddModuleTests :: TestTree
+cabalAddModuleTests =
+    testGroup
+        "Add Module"
+        [ runHaskellTestCaseSession "Add to benchmark" ("cabal-add-module" </> "library") $ do
+            let compName = CBenchName "test1"
+            pd <- generateAddDependencyTestSession "test.cabal" "Main.hs" compName
+            checkModuleAddedTo pd "Main" compName
+        , runHaskellTestCaseSession "Add to executable" ("cabal-add-module" </> "library") $ do
+            let compName = CExeName "test"
+            pd <- generateAddDependencyTestSession "test.cabal" "Main.hs" compName
+            checkModuleAddedTo pd "Main" compName
+        , runHaskellTestCaseSession "Add to test-suite" ("cabal-add-module" </> "library") $ do
+            let compName = CTestName "test2"
+            pd <- generateAddDependencyTestSession "test.cabal" "Main.hs" compName
+            checkModuleAddedTo pd "Main" compName
+        , runHaskellTestCaseSession "Add to library" ("cabal-add-module" </> "library") $ do
+            let compName = CLibName $ LSubLibName "test3"
+            pd <- generateAddDependencyTestSession "test.cabal" "Main.hs" compName
+            checkModuleAddedTo pd "Main" compName
+        , runHaskellTestCaseSession "Add to main library" ("cabal-add-module" </> "library") $ do
+            let compName = CLibName LMainLibName
+            pd <- generateAddDependencyTestSession "test.cabal" "Main.hs" compName
+            checkModuleAddedTo pd "Main" compName
+        ]
+  where
+    generateAddDependencyTestSession :: FilePath -> FilePath -> ComponentName -> Session PackageDescription
+    generateAddDependencyTestSession cabalFile haskellFile compName = do
+        haskellDoc <- openDoc haskellFile "haskell"
+        cabalDoc <- openDoc cabalFile "cabal"
+        _ <- waitForDiagnosticsFrom haskellDoc
+        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions haskellDoc
+        let selectedCas = filter (\ca -> (T.pack $ "Add to " <> Pretty.prettyShow compName <> " ") `T.isPrefixOf` (ca ^. L.title)) cas
+        mapM_ executeCodeAction $ selectedCas
+        _ <- skipManyTill anyMessage $ getDocumentEdit cabalDoc -- Wait for the changes in cabal file
+        contents <- documentContents cabalDoc
+        case parseCabalFileContents $ T.encodeUtf8 contents of
+            (_, Right gpd) -> pure $ flattenPackageDescription gpd
+            _ -> liftIO $ assertFailure "could not parse cabal file to gpd"
+
+    -- | Verify that the given module was added to the desired component.
+    -- Note that we do not care whether it was added to exposed-modules or other-modules of that component.
+    checkModuleAddedTo :: PackageDescription -> String -> ComponentName -> Session ()
+    checkModuleAddedTo pd modName compName = do
+        let comp = getComponent pd compName
+            compModules = case comp of
+                CLib lib     -> explicitLibModules lib
+                CFLib fLib   -> foreignLibModules fLib
+                CExe exe     -> exeModules exe
+                CTest test   -> testModules test
+                CBench bench -> benchmarkModules bench
+            testDescription = modName <> " was added to " <> showComponentName compName
+        liftIO $ assertBool testDescription $ fromString modName `elem` compModules
+
+cabalAddDependencyTests :: TestTree
+cabalAddDependencyTests =
   testGroup
-    "CabalAdd Tests"
-    [ runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable" ("cabal-add-testdata" </> "cabal-add-exe")
+    "Add dependency"
+    [ runHaskellTestCaseSession "Add to executable" ("cabal-add-testdata" </> "cabal-add-exe")
         (generateAddDependencyTestSession "cabal-add-exe.cabal" ("src" </> "Main.hs") "split" [253])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "cabal-add-lib")
+    , runHaskellTestCaseSession "Add to library" ("cabal-add-testdata" </> "cabal-add-lib")
         (generateAddDependencyTestSession "cabal-add-lib.cabal" ("src" </> "MyLib.hs") "split" [348])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "cabal-add-tests")
+    , runHaskellTestCaseSession "Add to testsuite" ("cabal-add-testdata" </> "cabal-add-tests")
         (generateAddDependencyTestSession "cabal-add-tests.cabal" ("test" </> "Main.hs") "split" [478])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test with PackageImports" ("cabal-add-testdata" </> "cabal-add-tests")
+    , runHaskellTestCaseSession "Add to testsuite with PackageImports" ("cabal-add-testdata" </> "cabal-add-tests")
         (generateAddDependencyTestSession "cabal-add-tests.cabal" ("test" </> "MainPackageImports.hs") "split" [731])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
+    , runHaskellTestCaseSession "Add to benchmark" ("cabal-add-testdata" </> "cabal-add-bench")
         (generateAddDependencyTestSession "cabal-add-bench.cabal" ("bench" </> "Main.hs") "split" [403])
 
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+    , runHaskellTestCaseSession "Add to executable, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
         (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("src" </> "Main.hs") "split" [269])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+    , runHaskellTestCaseSession "Add to library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
         (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "MyLib.hs") "split" [413])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an internal library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+    , runHaskellTestCaseSession "Add to internal library, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
         (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("lib" </> "InternalLib.hs") "split" [413])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+    , runHaskellTestCaseSession "Add to testsuite, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
         (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("test" </> "Main.hs") "split" [655])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
+    , runHaskellTestCaseSession "Add to benchmark, multiple targets" ("cabal-add-testdata" </> "cabal-add-multitarget")
         (generateAddDependencyTestSession "cabal-add-multitarget.cabal" ("bench" </> "Main.hs") "split" [776])
 
 
-    , runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "cabal-add-packageYaml")
+    , runHaskellTestCaseSession "Guard against HPack" ("cabal-add-testdata" </> "cabal-add-packageYaml")
         (generatePackageYAMLTestSession ("src" </> "Main.hs"))
 
     , testHiddenPackageSuggestions "Check CabalAdd's parser, no version"
@@ -156,7 +212,7 @@ cabalAddTests =
         liftIO $ assertEqual (T.unpack dependency <> " isn't found in the cabal file") indicesRes (T.indices dependency contents)
     testHiddenPackageSuggestions :: String -> [T.Text] -> [(T.Text, T.Text)] -> TestTree
     testHiddenPackageSuggestions testTitle messages suggestions =
-        let diags = map (\msg -> messageToDiagnostic msg ) messages
+        let diags = map (\msg -> messageToDiagnostic msg) messages
             suggestions' = map (safeHead . hiddenPackageSuggestion) diags
             assertions   = zipWith (@?=) suggestions' (map Just suggestions)
             testNames    = map (\(f, s) -> "Check if " ++ T.unpack f ++ (if s == "" then "" else "-") ++ T.unpack s ++ " was parsed correctly") suggestions
@@ -164,20 +220,19 @@ cabalAddTests =
         in test
     messageToDiagnostic :: T.Text -> Diagnostic
     messageToDiagnostic msg = Diagnostic {
-            _range    = mkRange 0 0 0 0
-          , _severity = Nothing
-          , _code     = Nothing
-          , _source   = Nothing
-          , _message  = msg
-          , _relatedInformation = Nothing
-          , _tags     = Nothing
-          , _codeDescription = Nothing
-          , _data_ = Nothing
+            J._range    = mkRange 0 0 0 0
+          , J._severity = Nothing
+          , J._code     = Nothing
+          , J._source   = Nothing
+          , J._message  = msg
+          , J._relatedInformation = Nothing
+          , J._tags     = Nothing
+          , J._codeDescription = Nothing
+          , J._data_ = Nothing
         }
 
-
     generatePackageYAMLTestSession :: FilePath -> Session ()
-    generatePackageYAMLTestSession haskellFile  = do
+    generatePackageYAMLTestSession haskellFile = do
         hsdoc <- openDoc haskellFile "haskell"
         _ <- waitForDiagnosticsFrom hsdoc
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions hsdoc

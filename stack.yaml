@@ -36,7 +36,7 @@ extra-deps:
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
   - directory-ospath-streaming-0.2.2
-
+  - cabal-add-0.2
 configure-options:
   ghcide:
     - --disable-library-for-ghci
@@ -50,8 +50,6 @@ flags:
     ghc-lib: true
   retrie:
     BuildExecutable: false
-  cabal-add:
-    cabal-syntax: true
   # stan dependencies
   directory-ospath-streaming:
       os-string: false
