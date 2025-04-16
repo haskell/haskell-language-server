@@ -44,7 +44,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-code-range-plugin`              | 1    |                          |
 | `hls-explicit-imports-plugin`        | 1    |                          |
 | `hls-pragmas-plugin`                 | 1    |                          |
-| `hls-refactor-plugin`                | 2    | 9.12.2                   |
+| `hls-refactor-plugin`                | 2    |                          |
 | `hls-alternate-number-format-plugin` | 2    |                          |
 | `hls-cabal-fmt-plugin`               | 2    |                          |
 | `hls-cabal-gild-plugin`              | 2    |                          |
