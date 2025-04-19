@@ -1,0 +1,31 @@
+name: brace-handling-test
+version: 0.1.0.0
+
+library
+    exposed-modules:
+        MyLib
+    build-depends:
+        base >= 4.7 && < 5
+        , text
+        , containers
+    default-language: GHC2021
+    ghc-options: -Wall
+    cpp-options: -DDEBUG
+    extra-libraries: 
+        , pthread
+        , dl
+    extra-lib-dirs:
+        , /usr/local/lib
+        , /opt/local/lib
+    extra-framework-dirs:
+        , /Library/Frameworks
+        , /System/Library/Frameworks
+    extra-frameworks:
+        , CoreFoundation
+        , CoreServices
+    extra-lib-dirs:
+        , /usr/local/lib
+        , /opt/local/lib
+    extra-libraries:
+        , pthread
+        , dl 

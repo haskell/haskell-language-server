@@ -69,6 +69,18 @@ basicCompleterTests =
         let complTexts = getTextEditTexts compls
         liftIO $ assertBool "suggests f2" $ "f2.hs" `elem` complTexts
         liftIO $ assertBool "does not suggest" $ "Content.hs" `notElem` complTexts
+    , runCabalTestCaseSession "Brace handling in multi-line fields" "brace-handling" $ do
+        doc <- openDoc "brace-handling.cabal" "cabal"
+        -- Test completion in a multi-line field with braces
+        compls <- getCompletions doc (Position 15 8)  -- Position in extra-libraries field
+        let complTexts = getTextEditTexts compls
+        liftIO $ assertBool "suggests correct library names" $ 
+            all (`elem` complTexts) ["pthread", "dl"]
+        -- Test completion in a field with multiple lines and braces
+        compls2 <- getCompletions doc (Position 25 8)  -- Position in extra-frameworks field
+        let complTexts2 = getTextEditTexts compls2
+        liftIO $ assertBool "suggests correct framework names" $ 
+            all (`elem` complTexts2) ["CoreFoundation", "CoreServices"]
     ]
     where
       getTextEditTexts :: [CompletionItem] -> [T.Text]
