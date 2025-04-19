@@ -1,0 +1,51 @@
+cabal-version:      3.0
+name:               hls-cabal-project-plugin
+version:            2.10.0.0
+synopsis:           Cabal project file support for Haskell Language Server
+description:        Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+category:           Development
+homepage:           https://github.com/haskell/haskell-language-server#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
+author:             The Haskell IDE Team
+maintainer:         https://github.com/haskell/haskell-language-server/graphs/contributors
+license:            Apache-2.0
+license-file:       LICENSE
+build-type:         Simple
+
+library
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.CabalProject
+  hs-source-dirs:   src
+  build-depends:
+    , base
+    , bytestring
+    , containers
+    , deepseq
+    , directory
+    , filepath
+    , ghcide                == 2.10.0.0
+    , hls-plugin-api        == 2.10.0.0
+    , lens
+    , lsp                   ^>=2.7
+    , lsp-types             ^>=2.3
+    , text
+    , text-rope
+    , transformers
+    , unordered-containers  >=0.2.10.0
+
+  default-extensions:
+    DataKinds
+    OverloadedStrings
+    RecordWildCards
+
+test-suite hls-cabal-project-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , filepath
+    , haskell-language-server:hls-cabal-project-plugin
+    , hls-test-utils        == 2.10.0.0
+    , text 
