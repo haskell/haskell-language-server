@@ -164,8 +164,7 @@ jobs:
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
 
-      # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin-tests || cabal test hls-stylish-haskell-plugin-tests
 

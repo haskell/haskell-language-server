@@ -79,10 +79,15 @@ provider recorder ide _token typ contents fp _opts = do
 -- If no such file has been found, return default config.
 loadConfigFrom :: FilePath -> IO Config
 loadConfigFrom file = do
+#if MIN_VERSION_stylish_haskell(0,15,0)
+  let configSearchStrategy = SearchFromDirectory (takeDirectory file)
+  config <- loadConfig (makeVerbose False) configSearchStrategy
+#else
   currDir <- getCurrentDirectory
   setCurrentDirectory (takeDirectory file)
   config <- loadConfig (makeVerbose False) Nothing
   setCurrentDirectory currDir
+#endif
   pure config
 
 -- | Run stylish-haskell on the given text with the given configuration.
