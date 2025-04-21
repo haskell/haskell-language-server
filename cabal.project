@@ -55,8 +55,5 @@ allow-newer:
 if impl(ghc >= 9.11)
   benchmarks: False
   allow-newer:
-    hie-bios:ghc,
-    ghc-trace-events:base,
-    tasty-hspec:base,
     cabal-install-parsers:base,
     cabal-install-parsers:time,
