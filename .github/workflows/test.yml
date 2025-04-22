@@ -213,7 +213,7 @@ jobs:
         name: Test hls-change-type-signature test suite
         run: cabal test hls-change-type-signature-plugin-tests || cabal test hls-change-type-signature-plugin-tests
 
-      - if: matrix.test && matrix.ghc != '9.12'
+      - if: matrix.test
         name: Test hls-gadt-plugin test suit
         run: cabal test hls-gadt-plugin-tests || cabal test hls-gadt-plugin-tests
 
