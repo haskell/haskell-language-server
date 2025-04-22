@@ -698,7 +698,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
             let ncfp = toNormalizedFilePath' (toAbsolutePath file)
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
-            sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
+            let
+              -- Each one of deps will be registered as a FileSystemWatcher in the GhcSession action
+              -- so that we can get a workspace/didChangeWatchedFiles notification when a dep changes.
+              -- The GlobPattern of a FileSystemWatcher can be absolute or relative.
+              -- We use the absolute one because it is supported by more LSP clients.
+              -- Here we make sure deps are absolute and later we use those absolute deps as GlobPattern.
+              absolutePathsCradleDeps (eq, deps)
+                = (eq, fmap toAbsolutePath deps)
+            (absolutePathsCradleDeps <$> sessionOpts (join cachedHieYamlLocation <|> hieYaml, file))  `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
