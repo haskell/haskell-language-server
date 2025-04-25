@@ -25,7 +25,6 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
 import           Data.Char                            (isSpace)
-import           Data.Functor                         ((<&>))
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
