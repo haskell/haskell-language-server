@@ -218,16 +218,18 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     --                  |^-_paddingLeft
     --                  ^-_position
     generateInlayHints :: Range -> ImportEdit -> PositionMapping -> Maybe InlayHint
-    generateInlayHints (Range _ end) ie pm = mkLabel ie <&> \label ->
-      InlayHint { _position = end
-                , _label = InL label
-                , _kind = Nothing -- neither a type nor a parameter
-                , _textEdits = fmap singleton $ toTEdit pm ie
-                , _tooltip = Just $ InL "Make this import explicit" -- simple enough, no need to resolve
-                , _paddingLeft = Just True -- show an extra space before the inlay hint
-                , _paddingRight = Nothing
-                , _data_ = Nothing
-                }
+    generateInlayHints (Range _ end) ie pm = do
+      label <- mkLabel ie
+      currentEnd <- toCurrentPosition pm end
+      return InlayHint { _position = currentEnd
+                       , _label = InL label
+                       , _kind = Nothing -- neither a type nor a parameter
+                       , _textEdits = fmap singleton $ toTEdit pm ie
+                       , _tooltip = Just $ InL "Make this import explicit" -- simple enough, no need to resolve
+                       , _paddingLeft = Just True -- show an extra space before the inlay hint
+                       , _paddingRight = Nothing
+                       , _data_ = Nothing
+                       }
     mkLabel :: ImportEdit -> Maybe T.Text
     mkLabel (ImportEdit{ieResType, ieText}) =
       let title ExplicitImport = Just $ abbreviateImportTitleWithoutModule ieText
