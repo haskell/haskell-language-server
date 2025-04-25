@@ -43,7 +43,9 @@ import           Development.IDE                      (IdeState,
                                                        srcSpanToLocation,
                                                        srcSpanToRange, viaShow)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.PositionMapping (PositionMapping,
+                                                       toCurrentPosition,
+                                                       toCurrentRange)
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
 import qualified Development.IDE.Core.Shake           as Shake
@@ -204,19 +206,19 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
-    pure $ InL $ mapMaybe (mkInlayHint crr pragma) defnLocsList
+    pure $ InL $ mapMaybe (mkInlayHint crr pragma pm) defnLocsList
    where
-     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
-     mkInlayHint CRR {enabledExtensions, nameMap} pragma (defnLocs, record) =
+     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
+     mkInlayHint CRR {enabledExtensions, nameMap} pragma pm (defnLocs, record) =
        let range = recordInfoToDotDotRange record
            textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
                     <> maybeToList (pragmaEdit enabledExtensions pragma)
            names = renderRecordInfoAsDotdotLabelName record
        in do
-         end <- fmap _end range
+         currentEnd <- range >>= toCurrentPosition pm . _end
          names' <- names
          defnLocs' <- defnLocs
-         let excludeDotDot (Location _ (Range _ end')) = end' /= end
+         let excludeDotDot (Location _ (Range _ end)) = end /= currentEnd
              -- find location from dotdot definitions that name equal to label name
              findLocation name locations =
                let -- filter locations not within dotdot range
@@ -227,7 +229,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
              valueWithLoc = [ (T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
              -- use `, ` to separate labels with definition location
              label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart valueWithLoc
-         pure $ InlayHint { _position = end -- at the end of dotdot
+         pure $ InlayHint { _position = currentEnd -- at the end of dotdot
                           , _label = InR label
                           , _kind = Nothing -- neither a type nor a parameter
                           , _textEdits = Just textEdits -- same as CodeAction
@@ -248,20 +250,22 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                   | Just range <- [toCurrentRange pm visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
-    pure $ InL (concatMap (mkInlayHints nameMap) records)
+    pure $ InL (concatMap (mkInlayHints nameMap pm) records)
    where
-     mkInlayHints :: UniqFM Name [Name] -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap record@(RecordInfoApp _ (RecordAppExpr _ fla)) =
+     mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
+     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ fla)) =
        let textEdits = renderRecordInfoAsTextEdit nameMap record
-       in mapMaybe (mkInlayHint textEdits) fla
-     mkInlayHints _       _              = []
-     mkInlayHint :: Maybe TextEdit -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
-     mkInlayHint te (label, _) =
+       in mapMaybe (mkInlayHint textEdits pm) fla
+     mkInlayHints _ _ _ = []
+
+     mkInlayHint :: Maybe TextEdit -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
+     mkInlayHint te pm (label, _) =
        let (name, loc) = ((flSelector . unLoc) &&& (srcSpanToLocation . getLoc)) label
            fieldDefLoc = srcSpanToLocation (nameSrcSpan name)
        in do
          (Location _ recRange) <- loc
-         pure InlayHint { _position = _start recRange
+         currentStart <- toCurrentPosition pm (_start recRange)
+         pure InlayHint { _position = currentStart
                         , _label = InR $ pure (mkInlayHintLabelPart name fieldDefLoc)
                         , _kind = Nothing -- neither a type nor a parameter
                         , _textEdits = Just (maybeToList te) -- same as CodeAction
@@ -270,6 +274,7 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _paddingRight = Nothing
                         , _data_ = Nothing
                         }
+
      mkInlayHintLabelPart name loc = InlayHintLabelPart (printOutputable (pprNameUnqualified name) <> "=") Nothing loc Nothing
 
 mkTitle :: [Extension] -> Text
