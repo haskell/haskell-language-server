@@ -7,7 +7,7 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.10.2.0"
+    default: "3.14.2.0"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
