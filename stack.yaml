@@ -22,6 +22,7 @@ extra-deps:
   - floskell-0.11.1
   - hiedb-0.6.0.2
   - implicit-hie-0.1.4.0
+  - hie-bios-0.15.0
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
   - retrie-1.2.3
