@@ -702,7 +702,7 @@ initObjLinker env =
 loadDLL :: HscEnv -> String -> IO (Maybe String)
 loadDLL env str = do
     res <- GHCi.loadDLL (GHCi.hscInterp env) str
-#if MIN_VERSION_ghc(9,11,0) || (MIN_VERSION_ghc(9, 8, 3) && !MIN_VERSION_ghc(9, 9, 0))
+#if MIN_VERSION_ghc(9,11,0) || (MIN_VERSION_ghc(9, 8, 3) && !MIN_VERSION_ghc(9, 9, 0)) || (MIN_VERSION_ghc(9, 10, 2) && !MIN_VERSION_ghc(9, 11, 0))
     pure $
       case res of
         Left err_msg -> Just err_msg
