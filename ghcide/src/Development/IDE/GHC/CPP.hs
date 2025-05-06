@@ -30,7 +30,7 @@ import qualified GHC.Driver.Pipeline.Execute     as Pipeline
 import qualified GHC.SysTools.Cpp                as Pipeline
 #endif
 
-#if MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,10,2)
 import qualified GHC.SysTools.Tasks              as Pipeline
 #endif
 
@@ -56,7 +56,7 @@ doCpp env input_fn output_fn =
 #if MIN_VERSION_ghc(9,5,0)
     let cpp_opts = Pipeline.CppOpts
                  { cppLinePragmas = True
-#if MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,10,2)
                  , sourceCodePreprocessor = Pipeline.SCPHsCpp
 #elif MIN_VERSION_ghc(9,10,0)
                  , useHsCpp = True
