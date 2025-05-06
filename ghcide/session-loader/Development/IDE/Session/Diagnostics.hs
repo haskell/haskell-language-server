@@ -28,7 +28,7 @@ data CradleErrorDetails =
   Depicts the cradle error in a user-friendly way.
 -}
 renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
-renderCradleError (CradleError deps _ec ms) cradle nfp =
+renderCradleError cradleError cradle nfp =
   let noDetails =
         ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines $ map T.pack userFriendlyMessage) Nothing
   in
@@ -36,7 +36,9 @@ renderCradleError (CradleError deps _ec ms) cradle nfp =
      then noDetails & fdLspDiagnosticL %~ \diag -> diag{_data_ = Just $ Aeson.toJSON CradleErrorDetails{cabalProjectFiles=absDeps}}
      else noDetails
   where
-    absDeps = fmap (cradleRootDir cradle </>) deps
+    ms = cradleErrorStderr cradleError
+
+    absDeps = fmap (cradleRootDir cradle </>) (cradleErrorDependencies cradleError)
     userFriendlyMessage :: [String]
     userFriendlyMessage
       | HieBios.isCabalCradle cradle = fromMaybe ms $ fileMissingMessage <|> mkUnknownModuleMessage
