@@ -45,6 +45,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
 - Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on initial load. As it is activated by default could drive to bad performance in large projects.
 - Check parents (`haskell.checkParents`, default `CheckOnSave`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnSave` (means dependent/parent modules will only be checked when you save), or `AlwaysCheck` (means re-typechecking them on every change).
+- Session loading preference (`haskell.sessionLoading`, default `singleComponent`): how to load sessions; one of `singleComponent` (means always loading only a single component when a new component is discovered) or `multipleComponents` (means always preferring loading multiple components in the cradle at once). `multipleComponents` might not be always possible, if the tool doesn't support multiple components loading. The cradle can decide how to handle these situations, and whether to honour the preference at all.
 
 #### Generic plugin configuration
 
