@@ -123,7 +123,7 @@ jobs:
       matrix:
         ghc: ['9.8', '9.10']
         os: [ubuntu-latest]
-        cabal: ['3.10']
+        cabal: ['3.14']
         example: ['cabal', 'lsp-types']
 
     steps:
