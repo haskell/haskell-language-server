@@ -411,6 +411,17 @@ Known limitations:
 
 - Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects](https://github.com/haskell/haskell-language-server/issues/2193).
 
+To eagerly load all components, you need to
+
+- set `haskell.sessionLoading` to `multipleComponents`,
+- set `hie.yaml` to load all components (currently only cabal supports this),
+  ```yaml
+  cradle:
+    cabal:
+      component: all
+  ```
+- and enable tests and benchmarks in `cabal.project` with `tests: True` and `benchmarks: True`.
+
 ## Semantic tokens
 
 Provided by: `hls-semantic-tokens-plugin`
