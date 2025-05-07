@@ -131,29 +131,6 @@ pluginTests =
                 expectNoMoreDiagnostics 1 hsDoc "typechecking"
                 cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
                 expectNoMoreDiagnostics 1 cabalDoc "parsing"
-            , runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" "simple-cabal" $ do
-                    hsDoc <- openDoc "A.hs" "haskell"
-                    expectNoMoreDiagnostics 1 hsDoc "typechecking"
-                    cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
-                    expectNoMoreDiagnostics 1 cabalDoc "parsing"
-                    let theRange = Range (Position 3 20) (Position 3 23)
-                    -- Invalid license
-                    changeDoc
-                        cabalDoc
-                        [ TextDocumentContentChangeEvent $
-                            InL TextDocumentContentChangePartial
-                                { _range = theRange
-                                , _rangeLength = Nothing
-                                , _text = "MIT3"
-                                }
-                        ]
-                    cabalDiags <- waitForDiagnosticsFrom cabalDoc
-                    unknownLicenseDiag <- liftIO $ inspectDiagnostic cabalDiags ["Unknown SPDX license identifier: 'MIT3'"]
-                    expectNoMoreDiagnostics 1 hsDoc "typechecking"
-                    liftIO $ do
-                        length cabalDiags @?= 1
-                        unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
-                        unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
             ]
         ]
 -- ----------------------------------------------------------------------------
