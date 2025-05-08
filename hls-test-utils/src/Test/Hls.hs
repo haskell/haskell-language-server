@@ -129,7 +129,6 @@ import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
 import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
-                                                           createDirectoryIfMissing,
                                                            getCurrentDirectory,
                                                            getTemporaryDirectory,
                                                            makeAbsolute,
@@ -587,17 +586,10 @@ instance Default (TestConfig b) where
 -- It returns the root to the testing directory that tests should use.
 -- This directory is not fully cleaned between reruns.
 -- However, it is totally safe to delete the directory between runs.
---
--- Additionally, this overwrites the 'XDG_CACHE_HOME' variable to isolate
--- the tests from existing caches. 'hie-bios' and 'ghcide' honour the
--- 'XDG_CACHE_HOME' environment variable and generate their caches there.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
   tmpDirRoot <- getTemporaryDirectory
   let testRoot = tmpDirRoot </> "hls-test-root"
-      testCacheDir = testRoot </> ".cache"
-  createDirectoryIfMissing True testCacheDir
-  setEnv "XDG_CACHE_HOME" testCacheDir
   pure testRoot
 
 goldenWithHaskellDocFormatter
