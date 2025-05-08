@@ -203,6 +203,7 @@ library
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
     Development.IDE.Types.Action
+    Development.IDE.Session.OrderedSet
 
   if flag(pedantic)
     ghc-options:
