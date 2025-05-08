@@ -129,7 +129,6 @@ import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
 import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
-                                                           createDirectoryIfMissing,
                                                            getCurrentDirectory,
                                                            getTemporaryDirectory,
                                                            makeAbsolute,
@@ -516,23 +515,45 @@ runWithLockInTempDir tree act = withLock lockForTempDirs $ do
     cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
     let runTestInDir action = case cleanupTempDir of
             Just val | val /= "0" -> do
-                (tempDir, _) <- newTempDirWithin testRoot
-                a <- action tempDir
+                (tempDir, cacheHome, _) <- setupTemporaryTestDirectories testRoot
+                a <- withTempCacheHome cacheHome (action tempDir)
                 logWith helperRecorder Debug LogNoCleanup
                 pure a
 
             _ -> do
-                (tempDir, cleanup) <- newTempDirWithin testRoot
-                a <- action tempDir `finally` cleanup
+                (tempDir, cacheHome, cleanup) <- setupTemporaryTestDirectories testRoot
+                a <- withTempCacheHome cacheHome (action tempDir) `finally`  cleanup
                 logWith helperRecorder Debug LogCleanup
                 pure a
     runTestInDir $ \tmpDir' -> do
         -- we canonicalize the path, so that we do not need to do
-        -- cannibalization during the test when we compare two paths
+        -- canonicalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
         logWith helperRecorder Info $ LogTestDir tmpDir
         fs <- FS.materialiseVFT tmpDir tree
         act fs
+    where
+        cache_home_var = "XDG_CACHE_HOME"
+        -- Set the dir for "XDG_CACHE_HOME".
+        -- When the operation finished, make sure the old value is restored.
+        withTempCacheHome tempCacheHomeDir act =
+            bracket
+              (do
+                old_cache_home <- lookupEnv cache_home_var
+                setEnv cache_home_var tempCacheHomeDir
+                pure old_cache_home)
+              (\old_cache_home ->
+                maybe (pure ()) (setEnv cache_home_var) old_cache_home
+                )
+              (\_ -> act)
+
+        -- Set up a temporary directory for the test files and one for the 'XDG_CACHE_HOME'.
+        -- The 'XDG_CACHE_HOME' is important for independent test runs, i.e. completely empty
+        -- caches.
+        setupTemporaryTestDirectories testRoot = do
+            (tempTestCaseDir, cleanup1) <- newTempDirWithin testRoot
+            (tempCacheHomeDir, cleanup2) <- newTempDirWithin testRoot
+            pure (tempTestCaseDir, tempCacheHomeDir, cleanup1 >> cleanup2)
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act =
@@ -565,17 +586,10 @@ instance Default (TestConfig b) where
 -- It returns the root to the testing directory that tests should use.
 -- This directory is not fully cleaned between reruns.
 -- However, it is totally safe to delete the directory between runs.
---
--- Additionally, this overwrites the 'XDG_CACHE_HOME' variable to isolate
--- the tests from existing caches. 'hie-bios' and 'ghcide' honour the
--- 'XDG_CACHE_HOME' environment variable and generate their caches there.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
   tmpDirRoot <- getTemporaryDirectory
   let testRoot = tmpDirRoot </> "hls-test-root"
-      testCacheDir = testRoot </> ".cache"
-  createDirectoryIfMissing True testCacheDir
-  setEnv "XDG_CACHE_HOME" testCacheDir
   pure testRoot
 
 goldenWithHaskellDocFormatter
