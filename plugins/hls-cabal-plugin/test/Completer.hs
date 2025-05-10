@@ -7,6 +7,7 @@ module Completer where
 
 import           Control.Lens                                   ((^.), (^?))
 import           Control.Lens.Prism
+import           Control.Monad                                  (forM_)
 import qualified Data.ByteString                                as ByteString
 import qualified Data.ByteString.Char8                          as BS8
 import           Data.Maybe                                     (mapMaybe)
@@ -40,7 +41,8 @@ completerTests =
       completionHelperTests,
       filePathExposedModulesTests,
       exposedModuleCompleterTests,
-      importCompleterTests
+      importCompleterTests,
+      autogenFieldCompletionTests
     ]
 
 basicCompleterTests :: TestTree
@@ -335,6 +337,26 @@ importCompleterTests =
           (Syntax.Name (Syntax.Position row col) "common")
           [Syntax.SecArgName (Syntax.Position row (col + 7)) (BS8.pack name)]
           []
+
+autogenFieldCompletionTests :: TestTree
+autogenFieldCompletionTests =
+  testGroup "Autogen Field Completer Tests"
+    [ testAutogenField "library"         "completion/autogen-completion.cabal" (Position 6 9)  ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "executable"      "completion/autogen-completion.cabal" (Position 11 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "test-suite"      "completion/autogen-completion.cabal" (Position 16 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "benchmark"       "completion/autogen-completion.cabal" (Position 21 9) ["autogen-modules:", "autogen-includes:"]
+    , testAutogenField "common"          "completion/autogen-completion.cabal" (Position 24 9) ["autogen-modules:", "autogen-includes:"]
+    ]
+
+  where
+    testAutogenField :: String -> FilePath -> Position -> [T.Text] -> TestTree
+    testAutogenField section file pos expected = runCabalTestCaseSession ("autogen-modules completion in " <> section) "" $ do
+      doc <- openDoc file "cabal"
+      items <- getCompletions doc pos
+      let labels = map (^. L.label) items
+      liftIO $ forM_ expected $ \expect ->
+        assertBool (T.unpack expect <> " not found in " <> section) $
+          any (expect `T.isInfixOf`) labels
 
 simpleCompleterData :: Maybe StanzaName -> FilePath -> T.Text -> CompleterData
 simpleCompleterData sName dir pref = do
