@@ -36,6 +36,7 @@ test = testGroup "explicit-fields"
     , mkTestNoAction "Puns" "Puns" 12 10 12 31
     , mkTestNoAction "Infix" "Infix" 11 11 11 31
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
+    , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
     , mkTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
     ]
   , testGroup "inlay hints"
