@@ -9,6 +9,7 @@
 - Bindists for GHC 9.8.4
 - Bindists for GHC 9.6.7
 - Bindists for GHC 9.4.8
+- Dropped support for Centos 7 as this platform is no longer supported by ghc
 - Improved import suggestions for contructors and OverloadedRecordDot fields
 
 ### Pull Requests
