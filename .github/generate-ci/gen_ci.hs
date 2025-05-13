@@ -45,7 +45,6 @@ data Distro
   | Fedora27
   | Fedora33
   | Fedora40
-  | Centos7
   | Rocky8
   deriving (Eq, Enum, Bounded)
 
@@ -104,7 +103,6 @@ distroImage Mint213 = "linuxmintd/mint21.3-amd64"
 distroImage Fedora27 = "fedora:27"
 distroImage Fedora33 = "fedora:33"
 distroImage Fedora40 = "fedora:40"
-distroImage Centos7 = "centos:7"
 distroImage Rocky8 = "rockylinux:8"
 
 distroName :: Distro -> String
@@ -121,7 +119,6 @@ distroName Mint213 = "mint213"
 distroName Fedora27 = "fedora27"
 distroName Fedora33 = "fedora33"
 distroName Fedora40 = "fedora40"
-distroName Centos7 = "centos7"
 distroName Rocky8 = "unknown"
 
 distroInstall :: Distro -> String
@@ -138,7 +135,6 @@ distroInstall Mint213    = "apt-get update && apt-get install -y"
 distroInstall Fedora27   = "dnf install -y"
 distroInstall Fedora33   = "dnf install -y"
 distroInstall Fedora40   = "dnf install -y"
-distroInstall Centos7    = "sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && yum -y install epel-release && yum install -y"
 distroInstall Rocky8     = "yum -y install epel-release && yum install -y --allowerasing"
 
 distroTools :: Distro -> String
@@ -155,7 +151,6 @@ distroTools Mint213    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev 
 distroTools Fedora27   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 distroTools Fedora33   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 distroTools Fedora40   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-distroTools Centos7    = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 distroTools Rocky8     = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 
 -------------------------------------------------------------------------------

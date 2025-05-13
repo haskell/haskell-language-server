@@ -155,70 +155,6 @@ jobs:
           ./out/plan.json/*
           ./out/*.zip
         retention-days: 2
-  bindist-x86_64-linux-centos7:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    name: bindist-x86_64-linux-centos7 (Prepare bindist)
-    needs:
-    - build-x86_64-linux-centos7-948
-    - build-x86_64-linux-centos7-967
-    - build-x86_64-linux-centos7-984
-    - build-x86_64-linux-centos7-9102
-    - build-x86_64-linux-centos7-9122
-    runs-on:
-    - self-hosted
-    - linux-space
-    - maerwald
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-948
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-967
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-984
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-9102
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-9122
-        path: ./
-    - name: Bindist
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BINDIST
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: bindist-x86_64-linux-centos7
-        path: |-
-          ./out/*.tar.xz
-          ./out/plan.json/*
-          ./out/*.zip
-        retention-days: 2
   bindist-x86_64-linux-deb10:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -1663,156 +1599,6 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-984
         path: out-aarch64-apple-darwin-9.8.4.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-9102:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-9102 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.10.2
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.10.2
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-9102
-        path: out-x86_64-linux-centos7-9.10.2.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-9122:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-9122 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.12.2
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.12.2
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-9122
-        path: out-x86_64-linux-centos7-9.12.2.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-948:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-948 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.4.8
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.4.8
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-948
-        path: out-x86_64-linux-centos7-9.4.8.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-967:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-967 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.6.7
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.6.7
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-967
-        path: out-x86_64-linux-centos7-9.6.7.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-984:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-984 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.8.4
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.8.4
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-984
-        path: out-x86_64-linux-centos7-9.8.4.tar
         retention-days: 2
   build-x86_64-linux-deb10-9102:
     env:
@@ -4265,7 +4051,6 @@ jobs:
     - test-x86_64-linux-fedora27
     - test-x86_64-linux-fedora33
     - test-x86_64-linux-fedora40
-    - test-x86_64-linux-centos7
     - test-x86_64-linux-unknown
     runs-on: ubuntu-latest
     steps:
@@ -4355,11 +4140,6 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: bindist-x86_64-linux-fedora40
-        path: ./out
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: bindist-x86_64-linux-centos7
         path: ./out
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -4461,35 +4241,6 @@ jobs:
         export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
         bash .github/scripts/test.sh
       shell: sh
-  test-x86_64-linux-centos7:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: test-x86_64-linux-centos7 (Test binaries)
-    needs:
-    - bindist-x86_64-linux-centos7
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: bindist-x86_64-linux-centos7
-        path: ./out
-    - name: Test
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: TEST
   test-x86_64-linux-deb10:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
