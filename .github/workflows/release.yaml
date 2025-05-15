@@ -21,7 +21,7 @@ jobs:
     - build-aarch64-linux-ubuntu2004-948
     - build-aarch64-linux-ubuntu2004-967
     - build-aarch64-linux-ubuntu2004-984
-    - build-aarch64-linux-ubuntu2004-9101
+    - build-aarch64-linux-ubuntu2004-9102
     - build-aarch64-linux-ubuntu2004-9122
     runs-on:
     - self-hosted
@@ -54,7 +54,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-aarch64-linux-ubuntu2004-9101
+        name: artifacts-build-aarch64-linux-ubuntu2004-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -96,7 +96,7 @@ jobs:
     - build-aarch64-mac-948
     - build-aarch64-mac-967
     - build-aarch64-mac-984
-    - build-aarch64-mac-9101
+    - build-aarch64-mac-9102
     - build-aarch64-mac-9122
     runs-on:
     - self-hosted
@@ -123,7 +123,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-aarch64-mac-9101
+        name: artifacts-build-aarch64-mac-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -155,70 +155,6 @@ jobs:
           ./out/plan.json/*
           ./out/*.zip
         retention-days: 2
-  bindist-x86_64-linux-centos7:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    name: bindist-x86_64-linux-centos7 (Prepare bindist)
-    needs:
-    - build-x86_64-linux-centos7-948
-    - build-x86_64-linux-centos7-967
-    - build-x86_64-linux-centos7-984
-    - build-x86_64-linux-centos7-9101
-    - build-x86_64-linux-centos7-9122
-    runs-on:
-    - self-hosted
-    - linux-space
-    - maerwald
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-948
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-967
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-984
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-9101
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-centos7-9122
-        path: ./
-    - name: Bindist
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BINDIST
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: bindist-x86_64-linux-centos7
-        path: |-
-          ./out/*.tar.xz
-          ./out/plan.json/*
-          ./out/*.zip
-        retention-days: 2
   bindist-x86_64-linux-deb10:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -235,7 +171,7 @@ jobs:
     - build-x86_64-linux-deb10-948
     - build-x86_64-linux-deb10-967
     - build-x86_64-linux-deb10-984
-    - build-x86_64-linux-deb10-9101
+    - build-x86_64-linux-deb10-9102
     - build-x86_64-linux-deb10-9122
     runs-on:
     - self-hosted
@@ -262,7 +198,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-deb10-9101
+        name: artifacts-build-x86_64-linux-deb10-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -299,7 +235,7 @@ jobs:
     - build-x86_64-linux-deb11-948
     - build-x86_64-linux-deb11-967
     - build-x86_64-linux-deb11-984
-    - build-x86_64-linux-deb11-9101
+    - build-x86_64-linux-deb11-9102
     - build-x86_64-linux-deb11-9122
     runs-on:
     - self-hosted
@@ -326,7 +262,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-deb11-9101
+        name: artifacts-build-x86_64-linux-deb11-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -342,6 +278,70 @@ jobs:
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb11
+        path: |-
+          ./out/*.tar.xz
+          ./out/plan.json/*
+          ./out/*.zip
+        retention-days: 2
+  bindist-x86_64-linux-deb12:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    name: bindist-x86_64-linux-deb12 (Prepare bindist)
+    needs:
+    - build-x86_64-linux-deb12-948
+    - build-x86_64-linux-deb12-967
+    - build-x86_64-linux-deb12-984
+    - build-x86_64-linux-deb12-9102
+    - build-x86_64-linux-deb12-9122
+    runs-on:
+    - self-hosted
+    - linux-space
+    - maerwald
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-deb12-948
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-deb12-967
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-deb12-984
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-deb12-9102
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-deb12-9122
+        path: ./
+    - name: Bindist
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BINDIST
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: bindist-x86_64-linux-deb12
         path: |-
           ./out/*.tar.xz
           ./out/plan.json/*
@@ -363,7 +363,7 @@ jobs:
     - build-x86_64-linux-deb9-948
     - build-x86_64-linux-deb9-967
     - build-x86_64-linux-deb9-984
-    - build-x86_64-linux-deb9-9101
+    - build-x86_64-linux-deb9-9102
     - build-x86_64-linux-deb9-9122
     runs-on:
     - self-hosted
@@ -390,7 +390,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-deb9-9101
+        name: artifacts-build-x86_64-linux-deb9-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -406,70 +406,6 @@ jobs:
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb9
-        path: |-
-          ./out/*.tar.xz
-          ./out/plan.json/*
-          ./out/*.zip
-        retention-days: 2
-  bindist-x86_64-linux-fedora27:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    name: bindist-x86_64-linux-fedora27 (Prepare bindist)
-    needs:
-    - build-x86_64-linux-fedora27-948
-    - build-x86_64-linux-fedora27-967
-    - build-x86_64-linux-fedora27-984
-    - build-x86_64-linux-fedora27-9101
-    - build-x86_64-linux-fedora27-9122
-    runs-on:
-    - self-hosted
-    - linux-space
-    - maerwald
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-fedora27-948
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-fedora27-967
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-fedora27-984
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-fedora27-9101
-        path: ./
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: artifacts-build-x86_64-linux-fedora27-9122
-        path: ./
-    - name: Bindist
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: BINDIST
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: bindist-x86_64-linux-fedora27
         path: |-
           ./out/*.tar.xz
           ./out/plan.json/*
@@ -491,7 +427,7 @@ jobs:
     - build-x86_64-linux-fedora33-948
     - build-x86_64-linux-fedora33-967
     - build-x86_64-linux-fedora33-984
-    - build-x86_64-linux-fedora33-9101
+    - build-x86_64-linux-fedora33-9102
     - build-x86_64-linux-fedora33-9122
     runs-on:
     - self-hosted
@@ -518,7 +454,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-fedora33-9101
+        name: artifacts-build-x86_64-linux-fedora33-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -534,6 +470,70 @@ jobs:
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-fedora33
+        path: |-
+          ./out/*.tar.xz
+          ./out/plan.json/*
+          ./out/*.zip
+        retention-days: 2
+  bindist-x86_64-linux-fedora40:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    name: bindist-x86_64-linux-fedora40 (Prepare bindist)
+    needs:
+    - build-x86_64-linux-fedora40-948
+    - build-x86_64-linux-fedora40-967
+    - build-x86_64-linux-fedora40-984
+    - build-x86_64-linux-fedora40-9102
+    - build-x86_64-linux-fedora40-9122
+    runs-on:
+    - self-hosted
+    - linux-space
+    - maerwald
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-fedora40-948
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-fedora40-967
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-fedora40-984
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-fedora40-9102
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-fedora40-9122
+        path: ./
+    - name: Bindist
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BINDIST
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: bindist-x86_64-linux-fedora40
         path: |-
           ./out/*.tar.xz
           ./out/plan.json/*
@@ -555,7 +555,7 @@ jobs:
     - build-x86_64-linux-mint193-948
     - build-x86_64-linux-mint193-967
     - build-x86_64-linux-mint193-984
-    - build-x86_64-linux-mint193-9101
+    - build-x86_64-linux-mint193-9102
     - build-x86_64-linux-mint193-9122
     runs-on:
     - self-hosted
@@ -582,7 +582,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-mint193-9101
+        name: artifacts-build-x86_64-linux-mint193-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -619,7 +619,7 @@ jobs:
     - build-x86_64-linux-mint202-948
     - build-x86_64-linux-mint202-967
     - build-x86_64-linux-mint202-984
-    - build-x86_64-linux-mint202-9101
+    - build-x86_64-linux-mint202-9102
     - build-x86_64-linux-mint202-9122
     runs-on:
     - self-hosted
@@ -646,7 +646,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-mint202-9101
+        name: artifacts-build-x86_64-linux-mint202-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -662,6 +662,70 @@ jobs:
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint202
+        path: |-
+          ./out/*.tar.xz
+          ./out/plan.json/*
+          ./out/*.zip
+        retention-days: 2
+  bindist-x86_64-linux-mint213:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    name: bindist-x86_64-linux-mint213 (Prepare bindist)
+    needs:
+    - build-x86_64-linux-mint213-948
+    - build-x86_64-linux-mint213-967
+    - build-x86_64-linux-mint213-984
+    - build-x86_64-linux-mint213-9102
+    - build-x86_64-linux-mint213-9122
+    runs-on:
+    - self-hosted
+    - linux-space
+    - maerwald
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-mint213-948
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-mint213-967
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-mint213-984
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-mint213-9102
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-build-x86_64-linux-mint213-9122
+        path: ./
+    - name: Bindist
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BINDIST
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: bindist-x86_64-linux-mint213
         path: |-
           ./out/*.tar.xz
           ./out/plan.json/*
@@ -683,7 +747,7 @@ jobs:
     - build-x86_64-linux-ubuntu1804-948
     - build-x86_64-linux-ubuntu1804-967
     - build-x86_64-linux-ubuntu1804-984
-    - build-x86_64-linux-ubuntu1804-9101
+    - build-x86_64-linux-ubuntu1804-9102
     - build-x86_64-linux-ubuntu1804-9122
     runs-on:
     - self-hosted
@@ -710,7 +774,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-ubuntu1804-9101
+        name: artifacts-build-x86_64-linux-ubuntu1804-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -747,7 +811,7 @@ jobs:
     - build-x86_64-linux-ubuntu2004-948
     - build-x86_64-linux-ubuntu2004-967
     - build-x86_64-linux-ubuntu2004-984
-    - build-x86_64-linux-ubuntu2004-9101
+    - build-x86_64-linux-ubuntu2004-9102
     - build-x86_64-linux-ubuntu2004-9122
     runs-on:
     - self-hosted
@@ -774,7 +838,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-ubuntu2004-9101
+        name: artifacts-build-x86_64-linux-ubuntu2004-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -811,7 +875,7 @@ jobs:
     - build-x86_64-linux-ubuntu2204-948
     - build-x86_64-linux-ubuntu2204-967
     - build-x86_64-linux-ubuntu2204-984
-    - build-x86_64-linux-ubuntu2204-9101
+    - build-x86_64-linux-ubuntu2204-9102
     - build-x86_64-linux-ubuntu2204-9122
     runs-on:
     - self-hosted
@@ -838,7 +902,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-ubuntu2204-9101
+        name: artifacts-build-x86_64-linux-ubuntu2204-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -875,7 +939,7 @@ jobs:
     - build-x86_64-linux-unknown-948
     - build-x86_64-linux-unknown-967
     - build-x86_64-linux-unknown-984
-    - build-x86_64-linux-unknown-9101
+    - build-x86_64-linux-unknown-9102
     - build-x86_64-linux-unknown-9122
     runs-on:
     - self-hosted
@@ -902,7 +966,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-linux-unknown-9101
+        name: artifacts-build-x86_64-linux-unknown-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -939,7 +1003,7 @@ jobs:
     - build-x86_64-mac-948
     - build-x86_64-mac-967
     - build-x86_64-mac-984
-    - build-x86_64-mac-9101
+    - build-x86_64-mac-9102
     - build-x86_64-mac-9122
     runs-on:
     - macOS-13
@@ -964,7 +1028,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-mac-9101
+        name: artifacts-build-x86_64-mac-9102
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -1005,7 +1069,7 @@ jobs:
     - build-x86_64-windows-948
     - build-x86_64-windows-967
     - build-x86_64-windows-984
-    - build-x86_64-windows-9101
+    - build-x86_64-windows-9102
     - build-x86_64-windows-9122
     runs-on:
     - windows-latest
@@ -1030,7 +1094,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: artifacts-build-x86_64-windows-9101
+        name: artifacts-build-x86_64-windows-9102
         path: ./out
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -1057,7 +1121,7 @@ jobs:
           ./out/plan.json/*
           ./out/*.zip
         retention-days: 2
-  build-aarch64-linux-ubuntu2004-9101:
+  build-aarch64-linux-ubuntu2004-9102:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
@@ -1069,7 +1133,7 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-linux-ubuntu2004-9101 (Build binaries)
+    name: build-aarch64-linux-ubuntu2004-9102 (Build binaries)
     runs-on:
     - self-hosted
     - Linux
@@ -1084,13 +1148,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     - env:
-        GHC_VERSION: 9.10.1
+        GHC_VERSION: 9.10.2
       name: Build aarch64-linux binaries
       uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
       with:
         args: bash .github/scripts/build.sh
     - env:
-        GHC_VERSION: 9.10.1
+        GHC_VERSION: 9.10.2
       name: Tar aarch64-linux binaries
       uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
       with:
@@ -1099,8 +1163,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-linux-ubuntu2004-9101
-        path: out-aarch64-linux-ubuntu2004-9.10.1.tar
+        name: artifacts-build-aarch64-linux-ubuntu2004-9102
+        path: out-aarch64-linux-ubuntu2004-9.10.2.tar
         retention-days: 2
   build-aarch64-linux-ubuntu2004-9122:
     env:
@@ -1282,7 +1346,7 @@ jobs:
         name: artifacts-build-aarch64-linux-ubuntu2004-984
         path: out-aarch64-linux-ubuntu2004-9.8.4.tar
         retention-days: 2
-  build-aarch64-mac-9101:
+  build-aarch64-mac-9102:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
@@ -1295,7 +1359,7 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-mac-9101 (Build binaries)
+    name: build-aarch64-mac-9102 (Build binaries)
     runs-on:
     - self-hosted
     - macOS
@@ -1304,7 +1368,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     - env:
-        GHC_VERSION: 9.10.1
+        GHC_VERSION: 9.10.2
       name: Run build
       run: |
         bash .github/scripts/brew.sh git coreutils autoconf automake tree
@@ -1317,8 +1381,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-mac-9101
-        path: out-aarch64-apple-darwin-9.10.1.tar
+        name: artifacts-build-aarch64-mac-9102
+        path: out-aarch64-apple-darwin-9.10.2.tar
         retention-days: 2
   build-aarch64-mac-9122:
     env:
@@ -1472,157 +1536,7 @@ jobs:
         name: artifacts-build-aarch64-mac-984
         path: out-aarch64-apple-darwin-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-centos7-9101:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-9101 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.10.1
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.10.1
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-9101
-        path: out-x86_64-linux-centos7-9.10.1.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-9122:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-9122 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.12.2
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.12.2
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-9122
-        path: out-x86_64-linux-centos7-9.12.2.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-948:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-948 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.4.8
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.4.8
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-948
-        path: out-x86_64-linux-centos7-9.4.8.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-967:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-967 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.6.7
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.6.7
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-967
-        path: out-x86_64-linux-centos7-9.6.7.tar
-        retention-days: 2
-  build-x86_64-linux-centos7-984:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-centos7-984 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.8.4
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: BUILD
-        version: 9.8.4
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-centos7-984
-        path: out-x86_64-linux-centos7-9.8.4.tar
-        retention-days: 2
-  build-x86_64-linux-deb10-9101:
+  build-x86_64-linux-deb10-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -1634,23 +1548,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-deb10-9101 (Build binaries)
+    name: build-x86_64-linux-deb10-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-deb10-9101
-        path: out-x86_64-linux-deb10-9.10.1.tar
+        name: artifacts-build-x86_64-linux-deb10-9102
+        path: out-x86_64-linux-deb10-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-deb10-9122:
     env:
@@ -1772,7 +1686,7 @@ jobs:
         name: artifacts-build-x86_64-linux-deb10-984
         path: out-x86_64-linux-deb10-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-deb11-9101:
+  build-x86_64-linux-deb11-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -1784,23 +1698,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-deb11-9101 (Build binaries)
+    name: build-x86_64-linux-deb11-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-deb11-9101
-        path: out-x86_64-linux-deb11-9.10.1.tar
+        name: artifacts-build-x86_64-linux-deb11-9102
+        path: out-x86_64-linux-deb11-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-deb11-9122:
     env:
@@ -1922,7 +1836,157 @@ jobs:
         name: artifacts-build-x86_64-linux-deb11-984
         path: out-x86_64-linux-deb11-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-deb9-9101:
+  build-x86_64-linux-deb12-9102:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb12-9102 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.10.2
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BUILD
+        version: 9.10.2
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb12-9102
+        path: out-x86_64-linux-deb12-9.10.2.tar
+        retention-days: 2
+  build-x86_64-linux-deb12-9122:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb12-9122 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.2
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BUILD
+        version: 9.12.2
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb12-9122
+        path: out-x86_64-linux-deb12-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-deb12-948:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb12-948 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.4.8
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BUILD
+        version: 9.4.8
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb12-948
+        path: out-x86_64-linux-deb12-9.4.8.tar
+        retention-days: 2
+  build-x86_64-linux-deb12-967:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb12-967 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.6.7
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BUILD
+        version: 9.6.7
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb12-967
+        path: out-x86_64-linux-deb12-9.6.7.tar
+        retention-days: 2
+  build-x86_64-linux-deb12-984:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb12-984 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.8.4
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BUILD
+        version: 9.8.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb12-984
+        path: out-x86_64-linux-deb12-9.8.4.tar
+        retention-days: 2
+  build-x86_64-linux-deb9-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -1934,23 +1998,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-deb9-9101 (Build binaries)
+    name: build-x86_64-linux-deb9-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-deb9
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-deb9-9101
-        path: out-x86_64-linux-deb9-9.10.1.tar
+        name: artifacts-build-x86_64-linux-deb9-9102
+        path: out-x86_64-linux-deb9-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-deb9-9122:
     env:
@@ -2072,157 +2136,7 @@ jobs:
         name: artifacts-build-x86_64-linux-deb9-984
         path: out-x86_64-linux-deb9-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-fedora27-9101:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-fedora27-9101 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.10.1
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: BUILD
-        version: 9.10.1
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-fedora27-9101
-        path: out-x86_64-linux-fedora27-9.10.1.tar
-        retention-days: 2
-  build-x86_64-linux-fedora27-9122:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-fedora27-9122 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.12.2
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: BUILD
-        version: 9.12.2
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-fedora27-9122
-        path: out-x86_64-linux-fedora27-9.12.2.tar
-        retention-days: 2
-  build-x86_64-linux-fedora27-948:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-fedora27-948 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.4.8
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: BUILD
-        version: 9.4.8
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-fedora27-948
-        path: out-x86_64-linux-fedora27-9.4.8.tar
-        retention-days: 2
-  build-x86_64-linux-fedora27-967:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-fedora27-967 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.6.7
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: BUILD
-        version: 9.6.7
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-fedora27-967
-        path: out-x86_64-linux-fedora27-9.6.7.tar
-        retention-days: 2
-  build-x86_64-linux-fedora27-984:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: build-x86_64-linux-fedora27-984 (Build binaries)
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build 9.8.4
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: BUILD
-        version: 9.8.4
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        if-no-files-found: error
-        name: artifacts-build-x86_64-linux-fedora27-984
-        path: out-x86_64-linux-fedora27-9.8.4.tar
-        retention-days: 2
-  build-x86_64-linux-fedora33-9101:
+  build-x86_64-linux-fedora33-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -2234,23 +2148,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-fedora33-9101 (Build binaries)
+    name: build-x86_64-linux-fedora33-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-fedora33-9101
-        path: out-x86_64-linux-fedora33-9.10.1.tar
+        name: artifacts-build-x86_64-linux-fedora33-9102
+        path: out-x86_64-linux-fedora33-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-fedora33-9122:
     env:
@@ -2372,7 +2286,157 @@ jobs:
         name: artifacts-build-x86_64-linux-fedora33-984
         path: out-x86_64-linux-fedora33-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-mint193-9101:
+  build-x86_64-linux-fedora40-9102:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora40-9102 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.10.2
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BUILD
+        version: 9.10.2
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora40-9102
+        path: out-x86_64-linux-fedora40-9.10.2.tar
+        retention-days: 2
+  build-x86_64-linux-fedora40-9122:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora40-9122 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.2
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BUILD
+        version: 9.12.2
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora40-9122
+        path: out-x86_64-linux-fedora40-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-fedora40-948:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora40-948 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.4.8
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BUILD
+        version: 9.4.8
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora40-948
+        path: out-x86_64-linux-fedora40-9.4.8.tar
+        retention-days: 2
+  build-x86_64-linux-fedora40-967:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora40-967 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.6.7
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BUILD
+        version: 9.6.7
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora40-967
+        path: out-x86_64-linux-fedora40-9.6.7.tar
+        retention-days: 2
+  build-x86_64-linux-fedora40-984:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora40-984 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.8.4
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BUILD
+        version: 9.8.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora40-984
+        path: out-x86_64-linux-fedora40-9.8.4.tar
+        retention-days: 2
+  build-x86_64-linux-mint193-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -2384,23 +2448,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-mint193-9101 (Build binaries)
+    name: build-x86_64-linux-mint193-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-mint193
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-mint193-9101
-        path: out-x86_64-linux-mint193-9.10.1.tar
+        name: artifacts-build-x86_64-linux-mint193-9102
+        path: out-x86_64-linux-mint193-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-mint193-9122:
     env:
@@ -2522,7 +2586,7 @@ jobs:
         name: artifacts-build-x86_64-linux-mint193-984
         path: out-x86_64-linux-mint193-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-mint202-9101:
+  build-x86_64-linux-mint202-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -2534,23 +2598,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-mint202-9101 (Build binaries)
+    name: build-x86_64-linux-mint202-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-mint202-9101
-        path: out-x86_64-linux-mint202-9.10.1.tar
+        name: artifacts-build-x86_64-linux-mint202-9102
+        path: out-x86_64-linux-mint202-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-mint202-9122:
     env:
@@ -2672,7 +2736,157 @@ jobs:
         name: artifacts-build-x86_64-linux-mint202-984
         path: out-x86_64-linux-mint202-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-ubuntu1804-9101:
+  build-x86_64-linux-mint213-9102:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint213-9102 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.10.2
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BUILD
+        version: 9.10.2
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint213-9102
+        path: out-x86_64-linux-mint213-9.10.2.tar
+        retention-days: 2
+  build-x86_64-linux-mint213-9122:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint213-9122 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.2
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BUILD
+        version: 9.12.2
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint213-9122
+        path: out-x86_64-linux-mint213-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-mint213-948:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint213-948 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.4.8
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BUILD
+        version: 9.4.8
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint213-948
+        path: out-x86_64-linux-mint213-9.4.8.tar
+        retention-days: 2
+  build-x86_64-linux-mint213-967:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint213-967 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.6.7
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BUILD
+        version: 9.6.7
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint213-967
+        path: out-x86_64-linux-mint213-9.6.7.tar
+        retention-days: 2
+  build-x86_64-linux-mint213-984:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint213-984 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.8.4
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BUILD
+        version: 9.8.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint213-984
+        path: out-x86_64-linux-mint213-9.8.4.tar
+        retention-days: 2
+  build-x86_64-linux-ubuntu1804-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -2684,23 +2898,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-ubuntu1804-9101 (Build binaries)
+    name: build-x86_64-linux-ubuntu1804-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-ubuntu1804
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-ubuntu1804-9101
-        path: out-x86_64-linux-ubuntu1804-9.10.1.tar
+        name: artifacts-build-x86_64-linux-ubuntu1804-9102
+        path: out-x86_64-linux-ubuntu1804-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-ubuntu1804-9122:
     env:
@@ -2822,7 +3036,7 @@ jobs:
         name: artifacts-build-x86_64-linux-ubuntu1804-984
         path: out-x86_64-linux-ubuntu1804-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-ubuntu2004-9101:
+  build-x86_64-linux-ubuntu2004-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -2834,23 +3048,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-ubuntu2004-9101 (Build binaries)
+    name: build-x86_64-linux-ubuntu2004-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-ubuntu2004-9101
-        path: out-x86_64-linux-ubuntu2004-9.10.1.tar
+        name: artifacts-build-x86_64-linux-ubuntu2004-9102
+        path: out-x86_64-linux-ubuntu2004-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-ubuntu2004-9122:
     env:
@@ -2972,7 +3186,7 @@ jobs:
         name: artifacts-build-x86_64-linux-ubuntu2004-984
         path: out-x86_64-linux-ubuntu2004-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-ubuntu2204-9101:
+  build-x86_64-linux-ubuntu2204-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -2984,23 +3198,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-ubuntu2204-9101 (Build binaries)
+    name: build-x86_64-linux-ubuntu2204-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-ubuntu2204-9101
-        path: out-x86_64-linux-ubuntu2204-9.10.1.tar
+        name: artifacts-build-x86_64-linux-ubuntu2204-9102
+        path: out-x86_64-linux-ubuntu2204-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-ubuntu2204-9122:
     env:
@@ -3122,7 +3336,7 @@ jobs:
         name: artifacts-build-x86_64-linux-ubuntu2204-984
         path: out-x86_64-linux-ubuntu2204-9.8.4.tar
         retention-days: 2
-  build-x86_64-linux-unknown-9101:
+  build-x86_64-linux-unknown-9102:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
       ARCH: '64'
@@ -3134,23 +3348,23 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-linux-unknown-9101 (Build binaries)
+    name: build-x86_64-linux-unknown-9102 (Build binaries)
     runs-on:
     - ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Build 9.10.1
+    - name: Build 9.10.2
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
-        version: 9.10.1
+        version: 9.10.2
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-linux-unknown-9101
-        path: out-x86_64-linux-unknown-9.10.1.tar
+        name: artifacts-build-x86_64-linux-unknown-9102
+        path: out-x86_64-linux-unknown-9.10.2.tar
         retention-days: 2
   build-x86_64-linux-unknown-9122:
     env:
@@ -3272,7 +3486,7 @@ jobs:
         name: artifacts-build-x86_64-linux-unknown-984
         path: out-x86_64-linux-unknown-9.8.4.tar
         retention-days: 2
-  build-x86_64-mac-9101:
+  build-x86_64-mac-9102:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: '64'
@@ -3284,14 +3498,14 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-mac-9101 (Build binaries)
+    name: build-x86_64-mac-9102 (Build binaries)
     runs-on:
     - macOS-13
     steps:
     - name: Checkout
       uses: actions/checkout@v4
     - env:
-        GHC_VERSION: 9.10.1
+        GHC_VERSION: 9.10.2
       name: Run build
       run: |
         brew install coreutils tree
@@ -3302,8 +3516,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-mac-9101
-        path: out-x86_64-apple-darwin-9.10.1.tar
+        name: artifacts-build-x86_64-mac-9102
+        path: out-x86_64-apple-darwin-9.10.2.tar
         retention-days: 2
   build-x86_64-mac-9122:
     env:
@@ -3437,7 +3651,7 @@ jobs:
         name: artifacts-build-x86_64-mac-984
         path: out-x86_64-apple-darwin-9.8.4.tar
         retention-days: 2
-  build-x86_64-windows-9101:
+  build-x86_64-windows-9102:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: '64'
@@ -3448,14 +3662,14 @@ jobs:
       TARBALL_EXT: zip
       TZ: Asia/Singapore
     environment: CI
-    name: build-x86_64-windows-9101 (Build binaries)
+    name: build-x86_64-windows-9102 (Build binaries)
     runs-on:
     - windows-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
     - env:
-        GHC_VERSION: 9.10.1
+        GHC_VERSION: 9.10.2
       name: Run build
       run: |
         $env:CHERE_INVOKING = 1
@@ -3467,7 +3681,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         if-no-files-found: error
-        name: artifacts-build-x86_64-windows-9101
+        name: artifacts-build-x86_64-windows-9102
         path: ./out/*
         retention-days: 2
   build-x86_64-windows-9122:
@@ -3613,14 +3827,15 @@ jobs:
     - test-x86_64-linux-deb9
     - test-x86_64-linux-deb10
     - test-x86_64-linux-deb11
+    - test-x86_64-linux-deb12
     - test-x86_64-linux-ubuntu1804
     - test-x86_64-linux-ubuntu2004
     - test-x86_64-linux-ubuntu2204
     - test-x86_64-linux-mint193
     - test-x86_64-linux-mint202
-    - test-x86_64-linux-fedora27
+    - test-x86_64-linux-mint213
     - test-x86_64-linux-fedora33
-    - test-x86_64-linux-centos7
+    - test-x86_64-linux-fedora40
     - test-x86_64-linux-unknown
     runs-on: ubuntu-latest
     steps:
@@ -3664,6 +3879,11 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
+        name: bindist-x86_64-linux-deb12
+        path: ./out
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
         name: bindist-x86_64-linux-ubuntu1804
         path: ./out
     - name: Download artifacts
@@ -3689,7 +3909,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: bindist-x86_64-linux-fedora27
+        name: bindist-x86_64-linux-mint213
         path: ./out
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -3699,7 +3919,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: bindist-x86_64-linux-centos7
+        name: bindist-x86_64-linux-fedora40
         path: ./out
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -3801,35 +4021,6 @@ jobs:
         export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
         bash .github/scripts/test.sh
       shell: sh
-  test-x86_64-linux-centos7:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-centos7
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: test-x86_64-linux-centos7 (Test binaries)
-    needs:
-    - bindist-x86_64-linux-centos7
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: bindist-x86_64-linux-centos7
-        path: ./out
-    - name: Test
-      uses: ./.github/actions/bindist-actions/action-centos7
-      with:
-        stage: TEST
   test-x86_64-linux-deb10:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -3888,6 +4079,35 @@ jobs:
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: TEST
+  test-x86_64-linux-deb12:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: test-x86_64-linux-deb12 (Test binaries)
+    needs:
+    - bindist-x86_64-linux-deb12
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: bindist-x86_64-linux-deb12
+        path: ./out
+    - name: Test
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: TEST
   test-x86_64-linux-deb9:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -3917,35 +4137,6 @@ jobs:
       uses: ./.github/actions/bindist-actions/action-deb9
       with:
         stage: TEST
-  test-x86_64-linux-fedora27:
-    env:
-      ADD_CABAL_ARGS: --enable-split-sections
-      ARCH: '64'
-      ARTIFACT: x86_64-linux-fedora27
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DEBIAN_FRONTEND: noninteractive
-      S3_HOST: ${{ secrets.S3_HOST }}
-      TARBALL_EXT: tar.xz
-      TZ: Asia/Singapore
-    environment: CI
-    name: test-x86_64-linux-fedora27 (Test binaries)
-    needs:
-    - bindist-x86_64-linux-fedora27
-    runs-on:
-    - ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: bindist-x86_64-linux-fedora27
-        path: ./out
-    - name: Test
-      uses: ./.github/actions/bindist-actions/action-fedora27
-      with:
-        stage: TEST
   test-x86_64-linux-fedora33:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -3973,6 +4164,35 @@ jobs:
         path: ./out
     - name: Test
       uses: ./.github/actions/bindist-actions/action-fedora33
+      with:
+        stage: TEST
+  test-x86_64-linux-fedora40:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: test-x86_64-linux-fedora40 (Test binaries)
+    needs:
+    - bindist-x86_64-linux-fedora40
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: bindist-x86_64-linux-fedora40
+        path: ./out
+    - name: Test
+      uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: TEST
   test-x86_64-linux-mint193:
@@ -4031,6 +4251,35 @@ jobs:
         path: ./out
     - name: Test
       uses: ./.github/actions/bindist-actions/action-mint202
+      with:
+        stage: TEST
+  test-x86_64-linux-mint213:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: test-x86_64-linux-mint213 (Test binaries)
+    needs:
+    - bindist-x86_64-linux-mint213
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: bindist-x86_64-linux-mint213
+        path: ./out
+    - name: Test
+      uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: TEST
   test-x86_64-linux-ubuntu1804:

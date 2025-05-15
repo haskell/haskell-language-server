@@ -1,4 +1,4 @@
-description: Container for centos7
+description: Container for fedora40
 inputs:
   stage:
     description: which stage to build
@@ -6,18 +6,16 @@ inputs:
   version:
     description: which GHC version to build/test
     required: false
-name: action-centos7
+name: action-fedora40
 runs:
   entrypoint: .github/scripts/entrypoint.sh
   env:
     GHC_VERSION: ${{ inputs.version }}
-    INSTALL: sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed
-      -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-      && yum -y install epel-release && yum install -y
+    INSTALL: dnf install -y
     STAGE: ${{ inputs.stage }}
     TOOLS: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs
       findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs
       ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which
       xz zlib-devel patchelf
-  image: centos:7
+  image: fedora:40
   using: docker
