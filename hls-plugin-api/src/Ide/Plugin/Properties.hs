@@ -21,9 +21,10 @@ module Ide.Plugin.Properties
     MetaData (..),
     PropertyKey (..),
     SPropertyKey (..),
+    SomePropertyKeyWithMetaData (..),
     KeyNameProxy (..),
     KeyNamePath (..),
-    Properties,
+    Properties(..),
     HasProperty,
     HasPropertyByPath,
     emptyProperties,
@@ -42,6 +43,8 @@ module Ide.Plugin.Properties
     usePropertyByPathEither,
     usePropertyByPath,
     (&),
+    PluginCustomConfig(..),
+    PluginCustomConfigParam(..),
   )
 where
 
@@ -516,3 +519,15 @@ toVSCodeExtensionSchema' ps = case ps of
           ]
       (SomePropertyKeyWithMetaData SProperties PropertiesMetaData {..}) ->
         map (first Just) $ toVSCodeExtensionSchema' childrenProperties
+
+data PluginCustomConfig = PluginCustomConfig {
+    pcc'Name   :: T.Text,
+    pcc'Params :: [PluginCustomConfigParam]
+}
+data PluginCustomConfigParam = PluginCustomConfigParam {
+    pccp'Name        :: T.Text,
+    pccp'Description :: T.Text,
+    pccp'Default     :: T.Text,
+    pccp'EnumValues  :: [T.Text]
+}
+
