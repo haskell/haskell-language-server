@@ -609,7 +609,7 @@ instance Default (TestConfig b) where
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
   tmpDirRoot <- getTemporaryDirectory
-  let testRoot = tmpDirRoot </> "hls-test-root"
+  let testRoot = tmpDirRoot </> "hls-tests"
   createDirectoryIfMissing True testRoot
   pure testRoot
 
