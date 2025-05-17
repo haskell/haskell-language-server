@@ -49,7 +49,6 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
-import           Development.IDE.GHC.CoreFile         (occNamePrefixes)
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        FieldOcc (FieldOcc),
@@ -83,6 +82,7 @@ import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns
                                                        mapConPatDetail, mapLoc,
                                                        pattern RealSrcSpan,
                                                        plusUFM_C, unitUFM)
+import           Development.IDE.GHC.CoreFile         (occNamePrefixes)
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable)
 import           Development.IDE.Graph                (RuleResult)
