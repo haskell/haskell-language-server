@@ -1,7 +1,7 @@
 # Let’s write a Haskell Language Server plugin
 Originally written by Pepe Iborra, maintained by the Haskell community.
 
-Haskell Language Server (HLS) is an LSP server for the Haskell programming language. It builds on several previous efforts to create a Haskell IDE.
+Haskell Language Server (HLS) is a Language Server Protocol (LSP) server for the Haskell programming language. It builds on several previous efforts to create a Haskell IDE.
 You can find many more details on the history and architecture on the [IDE 2020](https://mpickering.github.io/ide/index.html) community page.
 In this article we are going to cover the creation of an HLS plugin from scratch: a code lens to display explicit import lists.
 Along the way we will learn about HLS, its plugin model, and the relationship with [ghcide](https://github.com/haskell/haskell-language-server/tree/master/ghcide) and LSP.
@@ -87,25 +87,39 @@ This way you can simply test your changes by reloading your editor after rebuild
 
 [Manually test your hacked HLS](https://haskell-language-server.readthedocs.io/en/latest/contributing/contributing.html#manually-testing-your-hacked-hls) to ensure you use the HLS package you just built.
 
+## Digression about the Language Server Protocol
+
+There are two main types of communication in the Language Server Protocol:
+- A **request-response interaction** type where one party sends a message that requires a response from the other party.
+- A **notification** is a one-way interaction where one party sends a message without expecting any response.
+
+> **Note**: The LSP client and server can both send requests or notifications to the other party.
+
 ## Anatomy of a plugin
 
 HLS plugins are values of the `PluginDescriptor` datatype, which is defined in `hls-plugin-api/src/Ide/Types.hs` as:
 ```haskell
 data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId                   :: !PluginId
-                   , pluginRules                :: !(Rules ())
                    , pluginCommands             :: ![PluginCommand ideState]
                    , pluginHandlers             :: PluginHandlers ideState
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , [...] -- Other fields omitted for brevity.
                    }
 ```
-A plugin has a unique ID, command handlers, request handlers, notification handlers and rules:
 
-* Request handlers respond to requests from an LSP client. They must fulfill these requests as quickly as possible.
-* Notification handlers receive notifications from code not directly triggered by a user or client.
-* Rules add new targets to the Shake build graph. Most plugins do not need to define new rules.
-* Commands are an LSP abstraction for user-initiated actions that the server handles. These actions can be long-running and involve multiple modules.
+### Request-response interaction
+
+The `pluginHandlers` handle LSP client requests and provide responses to the client. They must fulfill these requests as quickly as possible.
+- Example: When you want to format a file, the client sends the [`textDocument/formatting`](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting) request to the server. The server formats the file and responds with the formatted content.
+
+### Notification
+
+The `pluginNotificationHandlers` handle notifications sent by the client to the server that are not explicitly triggered by a user.
+- Example: Whenever you modify a Haskell file, the client sends a notification informing HLS about the changes to the file.
+
+The `pluginCommands` are special types of user-initiated notifications sent to
+the server. These actions can be long-running and involve multiple modules.
 
 ## The explicit imports plugin
 
@@ -113,7 +127,7 @@ To achieve our plugin goals, we need to define:
 - a command handler (`importLensCommand`),
 - a code lens request handler (`lensProvider`).
 
-These will be assembled together in the `descriptor` function of the plugin, which contains all the information wrapped in the `PluginDescriptor` datatype mentioned above.
+These will be assembled in the `descriptor` function of the plugin, which contains all the information wrapped in the `PluginDescriptor` datatype mentioned above.
 
 Using the convenience `defaultPluginDescriptor` function, we can bootstrap the plugin with the required parts:
 
@@ -135,9 +149,9 @@ We'll start with the command, since it's the simplest of the two.
 
 ### The command handler
 
-In short, commands work like this:
+In short, LSP commands work like this:
 - The LSP server (HLS) initially sends a command descriptor to the client, in this case as part of a code lens.
-- Whenever the client decides to execute the command on behalf of a user (in this case a click on the code lens), it sends this same descriptor back to the LSP server. The server then handles and executes the command; this latter part is implemented by the `commandFunc` field of our `PluginCommand` value.
+- When the user clicks on the code lens, the client asks HLS to execute the command with the given descriptor. The server then handles and executes the command; this latter part is implemented by the `commandFunc` field of our `PluginCommand` value.
 
 > **Note**: Check the [LSP spec](https://microsoft.github.io/language-server-protocol/specification) for a deeper understanding of how commands work.
 
@@ -181,7 +195,7 @@ type CommandFunction ideState a
 ```
 
 
-`CommandFunction` takes an `ideState` and a JSON-encodable argument.
+`CommandFunction` takes an `ideState` and a JSON-encodable argument. `LspM` is a monad transformer with access to IO, and having access to a language context environment `Config`. The action evaluates to an `Either` value. `Left` indicates failure with a `ResponseError`, `Right` indicates success with a `Value`.
 
 Our handler will ignore the state argument and only use the `WorkspaceEdit` argument.
 
@@ -318,7 +332,7 @@ There's only one Haskell code change left to do at this point: "link" the plugin
 
 Integrating the plugin into HLS itself requires changes to several configuration files.
 
-A good approach is to use the ID of an existing plugin (e.g., `hls-class-plugin`) as a guide:
+A good approach is to search for the ID of an existing plugin (e.g., `hls-class-plugin`):
 - `./cabal*.project` and `./stack*.yaml`: Add the plugin package to the `packages` field.
 - `./haskell-language-server.cabal`: Add a conditional block with the plugin package dependency.
 - `./.github/workflows/test.yml`: Add a block to run the plugin's test suite.
