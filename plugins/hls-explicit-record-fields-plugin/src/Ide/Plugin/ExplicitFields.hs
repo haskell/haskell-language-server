@@ -26,7 +26,6 @@ import           Data.List                            (find, intersperse)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
-import           Data.Monoid                          (First (..), getFirst)
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Data.Unique                          (hashUnique, newUnique)
@@ -82,7 +81,7 @@ import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns
                                                        mapConPatDetail, mapLoc,
                                                        pattern RealSrcSpan,
                                                        plusUFM_C, unitUFM)
-import           Development.IDE.GHC.CoreFile         (occNamePrefixes)
+import           Development.IDE.GHC.CoreFile         (stripOccNamePrefix)
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable)
 import           Development.IDE.Graph                (RuleResult)
@@ -240,7 +239,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                    -- checks if 'a' is equal to 'Name' if the 'Either' is 'Right a', otherwise return 'False'
                    nameEq = either (const False) ((==) name)
                 in fmap fst $ find (nameEq . snd) filteredLocations
-             valueWithLoc = [ (stripPrefix $ T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
+             valueWithLoc = [ (stripOccNamePrefix $ T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
              -- use `, ` to separate labels with definition location
              label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart valueWithLoc
          pure $ InlayHint { _position = currentEnd -- at the end of dotdot
@@ -645,16 +644,5 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
 getRecPatterns _ = ([], False)
 
 printFieldName :: Outputable a => a -> Text
-printFieldName = stripPrefix . printOutputable
+printFieldName = stripOccNamePrefix . printOutputable
 
-{- When e.g. DuplicateRecordFields is enabled, compiler generates
-    names like "$sel:accessor:One" and "$sel:accessor:Two" to
-    disambiguate record selectors
-    https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields/DuplicateRecordFields#Implementation
--}
--- See also:
--- https://github.com/haskell/haskell-language-server/blob/master/ghcide/src/Development/IDE/Plugin/Completions/Logic.hs#L811
-stripPrefix :: T.Text -> T.Text
-stripPrefix name = T.takeWhile (/=':') $ fromMaybe name $
-    getFirst $ foldMap (First . (`T.stripPrefix` name))
-    occNamePrefixes

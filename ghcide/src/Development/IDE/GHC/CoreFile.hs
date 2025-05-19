@@ -10,7 +10,8 @@ module Development.IDE.GHC.CoreFile
   , readBinCoreFile
   , writeBinCoreFile
   , getImplicitBinds
-  , occNamePrefixes) where
+  , occNamePrefixes
+  , stripOccNamePrefix) where
 
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -29,6 +30,7 @@ import           GHC.Iface.Env
 #if MIN_VERSION_ghc(9,11,0)
 import qualified GHC.Iface.Load                  as Iface
 #endif
+import           Data.Monoid                     (First (..))
 import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
@@ -264,3 +266,12 @@ occNamePrefixes =
   , "$c"
   , "$m"
   ]
+
+-- | When e.g. DuplicateRecordFields is enabled, compiler generates
+-- names like "$sel:accessor:One" and "$sel:accessor:Two" to
+-- disambiguate record selectors
+-- https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields/DuplicateRecordFields#Implementation
+stripOccNamePrefix :: T.Text -> T.Text
+stripOccNamePrefix name = T.takeWhile (/=':') $ fromMaybe name $
+    getFirst $ foldMap (First . (`T.stripPrefix` name))
+    occNamePrefixes
