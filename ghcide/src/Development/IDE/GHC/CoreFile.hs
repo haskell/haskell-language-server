@@ -10,8 +10,7 @@ module Development.IDE.GHC.CoreFile
   , readBinCoreFile
   , writeBinCoreFile
   , getImplicitBinds
-  , occNamePrefixes
-  , stripOccNamePrefix) where
+  ) where
 
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -30,7 +29,6 @@ import           GHC.Iface.Env
 #if MIN_VERSION_ghc(9,11,0)
 import qualified GHC.Iface.Load                  as Iface
 #endif
-import           Data.Monoid                     (First (..))
 import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
@@ -225,53 +223,3 @@ tc_iface_bindings (TopIfaceRec vs) = do
   vs' <- traverse (\(v, e) -> (v,) <$> tcIfaceExpr e) vs
   pure $ Rec vs'
 
--- | Prefixes that can occur in a GHC OccName
-occNamePrefixes :: [T.Text]
-occNamePrefixes =
-  [
-    -- long ones
-    "$con2tag_"
-  , "$tag2con_"
-  , "$maxtag_"
-
-  -- four chars
-  , "$sel:"
-  , "$tc'"
-
-  -- three chars
-  , "$dm"
-  , "$co"
-  , "$tc"
-  , "$cp"
-  , "$fx"
-
-  -- two chars
-  , "$W"
-  , "$w"
-  , "$m"
-  , "$b"
-  , "$c"
-  , "$d"
-  , "$i"
-  , "$s"
-  , "$f"
-  , "$r"
-  , "C:"
-  , "N:"
-  , "D:"
-  , "$p"
-  , "$L"
-  , "$f"
-  , "$t"
-  , "$c"
-  , "$m"
-  ]
-
--- | When e.g. DuplicateRecordFields is enabled, compiler generates
--- names like "$sel:accessor:One" and "$sel:accessor:Two" to
--- disambiguate record selectors
--- https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields/DuplicateRecordFields#Implementation
-stripOccNamePrefix :: T.Text -> T.Text
-stripOccNamePrefix name = T.takeWhile (/=':') $ fromMaybe name $
-    getFirst $ foldMap (First . (`T.stripPrefix` name))
-    occNamePrefixes

@@ -81,9 +81,9 @@ import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns
                                                        mapConPatDetail, mapLoc,
                                                        pattern RealSrcSpan,
                                                        plusUFM_C, unitUFM)
-import           Development.IDE.GHC.CoreFile         (stripOccNamePrefix)
 import           Development.IDE.GHC.Util             (getExtensions,
-                                                       printOutputable)
+                                                       printOutputable,
+                                                       stripOccNamePrefix)
 import           Development.IDE.Graph                (RuleResult)
 import           Development.IDE.Graph.Classes        (Hashable, NFData)
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),

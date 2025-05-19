@@ -43,7 +43,6 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (isQual, ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.CoreFile             (stripOccNamePrefix)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
