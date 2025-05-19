@@ -393,13 +393,13 @@ Integrating the plugin into HLS itself requires changes to several configuration
 
 A good approach is to search for the ID of an existing plugin (e.g., `hls-class-plugin`):
 
-- `./cabal*.project` and `./stack*.yaml`: Add the plugin package to the `packages` field.
 - `./haskell-language-server.cabal`: Add a conditional block with the plugin package dependency.
 - `./.github/workflows/test.yml`: Add a block to run the plugin's test suite.
 - `./.github/workflows/hackage.yml`: Add the plugin to the component list for releasing the plugin package to Hackage.
 - `./*.nix`: Add the plugin to Nix builds.
 
-The full code used in this tutorial, including imports, is available in [this Gist](https://gist.github.com/pepeiborra/49b872b2e9ad112f61a3220cdb7db967) and in this [branch](https://github.com/pepeiborra/ide/blob/imports-lens/src/Ide/Plugin/ImportLens.hs).
+This plugin tutorial re-implements parts of the [`hls-explicit-imports-plugin`] which is part of HLS.
+The plugin code additionally contains advanced concepts, such as `Rules`.
 
 I hope this has given you a taste of how easy and joyful it is to write plugins for HLS. If you are looking for contribution ideas, here are some good ones listed in the HLS [issue tracker](https://github.com/haskell/haskell-language-server/issues).
 
