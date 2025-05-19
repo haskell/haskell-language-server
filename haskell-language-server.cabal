@@ -2265,3 +2265,22 @@ test-suite ghcide-bench-test
         OverloadedStrings
         RecordWildCards
         ViewPatterns
+
+executable plugin-tutorial
+  import: defaults
+  ghc-options: -pgmL markdown-unlit
+  main-is: docs/contributing/plugin-tutorial.lhs
+  build-tool-depends: markdown-unlit:markdown-unlit
+  build-depends:
+    base,
+    ghcide,
+    hls-plugin-api,
+    aeson,
+    lsp,
+    lsp-types,
+    markdown-unlit,
+    text,
+    unordered-containers,
+    containers,
+    transformers,
+    ghc,
