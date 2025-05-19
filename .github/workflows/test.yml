@@ -255,6 +255,10 @@ jobs:
         name: Test hls-notes-plugin test suite
         run: cabal test hls-notes-plugin-tests || cabal test hls-notes-plugin-tests
 
+      - if: matrix.test
+        name: Compile the plugin-tutorial
+        run: cabal build plugin-tutorial
+
   test_post_job:
     if: always()
     runs-on: ubuntu-latest
