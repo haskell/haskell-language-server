@@ -74,6 +74,9 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
+-- same as DependencyInformation but only rebuilds if the target file deps changes
+type instance RuleResult GetFileModuleGraph = DependencyInformation
+
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
 instance Hashable GetKnownTargets
@@ -416,6 +419,11 @@ data GetModuleGraph = GetModuleGraph
     deriving (Eq, Show, Generic)
 instance Hashable GetModuleGraph
 instance NFData   GetModuleGraph
+
+data GetFileModuleGraph = GetFileModuleGraph
+    deriving (Eq, Show, Generic)
+instance Hashable GetFileModuleGraph
+instance NFData   GetFileModuleGraph
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Generic)
