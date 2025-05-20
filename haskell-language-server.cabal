@@ -2268,6 +2268,12 @@ test-suite ghcide-bench-test
 
 executable plugin-tutorial
   import: defaults
+  -- The plugin tutorial is only compatible with 9.6 and 9.8.
+  -- No particular reason, just to avoid excessive CPP.
+  if (impl(ghc >= 9.6) && impl(ghc < 9.10))
+    buildable: True
+  else
+    buildable: False
   ghc-options: -pgmL markdown-unlit
   main-is: docs/contributing/plugin-tutorial.lhs
   build-tool-depends: markdown-unlit:markdown-unlit
