@@ -25,6 +25,11 @@ The plugins also make these tools much more accessible to all users of HLS.
 
 ## Preamble
 
+This tutorial is a literate Haskell file that can be compiled.
+As such, we list the imports, extensions etc... necessary for compilation.
+
+Please just skip over this `import` section, if you are only interested in the tutorial!
+
 ```haskell
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DerivingStrategies #-}
@@ -403,7 +408,11 @@ The plugin code additionally contains advanced concepts, such as `Rules`.
 
 I hope this has given you a taste of how easy and joyful it is to write plugins for HLS. If you are looking for contribution ideas, here are some good ones listed in the HLS [issue tracker](https://github.com/haskell/haskell-language-server/issues).
 
+<details>
+  <summary>Placeholder Main, unused</summary>
+
 ```haskell
 main :: IO ()
 main = putStrLn "Just here to silence the error!"
 ```
+</details>
