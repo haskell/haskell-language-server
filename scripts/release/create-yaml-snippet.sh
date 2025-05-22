@@ -28,6 +28,14 @@ cat <<EOF > /dev/stdout
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb10.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb10.tar.xz" | awk '{ print $1 }')
+            '(>= 11 && < 12)': &hls-${RELEASE//./}-64-deb11
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb11.tar.xz
+              dlSubdir: haskell-language-server-$RELEASE
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb11.tar.xz" | awk '{ print $1 }')
+            '>= 12': &hls-${RELEASE//./}-64-deb12
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb12.tar.xz
+              dlSubdir: haskell-language-server-$RELEASE
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb12.tar.xz" | awk '{ print $1 }')
             unknown_versioning: &hls-${RELEASE//./}-64-deb11
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb11.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
@@ -54,30 +62,27 @@ cat <<EOF > /dev/stdout
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-mint202.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-mint202.tar.xz" | awk '{ print $1 }')
-            '>= 21': *hls-${RELEASE//./}-64-ubuntu22
-          Linux_Fedora:
-            '< 33': &hls-${RELEASE//./}-64-fedora27
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-fedora27.tar.xz
+            '>= 21':
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-mint213.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-fedora27.tar.xz" | awk '{ print $1 }')
-            '>= 33': &hls-${RELEASE//./}-64-fedora33
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-mint213.tar.xz" | awk '{ print $1 }')
+          Linux_Fedora:
+            '(>= 33 && < 40)': &hls-${RELEASE//./}-64-fedora33
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-fedora33.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-fedora33.tar.xz" | awk '{ print $1 }')
-            unknown_versioning: *hls-${RELEASE//./}-64-fedora27
-          Linux_CentOS:
-            '( >= 7 && < 8 )': &hls-${RELEASE//./}-64-centos
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-centos7.tar.xz
+            '>= 40': &hls-${RELEASE//./}-64-fedora40
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-fedora40.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-centos7.tar.xz" | awk '{ print $1 }')
-            unknown_versioning: *hls-${RELEASE//./}-64-centos
-          Linux_RedHat:
-            unknown_versioning: *hls-${RELEASE//./}-64-centos
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-fedora40.tar.xz" | awk '{ print $1 }')
+            unknown_versioning: *hls-${RELEASE//./}-64-unknown
           Linux_UnknownLinux:
-            unknown_versioning:
+            unknown_versioning: &hls-${RELEASE//./}-64-unknown
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-unknown.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-unknown.tar.xz" | awk '{ print $1 }')
+          Linux_RedHat:
+            unknown_versioning: *hls-${RELEASE//./}-64-unknown
           Darwin:
             unknown_versioning:
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-apple-darwin.tar.xz
@@ -87,11 +92,6 @@ cat <<EOF > /dev/stdout
             unknown_versioning:
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-mingw64.zip
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-mingw64.zip" | awk '{ print $1 }')
-          FreeBSD:
-            unknown_versioning:
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-freebsd.tar.xz
-              dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-freebsd.tar.xz" | awk '{ print $1 }')
         A_ARM64:
           Linux_UnknownLinux:
             unknown_versioning:

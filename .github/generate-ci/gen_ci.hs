@@ -35,14 +35,15 @@ data Distro
   = Debian9
   | Debian10
   | Debian11
+  | Debian12
   | Ubuntu1804
   | Ubuntu2004
   | Ubuntu2204
   | Mint193
   | Mint202
-  | Fedora27
+  | Mint213
   | Fedora33
-  | Centos7
+  | Fedora40
   | Rocky8
   deriving (Eq, Enum, Bounded)
 
@@ -64,7 +65,7 @@ data GHC
   = GHC948
   | GHC967
   | GHC984
-  | GHC9101
+  | GHC9102
   | GHC9122
   deriving (Eq, Enum, Bounded)
 
@@ -72,7 +73,7 @@ ghcVersion :: GHC -> String
 ghcVersion GHC948 = "9.4.8"
 ghcVersion GHC967 = "9.6.7"
 ghcVersion GHC984 = "9.8.4"
-ghcVersion GHC9101 = "9.10.1"
+ghcVersion GHC9102 = "9.10.2"
 ghcVersion GHC9122 = "9.12.2"
 
 ghcVersionIdent :: GHC -> String
@@ -91,56 +92,60 @@ distroImage :: Distro -> String
 distroImage Debian9 = "debian:9"
 distroImage Debian10 = "debian:10"
 distroImage Debian11 = "debian:11"
+distroImage Debian12 = "debian:12"
 distroImage Ubuntu1804 = "ubuntu:18.04"
 distroImage Ubuntu2004 = "ubuntu:20.04"
 distroImage Ubuntu2204 = "ubuntu:22.04"
 distroImage Mint193 = "linuxmintd/mint19.3-amd64"
 distroImage Mint202 = "linuxmintd/mint20.2-amd64"
-distroImage Fedora27 = "fedora:27"
+distroImage Mint213 = "linuxmintd/mint21.3-amd64"
 distroImage Fedora33 = "fedora:33"
-distroImage Centos7 = "centos:7"
+distroImage Fedora40 = "fedora:40"
 distroImage Rocky8 = "rockylinux:8"
 
 distroName :: Distro -> String
 distroName Debian9 = "deb9"
 distroName Debian10 = "deb10"
 distroName Debian11 = "deb11"
+distroName Debian12 = "deb12"
 distroName Ubuntu1804 = "ubuntu1804"
 distroName Ubuntu2004 = "ubuntu2004"
 distroName Ubuntu2204 = "ubuntu2204"
 distroName Mint193 = "mint193"
 distroName Mint202 = "mint202"
-distroName Fedora27 = "fedora27"
+distroName Mint213 = "mint213"
 distroName Fedora33 = "fedora33"
-distroName Centos7 = "centos7"
+distroName Fedora40 = "fedora40"
 distroName Rocky8 = "unknown"
 
 distroInstall :: Distro -> String
 distroInstall Debian9    = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
 distroInstall Debian10   = "apt-get update && apt-get install -y"
 distroInstall Debian11   = "apt-get update && apt-get install -y"
+distroInstall Debian12   = "apt-get update && apt-get install -y"
 distroInstall Ubuntu1804 = "apt-get update && apt-get install -y"
 distroInstall Ubuntu2004 = "apt-get update && apt-get install -y"
 distroInstall Ubuntu2204 = "apt-get update && apt-get install -y"
 distroInstall Mint193    = "apt-get update && apt-get install -y"
 distroInstall Mint202    = "apt-get update && apt-get install -y"
-distroInstall Fedora27   = "dnf install -y"
+distroInstall Mint213    = "apt-get update && apt-get install -y"
 distroInstall Fedora33   = "dnf install -y"
-distroInstall Centos7    = "sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && yum -y install epel-release && yum install -y"
+distroInstall Fedora40   = "dnf install -y"
 distroInstall Rocky8     = "yum -y install epel-release && yum install -y --allowerasing"
 
 distroTools :: Distro -> String
 distroTools Debian9    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian10   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian11   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+distroTools Debian12   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu1804 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu2004 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu2204 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Mint193    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Mint202    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
-distroTools Fedora27   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+distroTools Mint213    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Fedora33   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-distroTools Centos7    = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+distroTools Fedora40   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 distroTools Rocky8     = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 
 -------------------------------------------------------------------------------
