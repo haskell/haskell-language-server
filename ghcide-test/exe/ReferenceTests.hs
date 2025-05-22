@@ -115,7 +115,7 @@ tests = testGroup "references"
           ]
 
     , testGroup "can get references to non FOIs"
-          [ referenceTest "can get references to symbol defined in a module we import"
+          [ referenceTest "references to symbol defined in a module we import"
                           ("References.hs", 22, 4)
                           YesIncludeDeclaration
                           [ ("References.hs", 22, 4)
@@ -123,7 +123,7 @@ tests = testGroup "references"
                           , ("OtherModule.hs", 4, 0)
                           ]
 
-          , referenceTest "can get references in modules that import us to symbols we define"
+          , referenceTest "references in modules that import us to symbols we define"
                           ("OtherModule.hs", 4, 0)
                           YesIncludeDeclaration
                           [ ("References.hs", 22, 4)
@@ -131,7 +131,7 @@ tests = testGroup "references"
                           , ("OtherModule.hs", 4, 0)
                           ]
 
-          , referenceTest "can get references to symbol defined in a module we import transitively"
+          , referenceTest "references to symbol defined in a module we import transitively"
                           ("References.hs", 24, 4)
                           YesIncludeDeclaration
                           [ ("References.hs", 24, 4)
@@ -139,7 +139,7 @@ tests = testGroup "references"
                           , ("OtherOtherModule.hs", 2, 0)
                           ]
 
-          , referenceTest "can get references in modules that import us transitively to symbols we define"
+          , referenceTest "references in modules that transitively use symbols we define"
                           ("OtherOtherModule.hs", 2, 0)
                           YesIncludeDeclaration
                           [ ("References.hs", 24, 4)
@@ -147,7 +147,7 @@ tests = testGroup "references"
                           , ("OtherOtherModule.hs", 2, 0)
                           ]
 
-          , referenceTest "can get type references to other modules"
+          , referenceTest "type references to other modules"
                           ("Main.hs", 12, 10)
                           YesIncludeDeclaration
                           [ ("Main.hs", 12, 7)
