@@ -151,10 +151,17 @@ descriptor recorder plId =
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
-  CRR {crCodeActions, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let actions = map (mkCodeAction enabledExtensions) (RangeMap.filterByRange range crCodeActions)
+  let recordUids = [ uid
+                      | uid <- RangeMap.filterByRange range crCodeActions
+                      , Just record <- [IntMap.lookup uid crCodeActionResolve]
+                      -- Only fully saturated constructor applications can be
+                      -- converted to the record syntax through the code action
+                      , isConvertible record
+                      ]
+  let actions = map (mkCodeAction enabledExtensions) recordUids
   pure $ InL actions
   where
     mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
@@ -168,6 +175,11 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
       , _command = Nothing
       , _data_ = Just $ toJSON uid
       }
+
+    isConvertible :: RecordInfo -> Bool
+    isConvertible = \case
+      RecordInfoApp _ (RecordAppExpr Unsaturated _ _) -> False
+      _ -> True
 
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
@@ -253,7 +265,7 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
     pure $ InL (concatMap (mkInlayHints nameMap pm) records)
    where
      mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ fla)) =
+     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ _ fla)) =
        let textEdits = renderRecordInfoAsTextEdit nameMap record
        in mapMaybe (mkInlayHint textEdits pm) fla
      mkInlayHints _ _ _ = []
@@ -379,7 +391,16 @@ instance Show CollectNamesResult where
 
 type instance RuleResult CollectNames = CollectNamesResult
 
-data RecordAppExpr = RecordAppExpr (LHsExpr GhcTc) [(Located FieldLabel, HsExpr GhcTc)]
+data Saturated = Saturated | Unsaturated
+  deriving (Generic)
+
+instance NFData Saturated
+
+data RecordAppExpr
+  = RecordAppExpr
+      Saturated  -- ^ Is the DataCon application fully saturated or partially applied?
+      (LHsExpr GhcTc)
+      [(Located FieldLabel, HsExpr GhcTc)]
   deriving (Generic)
 
 data RecordInfo
@@ -391,7 +412,7 @@ data RecordInfo
 instance Pretty RecordInfo where
   pretty (RecordInfoPat ss p) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable p)
   pretty (RecordInfoCon ss e) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable e)
-  pretty (RecordInfoApp ss (RecordAppExpr _ fla))
+  pretty (RecordInfoApp ss (RecordAppExpr _ _ fla))
     = pretty (printOutputable ss) <> ":" <+> hsep (map (pretty . printOutputable) fla)
 
 recordInfoToRange :: RecordInfo -> Range
@@ -536,7 +557,7 @@ showRecordConFlds (RecordCon _ _ flds) =
 showRecordConFlds _ = Nothing
 
 showRecordApp :: RecordAppExpr -> Maybe Text
-showRecordApp (RecordAppExpr recConstr fla)
+showRecordApp (RecordAppExpr _ recConstr fla)
   = Just $ printOutputable recConstr <>  " { "
          <> T.intercalate ", " (showFieldWithArg <$> fla)
          <> " }"
@@ -588,8 +609,14 @@ getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
 
     getFields :: HsExpr GhcTc -> [LHsExpr GhcTc] -> Maybe RecordAppExpr
     getFields (HsApp _ constr@(unLoc -> expr) arg) args
-      | not (null fls)
-      = Just (RecordAppExpr constr labelWithArgs)
+      | not (null fls) = Just $
+      -- Code action is only valid if the constructor application is fully
+      -- saturated, but we still want to display the inlay hints for partially
+      -- applied constructors
+        RecordAppExpr
+          (if length fls <= length args + 1 then Saturated else Unsaturated)
+          constr
+          labelWithArgs
       where fls = getExprFields expr
             labelWithArgs = zipWith mkLabelWithArg fls (arg : args)
             mkLabelWithArg label arg = (L (getLoc arg) label, unLoc arg)
