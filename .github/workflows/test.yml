@@ -255,6 +255,12 @@ jobs:
         name: Test hls-notes-plugin test suite
         run: cabal test hls-notes-plugin-tests || cabal test hls-notes-plugin-tests
 
+      # The plugin tutorial is only compatible with 9.6 and 9.8.
+      # No particular reason, just to avoid excessive CPP.
+      - if: matrix.test && matrix.ghc != '9.4' && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+        name: Compile the plugin-tutorial
+        run: cabal build plugin-tutorial
+
   test_post_job:
     if: always()
     runs-on: ubuntu-latest
