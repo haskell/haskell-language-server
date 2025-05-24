@@ -74,7 +74,7 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
--- same as DependencyInformation but only rebuilds if the target file deps changes
+-- same as GetModuleGraph but only rebuilds if the target file deps changes
 type instance RuleResult GetFileModuleGraph = DependencyInformation
 
 data GetKnownTargets = GetKnownTargets

@@ -1145,7 +1145,7 @@ needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
-  graph <- useNoFile GetModuleGraph
+  graph <- use GetFileModuleGraph file
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
     Nothing -> pure Nothing

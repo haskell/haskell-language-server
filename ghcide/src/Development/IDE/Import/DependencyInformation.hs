@@ -411,8 +411,8 @@ instance NFData NamedModuleDep where
 instance Show NamedModuleDep where
   show NamedModuleDep{..} = show nmdFilePath
 
--- | Build a map from file path to fingerprint. The fingerprint is built
--- from the fingerprints of the file and all its dependencies.
+-- | Build a map from file path to its full fingerprint.
+-- The fingerprint is depend on both the fingerprints of the file and all its dependencies.
 -- This is used to determine if a file has changed and needs to be reloaded.
 buildAccFingerFilePathIdMap :: FilePathIdMap FilePathIdSet -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
 buildAccFingerFilePathIdMap modulesDeps shallowFingers = go keys IntMap.empty
