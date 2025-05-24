@@ -46,7 +46,7 @@ import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
 import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
                                                                TypeCheck (..),
-                                                               tmrTypechecked)
+                                                               tmrTypechecked, GetFileModuleGraph(..))
 import           Development.IDE.Core.Shake                   (useNoFile_, use_,
                                                                uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
@@ -256,7 +256,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> use_ GetModSummary nfp
     deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
-    linkables_needed <- transitiveDeps <$> useNoFile_ GetModuleGraph <*> pure nfp
+    linkables_needed <- transitiveDeps <$> use_ GetFileModuleGraph nfp <*> pure nfp
     linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
