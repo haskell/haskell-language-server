@@ -82,7 +82,8 @@ import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns
                                                        pattern RealSrcSpan,
                                                        plusUFM_C, unitUFM)
 import           Development.IDE.GHC.Util             (getExtensions,
-                                                       printOutputable)
+                                                       printOutputable,
+                                                       stripOccNamePrefix)
 import           Development.IDE.Graph                (RuleResult)
 import           Development.IDE.Graph.Classes        (Hashable, NFData)
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
@@ -238,7 +239,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                    -- checks if 'a' is equal to 'Name' if the 'Either' is 'Right a', otherwise return 'False'
                    nameEq = either (const False) ((==) name)
                 in fmap fst $ find (nameEq . snd) filteredLocations
-             valueWithLoc = [ (T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
+             valueWithLoc = [ (stripOccNamePrefix $ T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
              -- use `, ` to separate labels with definition location
              label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart valueWithLoc
          pure $ InlayHint { _position = currentEnd -- at the end of dotdot
@@ -287,7 +288,7 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _data_ = Nothing
                         }
 
-     mkInlayHintLabelPart name loc = InlayHintLabelPart (printOutputable (pprNameUnqualified name) <> "=") Nothing loc Nothing
+     mkInlayHintLabelPart name loc = InlayHintLabelPart (printFieldName (pprNameUnqualified name) <> "=") Nothing loc Nothing
 
 mkTitle :: [Extension] -> Text
 mkTitle exts = "Expand record wildcard"
@@ -410,10 +411,10 @@ data RecordInfo
   deriving (Generic)
 
 instance Pretty RecordInfo where
-  pretty (RecordInfoPat ss p) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable p)
-  pretty (RecordInfoCon ss e) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable e)
+  pretty (RecordInfoPat ss p) = pretty (printFieldName ss) <> ":" <+> pretty (printOutputable p)
+  pretty (RecordInfoCon ss e) = pretty (printFieldName ss) <> ":" <+> pretty (printOutputable e)
   pretty (RecordInfoApp ss (RecordAppExpr _ _ fla))
-    = pretty (printOutputable ss) <> ":" <+> hsep (map (pretty . printOutputable) fla)
+    = pretty (printFieldName ss) <> ":" <+> hsep (map (pretty . printOutputable) fla)
 
 recordInfoToRange :: RecordInfo -> Range
 recordInfoToRange (RecordInfoPat ss _) = realSrcSpanToRange ss
@@ -520,7 +521,7 @@ processRecordFlds flds = flds { rec_dotdot = Nothing , rec_flds = puns' }
 
 
 showRecordPat :: Outputable (Pat GhcTc) => UniqFM Name [Name] -> Pat GhcTc -> Maybe Text
-showRecordPat names = fmap printOutputable . mapConPatDetail (\case
+showRecordPat names = fmap printFieldName . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
 
@@ -561,7 +562,7 @@ showRecordApp (RecordAppExpr _ recConstr fla)
   = Just $ printOutputable recConstr <>  " { "
          <> T.intercalate ", " (showFieldWithArg <$> fla)
          <> " }"
-  where showFieldWithArg (field, arg) = printOutputable field <> " = " <> printOutputable arg
+  where showFieldWithArg (field, arg) = printFieldName field <> " = " <> printOutputable arg
 
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` getRecCons)
@@ -641,3 +642,7 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
     mkRecInfo pat =
       [ RecordInfoPat realSpan' (unLoc pat) | RealSrcSpan realSpan' _ <- [ getLoc pat ]]
 getRecPatterns _ = ([], False)
+
+printFieldName :: Outputable a => a -> Text
+printFieldName = stripOccNamePrefix . printOutputable
+

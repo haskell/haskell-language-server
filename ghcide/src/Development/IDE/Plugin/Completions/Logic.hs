@@ -37,14 +37,12 @@ import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Function                            (on)
 
 import qualified Data.HashSet                             as HashSet
-import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (isQual, ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.CoreFile             (occNamePrefixes)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -261,7 +259,7 @@ mkNameCompItem doc thingParent origName provenance isInfix !imp mod = CI {..}
     compKind = occNameToComKind origName
     isTypeCompl = isTcOcc origName
     typeText = Nothing
-    label = stripPrefix $ printOutputable origName
+    label = stripOccNamePrefix $ printOutputable origName
     insertText = case isInfix of
             Nothing         -> label
             Just LeftSide   -> label <> "`"
@@ -800,17 +798,6 @@ openingBacktick line prefixModule prefixText Position { _character=(fromIntegral
 
 
 -- ---------------------------------------------------------------------
-
--- | Under certain circumstance GHC generates some extra stuff that we
--- don't want in the autocompleted symbols
-    {- When e.g. DuplicateRecordFields is enabled, compiler generates
-    names like "$sel:accessor:One" and "$sel:accessor:Two" to disambiguate record selectors
-    https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields/DuplicateRecordFields#Implementation
-    -}
--- TODO: Turn this into an alex lexer that discards prefixes as if they were whitespace.
-stripPrefix :: T.Text -> T.Text
-stripPrefix name = T.takeWhile (/=':') $ fromMaybe name $
-  getFirst $ foldMap (First . (`T.stripPrefix` name)) occNamePrefixes
 
 mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> Maybe (LImportDecl GhcPs) -> CompItem
 mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r
