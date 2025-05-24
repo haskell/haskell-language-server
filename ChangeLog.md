@@ -1,5 +1,74 @@
 # Changelog for haskell-language-server
 
+
+## 2.11.0.0
+
+- Bindists for GHC 9.12.2
+  - Full plugin support, inlcuding refactor plugin
+- Bindists for GHC 9.10.2
+- Bindists for GHC 9.8.4
+- Bindists for GHC 9.6.7
+- Bindists for GHC 9.4.8
+- Dropped support for Centos 7 as this platform is no longer supported by ghc
+- Improved import suggestions for contructors and OverloadedRecordDot fields
+
+### Pull Requests
+
+- Add doc for project-wide renaming
+  ([#4584](https://github.com/haskell/haskell-language-server/pull/4584)) by @jian-lin
+- Use hie-bios 0.15.0
+  ([#4582](https://github.com/haskell/haskell-language-server/pull/4582)) by @fendor
+- Allow building HLS with GHC 9.10.2
+  ([#4581](https://github.com/haskell/haskell-language-server/pull/4581)) by @fendor
+- Fix Plugin support table for 9.12.2
+  ([#4580](https://github.com/haskell/haskell-language-server/pull/4580)) by @fendor
+- Fix misplaced inlay hints by applying PositionMapping
+  ([#4571](https://github.com/haskell/haskell-language-server/pull/4571)) by @jetjinser
+- Enable hls-plugin-gadt for ghc-9.12
+  ([#4568](https://github.com/haskell/haskell-language-server/pull/4568)) by @GuillaumedeVolpiano
+- Remove no longer needed allow-newer
+  ([#4566](https://github.com/haskell/haskell-language-server/pull/4566)) by @jhrcek
+- Add missing golden files for GHC 9.10 config tests
+  ([#4563](https://github.com/haskell/haskell-language-server/pull/4563)) by @jian-lin
+- updating the plugins support table for refactor
+  ([#4560](https://github.com/haskell/haskell-language-server/pull/4560)) by @GuillaumedeVolpiano
+- Enable stylish-haskell for ghc-9.10 and ghc-9.12
+  ([#4559](https://github.com/haskell/haskell-language-server/pull/4559)) by @GuillaumedeVolpiano
+- Bump haskell-actions/setup from 2.7.10 to 2.7.11
+  ([#4557](https://github.com/haskell/haskell-language-server/pull/4557)) by @dependabot[bot]
+- Provide code action in hls-eval-plugin
+  ([#4556](https://github.com/haskell/haskell-language-server/pull/4556)) by @jian-lin
+- enable hlint for ghc-9.12
+  ([#4555](https://github.com/haskell/haskell-language-server/pull/4555)) by @GuillaumedeVolpiano
+- Enable fourmolu and ormolu for GHC 9.12
+  ([#4554](https://github.com/haskell/haskell-language-server/pull/4554)) by @fendor
+- Enable hls-cabal-gild-plugin for GHC 9.12.2
+  ([#4553](https://github.com/haskell/haskell-language-server/pull/4553)) by @fendor
+- Update plugin support table for GHC 9.12.2
+  ([#4552](https://github.com/haskell/haskell-language-server/pull/4552)) by @fendor
+- Remove allow-newer for hiedb
+  ([#4551](https://github.com/haskell/haskell-language-server/pull/4551)) by @jhrcek
+- Fix typo of rename plugin config
+  ([#4546](https://github.com/haskell/haskell-language-server/pull/4546)) by @jian-lin
+- Update the ghcup-metadata generation script
+  ([#4545](https://github.com/haskell/haskell-language-server/pull/4545)) by @fendor
+- porting hls-refactor to ghc-9.12
+  ([#4543](https://github.com/haskell/haskell-language-server/pull/4543)) by @GuillaumedeVolpiano
+- add ghcide-bench flag to .cabal file
+  ([#4542](https://github.com/haskell/haskell-language-server/pull/4542)) by @juhp
+- Revert "link executables dynamically to speed up linking (#4423)"
+  ([#4541](https://github.com/haskell/haskell-language-server/pull/4541)) by @fendor
+- Support PackageImports in hiddenPackageSuggestion
+  ([#4537](https://github.com/haskell/haskell-language-server/pull/4537)) by @jian-lin
+- Improve FreeBSD installation docs
+  ([#4536](https://github.com/haskell/haskell-language-server/pull/4536)) by @arrowd
+- reinstating ignore-plugins-ghc-bounds
+  ([#4532](https://github.com/haskell/haskell-language-server/pull/4532)) by @GuillaumedeVolpiano
+- Simplify FuzzySearch test (avoid dependency on /usr/share/dict/words)
+  ([#4531](https://github.com/haskell/haskell-language-server/pull/4531)) by @jhrcek
+- Import suggestion for missing newtype constructor, all types constructor and indirect overloadedrecorddot fields
+  ([#4516](https://github.com/haskell/haskell-language-server/pull/4516)) by @guibou
+
 ## 2.10.0.0
 
 - Bindists for GHC 9.12.2

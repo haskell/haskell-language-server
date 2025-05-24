@@ -121,7 +121,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
-import           GHC.Types.SrcLoc                                  (srcSpanToRealSrcSpan)
 #endif
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                                               (EpaLocation,
@@ -129,7 +128,6 @@ import           GHC                                               (EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..),
                                                                     EpToken (..))
-import           GHC.Types.SrcLoc                                  (srcSpanToRealSrcSpan)
 #endif
 
 

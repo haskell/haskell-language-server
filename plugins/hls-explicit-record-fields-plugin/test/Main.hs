@@ -36,6 +36,7 @@ test = testGroup "explicit-fields"
     , mkTestNoAction "Puns" "Puns" 12 10 12 31
     , mkTestNoAction "Infix" "Infix" 11 11 11 31
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
+    , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
     , mkTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
     ]
   , testGroup "inlay hints"
@@ -56,8 +57,51 @@ test = testGroup "explicit-fields"
                         , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
                         , _paddingLeft = Just True
                         }]
+    , mkInlayHintsTest "ConstructionDuplicateRecordFields" Nothing 16 $ \ih -> do
+        let mkLabelPart' = mkLabelPartOffsetLength "ConstructionDuplicateRecordFields"
+        foo <- mkLabelPart' 13 6 "foo"
+        bar <- mkLabelPart' 14 6 "bar"
+        baz <- mkLabelPart' 15 6 "baz"
+        (@?=) ih
+          [defInlayHint { _position = Position 16 14
+                        , _label = InR [ foo, commaPart
+                                       , bar, commaPart
+                                       , baz
+                                       ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 16 5 15
+                                            , mkPragmaTextEdit 3 -- Not 2 of the DuplicateRecordFields pragma
+                                            ]
+                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _paddingLeft = Just True
+                        }]
+
     , mkInlayHintsTest "PositionalConstruction" Nothing 15 $ \ih -> do
         let mkLabelPart' = mkLabelPartOffsetLengthSub1 "PositionalConstruction"
+        foo <- mkLabelPart' 5 4 "foo="
+        bar <- mkLabelPart' 6 4 "bar="
+        baz <- mkLabelPart' 7 4 "baz="
+        (@?=) ih
+          [ defInlayHint { _position = Position 15 11
+                         , _label = InR [ foo ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _tooltip = Just $ InL "Expand positional record"
+                         , _paddingLeft = Nothing
+                         }
+          , defInlayHint { _position = Position 15 13
+                         , _label = InR [ bar ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _tooltip = Just $ InL "Expand positional record"
+                         , _paddingLeft = Nothing
+                         }
+          , defInlayHint { _position = Position 15 15
+                         , _label = InR [ baz ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _tooltip = Just $ InL "Expand positional record"
+                         , _paddingLeft = Nothing
+                         }
+          ]
+    , mkInlayHintsTest "PositionalConstructionDuplicateRecordFields" Nothing 15 $ \ih -> do
+        let mkLabelPart' = mkLabelPartOffsetLengthSub1 "PositionalConstructionDuplicateRecordFields"
         foo <- mkLabelPart' 5 4 "foo="
         bar <- mkLabelPart' 6 4 "bar="
         baz <- mkLabelPart' 7 4 "baz="
@@ -93,6 +137,16 @@ test = testGroup "explicit-fields"
                         }]
     , mkInlayHintsTest "HsExpanded1" (Just " (positional)") 13 $ \ih -> do
         let mkLabelPart' = mkLabelPartOffsetLengthSub1 "HsExpanded1"
+        foo <- mkLabelPart' 11 4 "foo="
+        (@?=) ih
+          [defInlayHint { _position = Position 13 21
+                        , _label = InR [ foo ]
+                        , _textEdits = Just [ mkLineTextEdit "MyRec { foo = 5 }" 13 15 22 ]
+                        , _tooltip = Just $ InL "Expand positional record"
+                        , _paddingLeft = Nothing
+                        }]
+    , mkInlayHintsTest "HsExpanded1DuplicateRecordFields" (Just " (positional)") 13 $ \ih -> do
+        let mkLabelPart' = mkLabelPartOffsetLengthSub1 "HsExpanded1DuplicateRecordFields"
         foo <- mkLabelPart' 11 4 "foo="
         (@?=) ih
           [defInlayHint { _position = Position 13 21

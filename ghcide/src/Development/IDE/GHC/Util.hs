@@ -27,7 +27,8 @@ module Development.IDE.GHC.Util(
     dontWriteHieFiles,
     disableWarningsAsErrors,
     printOutputable,
-    getExtensions
+    getExtensions,
+    stripOccNamePrefix,
     ) where
 
 import           Control.Concurrent
@@ -62,6 +63,7 @@ import           GHC.IO.Handle.Types
 import           Ide.PluginUtils                   (unescape)
 import           System.FilePath
 
+import           Data.Monoid                       (First (..))
 import           GHC.Data.EnumSet
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
@@ -271,3 +273,55 @@ printOutputable =
 
 getExtensions :: ParsedModule -> [Extension]
 getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary
+
+-- | When e.g. DuplicateRecordFields is enabled, compiler generates
+-- names like "$sel:accessor:One" and "$sel:accessor:Two" to
+-- disambiguate record selectors
+-- https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields/DuplicateRecordFields#Implementation
+stripOccNamePrefix :: T.Text -> T.Text
+stripOccNamePrefix name = T.takeWhile (/=':') $ fromMaybe name $
+    getFirst $ foldMap (First . (`T.stripPrefix` name))
+    occNamePrefixes
+
+-- | Prefixes that can occur in a GHC OccName
+occNamePrefixes :: [T.Text]
+occNamePrefixes =
+  [
+    -- long ones
+    "$con2tag_"
+  , "$tag2con_"
+  , "$maxtag_"
+
+  -- four chars
+  , "$sel:"
+  , "$tc'"
+
+  -- three chars
+  , "$dm"
+  , "$co"
+  , "$tc"
+  , "$cp"
+  , "$fx"
+
+  -- two chars
+  , "$W"
+  , "$w"
+  , "$m"
+  , "$b"
+  , "$c"
+  , "$d"
+  , "$i"
+  , "$s"
+  , "$f"
+  , "$r"
+  , "C:"
+  , "N:"
+  , "D:"
+  , "$p"
+  , "$L"
+  , "$f"
+  , "$t"
+  , "$c"
+  , "$m"
+  ]
+

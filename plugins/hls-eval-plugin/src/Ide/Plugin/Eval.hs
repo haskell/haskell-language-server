@@ -27,7 +27,7 @@ import           Language.LSP.Protocol.Message
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Eval.Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-    (defaultPluginDescriptor plId "Provies code action and lens to evaluate expressions in doctest comments")
+    (defaultPluginDescriptor plId "Provides code action and lens to evaluate expressions in doctest comments")
         { pluginHandlers = mconcat
             [ mkPluginHandler SMethod_TextDocumentCodeAction (Handlers.codeAction recorder)
             , mkPluginHandler SMethod_TextDocumentCodeLens (Handlers.codeLens recorder)
