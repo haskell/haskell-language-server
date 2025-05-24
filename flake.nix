@@ -98,6 +98,7 @@
           shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
           shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
+          shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
         };
 
         packages = { inherit docs; };
