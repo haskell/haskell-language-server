@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -93,7 +94,7 @@ import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Time                                    (UTCTime (..))
+import           Data.Time                                    (UTCTime (..), getCurrentTime, diffUTCTime)
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
@@ -179,6 +180,12 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
+import Text.Pretty.Simple
+import qualified Data.Map.Strict as Map
+import System.FilePath (takeExtension, takeFileName, normalise, dropTrailingPathSeparator, dropExtension, splitDirectories)
+import Data.Char (isUpper)
+import System.Directory.Extra (listFilesRecursive, listFilesInside)
+import System.IO.Unsafe
 
 data Log
   = LogShake Shake.Log
@@ -317,8 +324,10 @@ getParsedModuleDefinition packageState opt file ms = do
 getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
+
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
-        (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
+        -- TODO: should we reverse this concatenation, there are way less
+        -- source import than normal import in theory, so it should be faster
 #if MIN_VERSION_ghc(9,13,0)
         let imports = [(False, lvl, mbPkgName, modName) | (lvl, mbPkgName, modName) <- ms_textual_imps ms]
                    ++ [(True, NormalLevel, NoPkgQual, noLoc modName) | L _ modName <- ms_srcimps ms]
@@ -330,26 +339,15 @@ getLocatedImportsRule recorder =
         let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
         opt <- getIdeOptions
-        let getTargetFor modName nfp
-                | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
-                    -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
-                | Just tt <- HM.lookup (TargetModule modName) targets = do
-                    -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let ttmap = HM.mapWithKey const (HashSet.toMap tt)
-                        nfp' = HM.lookupDefault nfp nfp ttmap
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
-                | otherwise = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
+
+        moduleMaps <- use_ GetModulesPaths file
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
 #else
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
 #endif
-            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+
+            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) import_dirs (optExtensions opt) modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -639,10 +637,51 @@ getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake rec
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
+{-# NOINLINE cacheVar #-}
+cacheVar = unsafePerformIO (newTVarIO mempty)
+
+getModulesPathsRule :: Recorder (WithPriority Log) -> Rules ()
+getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModulesPaths file -> do
+  env_eq <- use_ GhcSession file
+
+  cache <- liftIO (readTVarIO cacheVar)
+  case Map.lookup (envUnique env_eq) cache of
+    Just res -> pure (mempty, ([], Just res))
+    Nothing -> do
+      let env = hscEnv env_eq
+      let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+      opt <- getIdeOptions
+      let exts = (optExtensions opt)
+      let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+
+      (unzip -> (a, b)) <- flip mapM import_dirs $ \(u, dyn) -> do
+        (unzip -> (a, b)) <- flip mapM (importPaths dyn) $ \dir' -> do
+          let dir = dropTrailingPathSeparator dir'
+          let predicate path = pure (path == dir || isUpper (head (takeFileName path)))
+          let dir_number_directories = length (splitDirectories dir)
+          let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
+
+          -- TODO: we are taking/droping extension, this could be factorized to save a few cpu cycles ;)
+          -- TODO: do acceptedextensions needs to be a set ? or a vector?
+          modules <- fmap (\path -> (toModule path, toNormalizedFilePath' path)) . filter (\y -> takeExtension y `elem` acceptedExtensions) <$> liftIO (listFilesInside predicate dir)
+          let isSourceModule (_, path) = "-boot" `isSuffixOf` fromNormalizedFilePath path
+          let (sourceModules, notSourceModules) = partition isSourceModule modules
+          pure $ (Map.fromList notSourceModules, Map.fromList sourceModules)
+        pure (fmap (u,) $ mconcat a, fmap (u, ) $ mconcat b)
+
+      let res = (mconcat a, mconcat b)
+      liftIO $ atomically $ modifyTVar' cacheVar (Map.insert (envUnique env_eq) res)
+
+      pure (mempty, ([], Just $ (mconcat a, mconcat b)))
+
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
+  -- liftIO $ print ("fs length", length fs)
   (rawDepInfo, bm) <- rawDependencyInformation fs
+  -- liftIO $ print ("ok with raw deps")
+  -- liftIO $ pPrint rawDepInfo
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
+  -- liftIO $ print ("all_fs length", length all_fs)
   msrs <- uses GetModSummaryWithoutTimestamps all_fs
   let mss = map (fmap msrModSummary) msrs
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
@@ -728,6 +767,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
+        -- TODO: this is responsible for a LOT of allocations
 
         -- add the deps to the Shake graph
         let addDependency fp = do
@@ -1256,6 +1296,7 @@ mainRule recorder RulesConfig{..} = do
     getModIfaceRule recorder
     getModSummaryRule templateHaskellWarning recorder
     getModuleGraphRule recorder
+    getModulesPathsRule recorder
     getFileHashRule recorder
     knownFilesRule recorder
     getClientSettingsRule recorder

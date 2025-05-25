@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Types.HscEnvEq
 (   HscEnvEq,
-    hscEnv, newHscEnvEq,
+    hscEnv, newHscEnvEq, envUnique,
     updateHscEnvEq,
     envPackageExports,
     envVisibleModuleNames,

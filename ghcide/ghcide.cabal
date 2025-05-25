@@ -108,6 +108,7 @@ library
     , unliftio-core
     , unordered-containers         >=0.2.21
     , vector
+    , pretty-simple
 
   if os(windows)
     build-depends: Win32
