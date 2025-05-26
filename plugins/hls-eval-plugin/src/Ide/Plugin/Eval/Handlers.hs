@@ -41,14 +41,10 @@ import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Development.IDE.Core.FileStore               (getUriContents)
+import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
-import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
-                                                               TypeCheck (..),
-                                                               tmrTypechecked, GetFileModuleGraph(..))
-import           Development.IDE.Core.Shake                   (useNoFile_, use_,
-                                                               uses_)
+import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified))
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (OverridingBool (..))
@@ -76,17 +72,18 @@ import           GHC                                          (ClsInst,
 
 import           Development.IDE.Core.RuleTypes               (GetLinkable (GetLinkable),
                                                                GetModSummary (GetModSummary),
-                                                               GetModuleGraph (GetModuleGraph),
+                                                               GetFileModuleGraph (GetFileModuleGraph),
                                                                GhcSessionDeps (GhcSessionDeps),
-                                                               ModSummaryResult (msrModSummary))
-import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
+                                                               ModSummaryResult (msrModSummary),
+                                                               LinkableResult (linkableHomeMod),
+                                                               TypeCheck (..),
+                                                               tmrTypechecked, GetFileModuleGraph(..))
 import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
 import           Data.List.Extra                              (unsnoc)
-import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
