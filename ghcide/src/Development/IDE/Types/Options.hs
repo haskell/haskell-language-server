@@ -69,9 +69,7 @@ data IdeOptions = IdeOptions
     -- ^ When to typecheck reverse dependencies of a file
   , optHaddockParse       :: OptHaddockParse
     -- ^ Whether to return result of parsing module with Opt_Haddock.
-    --   Otherwise, return the result of parsing without Opt_Haddock, so
-    --   that the parsed module contains the result of Opt_KeepRawTokenStream,
-    --   which might be necessary for hlint.
+    --   Otherwise, return the result of parsing without Opt_Haddock.
   , optModifyDynFlags     :: Config -> DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
