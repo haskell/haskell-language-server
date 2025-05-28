@@ -154,12 +154,12 @@ data DependencyInformation =
     , depModuleFiles        :: !(ShowableModuleEnv FilePathId)
     -- ^ Map from Module to the corresponding non-boot hs file
     , depModuleGraph        :: !ModuleGraph
-    -- ^ Map from Module to fingerprint of the transitive dependencies of the module.
     , depTransDepsFingerprints :: !(FilePathIdMap Fingerprint)
-    -- ^ Map from FilePathId to the fingerprint of the transitive reverse dependencies of the module.
+    -- ^ Map from Module to fingerprint of the transitive dependencies of the module.
     , depTransReverseDepsFingerprints :: !(FilePathIdMap Fingerprint)
-    -- ^ Map from FilePathId to the fingerprint of the immediate reverse dependencies of the module.
+    -- ^ Map from FilePathId to the fingerprint of the transitive reverse dependencies of the module.
     , depImmediateReverseDepsFingerprints :: !(FilePathIdMap Fingerprint)
+    -- ^ Map from FilePathId to the fingerprint of the immediate reverse dependencies of the module.
     } deriving (Show, Generic)
 
 lookupFingerprint :: NormalizedFilePath -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
