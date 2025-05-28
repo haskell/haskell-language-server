@@ -74,8 +74,9 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
--- same as GetModuleGraph but only rebuilds if the target file deps changes
-type instance RuleResult GetFileModuleGraph = DependencyInformation
+-- | it only compute the fingerprint of the module graph for a file and its dependencies
+-- we need this to trigger recompilation when the sub module graph for a file changes
+type instance RuleResult GetFileModuleGraphFingerprint = Fingerprint
 
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
@@ -420,10 +421,10 @@ data GetModuleGraph = GetModuleGraph
 instance Hashable GetModuleGraph
 instance NFData   GetModuleGraph
 
-data GetFileModuleGraph = GetFileModuleGraph
+data GetFileModuleGraphFingerprint = GetFileModuleGraphFingerprint
     deriving (Eq, Show, Generic)
-instance Hashable GetFileModuleGraph
-instance NFData   GetFileModuleGraph
+instance Hashable GetFileModuleGraphFingerprint
+instance NFData   GetFileModuleGraphFingerprint
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Generic)

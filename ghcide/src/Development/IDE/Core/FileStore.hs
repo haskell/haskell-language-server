@@ -264,7 +264,7 @@ typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) pa
 
 typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
-    revs <- transitiveReverseDependencies nfp <$> use_ GetFileModuleGraph nfp
+    revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetFileModuleGraphFingerprint GetModuleGraph nfp
     case revs of
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do

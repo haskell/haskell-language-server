@@ -44,7 +44,7 @@ import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
-import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified))
+import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (OverridingBool (..))
@@ -72,12 +72,12 @@ import           GHC                                          (ClsInst,
 
 import           Development.IDE.Core.RuleTypes               (GetLinkable (GetLinkable),
                                                                GetModSummary (GetModSummary),
-                                                               GetFileModuleGraph (GetFileModuleGraph),
+                                                               GetFileModuleGraphFingerprint (GetFileModuleGraphFingerprint),
                                                                GhcSessionDeps (GhcSessionDeps),
                                                                ModSummaryResult (msrModSummary),
                                                                LinkableResult (linkableHomeMod),
                                                                TypeCheck (..),
-                                                               tmrTypechecked, GetFileModuleGraph(..))
+                                                               tmrTypechecked, GetFileModuleGraphFingerprint(..), GetModuleGraph(..))
 import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
@@ -253,7 +253,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> use_ GetModSummary nfp
     deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
-    linkables_needed <- transitiveDeps <$> use_ GetFileModuleGraph nfp <*> pure nfp
+    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetFileModuleGraphFingerprint GetModuleGraph nfp <*> pure nfp
     linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
