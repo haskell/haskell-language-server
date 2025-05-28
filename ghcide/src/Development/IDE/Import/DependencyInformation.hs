@@ -154,15 +154,19 @@ data DependencyInformation =
     , depModuleFiles        :: !(ShowableModuleEnv FilePathId)
     -- ^ Map from Module to the corresponding non-boot hs file
     , depModuleGraph        :: !ModuleGraph
-    -- ^ Map from Module to the
-    , depModuleFingerprints :: !(FilePathIdMap Fingerprint)
+    -- ^ Map from Module to fingerprint of the transitive dependencies of the module.
+    , depTransDepsFingerprints :: !(FilePathIdMap Fingerprint)
+    -- ^ Map from FilePathId to the fingerprint of the transitive reverse dependencies of the module.
+    , depTransReverseDepsFingerprints :: !(FilePathIdMap Fingerprint)
+    -- ^ Map from FilePathId to the fingerprint of the immediate reverse dependencies of the module.
+    , depImmediateReverseDepsFingerprints :: !(FilePathIdMap Fingerprint)
     } deriving (Show, Generic)
 
-lookupFingerprint :: NormalizedFilePath -> DependencyInformation -> Maybe Fingerprint
-lookupFingerprint fileId DependencyInformation {..} =
+lookupFingerprint :: NormalizedFilePath -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
+lookupFingerprint fileId DependencyInformation {..} depFingerprintMap =
   do
     FilePathId cur_id <- lookupPathToId depPathIdMap fileId
-    IntMap.lookup cur_id depModuleFingerprints
+    IntMap.lookup cur_id depFingerprintMap
 
 newtype ShowableModule =
   ShowableModule {showableModule :: Module}
@@ -250,7 +254,9 @@ processDependencyInformation RawDependencyInformation{..} rawBootMap mg shallowF
     , depBootMap = rawBootMap
     , depModuleFiles = ShowableModuleEnv reverseModuleMap
     , depModuleGraph = mg
-    , depModuleFingerprints = buildAccFingerFilePathIdMap moduleDeps shallowFingerMap
+    , depTransDepsFingerprints = buildTransDepsFingerprintMap moduleDeps shallowFingerMap
+    , depTransReverseDepsFingerprints = buildTransDepsFingerprintMap reverseModuleDeps shallowFingerMap
+    , depImmediateReverseDepsFingerprints = buildImmediateDepsFingerprintMap reverseModuleDeps shallowFingerMap
     }
   where resultGraph = buildResultGraph rawImports
         (errorNodes, successNodes) = partitionNodeResults $ IntMap.toList resultGraph
@@ -411,11 +417,33 @@ instance NFData NamedModuleDep where
 instance Show NamedModuleDep where
   show NamedModuleDep{..} = show nmdFilePath
 
+
+buildImmediateDepsFingerprintMap :: FilePathIdMap FilePathIdSet -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
+buildImmediateDepsFingerprintMap modulesDeps shallowFingers = go keys IntMap.empty
+  where
+    keys = IntMap.keys shallowFingers
+    go :: [IntSet.Key] -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
+    go keys acc =
+      case keys of
+        [] -> acc
+        k : ks ->
+          if IntMap.member k acc
+            -- already in the map, so we can skip
+            then go ks acc
+            -- not in the map, so we need to add it
+            else
+              let -- get the dependencies of the current key
+                  deps = IntSet.toList $ IntMap.findWithDefault IntSet.empty k modulesDeps
+                  -- combine the fingerprints of the dependencies with the current key
+                  combinedFingerprints = Util.fingerprintFingerprints $ map (shallowFingers IntMap.!) (k:deps)
+               in -- add the combined fingerprints to the accumulator
+                  go ks (IntMap.insert k combinedFingerprints acc)
+
 -- | Build a map from file path to its full fingerprint.
 -- The fingerprint is depend on both the fingerprints of the file and all its dependencies.
 -- This is used to determine if a file has changed and needs to be reloaded.
-buildAccFingerFilePathIdMap :: FilePathIdMap FilePathIdSet -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
-buildAccFingerFilePathIdMap modulesDeps shallowFingers = go keys IntMap.empty
+buildTransDepsFingerprintMap :: FilePathIdMap FilePathIdSet -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
+buildTransDepsFingerprintMap modulesDeps shallowFingers = go keys IntMap.empty
   where
     keys = IntMap.keys shallowFingers
     go :: [IntSet.Key] -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint

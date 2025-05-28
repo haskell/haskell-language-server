@@ -76,7 +76,9 @@ type instance RuleResult GetModuleGraph = DependencyInformation
 
 -- | it only compute the fingerprint of the module graph for a file and its dependencies
 -- we need this to trigger recompilation when the sub module graph for a file changes
-type instance RuleResult GetFileModuleGraphFingerprint = Fingerprint
+type instance RuleResult GetModuleGraphTransDepsFingerprints = Fingerprint
+type instance RuleResult GetModuleGraphTransReverseDepsFingerprints = Fingerprint
+type instance RuleResult GetModuleGraphImmediateReverseDepsFingerprints = Fingerprint
 
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
@@ -421,10 +423,20 @@ data GetModuleGraph = GetModuleGraph
 instance Hashable GetModuleGraph
 instance NFData   GetModuleGraph
 
-data GetFileModuleGraphFingerprint = GetFileModuleGraphFingerprint
+data GetModuleGraphTransDepsFingerprints = GetModuleGraphTransDepsFingerprints
     deriving (Eq, Show, Generic)
-instance Hashable GetFileModuleGraphFingerprint
-instance NFData   GetFileModuleGraphFingerprint
+instance Hashable GetModuleGraphTransDepsFingerprints
+instance NFData   GetModuleGraphTransDepsFingerprints
+
+data GetModuleGraphTransReverseDepsFingerprints = GetModuleGraphTransReverseDepsFingerprints
+    deriving (Eq, Show, Generic)
+instance Hashable GetModuleGraphTransReverseDepsFingerprints
+instance NFData   GetModuleGraphTransReverseDepsFingerprints
+
+data GetModuleGraphImmediateReverseDepsFingerprints = GetModuleGraphImmediateReverseDepsFingerprints
+    deriving (Eq, Show, Generic)
+instance Hashable GetModuleGraphImmediateReverseDepsFingerprints
+instance NFData   GetModuleGraphImmediateReverseDepsFingerprints
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Generic)
