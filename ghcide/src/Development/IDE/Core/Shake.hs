@@ -1155,7 +1155,7 @@ useWithSeparateFingerprintRule
     :: (IdeRule k v, IdeRule k1 Fingerprint)
     => k1 -> k -> NormalizedFilePath -> Action (Maybe v)
 useWithSeparateFingerprintRule fingerKey key file = do
-    _ <- use_ fingerKey file
+    _ <- use fingerKey file
     useWithoutDependency key emptyFilePath
 
 -- we use separate fingerprint rules to trigger the rebuild of the rule
