@@ -760,9 +760,10 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
+            de <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
             mg <- do
               if fullModuleGraph
-              then depModuleGraph <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
+              then return $ depModuleGraph de
               else do
                 let mgs = map hsc_mod_graph depSessions
                 -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
@@ -775,7 +776,6 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
-            de <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
             session' <- liftIO $ mergeEnvs hsc mg de ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
