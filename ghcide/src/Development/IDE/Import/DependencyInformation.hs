@@ -419,25 +419,18 @@ instance Show NamedModuleDep where
 
 
 buildImmediateDepsFingerprintMap :: FilePathIdMap FilePathIdSet -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
-buildImmediateDepsFingerprintMap modulesDeps shallowFingers = go keys IntMap.empty
-  where
-    keys = IntMap.keys shallowFingers
-    go :: [IntSet.Key] -> FilePathIdMap Fingerprint -> FilePathIdMap Fingerprint
-    go keys acc =
-      case keys of
-        [] -> acc
-        k : ks ->
-          if IntMap.member k acc
-            -- already in the map, so we can skip
-            then go ks acc
-            -- not in the map, so we need to add it
-            else
-              let -- get the dependencies of the current key
-                  deps = IntSet.toList $ IntMap.findWithDefault IntSet.empty k modulesDeps
-                  -- combine the fingerprints of the dependencies with the current key
-                  combinedFingerprints = Util.fingerprintFingerprints $ map (shallowFingers IntMap.!) (k:deps)
-               in -- add the combined fingerprints to the accumulator
-                  go ks (IntMap.insert k combinedFingerprints acc)
+buildImmediateDepsFingerprintMap modulesDeps shallowFingers =
+  IntMap.fromList
+    $ map
+      ( \k ->
+          ( k,
+            Util.fingerprintFingerprints $
+              map
+                (shallowFingers IntMap.!)
+                (k : IntSet.toList (IntMap.findWithDefault IntSet.empty k modulesDeps))
+          )
+      )
+    $ IntMap.keys shallowFingers
 
 -- | Build a map from file path to its full fingerprint.
 -- The fingerprint is depend on both the fingerprints of the file and all its dependencies.
