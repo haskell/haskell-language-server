@@ -31,6 +31,8 @@ module Development.IDE.Core.Shake(
     shakeEnqueue,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
+    useWithSeparateFingerprintRule,
+    useWithSeparateFingerprintRule_,
     FastResult(..),
     use_, useNoFile_, uses_,
     useWithStale, usesWithStale,
@@ -1147,6 +1149,23 @@ usesWithStale key files = do
     -- return the most recent successfully computed value regardless of
     -- whether the rule succeeded or not.
     traverse (lastValue key) files
+
+-- we use separate fingerprint rules to trigger the rebuild of the rule
+useWithSeparateFingerprintRule
+    :: (IdeRule k v, IdeRule k1 Fingerprint)
+    => k1 -> k -> NormalizedFilePath -> Action (Maybe v)
+useWithSeparateFingerprintRule fingerKey key file = do
+    _ <- use fingerKey file
+    useWithoutDependency key emptyFilePath
+
+-- we use separate fingerprint rules to trigger the rebuild of the rule
+useWithSeparateFingerprintRule_
+    :: (IdeRule k v, IdeRule k1 Fingerprint)
+    => k1 -> k -> NormalizedFilePath -> Action v
+useWithSeparateFingerprintRule_ fingerKey key file = do
+    useWithSeparateFingerprintRule fingerKey key file >>= \case
+        Just v -> return v
+        Nothing -> liftIO $ throwIO $ BadDependency (show key)
 
 useWithoutDependency :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe v)

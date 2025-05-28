@@ -472,7 +472,7 @@ rawDependencyInformation fs = do
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles file -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
-        DependencyInformation{..} <- useNoFile_ GetModuleGraph
+        DependencyInformation{..} <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
         case pathToId depPathIdMap file of
           -- The header of the file does not parse, so it can't be part of any import cycles.
           Nothing -> pure []
@@ -608,7 +608,7 @@ typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck fi
     -- very expensive.
     when (foi == NotFOI) $
       logWith recorder Logger.Warning $ LogTypecheckedFOI file
-    typeCheckRuleDefinition hsc pm
+    typeCheckRuleDefinition hsc pm file
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
 knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetKnownTargets -> do
@@ -643,7 +643,10 @@ dependencyInfoForFiles fs = do
       go (Just ms) _ = Just $ ModuleNode [] ms
       go _ _ = Nothing
       mg = mkModuleGraph mns
-  pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
+  let shallowFingers = IntMap.fromList $ foldr' (\(i, m) acc -> case m of
+                                        Just x -> (getFilePathId i,msrFingerprint x):acc
+                                        Nothing -> acc) [] $ zip _all_ids msrs
+  pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg shallowFingers)
 
 -- This is factored out so it can be directly called from the GetModIface
 -- rule. Directly calling this rule means that on the initial load we can
@@ -652,14 +655,15 @@ dependencyInfoForFiles fs = do
 typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
+    -> NormalizedFilePath
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition hsc pm = do
+typeCheckRuleDefinition hsc pm fp = do
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
            { getLinkables = unliftIO unlift . uses_ GetLinkable
-           , getModuleGraph = unliftIO unlift $ useNoFile_ GetModuleGraph
+           , getModuleGraph = unliftIO unlift $ useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph fp
            }
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
@@ -756,9 +760,10 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
+            de <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
             mg <- do
               if fullModuleGraph
-              then depModuleGraph <$> useNoFile_ GetModuleGraph
+              then return $ depModuleGraph de
               else do
                 let mgs = map hsc_mod_graph depSessions
                 -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
@@ -771,7 +776,6 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
-            de <- useNoFile_ GetModuleGraph
             session' <- liftIO $ mergeEnvs hsc mg de ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
@@ -801,7 +805,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
-            , get_module_graph = useNoFile_ GetModuleGraph
+            , get_module_graph = useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph f
             , regenerate = regenerateHiFile session f ms
             }
       hsc_env' <- setFileCacheHook (hscEnv session)
@@ -977,7 +981,7 @@ regenerateHiFile sess f ms compNeeded = do
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm f
             case mtmr of
               Nothing -> pure (diags', Nothing)
               Just tmr -> do
@@ -1135,7 +1139,7 @@ needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
-  graph <- useNoFile GetModuleGraph
+  graph <- useWithSeparateFingerprintRule GetModuleGraphImmediateReverseDepsFingerprints GetModuleGraph file
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
     Nothing -> pure Nothing
@@ -1247,6 +1251,19 @@ mainRule recorder RulesConfig{..} = do
     persistentDocMapRule
     persistentImportMapRule
     getLinkableRule recorder
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphTransDepsFingerprints file -> do
+        di <- useNoFile_ GetModuleGraph
+        let finger = lookupFingerprint file di (depTransDepsFingerprints di)
+        return (fingerprintToBS <$> finger, ([], finger))
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphTransReverseDepsFingerprints file -> do
+        di <- useNoFile_ GetModuleGraph
+        let finger = lookupFingerprint file di (depTransReverseDepsFingerprints di)
+        return (fingerprintToBS <$> finger, ([], finger))
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphImmediateReverseDepsFingerprints file -> do
+        di <- useNoFile_ GetModuleGraph
+        let finger = lookupFingerprint file di (depImmediateReverseDepsFingerprints di)
+        return (fingerprintToBS <$> finger, ([], finger))
+
 
 -- | Get HieFile for haskell file on NormalizedFilePath
 getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
