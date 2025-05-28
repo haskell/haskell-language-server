@@ -1251,15 +1251,19 @@ mainRule recorder RulesConfig{..} = do
     persistentDocMapRule
     persistentImportMapRule
     getLinkableRule recorder
-    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetModuleGraphTransDepsFingerprints file -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphTransDepsFingerprints file -> do
         di <- useNoFile_ GetModuleGraph
-        return $ lookupFingerprint file di (depTransDepsFingerprints di)
-    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetModuleGraphTransReverseDepsFingerprints file -> do
+        let finger = lookupFingerprint file di (depTransDepsFingerprints di)
+        return (fingerprintToBS <$> finger, ([], finger))
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphTransReverseDepsFingerprints file -> do
         di <- useNoFile_ GetModuleGraph
-        return $ lookupFingerprint file di (depTransReverseDepsFingerprints di)
-    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetModuleGraphImmediateReverseDepsFingerprints file -> do
+        let finger = lookupFingerprint file di (depTransReverseDepsFingerprints di)
+        return (fingerprintToBS <$> finger, ([], finger))
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphImmediateReverseDepsFingerprints file -> do
         di <- useNoFile_ GetModuleGraph
-        return $ lookupFingerprint file di (depImmediateReverseDepsFingerprints di)
+        let finger = lookupFingerprint file di (depImmediateReverseDepsFingerprints di)
+        return (fingerprintToBS <$> finger, ([], finger))
+
 
 -- | Get HieFile for haskell file on NormalizedFilePath
 getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
