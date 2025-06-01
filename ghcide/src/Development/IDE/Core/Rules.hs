@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -93,7 +94,7 @@ import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Time                                    (UTCTime (..))
+import           Data.Time                                    (UTCTime (..), getCurrentTime, diffUTCTime)
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
@@ -173,8 +174,12 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
-
-import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
+import Text.Pretty.Simple
+import qualified Data.Map.Strict as Map
+import System.FilePath (takeExtension, takeFileName, normalise, dropTrailingPathSeparator, dropExtension, splitDirectories)
+import Data.Char (isUpper)
+import System.Directory.Extra (listFilesRecursive, listFilesInside)
+import System.IO.Unsafe
 
 data Log
   = LogShake Shake.Log
@@ -262,12 +267,10 @@ getParsedModuleRule recorder =
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    -- We still parse with Haddocks whether Opt_Haddock is True or False to collect information
-    -- but we no longer need to parse with and without Haddocks separately for above GHC90.
-    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file ms
 
-withOptHaddock :: ModSummary -> ModSummary
-withOptHaddock = withOption Opt_Haddock
+withoutOptHaddock :: ModSummary -> ModSummary
+withoutOptHaddock = withoutOption Opt_Haddock
 
 withOption :: GeneralFlag -> ModSummary -> ModSummary
 withOption opt ms = ms{ms_hspp_opts= gopt_set (ms_hspp_opts ms) opt}
@@ -286,7 +289,7 @@ getParsedModuleWithCommentsRule recorder =
     ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary file
     opt <- getIdeOptions
 
-    let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+    let ms' = withoutOptHaddock $ withOption Opt_KeepRawTokenStream ms
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms'' = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
@@ -315,30 +318,21 @@ getParsedModuleDefinition packageState opt file ms = do
 getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
+
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
-        (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
+        -- TODO: should we reverse this concatenation, there are way less
+        -- source import than normal import in theory, so it should be faster
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
         let env = hscEnv env_eq
         let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
         opt <- getIdeOptions
-        let getTargetFor modName nfp
-                | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
-                    -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
-                | Just tt <- HM.lookup (TargetModule modName) targets = do
-                    -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let ttmap = HM.mapWithKey const (HashSet.toMap tt)
-                        nfp' = HM.lookupDefault nfp nfp ttmap
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
-                | otherwise = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
+
+        moduleMaps <- use_ GetModulesPaths file
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+
+            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) import_dirs (optExtensions opt) modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -472,7 +466,7 @@ rawDependencyInformation fs = do
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles file -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
-        DependencyInformation{..} <- useNoFile_ GetModuleGraph
+        DependencyInformation{..} <- use_ GetFileModuleGraph file
         case pathToId depPathIdMap file of
           -- The header of the file does not parse, so it can't be part of any import cycles.
           Nothing -> pure []
@@ -608,7 +602,7 @@ typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck fi
     -- very expensive.
     when (foi == NotFOI) $
       logWith recorder Logger.Warning $ LogTypecheckedFOI file
-    typeCheckRuleDefinition hsc pm
+    typeCheckRuleDefinition hsc pm file
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
 knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetKnownTargets -> do
@@ -628,10 +622,57 @@ getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake rec
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
+{-# NOINLINE cacheVar #-}
+cacheVar = unsafePerformIO (newTVarIO mempty)
+
+getModulesPathsRule :: Recorder (WithPriority Log) -> Rules ()
+getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModulesPaths file -> do
+  env_eq <- use_ GhcSession file
+
+  cache <- liftIO (readTVarIO cacheVar)
+  case Map.lookup (envUnique env_eq) cache of
+    Just res -> pure (mempty, ([], Just res))
+    Nothing -> do
+      let env = hscEnv env_eq
+      let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+      opt <- getIdeOptions
+      let exts = (optExtensions opt)
+      let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+
+      (unzip -> (a, b)) <- flip mapM import_dirs $ \(u, dyn) -> do
+        (unzip -> (a, b)) <- flip mapM (importPaths dyn) $ \dir' -> do
+          let dir = dropTrailingPathSeparator dir'
+          let predicate path = pure (path == dir || isUpper (head (takeFileName path)))
+          let dir_number_directories = length (splitDirectories dir)
+          let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
+
+          -- TODO: we are taking/droping extension, this could be factorized to save a few cpu cycles ;)
+          -- TODO: do acceptedextensions needs to be a set ? or a vector?
+          modules <- fmap (\path -> (toModule path, toNormalizedFilePath' path)) . filter (\y -> takeExtension y `elem` acceptedExtensions) <$> liftIO (listFilesInside predicate dir)
+          let isSourceModule (_, path) = "-boot" `isSuffixOf` fromNormalizedFilePath path
+          let (sourceModules, notSourceModules) = partition isSourceModule modules
+          pure $ (Map.fromList notSourceModules, Map.fromList sourceModules)
+        pure (fmap (u,) $ mconcat a, fmap (u, ) $ mconcat b)
+
+      let res = (mconcat a, mconcat b)
+      liftIO $ atomically $ modifyTVar' cacheVar (Map.insert (envUnique env_eq) res)
+
+      pure (mempty, ([], Just $ (mconcat a, mconcat b)))
+
+getModuleGraphSingleFileRule :: Recorder (WithPriority Log) -> Rules ()
+getModuleGraphSingleFileRule recorder =
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetFileModuleGraph file -> do
+        di <- useNoFile_ GetModuleGraph
+        return (fingerprintToBS <$> lookupFingerprint file di, ([], Just di))
+
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
+  -- liftIO $ print ("fs length", length fs)
   (rawDepInfo, bm) <- rawDependencyInformation fs
+  -- liftIO $ print ("ok with raw deps")
+  -- liftIO $ pPrint rawDepInfo
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
+  -- liftIO $ print ("all_fs length", length all_fs)
   msrs <- uses GetModSummaryWithoutTimestamps all_fs
   let mss = map (fmap msrModSummary) msrs
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
@@ -643,7 +684,10 @@ dependencyInfoForFiles fs = do
       go (Just ms) _ = Just $ ModuleNode [] ms
       go _ _ = Nothing
       mg = mkModuleGraph mns
-  pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
+  let shallowFingers = IntMap.fromList $ foldr' (\(i, m) acc -> case m of
+                                        Just x -> (getFilePathId i,msrFingerprint x):acc
+                                        Nothing -> acc) [] $ zip _all_ids msrs
+  pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg shallowFingers)
 
 -- This is factored out so it can be directly called from the GetModIface
 -- rule. Directly calling this rule means that on the initial load we can
@@ -652,14 +696,15 @@ dependencyInfoForFiles fs = do
 typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
+    -> NormalizedFilePath
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition hsc pm = do
+typeCheckRuleDefinition hsc pm fp = do
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
            { getLinkables = unliftIO unlift . uses_ GetLinkable
-           , getModuleGraph = unliftIO unlift $ useNoFile_ GetModuleGraph
+           , getModuleGraph = unliftIO unlift $ use_ GetFileModuleGraph fp
            }
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
@@ -706,6 +751,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
+        -- TODO: this is responsible for a LOT of allocations
 
         -- add the deps to the Shake graph
         let addDependency fp = do
@@ -758,7 +804,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
             mg <- do
               if fullModuleGraph
-              then depModuleGraph <$> useNoFile_ GetModuleGraph
+              then depModuleGraph <$> use_ GetFileModuleGraph file
               else do
                 let mgs = map hsc_mod_graph depSessions
                 -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
@@ -771,7 +817,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
-            de <- useNoFile_ GetModuleGraph
+            de <- use_ GetFileModuleGraph file
             session' <- liftIO $ mergeEnvs hsc mg de ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
@@ -801,7 +847,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
-            , get_module_graph = useNoFile_ GetModuleGraph
+            , get_module_graph = use_ GetFileModuleGraph f
             , regenerate = regenerateHiFile session f ms
             }
       hsc_env' <- setFileCacheHook (hscEnv session)
@@ -971,13 +1017,13 @@ regenerateHiFile sess f ms compNeeded = do
     opt <- getIdeOptions
 
     -- Embed haddocks in the interface file
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm f
             case mtmr of
               Nothing -> pure (diags', Nothing)
               Just tmr -> do
@@ -1135,7 +1181,7 @@ needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
-  graph <- useNoFile GetModuleGraph
+  graph <- use GetFileModuleGraph file
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
     Nothing -> pure Nothing
@@ -1226,6 +1272,8 @@ mainRule recorder RulesConfig{..} = do
     getModIfaceRule recorder
     getModSummaryRule templateHaskellWarning recorder
     getModuleGraphRule recorder
+    getModulesPathsRule recorder
+    getModuleGraphSingleFileRule recorder
     getFileHashRule recorder
     knownFilesRule recorder
     getClientSettingsRule recorder

@@ -74,6 +74,9 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
+-- same as GetModuleGraph but only rebuilds if the target file deps changes
+type instance RuleResult GetFileModuleGraph = DependencyInformation
+
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
 instance Hashable GetKnownTargets
@@ -389,6 +392,9 @@ type instance RuleResult GetModSummary = ModSummaryResult
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
 
+type instance RuleResult GetModulesPaths = (M.Map ModuleName (UnitId, NormalizedFilePath),
+                                            M.Map ModuleName (UnitId, NormalizedFilePath))
+
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Generic)
 instance Hashable GetParsedModule
@@ -416,6 +422,11 @@ data GetModuleGraph = GetModuleGraph
     deriving (Eq, Show, Generic)
 instance Hashable GetModuleGraph
 instance NFData   GetModuleGraph
+
+data GetFileModuleGraph = GetFileModuleGraph
+    deriving (Eq, Show, Generic)
+instance Hashable GetFileModuleGraph
+instance NFData   GetFileModuleGraph
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Generic)
@@ -485,6 +496,13 @@ data GetModSummaryWithoutTimestamps = GetModSummaryWithoutTimestamps
     deriving (Eq, Show, Generic)
 instance Hashable GetModSummaryWithoutTimestamps
 instance NFData   GetModSummaryWithoutTimestamps
+
+-- | Scan all the import directory for existing modules and build a map from
+-- module name to paths
+data GetModulesPaths = GetModulesPaths
+    deriving (Eq, Show, Generic)
+instance Hashable GetModulesPaths
+instance NFData   GetModulesPaths
 
 data GetModSummary = GetModSummary
     deriving (Eq, Show, Generic)
