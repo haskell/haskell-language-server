@@ -174,8 +174,6 @@ import           System.Info.Extra                            (isWindows)
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
 
-import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
-
 data Log
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
@@ -262,12 +260,10 @@ getParsedModuleRule recorder =
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    -- We still parse with Haddocks whether Opt_Haddock is True or False to collect information
-    -- but we no longer need to parse with and without Haddocks separately for above GHC90.
-    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file ms
 
-withOptHaddock :: ModSummary -> ModSummary
-withOptHaddock = withOption Opt_Haddock
+withoutOptHaddock :: ModSummary -> ModSummary
+withoutOptHaddock = withoutOption Opt_Haddock
 
 withOption :: GeneralFlag -> ModSummary -> ModSummary
 withOption opt ms = ms{ms_hspp_opts= gopt_set (ms_hspp_opts ms) opt}
@@ -286,7 +282,7 @@ getParsedModuleWithCommentsRule recorder =
     ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary file
     opt <- getIdeOptions
 
-    let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+    let ms' = withoutOptHaddock $ withOption Opt_KeepRawTokenStream ms
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms'' = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
@@ -971,7 +967,7 @@ regenerateHiFile sess f ms compNeeded = do
     opt <- getIdeOptions
 
     -- Embed haddocks in the interface file
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
