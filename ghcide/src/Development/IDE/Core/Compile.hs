@@ -481,9 +481,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                                               simplified_guts
 
   final_iface' <- mkFullIface session partial_iface Nothing
-#if MIN_VERSION_ghc(9,4,2)
                     Nothing
-#endif
 #if MIN_VERSION_ghc(9,11,0)
                     NoStubs []
 #endif
@@ -647,11 +645,7 @@ generateObjectCode session summary guts = do
                               (Just dot_o)
                             $ hsc_dflags env'
                           session' = hscSetFlags newFlags session
-#if MIN_VERSION_ghc(9,4,2)
                       (outputFilename, _mStub, _foreign_files, _cinfos, _stgcinfos) <- hscGenHardCode session' guts
-#else
-                      (outputFilename, _mStub, _foreign_files, _cinfos) <- hscGenHardCode session' guts
-#endif
                                 (ms_location summary)
                                 fp
                       obj <- compileFile session' driverNoStop (outputFilename, Just (As False))
@@ -1637,7 +1631,7 @@ setNonHomeFCHook hsc_env =
   with negative if clauses coming before positive if clauses of the same
   version. (If you think about which GHC version a clause activates for this
   should make sense `!MIN_VERSION_GHC(9,0,0)` refers to 8.10 and lower which is
-  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0
+  an earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0
   and later). In addition there should be a space before and after each CPP
   clause.
 

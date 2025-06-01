@@ -239,13 +239,8 @@ showAstDataHtml a0 = html $
             annotationEpAnnHsCase :: EpAnn EpAnnHsCase -> SDoc
             annotationEpAnnHsCase = annotation' (text "EpAnn EpAnnHsCase")
 
-#if MIN_VERSION_ghc(9,4,0)
             annotationEpAnnHsLet :: EpAnn NoEpAnns -> SDoc
             annotationEpAnnHsLet = annotation' (text "EpAnn NoEpAnns")
-#else
-            annotationEpAnnHsLet :: EpAnn AnnsLet -> SDoc
-            annotationEpAnnHsLet = annotation' (text "EpAnn AnnsLet")
-#endif
 
 #if MIN_VERSION_ghc(9,11,0)
             annotationAnnList :: EpAnn (AnnList ()) -> SDoc

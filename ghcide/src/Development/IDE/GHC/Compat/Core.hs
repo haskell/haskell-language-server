@@ -375,18 +375,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Unit.Finder.Types,
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
-#if !MIN_VERSION_ghc(9,4,0)
-    pattern HsFieldBind,
-    hfbAnn,
-    hfbLHS,
-    hfbRHS,
-    hfbPun,
-#endif
-#if !MIN_VERSION_ghc_boot_th(9,4,1)
-    Extension(.., NamedFieldPuns),
-#else
     Extension(..),
-#endif
     mkCgInteractiveGuts,
     justBytecode,
     justObjects,
@@ -768,17 +757,6 @@ initTidyOpts =
 driverNoStop :: StopPhase
 driverNoStop = NoStop
 
-
-#if !MIN_VERSION_ghc(9,4,0)
-pattern HsFieldBind :: XHsRecField id -> id -> arg -> Bool -> HsRecField' id arg
-pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- HsRecField hfbAnn (SrcLoc.unLoc -> hfbLHS) hfbRHS hfbPun where
-  HsFieldBind ann lhs rhs pun = HsRecField ann (SrcLoc.noLoc lhs) rhs pun
-#endif
-
-#if !MIN_VERSION_ghc_boot_th(9,4,1)
-pattern NamedFieldPuns :: Extension
-pattern NamedFieldPuns = RecordPuns
-#endif
 
 groupOrigin :: MatchGroup GhcRn body -> Origin
 #if MIN_VERSION_ghc(9,5,0)

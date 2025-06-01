@@ -267,10 +267,8 @@ myCoreToStg logger dflags ictxt
 
 #if MIN_VERSION_ghc(9,8,0)
     (unzip -> (stg_binds2,_),_)
-#elif MIN_VERSION_ghc(9,4,2)
-    (stg_binds2,_)
 #else
-    stg_binds2
+    (stg_binds2,_)
 #endif
         <- {-# SCC "Stg2Stg" #-}
            stg2stg logger

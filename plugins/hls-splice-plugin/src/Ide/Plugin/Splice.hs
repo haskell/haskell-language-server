@@ -38,14 +38,14 @@ import           Data.Maybe                            (fromMaybe, listToMaybe,
                                                         mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE
-import           Development.IDE.Core.FileStore            (getVersionedTextDoc)
+import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
-import qualified GHC.Runtime.Loader                as Loader
+import qualified GHC.Runtime.Loader                    as Loader
 import qualified GHC.Types.Error                       as Error
 import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
@@ -58,9 +58,7 @@ import           Language.LSP.Protocol.Types
 import           Data.Foldable                         (Foldable (foldl'))
 #endif
 
-#if MIN_VERSION_ghc(9,4,1)
 import           GHC.Data.Bag                          (Bag)
-#endif
 
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                 (EpAnn (..))
@@ -418,14 +416,8 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
     pure resl
     where
         dflags = hsc_dflags hscEnv
-
-#if MIN_VERSION_ghc(9,4,1)
         showErrors = showBag
-#else
-        showErrors = show
-#endif
 
-#if MIN_VERSION_ghc(9,4,1)
 showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
 showBag = show . fmap (fmap toDiagnosticMessage)
 
@@ -433,15 +425,12 @@ toDiagnosticMessage :: forall a. Error.Diagnostic a => a -> Error.DiagnosticMess
 toDiagnosticMessage message =
     Error.DiagnosticMessage
         { diagMessage = Error.diagnosticMessage
-#if MIN_VERSION_ghc(9,5,0)
                           (Error.defaultDiagnosticOpts @a)
-#endif
                           message
 
         , diagReason  = Error.diagnosticReason  message
         , diagHints   = Error.diagnosticHints   message
         }
-#endif
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 unRenamedE ::
@@ -458,11 +447,7 @@ unRenamedE dflags expr = do
             showSDoc dflags $ ppr expr
     pure expr'
   where
-#if MIN_VERSION_ghc(9,4,1)
     showErrors = showBag . Error.getMessages
-#else
-    showErrors = show
-#endif
 
 data SearchResult r =
     Continue | Stop | Here r

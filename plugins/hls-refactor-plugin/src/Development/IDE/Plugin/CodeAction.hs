@@ -73,8 +73,7 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC                                               (
-                                                                    DeltaPos (..),
+import           GHC                                               (DeltaPos (..),
                                                                     EpAnn (..),
                                                                     LEpaComment)
 import qualified GHC.LanguageExtensions                            as Lang
@@ -109,9 +108,9 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.Compat.ExactPrint             (makeDeltaAst)
 import           GHC                                               (AddEpAnn (AddEpAnn),
-                                                                    AnnsModule (am_main),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
+                                                                    AnnsModule (am_main),
                                                                     EpaLocation (..))
 #endif
 
@@ -123,11 +122,11 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     HasLoc (..))
 #endif
 #if MIN_VERSION_ghc(9,11,0)
-import           GHC                                               (EpaLocation,
-                                                                    AnnsModule (am_where),
+import           GHC                                               (AnnsModule (am_where),
+                                                                    EpToken (..),
+                                                                    EpaLocation,
                                                                     EpaLocation' (..),
-                                                                    HasLoc (..),
-                                                                    EpToken (..))
+                                                                    HasLoc (..))
 #endif
 
 
@@ -680,14 +679,16 @@ suggestDeleteUnusedBinding
         indexedContent
         name
         (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
-        let go bag lsigs =
+        let emptyBag bag =
 #if MIN_VERSION_ghc(9,11,0)
-                if null bag
+                null bag
 #else
-                if isEmptyBag bag
+                isEmptyBag bag
 #endif
-                then []
-                else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
+            go bag lsigs =
+                  if emptyBag bag
+                  then []
+                  else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
         case grhssLocalBinds of
           (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
           _                                     -> []
@@ -858,7 +859,6 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
-#if MIN_VERSION_ghc(9,4,0)
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
                                        , ".*to type ‘([^ ]+)’ "
                                        , "in the following constraint"
@@ -869,17 +869,6 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
                                        , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
-#else
-      pat multiple at inArg inExpr = T.concat [ ".*Defaulting the following constraint"
-                                       , if multiple then "s" else ""
-                                       , " to type ‘([^ ]+)’ "
-                                       , ".*arising from the literal ‘(.+)’"
-                                       , if inArg then ".+In the.+argument" else ""
-                                       , if at then ".+at ([^ ]*)" else ""
-                                       , if inExpr then ".+In the expression" else ""
-                                       , ".+In the expression"
-                                       ]
-#endif
       codeEdit range ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
             edits = [TextEdit range replacement]
@@ -1757,8 +1746,8 @@ findPositionAfterModuleName ps _hsmodName' = do
         EpAnnNotUsed -> Nothing
 #endif
 #if MIN_VERSION_ghc(9,11,0)
-    filterWhere (EpTok loc) = Just loc
-    filterWhere _ = Nothing
+    filterWhere (EpTok loc)             = Just loc
+    filterWhere _                       = Nothing
 #else
     filterWhere (AddEpAnn AnnWhere loc) = Just loc
     filterWhere _                       = Nothing
@@ -1797,7 +1786,7 @@ findPositionAfterModuleName ps _hsmodName' = do
 
 #if MIN_VERSION_ghc(9,11,0)
     anchorOpLine :: EpaLocation' a -> Int
-    anchorOpLine EpaSpan{}                           = 0
+    anchorOpLine EpaSpan{}                             = 0
     anchorOpLine (EpaDelta _ (SameLine _) _)           = 0
     anchorOpLine (EpaDelta _ (DifferentLine line _) _) = line
 #elif MIN_VERSION_ghc(9,9,0)

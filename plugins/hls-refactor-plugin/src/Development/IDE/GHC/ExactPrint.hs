@@ -735,26 +735,16 @@ annotate :: ASTElement l ast
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-#if MIN_VERSION_ghc(9,4,0)
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
-#else
-    expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
-    pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
-#endif
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-#if MIN_VERSION_ghc(9,4,0)
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
     pure $ setPrecedingLines expr' 1 0
-#else
-    expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
-    pure $ setPrecedingLines expr' 1 0
-#endif
 
 ------------------------------------------------------------------------------
 
