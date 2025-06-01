@@ -61,6 +61,8 @@
             pkgs.haskellPackages.cabal-install
             # Dependencies needed to build some parts of Hackage
             gmp zlib ncurses
+            # for compatibility of curl with provided gcc
+            curl
             # Changelog tooling
             (gen-hls-changelogs pkgs.haskellPackages)
             # For the documentation
