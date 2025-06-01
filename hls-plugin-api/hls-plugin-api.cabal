@@ -60,7 +60,7 @@ library
     , data-default
     , dependent-map
     , dependent-sum         >=0.7
-    , Diff                  ^>=0.5
+    , Diff                  ^>=0.5 || ^>=1.0.0
     , dlist
     , extra
     , filepath
