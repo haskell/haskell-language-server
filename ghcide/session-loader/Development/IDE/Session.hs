@@ -798,7 +798,7 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- Moved back to implementation in GHC.
 checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> [DriverMessages]
 checkHomeUnitsClosed' ue _ = checkHomeUnitsClosed ue
-#elif MIN_VERSION_ghc(9,3,0)
+#else
 -- This function checks the important property that if both p and q are home units
 -- then any dependency of p, which transitively depends on q is also a home unit.
 -- GHC had an implementation of this function, but it was horribly inefficient

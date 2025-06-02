@@ -815,7 +815,7 @@ generateHieAsts hscEnv tcm =
     pure $ Just $
 #if MIN_VERSION_ghc(9,11,0)
       hie_asts (tcg_type_env ts)
-#elif MIN_VERSION_ghc(9,3,0)
+#else
       hie_asts
 #endif
   where
@@ -1005,7 +1005,7 @@ mergeEnvs env mg dep_info ms extraMods envs = do
           | HsSrcFile <- mi_hsc_src (hm_iface a) = a
           | otherwise = b
 
-#elif MIN_VERSION_ghc(9,3,0)
+#else
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
