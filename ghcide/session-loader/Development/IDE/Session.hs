@@ -888,11 +888,7 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
             ideErrorWithSource
                 (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
                 (T.pack (Compat.printWithoutUniques (singleMessage err)))
-#if MIN_VERSION_ghc(9,5,0)
                 (Just (fmap GhcDriverMessage err))
-#else
-                Nothing
-#endif
         multi_errs = map closure_err_to_multi_err closure_errs
         bad_units = OS.fromList $ concat $ do
             x <- map errMsgDiagnostic closure_errs

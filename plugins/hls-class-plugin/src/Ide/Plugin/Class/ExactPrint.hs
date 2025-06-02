@@ -46,10 +46,8 @@ makeMethodDecl df (mName, sig) = do
 
 #if MIN_VERSION_ghc_exactprint(1,10,0)
 addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> Located (HsModule GhcPs)
-#elif MIN_VERSION_ghc(9,5,0)
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located (HsModule GhcPs))
 #else
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
+addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located (HsModule GhcPs))
 #endif
 addMethodDecls ps mDecls range withSig
     | withSig = go (concatMap (\(decl, sig) -> [sig, decl]) mDecls)

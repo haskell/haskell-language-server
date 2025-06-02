@@ -151,13 +151,8 @@ instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = ParsedSource
 
-#if MIN_VERSION_ghc(9,5,0)
 instance Show (HsModule GhcPs) where
   show _ = "<HsModule GhcPs>"
-#else
-instance Show HsModule where
-  show _ = "<HsModule GhcPs>"
-#endif
 
 -- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Recorder (WithPriority Log) -> Rules ()
@@ -622,17 +617,10 @@ modifyMgMatchesT' ::
   r ->
   (r -> r -> m r) ->
   TransformT m (MatchGroup GhcPs (LHsExpr GhcPs), r)
-#if MIN_VERSION_ghc(9,5,0)
 modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- TransformT $ lift $ foldM combineResults def rs
   pure (MG xMg (L locMatches matches'), r')
-#else
-modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
-  (unzip -> (matches', rs)) <- mapM f matches
-  r' <- lift $ foldM combineResults def rs
-  pure (MG xMg (L locMatches matches') originMg, r')
-#endif
 
 graftSmallestDeclsWithM ::
     forall a.

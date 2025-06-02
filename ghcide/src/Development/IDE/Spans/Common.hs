@@ -38,11 +38,7 @@ type DocMap = NameEnv SpanDoc
 type TyThingMap = NameEnv TyThing
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
-#if MIN_VERSION_ghc(9,5,0)
 unqualIEWrapName :: IEWrappedName GhcPs -> T.Text
-#else
-unqualIEWrapName :: IEWrappedName RdrName -> T.Text
-#endif
 unqualIEWrapName = printOutputable . rdrNameOcc . ieWrappedName
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs

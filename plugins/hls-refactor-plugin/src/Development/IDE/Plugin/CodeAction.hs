@@ -269,19 +269,11 @@ extendImportHandler' ideState ExtendImport {..}
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ ideclName
-#if MIN_VERSION_ghc(9,5,0)
                                                       , ideclImportList = Just (Exactly, _)
-#else
-                                                      , ideclHiding = Just (False, _)
-#endif
                                                       }) =
     not (isQualifiedImport it) && unLoc ideclName == wantedModule
 isWantedModule wantedModule (Just qual) (L _ ImportDecl{ ideclAs, ideclName
-#if MIN_VERSION_ghc(9,5,0)
                                                        , ideclImportList = Just (Exactly, _)
-#else
-                                                       , ideclHiding = Just (False, _)
-#endif
                                                        }) =
     unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc <$> ideclAs) == Just qual)
 isWantedModule _ _ _ = False
@@ -1148,17 +1140,10 @@ occursUnqualified symbol ImportDecl{..}
     | isNothing ideclAs = Just False /=
             -- I don't find this particularly comprehensible,
             -- but HLint suggested me to do so...
-#if MIN_VERSION_ghc(9,5,0)
         (ideclImportList <&> \(isHiding, L _ ents) ->
             let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
             in (isHiding == EverythingBut) && not occurs || (isHiding == Exactly) && occurs
         )
-#else
-        (ideclHiding <&> \(isHiding, L _ ents) ->
-            let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
-            in isHiding && not occurs || not isHiding && occurs
-        )
-#endif
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
@@ -1729,11 +1714,7 @@ findPositionAfterModuleName ps _hsmodName' = do
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
     -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
-#if MIN_VERSION_ghc(9,5,0)
     whereKeywordLineOffset = case hsmodAnn hsmodExt of
-#else
-    whereKeywordLineOffset = case hsmodAnn of
-#endif
         EpAnn _ annsModule _ -> do
             -- Find the first 'where'
 #if MIN_VERSION_ghc(9,11,0)
@@ -1757,11 +1738,8 @@ findPositionAfterModuleName ps _hsmodName' = do
 #if MIN_VERSION_ghc(9,9,0)
     epaLocationToLine (EpaSpan sp)
       = fmap (srcLocLine . realSrcSpanEnd) $ srcSpanToRealSrcSpan sp
-#elif MIN_VERSION_ghc(9,5,0)
-    epaLocationToLine (EpaSpan sp _)
-      = Just . srcLocLine . realSrcSpanEnd $ sp
 #else
-    epaLocationToLine (EpaSpan sp)
+    epaLocationToLine (EpaSpan sp _)
       = Just . srcLocLine . realSrcSpanEnd $ sp
 #endif
 #if MIN_VERSION_ghc(9,11,0)
@@ -2045,21 +2023,12 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
-#if MIN_VERSION_ghc(9,5,0)
 rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
   } b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
     b' = wrapOperatorInParens b
-#else
-rangesForBindingImport ImportDecl{
-  ideclHiding = Just (False, L _ lies)
-  } b =
-    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
-  where
-    b' = wrapOperatorInParens b
-#endif
 rangesForBindingImport _ _ = []
 
 wrapOperatorInParens :: String -> String

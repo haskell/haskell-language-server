@@ -382,9 +382,6 @@ module Development.IDE.GHC.Compat.Core (
     emptyHomeModInfoLinkable,
     homeModInfoByteCode,
     homeModInfoObject,
-#if !MIN_VERSION_ghc(9,5,0)
-    field_label,
-#endif
     groupOrigin,
     isVisibleFunArg,
 #if MIN_VERSION_ghc(9,8,0)
@@ -739,11 +736,7 @@ makeSimpleDetails hsc_env =
 
 mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> Maybe CoreProgram -> TcGblEnv -> IO ModIface
 mkIfaceTc hscEnv shm md _ms _mcp =
-#if MIN_VERSION_ghc(9,5,0)
   GHC.mkIfaceTc hscEnv shm md _ms _mcp -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
-#else
-  GHC.mkIfaceTc hscEnv shm md _ms -- ms::ModSummary is only used in GHC >= 9.4
-#endif
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
 mkBootModDetailsTc session = GHC.mkBootModDetailsTc
@@ -757,39 +750,10 @@ initTidyOpts =
 driverNoStop :: StopPhase
 driverNoStop = NoStop
 
-
 groupOrigin :: MatchGroup GhcRn body -> Origin
-#if MIN_VERSION_ghc(9,5,0)
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = fmap
 groupOrigin = mg_ext
-#else
-mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
-mapLoc = SrcLoc.mapLoc
-groupOrigin = mg_origin
-#endif
-
-
-#if !MIN_VERSION_ghc(9,5,0)
-mkCgInteractiveGuts :: CgGuts -> CgGuts
-mkCgInteractiveGuts = id
-
-emptyHomeModInfoLinkable :: Maybe Linkable
-emptyHomeModInfoLinkable = Nothing
-
-justBytecode :: Linkable -> Maybe Linkable
-justBytecode = Just
-
-justObjects :: Linkable -> Maybe Linkable
-justObjects = Just
-
-homeModInfoByteCode, homeModInfoObject :: HomeModInfo -> Maybe Linkable
-homeModInfoByteCode = hm_linkable
-homeModInfoObject = hm_linkable
-
-field_label :: a -> a
-field_label = id
-#endif
 
 mkSimpleTarget :: DynFlags -> FilePath -> Target
 mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Nothing

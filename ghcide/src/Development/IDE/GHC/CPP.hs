@@ -19,16 +19,10 @@ import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
 import           GHC.Settings
+import qualified GHC.SysTools.Cpp                as Pipeline
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,5,0)
-import qualified GHC.Driver.Pipeline.Execute     as Pipeline
-#endif
-
-#if MIN_VERSION_ghc(9,5,0)
-import qualified GHC.SysTools.Cpp                as Pipeline
-#endif
 
 #if MIN_VERSION_ghc(9,10,2)
 import qualified GHC.SysTools.Tasks              as Pipeline
@@ -49,13 +43,12 @@ addOptP f = alterToolSettings $ \s -> s
 
 doCpp :: HscEnv -> FilePath -> FilePath -> IO ()
 doCpp env input_fn output_fn =
-        -- See GHC commit a2f53ac8d968723417baadfab5be36a020ea6850
-        -- this function/Pipeline.doCpp previously had a raw parameter
-        -- always set to True that corresponded to these settings
-
-#if MIN_VERSION_ghc(9,5,0)
+    -- See GHC commit a2f53ac8d968723417baadfab5be36a020ea6850
+    -- this function/Pipeline.doCpp previously had a raw parameter
+    -- always set to True that corresponded to these settings
     let cpp_opts = Pipeline.CppOpts
                  { cppLinePragmas = True
+
 #if MIN_VERSION_ghc(9,10,2)
                  , sourceCodePreprocessor = Pipeline.SCPHsCpp
 #elif MIN_VERSION_ghc(9,10,0)
@@ -63,10 +56,8 @@ doCpp env input_fn output_fn =
 #else
                  , cppUseCc = False
 #endif
+
                  } in
-#else
-    let cpp_opts = True in
-#endif
 
     Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) cpp_opts input_fn output_fn
 

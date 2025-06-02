@@ -112,6 +112,8 @@ import           System.IO.Extra                        (fixIO,
 import qualified Data.Set                               as Set
 import qualified GHC                                    as G
 import qualified GHC.Runtime.Loader                as Loader
+import           GHC.Driver.Config.CoreToStg.Prep
+import           GHC.Core.Lint.Interactive
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.Error
 import           GHC.Types.ForeignStubs
@@ -119,12 +121,6 @@ import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-
-#if MIN_VERSION_ghc(9,5,0)
-import           GHC.Core.Lint.Interactive
-import           GHC.Driver.Config.CoreToStg.Prep
-#endif
 
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                          (toList)
@@ -470,9 +466,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         pure (details, guts)
 
   let !partial_iface = force $ mkPartialIface session
-#if MIN_VERSION_ghc(9,5,0)
                                               (cg_binds guts)
-#endif
                                               details
                                               ms
 #if MIN_VERSION_ghc(9,11,0)
@@ -522,17 +516,9 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
           mod = ms_mod ms
           data_tycons = filter isDataTyCon tycons
       CgGuts{cg_binds = unprep_binds'} <- coreFileToCgGuts session final_iface details core
-
-#if MIN_VERSION_ghc(9,5,0)
       cp_cfg <- initCorePrepConfig session
-#endif
-
       let corePrep = corePrepPgm
-#if MIN_VERSION_ghc(9,5,0)
                        (hsc_logger session) cp_cfg (initCorePrepPgmConfig (hsc_dflags session) (interactiveInScope $ hsc_IC session))
-#else
-                       session
-#endif
                        mod (ms_location ms)
 
       -- Run corePrep first as we want to test the final version of the program that will
@@ -1167,11 +1153,7 @@ parseHeader
        => DynFlags -- ^ flags to use
        -> FilePath  -- ^ the filename (for source locations)
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
-#if MIN_VERSION_ghc(9,5,0)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located (HsModule GhcPs))
-#else
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located HsModule)
-#endif
 parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
@@ -1517,16 +1499,12 @@ coreFileToCgGuts session iface details core_file = do
       -- Implicit binds aren't saved, so we need to regenerate them ourselves.
   let _implicit_binds = concatMap getImplicitBinds tyCons -- only used if GHC < 9.6
       tyCons = typeEnvTyCons (md_types details)
-#if MIN_VERSION_ghc(9,5,0)
   -- In GHC 9.6, the implicit binds are tidied and part of core_binds
   pure $ CgGuts this_mod tyCons core_binds [] NoStubs [] mempty
 #if !MIN_VERSION_ghc(9,11,0)
                 (emptyHpcInfo False)
 #endif
                 Nothing []
-#else
-  pure $ CgGuts this_mod tyCons (_implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
-#endif
 
 coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDetails -> CoreFile -> UTCTime -> IO ([FileDiagnostic], Maybe HomeModInfo)
 coreFileToLinkable linkableType session ms iface details core_file t = do
