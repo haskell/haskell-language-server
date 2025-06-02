@@ -616,20 +616,10 @@ pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
 isVisibleFunArg :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Bool
-#if __GLASGOW_HASKELL__ >= 906
 isVisibleFunArg = TypesVar.isVisibleFunArg
 type FunTyFlag = TypesVar.FunTyFlag
-#else
-isVisibleFunArg VisArg = True
-isVisibleFunArg _ = False
-type FunTyFlag = TypesVar.AnonArgFlag
-#endif
 pattern FunTy :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Type -> Type -> Type
 pattern FunTy af arg res <- TyCoRep.FunTy {ft_af = af, ft_arg = arg, ft_res = res}
-
-
--- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
--- type HasSrcSpan x = () :: Constraint
 
 class HasSrcSpan a where
   getLoc :: a -> SrcSpan

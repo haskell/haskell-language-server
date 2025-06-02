@@ -1481,11 +1481,6 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
         >>= (findImportDeclByModuleName hsmodImports . T.unpack)
         >>= ideclAs . unLoc
         <&> T.pack . moduleNameString . unLoc
-  , -- tentative workaround for detecting qualification in GHC 9.4
-    -- FIXME: We can delete this after dropping the support for GHC 9.4
-    qualGHC94 <-
-        guard (ghcVersion == GHC94)
-            *> extractQualifiedModuleNameFromMissingName (extractTextInRange _range fileContents)
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
 #if MIN_VERSION_ghc(9,7,0)
@@ -1494,19 +1489,8 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
 #endif
   = let qis = qualifiedImportStyle df
-        -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
-        -- In what fllows, @missing@ is assumed to be qualified name.
-        -- @thingMissing@ is already as desired with GHC != 9.4.
-        -- In GHC 9.4, however, GHC drops a module qualifier from a qualified symbol.
-        -- Thus we need to explicitly concatenate qualifier explicity in GHC 9.4.
-        missing
-            | GHC94 <- ghcVersion
-            , isNothing (qual <|> qual')
-            , Just q <- qualGHC94 =
-                qualify q thingMissing
-            | otherwise = thingMissing
         suggestions = nubSortBy simpleCompareImportSuggestion
-          (constructNewImportSuggestions packageExportsMap (qual <|> qual' <|> qualGHC94, missing) extendImportSuggestions qis) in
+          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     qualify q (NotInScopeDataConstructor d) = NotInScopeDataConstructor (q <> "." <> d)

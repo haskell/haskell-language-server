@@ -1040,10 +1040,6 @@ instance HiePass p => ToHie (PScoped (LocatedA (Pat (GhcPass p)))) where
               in [ toHie $ L ospan wrap
                  , toHie $ PS rsp scope pscope $ (L ospan pat)
                  ]
--- CHANGED: removed preprocessor stuff
--- #if __GLASGOW_HASKELL__ < 811
---           HieRn -> []
--- #endif
     where
       contextify :: a ~ LPat (GhcPass p) => HsConDetails (HsPatSigType (NoGhcTc (GhcPass p))) a (HsRecFields (GhcPass p) a)
                  -> HsConDetails (TScoped (HsPatSigType (NoGhcTc (GhcPass p)))) (PScoped a) (RContext (HsRecFields (GhcPass p) (PScoped a)))
@@ -1928,11 +1924,6 @@ instance HiePass p => ToHie (LocatedA (HsSplice (GhcPass p))) where
       HsSpliced _ _ _ ->
         []
       XSplice x -> case ghcPass @p of
--- CHANGED: removed preprocessor stuff
--- #if __GLASGOW_HASKELL__ < 811
---                      GhcPs -> noExtCon x
---                      GhcRn -> noExtCon x
--- #endif
                      GhcTc -> case x of
                                 HsSplicedT _ -> []
 
