@@ -43,7 +43,7 @@ import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
-                                                               runAction)
+                                                               runAction, useTransDepModuleGraph)
 import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
@@ -253,7 +253,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> use_ GetModSummary nfp
     deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
-    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph nfp <*> pure nfp
+    linkables_needed <- transitiveDeps <$> useTransDepModuleGraph nfp <*> pure nfp
     linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
