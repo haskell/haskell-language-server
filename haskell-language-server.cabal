@@ -1342,6 +1342,7 @@ test-suite hls-explicit-record-fields-plugin-tests
     , ghcide
     , haskell-language-server:hls-explicit-record-fields-plugin
     , hls-test-utils              == 2.11.0.0
+    , aeson
 
 -----------------------------
 -- overloaded record dot plugin

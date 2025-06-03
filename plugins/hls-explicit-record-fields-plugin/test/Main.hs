@@ -3,6 +3,7 @@
 
 module Main ( main ) where
 
+import qualified Data.Aeson                as A
 import           Data.Either               (rights)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
@@ -300,6 +301,7 @@ mkInlayHintsTest fp postfix line assert =
   testCase (fp ++ concat postfix) $
     runSessionWithServer def plugin testDataDir $ do
       doc <- openDoc (fp ++ ".hs") "haskell"
+      setConfigSection "haskell" (createConfig False)
       inlayHints <- getInlayHints doc (lineRange line)
       liftIO $ assert inlayHints
   where
@@ -396,3 +398,9 @@ mkPragmaTextEdit line =
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-explicit-record-fields-plugin" </> "test" </> "testdata"
+
+createConfig :: Bool -> A.Value
+createConfig on = A.object [ "plugin"
+                    A..= A.object [ "ghcide-type-lenses"
+                      A..= A.object [ "config"
+                        A..= A.object [ "localBindingInlayHintOn" A..= A.Bool on ]]]]
