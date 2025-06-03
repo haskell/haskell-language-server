@@ -1235,7 +1235,7 @@ mainRule recorder RulesConfig{..} = do
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder
     getModSummaryRule templateHaskellWarning recorder
-    getModuleGraphRule recorder
+    moduleGraphRules recorder
     getFileHashRule recorder
     knownFilesRule recorder
     getClientSettingsRule recorder
@@ -1257,6 +1257,11 @@ mainRule recorder RulesConfig{..} = do
     persistentDocMapRule
     persistentImportMapRule
     getLinkableRule recorder
+
+-- | Rules for the module graph, which is used to track dependencies
+moduleGraphRules :: Recorder (WithPriority Log) -> Rules ()
+moduleGraphRules recorder = do
+    moduleGraphRules recorder
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphTransDepsFingerprints file -> do
         di <- useNoFile_ GetModuleGraph
         let finger = lookupFingerprint file di (depTransDepsFingerprints di)
@@ -1269,7 +1274,6 @@ mainRule recorder RulesConfig{..} = do
         di <- useNoFile_ GetModuleGraph
         let finger = lookupFingerprint file di (depImmediateReverseDepsFingerprints di)
         return (fingerprintToBS <$> finger, ([], finger))
-
 
 -- | Get HieFile for haskell file on NormalizedFilePath
 getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
