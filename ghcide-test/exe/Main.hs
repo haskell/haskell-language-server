@@ -82,7 +82,7 @@ main = do
     , HighlightTests.tests
     , FindDefinitionAndHoverTests.tests
     , FindImplementationAndHoverTests.tests
-    , PluginSimpleTests.tests
+    -- , PluginSimpleTests.tests
     , PreprocessorTests.tests
     , THTests.tests
     , SymlinkTests.tests

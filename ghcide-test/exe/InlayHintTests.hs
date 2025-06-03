@@ -119,6 +119,7 @@ editTest :: String -> TestTree
 editTest file =
   testWithDummyPlugin (file <> " (InlayHint EditText)") (mkIdeTestFs [copyDir "local-sig-inlay-hints"]) $ do
     doc <- openDoc (file ++ ".hs") "haskell"
+    setConfigSection "haskell" (createConfig True)
     executeAllHints doc globalRange
     real <- documentContents doc
     expectedDoc <- openDoc (file ++ ".expected.hs") "haskell"
@@ -129,6 +130,7 @@ hintTest :: String -> ([InlayHint] -> Assertion) -> TestTree
 hintTest file assert =
   testWithDummyPlugin (file <> " (InlayHint)") (mkIdeTestFs [copyDir "local-sig-inlay-hints"]) $ do
     doc <- openDoc (file ++ ".hs") "haskell"
+    setConfigSection "haskell" (createConfig True)
     hints <- getInlayHints doc globalRange
     liftIO $ assert hints
 

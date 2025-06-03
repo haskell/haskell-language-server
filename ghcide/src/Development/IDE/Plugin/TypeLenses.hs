@@ -24,6 +24,7 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
+import qualified Data.Foldable                        as F
 import           Data.Generics                        (GenericQ, everything,
                                                        extQ, mkQ, something)
 import           Data.List                            (find)
@@ -89,6 +90,7 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
+                                                       isSubrangeOf,
                                                        type (|?) (..))
 import           Text.Regex.TDFA                      ((=~))
 
@@ -127,7 +129,7 @@ properties = emptyProperties
     ] Always
   & defineBooleanProperty #localBindingInlayHintOn
     "Display inlay hints of local bindings"
-    True
+    False
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
@@ -538,7 +540,7 @@ generateWhereInlayHints name ty range offset =
           insertRange = Range startPos' startPos'
       in TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")
 
-generateWhereLens :: PluginId -> Uri -> Id -> T.Text -> Range -> Int -> CodeLens
+generateWhereLens :: PluginId -> Uri -> LocalBindingHintRenderer CodeLens
 generateWhereLens plId uri _ title range _ = CodeLens range (Just cmd) Nothing
     where
         cmd = mkLspCommand plId typeLensCommandId title (Just [A.toJSON (makeEdit range title)])
@@ -557,8 +559,8 @@ bindingToHints :: LocalBindingHintRenderer a -> Id -> Maybe String -> Range -> I
 bindingToHints render id (Just sig) range offset = Just $ render id (T.pack sig) range offset
 bindingToHints _ _ Nothing _ _              = Nothing
 
-renderLocalHints :: MonadIO m => LocalBindingHintRenderer a -> Uri -> IdeState -> ExceptT PluginError m ([a] |? b)
-renderLocalHints render uri state = do
+renderLocalHints :: MonadIO m => LocalBindingHintRenderer a -> Maybe Range -> Uri -> IdeState -> ExceptT PluginError m ([a] |? b)
+renderLocalHints render visibleRange uri state = do
     nfp <- getNormalizedFilePathE uri
     (LocalBindingTypeSigsResult (localBindings, sigMap), pm)
        <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetLocalBindingTypeSigs nfp
@@ -576,8 +578,8 @@ renderLocalHints render uri state = do
                   , bindingSpan `notElem` sigSpans
                   , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
                   -- Show inlay hints only within visible range
-                  -- TODO: there's no "visibleRange" on CodeLens'
-                  -- , isSubrangeOf bindingRange visibleRange
+                  -- CodeLenses don't have a visible range
+                  , maybe True (isSubrangeOf bindingRange) visibleRange
                   ]
     pure $ InL hints
 
@@ -587,12 +589,12 @@ localBindingCodeLens state plId (CodeLensParams{..})  = do
   let uri = _textDocument ^. L.uri
   if enabled
       then pure $ InL []
-      else renderLocalHints (generateWhereLens plId uri) uri state
+      else renderLocalHints (generateWhereLens plId uri) Nothing uri state
 
 -- | Provide inlay hints for local bindings
 localBindingInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
-localBindingInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) _)  = do
+localBindingInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) visibleRange)  = do
   enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #localBindingInlayHintOn plId properties
   if not enabled
       then pure $ InL []
-      else renderLocalHints generateWhereInlayHints uri state
+      else renderLocalHints generateWhereInlayHints (Just visibleRange) uri state
