@@ -18,6 +18,7 @@ import           Control.Concurrent.STM.Stats         (atomically)
 import           Control.DeepSeq                      (rwhnf)
 import           Control.Lens                         ((?~), (^.))
 import           Control.Monad                        (mzero)
+import           Control.Monad.Except                 (ExceptT)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -26,6 +27,7 @@ import qualified Data.Aeson.Types                     as A
 import           Data.Generics                        (GenericQ, everything,
                                                        extQ, mkQ, something)
 import           Data.List                            (find)
+import qualified Data.Map                             as M
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
                                                        mapMaybe, maybeToList)
@@ -79,7 +81,7 @@ import           Language.LSP.Protocol.Message        (Method (..),
                                                        SMethod (..))
 import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
                                                        CodeLens (..),
-                                                       CodeLensParams (CodeLensParams, _textDocument),
+                                                       CodeLensParams (..),
                                                        Command, Diagnostic (..),
                                                        InlayHint (..),
                                                        InlayHintParams (InlayHintParams),
@@ -87,7 +89,6 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
-                                                       isSubrangeOf,
                                                        type (|?) (..))
 import           Text.Regex.TDFA                      ((=~))
 
@@ -107,6 +108,7 @@ descriptor recorder plId =
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
                     <> mkPluginHandler SMethod_TextDocumentInlayHint localBindingInlayHints
+                    <> mkPluginHandler SMethod_TextDocumentCodeLens localBindingCodeLens
     , pluginCommands = [PluginCommand typeLensCommandId "adds a signature" commandHandler]
     , pluginRules = globalBindingRules recorder *> localBindingRules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
@@ -512,54 +514,85 @@ findBindingsQ = something (mkQ Nothing findBindings)
     findSigIds (unLoc -> (TypeSig _ names _)) = map unLoc names
     findSigIds _                              = []
 
--- | Provide code lens for local bindings.
-localBindingInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
-localBindingInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) visibleRange)  = do
-  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #localBindingInlayHintOn plId properties
-  if not enabled then pure $ InL [] else do
+type LocalBindingHintRenderer a = Id -> T.Text -> Range -> Int -> a
+
+generateWhereInlayHints :: LocalBindingHintRenderer InlayHint
+generateWhereInlayHints name ty range offset =
+  let edit = makeEdit range ((T.pack $ printName (idName name)) <> " :: " <> ty) offset
+  in InlayHint { _textEdits = Just [edit]
+               , _paddingRight = Nothing
+               , _paddingLeft = Just True
+               , _tooltip = Nothing
+               , _position = _end range
+               , _kind = Nothing
+               , _label = InL $ ":: " <> ty
+               , _data_ = Nothing
+               }
+  where
+    makeEdit :: Range -> T.Text -> Int -> TextEdit
+    makeEdit range text offset =
+      let startPos = range ^. L.start
+          -- Subtract the offset to align with the whole binding expression
+          insertChar = _character startPos - fromIntegral offset
+          startPos' = startPos { _character = insertChar }
+          insertRange = Range startPos' startPos'
+      in TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")
+
+generateWhereLens :: PluginId -> Uri -> Id -> T.Text -> Range -> Int -> CodeLens
+generateWhereLens plId uri _ title range _ = CodeLens range (Just cmd) Nothing
+    where
+        cmd = mkLspCommand plId typeLensCommandId title (Just [A.toJSON (makeEdit range title)])
+        makeEdit :: Range -> T.Text -> WorkspaceEdit
+        makeEdit range text =
+            let startPos = range ^. L.start
+                insertChar = startPos ^. L.character
+                insertRange = Range startPos startPos
+            in WorkspaceEdit
+                (Just $ M.fromList [(uri, [TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")])])
+                Nothing
+                Nothing
+
+
+bindingToHints :: LocalBindingHintRenderer a -> Id -> Maybe String -> Range -> Int -> Maybe a
+bindingToHints render id (Just sig) range offset = Just $ render id (T.pack sig) range offset
+bindingToHints _ _ Nothing _ _              = Nothing
+
+renderLocalHints :: MonadIO m => LocalBindingHintRenderer a -> Uri -> IdeState -> ExceptT PluginError m ([a] |? b)
+renderLocalHints render uri state = do
     nfp <- getNormalizedFilePathE uri
     (LocalBindingTypeSigsResult (localBindings, sigMap), pm)
-        <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetLocalBindingTypeSigs nfp
-    let bindingToInlayHints :: Id -> Maybe String -> Range -> Int -> Maybe InlayHint
-        bindingToInlayHints id (Just sig) range offset =
-          Just $ generateWhereInlayHints (T.pack $ printName (idName id)) (T.pack sig) range offset
-        bindingToInlayHints _ Nothing _ _              = Nothing
+       <- runActionE "InlayHint.GetWhereBindingTypeSigs" state $ useWithStaleE GetLocalBindingTypeSigs nfp
 
-        -- | Note there may multi ids for one binding,
-        -- like @(a, b) = (42, True)@, there are `a` and `b`
-        -- in one binding.
-        inlayHints = catMaybes
-          [ bindingToInlayHints bindingId bindingSig bindingRange offset
-          | LocalBindings{..} <- localBindings
-          , let sigSpans = getSrcSpan <$> existingSigNames
-          , LocalBinding{..} <- bindings
-          , let bindingSpan = getSrcSpan (idName bindingId)
-          , let bindingSig = Map.lookup bindingId sigMap
-          , bindingSpan `notElem` sigSpans
-          , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
-          -- Show inlay hints only within visible range
-          , isSubrangeOf bindingRange visibleRange
-          ]
-    pure $ InL inlayHints
-    where
-      generateWhereInlayHints :: T.Text -> T.Text -> Range -> Int -> InlayHint
-      generateWhereInlayHints name ty range offset =
-        let edit = makeEdit range (name <> " :: " <> ty) offset
-        in InlayHint { _textEdits = Just [edit]
-                     , _paddingRight = Nothing
-                     , _paddingLeft = Just True
-                     , _tooltip = Nothing
-                     , _position = _end range
-                     , _kind = Nothing
-                     , _label = InL $ ":: " <> ty
-                     , _data_ = Nothing
-                     }
+    -- | Note there may multi ids for one binding,
+    -- like @(a, b) = (42, True)@, there are `a` and `b`
+    -- in one binding.
+    let hints = catMaybes
+                  [ bindingToHints render bindingId bindingSig bindingRange offset
+                  | LocalBindings{..} <- localBindings
+                  , let sigSpans = getSrcSpan <$> existingSigNames
+                  , LocalBinding{..} <- bindings
+                  , let bindingSpan = getSrcSpan (idName bindingId)
+                  , let bindingSig = Map.lookup bindingId sigMap
+                  , bindingSpan `notElem` sigSpans
+                  , Just bindingRange <- maybeToList $ toCurrentRange pm <$> srcSpanToRange bindingLoc
+                  -- Show inlay hints only within visible range
+                  -- TODO: there's no "visibleRange" on CodeLens'
+                  -- , isSubrangeOf bindingRange visibleRange
+                  ]
+    pure $ InL hints
 
-      makeEdit :: Range -> T.Text -> Int -> TextEdit
-      makeEdit range text offset =
-        let startPos = range ^. L.start
-            -- Subtract the offset to align with the whole binding expression
-            insertChar = _character startPos - fromIntegral offset
-            startPos' = startPos { _character = insertChar }
-            insertRange = Range startPos' startPos'
-        in TextEdit insertRange (text <> "\n" <> T.replicate (fromIntegral insertChar) " ")
+localBindingCodeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
+localBindingCodeLens state plId (CodeLensParams{..})  = do
+  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #localBindingInlayHintOn plId properties
+  let uri = _textDocument ^. L.uri
+  if enabled
+      then pure $ InL []
+      else renderLocalHints (generateWhereLens plId uri) uri state
+
+-- | Provide inlay hints for local bindings
+localBindingInlayHints :: PluginMethodHandler IdeState Method_TextDocumentInlayHint
+localBindingInlayHints state plId (InlayHintParams _ (TextDocumentIdentifier uri) _)  = do
+  enabled <- liftIO $ runAction "inlayHint.config" state $ usePropertyAction #localBindingInlayHintOn plId properties
+  if not enabled
+      then pure $ InL []
+      else renderLocalHints generateWhereInlayHints uri state
