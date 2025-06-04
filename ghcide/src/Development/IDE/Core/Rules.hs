@@ -159,10 +159,10 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
+import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
                                                                ShowMessageParams (ShowMessageParams))
-import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -173,8 +173,6 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
-
-import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 
 data Log
   = LogShake Shake.Log

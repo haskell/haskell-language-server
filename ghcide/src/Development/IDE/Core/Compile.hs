@@ -39,81 +39,83 @@ module Development.IDE.Core.Compile
   , setNonHomeFCHook
   ) where
 
-import           Control.Concurrent.STM.Stats           hiding (orElse)
-import           Control.DeepSeq                        (NFData (..), force,
-                                                         rnf)
-import           Control.Exception                      (evaluate)
+import           Control.Concurrent.STM.Stats                 hiding (orElse)
+import           Control.DeepSeq                              (NFData (..),
+                                                               force, rnf)
+import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                           hiding (List, pre,
-                                                         (<.>))
+import           Control.Lens                                 hiding (List, pre,
+                                                               (<.>))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
-import qualified Control.Monad.Trans.State.Strict       as S
-import           Data.Aeson                             (toJSON)
-import           Data.Bifunctor                         (first, second)
+import qualified Control.Monad.Trans.State.Strict             as S
+import           Data.Aeson                                   (toJSON)
+import           Data.Bifunctor                               (first, second)
 import           Data.Binary
-import qualified Data.ByteString                        as BS
+import qualified Data.ByteString                              as BS
 import           Data.Coerce
-import qualified Data.DList                             as DL
+import qualified Data.DList                                   as DL
 import           Data.Functor
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
-import qualified Data.HashMap.Strict                    as HashMap
-import           Data.IntMap                            (IntMap)
+import qualified Data.HashMap.Strict                          as HashMap
+import           Data.IntMap                                  (IntMap)
 import           Data.IORef
 import           Data.List.Extra
-import qualified Data.List.NonEmpty                     as NE
-import qualified Data.Map.Strict                        as Map
+import qualified Data.Map.Strict                              as Map
 import           Data.Maybe
-import           Data.Proxy                             (Proxy (Proxy))
-import qualified Data.Text                              as T
-import           Data.Time                              (UTCTime (..), getCurrentTime)
-import           Data.Tuple.Extra                       (dupe)
+import           Data.Proxy                                   (Proxy (Proxy))
+import qualified Data.Text                                    as T
+import           Data.Time                                    (UTCTime (..))
+import           Data.Tuple.Extra                             (dupe)
 import           Debug.Trace
-import           Development.IDE.Core.FileStore         (resetInterfaceStore)
+import           Development.IDE.Core.FileStore               (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
-import           Development.IDE.Core.ProgressReporting (progressUpdate)
+import           Development.IDE.Core.ProgressReporting       (progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
-import           Development.IDE.Core.Tracing           (withTrace)
-import           Development.IDE.GHC.Compat             hiding (assert,
-                                                         loadInterface,
-                                                         parseHeader,
-                                                         parseModule,
-                                                         tcRnModule,
-                                                         writeHieFile)
-import qualified Development.IDE.GHC.Compat             as Compat
-import qualified Development.IDE.GHC.Compat             as GHC
-import qualified Development.IDE.GHC.Compat.Util        as Util
+import           Development.IDE.Core.Tracing                 (withTrace)
+import           Development.IDE.GHC.Compat                   hiding
+                                                              (loadInterface,
+                                                               parseHeader,
+                                                               parseModule,
+                                                               tcRnModule,
+                                                               writeHieFile)
+import qualified Development.IDE.GHC.Compat                   as Compat
+import qualified Development.IDE.GHC.Compat                   as GHC
+import           Development.IDE.GHC.Compat.Driver            (hscTypecheckRenameWithDiagnostics)
+import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.Orphans            ()
+import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
+import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC                                    (ForeignHValue,
-                                                         GetDocsFailure (..),
-                                                         parsedSource, ModLocation (..))
-import qualified GHC.LanguageExtensions                 as LangExt
+import           GHC                                          (ForeignHValue,
+                                                               GetDocsFailure (..),
+                                                               ModLocation (..),
+                                                               parsedSource)
+import qualified GHC.LanguageExtensions                       as LangExt
 import           GHC.Serialized
-import           HieDb                                  hiding (withHieDb)
-import qualified Language.LSP.Protocol.Message          as LSP
-import           Language.LSP.Protocol.Types            (DiagnosticTag (..))
-import qualified Language.LSP.Server                    as LSP
-import           Prelude                                hiding (mod)
+import           HieDb                                        hiding (withHieDb)
+import qualified Language.LSP.Protocol.Message                as LSP
+import           Language.LSP.Protocol.Types                  (DiagnosticTag (..))
+import qualified Language.LSP.Server                          as LSP
+import           Prelude                                      hiding (mod)
 import           System.Directory
 import           System.FilePath
-import           System.IO.Extra                        (fixIO,
-                                                         newTempFileWithin)
+import           System.IO.Extra                              (fixIO,
+                                                               newTempFileWithin)
 
-import qualified Data.Set                               as Set
-import qualified GHC                                    as G
-import qualified GHC.Runtime.Loader                as Loader
-import           GHC.Driver.Config.CoreToStg.Prep
+import qualified Data.Set                                     as Set
+import qualified GHC                                          as G
 import           GHC.Core.Lint.Interactive
+import           GHC.Driver.Config.CoreToStg.Prep
+import qualified GHC.Runtime.Loader                           as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.Error
 import           GHC.Types.ForeignStubs
@@ -123,17 +125,17 @@ import           GHC.Types.TypeEnv
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,7,0)
-import           Data.Foldable                          (toList)
+import           Data.Foldable                                (toList)
 import           GHC.Unit.Module.Warnings
 #else
-import           Development.IDE.Core.FileStore         (shareFilePath)
+import           Development.IDE.Core.FileStore               (shareFilePath)
 #endif
 
-import           Development.IDE.GHC.Compat.Driver (hscTypecheckRenameWithDiagnostics)
-
-import Development.IDE.Import.DependencyInformation
-import GHC.Driver.Env ( hsc_all_home_unit_ids )
-import Development.IDE.Import.FindImports
+#if MIN_VERSION_ghc(9,11,0)
+import qualified Data.List.NonEmpty                           as NE
+import           Data.Time                                    (getCurrentTime)
+import           GHC.Driver.Env                               (hsc_all_home_unit_ids)
+#endif
 
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
@@ -172,7 +174,7 @@ computePackageDeps env pkg = do
 
 data TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables       :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  { getLinkables   :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   , getModuleGraph :: IO DependencyInformation
   }
 
@@ -653,22 +655,31 @@ generateByteCode :: CoreFileTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeRes
 generateByteCode (CoreFileTime time) hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
+
 #if MIN_VERSION_ghc(9,11,0)
               (warnings, (_, bytecode)) <-
-#else
-              (warnings, (_, bytecode, sptEntries)) <-
-#endif
                 withWarnings "bytecode" $ \_tweak -> do
                       let session = _tweak (hscSetFlags (ms_hspp_opts summary) hscEnv)
                           -- TODO: maybe settings ms_hspp_opts is unnecessary?
                           summary' = summary { ms_hspp_opts = hsc_dflags session }
                       hscInteractive session (mkCgInteractiveGuts guts)
                                 (ms_location summary')
+#else
+              (warnings, (_, bytecode, sptEntries)) <-
+                withWarnings "bytecode" $ \_tweak -> do
+                      let session = _tweak (hscSetFlags (ms_hspp_opts summary) hscEnv)
+                          -- TODO: maybe settings ms_hspp_opts is unnecessary?
+                          summary' = summary { ms_hspp_opts = hsc_dflags session }
+                      hscInteractive session (mkCgInteractiveGuts guts)
+                                (ms_location summary')
+#endif
+
 #if MIN_VERSION_ghc(9,11,0)
               let linkable = Linkable time (ms_mod summary) (pure $ BCOs bytecode)
 #else
               let linkable = LM time (ms_mod summary) [BCOs bytecode sptEntries]
 #endif
+
               pure (map snd warnings, linkable)
 
 demoteTypeErrorsToWarnings :: ParsedModule -> ParsedModule
@@ -946,12 +957,12 @@ handleGenerationErrors' dflags source action =
           )
     ]
 
-
 -- Merge the HPTs, module graphs and FinderCaches
 -- See Note [GhcSessionDeps] in Development.IDE.Core.Rules
 -- Add the current ModSummary to the graph, along with the
 -- HomeModInfo's of all direct dependencies (by induction hypothesis all
 -- transitive dependencies will be contained in envs)
+#if MIN_VERSION_ghc(9,11,0)
 mergeEnvs :: HscEnv
           -> ModuleGraph
           -> DependencyInformation
@@ -960,7 +971,6 @@ mergeEnvs :: HscEnv
           -> [HscEnv]
           -> IO HscEnv
 mergeEnvs env mg dep_info ms extraMods envs = do
-#if MIN_VERSION_ghc(9,11,0)
     return $! loadModulesHome extraMods $
       let newHug = foldl' mergeHUG (hsc_HUG env) (map hsc_HUG envs) in
       (hscUpdateHUG (const newHug) env){
@@ -992,6 +1002,14 @@ mergeEnvs env mg dep_info ms extraMods envs = do
           | otherwise = b
 
 #else
+mergeEnvs :: HscEnv
+          -> ModuleGraph
+          -> DependencyInformation
+          -> ModSummary
+          -> [HomeModInfo]
+          -> [HscEnv]
+          -> IO HscEnv
+mergeEnvs env mg _dep_info ms extraMods envs = do
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
@@ -1415,7 +1433,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                    | not (mi_used_th iface) = emptyModuleEnv
                    | otherwise = parseRuntimeDeps (md_anns details)
              -- Peform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies session get_linkable_hashes get_module_graph runtime_deps
+             maybe_recomp <- checkLinkableDependencies get_linkable_hashes get_module_graph runtime_deps
              case maybe_recomp of
                Just msg -> do_regenerate msg
                Nothing
@@ -1452,8 +1470,8 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => HscEnv -> ([NormalizedFilePath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
-checkLinkableDependencies hsc_env get_linkable_hashes get_module_graph runtime_deps = do
+checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies get_linkable_hashes get_module_graph runtime_deps = do
   graph <- get_module_graph
   let go (mod, hash) = (,hash) <$> lookupModuleFile mod graph
       hs_files = mapM go (moduleEnvToList runtime_deps)

@@ -18,7 +18,6 @@ module Development.IDE.Plugin.CodeAction
     ) where
 
 import           Control.Applicative                               ((<|>))
-import           Control.Applicative.Combinators.NonEmpty          (sepBy1)
 import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
@@ -80,7 +79,6 @@ import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.Logger                                        hiding
                                                                    (group)
 import           Ide.PluginUtils                                   (extendToFullLines,
-                                                                    extractTextInRange,
                                                                     subRange)
 import           Ide.Types
 import           Language.LSP.Protocol.Message                     (Method (..),
@@ -100,7 +98,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
 import qualified Text.Fuzzy.Parallel                               as TFP
-import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -121,6 +118,7 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
 #endif
+
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                                               (AnnsModule (am_where),
                                                                     EpToken (..),
@@ -1493,68 +1491,8 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
           (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
-    qualify q (NotInScopeDataConstructor d) = NotInScopeDataConstructor (q <> "." <> d)
-    qualify q (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (q <> "." <> d)
-    qualify q (NotInScopeThing d) = NotInScopeThing (q <> "." <> d)
-
     L _ HsModule {..} = ps
 suggestNewImport _ _ _ _ _ = []
-
-{- |
-Extracts qualifier of the symbol from the missing symbol.
-Input must be either a plain qualified variable or possibly-parenthesized qualified binary operator (though no strict checking is done for symbol part).
-This is only needed to alleviate the issue #3473.
-
-FIXME: We can delete this after dropping the support for GHC 9.4
-
->>> extractQualifiedModuleNameFromMissingName "P.lookup"
-Just "P"
-
->>> extractQualifiedModuleNameFromMissingName "ΣP3_'.σlookup"
-Just "\931P3_'"
-
->>> extractQualifiedModuleNameFromMissingName "ModuleA.Gre_ekσ.goodδ"
-Just "ModuleA.Gre_ek\963"
-
->>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ.+)"
-Just "ModuleA.Gre_ek\963"
-
->>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ..|.)"
-Just "ModuleA.Gre_ek\963"
-
->>> extractQualifiedModuleNameFromMissingName "A.B.|."
-Just "A.B"
--}
-extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
-extractQualifiedModuleNameFromMissingName (T.strip -> missing)
-    = T.pack <$> (T.unpack missing RE.=~ qualIdentP)
-    where
-        {-
-        NOTE: Haskell 2010 allows /unicode/ upper & lower letters
-        as a module name component; otoh, regex-tdfa only allows
-        /ASCII/ letters to be matched with @[[:upper:]]@ and/or @[[:lower:]]@.
-        Hence we use regex-applicative(-text) for finer-grained predicates.
-
-        RULES (from [Section 10 of Haskell 2010 Report](https://www.haskell.org/onlinereport/haskell2010/haskellch10.html)):
-            modid	→	{conid .} conid
-            conid	→	large {small | large | digit | ' }
-            small	→	ascSmall | uniSmall | _
-            ascSmall	→	a | b | … | z
-            uniSmall	→	any Unicode lowercase letter
-            large	→	ascLarge | uniLarge
-            ascLarge	→	A | B | … | Z
-            uniLarge	→	any uppercase or titlecase Unicode letter
-        -}
-
-        qualIdentP = parensQualOpP <|> qualVarP
-        parensQualOpP = RE.sym '(' *> modNameP <* RE.sym '.' <* RE.anySym <* RE.few RE.anySym <* RE.sym ')'
-        qualVarP = modNameP <* RE.sym '.' <* RE.some RE.anySym
-        conIDP = RE.withMatched $
-            RE.psym isUpper
-            *> RE.many
-                (RE.psym $ \c -> c == '\'' || c == '_' || isUpper c || isLower c || isDigit c)
-        modNameP = fmap snd $ RE.withMatched $ conIDP `sepBy1` RE.sym '.'
-
 
 -- | A Backward compatible implementation of `lookupOccEnv_AllNameSpaces` for
 -- GHC <=9.6
