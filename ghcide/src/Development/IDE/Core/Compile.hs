@@ -147,6 +147,10 @@ import           Data.Time                                    (getCurrentTime)
 import           GHC.Driver.Env                               (hsc_all_home_unit_ids)
 #endif
 
+#if MIN_VERSION_ghc(9,12,0)
+import           Development.IDE.Import.FindImports
+#endif
+
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
 sourceTypecheck = "typecheck"
