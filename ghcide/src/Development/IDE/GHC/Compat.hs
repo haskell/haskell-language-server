@@ -102,9 +102,7 @@ module Development.IDE.GHC.Compat(
     Dependencies(dep_direct_mods),
     NameCacheUpdater,
 
-#if MIN_VERSION_ghc(9,5,0)
     XModulePs(..),
-#endif
 
 #if !MIN_VERSION_ghc(9,7,0)
     liftZonkM,
@@ -167,8 +165,13 @@ import           GHC.Types.Var.Env
 
 import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
+import           GHC.Core.Lint.Interactive               (interactiveInScope)
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
+import           GHC.Driver.Config.Core.Lint.Interactive (lintInteractiveExpr)
+import           GHC.Driver.Config.Core.Opt.Simplify     (initSimplifyExprOpts)
+import           GHC.Driver.Config.CoreToStg             (initCoreToStgOpts)
+import           GHC.Driver.Config.CoreToStg.Prep        (initCorePrepConfig)
 import           GHC.Driver.Config.Stg.Pipeline
 import           GHC.Driver.Env                          as Env
 import           GHC.Iface.Env
@@ -187,18 +190,6 @@ import           GHC.Unit.Module.Deps                    (Dependencies (dep_dire
 import           GHC.Unit.Module.ModIface
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if !MIN_VERSION_ghc(9,5,0)
-import           GHC.Core.Lint                           (lintInteractiveExpr)
-#endif
-
-#if MIN_VERSION_ghc(9,5,0)
-import           GHC.Core.Lint.Interactive               (interactiveInScope)
-import           GHC.Driver.Config.Core.Lint.Interactive (lintInteractiveExpr)
-import           GHC.Driver.Config.Core.Opt.Simplify     (initSimplifyExprOpts)
-import           GHC.Driver.Config.CoreToStg             (initCoreToStgOpts)
-import           GHC.Driver.Config.CoreToStg.Prep        (initCorePrepConfig)
-#endif
 
 #if MIN_VERSION_ghc(9,7,0)
 import           GHC.Tc.Zonk.TcType                      (tcInitTidyEnv)
@@ -230,11 +221,7 @@ myCoreToStgExpr logger dflags ictxt
        binding for the stg2stg step) -}
     let bco_tmp_id = mkSysLocal (fsLit "BCO_toplevel")
                                 (mkPseudoUniqueE 0)
-#if MIN_VERSION_ghc(9,5,0)
                                 ManyTy
-#else
-                                Many
-#endif
                                 (exprType prepd_expr)
     (stg_binds, prov_map, collected_ccs) <-
        myCoreToStg logger
@@ -258,27 +245,17 @@ myCoreToStg logger dflags ictxt
     let (stg_binds, denv, cost_centre_info)
          = {-# SCC "Core2Stg" #-}
            coreToStg
-#if MIN_VERSION_ghc(9,5,0)
              (initCoreToStgOpts dflags)
-#else
-             dflags
-#endif
              this_mod ml prepd_binds
 
 #if MIN_VERSION_ghc(9,8,0)
     (unzip -> (stg_binds2,_),_)
-#elif MIN_VERSION_ghc(9,4,2)
-    (stg_binds2,_)
 #else
-    stg_binds2
+    (stg_binds2,_)
 #endif
         <- {-# SCC "Stg2Stg" #-}
            stg2stg logger
-#if MIN_VERSION_ghc(9,5,0)
                    (interactiveInScope ictxt)
-#else
-                   ictxt
-#endif
                    (initStgPipelineOpts dflags for_bytecode) this_mod stg_binds
 
     return (stg_binds2, denv, cost_centre_info)
@@ -293,42 +270,21 @@ getDependentMods :: ModIface -> [ModuleName]
 getDependentMods = map (gwib_mod . snd) . S.toList . dep_direct_mods . mi_deps
 
 simplifyExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
-#if MIN_VERSION_ghc(9,5,0)
 simplifyExpr _ env = GHC.simplifyExpr (Development.IDE.GHC.Compat.Env.hsc_logger env) (ue_eps (Development.IDE.GHC.Compat.Env.hsc_unit_env env)) (initSimplifyExprOpts (hsc_dflags env) (hsc_IC env))
-#else
-simplifyExpr _ = GHC.simplifyExpr
-#endif
 
 corePrepExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
-#if MIN_VERSION_ghc(9,5,0)
 corePrepExpr _ env expr = do
   cfg <- initCorePrepConfig env
   GHC.corePrepExpr (Development.IDE.GHC.Compat.Env.hsc_logger env) cfg expr
-#else
-corePrepExpr _ = GHC.corePrepExpr
-#endif
 
 renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
 renderMessages msgs =
-#if MIN_VERSION_ghc(9,5,0)
   let renderMsgs extractor = (fmap . fmap) GhcPsMessage . getMessages $ extractor msgs
   in (renderMsgs psWarnings, renderMsgs psErrors)
-#else
-  let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
-  in (renderMsgs psWarnings, renderMsgs psErrors)
-#endif
 
-#if MIN_VERSION_ghc(9,5,0)
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope GhcMessage)) -> ParseResult a
-#else
-pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
-#endif
 pattern PFailedWithErrorMessages msgs
-#if MIN_VERSION_ghc(9,5,0)
      <- PFailed (const . fmap (fmap GhcPsMessage) . getMessages . getPsErrorMessages -> msgs)
-#else
-     <- PFailed (const . fmap (fmap renderDiagnosticMessageWithHints) . getMessages . getPsErrorMessages -> msgs)
-#endif
 {-# COMPLETE POk, PFailedWithErrorMessages #-}
 
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
@@ -453,8 +409,7 @@ generatedNodeInfo :: HieAST a -> Maybe (NodeInfo a)
 generatedNodeInfo = Map.lookup GeneratedInfo . getSourcedNodeInfo . sourcedNodeInfo
 
 data GhcVersion
-  = GHC94
-  | GHC96
+  = GHC96
   | GHC98
   | GHC910
   | GHC912
@@ -470,10 +425,8 @@ ghcVersion = GHC912
 ghcVersion = GHC910
 #elif MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
 ghcVersion = GHC98
-#elif MIN_VERSION_GLASGOW_HASKELL(9,6,0,0)
+#else
 ghcVersion = GHC96
-#elif MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
-ghcVersion = GHC94
 #endif
 
 simpleNodeInfoCompat :: FastStringCompat -> FastStringCompat -> NodeInfo a
@@ -510,14 +463,8 @@ loadModulesHome mod_infos e =
 
 recDotDot :: HsRecFields (GhcPass p) arg -> Maybe Int
 recDotDot x =
-#if MIN_VERSION_ghc(9,5,0)
             unRecFieldsDotDot <$>
-#endif
             unLoc <$> rec_dotdot x
 
-#if MIN_VERSION_ghc(9,5,0)
-extract_cons (NewTypeCon x) = [x]
+extract_cons (NewTypeCon x)      = [x]
 extract_cons (DataTypeCons _ xs) = xs
-#else
-extract_cons = id
-#endif

@@ -145,9 +145,8 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     dflags = hsc_dflags env
     import_paths = mapMaybe (mkImportDirs env) comp_info
     other_imports =
-#if MIN_VERSION_ghc(9,4,0)
-      -- On 9.4+ instead of bringing all the units into scope, only bring into scope the units
-      -- this one depends on
+      -- Instead of bringing all the units into scope, only bring into scope the units
+      -- this one depends on.
       -- This way if you have multiple units with the same module names, we won't get confused
       -- For example if unit a imports module M from unit B, when there is also a module M in unit C,
       -- and unit a only depends on unit b, without this logic there is the potential to get confused
@@ -163,17 +162,6 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
     hpt_deps :: [UnitId]
     hpt_deps = homeUnitDepends units
-#else
-      _import_paths'
-#endif
-
-      -- first try to find the module as a file. If we can't find it try to find it in the package
-      -- database.
-      -- Here the importPaths for the current modules are added to the front of the import paths from the other components.
-      -- This is particularly important for Paths_* modules which get generated for every component but unless you use it in
-      -- each component will end up being found in the wrong place and cause a multi-cradle match failure.
-    _import_paths' = -- import_paths' is only used in GHC < 9.4
-            import_paths
 
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)

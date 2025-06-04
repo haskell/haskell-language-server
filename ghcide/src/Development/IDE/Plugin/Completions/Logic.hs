@@ -53,6 +53,7 @@ import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            IdePlugins (..),
                                                            PluginId)
+import           Language.Haskell.Syntax.Basic
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                         as VFS
@@ -72,9 +73,6 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,5,0)
-import           Language.Haskell.Syntax.Basic
-#endif
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -136,42 +134,23 @@ getCContext pos pm
           | pos `isInsideSrcSpan` r = Just TypeContext
         goInline _ = Nothing
 
-#if MIN_VERSION_ghc(9,5,0)
         importGo :: GHC.LImportDecl GhcPs -> Maybe Context
         importGo (L (locA -> r) impDecl)
           | pos `isInsideSrcSpan` r
           = importInline importModuleName (fmap (fmap reLoc) $ ideclImportList impDecl)
-#else
-        importGo :: GHC.LImportDecl GhcPs -> Maybe Context
-        importGo (L (locA -> r) impDecl)
-          | pos `isInsideSrcSpan` r
-          = importInline importModuleName (fmap (fmap reLoc) $ ideclHiding impDecl)
-#endif
           <|> Just (ImportContext importModuleName)
 
           | otherwise = Nothing
           where importModuleName = moduleNameString $ unLoc $ ideclName impDecl
 
         -- importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
-#if MIN_VERSION_ghc(9,5,0)
         importInline modName (Just (EverythingBut, L r _))
           | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
           | otherwise = Nothing
-#else
-        importInline modName (Just (True, L r _))
-          | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
-          | otherwise = Nothing
-#endif
 
-#if MIN_VERSION_ghc(9,5,0)
         importInline modName (Just (Exactly, L r _))
           | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
           | otherwise = Nothing
-#else
-        importInline modName (Just (False, L r _))
-          | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
-          | otherwise = Nothing
-#endif
 
         importInline _ _ = Nothing
 

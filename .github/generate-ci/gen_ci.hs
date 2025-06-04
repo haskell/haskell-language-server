@@ -1,21 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards   #-}
 
-import Control.Monad
-import Data.Maybe
+import           Control.Monad
+import           Data.Maybe
 
-import Data.Aeson hiding ( encode )
-import Data.Aeson.Types (Pair)
-import qualified Data.Aeson.Key as K
-import Data.Yaml
+import           Data.Aeson         hiding (encode)
+import qualified Data.Aeson.Key     as K
+import           Data.Aeson.Types   (Pair)
+import           Data.Yaml
 
-import qualified Data.ByteString as BS
+import qualified Data.ByteString    as BS
 
-import qualified Data.List as L
+import qualified Data.List          as L
 
-import System.Directory
-import System.FilePath
-import System.Environment
+import           System.Directory
+import           System.Environment
+import           System.FilePath
 
 -------------------------------------------------------------------------------
 -- Configuration parameters
@@ -27,8 +27,8 @@ data Opsys
   | Windows deriving (Eq)
 
 osName :: Opsys -> String
-osName Darwin = "mac"
-osName Windows = "windows"
+osName Darwin    = "mac"
+osName Windows   = "windows"
 osName (Linux d) = "linux-" ++ distroName d
 
 data Distro
@@ -52,27 +52,25 @@ allDistros = [minBound .. maxBound]
 
 data Arch = Amd64 | AArch64
 archName :: Arch -> String
-archName Amd64 = "x86_64"
+archName Amd64   = "x86_64"
 archName AArch64 = "aarch64"
 
 artifactName :: Arch -> Opsys -> String
 artifactName arch opsys = archName arch ++ "-" ++ case opsys of
   Linux distro -> "linux-" ++ distroName distro
-  Darwin -> "apple-darwin"
-  Windows -> "mingw64"
+  Darwin       -> "apple-darwin"
+  Windows      -> "mingw64"
 
 data GHC
-  = GHC948
-  | GHC967
+  = GHC967
   | GHC984
   | GHC9102
   | GHC9122
   deriving (Eq, Enum, Bounded)
 
 ghcVersion :: GHC -> String
-ghcVersion GHC948 = "9.4.8"
-ghcVersion GHC967 = "9.6.7"
-ghcVersion GHC984 = "9.8.4"
+ghcVersion GHC967  = "9.6.7"
+ghcVersion GHC984  = "9.8.4"
 ghcVersion GHC9102 = "9.10.2"
 ghcVersion GHC9122 = "9.12.2"
 
@@ -89,34 +87,34 @@ data Stage = Build GHC | Bindist | Test
 -------------------------------------------------------------------------------
 
 distroImage :: Distro -> String
-distroImage Debian9 = "debian:9"
-distroImage Debian10 = "debian:10"
-distroImage Debian11 = "debian:11"
-distroImage Debian12 = "debian:12"
+distroImage Debian9    = "debian:9"
+distroImage Debian10   = "debian:10"
+distroImage Debian11   = "debian:11"
+distroImage Debian12   = "debian:12"
 distroImage Ubuntu1804 = "ubuntu:18.04"
 distroImage Ubuntu2004 = "ubuntu:20.04"
 distroImage Ubuntu2204 = "ubuntu:22.04"
-distroImage Mint193 = "linuxmintd/mint19.3-amd64"
-distroImage Mint202 = "linuxmintd/mint20.2-amd64"
-distroImage Mint213 = "linuxmintd/mint21.3-amd64"
-distroImage Fedora33 = "fedora:33"
-distroImage Fedora40 = "fedora:40"
-distroImage Rocky8 = "rockylinux:8"
+distroImage Mint193    = "linuxmintd/mint19.3-amd64"
+distroImage Mint202    = "linuxmintd/mint20.2-amd64"
+distroImage Mint213    = "linuxmintd/mint21.3-amd64"
+distroImage Fedora33   = "fedora:33"
+distroImage Fedora40   = "fedora:40"
+distroImage Rocky8     = "rockylinux:8"
 
 distroName :: Distro -> String
-distroName Debian9 = "deb9"
-distroName Debian10 = "deb10"
-distroName Debian11 = "deb11"
-distroName Debian12 = "deb12"
+distroName Debian9    = "deb9"
+distroName Debian10   = "deb10"
+distroName Debian11   = "deb11"
+distroName Debian12   = "deb12"
 distroName Ubuntu1804 = "ubuntu1804"
 distroName Ubuntu2004 = "ubuntu2004"
 distroName Ubuntu2204 = "ubuntu2204"
-distroName Mint193 = "mint193"
-distroName Mint202 = "mint202"
-distroName Mint213 = "mint213"
-distroName Fedora33 = "fedora33"
-distroName Fedora40 = "fedora40"
-distroName Rocky8 = "unknown"
+distroName Mint193    = "mint193"
+distroName Mint202    = "mint202"
+distroName Mint213    = "mint213"
+distroName Fedora33   = "fedora33"
+distroName Fedora40   = "fedora40"
+distroName Rocky8     = "unknown"
 
 distroInstall :: Distro -> String
 distroInstall Debian9    = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
@@ -165,13 +163,13 @@ envVars arch os = object $
      baseEnv
   ++ [ "TARBALL_EXT" .= str (case os of
           Windows -> "zip"
-          _ -> "tar.xz")
+          _       -> "tar.xz")
      , "ARCH" .= str (case arch of
-         Amd64 -> "64"
+         Amd64   -> "64"
          AArch64 -> "ARM64")
      , "ADD_CABAL_ARGS" .= str (case (os,arch) of
         (Linux _, Amd64) -> "--enable-split-sections"
-        _ -> "")
+        _                -> "")
      , "ARTIFACT" .= artifactName arch os
      ]
   ++ [ "DEBIAN_FRONTEND" .= str "noninteractive"
@@ -186,21 +184,21 @@ envVars arch os = object $
 
 -- | Runner selection
 runner :: Arch -> Opsys -> [Value]
-runner Amd64 (Linux _) = ["ubuntu-latest"]
+runner Amd64 (Linux _)   = ["ubuntu-latest"]
 runner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
-runner Amd64 Darwin = ["macOS-13"]
-runner AArch64 Darwin = ["self-hosted", "macOS", "ARM64"]
-runner Amd64 Windows = ["windows-latest"]
-runner AArch64 Windows = error "aarch64 windows not supported"
+runner Amd64 Darwin      = ["macOS-13"]
+runner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
+runner Amd64 Windows     = ["windows-latest"]
+runner AArch64 Windows   = error "aarch64 windows not supported"
 
 -- | Runner selection for bindist jobs
 bindistRunner :: Arch -> Opsys -> [Value]
-bindistRunner Amd64 (Linux _) = ["self-hosted", "linux-space", "maerwald"]
+bindistRunner Amd64 (Linux _)   = ["self-hosted", "linux-space", "maerwald"]
 bindistRunner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
-bindistRunner Amd64 Darwin = ["macOS-13"]
-bindistRunner AArch64 Darwin = ["self-hosted", "macOS", "ARM64"]
-bindistRunner Amd64 Windows = ["windows-latest"]
-bindistRunner AArch64 Windows = error "aarch64 windows not supported"
+bindistRunner Amd64 Darwin      = ["macOS-13"]
+bindistRunner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
+bindistRunner Amd64 Windows     = ["windows-latest"]
+bindistRunner AArch64 Windows   = error "aarch64 windows not supported"
 
 -------------------------------------------------------------------------------
 -- Action generatation
@@ -220,7 +218,7 @@ bindistRunner AArch64 Windows = error "aarch64 windows not supported"
 -- called 'actionName', located at 'actionPath'
 data Action
   = Action
-  { actionName  :: String
+  { actionName   :: String
   , actionDistro :: Distro
   }
 
@@ -259,7 +257,7 @@ instance ToJSON Action where
 
 configAction :: Config -> Maybe Action
 configAction (MkConfig Amd64 (Linux d) _) = Just $ Action (distroActionName d) d
-configAction _ = Nothing
+configAction _                            = Nothing
 
 distroActionName :: Distro -> String
 distroActionName d = "action-" ++ distroName d
@@ -279,7 +277,7 @@ customAction d st = flip (ghAction stepName (actionPath d)) [] $ case st of
   where
     stepName = case st of
       Build v -> "Build " ++ ghcVersion v
-      Test -> "Test"
+      Test    -> "Test"
       Bindist -> "Bindist"
 
 -------------------------------------------------------------------------------

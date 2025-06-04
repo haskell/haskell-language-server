@@ -24,13 +24,7 @@ import           Language.LSP.Protocol.Types
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,4,0)
-import           GHC.Parser.Annotation                     (IsUnicodeSyntax (..),
-                                                            TrailingAnn (..))
-import           Language.Haskell.GHC.ExactPrint           (d1)
-#endif
-
-#if MIN_VERSION_ghc(9,4,0) && !MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,6,0) && !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.ExactPrint            (epl)
 import           GHC.Parser.Annotation                     (TokenLocation (..))
 #endif
@@ -50,8 +44,9 @@ import           GHC                                       (DeltaPos (..),
                                                             IsUnicodeSyntax (NormalSyntax))
 import           Language.Haskell.GHC.ExactPrint           (d1, setEntryDP)
 #endif
+
 #if MIN_VERSION_ghc(9,11,0)
-import GHC.Parser.Annotation (EpToken(..))
+import           GHC.Parser.Annotation                     (EpToken (..))
 #endif
 
 -- When GHC tells us that a variable is not bound, it will tell us either:
@@ -79,27 +74,33 @@ plugin parsedModule Diagnostic {_message, _range}
 --      addArgToMatch "foo" `bar arg1 arg2 = ...`
 --   => (`bar arg1 arg2 foo = ...`, 2)
 addArgToMatch :: T.Text -> GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))) -> (GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))), Int)
+
+-- NOTE: The code duplication within CPP clauses avoids a parse error with
+-- `stylish-haskell`.
 #if MIN_VERSION_ghc(9,11,0)
 addArgToMatch name (L locMatch (Match xMatch ctxMatch (L l pats) rhs)) =
-#else
-addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
-#endif
-#if MIN_VERSION_ghc(9,9,0)
   let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
       newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
       -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
       -- the newly added pattern and the rest
       indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
       indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
+   in (L locMatch (Match xMatch ctxMatch (L l (pats <> [newPat])) (indentRhs rhs)), Prelude.length pats)
+#elif MIN_VERSION_ghc(9,9,0)
+addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
+  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
+      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
+      -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
+      -- the newly added pattern and the rest
+      indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
+      indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
+   in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
 #else
+addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
   let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
       indentRhs = id
-#endif
-#if MIN_VERSION_ghc(9,11,0)
-  in (L locMatch (Match xMatch ctxMatch (L l (pats <> [newPat])) (indentRhs rhs)), Prelude.length pats)
-#else
-  in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
+   in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
 #endif
 
 -- Attempt to insert a binding pattern into each match for the given LHsDecl; succeeds only if the function is a FunBind.
@@ -186,23 +187,15 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
           , L wildCardAnn $ HsWildCardTy NoEpTok
 #else
           , L wildCardAnn $ HsWildCardTy noExtField
-#endif 
+#endif
           )
-#elif MIN_VERSION_ghc(9,4,0)
+#else
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem []) emptyComments) generatedSrcSpan
         arrowAnn = TokenLoc (epl 1)
         newArg =
           ( SrcSpanAnn mempty generatedSrcSpan
           , noAnn
           , HsUnrestrictedArrow (L arrowAnn HsNormalTok)
-          , L wildCardAnn $ HsWildCardTy noExtField
-          )
-#else
-        wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem [AddRarrowAnn d1]) emptyComments) generatedSrcSpan
-        newArg =
-          ( SrcSpanAnn mempty generatedSrcSpan
-          , noAnn
-          , HsUnrestrictedArrow NormalSyntax
           , L wildCardAnn $ HsWildCardTy noExtField
           )
 #endif

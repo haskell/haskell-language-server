@@ -77,9 +77,7 @@ showErr e =
                                       $ bagToList
                                       $ fmap (vcat . unDecorated
                                                    . diagnosticMessage
-#if MIN_VERSION_ghc(9,5,0)
                                                     (defaultDiagnosticOpts @GhcMessage)
-#endif
                                                    . errMsgDiagnostic)
                                       $ getMessages msgs
     _ ->

@@ -472,11 +472,7 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
 
 isExplicitImport :: ImportDecl GhcRn -> Bool
-#if MIN_VERSION_ghc(9,5,0)
 isExplicitImport ImportDecl {ideclImportList = Just (Exactly, _)} = True
-#else
-isExplicitImport ImportDecl {ideclHiding = Just (False, _)}       = True
-#endif
 isExplicitImport _                                                = False
 
 -- This number is somewhat arbitrarily chosen. Ideally the protocol would tell us these things,
@@ -528,11 +524,7 @@ abbreviateImportTitleWithoutModule = abbreviateImportTitle . T.dropWhile (/= '('
 
 
 filterByImport :: ImportDecl GhcRn -> Map.Map ModuleName [AvailInfo] -> Maybe (Map.Map ModuleName [AvailInfo])
-#if MIN_VERSION_ghc(9,5,0)
 filterByImport (ImportDecl{ideclImportList = Just (_, L _ names)})
-#else
-filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
-#endif
   avails =
       -- if there is a function defined in the current module and is used
       -- i.e. if a function is not reexported but defined in current
@@ -549,22 +541,12 @@ filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
 filterByImport _ _ = Nothing
 
 constructImport :: ImportDecl GhcRn -> ImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> ImportDecl GhcRn
-#if MIN_VERSION_ghc(9,5,0)
 constructImport ImportDecl{ideclQualified = qualified, ideclImportList = origHiding} imd@ImportDecl{ideclImportList = Just (hiding, L _ names)}
-#else
-constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding} imd@ImportDecl{ideclHiding = Just (hiding, L _ names)}
-#endif
   (newModuleName, avails) = imd
     { ideclName = noLocA newModuleName
-#if MIN_VERSION_ghc(9,5,0)
     , ideclImportList = if isNothing origHiding && qualified /= NotQualified
                         then Nothing
                         else Just (hiding, noLocA newNames)
-#else
-    , ideclHiding = if isNothing origHiding && qualified /= NotQualified
-                        then Nothing
-                        else Just (hiding, noLocA newNames)
-#endif
     }
     where newNames = filter (\n -> any (n `containsAvail`) avails) names
           -- Check if a name is exposed by AvailInfo (the available information of a module)

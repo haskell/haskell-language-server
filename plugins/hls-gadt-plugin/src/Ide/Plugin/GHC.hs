@@ -26,18 +26,13 @@ import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,5,0)
 import qualified Data.List.NonEmpty                      as NE
-#endif
-
-#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,9,0)
-import           GHC.Parser.Annotation                   (TokenLocation (..))
-#endif
 
 #if !MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                   (Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
                                                           SrcSpanAnn' (SrcSpanAnn),
+                                                          TokenLocation (..),
                                                           spanAsAnchor)
 #endif
 
@@ -106,6 +101,7 @@ h98ToGADTConDecl ::
 h98ToGADTConDecl dataName tyVars ctxt = \case
     ConDeclH98{..} ->
         ConDeclGADT
+
 #if MIN_VERSION_ghc(9,11,0)
             (AnnConDeclGADT [] [] NoEpUniTok)
 #elif MIN_VERSION_ghc(9,9,0)
@@ -113,13 +109,10 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
 #else
             con_ext
 #endif
-#if MIN_VERSION_ghc(9,5,0)
-            (NE.singleton con_name)
-#else
-            [con_name]
-#endif
 
-#if MIN_VERSION_ghc(9,5,0) && !MIN_VERSION_ghc(9,9,0)
+            (NE.singleton con_name)
+
+#if !MIN_VERSION_ghc(9,9,0)
             (L NoTokenLoc HsNormalTok)
 #endif
             -- Ignore all existential type variable since GADT not needed

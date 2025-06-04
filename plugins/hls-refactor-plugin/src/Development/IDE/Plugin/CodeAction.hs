@@ -18,7 +18,6 @@ module Development.IDE.Plugin.CodeAction
     ) where
 
 import           Control.Applicative                               ((<|>))
-import           Control.Applicative.Combinators.NonEmpty          (sepBy1)
 import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
@@ -73,15 +72,13 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC                                               (
-                                                                    DeltaPos (..),
+import           GHC                                               (DeltaPos (..),
                                                                     EpAnn (..),
                                                                     LEpaComment)
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.Logger                                        hiding
                                                                    (group)
 import           Ide.PluginUtils                                   (extendToFullLines,
-                                                                    extractTextInRange,
                                                                     subRange)
 import           Ide.Types
 import           Language.LSP.Protocol.Message                     (Method (..),
@@ -101,7 +98,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
 import qualified Text.Fuzzy.Parallel                               as TFP
-import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -109,9 +105,9 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.Compat.ExactPrint             (makeDeltaAst)
 import           GHC                                               (AddEpAnn (AddEpAnn),
-                                                                    AnnsModule (am_main),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
+                                                                    AnnsModule (am_main),
                                                                     EpaLocation (..))
 #endif
 
@@ -122,12 +118,13 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
 #endif
+
 #if MIN_VERSION_ghc(9,11,0)
-import           GHC                                               (EpaLocation,
-                                                                    AnnsModule (am_where),
+import           GHC                                               (AnnsModule (am_where),
+                                                                    EpToken (..),
+                                                                    EpaLocation,
                                                                     EpaLocation' (..),
-                                                                    HasLoc (..),
-                                                                    EpToken (..))
+                                                                    HasLoc (..))
 #endif
 
 
@@ -270,19 +267,11 @@ extendImportHandler' ideState ExtendImport {..}
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ ideclName
-#if MIN_VERSION_ghc(9,5,0)
                                                       , ideclImportList = Just (Exactly, _)
-#else
-                                                      , ideclHiding = Just (False, _)
-#endif
                                                       }) =
     not (isQualifiedImport it) && unLoc ideclName == wantedModule
 isWantedModule wantedModule (Just qual) (L _ ImportDecl{ ideclAs, ideclName
-#if MIN_VERSION_ghc(9,5,0)
                                                        , ideclImportList = Just (Exactly, _)
-#else
-                                                       , ideclHiding = Just (False, _)
-#endif
                                                        }) =
     unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc <$> ideclAs) == Just qual)
 isWantedModule _ _ _ = False
@@ -680,14 +669,16 @@ suggestDeleteUnusedBinding
         indexedContent
         name
         (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
-        let go bag lsigs =
+        let emptyBag bag =
 #if MIN_VERSION_ghc(9,11,0)
-                if null bag
+                null bag
 #else
-                if isEmptyBag bag
+                isEmptyBag bag
 #endif
-                then []
-                else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
+            go bag lsigs =
+                  if emptyBag bag
+                  then []
+                  else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
         case grhssLocalBinds of
           (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
           _                                     -> []
@@ -858,7 +849,6 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
-#if MIN_VERSION_ghc(9,4,0)
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
                                        , ".*to type ‘([^ ]+)’ "
                                        , "in the following constraint"
@@ -869,17 +859,6 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
                                        , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
-#else
-      pat multiple at inArg inExpr = T.concat [ ".*Defaulting the following constraint"
-                                       , if multiple then "s" else ""
-                                       , " to type ‘([^ ]+)’ "
-                                       , ".*arising from the literal ‘(.+)’"
-                                       , if inArg then ".+In the.+argument" else ""
-                                       , if at then ".+at ([^ ]*)" else ""
-                                       , if inExpr then ".+In the expression" else ""
-                                       , ".+In the expression"
-                                       ]
-#endif
       codeEdit range ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
             edits = [TextEdit range replacement]
@@ -1159,17 +1138,10 @@ occursUnqualified symbol ImportDecl{..}
     | isNothing ideclAs = Just False /=
             -- I don't find this particularly comprehensible,
             -- but HLint suggested me to do so...
-#if MIN_VERSION_ghc(9,5,0)
         (ideclImportList <&> \(isHiding, L _ ents) ->
             let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
             in (isHiding == EverythingBut) && not occurs || (isHiding == Exactly) && occurs
         )
-#else
-        (ideclHiding <&> \(isHiding, L _ ents) ->
-            let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
-            in isHiding && not occurs || not isHiding && occurs
-        )
-#endif
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
@@ -1507,11 +1479,6 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
         >>= (findImportDeclByModuleName hsmodImports . T.unpack)
         >>= ideclAs . unLoc
         <&> T.pack . moduleNameString . unLoc
-  , -- tentative workaround for detecting qualification in GHC 9.4
-    -- FIXME: We can delete this after dropping the support for GHC 9.4
-    qualGHC94 <-
-        guard (ghcVersion == GHC94)
-            *> extractQualifiedModuleNameFromMissingName (extractTextInRange _range fileContents)
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
 #if MIN_VERSION_ghc(9,7,0)
@@ -1520,83 +1487,12 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
 #endif
   = let qis = qualifiedImportStyle df
-        -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
-        -- In what fllows, @missing@ is assumed to be qualified name.
-        -- @thingMissing@ is already as desired with GHC != 9.4.
-        -- In GHC 9.4, however, GHC drops a module qualifier from a qualified symbol.
-        -- Thus we need to explicitly concatenate qualifier explicity in GHC 9.4.
-        missing
-            | GHC94 <- ghcVersion
-            , isNothing (qual <|> qual')
-            , Just q <- qualGHC94 =
-                qualify q thingMissing
-            | otherwise = thingMissing
         suggestions = nubSortBy simpleCompareImportSuggestion
-          (constructNewImportSuggestions packageExportsMap (qual <|> qual' <|> qualGHC94, missing) extendImportSuggestions qis) in
+          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
-    qualify q (NotInScopeDataConstructor d) = NotInScopeDataConstructor (q <> "." <> d)
-    qualify q (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (q <> "." <> d)
-    qualify q (NotInScopeThing d) = NotInScopeThing (q <> "." <> d)
-
     L _ HsModule {..} = ps
 suggestNewImport _ _ _ _ _ = []
-
-{- |
-Extracts qualifier of the symbol from the missing symbol.
-Input must be either a plain qualified variable or possibly-parenthesized qualified binary operator (though no strict checking is done for symbol part).
-This is only needed to alleviate the issue #3473.
-
-FIXME: We can delete this after dropping the support for GHC 9.4
-
->>> extractQualifiedModuleNameFromMissingName "P.lookup"
-Just "P"
-
->>> extractQualifiedModuleNameFromMissingName "ΣP3_'.σlookup"
-Just "\931P3_'"
-
->>> extractQualifiedModuleNameFromMissingName "ModuleA.Gre_ekσ.goodδ"
-Just "ModuleA.Gre_ek\963"
-
->>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ.+)"
-Just "ModuleA.Gre_ek\963"
-
->>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ..|.)"
-Just "ModuleA.Gre_ek\963"
-
->>> extractQualifiedModuleNameFromMissingName "A.B.|."
-Just "A.B"
--}
-extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
-extractQualifiedModuleNameFromMissingName (T.strip -> missing)
-    = T.pack <$> (T.unpack missing RE.=~ qualIdentP)
-    where
-        {-
-        NOTE: Haskell 2010 allows /unicode/ upper & lower letters
-        as a module name component; otoh, regex-tdfa only allows
-        /ASCII/ letters to be matched with @[[:upper:]]@ and/or @[[:lower:]]@.
-        Hence we use regex-applicative(-text) for finer-grained predicates.
-
-        RULES (from [Section 10 of Haskell 2010 Report](https://www.haskell.org/onlinereport/haskell2010/haskellch10.html)):
-            modid	→	{conid .} conid
-            conid	→	large {small | large | digit | ' }
-            small	→	ascSmall | uniSmall | _
-            ascSmall	→	a | b | … | z
-            uniSmall	→	any Unicode lowercase letter
-            large	→	ascLarge | uniLarge
-            ascLarge	→	A | B | … | Z
-            uniLarge	→	any uppercase or titlecase Unicode letter
-        -}
-
-        qualIdentP = parensQualOpP <|> qualVarP
-        parensQualOpP = RE.sym '(' *> modNameP <* RE.sym '.' <* RE.anySym <* RE.few RE.anySym <* RE.sym ')'
-        qualVarP = modNameP <* RE.sym '.' <* RE.some RE.anySym
-        conIDP = RE.withMatched $
-            RE.psym isUpper
-            *> RE.many
-                (RE.psym $ \c -> c == '\'' || c == '_' || isUpper c || isLower c || isDigit c)
-        modNameP = fmap snd $ RE.withMatched $ conIDP `sepBy1` RE.sym '.'
-
 
 -- | A Backward compatible implementation of `lookupOccEnv_AllNameSpaces` for
 -- GHC <=9.6
@@ -1740,11 +1636,7 @@ findPositionAfterModuleName ps _hsmodName' = do
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
     -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
-#if MIN_VERSION_ghc(9,5,0)
     whereKeywordLineOffset = case hsmodAnn hsmodExt of
-#else
-    whereKeywordLineOffset = case hsmodAnn of
-#endif
         EpAnn _ annsModule _ -> do
             -- Find the first 'where'
 #if MIN_VERSION_ghc(9,11,0)
@@ -1757,8 +1649,8 @@ findPositionAfterModuleName ps _hsmodName' = do
         EpAnnNotUsed -> Nothing
 #endif
 #if MIN_VERSION_ghc(9,11,0)
-    filterWhere (EpTok loc) = Just loc
-    filterWhere _ = Nothing
+    filterWhere (EpTok loc)             = Just loc
+    filterWhere _                       = Nothing
 #else
     filterWhere (AddEpAnn AnnWhere loc) = Just loc
     filterWhere _                       = Nothing
@@ -1768,11 +1660,8 @@ findPositionAfterModuleName ps _hsmodName' = do
 #if MIN_VERSION_ghc(9,9,0)
     epaLocationToLine (EpaSpan sp)
       = fmap (srcLocLine . realSrcSpanEnd) $ srcSpanToRealSrcSpan sp
-#elif MIN_VERSION_ghc(9,5,0)
-    epaLocationToLine (EpaSpan sp _)
-      = Just . srcLocLine . realSrcSpanEnd $ sp
 #else
-    epaLocationToLine (EpaSpan sp)
+    epaLocationToLine (EpaSpan sp _)
       = Just . srcLocLine . realSrcSpanEnd $ sp
 #endif
 #if MIN_VERSION_ghc(9,11,0)
@@ -1797,7 +1686,7 @@ findPositionAfterModuleName ps _hsmodName' = do
 
 #if MIN_VERSION_ghc(9,11,0)
     anchorOpLine :: EpaLocation' a -> Int
-    anchorOpLine EpaSpan{}                           = 0
+    anchorOpLine EpaSpan{}                             = 0
     anchorOpLine (EpaDelta _ (SameLine _) _)           = 0
     anchorOpLine (EpaDelta _ (DifferentLine line _) _) = line
 #elif MIN_VERSION_ghc(9,9,0)
@@ -2056,21 +1945,12 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
-#if MIN_VERSION_ghc(9,5,0)
 rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
   } b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
     b' = wrapOperatorInParens b
-#else
-rangesForBindingImport ImportDecl{
-  ideclHiding = Just (False, L _ lies)
-  } b =
-    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
-  where
-    b' = wrapOperatorInParens b
-#endif
 rangesForBindingImport _ _ = []
 
 wrapOperatorInParens :: String -> String

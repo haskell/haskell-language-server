@@ -32,11 +32,9 @@ import           GHC.Types.SrcLoc
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo
 import           GHC.Unit.Module.Location          (ModLocation (..))
 import           GHC.Unit.Module.WholeCoreBindings
-#endif
 
 -- Orphan instance for Shake.hs
 -- https://hub.darcs.net/ross/transformers/issue/86
@@ -68,13 +66,10 @@ instance NFData Unlinked where
   rnf (DotA f)           = rnf f
   rnf (DotDLL f)         = rnf f
   rnf (BCOs a b)         = seqCompiledByteCode a `seq` liftRnf rwhnf b
-#if MIN_VERSION_ghc(9,5,0)
   rnf (CoreBindings wcb) = rnf wcb
   rnf (LoadedBCOs us)    = rnf us
 #endif
-#endif
 
-#if MIN_VERSION_ghc(9,5,0)
 instance NFData WholeCoreBindings where
 #if MIN_VERSION_ghc(9,11,0)
   rnf (WholeCoreBindings bs m ml f) = rnf bs `seq` rnf m `seq` rnf ml `seq` rnf f
@@ -87,7 +82,6 @@ instance NFData ModLocation where
     rnf (OsPathModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
 #else
     rnf (ModLocation mf f1 f2 f3 f4 f5) = rnf mf `seq` rnf f1 `seq` rnf f2 `seq` rnf f3 `seq` rnf f4 `seq` rnf f5
-#endif
 #endif
 
 instance Show PackageFlag where show = unpack . printOutputable
@@ -102,12 +96,6 @@ instance NFData SB.StringBuffer where rnf = rwhnf
 
 instance Show Module where
     show = moduleNameString . moduleName
-
-
-#if !MIN_VERSION_ghc(9,5,0)
-instance (NFData l, NFData e) => NFData (GenLocated l e) where
-    rnf (L l e) = rnf l `seq` rnf e
-#endif
 
 instance Show ModSummary where
     show = show . ms_mod
@@ -191,11 +179,6 @@ instance NFData Type where
 instance Show a => Show (Bag a) where
     show = show . bagToList
 
-#if !MIN_VERSION_ghc(9,5,0)
-instance NFData HsDocString where
-    rnf = rwhnf
-#endif
-
 instance Show ModGuts where
     show _ = "modguts"
 instance NFData ModGuts where
@@ -204,11 +187,7 @@ instance NFData ModGuts where
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
 
-#if MIN_VERSION_ghc(9,5,0)
 instance (NFData (HsModule a)) where
-#else
-instance (NFData HsModule) where
-#endif
   rnf = rwhnf
 
 instance Show OccName where show = unpack . printOutputable
@@ -239,10 +218,8 @@ instance NFData UnitId where
 instance NFData NodeKey where
   rnf = rwhnf
 
-#if MIN_VERSION_ghc(9,5,0)
 instance NFData HomeModLinkable where
   rnf = rwhnf
-#endif
 
 instance NFData (HsExpr (GhcPass Renamed)) where
     rnf = rwhnf
@@ -261,16 +238,3 @@ instance NFData Extension where
 
 instance NFData (UniqFM Name [Name]) where
   rnf (ufmToIntMap -> m) = rnf m
-
-#if !MIN_VERSION_ghc(9,5,0)
-instance NFData DuplicateRecordFields where
-  rnf DuplicateRecordFields   = ()
-  rnf NoDuplicateRecordFields = ()
-
-instance NFData FieldSelectors where
-  rnf FieldSelectors   = ()
-  rnf NoFieldSelectors = ()
-
-instance NFData FieldLabel where
-  rnf (FieldLabel a b c d) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
-#endif

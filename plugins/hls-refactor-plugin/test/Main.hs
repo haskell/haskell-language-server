@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
@@ -1359,8 +1359,7 @@ extendImportTests = testGroup "extend import actions"
                     [ "import Data.Monoid (First (..))"
                     , "f = (First Nothing) <> mempty"
                     ])
-        , brokenForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
-          testSession "extend single line qualified import with value" $ template
+        , testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
@@ -1552,8 +1551,7 @@ extendImportTests = testGroup "extend import actions"
                 )
                 (Range (Position 2 3) (Position 2 7))
             )
-        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
-          testSession "type constructor name same as data constructor name" $ template
+        , testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "newtype Foo = Foo Int"
@@ -1855,7 +1853,7 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    ([ ignoreForGhcVersions [GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    ([ ignoreForGhcVersions [GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
     ++ [
         theTestIndirect qualifiedGhcRecords polymorphicType
@@ -2619,9 +2617,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = 1"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘1’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A (f) where"
@@ -2638,9 +2634,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    let x = 3"
       , "    in x"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘3’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2658,9 +2652,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    let x = let y = 5 in y"
       , "    in x"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘5’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2679,15 +2671,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = seq \"debug\" traceShow \"debug\""
       ]
-      (if ghcVersion >= GHC94
-        then
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
-          ]
-        else
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint", Nothing)
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint", Nothing)
-          ])
+      [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
+      , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
+      ]
       ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2707,9 +2693,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f a = traceShow \"debug\" a"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
       ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2729,9 +2713,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
       ("Add type annotation ‘"<> stringLit <>"’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -3405,8 +3387,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
-      testSession "type is exported but not the constructor of same name" $ templateNoAction
+    , testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
         , "data Foo = Foo"
@@ -4049,6 +4030,3 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 -- @/var@
 withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir f = System.IO.Extra.withTempDir $ (canonicalizePath >=> f)
-
-brokenForGHC94 :: String -> TestTree -> TestTree
-brokenForGHC94 = knownBrokenForGhcVersions [GHC94]

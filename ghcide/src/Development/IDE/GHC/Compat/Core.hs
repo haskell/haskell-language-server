@@ -375,27 +375,13 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Unit.Finder.Types,
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
-#if !MIN_VERSION_ghc(9,4,0)
-    pattern HsFieldBind,
-    hfbAnn,
-    hfbLHS,
-    hfbRHS,
-    hfbPun,
-#endif
-#if !MIN_VERSION_ghc_boot_th(9,4,1)
-    Extension(.., NamedFieldPuns),
-#else
     Extension(..),
-#endif
     mkCgInteractiveGuts,
     justBytecode,
     justObjects,
     emptyHomeModInfoLinkable,
     homeModInfoByteCode,
     homeModInfoObject,
-#if !MIN_VERSION_ghc(9,5,0)
-    field_label,
-#endif
     groupOrigin,
     isVisibleFunArg,
 #if MIN_VERSION_ghc(9,8,0)
@@ -630,20 +616,10 @@ pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
 isVisibleFunArg :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Bool
-#if __GLASGOW_HASKELL__ >= 906
 isVisibleFunArg = TypesVar.isVisibleFunArg
 type FunTyFlag = TypesVar.FunTyFlag
-#else
-isVisibleFunArg VisArg = True
-isVisibleFunArg _ = False
-type FunTyFlag = TypesVar.AnonArgFlag
-#endif
 pattern FunTy :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Type -> Type -> Type
 pattern FunTy af arg res <- TyCoRep.FunTy {ft_af = af, ft_arg = arg, ft_res = res}
-
-
--- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
--- type HasSrcSpan x = () :: Constraint
 
 class HasSrcSpan a where
   getLoc :: a -> SrcSpan
@@ -750,11 +726,7 @@ makeSimpleDetails hsc_env =
 
 mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> Maybe CoreProgram -> TcGblEnv -> IO ModIface
 mkIfaceTc hscEnv shm md _ms _mcp =
-#if MIN_VERSION_ghc(9,5,0)
   GHC.mkIfaceTc hscEnv shm md _ms _mcp -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
-#else
-  GHC.mkIfaceTc hscEnv shm md _ms -- ms::ModSummary is only used in GHC >= 9.4
-#endif
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
 mkBootModDetailsTc session = GHC.mkBootModDetailsTc
@@ -768,50 +740,10 @@ initTidyOpts =
 driverNoStop :: StopPhase
 driverNoStop = NoStop
 
-
-#if !MIN_VERSION_ghc(9,4,0)
-pattern HsFieldBind :: XHsRecField id -> id -> arg -> Bool -> HsRecField' id arg
-pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- HsRecField hfbAnn (SrcLoc.unLoc -> hfbLHS) hfbRHS hfbPun where
-  HsFieldBind ann lhs rhs pun = HsRecField ann (SrcLoc.noLoc lhs) rhs pun
-#endif
-
-#if !MIN_VERSION_ghc_boot_th(9,4,1)
-pattern NamedFieldPuns :: Extension
-pattern NamedFieldPuns = RecordPuns
-#endif
-
 groupOrigin :: MatchGroup GhcRn body -> Origin
-#if MIN_VERSION_ghc(9,5,0)
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = fmap
 groupOrigin = mg_ext
-#else
-mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
-mapLoc = SrcLoc.mapLoc
-groupOrigin = mg_origin
-#endif
-
-
-#if !MIN_VERSION_ghc(9,5,0)
-mkCgInteractiveGuts :: CgGuts -> CgGuts
-mkCgInteractiveGuts = id
-
-emptyHomeModInfoLinkable :: Maybe Linkable
-emptyHomeModInfoLinkable = Nothing
-
-justBytecode :: Linkable -> Maybe Linkable
-justBytecode = Just
-
-justObjects :: Linkable -> Maybe Linkable
-justObjects = Just
-
-homeModInfoByteCode, homeModInfoObject :: HomeModInfo -> Maybe Linkable
-homeModInfoByteCode = hm_linkable
-homeModInfoObject = hm_linkable
-
-field_label :: a -> a
-field_label = id
-#endif
 
 mkSimpleTarget :: DynFlags -> FilePath -> Target
 mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Nothing

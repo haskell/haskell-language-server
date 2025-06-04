@@ -73,11 +73,7 @@ apiAnnComments' pm = do
 #endif
             span) c)
   where
-#if MIN_VERSION_ghc(9,5,0)
     getEpaComments :: Development.IDE.GHC.Compat.Located (HsModule GhcPs) -> [LEpaComment]
-#else
-    getEpaComments :: Development.IDE.GHC.Compat.Located HsModule -> [LEpaComment]
-#endif
     getEpaComments = toListOf biplate
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan

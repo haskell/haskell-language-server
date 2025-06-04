@@ -3,7 +3,10 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-module Ide.Plugin.ConfigUtils where
+module Ide.Plugin.ConfigUtils (
+  pluginsToDefaultConfig,
+  pluginsToVSCodeExtensionSchema
+  ) where
 
 import           Control.Lens                  (at, (&), (?~))
 import qualified Data.Aeson                    as A
@@ -31,10 +34,10 @@ pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
   -- Use '_Object' and 'at' to get at the "plugin" key
   -- and actually set it.
-  A.toJSON defaultConfig & _Object . at "plugin" ?~ elems
+  A.toJSON defaultConfig & _Object . at "plugin" ?~ pluginSpecificDefaultConfigs
   where
-    defaultConfig@Config {} = def
-    elems = A.object $ mconcat $ singlePlugin <$> ipMap
+    defaultConfig = def :: Config
+    pluginSpecificDefaultConfigs = A.object $ mconcat $ singlePlugin <$> ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
     --
@@ -48,6 +51,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     --     }
     --   }
     -- }
+    singlePlugin :: PluginDescriptor ideState -> [A.Pair]
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
        in [fromString (T.unpack pId) A..= A.object x | not $ null x]
@@ -66,8 +70,8 @@ pluginsToDefaultConfig IdePlugins {..} =
                         <> nubOrd (mconcat
                             (handlersToGenericDefaultConfig configInitialGenericConfig <$> handlers))
             in case x of
-                    -- if the plugin has only one capability, we produce globalOn instead of the specific one;
-                    -- otherwise we don't produce globalOn at all
+                    -- If the plugin has only one capability, we produce globalOn instead of the specific one;
+                    -- otherwise we omit globalOn
                     [_] -> ["globalOn" A..= plcGlobalOn configInitialGenericConfig]
                     _   -> x
         -- Example:
