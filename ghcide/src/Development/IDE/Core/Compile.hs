@@ -76,12 +76,6 @@ import           Development.IDE.Core.ProgressReporting       (progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing                 (withTrace)
-import           Development.IDE.GHC.Compat                   hiding
-                                                              (loadInterface,
-                                                               parseHeader,
-                                                               parseModule,
-                                                               tcRnModule,
-                                                               writeHieFile)
 import qualified Development.IDE.GHC.Compat                   as Compat
 import qualified Development.IDE.GHC.Compat                   as GHC
 import           Development.IDE.GHC.Compat.Driver            (hscTypecheckRenameWithDiagnostics)
@@ -129,6 +123,22 @@ import           Data.Foldable                                (toList)
 import           GHC.Unit.Module.Warnings
 #else
 import           Development.IDE.Core.FileStore               (shareFilePath)
+#endif
+
+#if MIN_VERSION_ghc(9,10,0)
+import           Development.IDE.GHC.Compat                   hiding (assert,
+                                                               loadInterface,
+                                                               parseHeader,
+                                                               parseModule,
+                                                               tcRnModule,
+                                                               writeHieFile)
+#else
+import           Development.IDE.GHC.Compat                   hiding
+                                                              (loadInterface,
+                                                               parseHeader,
+                                                               parseModule,
+                                                               tcRnModule,
+                                                               writeHieFile)
 #endif
 
 #if MIN_VERSION_ghc(9,11,0)
