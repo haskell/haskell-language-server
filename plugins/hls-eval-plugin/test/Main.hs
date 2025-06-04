@@ -84,8 +84,7 @@ tests =
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval "Evaluate a type with :kind!" "T10" "hs"
-  -- TODO: I do not understand why this is 'ghc94.expected'.
-  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" "ghc94.expected"
+  , goldenWithEval "Reports an error for an incorrect type with :kind!" "T11" "hs"
   , goldenWithEval "Shows a kind with :kind" "T12" "hs"
   , goldenWithEval "Reports an error for an incorrect type with :kind" "T13" "hs"
   , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
