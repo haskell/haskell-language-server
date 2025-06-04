@@ -9,7 +9,6 @@
 - [ ] bump package versions in all `*.cabal` files (same version as hls)
   - HLS uses lockstep versioning. The core packages and all plugins use the same version number, and only support exactly this version.
     - Exceptions:
-      - `hie-compat` requires no automatic version bump.
       - `shake-bench` is an internal testing tool, not exposed to the outside world. Thus, no version bump required for releases.
   - For updating cabal files, the following script can be used:
     - ```sh

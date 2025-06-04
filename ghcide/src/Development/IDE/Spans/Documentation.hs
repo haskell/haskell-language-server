@@ -28,6 +28,7 @@ import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Spans.Common
+import           GHC.Iface.Ext.Utils             (RefMap)
 import           Language.LSP.Protocol.Types     (filePathToUri, getUri)
 import           Prelude                         hiding (mod)
 import           System.Directory

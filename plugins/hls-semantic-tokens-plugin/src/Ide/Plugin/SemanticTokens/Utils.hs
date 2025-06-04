@@ -10,6 +10,11 @@ import           Data.ByteString.Char8      (unpack)
 import qualified Data.Map.Strict            as Map
 import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
+import           GHC.Iface.Ext.Types        (BindType (..), ContextInfo (..),
+                                             DeclType (..), Identifier,
+                                             IdentifierDetails (..),
+                                             RecFieldContext (..), Span)
+import           GHC.Iface.Ext.Utils        (RefMap)
 import           Prelude                    hiding (length, span)
 
 deriving instance Show DeclType
