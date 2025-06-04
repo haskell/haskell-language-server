@@ -19,7 +19,11 @@ import           Data.Maybe                 (fromMaybe, mapMaybe)
 import           Data.Semigroup             (First (First, getFirst))
 import           Data.Semigroup.Foldable    (foldlM1)
 import qualified Data.Set                   as Set
-import           Development.IDE.GHC.Compat hiding (nodeInfo)
+import           Development.IDE.GHC.Compat
+import           GHC.Iface.Ext.Types        (ContextInfo (..), HieAST (..),
+                                             Identifier, IdentifierDetails (..),
+                                             NodeInfo (nodeIdentifiers), Span)
+import           GHC.Iface.Ext.Utils        (RefMap, flattenAst)
 import           Prelude                    hiding (span)
 
 {-|

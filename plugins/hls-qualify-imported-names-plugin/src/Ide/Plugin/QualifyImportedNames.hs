@@ -32,17 +32,14 @@ import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileConte
                                                    TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
                                                    TypeCheck (TypeCheck))
 import           Development.IDE.Core.Shake       (IdeState)
-import           Development.IDE.GHC.Compat       (ContextInfo (Use),
-                                                   GenLocated (..), GhcPs,
+import           Development.IDE.GHC.Compat       (GenLocated (..), GhcPs,
                                                    GlobalRdrElt, GlobalRdrEnv,
                                                    HsModule (hsmodImports),
-                                                   Identifier,
-                                                   IdentifierDetails (IdentifierDetails, identInfo),
                                                    ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
                                                    ImportSpec (ImpSpec),
                                                    LImportDecl, ModuleName,
                                                    Name, NameEnv, ParsedModule,
-                                                   RefMap, Span, SrcSpan,
+                                                   SrcSpan,
                                                    TcGblEnv (tcg_rdr_env),
                                                    emptyUFM, globalRdrEnvElts,
                                                    gre_imp, gre_name, locA,
@@ -58,6 +55,9 @@ import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    srcSpanStartLine, unitUFM)
 import           Development.IDE.Types.Location   (Position (Position),
                                                    Range (Range), Uri)
+import           GHC.Iface.Ext.Types              (ContextInfo (..), Identifier,
+                                                   IdentifierDetails (..), Span)
+import           GHC.Iface.Ext.Utils              (RefMap)
 import           Ide.Plugin.Error                 (PluginError (PluginRuleFailed),
                                                    getNormalizedFilePathE,
                                                    handleMaybe)

@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeFamilies        #-}
@@ -43,6 +44,8 @@ import           Development.IDE.Core.Shake               (ShakeExtras (..),
                                                            getVirtualFile)
 import           Development.IDE.GHC.Compat               hiding (Warning)
 import           Development.IDE.GHC.Compat.Util          (mkFastString)
+import           GHC.Iface.Ext.Types                      (HieASTs (getAsts),
+                                                           pattern HiePath)
 import           Ide.Logger                               (logWith)
 import           Ide.Plugin.Error                         (PluginError (PluginInternalError),
                                                            getNormalizedFilePathE,

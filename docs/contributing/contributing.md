@@ -197,7 +197,6 @@ pre-commit install
 #### Why are some components excluded from automatic formatting?
 
 - `test/testdata` and `test/data` are excluded because we want to test formatting plugins.
-- `hie-compat` is excluded because we want to keep its code as close to GHC as possible.
 
 ## Plugin tutorial
 

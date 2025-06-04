@@ -69,7 +69,7 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, mbExpectedCod
       | ghcVersion >= GHC96 =
         case (mbExpectedCode, _code d) of
           (Nothing, _)                         -> True
-          (Just expectedCode, Nothing)         -> False
+          (Just _, Nothing)                    -> False
           (Just expectedCode, Just actualCode) -> InR expectedCode == actualCode
       | otherwise =  True
 
