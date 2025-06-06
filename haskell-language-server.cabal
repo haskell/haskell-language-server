@@ -347,10 +347,10 @@ library hls-cabal-project-plugin
     , directory
     , filepath
     , extra                 >=1.7.4
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.11.0.0
     , hashable
-    , hls-plugin-api        == 2.9.0.1
-    , hls-graph             == 2.9.0.1
+    , hls-plugin-api        == 2.11.0.0
+    , hls-graph             == 2.11.0.0
     , lens
     , lsp                   ^>=2.7
     , lsp-types             ^>=2.3
@@ -382,7 +382,7 @@ test-suite hls-cabal-project-plugin-tests
     , filepath
     , ghcide
     , haskell-language-server:hls-cabal-project-plugin
-    , hls-test-utils    == 2.9.0.1
+    , hls-test-utils    == 2.11.0.0
     , lens
     , lsp-types
     , text
