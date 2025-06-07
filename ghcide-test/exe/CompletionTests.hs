@@ -211,7 +211,36 @@ localCompletionTests = [
 
         compls <- getCompletions doc (Position 0 15)
         liftIO $ filter ("AAA" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["AAAAA"]
-        pure ()
+        pure (),
+    completionTest
+        "polymorphic record dot completion"
+        [ "{-# LANGUAGE OverloadedRecordDot #-}"
+        , "module A () where"
+        , "data Record = Record"
+        , "  { field1 :: Int"
+        , "  , field2 :: Int"
+        , "  }"
+        , "foo record = record.f"
+        ]
+        (Position 6 21)
+        [("field1", CompletionItemKind_Function, "field1", True, False, Nothing)
+        ,("field2", CompletionItemKind_Function, "field2", True, False, Nothing)
+        ],
+    completionTest
+        "qualified polymorphic record dot completion"
+        [ "{-# LANGUAGE OverloadedRecordDot #-}"
+        , "module A () where"
+        , "data Record = Record"
+        , "  { field1 :: Int"
+        , "  , field2 :: Int"
+        , "  }"
+        , "someValue = undefined"
+        , "foo = A.someValue.f"
+        ]
+        (Position 7 19)
+        [("field1", CompletionItemKind_Function, "field1", True, False, Nothing)
+        ,("field2", CompletionItemKind_Function, "field2", True, False, Nothing)
+        ]
     ]
 
 nonLocalCompletionTests :: [TestTree]
