@@ -905,6 +905,7 @@ library hls-pragmas-plugin
     , text
     , transformers
     , containers
+    , ghc
 
 test-suite hls-pragmas-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
