@@ -715,7 +715,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
                 let nfp = toNormalizedFilePath' fp
                 itExists <- getFileExists nfp
                 when itExists $ void $ do
-                  use_ GetModificationTime nfp
+                  use_ GetPhysicalModificationTime nfp
         mapM_ addDependency deps
 
         let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))

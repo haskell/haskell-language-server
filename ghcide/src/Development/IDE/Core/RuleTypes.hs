@@ -295,9 +295,10 @@ type instance RuleResult AddWatchedFile = Bool
 
 
 -- The Shake key type for getModificationTime queries
-newtype GetModificationTime = GetModificationTime_
+data GetModificationTime = GetModificationTime_
     { missingFileDiagnostics :: Bool
       -- ^ If false, missing file diagnostics are not reported
+    , physicalOnly :: Bool
     }
     deriving (Generic)
 
@@ -317,7 +318,10 @@ instance Hashable GetModificationTime where
 instance NFData   GetModificationTime
 
 pattern GetModificationTime :: GetModificationTime
-pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
+pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True, physicalOnly = False}
+
+pattern GetPhysicalModificationTime :: GetModificationTime
+pattern GetPhysicalModificationTime = GetModificationTime_ {missingFileDiagnostics=True, physicalOnly = True}
 
 -- | Get the modification time of a file.
 type instance RuleResult GetModificationTime = FileVersion

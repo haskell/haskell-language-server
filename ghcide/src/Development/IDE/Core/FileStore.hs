@@ -110,22 +110,23 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
 
 
 getModificationTimeRule :: Recorder (WithPriority Log) -> Rules ()
-getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
-    getModificationTimeImpl missingFileDiags file
+getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags physical) file ->
+    getModificationTimeImpl missingFileDiags physical file
 
 getModificationTimeImpl
   :: Bool
+  -> Bool
   -> NormalizedFilePath
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getModificationTimeImpl missingFileDiags file = do
+getModificationTimeImpl missingFileDiags physical file = do
     let file' = fromNormalizedFilePath file
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
     mbVf <- getVirtualFile file
     case mbVf of
-        Just (virtualFileVersion -> ver) -> do
+        Just (virtualFileVersion -> ver) | not physical -> do
             alwaysRerun
             pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
-        Nothing -> do
+        _ -> do
             isWF <- use_ AddWatchedFile file
             if isWF
                 then -- the file is watched so we can rely on FileWatched notifications,

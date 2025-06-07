@@ -1308,7 +1308,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         -- For all other rules - compute the version properly without:
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
-        | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+        | otherwise = useWithoutDependency (GetModificationTime_ False False) fp
 
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
