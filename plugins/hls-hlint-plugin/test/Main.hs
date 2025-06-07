@@ -45,7 +45,7 @@ getApplyHintText :: T.Text -> T.Text
 getApplyHintText name = "Apply hint \"" <> name <> "\""
 
 resolveTests :: TestTree
-resolveTests = testGroup "hlint resolve tests"
+resolveTests = knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testGroup "hlint resolve tests"
   [
     ignoreHintGoldenResolveTest
       "Resolve version of: Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
@@ -76,7 +76,7 @@ ignoreHintTests = testGroup "hlint ignore hint tests"
   ]
 
 applyHintTests :: TestTree
-applyHintTests = testGroup "hlint apply hint tests"
+applyHintTests = knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testGroup "hlint apply hint tests"
   [
     applyHintGoldenTest
       "[#2612] Apply hint works when operator fixities go right-to-left"
@@ -88,7 +88,7 @@ applyHintTests = testGroup "hlint apply hint tests"
 suggestionsTests :: TestTree
 suggestionsTests =
   testGroup "hlint suggestions" [
-    testCase "provides 3.8 code actions including apply all" $ runHlintSession "" $ do
+    knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "provides 3.8 code actions including apply all" $ runHlintSession "" $ do
         doc <- openDoc "Base.hs" "haskell"
         diags@(reduceDiag:_) <- hlintCaptureKick
 
@@ -120,7 +120,7 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-    , testCase "falls back to pre 3.8 code actions" $
+    , knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "falls back to pre 3.8 code actions" $
         runSessionWithTestConfig def
             { testConfigCaps = noLiteralCaps
             , testDirLocation = Left testDir
@@ -179,15 +179,15 @@ suggestionsTests =
         doc <- openDoc "CppHeader.hs" "haskell"
         testHlintDiagnostics doc
 
-    , testCase "[#590] apply-refact works with -XLambdaCase argument" $ runHlintSession "lambdacase" $ do
+    , knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "[#590] apply-refact works with -XLambdaCase argument" $ runHlintSession "lambdacase" $ do
         testRefactor "LambdaCase.hs" "Redundant bracket"
             expectedLambdaCase
 
-    , testCase "[#1242] apply-refact works with -XTypeApplications argument" $ runHlintSession "typeapps" $ do
+    , knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "[#1242] apply-refact works with -XTypeApplications argument" $ runHlintSession "typeapps" $ do
         testRefactor "TypeApplication.hs" "Redundant bracket"
             expectedTypeApp
 
-    , testCase "apply hints works with LambdaCase via language pragma" $ runHlintSession "" $ do
+    , knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "apply hints works with LambdaCase via language pragma" $ runHlintSession "" $ do
         testRefactor "LambdaCase.hs" "Redundant bracket"
             ("{-# LANGUAGE LambdaCase #-}" : expectedLambdaCase)
 
@@ -213,10 +213,10 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         testNoHlintDiagnostics doc
 
-    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+    , knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
 
-    , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
+    , knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
         testRefactor "TwoHintsAndComment.hs" "Apply all hints" expectedComments2
 
     , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
