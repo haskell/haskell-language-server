@@ -2110,7 +2110,7 @@ test-suite ghcide-tests
     , sqlite-simple
     , stm
     , stm-containers
-    , tasty
+    , tasty                  >=1.5
     , tasty-expected-failure
     , tasty-hunit             >=0.10
     , tasty-quickcheck
