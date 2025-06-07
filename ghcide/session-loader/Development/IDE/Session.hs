@@ -586,7 +586,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           unless (null new_deps || not checkProject) $ do
                 cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                    mmt <- uses GetModificationTime cfps'
+                    mmt <- uses GetPhysicalModificationTime cfps'
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
                     modIfaces <- uses GetModIface cs_exist
                     -- update exports map
