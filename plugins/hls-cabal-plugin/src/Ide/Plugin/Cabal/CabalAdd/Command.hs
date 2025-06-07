@@ -99,14 +99,14 @@ getModuleEdit recorder env cabalFilePath stanza targetFieldStr modulePath =
     cabalFilePath
     mkConfig
  where
-  mkConfig :: (ByteString -> [Field Position] -> GenericPackageDescription -> ExceptT PluginError m Config)
+  mkConfig :: (ByteString -> [Field Position] -> GenericPackageDescription -> ExceptT PluginError m AddConfig)
   mkConfig cnfOrigContents fields packDescr = do
     let compName =
           case Add.resolveComponent cabalFilePath (fields, packDescr) $ Just $ CabalPretty.prettyShow stanza of
             Right x -> x
             Left _  -> error ""
     pure $
-      Config
+      AddConfig
         { cnfOrigContents = cnfOrigContents
         , cnfFields = fields
         , cnfComponent = compName
@@ -149,7 +149,7 @@ getDependencyEdit ::
 getDependencyEdit recorder env cabalFilePath buildTarget dependency =
   mkCabalAddConfig recorder env cabalFilePath mkConfig
  where
-  mkConfig :: (ByteString -> [Field Position] -> GenericPackageDescription -> ExceptT PluginError m Config)
+  mkConfig :: (ByteString -> [Field Position] -> GenericPackageDescription -> ExceptT PluginError m AddConfig)
   mkConfig cnfOrigContents fields packDescr = do
     let specVer = specVersion $ packageDescription packDescr
     (deps, compName) <-
@@ -158,7 +158,7 @@ getDependencyEdit recorder env cabalFilePath buildTarget dependency =
         compName <- resolveComponent cabalFilePath (fields, packDescr) buildTarget
         pure (deps, compName)
     pure $
-      Config
+      AddConfig
         { cnfOrigContents = cnfOrigContents
         , cnfFields = fields
         , cnfComponent = compName
@@ -180,7 +180,7 @@ mkCabalAddConfig ::
   ( ByteString ->
     [Field Position] ->
     GenericPackageDescription ->
-    ExceptT PluginError m Config
+    ExceptT PluginError m AddConfig
   ) ->
   ExceptT PluginError m WorkspaceEdit
 mkCabalAddConfig recorder env cabalFilePath mkConfig = do
@@ -211,7 +211,7 @@ mkCabalAddConfig recorder env cabalFilePath mkConfig = do
 
   cabalAddConfig <- mkConfig cnfOrigContents fields packDescr
 
-  case executeConfig (validateChanges packDescr) cabalAddConfig of
+  case executeAddConfig (validateChanges packDescr) cabalAddConfig of
     Nothing ->
       throwE $
         PluginInternalError $

@@ -288,7 +288,7 @@ library hls-cabal-plugin
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
-    , cabal-add
+    , cabal-add             ^>=0.2
     , aeson
     , Cabal
     , pretty

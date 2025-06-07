@@ -19,8 +19,7 @@ import           Ide.Plugin.Cabal.Orphans        ()
 import           Language.LSP.Protocol.Types
 
 data Log
-  = LogFoundResponsibleCabalFile FilePath
-  | LogCalledCabalAddPackageCommand CabalAddPackageCommandParams
+  = LogCalledCabalAddPackageCommand CabalAddPackageCommandParams
   | LogCalledCabalAddModuleCommand ModuleInsertionConfig
   | LogCreatedEdit WorkspaceEdit
   | LogExecutedCommand
@@ -28,7 +27,6 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogFoundResponsibleCabalFile fp -> "Located the responsible cabal file at " <+> pretty fp
     LogCalledCabalAddPackageCommand params -> "Called CabalAddPackage command with:\n" <+> pretty params
     LogCalledCabalAddModuleCommand params -> "Called CabalAddModule command with:\n" <+> pretty params
     LogCreatedEdit edit -> "Created inplace edit:\n" <+> pretty edit

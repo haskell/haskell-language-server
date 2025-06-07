@@ -35,7 +35,6 @@ data Log
   = LogModificationTime NormalizedFilePath FileVersion
   | LogShake Shake.Log
   | LogOfInterest OfInterest.Log
-  | LogDocSaved Uri
   deriving (Show)
 
 instance Pretty Log where
@@ -44,8 +43,6 @@ instance Pretty Log where
     LogOfInterest log' -> pretty log'
     LogModificationTime nfp modTime ->
       "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
-    LogDocSaved uri ->
-      "Saved text document:" <+> pretty (getUri uri)
 
 cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 cabalRules recorder plId = do
