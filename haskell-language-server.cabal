@@ -318,6 +318,7 @@ test-suite hls-cabal-plugin-tests
     , haskell-language-server:hls-cabal-plugin
     , hls-test-utils    == 2.11.0.0
     , lens
+    , lsp
     , lsp-types
     , text
 

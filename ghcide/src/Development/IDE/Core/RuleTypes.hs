@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE PatternSynonyms    #-}
@@ -318,6 +319,13 @@ instance Hashable GetModificationTime where
     hashWithSalt salt _ = salt
 
 instance NFData   GetModificationTime
+
+data GetPhysicalModificationTime = GetPhysicalModificationTime
+    deriving (Generic, Show, Eq)
+    deriving anyclass (Hashable, NFData)
+
+-- | Get the modification time of a file on disk, ignoring any version in the VFS.
+type instance RuleResult GetPhysicalModificationTime = FileVersion
 
 pattern GetModificationTime :: GetModificationTime
 pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
