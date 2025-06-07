@@ -91,6 +91,13 @@
             },
             "globalOn": true
         },
+        "hlint": {
+            "codeActionsOn": true,
+            "config": {
+                "flags": []
+            },
+            "diagnosticsOn": true
+        },
         "importLens": {
             "codeActionsOn": true,
             "codeLensOn": true,

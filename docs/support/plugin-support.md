@@ -55,7 +55,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-explicit-record-fields-plugin`  | 2    |                          |
 | `hls-fourmolu-plugin`                | 2    |                          |
 | `hls-gadt-plugin`                    | 2    |                          |
-| `hls-hlint-plugin`                   | 2    | 9.10.1                   |
+| `hls-hlint-plugin`                   | 2    |                          |
 | `hls-module-name-plugin`             | 2    |                          |
 | `hls-notes-plugin`                   | 2    |                          |
 | `hls-qualify-imported-names-plugin`  | 2    |                          |
