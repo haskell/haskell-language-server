@@ -912,7 +912,7 @@ getCompletionPrefixFromRope pos@(Position l c) ropetext =
           [] -> Nothing
           (x:xs) -> do
             let modParts = reverse $ filter (not .T.null) xs
-                modName = T.intercalate "." modParts
+                modName = if all (isUpper . T.head) modParts then T.intercalate "." modParts else ""
             return $ PosPrefixInfo { fullLine = curLine, prefixScope = modName, prefixText = x, cursorPos = pos }
 
 completionPrefixPos :: PosPrefixInfo -> Position
