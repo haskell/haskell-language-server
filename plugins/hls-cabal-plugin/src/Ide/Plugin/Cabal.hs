@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
@@ -154,7 +155,7 @@ descriptor recorder plId =
               \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocSaved _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(saved)" $
+                  restartCabalShakeSessionPhysical (shakeExtras ide) vfs file "(saved)" $
                     addFileOfInterest recorder ide file OnDisk
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
               \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
@@ -187,6 +188,13 @@ restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = d
   restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
     return (toKey GetModificationTime file:keys)
+
+
+restartCabalShakeSessionPhysical :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
+restartCabalShakeSessionPhysical shakeExtras vfs file actionMsg actionBetweenSession = do
+  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+    keys <- actionBetweenSession
+    return (toKey GetModificationTime file:toKey GetPhysicalModificationTime file:keys)
 
 -- ----------------------------------------------------------------
 -- Plugin Rules
