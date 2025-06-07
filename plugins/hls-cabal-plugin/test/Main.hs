@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP                      #-}
+{-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE QuasiQuotes              #-}
 
 module Main (
     main,
@@ -17,14 +19,19 @@ import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
 import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
+import qualified Data.Text.IO                    as Text
 import           Definition                      (gotoDefinitionTests)
+import           Development.IDE.Test
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
+import qualified Language.LSP.Protocol.Message   as L
 import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
+import           Test.Hls.FileSystem
 import           Utils
 
 main :: IO ()
@@ -40,6 +47,7 @@ main = do
             , codeActionTests
             , gotoDefinitionTests
             , hoverTests
+            , reloadOnCabalChangeTests
             ]
 
 -- ------------------------------------------------------------------------
@@ -128,11 +136,6 @@ pluginTests =
                 _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
                 newDiags <- cabalCaptureKick
                 liftIO $ newDiags @?= []
-            , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do
-                hsDoc <- openDoc "A.hs" "haskell"
-                expectNoMoreDiagnostics 1 hsDoc "typechecking"
-                cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
-                expectNoMoreDiagnostics 1 cabalDoc "parsing"
             ]
         ]
 -- ----------------------------------------------------------------------------
@@ -262,3 +265,63 @@ hoverOnDependencyTests = testGroup "Hover Dependency"
                 h <- getHover doc pos
                 liftIO $ assertBool ("Found hover `" <> show h <> "`") $ Maybe.isNothing h
                 closeDoc doc
+
+-- ----------------------------------------------------------------------------
+-- Reloading of Haskell files on .cabal changes
+-- ----------------------------------------------------------------------------
+
+simpleCabalVft :: [FileTree]
+simpleCabalVft =
+    [ copy "hie.yaml"
+    , copy "simple-reload.cabal"
+    , copy "Main.hs"
+    ]
+
+simpleCabalFs :: VirtualFileTree
+simpleCabalFs = mkVirtualFileTree
+    (testDataDir </> "simple-reload")
+    simpleCabalVft
+
+-- Slow tests
+reloadOnCabalChangeTests :: TestTree
+reloadOnCabalChangeTests = testGroup "Reload on .cabal changes"
+    [ runCabalTestCaseSessionVft "Change warnings when .cabal file changes" simpleCabalFs $ do
+        _ <- openDoc "Main.hs" "haskell"
+        expectDiagnostics [("Main.hs", [(DiagnosticSeverity_Warning, (8, 0), "Top-level binding with no type signature", Just "GHC-38417")])]
+        waitForAllProgressDone
+        cabalDoc <- openDoc "simple-reload.cabal" "cabal"
+        skipManyTill anyMessage cabalKickDone
+        saveDoc cabalDoc
+            [trimming|
+            cabal-version:      3.4
+            name:               simple-reload
+            version:            0.1.0.0
+            -- copyright:
+            build-type:         Simple
+
+            common warnings
+                ghc-options: -Wall -Wno-missing-signatures
+
+            executable simple-reload
+                import:           warnings
+                main-is:          Main.hs
+                build-depends:    base
+                default-language: Haskell2010
+            |]
+
+        expectDiagnostics [("Main.hs", [(DiagnosticSeverity_Warning, (2, 0), "The import of \8216Data.List\8217 is redundant", Nothing)])]
+    ]
+
+-- | Persists the given contents to the 'TextDocumentIdentifier' on disk
+-- and sends the @textDocument/didSave@ notification.
+saveDoc :: TextDocumentIdentifier -> Text -> Session ()
+saveDoc docId t = do
+    -- I couldn't figure out how to get the virtual file contents, so we write it
+    -- to disk and send the 'SMethod_TextDocumentDidSave' notification
+    case uriToFilePath (docId ^. L.uri) of
+        Nothing -> pure ()
+        Just fp -> do
+            liftIO $ Text.writeFile fp t
+
+    let params = DidSaveTextDocumentParams docId Nothing
+    sendNotification L.SMethod_TextDocumentDidSave params

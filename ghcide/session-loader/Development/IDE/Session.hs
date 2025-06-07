@@ -499,7 +499,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           hscEnv <- emptyHscEnv ideNc libDir
           newTargetDfs <- evalGhcEnv hscEnv $ setOptions optHaddockParse cfp opts (hsc_dflags hscEnv) rootDir
           let deps = componentDependencies opts ++ maybeToList hieYaml
-          dep_info <- getDependencyInfo deps
+          dep_info <- getDependencyInfo (fmap toAbsolutePath deps)
           -- Now lookup to see whether we are combining with an existing HscEnv
           -- or making a new one. The lookup returns the HscEnv and a list of
           -- information about other components loaded into the HscEnv
