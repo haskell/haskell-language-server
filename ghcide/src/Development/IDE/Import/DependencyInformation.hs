@@ -4,6 +4,7 @@
 
 module Development.IDE.Import.DependencyInformation
   ( DependencyInformation(..)
+  , filterDependencyInformationReachable
   , ModuleImports(..)
   , RawDependencyInformation(..)
   , NodeError(..)
@@ -137,6 +138,26 @@ data RawDependencyInformation = RawDependencyInformation
     , rawModuleMap :: !(FilePathIdMap ShowableModule)
     } deriving Show
 
+filterFilePathIdMap :: (IntMap.Key -> Bool) -> FilePathIdMap a -> FilePathIdMap a
+filterFilePathIdMap p = IntMap.filterWithKey (\k _ -> p k)
+
+filterDependencyInformationReachable :: NormalizedFilePath -> DependencyInformation -> DependencyInformation
+filterDependencyInformationReachable fileId depInfo@DependencyInformation{..} =
+  let reachableIds = transitiveDepIds depInfo fileId
+      curId = getFilePathId <$> lookupPathToId depPathIdMap fileId
+      isReachable k = IntSet.member k reachableIds || Just k == curId
+      filterMap = filterFilePathIdMap isReachable
+      rawModDeps = filterMap depModules
+  in depInfo {
+             depErrorNodes = filterMap depErrorNodes
+             , depModules  = rawModDeps
+             , depModuleDeps = filterMap depModuleDeps
+             , depReverseModuleDeps = filterMap depReverseModuleDeps
+             , depBootMap = filterMap depBootMap
+             , depModuleGraph = filterMap depModuleGraph
+             , depModuleFiles = ShowableModuleEnv $ mkModuleEnv $ map (\(i,sm) -> (showableModule sm, FilePathId i)) $ IntMap.toList rawModDeps
+  }
+
 data DependencyInformation =
   DependencyInformation
     { depErrorNodes         :: !(FilePathIdMap (NonEmpty NodeError))
@@ -153,7 +174,7 @@ data DependencyInformation =
     -- ^ Map from hs-boot file to the corresponding hs file
     , depModuleFiles        :: !(ShowableModuleEnv FilePathId)
     -- ^ Map from Module to the corresponding non-boot hs file
-    , depModuleGraph        :: !ModuleGraph
+    , depModuleGraph        :: !(FilePathIdMap ModuleGraphNode)
     , depTransDepsFingerprints :: !(FilePathIdMap Fingerprint)
     -- ^ Map from Module to fingerprint of the transitive dependencies of the module.
     , depTransReverseDepsFingerprints :: !(FilePathIdMap Fingerprint)
@@ -187,7 +208,10 @@ reachableModules DependencyInformation{..} =
     map (idToPath depPathIdMap . FilePathId) $ IntMap.keys depErrorNodes <> IntMap.keys depModuleDeps
 
 instance NFData DependencyInformation
-
+instance NFData ModuleGraphNode where
+    rnf = rwhnf
+instance Show (ModuleGraphNode) where
+    show (_) = "ModuleGraphNode"
 -- | This does not contain the actual parse error as that is already reported by GetParsedModule.
 data ModuleParseError = ModuleParseError
   deriving (Show, Generic)
@@ -243,7 +267,7 @@ instance Semigroup NodeResult where
    SuccessNode _ <> ErrorNode errs   = ErrorNode errs
    SuccessNode a <> SuccessNode _    = SuccessNode a
 
-processDependencyInformation :: RawDependencyInformation -> BootIdMap -> ModuleGraph -> FilePathIdMap Fingerprint -> DependencyInformation
+processDependencyInformation :: RawDependencyInformation -> BootIdMap -> FilePathIdMap ModuleGraphNode -> FilePathIdMap Fingerprint -> DependencyInformation
 processDependencyInformation RawDependencyInformation{..} rawBootMap mg shallowFingerMap =
   DependencyInformation
     { depErrorNodes = IntMap.fromList errorNodes
@@ -359,6 +383,23 @@ immediateReverseDependencies file DependencyInformation{..} = do
   FilePathId cur_id <- lookupPathToId depPathIdMap file
   return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
+-- | returns all transitive dependencies ids
+transitiveDepIds :: DependencyInformation -> NormalizedFilePath -> IntSet.IntSet
+transitiveDepIds DependencyInformation{..} file = fromMaybe mempty $ do
+  !fileId <- pathToId depPathIdMap file
+  reachableVs <-
+      -- Delete the starting node
+      IntSet.delete (getFilePathId fileId) .
+      IntSet.fromList . map (fst3 . fromVertex) .
+      reachable g <$> toVertex (getFilePathId fileId)
+  let transitiveModuleDepIds = IntSet.fromList $ filter (\v -> v `IntSet.member` reachableVs) $ map (fst3 . fromVertex) vs
+  return transitiveModuleDepIds
+  where
+    (g, fromVertex, toVertex) = graphFromEdges edges
+    edges = map (\(f, fs) -> (f, f, IntSet.toList fs ++ boot_edge f)) $ IntMap.toList depModuleDeps
+    boot_edge f = [getFilePathId f' | Just f' <- [IntMap.lookup f depBootMap]]
+    vs = vertices g
+
 -- | returns all transitive dependencies in topological order.
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do
@@ -372,7 +413,7 @@ transitiveDeps DependencyInformation{..} file = do
         filter (\v -> v `IntSet.member` reachableVs) $ map (fst3 . fromVertex) vs
   let transitiveModuleDeps =
         map (idToPath depPathIdMap . FilePathId) transitiveModuleDepIds
-  pure TransitiveDependencies {..}
+  pure TransitiveDependencies {transitiveModuleDeps}
   where
     (g, fromVertex, toVertex) = graphFromEdges edges
     edges = map (\(f, fs) -> (f, f, IntSet.toList fs ++ boot_edge f)) $ IntMap.toList depModuleDeps
