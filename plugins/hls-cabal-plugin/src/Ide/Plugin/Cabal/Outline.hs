@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Cabal.Outline where
 
@@ -15,7 +14,6 @@ import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake              (IdeState (shakeExtras),
                                                           runIdeAction,
                                                           useWithStaleFast)
-import           Development.IDE.Types.Location          (toNormalizedFilePath')
 import           Distribution.Fields.Field               (Field (Field, Section),
                                                           Name (Name))
 import           Distribution.Parsec.Position            (Position)
@@ -25,20 +23,19 @@ import           Ide.Plugin.Cabal.Completion.Types       (ParseCabalFields (..),
 import           Ide.Plugin.Cabal.Orphans                ()
 import           Ide.Types                               (PluginMethodHandler)
 import           Language.LSP.Protocol.Message           (Method (..))
-import           Language.LSP.Protocol.Types             (DocumentSymbol (..))
+import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
+                                                          toNormalizedUri)
 import qualified Language.LSP.Protocol.Types             as LSP
 
 
 moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
-moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocumentIdentifier uri} =
-  case LSP.uriToFilePath uri of
-    Just (toNormalizedFilePath' -> fp) -> do
-      mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields fp)
-      case fmap fst mFields of
-        Just fieldPositions -> pure $ LSP.InR (LSP.InL allSymbols)
-          where
-            allSymbols = mapMaybe documentSymbolForField fieldPositions
-        Nothing -> pure $ LSP.InL []
+moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocumentIdentifier uri} = do
+  let nuri = toNormalizedUri uri
+  mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields nuri)
+  case fmap fst mFields of
+    Just fieldPositions -> pure $ LSP.InR (LSP.InL allSymbols)
+      where
+        allSymbols = mapMaybe documentSymbolForField fieldPositions
     Nothing -> pure $ LSP.InL []
 
 -- | Creates a @DocumentSymbol@ object for the

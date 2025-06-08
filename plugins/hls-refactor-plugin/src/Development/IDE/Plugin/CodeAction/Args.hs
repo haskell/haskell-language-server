@@ -54,8 +54,8 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 
 runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = diags}) codeAction = do
-  let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-      runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
+  let nuri = toNormalizedUri uri
+      runRule key = runAction ("GhcideCodeActions." <> show key) state $ use key nuri
   caaGhcSession <- onceIO $ runRule GhcSession
   caaExportsMap <-
     onceIO $

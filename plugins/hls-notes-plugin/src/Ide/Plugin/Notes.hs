@@ -31,7 +31,7 @@ import           Text.Regex.TDFA                  (Regex, caseSensitive,
 
 data Log
     = LogShake Shake.Log
-    | LogNotesFound NormalizedFilePath [(Text, Position)]
+    | LogNotesFound NormalizedUri [(Text, Position)]
     deriving Show
 
 data GetNotesInFile = MkGetNotesInFile
@@ -42,7 +42,7 @@ type instance RuleResult GetNotesInFile = HM.HashMap Text Position
 data GetNotes = MkGetNotes
     deriving (Show, Generic, Eq, Ord)
     deriving anyclass (Hashable, NFData)
-type instance RuleResult GetNotes = HashMap Text (NormalizedFilePath, Position)
+type instance RuleResult GetNotes = HashMap Text (NormalizedUri, Position)
 
 instance Pretty Log where
     pretty = \case
@@ -73,23 +73,21 @@ findNotesRules recorder = do
         pure $ Just $ HM.unions definedNotes
 
 jumpToNote :: PluginMethodHandler IdeState Method_TextDocumentDefinition
-jumpToNote state _ param
-    | Just nfp <- uriToNormalizedFilePath uriOrig
-    = do
+jumpToNote state _ param = do
         let Position l c = param ^. L.position
         contents <-
             err "Error getting file contents"
-            =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
+            =<< liftIO (runAction "notes.getfileContents" state (getFileContents uriOrig))
         line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
             (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
         let noteOpt = listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
         case noteOpt of
             Nothing -> pure (InR (InR Null))
             Just note -> do
-                notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
-                (noteFp, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
+                notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes uriOrig
+                (noteUri, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
                 pure $ InL (Definition (InL
-                        (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
+                        (Location (fromNormalizedUri $ noteUri) (Range pos pos))
                     ))
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
@@ -101,19 +99,20 @@ jumpToNote state _ param
             -- the title of the note as extracted by the regex.
             (_, (c', len)) -> if c' <= c && c <= c' + len
                 then Just (fst (arr A.! 1)) else Nothing
-jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
 
-findNotesInFile :: NormalizedFilePath -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position))
-findNotesInFile file recorder = do
+findNotesInFile :: NormalizedUri -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position))
+findNotesInFile nuri recorder = do
     -- GetFileContents only returns a value if the file is open in the editor of
     -- the user. If not, we need to read it from disk.
-    contentOpt <- (snd =<<) <$> use GetFileContents file
-    content <- case contentOpt of
-        Just x  -> pure $ Rope.toText x
-        Nothing -> liftIO $ readFileUtf8 $ fromNormalizedFilePath file
-    let matches = (A.! 1) <$> matchAllText noteRegex content
-        m = toPositions matches content
-    logWith recorder Debug $ LogNotesFound file (HM.toList m)
+    contentOpt <- (snd =<<) <$> use GetFileContents nuri
+    mcontent <- case contentOpt of
+        Just x  -> pure $ Just $ Rope.toText x
+        Nothing | Just nfp <- uriToNormalizedFilePath nuri -> Just <$> do
+          liftIO $ readFileUtf8 $ fromNormalizedFilePath nfp
+        _ -> pure Nothing
+    let matches = (A.! 1) <$> foldMap (matchAllText noteRegex) mcontent
+        m = foldMap (toPositions matches) mcontent
+    logWith recorder Debug $ LogNotesFound nuri (HM.toList m)
     pure $ Just m
     where
         uint = fromIntegral . toInteger

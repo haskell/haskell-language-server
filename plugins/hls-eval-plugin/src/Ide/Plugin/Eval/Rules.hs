@@ -13,6 +13,7 @@ import qualified Data.HashSet                         as Set
 import           Data.IORef
 import qualified Data.Map.Strict                      as Map
 import           Data.String                          (fromString)
+import qualified Data.Text                            as T
 import           Development.IDE                      (GetParsedModuleWithComments (GetParsedModuleWithComments),
                                                        IdeState,
                                                        LinkableType (BCOLinkable),
@@ -39,6 +40,9 @@ import           GHC.Parser.Annotation
 import           Ide.Logger                           (Recorder, WithPriority,
                                                        cmapWithPrio)
 import           Ide.Plugin.Eval.Types
+import           Language.LSP.Protocol.Types          (NormalizedUri,
+                                                       fromNormalizedUri,
+                                                       getUri)
 
 
 rules :: Recorder (WithPriority Log) -> Rules ()
@@ -48,15 +52,15 @@ rules recorder = do
     isEvaluatingRule recorder
     addIdeGlobal . EvaluatingVar =<< liftIO(newIORef mempty)
 
-newtype EvaluatingVar = EvaluatingVar (IORef (HashSet NormalizedFilePath))
+newtype EvaluatingVar = EvaluatingVar (IORef (HashSet NormalizedUri))
 instance IsIdeGlobal EvaluatingVar
 
-queueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
-queueForEvaluation ide nfp = do
+queueForEvaluation :: IdeState -> NormalizedUri -> IO ()
+queueForEvaluation ide nuri = do
     EvaluatingVar var <- getIdeGlobalState ide
-    atomicModifyIORef' var (\fs -> (Set.insert nfp fs, ()))
+    atomicModifyIORef' var (\fs -> (Set.insert nuri fs, ()))
 
-unqueueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+unqueueForEvaluation :: IdeState -> NormalizedUri -> IO ()
 unqueueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     -- remove the module from the Evaluating state, so that next time it won't evaluate to True
@@ -80,12 +84,12 @@ pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
 
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
-evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
-    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
+evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nuri -> do
+    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments nuri
     let comments = foldMap (\case
                 L (RealSrcSpanAlready real) bdy
                     | FastString.unpackFS (srcSpanFile real) ==
-                        fromNormalizedFilePath nfp
+                        T.unpack (getUri (fromNormalizedUri nuri))
                     , let ran0 = realSrcSpanToRange real
                     , Just curRan <- toCurrentRange posMap ran0
                     ->
