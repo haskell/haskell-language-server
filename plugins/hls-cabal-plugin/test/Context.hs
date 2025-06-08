@@ -17,6 +17,7 @@ import           Ide.Plugin.Cabal.Completion.Types           (Context,
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Test.Hls
 import           Utils                                       as T
+import Development.IDE.Types.Location ( filePathToUri' )
 
 cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
 cabalPlugin = mkPluginTestDescriptor descriptor "cabal context"
@@ -207,7 +208,7 @@ getContextTests =
   where
     callGetContext :: Position -> T.Text -> T.Text -> IO Context
     callGetContext pos pref ls = do
-        case Parse.readCabalFields "not-real" (Text.encodeUtf8 ls) of
+        case Parse.readCabalFields (filePathToUri' "not-real") (Text.encodeUtf8 ls) of
             Left err -> fail $ show err
             Right fields -> do
                 getContext mempty (simpleCabalPrefixInfoFromPos pos pref) fields

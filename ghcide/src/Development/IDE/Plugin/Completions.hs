@@ -81,20 +81,20 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
-    define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
-        let uri = fromNormalizedUri $ normalizedFilePathToUri file
-        mbPm <- useWithStale GetParsedModule file
+    define (cmapWithPrio LogShake recorder) $ \LocalCompletions nuri -> do
+        let uri = fromNormalizedUri nuri
+        mbPm <- useWithStale GetParsedModule nuri
         case mbPm of
             Just (pm, _) -> do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
             _ -> return ([], Nothing)
-    define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions file -> do
+    define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions nuri -> do
         -- For non local completions we avoid depending on the parsed module,
         -- synthesizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports
-        ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
-        mbSess <- fmap fst <$> useWithStale GhcSessionDeps file
+        ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps nuri
+        mbSess <- fmap fst <$> useWithStale GhcSessionDeps nuri
 
         case (ms, mbSess) of
             (Just ModSummaryResult{..}, Just sess) -> do
@@ -104,7 +104,7 @@ produceCompletions recorder = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       visibleMods <- liftIO $ fmap (fromMaybe []) $ envVisibleModuleNames sess
-                      let uri = fromNormalizedUri $ normalizedFilePathToUri file
+                      let uri = fromNormalizedUri nuri
                       let cdata = cacheDataProducer uri visibleMods (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
                   (_diag, _) ->
@@ -124,13 +124,13 @@ dropListFromImportDecl iDecl = let
 resolveCompletion :: ResolveFunction IdeState CompletionResolveData Method_CompletionItemResolve
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
   do
-    file <- getNormalizedFilePathE uri
+    let nuri = toNormalizedUri uri
     (sess,_) <- withExceptT (const PluginStaleResolve)
                   $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
-                  $ useWithStaleFastE GhcSessionDeps file
+                  $ useWithStaleFastE GhcSessionDeps nuri
     let nc = ideNc $ shakeExtras ide
     name <- liftIO $ lookupNameCache nc mod occ
-    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
+    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap nuri
     let (dm,km) = case mdkm of
           Just (DKMap docMap tyThingMap, _) -> (docMap,tyThingMap)
           Nothing                           -> (mempty, mempty)
@@ -165,18 +165,18 @@ getCompletionsLSP ide plId
       liftIO $ runAction "Completion" ide $ getUriContents $ toNormalizedUri uri
     fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
-        let npath = toNormalizedFilePath' path
+        let nuri = filePathToUri' $ toNormalizedFilePath' path
         (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-            localCompls <- useWithStaleFast LocalCompletions npath
-            nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
-            pm <- useWithStaleFast GetParsedModule npath
-            binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
+            localCompls <- useWithStaleFast LocalCompletions nuri
+            nonLocalCompls <- useWithStaleFast NonLocalCompletions nuri
+            pm <- useWithStaleFast GetParsedModule nuri
+            binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings nuri
             knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
             let localModules = maybe [] (Map.keys . targetMap) knownTargets
             let lModules = mempty{importableModules = map toModueNameText localModules}
             -- set up the exports map including both package and project-level identifiers
-            packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
+            packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession nuri
             packageExportsMap <- mapM liftIO packageExportsMapIO
             projectExportsMap <- liftIO $ readTVarIO (exportsMap $ shakeExtras ide)
             let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
@@ -188,10 +188,10 @@ getCompletionsLSP ide plId
 
             -- get HieAst if OverloadedRecordDot is enabled
             let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
-            ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
+            ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps nuri
             astres <- case ms of
               Just ms' | uses_overloaded_record_dot ms'
-                ->  useWithStaleFast GetHieAst npath
+                ->  useWithStaleFast GetHieAst nuri
               _ -> return Nothing
 
             pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
