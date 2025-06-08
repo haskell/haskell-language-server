@@ -49,6 +49,7 @@ import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
                                                      preProcessAST)
 import           Language.LSP.Protocol.Types        (FoldingRangeKind (FoldingRangeKind_Comment, FoldingRangeKind_Imports, FoldingRangeKind_Region))
 
+import qualified Data.Text                          as T
 import           Language.LSP.Protocol.Lens         (HasEnd (end),
                                                      HasStart (start))
 import           Prelude                            hiding (log)
@@ -171,7 +172,7 @@ codeRangeRule recorder =
         -- See https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
         HAR{hieAst, refMap} <- lift $ use_ GetHieAst file
         ast <- maybeToExceptT LogNoAST . MaybeT . pure $
-            getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath) file
+            getAsts hieAst Map.!? (coerce . mkFastString . T.unpack . getUri . fromNormalizedUri) file
         let (codeRange, warnings) = runWriter (buildCodeRange ast refMap)
         traverse_ (logWith recorder Warning) warnings
 

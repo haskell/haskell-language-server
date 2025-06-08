@@ -58,16 +58,16 @@ toMethodName n
 --   if the module parsed success.
 insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
-    -> NormalizedFilePath
+    -> NormalizedUri
     -> Extension
     -> ExceptT PluginError m [TextEdit]
-insertPragmaIfNotPresent state nfp pragma = do
+insertPragmaIfNotPresent state nuri pragma = do
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GhcSession" state
-        $ useWithStaleE GhcSession nfp
+        $ useWithStaleE GhcSession nuri
     fileContents <- liftIO $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
-        $ getFileContents nfp
+        $ getFileContents nuri
     (pm, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
-        $ useWithStaleE GetParsedModuleWithComments nfp
+        $ useWithStaleE GetParsedModuleWithComments nuri
     let exts = getExtensions pm
         info = getNextPragmaInfo sessionDynFlags fileContents
     pure [insertNewPragma info pragma | pragma `notElem` exts]

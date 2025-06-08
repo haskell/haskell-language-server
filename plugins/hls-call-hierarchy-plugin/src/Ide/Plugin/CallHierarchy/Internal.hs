@@ -27,7 +27,6 @@ import           Development.IDE.Spans.AtPoint
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
@@ -38,22 +37,22 @@ import           Text.Read                      (readMaybe)
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState Method_TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state _ param = do
-    nfp <- getNormalizedFilePathE (param ^. (L.textDocument . L.uri))
+    let nuri = toNormalizedUri (param ^. (L.textDocument . L.uri))
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
-        $ prepareCallHierarchyItem nfp (param ^. L.position)
+        $ prepareCallHierarchyItem nuri (param ^. L.position)
     pure $ InL items
 
-prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
-prepareCallHierarchyItem nfp pos = use GetHieAst nfp <&> \case
+prepareCallHierarchyItem :: NormalizedUri -> Position -> Action [CallHierarchyItem]
+prepareCallHierarchyItem nuri pos = use GetHieAst nuri <&> \case
     Nothing               -> mempty
-    Just (HAR _ hf _ _ _) -> prepareByAst hf pos nfp
+    Just (HAR _ hf _ _ _) -> prepareByAst hf pos nuri
 
-prepareByAst :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
-prepareByAst hf pos nfp =
+prepareByAst :: HieASTs a -> Position -> NormalizedUri -> [CallHierarchyItem]
+prepareByAst hf pos nuri =
     case listToMaybe $ pointCommand hf pos extract of
         Nothing    -> mempty
-        Just infos -> mapMaybe (construct nfp hf) infos
+        Just infos -> mapMaybe (construct nuri hf) infos
 
 extract :: HieAST a -> [(Identifier, [ContextInfo], Span)]
 extract ast = let span = nodeSpan ast
@@ -71,7 +70,7 @@ patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
 tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
 matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
-construct :: NormalizedFilePath -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
+construct :: NormalizedUri -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
 construct nfp hf (ident, contexts, ssp)
     | isInternalIdentifier ident = Nothing
 
@@ -129,14 +128,14 @@ construct nfp hf (ident, contexts, ssp)
                 Nothing -> Nothing
                 Just sp -> listToMaybe $ prepareByAst hf (realSrcSpanToRange sp ^. L.start) nfp
 
-mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
+mkCallHierarchyItem :: NormalizedUri -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
     CallHierarchyItem
         (T.pack $ optimizeDisplay $ identifierName ident)
         kind
         Nothing
         (Just $ T.pack $ identifierToDetail ident)
-        (fromNormalizedUri $ normalizedFilePathToUri nfp)
+        (fromNormalizedUri nfp)
         (realSrcSpanToRange span)
         (realSrcSpanToRange selSpan)
         (toJSON . show <$> mkSymbol ident)
@@ -215,14 +214,14 @@ mergeCalls constructor target =
 mkCallHierarchyCall :: (CallHierarchyItem ->  [Range] -> a) -> Vertex -> Action (Maybe a)
 mkCallHierarchyCall mk v@Vertex{..} = do
     let pos = Position (fromIntegral $ sl - 1) (fromIntegral $ sc - 1)
-        nfp = toNormalizedFilePath' hieSrc
+        nuri = normalizedFilePathToUri $ toNormalizedFilePath' hieSrc
         range = mkRange
                     (fromIntegral $ casl - 1)
                     (fromIntegral $ casc - 1)
                     (fromIntegral $ cael - 1)
                     (fromIntegral $ caec - 1)
 
-    prepareCallHierarchyItem nfp pos >>=
+    prepareCallHierarchyItem nuri pos >>=
         \case
             [item] -> pure $ Just $ mk item [range]
             _      -> do
@@ -231,7 +230,7 @@ mkCallHierarchyCall mk v@Vertex{..} = do
                 case sps of
                     (x:_) -> do
                         items <- prepareCallHierarchyItem
-                                    nfp
+                                    nuri
                                     (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1))
                         case items of
                             [item] -> pure $ Just $ mk item [range]
@@ -245,17 +244,16 @@ queryCalls ::
     -> (Vertex -> Action (Maybe a))
     -> ([a] -> [a])
     -> Action [a]
-queryCalls item queryFunc makeFunc merge
-    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-        ShakeExtras{withHieDb} <- getShakeExtras
-        maySymbol <- getSymbol nfp
-        case maySymbol of
-            Nothing -> pure mempty
-            Just symbol -> do
-                vs <- liftIO $ withHieDb (`queryFunc` symbol)
-                items <- catMaybes <$> mapM makeFunc vs
-                pure $ merge items
-    | otherwise = pure mempty
+queryCalls item queryFunc makeFunc merge = do
+    let nuri = toNormalizedUri uri
+    ShakeExtras{withHieDb} <- getShakeExtras
+    maySymbol <- getSymbol nuri
+    case maySymbol of
+        Nothing -> pure mempty
+        Just symbol -> do
+            vs <- liftIO $ withHieDb (`queryFunc` symbol)
+            items <- catMaybes <$> mapM makeFunc vs
+            pure $ merge items
     where
         uri = item ^. L.uri
         pos = item ^. (L.selectionRange . L.start)
@@ -266,7 +264,7 @@ queryCalls item queryFunc makeFunc merge
                 A.Error _ -> getSymbolFromAst nfp pos
             Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
-        getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
+        getSymbolFromAst :: NormalizedUri -> Position -> Action (Maybe Symbol)
         getSymbolFromAst nfp pos_ = use GetHieAst nfp <&> \case
             Nothing -> Nothing
             Just (HAR _ hf _ _ _) -> do
