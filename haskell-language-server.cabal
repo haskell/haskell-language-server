@@ -473,7 +473,7 @@ library hls-eval-plugin
     , bytestring
     , containers
     , deepseq
-    , Diff                  ^>=0.5
+    , Diff                  ^>=0.5 || ^>=1.0.0
     , dlist
     , extra
     , filepath
@@ -2115,7 +2115,7 @@ test-suite ghcide-tests
     , sqlite-simple
     , stm
     , stm-containers
-    , tasty
+    , tasty                  >=1.5
     , tasty-expected-failure
     , tasty-hunit             >=0.10
     , tasty-quickcheck
