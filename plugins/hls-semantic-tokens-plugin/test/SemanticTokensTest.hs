@@ -22,6 +22,7 @@ import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Types        as J
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
@@ -90,7 +91,7 @@ docLspSemanticTokensString :: (HasCallStack) => TextDocumentIdentifier -> Sessio
 docLspSemanticTokensString doc = do
   res <- Test.getSemanticTokens doc
   textContent <- documentContents doc
-  let vfs = VirtualFile 0 0 (Rope.fromText textContent)
+  let vfs = VirtualFile 0 0 (Rope.fromText textContent) $ Just J.LanguageKind_Haskell
   case res ^? Language.LSP.Protocol.Types._L of
     Just tokens -> do
       either (error . show) pure $ recoverLspSemanticTokens vfs tokens
