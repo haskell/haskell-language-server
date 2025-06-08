@@ -123,6 +123,7 @@ import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
+import GHC (DynFlags(..))
 
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Driver.Make                     (checkHomeUnitsClosed)
@@ -1173,6 +1174,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
               dontWriteHieFiles $
               setIgnoreInterfacePragmas $
               setBytecodeLinkerOptions $
+              (\x -> x { maxSimplIterations = 0 }) $
               disableOptimisation $
               Compat.setUpTypedHoles $
               makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
