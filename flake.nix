@@ -68,6 +68,7 @@
           buildInputs = [
             # Compiler toolchain
             hpkgs.ghc
+            hpkgs.haskell-language-server
             pkgs.haskellPackages.cabal-install
             # Dependencies needed to build some parts of Hackage
             gmp zlib ncurses
