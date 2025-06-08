@@ -912,6 +912,8 @@ getCompletionPrefixFromRope pos@(Position l c) ropetext =
           [] -> Nothing
           (x:xs) -> do
             let modParts = reverse $ filter (not .T.null) xs
+                -- Must check the prefix is a valid module name, else record dot accesses treat 
+                -- the record name as a qualName for search and generated imports
                 modName = if all (isUpper . T.head) modParts then T.intercalate "." modParts else ""
             return $ PosPrefixInfo { fullLine = curLine, prefixScope = modName, prefixText = x, cursorPos = pos }
 

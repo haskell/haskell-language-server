@@ -33,6 +33,8 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
+import System.IO
+
 
 tests :: TestTree
 tests
@@ -61,6 +63,7 @@ completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, Co
 completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
     docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
+
     compls <- getAndResolveCompletions docId pos
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     let emptyToMaybe x = if T.null x then Nothing else Just x
@@ -220,9 +223,11 @@ localCompletionTests = [
         , "  { field1 :: Int"
         , "  , field2 :: Int"
         , "  }"
+        , -- Without the following, this file doesn't trigger any diagnostics, so completionTest waits forever
+          "triggerDiag :: UnknownType"
         , "foo record = record.f"
         ]
-        (Position 6 21)
+        (Position 7 21)
         [("field1", CompletionItemKind_Function, "field1", True, False, Nothing)
         ,("field2", CompletionItemKind_Function, "field2", True, False, Nothing)
         ],
