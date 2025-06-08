@@ -1,5 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
-module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions) where
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
+
+module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions, dependencyVersionLens) where
 
 import qualified Data.Char                         as Char
 import qualified Data.List                         as List
@@ -15,9 +17,22 @@ import           Development.IDE.GHC.Compat        (HscEnv, filterUniqMap,
 import qualified Distribution.Fields               as Syntax
 import qualified Distribution.Parsec.Position      as Syntax
 import qualified Ide.Plugin.Cabal.Completion.Types as Types
-import           Language.LSP.Protocol.Types       (InlayHint (..),
+import           Language.LSP.Protocol.Types       (CodeLens (..), Command (..),
+                                                    InlayHint (..),
                                                     InlayHintLabelPart (InlayHintLabelPart),
-                                                    type (|?) (..))
+                                                    Range (..), type (|?) (..))
+
+dependencyVersionLens :: [Syntax.Field Syntax.Position] -> HscEnv -> [CodeLens]
+dependencyVersionLens cabalFields = fmap mkCodeLens . collectPackageDependencyVersions cabalFields
+  where
+    mkCodeLens :: (Syntax.Position, Version) -> CodeLens
+    mkCodeLens (pos, dependencyVersion) =
+      let cPos = Types.cabalPositionToLSPPosition pos
+          command = Command (printVersion dependencyVersion) mempty Nothing
+      in  CodeLens
+            { _range = Range cPos cPos
+            , _command = Just command
+            , _data_ = Nothing }
 
 dependencyVersionHints ::  [Syntax.Field Syntax.Position] -> HscEnv -> [InlayHint]
 dependencyVersionHints cabalFields = fmap mkHint . collectPackageDependencyVersions cabalFields

@@ -138,6 +138,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
           , mkPluginHandler LSP.SMethod_TextDocumentInlayHint hints
+          , mkPluginHandler LSP.SMethod_TextDocumentCodeLens lens
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -378,6 +379,15 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
                                                                               haskellFilePath cabalFilePath
                                                                               gpd
                   pure $ InL $ fmap InR actions
+
+lens :: PluginMethodHandler IdeState LSP.Method_TextDocumentCodeLens
+lens state _plId clp = do
+  let uri = clp ^. JL.textDocument . JL.uri
+  nfp <- getNormalizedFilePathE uri
+  cabalFields <- runActionE "cabal.cabal-code-lens" state $ useE ParseCabalFields nfp
+  (hscEnv -> hsc) <- runActionE "cabal.cabal-code-lens" state $ useE GhcSession nfp
+  pure $ InL $ Dependencies.dependencyVersionLens cabalFields hsc
+
 
 hints :: PluginMethodHandler IdeState LSP.Method_TextDocumentInlayHint
 hints state _plId clp = do
