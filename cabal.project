@@ -6,8 +6,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-
-index-state: 2026-02-02T09:03:26Z
+index-state: 2026-02-24T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -41,6 +40,7 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
+  monad-control >=1.0.3,  
 
 
 -- Some of the formatters need the latest Cabal-syntax version,
@@ -59,15 +59,11 @@ if impl(ghc >= 9.11)
 
 if impl(ghc >= 9.14)
   allow-newer:
-    lsp-types:containers,
-    lsp:containers,
     indexed-traversable:containers,
     quickcheck-instances:containers,
     dependent-map:containers,
     aeson:containers,
     semialign:containers,
-    lsp-test:containers,
-    hie-bios:ghc,
     string-interpolate:template-haskell,
     tasty-hspec:base,
     tagged:template-haskell,
@@ -79,19 +75,20 @@ if impl(ghc >= 9.14)
     some:base,
     boring:base,
     indexed-traversable-instances:base,
-    lsp-types:template-haskell,
     uuid-types:template-haskell,
     hie-compat:base,
-    hie-bios:time,
-    hie-bios:template-haskell,
     ghc-trace-events:base,
     constraints-extras:template-haskell,
     aeson:time,
     text-iso8601:time,
     semialign:base,
     aeson:template-haskell,
-    lsp-test:time,
     lukko:base,
     binary-instances:base,
     binary-orphans:base,
-    cabal-install-parsers:containers
+    cabal-install-parsers:containers,
+    haddock-library:base,
+    websockets:containers,
+    monad-control:transformers,
+    mmorph:transformers-compat,
+    binary-instances:tagged,

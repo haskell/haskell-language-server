@@ -22,12 +22,14 @@ extra-deps:
   - hiedb-0.8.0.0
   - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
-  - hie-bios-0.17.0
+  - hie-bios-0.18.0
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
   - retrie-1.2.3
   - unordered-containers-0.2.21
-
+  - lsp-2.8.0.0
+  - lsp-test-0.18.0.0
+  - lsp-types-2.4.0.0
   # stan dependencies not found in the stackage snapshot
   - stan-0.2.1.0
   - dir-traverse-0.2.3.0

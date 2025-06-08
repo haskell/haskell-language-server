@@ -2,14 +2,10 @@
 {-# LANGUAGE QuasiQuotes #-}
 
 import           Control.Arrow                            ((>>>))
-import           Control.Exception                        (throw)
-import           Control.Lens                             ((^.))
-import           Data.Maybe                               (fromJust)
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (PosPrefixInfo))
 import           Ide.Plugin.SignatureHelp                 (descriptor)
-import qualified Language.LSP.Protocol.Lens               as L
 import           Test.Hls
 import           Test.Hls.FileSystem                      (VirtualFileTree,
                                                            directCradle, file,
@@ -411,7 +407,7 @@ getSignatureHelpFromSession sourceCode (PosPrefixInfo _ _ _ position) =
       virtualFileTree = mkVirtualFileTreeWithSingleFile fileName sourceCode
    in runSessionWithServerInTmpDir def plugin virtualFileTree $ do
         doc <- openDoc fileName "haskell"
-        (fmap . fmap) SimilarSignatureHelp (getSignatureHelp doc position)
+        (fmap . fmap) SimilarSignatureHelp (getSignatureHelp doc position Nothing)
 
 mkVirtualFileTreeWithSingleFile :: FilePath -> Text -> VirtualFileTree
 mkVirtualFileTreeWithSingleFile fileName sourceCode =
@@ -499,16 +495,3 @@ instance (IsSimilar a, IsSimilar b) => IsSimilar (a |? b) where
   InL x ~= InL y = x ~= y
   InR x ~= InR y = x ~= y
   _ ~= _         = False
-
--- TODO use the one from lsp-test when we have https://github.com/haskell/lsp/pull/621
-
--- | Returns the signature help at the specified position.
-getSignatureHelp :: TextDocumentIdentifier -> Position -> Session (Maybe SignatureHelp)
-getSignatureHelp doc pos =
-  let params = SignatureHelpParams doc pos Nothing Nothing
-   in nullToMaybe . getResponseResult <$> request SMethod_TextDocumentSignatureHelp params
-  where
-    getResponseResult rsp =
-      case rsp ^. L.result of
-        Right x  -> x
-        Left err -> throw $ UnexpectedResponseError (fromJust $ rsp ^. L.id) err

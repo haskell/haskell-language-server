@@ -130,6 +130,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
+import qualified Language.LSP.VFS                       as VFS
 
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
@@ -401,7 +402,8 @@ class Typeable a => IsIdeGlobal a where
 getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
-  pure $! Map.lookup (filePathToUri' nf) vfs -- Don't leak a reference to the entire map
+  pure $!  -- Don't leak a reference to the entire map
+    getVirtualFileFromVFS (VFS vfs) $ filePathToUri' nf
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
