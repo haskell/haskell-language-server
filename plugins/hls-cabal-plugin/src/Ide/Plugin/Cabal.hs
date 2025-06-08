@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
 
@@ -68,6 +69,9 @@ import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
 import           Text.Regex.TDFA
+import Development.IDE.GHC.Compat (getUnitInfoMap, unitPackageNameString, unitPackageVersion, filterUniqMap, nonDetEltsUniqMap)
+import Data.Version (Version(..))
+import qualified Data.Char as Char
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -135,6 +139,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
+          , mkPluginHandler LSP.SMethod_TextDocumentInlayHint hints
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -375,6 +380,49 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
                                                                               haskellFilePath cabalFilePath
                                                                               gpd
                   pure $ InL $ fmap InR actions
+
+hints :: PluginMethodHandler IdeState LSP.Method_TextDocumentInlayHint
+hints state _plId clp = do
+  let uri = clp ^. JL.textDocument . JL.uri
+  nfp <- getNormalizedFilePathE uri
+  cabalFields <- runActionE "cabal.cabal-lens" state $ useE ParseCabalFields nfp
+  (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession nfp
+  let lookupVersion pkgName = Maybe.listToMaybe $ nonDetEltsUniqMap $ fmap unitPackageVersion $ filterUniqMap ((==) pkgName . unitPackageNameString) $ getUnitInfoMap hsc
+  pure $ InL $ fmap hint $ collectPackageVersions (fmap printVersion . lookupVersion . T.unpack) =<< cabalFields
+  where
+    collectPackageVersions :: (T.Text -> Maybe T.Text) -> Syntax.Field Syntax.Position -> [(Syntax.Position, LicenseSuggest.Text)]
+    collectPackageVersions lookupVersion (Syntax.Field (Syntax.Name _ "build-depends") pos) = concatMap (fieldLinePackageVersions lookupVersion) pos
+    collectPackageVersions lookupVersion (Syntax.Section _ _ fields) = concatMap (collectPackageVersions lookupVersion) fields
+    collectPackageVersions _ _ = []
+
+    fieldLinePackageVersions :: (T.Text -> Maybe T.Text) -> Syntax.FieldLine Syntax.Position -> [(Syntax.Position, LicenseSuggest.Text)]
+    fieldLinePackageVersions lookupVersion (Syntax.FieldLine pos x) =
+      let splitted = T.splitOn "," $ Encoding.decodeUtf8Lenient x
+          calcStartPosition (prev, start) = T.length prev + 1 + start
+          potentialPkgs = List.foldl' (\a b -> a <> [(b, Maybe.maybe 0 calcStartPosition $ Maybe.listToMaybe $ reverse a)]) [] splitted
+          versions = do
+            (pkg', pkgStartOffset) <- potentialPkgs
+            let pkgName = T.takeWhile (not . Char.isSpace) . T.strip $ pkg'
+                endOfPackage = T.length pkgName + (T.length $ T.takeWhile Char.isSpace pkg')
+            version <- Maybe.maybeToList $ lookupVersion $ T.takeWhile (not . Char.isSpace) . T.strip $ pkg'
+            pure (Syntax.Position (Syntax.positionRow pos) (Syntax.positionCol pos + pkgStartOffset + endOfPackage), version)
+       in versions
+
+    printVersion v = T.intercalate "." (fmap (T.pack . show) $ versionBranch v)
+
+    hint :: (Syntax.Position, LicenseSuggest.Text) -> InlayHint
+    hint (pos, foo) =
+      let cPos = Types.cabalPositionToLSPPosition pos
+          mkInlayHintLabelPart = InlayHintLabelPart (" (" <> foo <> ")") Nothing Nothing Nothing
+      in  InlayHint { _position = cPos
+                    , _label = InR $ pure mkInlayHintLabelPart
+                    , _kind = Nothing -- neither a type nor a parameter
+                    , _textEdits = Nothing -- same as CodeAction
+                    , _tooltip = Nothing
+                    , _paddingLeft = Nothing
+                    , _paddingRight = Nothing
+                    , _data_ = Nothing
+                    }
 
 -- | Handler for hover messages.
 --
