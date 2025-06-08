@@ -123,11 +123,11 @@ jobs:
       matrix:
         ghc: ['9.8', '9.10']
         os: [ubuntu-latest]
-        cabal: ['3.10']
+        cabal: ['3.14']
         example: ['cabal', 'lsp-types']
 
     steps:
-    - uses: haskell-actions/setup@v2.7.10
+    - uses: haskell-actions/setup@v2.8.0
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}

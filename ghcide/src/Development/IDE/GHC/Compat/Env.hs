@@ -105,22 +105,14 @@ hscHomeUnit =
 setBytecodeLinkerOptions :: DynFlags -> DynFlags
 setBytecodeLinkerOptions df = df {
     ghcLink   = LinkInMemory
-#if MIN_VERSION_ghc(9,5,0)
   , backend = noBackend
-#else
-  , backend = NoBackend
-#endif
   , ghcMode = CompManager
     }
 
 setInterpreterLinkerOptions :: DynFlags -> DynFlags
 setInterpreterLinkerOptions df = df {
     ghcLink   = LinkInMemory
-#if MIN_VERSION_ghc(9,5,0)
    , backend = interpreterBackend
-#else
-  , backend = Interpreter
-#endif
   , ghcMode = CompManager
     }
 

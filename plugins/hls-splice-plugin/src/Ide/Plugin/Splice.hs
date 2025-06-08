@@ -38,14 +38,14 @@ import           Data.Maybe                            (fromMaybe, listToMaybe,
                                                         mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE
-import           Development.IDE.Core.FileStore            (getVersionedTextDoc)
+import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
-import qualified GHC.Runtime.Loader                as Loader
+import qualified GHC.Runtime.Loader                    as Loader
 import qualified GHC.Types.Error                       as Error
 import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
@@ -58,9 +58,7 @@ import           Language.LSP.Protocol.Types
 import           Data.Foldable                         (Foldable (foldl'))
 #endif
 
-#if MIN_VERSION_ghc(9,4,1)
 import           GHC.Data.Bag                          (Bag)
-#endif
 
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                 (EpAnn (..))
@@ -294,11 +292,9 @@ data SpliceClass where
     OneToOneAST :: HasSplice AnnListItem ast => Proxy# ast -> SpliceClass
     IsHsDecl :: SpliceClass
 
-#if MIN_VERSION_ghc(9,5,0)
 data HsSpliceCompat pass
   = UntypedSplice (HsUntypedSplice pass)
   | TypedSplice (LHsExpr pass)
-#endif
 
 
 class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast where
@@ -307,43 +303,24 @@ class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast wher
     expandSplice :: Proxy# ast -> SpliceOf ast GhcPs -> RnM (Either (ast GhcPs) (ast GhcRn), FreeVars)
 
 instance HasSplice AnnListItem HsExpr where
-#if MIN_VERSION_ghc(9,5,0)
     type SpliceOf HsExpr = HsSpliceCompat
     matchSplice _ (HsUntypedSplice _ spl) = Just (UntypedSplice spl)
     matchSplice _ (HsTypedSplice _ spl)   = Just (TypedSplice spl)
-#else
-    type SpliceOf HsExpr = HsSplice
-    matchSplice _ (HsSpliceE _ spl) = Just spl
-#endif
-    matchSplice _ _                 = Nothing
-#if MIN_VERSION_ghc(9,5,0)
+    matchSplice _ _                       = Nothing
     expandSplice _ (UntypedSplice e) = fmap (first Right) $ rnUntypedSpliceExpr e
     expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice e
-#else
-    expandSplice _ = fmap (first Right) . rnSpliceExpr
-#endif
 
 instance HasSplice AnnListItem Pat where
-#if MIN_VERSION_ghc(9,5,0)
     type SpliceOf Pat = HsUntypedSplice
-#else
-    type SpliceOf Pat = HsSplice
-#endif
     matchSplice _ (SplicePat _ spl) = Just spl
     matchSplice _ _                 = Nothing
     expandSplice _ =
-#if MIN_VERSION_ghc(9,5,0)
       fmap (first (Left . unLoc . utsplice_result . snd )) .
-#endif
       rnSplicePat
 
 
 instance HasSplice AnnListItem HsType where
-#if MIN_VERSION_ghc(9,5,0)
     type SpliceOf HsType = HsUntypedSplice
-#else
-    type SpliceOf HsType = HsSplice
-#endif
     matchSplice _ (HsSpliceTy _ spl) = Just spl
     matchSplice _ _                  = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceType
@@ -418,14 +395,8 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
     pure resl
     where
         dflags = hsc_dflags hscEnv
-
-#if MIN_VERSION_ghc(9,4,1)
         showErrors = showBag
-#else
-        showErrors = show
-#endif
 
-#if MIN_VERSION_ghc(9,4,1)
 showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
 showBag = show . fmap (fmap toDiagnosticMessage)
 
@@ -433,15 +404,12 @@ toDiagnosticMessage :: forall a. Error.Diagnostic a => a -> Error.DiagnosticMess
 toDiagnosticMessage message =
     Error.DiagnosticMessage
         { diagMessage = Error.diagnosticMessage
-#if MIN_VERSION_ghc(9,5,0)
                           (Error.defaultDiagnosticOpts @a)
-#endif
                           message
 
         , diagReason  = Error.diagnosticReason  message
         , diagHints   = Error.diagnosticHints   message
         }
-#endif
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 unRenamedE ::
@@ -458,11 +426,7 @@ unRenamedE dflags expr = do
             showSDoc dflags $ ppr expr
     pure expr'
   where
-#if MIN_VERSION_ghc(9,4,1)
     showErrors = showBag . Error.getMessages
-#else
-    showErrors = show
-#endif
 
 data SearchResult r =
     Continue | Stop | Here r
@@ -510,12 +474,8 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
                     (L (AsSrcSpan l@(RealSrcSpan spLoc _)) expr :: LHsExpr GhcPs)
                         | spanIsRelevant l ->
                             case expr of
-#if MIN_VERSION_ghc(9,5,0)
                                 HsTypedSplice{}   -> Here (spLoc, Expr)
                                 HsUntypedSplice{} -> Here (spLoc, Expr)
-#else
-                                HsSpliceE {}      -> Here (spLoc, Expr)
-#endif
                                 _                 -> Continue
                     _ -> Stop
                 )

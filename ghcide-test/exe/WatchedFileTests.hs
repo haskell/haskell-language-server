@@ -3,11 +3,14 @@
 
 module WatchedFileTests (tests) where
 
-import           Config                          (testWithDummyPluginEmpty')
+import           Config                          (mkIdeTestFs,
+                                                  testWithDummyPlugin',
+                                                  testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import qualified Data.Text                       as T
+import qualified Data.Text.IO                    as T
 import           Development.IDE.Test            (expectDiagnostics)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
@@ -18,6 +21,7 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
+import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -69,6 +73,17 @@ tests = testGroup "watched files"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "B.hs") FileChangeType_Changed ]
         expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'", Just "GHC-83865")])]
+      , testWithDummyPlugin' "reload HLS after .cabal file changes" (mkIdeTestFs [copyDir ("watched-files" </> "reload")]) $ \sessionDir -> do
+          let hsFile = "src" </> "MyLib.hs"
+          _ <- openDoc hsFile "haskell"
+          expectDiagnostics [(hsFile, [(DiagnosticSeverity_Error, (2, 7), "Could not load module \8216Data.List.Split\8217", Nothing)])]
+          let cabalFile = "reload.cabal"
+          cabalContent <- liftIO $ T.readFile cabalFile
+          let fix = T.replace "build-depends:    base" "build-depends:    base, split"
+          liftIO $ T.writeFile cabalFile (fix cabalContent)
+          sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+            [ FileEvent (filePathToUri $ sessionDir </> cabalFile) FileChangeType_Changed ]
+          expectDiagnostics [(hsFile, [])]
     ]
   ]
 

@@ -39,11 +39,12 @@
             "codeLensOn": true
         },
         "eval": {
+            "codeActionsOn": true,
+            "codeLensOn": true,
             "config": {
                 "diff": true,
                 "exception": false
-            },
-            "globalOn": true
+            }
         },
         "explicit-fields": {
             "codeActionsOn": true,
@@ -90,13 +91,6 @@
             },
             "globalOn": true
         },
-        "hlint": {
-            "codeActionsOn": true,
-            "config": {
-                "flags": []
-            },
-            "diagnosticsOn": true
-        },
         "importLens": {
             "codeActionsOn": true,
             "codeLensOn": true,
@@ -131,9 +125,6 @@
             },
             "globalOn": true
         },
-        "retrie": {
-            "globalOn": true
-        },
         "semanticTokens": {
             "config": {
                 "classMethodToken": "method",
@@ -151,9 +142,6 @@
                 "variableToken": "variable"
             },
             "globalOn": false
-        },
-        "splice": {
-            "globalOn": true
         },
         "stan": {
             "globalOn": false

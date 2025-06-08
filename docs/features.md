@@ -346,7 +346,7 @@ Shows the type signature for bindings without type signatures, and adds it with 
 
 Provided by: `hls-eval-plugin`
 
-Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
+Evaluates code blocks in comments with a click.  A code action is also provided. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
 ![Eval Demo](../plugins/hls-eval-plugin/demo.gif)
 
@@ -410,6 +410,17 @@ Provides renaming of symbols within a module. Experimental cross-module renaming
 Known limitations:
 
 - Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects](https://github.com/haskell/haskell-language-server/issues/2193).
+
+To eagerly load all components, you need to
+
+- set `haskell.sessionLoading` to `multipleComponents`,
+- set `hie.yaml` to load all components (currently only cabal supports this),
+  ```yaml
+  cradle:
+    cabal:
+      component: all
+  ```
+- and enable tests and benchmarks in `cabal.project` with `tests: True` and `benchmarks: True`.
 
 ## Semantic tokens
 

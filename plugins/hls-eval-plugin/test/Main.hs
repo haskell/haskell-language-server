@@ -6,13 +6,15 @@ module Main
   ) where
 
 import           Control.Lens               (_Just, folded, preview, view, (^.),
-                                             (^..))
+                                             (^..), (^?))
+import           Control.Monad              (join)
 import           Data.Aeson                 (Value (Object), fromJSON, object,
                                              (.=))
 import           Data.Aeson.Types           (Pair, Result (Success))
 import           Data.List                  (isInfixOf)
 import           Data.List.Extra            (nubOrdOn)
 import qualified Data.Map                   as Map
+import qualified Data.Maybe                 as Maybe
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (Config)
 import qualified Ide.Plugin.Config          as Plugin
@@ -59,6 +61,9 @@ tests =
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
 
+  , goldenWithEvalForCodeAction "Evaluation of expressions via code action" "T1" "hs"
+  , goldenWithEvalForCodeAction "Reevaluation of expressions via code action" "T2" "hs"
+
   , goldenWithEval "Evaluation of expressions" "T1" "hs"
   , goldenWithEval "Reevaluation of expressions" "T2" "hs"
   , goldenWithEval "Evaluation of expressions w/ imports" "T3" "hs"
@@ -79,8 +84,7 @@ tests =
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval "Evaluate a type with :kind!" "T10" "hs"
-  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs"
-        (if ghcVersion >= GHC94 then "ghc94.expected" else "expected")
+  , goldenWithEval "Reports an error for an incorrect type with :kind!" "T11" "hs"
   , goldenWithEval "Shows a kind with :kind" "T12" "hs"
   , goldenWithEval "Reports an error for an incorrect type with :kind" "T13" "hs"
   , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
@@ -133,7 +137,6 @@ tests =
           GHC910 -> "ghc910.expected"
           GHC98  -> "ghc98.expected"
           GHC96  -> "ghc96.expected"
-          GHC94  -> "ghc94.expected"
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
@@ -214,12 +217,16 @@ tests =
     knownBrokenInWindowsBeforeGHC912 msg =
         foldl (.) id
            [ knownBrokenInSpecificEnv [GhcVer ghcVer, HostOS Windows] msg
-           | ghcVer <- [GHC94 .. GHC910]
+           | ghcVer <- [GHC96 .. GHC910]
            ]
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =
   goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs $ FS.directProject (path <.> ext)) path "expected" ext executeLensesBackwards
+
+goldenWithEvalForCodeAction :: TestName -> FilePath -> FilePath -> TestTree
+goldenWithEvalForCodeAction title path ext =
+  goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs $ FS.directProject (path <.> ext)) path "expected" ext executeCodeActionsBackwards
 
 goldenWithEvalAndFs :: TestName -> [FS.FileTree] -> FilePath -> FilePath -> TestTree
 goldenWithEvalAndFs title tree path ext =
@@ -239,14 +246,24 @@ goldenWithEvalAndFs' title tree path ext expected =
 -- | Execute lenses backwards, to avoid affecting their position in the source file
 executeLensesBackwards :: TextDocumentIdentifier -> Session ()
 executeLensesBackwards doc = do
-  codeLenses <- reverse <$> getCodeLenses doc
+  codeLenses <- getCodeLenses doc
   -- liftIO $ print codeLenses
+  executeCmdsBackwards [c | CodeLens{_command = Just c} <- codeLenses]
 
-  -- Execute sequentially, nubbing elements to avoid
-  -- evaluating the same section with multiple tests
-  -- more than twice
-  mapM_ executeCmd $
-    nubOrdOn actSectionId [c | CodeLens{_command = Just c} <- codeLenses]
+executeCodeActionsBackwards :: TextDocumentIdentifier -> Session ()
+executeCodeActionsBackwards doc = do
+  codeLenses <- getCodeLenses doc
+  let ranges = [_range | CodeLens{_range} <- codeLenses]
+  -- getAllCodeActions cannot get our code actions because they have no diagnostics
+  codeActions <- join <$> traverse (getCodeActions doc) ranges
+  let cmds = Maybe.mapMaybe (^? _L) codeActions
+  executeCmdsBackwards cmds
+
+-- Execute commands backwards, nubbing elements to avoid
+-- evaluating the same section with multiple tests
+-- more than twice
+executeCmdsBackwards :: [Command] -> Session ()
+executeCmdsBackwards = mapM_ executeCmd . nubOrdOn actSectionId . reverse
 
 actSectionId :: Command -> Int
 actSectionId Command{_arguments = Just [fromJSON -> Success EvalParams{..}]} = evalId

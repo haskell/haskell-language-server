@@ -698,7 +698,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
             let ncfp = toNormalizedFilePath' (toAbsolutePath file)
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
-            sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
+            let
+              -- Each one of deps will be registered as a FileSystemWatcher in the GhcSession action
+              -- so that we can get a workspace/didChangeWatchedFiles notification when a dep changes.
+              -- The GlobPattern of a FileSystemWatcher can be absolute or relative.
+              -- We use the absolute one because it is supported by more LSP clients.
+              -- Here we make sure deps are absolute and later we use those absolute deps as GlobPattern.
+              absolutePathsCradleDeps (eq, deps)
+                = (eq, fmap toAbsolutePath deps)
+            (absolutePathsCradleDeps <$> sessionOpts (join cachedHieYamlLocation <|> hieYaml, file))  `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
@@ -790,7 +798,7 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- Moved back to implementation in GHC.
 checkHomeUnitsClosed' ::  UnitEnv -> OS.Set UnitId -> [DriverMessages]
 checkHomeUnitsClosed' ue _ = checkHomeUnitsClosed ue
-#elif MIN_VERSION_ghc(9,3,0)
+#else
 -- This function checks the important property that if both p and q are home units
 -- then any dependency of p, which transitively depends on q is also a home unit.
 -- GHC had an implementation of this function, but it was horribly inefficient
@@ -880,11 +888,7 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
             ideErrorWithSource
                 (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
                 (T.pack (Compat.printWithoutUniques (singleMessage err)))
-#if MIN_VERSION_ghc(9,5,0)
                 (Just (fmap GhcDriverMessage err))
-#else
-                Nothing
-#endif
         multi_errs = map closure_err_to_multi_err closure_errs
         bad_units = OS.fromList $ concat $ do
             x <- map errMsgDiagnostic closure_errs

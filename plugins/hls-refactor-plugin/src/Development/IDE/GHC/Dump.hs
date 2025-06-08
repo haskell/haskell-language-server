@@ -127,6 +127,7 @@ showAstDataHtml a0 = html $
 
             sourceText :: SourceText -> SDoc
             sourceText NoSourceText     = text "NoSourceText"
+
 #if MIN_VERSION_ghc(9,7,0)
             sourceText (SourceText src) = text "SourceText" <+> ftext src
 #else
@@ -134,13 +135,13 @@ showAstDataHtml a0 = html $
 #endif
 
             epaAnchor :: EpaLocation -> SDoc
+
 #if MIN_VERSION_ghc(9,9,0)
             epaAnchor (EpaSpan s) = parens $ text "EpaSpan" <+> srcSpan s
-#elif MIN_VERSION_ghc(9,5,0)
-            epaAnchor (EpaSpan r _)  = text "EpaSpan" <+> realSrcSpan r
 #else
-            epaAnchor (EpaSpan r)  = text "EpaSpan" <+> realSrcSpan r
+            epaAnchor (EpaSpan r _)  = text "EpaSpan" <+> realSrcSpan r
 #endif
+
 #if MIN_VERSION_ghc(9,11,0)
             epaAnchor (EpaDelta s d cs) = text "EpaDelta" <+> srcSpan s <+> deltaPos d <+> showAstDataHtml' cs
 #else
@@ -239,13 +240,8 @@ showAstDataHtml a0 = html $
             annotationEpAnnHsCase :: EpAnn EpAnnHsCase -> SDoc
             annotationEpAnnHsCase = annotation' (text "EpAnn EpAnnHsCase")
 
-#if MIN_VERSION_ghc(9,4,0)
             annotationEpAnnHsLet :: EpAnn NoEpAnns -> SDoc
             annotationEpAnnHsLet = annotation' (text "EpAnn NoEpAnns")
-#else
-            annotationEpAnnHsLet :: EpAnn AnnsLet -> SDoc
-            annotationEpAnnHsLet = annotation' (text "EpAnn AnnsLet")
-#endif
 
 #if MIN_VERSION_ghc(9,11,0)
             annotationAnnList :: EpAnn (AnnList ()) -> SDoc

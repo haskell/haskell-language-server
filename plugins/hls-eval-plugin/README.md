@@ -40,7 +40,7 @@ A test is composed by a sequence of contiguous lines, the result of their evalua
 "CDAB"
 ```
 
-You execute a test by clicking on the _Evaluate_ code lens that appears above it (or _Refresh_, if the test has been run previously).
+You execute a test by clicking on the _Evaluate_ code lens that appears above it (or _Refresh_, if the test has been run previously). A code action is also provided.
 
 All tests in the same comment block are executed together.
 

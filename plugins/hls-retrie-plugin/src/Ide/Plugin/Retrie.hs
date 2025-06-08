@@ -465,11 +465,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           ]
         | L (locA -> l) r  <- rds_rules,
           pos `isInsideSrcSpan` l,
-#if MIN_VERSION_ghc(9,5,0)
           let HsRule {rd_name = L _ rn} = r,
-#else
-          let HsRule {rd_name = L _ (_, rn)} = r,
-#endif
           let ruleName = unpackFS rn
       ]
   where
@@ -736,7 +732,6 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
 
     ideclPkgQual = NoRawPkgQual
 
-#if MIN_VERSION_ghc(9,5,0)
     ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
       { ideclAnn =
@@ -748,11 +743,6 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
       }
-#else
-    ideclExt = GHCGHC.EpAnnNotUsed
-    ideclHiding = Nothing
-#endif
-
 
 reuseParsedModule :: IdeState -> NormalizedFilePath -> IO (FixityEnv, Annotated GHCGHC.ParsedSource)
 reuseParsedModule state f = do

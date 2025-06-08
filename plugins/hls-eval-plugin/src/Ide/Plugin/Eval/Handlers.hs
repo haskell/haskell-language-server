@@ -12,7 +12,8 @@ A plugin inspired by the REPLoid feature of <https://github.com/jyp/dante Dante>
 
 For a full example see the "Ide.Plugin.Eval.Tutorial" module.
 -}
-module Ide.Plugin.Eval.CodeLens (
+module Ide.Plugin.Eval.Handlers (
+    codeAction,
     codeLens,
     evalCommand,
 ) where
@@ -40,14 +41,10 @@ import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Development.IDE.Core.FileStore               (getUriContents)
+import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
-import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
-                                                               TypeCheck (..),
-                                                               tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useNoFile_, use_,
-                                                               uses_)
+import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (OverridingBool (..))
@@ -75,16 +72,18 @@ import           GHC                                          (ClsInst,
 
 import           Development.IDE.Core.RuleTypes               (GetLinkable (GetLinkable),
                                                                GetModSummary (GetModSummary),
-                                                               GetModuleGraph (GetModuleGraph),
+                                                               GetModuleGraphTransDepsFingerprints (GetModuleGraphTransDepsFingerprints),
                                                                GhcSessionDeps (GhcSessionDeps),
-                                                               ModSummaryResult (msrModSummary))
-import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
+                                                               ModSummaryResult (msrModSummary),
+                                                               LinkableResult (linkableHomeMod),
+                                                               TypeCheck (..),
+                                                               tmrTypechecked, GetModuleGraphTransDepsFingerprints(..), GetModuleGraph(..))
 import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
-import           Development.IDE.Core.FileStore               (setSomethingModified)
+import           Data.List.Extra                              (unsnoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
@@ -125,17 +124,35 @@ import           Language.LSP.Server
 import           GHC.Unit.Module.ModIface                     (IfaceTopEnv (..))
 #endif
 
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
+codeAction recorder st plId CodeActionParams{_textDocument,_range} = do
+    rangeCommands <- mkRangeCommands recorder st plId _textDocument
+    pure
+        $ InL
+            [ InL command
+            | (testRange, command) <- rangeCommands
+            , _range `isSubrangeOf` testRange
+            ]
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
 codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens recorder st plId CodeLensParams{_textDocument} =
+codeLens recorder st plId CodeLensParams{_textDocument} = do
+    rangeCommands <- mkRangeCommands recorder st plId _textDocument
+    pure
+        $ InL
+            [ CodeLens range (Just command) Nothing
+            | (range, command) <- rangeCommands
+            ]
+
+mkRangeCommands :: Recorder (WithPriority Log) -> IdeState -> PluginId -> TextDocumentIdentifier -> ExceptT PluginError (HandlerM Config) [(Range, Command)]
+mkRangeCommands recorder st plId textDocument =
     let dbg = logWith recorder Debug
         perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
-     in perf "codeLens" $
+     in perf "evalMkRangeCommands" $
             do
-                let TextDocumentIdentifier uri = _textDocument
+                let TextDocumentIdentifier uri = textDocument
                 fp <- uriToFilePathE uri
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
@@ -148,11 +165,11 @@ codeLens recorder st plId CodeLensParams{_textDocument} =
                 let Sections{..} = commentsToSections isLHS comments
                     tests = testsBySection nonSetupSections
                     cmd = mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
-                let lenses =
-                        [ CodeLens testRange (Just cmd') Nothing
+                let rangeCommands =
+                        [ (testRange, cmd')
                         | (section, ident, test) <- tests
                         , let (testRange, resultRange) = testRanges test
-                              args = EvalParams (setupSections ++ [section]) _textDocument ident
+                              args = EvalParams (setupSections ++ [section]) textDocument ident
                               cmd' =
                                 (cmd :: Command)
                                     { _arguments = Just [toJSON args]
@@ -168,9 +185,9 @@ codeLens recorder st plId CodeLensParams{_textDocument} =
                             (length tests)
                             (length nonSetupSections)
                             (length setupSections)
-                            (length lenses)
+                            (length rangeCommands)
 
-                return $ InL lenses
+                pure rangeCommands
   where
     trivial (Range p p') = p == p'
 
@@ -236,7 +253,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> use_ GetModSummary nfp
     deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
-    linkables_needed <- transitiveDeps <$> useNoFile_ GetModuleGraph <*> pure nfp
+    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph nfp <*> pure nfp
     linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
@@ -298,7 +315,7 @@ finalReturn :: Text -> TextEdit
 finalReturn txt =
     let ls = T.lines txt
         l = fromIntegral $ length ls -1
-        c = fromIntegral $ T.length . last $ ls
+        c = fromIntegral $ T.length $ maybe T.empty snd (unsnoc ls)
         p = Position l c
      in TextEdit (Range p p) "\n"
 

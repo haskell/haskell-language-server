@@ -11,6 +11,12 @@
         "scope": "resource",
         "type": "string"
     },
+    "haskell.plugin.cabal-gild.config.path": {
+        "default": "cabal-gild",
+        "markdownDescription": "Set path to 'cabal-gild' executable",
+        "scope": "resource",
+        "type": "string"
+    },
     "haskell.plugin.cabal.codeActionsOn": {
         "default": true,
         "description": "Enables cabal code actions",
@@ -71,6 +77,18 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.eval.codeActionsOn": {
+        "default": true,
+        "description": "Enables eval code actions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.eval.codeLensOn": {
+        "default": true,
+        "description": "Enables eval code lenses",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.eval.config.diff": {
         "default": true,
         "markdownDescription": "Enable the diff output (WAS/NOW) of eval lenses",
@@ -80,12 +98,6 @@
     "haskell.plugin.eval.config.exception": {
         "default": false,
         "markdownDescription": "Enable marking exceptions with `*** Exception:` similarly to doctest and GHCi.",
-        "scope": "resource",
-        "type": "boolean"
-    },
-    "haskell.plugin.eval.globalOn": {
-        "default": true,
-        "description": "Enables eval plugin",
         "scope": "resource",
         "type": "boolean"
     },
@@ -104,6 +116,48 @@
     "haskell.plugin.explicit-fixity.globalOn": {
         "default": true,
         "description": "Enables explicit-fixity plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.fourmolu.config.external": {
+        "default": false,
+        "markdownDescription": "Call out to an external \"fourmolu\" executable, rather than using the bundled library.",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.fourmolu.config.path": {
+        "default": "fourmolu",
+        "markdownDescription": "Set path to executable (for \"external\" mode).",
+        "scope": "resource",
+        "type": "string"
+    },
+    "haskell.plugin.gadt.globalOn": {
+        "default": true,
+        "description": "Enables gadt plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-bindings.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-bindings plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-fill-holes.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-fill-holes plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-imports-exports.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-imports-exports plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-type-signatures.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-type-signatures plugin",
         "scope": "resource",
         "type": "boolean"
     },
@@ -159,6 +213,24 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.hlint.codeActionsOn": {
+        "default": true,
+        "description": "Enables hlint code actions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.hlint.config.flags": {
+        "default": [],
+        "markdownDescription": "Flags used by hlint",
+        "scope": "resource",
+        "type": "array"
+    },
+    "haskell.plugin.hlint.diagnosticsOn": {
+        "default": true,
+        "description": "Enables hlint diagnostics",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.importLens.codeActionsOn": {
         "default": true,
         "description": "Enables importLens code actions",
@@ -180,6 +252,12 @@
     "haskell.plugin.moduleName.globalOn": {
         "default": true,
         "description": "Enables moduleName plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ormolu.config.external": {
+        "default": false,
+        "markdownDescription": "Call out to an external \"ormolu\" executable, rather than using the bundled library",
         "scope": "resource",
         "type": "boolean"
     },
@@ -210,6 +288,18 @@
     "haskell.plugin.qualifyImportedNames.globalOn": {
         "default": true,
         "description": "Enables qualifyImportedNames plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.rename.config.crossModule": {
+        "default": false,
+        "markdownDescription": "Enable experimental cross-module renaming",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.rename.globalOn": {
+        "default": true,
+        "description": "Enables rename plugin",
         "scope": "resource",
         "type": "boolean"
     },

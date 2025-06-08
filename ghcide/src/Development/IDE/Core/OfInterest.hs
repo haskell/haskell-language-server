@@ -29,7 +29,6 @@ import           Development.IDE.Graph
 import           Control.Concurrent.STM.Stats             (atomically,
                                                            modifyTVar')
 import           Data.Aeson                               (toJSON)
-import qualified Data.Aeson                               as Aeson
 import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes)
 import           Development.IDE.Core.ProgressReporting

@@ -25,7 +25,6 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
 import           Data.Char                            (isSpace)
-import           Data.Functor                         ((<&>))
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
@@ -218,16 +217,18 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     --                  |^-_paddingLeft
     --                  ^-_position
     generateInlayHints :: Range -> ImportEdit -> PositionMapping -> Maybe InlayHint
-    generateInlayHints (Range _ end) ie pm = mkLabel ie <&> \label ->
-      InlayHint { _position = end
-                , _label = InL label
-                , _kind = Nothing -- neither a type nor a parameter
-                , _textEdits = fmap singleton $ toTEdit pm ie
-                , _tooltip = Just $ InL "Make this import explicit" -- simple enough, no need to resolve
-                , _paddingLeft = Just True -- show an extra space before the inlay hint
-                , _paddingRight = Nothing
-                , _data_ = Nothing
-                }
+    generateInlayHints (Range _ end) ie pm = do
+      label <- mkLabel ie
+      currentEnd <- toCurrentPosition pm end
+      return InlayHint { _position = currentEnd
+                       , _label = InL label
+                       , _kind = Nothing -- neither a type nor a parameter
+                       , _textEdits = fmap singleton $ toTEdit pm ie
+                       , _tooltip = Just $ InL "Make this import explicit" -- simple enough, no need to resolve
+                       , _paddingLeft = Just True -- show an extra space before the inlay hint
+                       , _paddingRight = Nothing
+                       , _data_ = Nothing
+                       }
     mkLabel :: ImportEdit -> Maybe T.Text
     mkLabel (ImportEdit{ieResType, ieText}) =
       let title ExplicitImport = Just $ abbreviateImportTitleWithoutModule ieText
@@ -471,11 +472,7 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
 
 isExplicitImport :: ImportDecl GhcRn -> Bool
-#if MIN_VERSION_ghc(9,5,0)
 isExplicitImport ImportDecl {ideclImportList = Just (Exactly, _)} = True
-#else
-isExplicitImport ImportDecl {ideclHiding = Just (False, _)}       = True
-#endif
 isExplicitImport _                                                = False
 
 -- This number is somewhat arbitrarily chosen. Ideally the protocol would tell us these things,
@@ -527,11 +524,7 @@ abbreviateImportTitleWithoutModule = abbreviateImportTitle . T.dropWhile (/= '('
 
 
 filterByImport :: ImportDecl GhcRn -> Map.Map ModuleName [AvailInfo] -> Maybe (Map.Map ModuleName [AvailInfo])
-#if MIN_VERSION_ghc(9,5,0)
 filterByImport (ImportDecl{ideclImportList = Just (_, L _ names)})
-#else
-filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
-#endif
   avails =
       -- if there is a function defined in the current module and is used
       -- i.e. if a function is not reexported but defined in current
@@ -548,22 +541,12 @@ filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
 filterByImport _ _ = Nothing
 
 constructImport :: ImportDecl GhcRn -> ImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> ImportDecl GhcRn
-#if MIN_VERSION_ghc(9,5,0)
 constructImport ImportDecl{ideclQualified = qualified, ideclImportList = origHiding} imd@ImportDecl{ideclImportList = Just (hiding, L _ names)}
-#else
-constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding} imd@ImportDecl{ideclHiding = Just (hiding, L _ names)}
-#endif
   (newModuleName, avails) = imd
     { ideclName = noLocA newModuleName
-#if MIN_VERSION_ghc(9,5,0)
     , ideclImportList = if isNothing origHiding && qualified /= NotQualified
                         then Nothing
                         else Just (hiding, noLocA newNames)
-#else
-    , ideclHiding = if isNothing origHiding && qualified /= NotQualified
-                        then Nothing
-                        else Just (hiding, noLocA newNames)
-#endif
     }
     where newNames = filter (\n -> any (n `containsAvail`) avails) names
           -- Check if a name is exposed by AvailInfo (the available information of a module)

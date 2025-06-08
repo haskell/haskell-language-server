@@ -8,7 +8,7 @@ packages:
          ./hls-test-utils
 
 
-index-state:  2025-03-20T00:00:00Z
+index-state: 2025-05-12T13:26:29Z
 
 tests: True
 test-show-details: direct
@@ -16,12 +16,6 @@ test-show-details: direct
 benchmarks: True
 
 write-ghc-environment-files: never
-
--- Link executables dynamically so the linker doesn't produce test
--- executables of ~150MB each and works lightning fast at that too
--- Disabled on Windows
-if(!os(windows))
-  executable-dynamic: True
 
 -- Many of our tests only work single-threaded, and the only way to
 -- ensure tasty runs everything purely single-threaded is to pass
@@ -50,23 +44,16 @@ constraints:
   bitvec -simd,
 
 
-if impl(ghc >= 9.8.4) && impl(ghc < 9.8.5)
-  -- By depending on ghc-lib-parser and ghc, we are encountering
-  -- a constraint conflict, ghc-9.8.4 comes with `filepath-1.4.301.0`,
-  -- and `ghc-lib-parser-9.8.4.20241130` specifies `filepath >=1.5 && < 1.6.
-  -- See https://github.com/digital-asset/ghc-lib/issues/572 for details.
-  allow-older:
-    ghc-lib-parser:filepath
-  constraints:
-    ghc-lib-parser==9.8.4.20241130
+-- Some of the formatters need the latest Cabal-syntax version,
+-- but 'cabal-install-parsers-0.6.2' only has Cabal-syntax (>=3.12.0.0 && <3.13).
+-- So, we relax the upper bounds here.
+-- fourmolu-0.18.0 and ormolu-0.8 depend on Cabal-syntax == 3.14.*, while
+-- cabal-add depends on cabal-install-parsers.
+allow-newer:
+  cabal-install-parsers:Cabal-syntax,
 
 if impl(ghc >= 9.11)
   benchmarks: False
   allow-newer:
-    hiedb:base,
-    hiedb:ghc,
-    hie-bios:ghc,
-    ghc-trace-events:base,
-    tasty-hspec:base,
     cabal-install-parsers:base,
     cabal-install-parsers:time,

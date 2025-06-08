@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
@@ -46,6 +47,7 @@ import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImp
 import           Test.Hls
 
 import qualified Development.IDE.GHC.ExactPrint
+import           Development.IDE.Plugin.CodeAction        (NotInScope (..))
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Test.AddArgument
 
@@ -68,6 +70,7 @@ tests =
   , codeActionTests
   , codeActionHelperFunctionTests
   , completionTests
+  , extractNotInScopeNameTests
   ]
 
 initializeTests :: TestTree
@@ -300,6 +303,8 @@ codeActionTests = testGroup "code actions"
   , suggestImportClassMethodTests
   , suggestImportTests
   , suggestAddRecordFieldImportTests
+  , suggestAddCoerceMissingConstructorImportTests
+  , suggestAddGenericMissingConstructorImportTests
   , suggestHideShadowTests
   , fixConstructorImportTests
   , fixModuleImportTypoTests
@@ -316,6 +321,7 @@ codeActionTests = testGroup "code actions"
   , addImplicitParamsConstraintTests
   , removeExportTests
   , Test.AddArgument.tests
+  , suggestAddRecordFieldUpdateImportTests
   ]
 
 insertImportTests :: TestTree
@@ -1353,8 +1359,7 @@ extendImportTests = testGroup "extend import actions"
                     [ "import Data.Monoid (First (..))"
                     , "f = (First Nothing) <> mempty"
                     ])
-        , brokenForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
-          testSession "extend single line qualified import with value" $ template
+        , testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
@@ -1546,8 +1551,7 @@ extendImportTests = testGroup "extend import actions"
                 )
                 (Range (Position 2 3) (Position 2 7))
             )
-        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
-          testSession "type constructor name same as data constructor name" $ template
+        , testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "newtype Foo = Foo Int"
@@ -1849,8 +1853,14 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    [ ignoreForGhcVersions [GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    ([ ignoreForGhcVersions [GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
+    ++ [
+        theTestIndirect qualifiedGhcRecords polymorphicType
+        |
+        qualifiedGhcRecords <- [False, True]
+        , polymorphicType <- [False, True]
+        ])
   ]
   where
     theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
@@ -1867,6 +1877,144 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
       action <- pickActionWithTitle "Add foo to the import list of B" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+    theTestIndirect qualifiedGhcRecords polymorphicType = testGroup
+      ((if qualifiedGhcRecords then "qualified-" else "unqualified-")
+      <> ("HasField " :: String)
+      <>
+      (if polymorphicType then "polymorphic-" else "monomorphic-")
+      <> "type ")
+      . (\x -> [x]) $ testSessionWithExtraFiles "hover" def $ \dir -> do
+      -- Hopefully enable project indexing?
+      configureCheckProject True
+
+      let
+          before = T.unlines ["{-# LANGUAGE OverloadedRecordDot #-}", "module A where", if qualifiedGhcRecords then "" else "import GHC.Records", "import C (bar)", "spam = bar.foo"]
+          after = T.unlines ["{-# LANGUAGE OverloadedRecordDot #-}", "module A where", if qualifiedGhcRecords then "" else "import GHC.Records", "import C (bar)", "import B (Foo(..))", "spam = bar.foo"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, B, C]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["module B where", if polymorphicType then "data Foo x = Foo { foo :: x }" else "data Foo = Foo { foo :: Int }"]
+      liftIO $ writeFileUTF8 (dir </> "C.hs") $ unlines ["module C where", "import B", "bar = Foo 10" ]
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = 4
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- pickActionWithTitle "import B (Foo(..))" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+suggestAddRecordFieldUpdateImportTests :: TestTree
+suggestAddRecordFieldUpdateImportTests = testGroup "suggest imports of record fields in update"
+  [ testGroup "implicit import of type" [theTest ] ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject True
+
+      let
+          before = T.unlines ["module C where", "import B", "biz = bar { foo = 100 }"]
+          after = T.unlines ["module C where", "import B", "import A (Foo(..))", "biz = bar { foo = 100 }"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, B, C]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "A.hs") $ unlines ["module A where", "data Foo = Foo { foo :: Int }"]
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["module B where", "import A", "bar = Foo 10" ]
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      diags <- waitForDiagnostics
+      liftIO $ print diags
+      let defLine = 2
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      liftIO $ print actions
+      action <- pickActionWithTitle "import A (Foo(..))" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+extractNotInScopeNameTests :: TestTree
+extractNotInScopeNameTests =
+  testGroup "extractNotInScopeName" [
+      testGroup "record field" [
+            testCase ">=ghc 910" $ Refactor.extractNotInScopeName "Not in scope: ‘foo’"  @=? Just (NotInScopeThing "foo"),
+            testCase "<ghc 910" $ Refactor.extractNotInScopeName "Not in scope: record field ‘foo’"  @=? Just (NotInScopeThing "foo")
+            ],
+      testGroup "HasField" [
+        testGroup "unqualified" [
+          testGroup "nice ticks" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"baz\" Cheval Bool’"  @=? Just (NotInScopeThing "Cheval"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"bar\" (Hibou Int) a0’"  @=? Just (NotInScopeThing "Hibou"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"foo\" (Tortue Int) Int’"  @=? Just (NotInScopeThing "Tortue")
+            ],
+          testGroup "parenthesis" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"blup\" Calamar Bool’"  @=? Just (NotInScopeThing "Calamar"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"biz\" (Ornithorink Int) a0’"  @=? Just (NotInScopeThing "Ornithorink"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘HasField \"blork\" (Salamandre Int) Int’"  @=? Just (NotInScopeThing "Salamandre")
+            ]
+          ],
+        testGroup "qualified" [
+          testGroup "nice ticks" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘GHC.HasField \"baz\" Cheval Bool’"  @=? Just (NotInScopeThing "Cheval"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Record.HasField \"bar\" (Hibou Int) a0’"  @=? Just (NotInScopeThing "Hibou"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Youpi.HasField \"foo\" (Tortue Int) Int’"  @=? Just (NotInScopeThing "Tortue")
+            ],
+          testGroup "parenthesis" [
+            testCase "Simple type" $ Refactor.extractNotInScopeName "No instance for ‘GHC.Tortue.HasField \"blup\" Calamar Bool’"  @=? Just (NotInScopeThing "Calamar"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Youpi.Salamandre.HasField \"biz\" (Ornithorink Int) a0’"  @=? Just (NotInScopeThing "Ornithorink"),
+            testCase "Parametric type" $ Refactor.extractNotInScopeName "No instance for ‘Foo.Bar.HasField \"blork\" (Salamandre Int) Int’"  @=? Just (NotInScopeThing "Salamandre")
+            ]
+          ]
+        ]
+    ]
+suggestAddCoerceMissingConstructorImportTests :: TestTree
+suggestAddCoerceMissingConstructorImportTests = testGroup "suggest imports of newtype constructor when using coerce"
+  [ testGroup "The newtype constructor is suggested when a matching representation error"
+    [ theTest
+    ]
+  ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject False
+      let before = T.unlines ["module A where", "import Data.Coerce (coerce)", "import Data.Semigroup (Sum)", "bar = coerce (10 :: Int) :: Sum Int"]
+          after = T.unlines ["module A where", "import Data.Coerce (coerce)", "import Data.Semigroup (Sum)", "import Data.Semigroup (Sum(..))", "bar = coerce (10 :: Int) :: Sum Int"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = 3
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- pickActionWithTitle "import Data.Semigroup (Sum(..))" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
+suggestAddGenericMissingConstructorImportTests :: TestTree
+suggestAddGenericMissingConstructorImportTests = testGroup "suggest imports of type constructors when using generic deriving"
+  [ testGroup "The type constructors are suggested when not in scope"
+    [ theTest
+    ]
+  ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject False
+      let
+          before = T.unlines ["module A where", "import GHC.Generics", "import Data.Semigroup (Sum)", "deriving instance Generic (Sum Int)"]
+          after = T.unlines ["module A where", "import GHC.Generics", "import Data.Semigroup (Sum)", "import Data.Semigroup (Sum(..))", "deriving instance Generic (Sum Int)"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = 3
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- pickActionWithTitle "import Data.Semigroup (Sum(..))" actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction
@@ -2469,9 +2617,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = 1"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘1’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A (f) where"
@@ -2488,9 +2634,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    let x = 3"
       , "    in x"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘3’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2508,9 +2652,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    let x = let y = 5 in y"
       , "    in x"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘5’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2529,23 +2671,17 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = seq \"debug\" traceShow \"debug\""
       ]
-      (if ghcVersion >= GHC94
-        then
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
-          ]
-        else
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint", Nothing)
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint", Nothing)
-          ])
-      "Add type annotation ‘String’ to ‘\"debug\"’"
+      [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
+      , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
+      ]
+      ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f = seq (\"debug\" :: String) traceShow \"debug\""
+      , "f = seq (\"debug\" :: "<> stringLit <> ") traceShow \"debug\""
       ]
   , testSession "add default type to satisfy two constraints" $
     testFor
@@ -2557,17 +2693,15 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f a = traceShow \"debug\" a"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint", Nothing) ])
-      "Add type annotation ‘String’ to ‘\"debug\"’"
+      [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
+      ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f a = traceShow (\"debug\" :: String) a"
+      , "f a = traceShow (\"debug\" :: " <> stringLit <> ") a"
       ]
   , testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
@@ -2579,20 +2713,19 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint", Nothing) ])
-      "Add type annotation ‘String’ to ‘\"debug\"’"
+      [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
+      ("Add type annotation ‘"<> stringLit <>"’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: String)))"
+      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: "<> stringLit <> ")))"
       ]
   ]
   where
+    stringLit = if ghcVersion >= GHC912 then "[Char]" else "String"
     testFor sourceLines diag expectedTitle expectedLines = do
       docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
       expectDiagnostics [ ("A.hs", diag) ]
@@ -3208,6 +3341,10 @@ addSigActionTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
+  issue806 = if ghcVersion >= GHC912 then
+                  "hello = print"           >:: "hello :: GHC.Types.ZonkAny 0 -> IO ()" -- GHC now returns ZonkAny 0 instead of Any. https://gitlab.haskell.org/ghc/ghc/-/issues/25895
+                else
+                  "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
   in
   testGroup "add signature"
     [ "abc = True"              >:: "abc :: Bool"
@@ -3216,7 +3353,7 @@ addSigActionTests = let
     , "(!!!) a b = a > b"       >:: "(!!!) :: Ord a => a -> a -> Bool"
     , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
     , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
-    , "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806
+    , issue806
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a" >:: "pattern Some :: a -> Maybe a"
     , "pattern Some a <- Just a\n  where Some a = Just a" >:: "pattern Some :: a -> Maybe a"
@@ -3250,8 +3387,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
-      testSession "type is exported but not the constructor of same name" $ templateNoAction
+    , testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
         , "data Foo = Foo"
@@ -3893,8 +4029,4 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 -- Which we need to do on macOS since the $TMPDIR can be in @/private/var@ or
 -- @/var@
 withTempDir :: (FilePath -> IO a) -> IO a
-withTempDir f = System.IO.Extra.withTempDir $ \dir ->
-  canonicalizePath dir >>= f
-
-brokenForGHC94 :: String -> TestTree -> TestTree
-brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
+withTempDir f = System.IO.Extra.withTempDir $ (canonicalizePath >=> f)

@@ -49,11 +49,7 @@ initParserState :: ParserOpts -> StringBuffer -> RealSrcLoc -> PState
 initParserState =
   Lexer.initParserState
 
-#if MIN_VERSION_ghc(9,5,0)
 pattern HsParsedModule :: Located (HsModule GhcPs) -> [FilePath] -> GHC.HsParsedModule
-#else
-pattern HsParsedModule :: Located HsModule -> [FilePath] -> GHC.HsParsedModule
-#endif
 pattern HsParsedModule
     { hpm_module
     , hpm_src_files

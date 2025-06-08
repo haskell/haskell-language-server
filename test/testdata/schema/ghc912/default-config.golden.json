@@ -20,6 +20,11 @@
                 "path": "cabal-fmt"
             }
         },
+        "cabal-gild": {
+            "config": {
+                "path": "cabal-gild"
+            }
+        },
         "cabalHaskellIntegration": {
             "globalOn": true
         },
@@ -34,17 +39,39 @@
             "codeLensOn": true
         },
         "eval": {
+            "codeActionsOn": true,
+            "codeLensOn": true,
             "config": {
                 "diff": true,
                 "exception": false
-            },
-            "globalOn": true
+            }
         },
         "explicit-fields": {
             "codeActionsOn": true,
             "inlayHintsOn": true
         },
         "explicit-fixity": {
+            "globalOn": true
+        },
+        "fourmolu": {
+            "config": {
+                "external": false,
+                "path": "fourmolu"
+            }
+        },
+        "gadt": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-bindings": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-fill-holes": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-imports-exports": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-type-signatures": {
             "globalOn": true
         },
         "ghcide-completions": {
@@ -64,6 +91,13 @@
             },
             "globalOn": true
         },
+        "hlint": {
+            "codeActionsOn": true,
+            "config": {
+                "flags": []
+            },
+            "diagnosticsOn": true
+        },
         "importLens": {
             "codeActionsOn": true,
             "codeLensOn": true,
@@ -71,6 +105,11 @@
         },
         "moduleName": {
             "globalOn": true
+        },
+        "ormolu": {
+            "config": {
+                "external": false
+            }
         },
         "overloaded-record-dot": {
             "globalOn": true
@@ -85,6 +124,12 @@
             "globalOn": true
         },
         "qualifyImportedNames": {
+            "globalOn": true
+        },
+        "rename": {
+            "config": {
+                "crossModule": false
+            },
             "globalOn": true
         },
         "semanticTokens": {

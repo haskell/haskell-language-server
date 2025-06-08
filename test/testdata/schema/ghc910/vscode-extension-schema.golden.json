@@ -77,6 +77,18 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.eval.codeActionsOn": {
+        "default": true,
+        "description": "Enables eval code actions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.eval.codeLensOn": {
+        "default": true,
+        "description": "Enables eval code lenses",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.eval.config.diff": {
         "default": true,
         "markdownDescription": "Enable the diff output (WAS/NOW) of eval lenses",
@@ -86,12 +98,6 @@
     "haskell.plugin.eval.config.exception": {
         "default": false,
         "markdownDescription": "Enable marking exceptions with `*** Exception:` similarly to doctest and GHCi.",
-        "scope": "resource",
-        "type": "boolean"
-    },
-    "haskell.plugin.eval.globalOn": {
-        "default": true,
-        "description": "Enables eval plugin",
         "scope": "resource",
         "type": "boolean"
     },
@@ -207,24 +213,6 @@
         "scope": "resource",
         "type": "boolean"
     },
-    "haskell.plugin.hlint.codeActionsOn": {
-        "default": true,
-        "description": "Enables hlint code actions",
-        "scope": "resource",
-        "type": "boolean"
-    },
-    "haskell.plugin.hlint.config.flags": {
-        "default": [],
-        "markdownDescription": "Flags used by hlint",
-        "scope": "resource",
-        "type": "array"
-    },
-    "haskell.plugin.hlint.diagnosticsOn": {
-        "default": true,
-        "description": "Enables hlint diagnostics",
-        "scope": "resource",
-        "type": "boolean"
-    },
     "haskell.plugin.importLens.codeActionsOn": {
         "default": true,
         "description": "Enables importLens code actions",
@@ -294,12 +282,6 @@
     "haskell.plugin.rename.globalOn": {
         "default": true,
         "description": "Enables rename plugin",
-        "scope": "resource",
-        "type": "boolean"
-    },
-    "haskell.plugin.retrie.globalOn": {
-        "default": true,
-        "description": "Enables retrie plugin",
         "scope": "resource",
         "type": "boolean"
     },
@@ -1034,12 +1016,6 @@
     "haskell.plugin.semanticTokens.globalOn": {
         "default": false,
         "description": "Enables semanticTokens plugin",
-        "scope": "resource",
-        "type": "boolean"
-    },
-    "haskell.plugin.splice.globalOn": {
-        "default": true,
-        "description": "Enables splice plugin",
         "scope": "resource",
         "type": "boolean"
     },

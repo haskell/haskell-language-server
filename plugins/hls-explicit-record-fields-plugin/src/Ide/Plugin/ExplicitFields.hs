@@ -43,7 +43,9 @@ import           Development.IDE                      (IdeState,
                                                        srcSpanToLocation,
                                                        srcSpanToRange, viaShow)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.PositionMapping (PositionMapping,
+                                                       toCurrentPosition,
+                                                       toCurrentRange)
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
 import qualified Development.IDE.Core.Shake           as Shake
@@ -80,7 +82,8 @@ import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns
                                                        pattern RealSrcSpan,
                                                        plusUFM_C, unitUFM)
 import           Development.IDE.GHC.Util             (getExtensions,
-                                                       printOutputable)
+                                                       printOutputable,
+                                                       stripOccNamePrefix)
 import           Development.IDE.Graph                (RuleResult)
 import           Development.IDE.Graph.Classes        (Hashable, NFData)
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
@@ -149,10 +152,17 @@ descriptor recorder plId =
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
-  CRR {crCodeActions, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let actions = map (mkCodeAction enabledExtensions) (RangeMap.filterByRange range crCodeActions)
+  let recordUids = [ uid
+                      | uid <- RangeMap.filterByRange range crCodeActions
+                      , Just record <- [IntMap.lookup uid crCodeActionResolve]
+                      -- Only fully saturated constructor applications can be
+                      -- converted to the record syntax through the code action
+                      , isConvertible record
+                      ]
+  let actions = map (mkCodeAction enabledExtensions) recordUids
   pure $ InL actions
   where
     mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
@@ -166,6 +176,11 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
       , _command = Nothing
       , _data_ = Just $ toJSON uid
       }
+
+    isConvertible :: RecordInfo -> Bool
+    isConvertible = \case
+      RecordInfoApp _ (RecordAppExpr Unsaturated _ _) -> False
+      _ -> True
 
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
@@ -204,19 +219,19 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
-    pure $ InL $ mapMaybe (mkInlayHint crr pragma) defnLocsList
+    pure $ InL $ mapMaybe (mkInlayHint crr pragma pm) defnLocsList
    where
-     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
-     mkInlayHint CRR {enabledExtensions, nameMap} pragma (defnLocs, record) =
+     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
+     mkInlayHint CRR {enabledExtensions, nameMap} pragma pm (defnLocs, record) =
        let range = recordInfoToDotDotRange record
            textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
                     <> maybeToList (pragmaEdit enabledExtensions pragma)
            names = renderRecordInfoAsDotdotLabelName record
        in do
-         end <- fmap _end range
+         currentEnd <- range >>= toCurrentPosition pm . _end
          names' <- names
          defnLocs' <- defnLocs
-         let excludeDotDot (Location _ (Range _ end')) = end' /= end
+         let excludeDotDot (Location _ (Range _ end)) = end /= currentEnd
              -- find location from dotdot definitions that name equal to label name
              findLocation name locations =
                let -- filter locations not within dotdot range
@@ -224,10 +239,10 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                    -- checks if 'a' is equal to 'Name' if the 'Either' is 'Right a', otherwise return 'False'
                    nameEq = either (const False) ((==) name)
                 in fmap fst $ find (nameEq . snd) filteredLocations
-             valueWithLoc = [ (T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
+             valueWithLoc = [ (stripOccNamePrefix $ T.pack $ printName name, findLocation name defnLocs') | name <- names' ]
              -- use `, ` to separate labels with definition location
              label = intersperse (mkInlayHintLabelPart (", ", Nothing)) $ fmap mkInlayHintLabelPart valueWithLoc
-         pure $ InlayHint { _position = end -- at the end of dotdot
+         pure $ InlayHint { _position = currentEnd -- at the end of dotdot
                           , _label = InR label
                           , _kind = Nothing -- neither a type nor a parameter
                           , _textEdits = Just textEdits -- same as CodeAction
@@ -248,20 +263,22 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                   | Just range <- [toCurrentRange pm visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
-    pure $ InL (concatMap (mkInlayHints nameMap) records)
+    pure $ InL (concatMap (mkInlayHints nameMap pm) records)
    where
-     mkInlayHints :: UniqFM Name [Name] -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap record@(RecordInfoApp _ (RecordAppExpr _ fla)) =
+     mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
+     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ _ fla)) =
        let textEdits = renderRecordInfoAsTextEdit nameMap record
-       in mapMaybe (mkInlayHint textEdits) fla
-     mkInlayHints _       _              = []
-     mkInlayHint :: Maybe TextEdit -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
-     mkInlayHint te (label, _) =
+       in mapMaybe (mkInlayHint textEdits pm) fla
+     mkInlayHints _ _ _ = []
+
+     mkInlayHint :: Maybe TextEdit -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
+     mkInlayHint te pm (label, _) =
        let (name, loc) = ((flSelector . unLoc) &&& (srcSpanToLocation . getLoc)) label
            fieldDefLoc = srcSpanToLocation (nameSrcSpan name)
        in do
          (Location _ recRange) <- loc
-         pure InlayHint { _position = _start recRange
+         currentStart <- toCurrentPosition pm (_start recRange)
+         pure InlayHint { _position = currentStart
                         , _label = InR $ pure (mkInlayHintLabelPart name fieldDefLoc)
                         , _kind = Nothing -- neither a type nor a parameter
                         , _textEdits = Just (maybeToList te) -- same as CodeAction
@@ -270,7 +287,8 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _paddingRight = Nothing
                         , _data_ = Nothing
                         }
-     mkInlayHintLabelPart name loc = InlayHintLabelPart (printOutputable (pprNameUnqualified name) <> "=") Nothing loc Nothing
+
+     mkInlayHintLabelPart name loc = InlayHintLabelPart (printFieldName (pprNameUnqualified name) <> "=") Nothing loc Nothing
 
 mkTitle :: [Extension] -> Text
 mkTitle exts = "Expand record wildcard"
@@ -374,7 +392,16 @@ instance Show CollectNamesResult where
 
 type instance RuleResult CollectNames = CollectNamesResult
 
-data RecordAppExpr = RecordAppExpr (LHsExpr GhcTc) [(Located FieldLabel, HsExpr GhcTc)]
+data Saturated = Saturated | Unsaturated
+  deriving (Generic)
+
+instance NFData Saturated
+
+data RecordAppExpr
+  = RecordAppExpr
+      Saturated  -- ^ Is the DataCon application fully saturated or partially applied?
+      (LHsExpr GhcTc)
+      [(Located FieldLabel, HsExpr GhcTc)]
   deriving (Generic)
 
 data RecordInfo
@@ -384,10 +411,10 @@ data RecordInfo
   deriving (Generic)
 
 instance Pretty RecordInfo where
-  pretty (RecordInfoPat ss p) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable p)
-  pretty (RecordInfoCon ss e) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable e)
-  pretty (RecordInfoApp ss (RecordAppExpr _ fla))
-    = pretty (printOutputable ss) <> ":" <+> hsep (map (pretty . printOutputable) fla)
+  pretty (RecordInfoPat ss p) = pretty (printFieldName ss) <> ":" <+> pretty (printOutputable p)
+  pretty (RecordInfoCon ss e) = pretty (printFieldName ss) <> ":" <+> pretty (printOutputable e)
+  pretty (RecordInfoApp ss (RecordAppExpr _ _ fla))
+    = pretty (printFieldName ss) <> ":" <+> hsep (map (pretty . printOutputable) fla)
 
 recordInfoToRange :: RecordInfo -> Range
 recordInfoToRange (RecordInfoPat ss _) = realSrcSpanToRange ss
@@ -494,7 +521,7 @@ processRecordFlds flds = flds { rec_dotdot = Nothing , rec_flds = puns' }
 
 
 showRecordPat :: Outputable (Pat GhcTc) => UniqFM Name [Name] -> Pat GhcTc -> Maybe Text
-showRecordPat names = fmap printOutputable . mapConPatDetail (\case
+showRecordPat names = fmap printFieldName . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
 
@@ -531,11 +558,11 @@ showRecordConFlds (RecordCon _ _ flds) =
 showRecordConFlds _ = Nothing
 
 showRecordApp :: RecordAppExpr -> Maybe Text
-showRecordApp (RecordAppExpr recConstr fla)
+showRecordApp (RecordAppExpr _ recConstr fla)
   = Just $ printOutputable recConstr <>  " { "
          <> T.intercalate ", " (showFieldWithArg <$> fla)
          <> " }"
-  where showFieldWithArg (field, arg) = printOutputable field <> " = " <> printOutputable arg
+  where showFieldWithArg (field, arg) = printFieldName field <> " = " <> printOutputable arg
 
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` getRecCons)
@@ -583,8 +610,14 @@ getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
 
     getFields :: HsExpr GhcTc -> [LHsExpr GhcTc] -> Maybe RecordAppExpr
     getFields (HsApp _ constr@(unLoc -> expr) arg) args
-      | not (null fls)
-      = Just (RecordAppExpr constr labelWithArgs)
+      | not (null fls) = Just $
+      -- Code action is only valid if the constructor application is fully
+      -- saturated, but we still want to display the inlay hints for partially
+      -- applied constructors
+        RecordAppExpr
+          (if length fls <= length args + 1 then Saturated else Unsaturated)
+          constr
+          labelWithArgs
       where fls = getExprFields expr
             labelWithArgs = zipWith mkLabelWithArg fls (arg : args)
             mkLabelWithArg label arg = (L (getLoc arg) label, unLoc arg)
@@ -609,3 +642,7 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
     mkRecInfo pat =
       [ RecordInfoPat realSpan' (unLoc pat) | RealSrcSpan realSpan' _ <- [ getLoc pat ]]
 getRecPatterns _ = ([], False)
+
+printFieldName :: Outputable a => a -> Text
+printFieldName = stripOccNamePrefix . printOutputable
+
