@@ -33,9 +33,6 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
-import System.IO
-
-
 tests :: TestTree
 tests
   = testGroup "completion"
