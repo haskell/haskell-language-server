@@ -46,7 +46,7 @@ import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
 import           Language.LSP.Protocol.Types                  (Int32,
-                                                               NormalizedFilePath)
+                                                               NormalizedUri)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -121,7 +121,7 @@ instance NFData   GetImportMap
 
 type instance RuleResult GetImportMap = ImportMap
 newtype ImportMap = ImportMap
-  { importMap :: M.Map ModuleName NormalizedFilePath -- ^ Where are the modules imported by this file located?
+  { importMap :: M.Map ModuleName NormalizedUri -- ^ Where are the modules imported by this file located?
   } deriving stock Show
     deriving newtype NFData
 

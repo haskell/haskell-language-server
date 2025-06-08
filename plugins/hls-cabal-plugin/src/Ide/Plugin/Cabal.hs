@@ -61,7 +61,6 @@ import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Cabal.Outline
 import qualified Ide.Plugin.Cabal.Parse                        as Parse
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
@@ -70,13 +69,13 @@ import qualified Language.LSP.VFS                              as VFS
 import           Text.Regex.TDFA
 
 data Log
-  = LogModificationTime NormalizedFilePath FileVersion
+  = LogModificationTime NormalizedUri FileVersion
   | LogShake Shake.Log
   | LogDocOpened Uri
   | LogDocModified Uri
   | LogDocSaved Uri
   | LogDocClosed Uri
-  | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
+  | LogFOI (HashMap NormalizedUri FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
   | LogCabalAdd CabalAdd.Log
@@ -85,8 +84,8 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogShake log' -> pretty log'
-    LogModificationTime nfp modTime ->
-      "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
+    LogModificationTime nuri modTime ->
+      "Modified:" <+> pretty (fromNormalizedUri nuri) <+> pretty (show modTime)
     LogDocOpened uri ->
       "Opened text document:" <+> pretty (getUri uri)
     LogDocModified uri ->
@@ -140,28 +139,28 @@ descriptor recorder plId =
         mconcat
           [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
-                    addFileOfInterest recorder ide file Modified{firstOpen = True}
+                  let nuri = toNormalizedUri _uri
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(opened)" $
+                    addFileOfInterest recorder ide nuri Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocModified _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
-                    addFileOfInterest recorder ide file Modified{firstOpen = False}
+                  let nuri = toNormalizedUri _uri
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(changed)" $
+                    addFileOfInterest recorder ide nuri Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
               \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocSaved _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(saved)" $
-                    addFileOfInterest recorder ide file OnDisk
+                  let nuri = toNormalizedUri _uri
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(saved)" $
+                    addFileOfInterest recorder ide nuri OnDisk
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
               \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                  let nuri = toNormalizedUri _uri
                   log' Debug $ LogDocClosed _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(closed)" $
-                    deleteFileOfInterest recorder ide file
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(closed)" $
+                    deleteFileOfInterest recorder ide nuri
           ]
     , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
@@ -169,9 +168,6 @@ descriptor recorder plId =
     }
  where
   log' = logWith recorder
-
-  whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-  whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
 
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
 No special logic, just group up a bunch of functions you need for the base
@@ -182,11 +178,11 @@ needs to be re-parsed. That's what we do when we record the dirty key that our p
 rule depends on.
 Then we restart the shake session, so that changes to our virtual files are actually picked up.
 -}
-restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
-restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = do
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedUri -> String -> IO [Key] -> IO ()
+restartCabalShakeSession shakeExtras vfs uri actionMsg actionBetweenSession = do
+  restartShakeSession shakeExtras (VFSModified vfs) (T.unpack (getUri $ fromNormalizedUri uri) ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
-    return (toKey GetModificationTime file:keys)
+    return (toKey GetModificationTime uri:keys)
 
 -- ----------------------------------------------------------------
 -- Plugin Rules
@@ -197,94 +193,98 @@ cabalRules recorder plId = do
   -- Make sure we initialise the cabal files-of-interest.
   ofInterestRules recorder
   -- Rule to produce diagnostics for cabal files.
-  define (cmapWithPrio LogShake recorder) $ \ParseCabalFields file -> do
+  define (cmapWithPrio LogShake recorder) $ \ParseCabalFields uri -> do
     config <- getPluginConfigAction plId
     if not (plcGlobalOn config && plcDiagnosticsOn config)
       then pure ([], Nothing)
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mCabalSource) <- use_ GetFileContents file
-        log' Debug $ LogModificationTime file t
+        (t, mCabalSource) <- use_ GetFileContents uri
+        log' Debug $ LogModificationTime uri t
         contents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 $ Rope.toText sources
-          Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+            pure $ Just $ Encoding.encodeUtf8 $ Rope.toText sources
+          Nothing | Just fp <- uriToNormalizedFilePath uri -> Just <$> do
+              liftIO $ BS.readFile $ fromNormalizedFilePath fp
+          _ -> pure Nothing
 
-        case Parse.readCabalFields file contents of
-          Left _ ->
-            pure ([], Nothing)
-          Right fields ->
-            pure ([], Just fields)
+        pure $ case Parse.readCabalFields uri <$> contents of
+          Nothing             -> ([], Nothing)
+          Just (Left _)       -> ([], Nothing)
+          Just (Right fields) -> ([], Just fields)
 
-  define (cmapWithPrio LogShake recorder) $ \ParseCabalCommonSections file -> do
-    fields <- use_ ParseCabalFields file
+  define (cmapWithPrio LogShake recorder) $ \ParseCabalCommonSections uri -> do
+    fields <- use_ ParseCabalFields uri
     let commonSections = Maybe.mapMaybe (\case
           commonSection@(Syntax.Section (Syntax.Name _ "common") _ _) -> Just commonSection
           _ -> Nothing)
           fields
     pure ([], Just commonSections)
 
-  define (cmapWithPrio LogShake recorder) $ \ParseCabalFile file -> do
+  define (cmapWithPrio LogShake recorder) $ \ParseCabalFile uri -> do
     config <- getPluginConfigAction plId
     if not (plcGlobalOn config && plcDiagnosticsOn config)
       then pure ([], Nothing)
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mCabalSource) <- use_ GetFileContents file
-        log' Debug $ LogModificationTime file t
-        contents <- case mCabalSource of
+        (t, mCabalSource) <- use_ GetFileContents uri
+        log' Debug $ LogModificationTime uri t
+        mcontents <- case mCabalSource of
           Just sources ->
-            pure $ Encoding.encodeUtf8 $ Rope.toText sources
-          Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+            pure $ Just $ Encoding.encodeUtf8 $ Rope.toText sources
+          Nothing | Just fp <- uriToNormalizedFilePath uri -> Just <$> do
+            liftIO $ BS.readFile $ fromNormalizedFilePath fp
+          _ -> pure Nothing
 
         -- Instead of fully reparsing the sources to get a 'GenericPackageDescription',
         -- we would much rather re-use the already parsed results of 'ParseCabalFields'.
         -- Unfortunately, Cabal-syntax doesn't expose the function 'parseGenericPackageDescription''
         -- which allows us to resume the parsing pipeline with '[Field Position]'.
-        (pWarnings, pm) <- liftIO $ Parse.parseCabalFileContents contents
-        let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
-        case pm of
-          Left (_cabalVersion, pErrorNE) -> do
-            let regexUnknownCabalBefore310 :: T.Text
-                -- We don't support the cabal version, this should not be an error, as the
-                -- user did not do anything wrong. Instead we cast it to a warning
-                regexUnknownCabalBefore310 = "Unsupported cabal-version [0-9]+.[0-9]*"
-                regexUnknownCabalVersion :: T.Text
-                regexUnknownCabalVersion = "Unsupported cabal format version in cabal-version field: [0-9]+.[0-9]+"
-                unsupportedCabalHelpText = unlines
-                  [ "The used `cabal-version` is not fully supported by this `HLS` binary."
-                  , "Either the `cabal-version` is unknown, or too new for this executable."
-                  , "This means that some functionality might not work as expected."
-                  , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if possible."
-                  , ""
-                  , "Supported versions are: " <>
-                      List.intercalate ", "
-                        (fmap Cabal.showCabalSpecVersion Data.supportedCabalVersions)
-                  ]
-                errorDiags =
-                  NE.toList $
-                    NE.map
-                      ( \pe@(PError pos text) ->
-                          if any (text =~)
-                                [ regexUnknownCabalBefore310
-                                , regexUnknownCabalVersion
-                                ]
-                            then Diagnostics.warningDiagnostic file (Syntax.PWarning Syntax.PWTOther pos $
-                                  unlines
-                                    [ text
-                                    , unsupportedCabalHelpText
-                                    ])
-                            else Diagnostics.errorDiagnostic file pe
-                      )
-                      pErrorNE
-                allDiags = errorDiags <> warningDiags
-            pure (allDiags, Nothing)
-          Right gpd -> do
-            pure (warningDiags, Just gpd)
+        case mcontents of
+          Nothing -> pure ([ideErrorText uri $ "tried to open uri " <> getUri (fromNormalizedUri uri) <> " but it is not a file uri"], Nothing)
+          Just contents -> do
+            (pWarnings, pm) <- liftIO $ Parse.parseCabalFileContents contents
+            let warningDiags = fmap (Diagnostics.warningDiagnostic uri) pWarnings
+            case pm of
+              Left (_cabalVersion, pErrorNE) -> do
+                let regexUnknownCabalBefore310 :: T.Text
+                    -- We don't support the cabal version, this should not be an error, as the
+                    -- user did not do anything wrong. Instead we cast it to a warning
+                    regexUnknownCabalBefore310 = "Unsupported cabal-version [0-9]+.[0-9]*"
+                    regexUnknownCabalVersion :: T.Text
+                    regexUnknownCabalVersion = "Unsupported cabal format version in cabal-version field: [0-9]+.[0-9]+"
+                    unsupportedCabalHelpText = unlines
+                      [ "The used `cabal-version` is not fully supported by this `HLS` binary."
+                      , "Either the `cabal-version` is unknown, or too new for this executable."
+                      , "This means that some functionality might not work as expected."
+                      , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if possible."
+                      , ""
+                      , "Supported versions are: " <>
+                          List.intercalate ", "
+                            (fmap Cabal.showCabalSpecVersion Data.supportedCabalVersions)
+                      ]
+                    errorDiags =
+                      NE.toList $
+                        NE.map
+                          ( \pe@(PError pos text) ->
+                              if any (text =~)
+                                    [ regexUnknownCabalBefore310
+                                    , regexUnknownCabalVersion
+                                    ]
+                                then Diagnostics.warningDiagnostic uri (Syntax.PWarning Syntax.PWTOther pos $
+                                      unlines
+                                        [ text
+                                        , unsupportedCabalHelpText
+                                        ])
+                                else Diagnostics.errorDiagnostic uri pe
+                          )
+                          pErrorNE
+                    allDiags = errorDiags <> warningDiags
+                pure (allDiags, Nothing)
+              Right gpd -> do
+                pure (warningDiags, Just gpd)
 
   action $ do
     -- Run the cabal kick. This code always runs when 'shakeRestart' is run.
@@ -326,13 +326,14 @@ licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifie
 -- use some sort of fuzzy matching in the future, see issue #4357.
 fieldSuggestCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
-  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
+  let nuri = toNormalizedUri uri
+  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents nuri
   case (,) <$> mContents <*> uriToFilePath' uri of
     Nothing -> pure $ InL []
     Just (fileContents, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields nuri
       case mFields of
         Nothing ->
           pure $ InL []
@@ -346,7 +347,7 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
           fakeLspCursorPosition = Position lineNr (col + fromIntegral (T.length fieldName))
           lspPrefixInfo = Ghcide.getCompletionPrefixFromRope fakeLspCursorPosition fileContents
           cabalPrefixInfo = Completions.getCabalPrefixInfo fp lspPrefixInfo
-      completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields
+      completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo uri cabalFields
       let completionTexts = fmap (^. JL.label) completions
       pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
 
@@ -364,9 +365,10 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
           case mbCabalFile of
             Nothing -> pure $ InL []
             Just cabalFilePath -> do
+              let fileUri = filePathToUri cabalFilePath
               verTxtDocId <- runActionE "cabalAdd.getVersionedTextDoc" state $
-                lift $ getVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
-              mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+                lift $ getVersionedTextDoc $ TextDocumentIdentifier fileUri
+              mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedUri fileUri
               case mbGPD of
                 Nothing -> pure $ InL []
                 Just (gpd, _) -> do
@@ -383,13 +385,13 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
 -- adds a Documentation link.
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
-  nfp <- getNormalizedFilePathE uri
-  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
+  let nuri = toNormalizedUri uri
+  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nuri
   case CabalFields.findTextWord cursor cabalFields of
     Nothing ->
       pure $ InR Null
     Just cursorText -> do
-      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
+      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nuri
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
       case filterVersion cursorText of
         Nothing -> pure $ InR Null
@@ -437,7 +439,7 @@ such as generating diagnostics, re-parsing, etc...
 We need to store the open files to parse them again if we restart the shake session.
 Restarting of the shake session happens whenever these files are modified.
 -}
-newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedUri FileOfInterestStatus))
 
 instance Shake.IsIdeGlobal OfInterestCabalVar
 
@@ -473,12 +475,12 @@ ofInterestRules recorder = do
   summarize (IsCabalFOI (Modified False)) = BS.singleton 2
   summarize (IsCabalFOI (Modified True))  = BS.singleton 3
 
-getCabalFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getCabalFilesOfInterestUntracked :: Action (HashMap NormalizedUri FileOfInterestStatus)
 getCabalFilesOfInterestUntracked = do
   OfInterestCabalVar var <- Shake.getIdeGlobalAction
   liftIO $ readVar var
 
-addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
+addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedUri -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest recorder state f v = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   (prev, files) <- modifyVar var $ \dict -> do
@@ -492,7 +494,7 @@ addFileOfInterest recorder state f v = do
  where
   log' = logWith recorder
 
-deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO [Key]
+deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedUri -> IO [Key]
 deleteFileOfInterest recorder state f = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   files <- modifyVar' var $ HashMap.delete f
@@ -509,24 +511,26 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let TextDocumentIdentifier uri = complParams ^. JL.textDocument
       position = complParams ^. JL.position
+      nuri = toNormalizedUri uri
   mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
   case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields nuri
       case mFields of
         Nothing ->
           pure . InR $ InR Null
         Just (fields, _) -> do
           let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
               cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
-          let res = computeCompletionsAt recorder ide cabalPrefInfo path fields
+          let res = computeCompletionsAt recorder ide cabalPrefInfo uri fields
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null
 
-computeCompletionsAt :: Recorder (WithPriority Log) -> IdeState -> Types.CabalPrefixInfo -> FilePath -> [Syntax.Field Syntax.Position] -> IO [CompletionItem]
-computeCompletionsAt recorder ide prefInfo fp fields = do
+computeCompletionsAt :: Recorder (WithPriority Log) -> IdeState -> Types.CabalPrefixInfo -> Uri -> [Syntax.Field Syntax.Position] -> IO [CompletionItem]
+computeCompletionsAt recorder ide prefInfo uri fields = do
+  let nuri = toNormalizedUri uri
   runMaybeT (context fields) >>= \case
     Nothing -> pure []
     Just ctx -> do
@@ -537,9 +541,9 @@ computeCompletionsAt recorder ide prefInfo fp fields = do
               -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
               -- thus, a quick response gives us the desired result most of the time.
               -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
-              mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath fp
+              mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile nuri
               pure $ fmap fst mGPD
-            , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections $ toNormalizedFilePath fp
+            , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections nuri
             , cabalPrefixInfo = prefInfo
             , stanzaName =
             case fst ctx of

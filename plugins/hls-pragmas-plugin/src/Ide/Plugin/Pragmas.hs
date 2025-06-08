@@ -33,7 +33,6 @@ import           Development.IDE.Plugin.Completions       (ghcideCompletionsPlug
 import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
 import qualified Development.IDE.Spans.Pragmas            as Pragmas
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import qualified Language.LSP.Protocol.Message            as LSP
@@ -77,12 +76,12 @@ suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarni
 mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 mkCodeActionProvider mkSuggest state _plId
   (LSP.CodeActionParams _ _ LSP.TextDocumentIdentifier{ _uri = uri } _ (LSP.CodeActionContext diags _monly _)) = do
-    normalizedFilePath <- getNormalizedFilePathE uri
+    let nuri = toNormalizedUri uri
     -- ghc session to get some dynflags even if module isn't parsed
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
-      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
-    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession nuri
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents nuri
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule nuri
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
         pedits = nubOrdOn snd $ concatMap (mkSuggest parsedModuleDynFlags) diags

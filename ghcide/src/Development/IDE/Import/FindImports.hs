@@ -26,6 +26,8 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Types.PkgQual
 import           GHC.Unit.State
+import           Language.LSP.Protocol.Types       (normalizedFilePathToUri,
+                                                    uriToNormalizedFilePath)
 import           System.FilePath
 
 
@@ -39,14 +41,14 @@ data Import
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
-  { artifactFilePath    :: !NormalizedFilePath
+  { artifactUri         :: !NormalizedUri
   , artifactModLocation :: !(Maybe ModLocation)
   , artifactIsSource    :: !Bool          -- ^ True if a module is a source input
   , artifactModule      :: !(Maybe Module)
   } deriving Show
 
 instance NFData ArtifactsLocation where
-  rnf ArtifactsLocation{..} = rnf artifactFilePath `seq` rwhnf artifactModLocation `seq` rnf artifactIsSource `seq` rnf artifactModule
+  rnf ArtifactsLocation{..} = rnf artifactUri `seq` rwhnf artifactModLocation `seq` rnf artifactIsSource `seq` rnf artifactModule
 
 isBootLocation :: ArtifactsLocation -> Bool
 isBootLocation = not . artifactIsSource
@@ -55,13 +57,14 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf PackageImport  = ()
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
+modSummaryToArtifactsLocation :: NormalizedUri -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation nuri ms = ArtifactsLocation nuri (ms_location <$> ms) source mbMod
   where
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Nothing | Just nfp <- uriToNormalizedFilePath nuri -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+              | otherwise -> False
       Just modSum -> isSource (ms_hsc_src modSum)
     mbMod = ms_mod <$> ms
 
@@ -166,7 +169,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
-        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
+        return $ Right $ FileImport $ ArtifactsLocation (normalizedFilePathToUri file) (Just loc) (not isSource) (Just genMod)
 
     lookupLocal uid dirs reexports = do
       mbFile <- locateModuleFile [(uid, dirs, reexports)] exts targetFor isSource $ unLoc modName

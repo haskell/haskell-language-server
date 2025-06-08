@@ -43,7 +43,6 @@ import           Development.IDE.Graph.Internal.Types (Result (resultBuilt, resu
 import qualified Development.IDE.Graph.Internal.Types as Graph
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
-import           Development.IDE.Types.Location       (fromUri)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
 import           Ide.Types
@@ -97,8 +96,8 @@ testRequestHandler _ (BlockSeconds secs) = do
     liftIO $ sleep secs
     return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
-    let nfp = fromUri $ toNormalizedUri file
-    sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
+    let nuri = toNormalizedUri file
+    sess <- runAction "Test - GhcSession" s $ use_ GhcSession nuri
     let hiPath = hiDir $ hsc_dflags $ hscEnv sess
     return $ Right (toJSON hiPath)
 testRequestHandler s GetShakeSessionQueueCount = liftIO $ do
@@ -110,8 +109,8 @@ testRequestHandler s WaitForShakeQueue = liftIO $ do
         when (n>0) retry
     return $ Right A.Null
 testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
-    let nfp = fromUri $ toNormalizedUri file
-    success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
+    let nuri = toNormalizedUri file
+    success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nuri
     let res = WaitForIdeRuleResult <$> success
     return $ bimap PluginInvalidParams toJSON res
 testRequestHandler s GetBuildKeysBuilt = liftIO $ do
@@ -134,7 +133,7 @@ testRequestHandler s GetStoredKeys = do
     return $ Right $ toJSON $ map show keys
 testRequestHandler s GetFilesOfInterest = do
     ff <- liftIO $ getFilesOfInterest s
-    return $ Right $ toJSON $ map fromNormalizedFilePath $ HM.keys ff
+    return $ Right $ toJSON $ map fromNormalizedUri $ HM.keys ff
 testRequestHandler s GetRebuildsCount = do
     count <- liftIO $ runAction "get build count" s getRebuildCount
     return $ Right $ toJSON count
@@ -147,7 +146,7 @@ getDatabaseKeys field db = do
     step <- shakeGetBuildStep db
     return [ k | (k, res) <- keys, field res == Step step]
 
-parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
+parseAction :: CI String -> NormalizedUri -> Action (Either Text Bool)
 parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp
 parseAction "getLocatedImports" fp = Right . isJust <$> use GetLocatedImports fp
 parseAction "getmodsummary" fp = Right . isJust <$> use GetModSummary fp

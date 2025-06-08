@@ -22,29 +22,29 @@ import           Ide.PluginUtils                   (extendNextLine)
 import           Language.LSP.Protocol.Lens        (range)
 import           Language.LSP.Protocol.Types       (Diagnostic (..),
                                                     DiagnosticSeverity (..),
-                                                    NormalizedFilePath,
+                                                    NormalizedUri,
                                                     Position (Position),
                                                     Range (Range),
-                                                    fromNormalizedFilePath)
+                                                    fromNormalizedUri, getUri)
 
 -- | Produce a diagnostic for a fatal Cabal parser error.
-fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic
+fatalParseErrorDiagnostic :: NormalizedUri -> T.Text -> FileDiagnostic
 fatalParseErrorDiagnostic fp msg =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine Syntax.zeroPos) msg
 
 -- | Produce a diagnostic from a Cabal parser error
-errorDiagnostic :: NormalizedFilePath -> Syntax.PError -> FileDiagnostic
+errorDiagnostic :: NormalizedUri -> Syntax.PError -> FileDiagnostic
 errorDiagnostic fp err@(Syntax.PError pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine pos) msg
   where
-    msg = T.pack $ showPError (fromNormalizedFilePath fp) err
+    msg = T.pack $ showPError (T.unpack $ getUri $ fromNormalizedUri fp) err
 
 -- | Produce a diagnostic from a Cabal parser warning
-warningDiagnostic :: NormalizedFilePath -> Syntax.PWarning -> FileDiagnostic
+warningDiagnostic :: NormalizedUri -> Syntax.PWarning -> FileDiagnostic
 warningDiagnostic fp warning@(Syntax.PWarning _ pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Warning (toBeginningOfNextLine pos) msg
   where
-    msg = T.pack $ showPWarning (fromNormalizedFilePath fp) warning
+    msg = T.pack $ showPWarning (T.unpack $ getUri $ fromNormalizedUri fp) warning
 
 -- | The Cabal parser does not output a _range_ for a warning/error,
 -- only a single source code 'Lib.Position'.
@@ -72,7 +72,7 @@ positionFromCabalPosition (Syntax.Position line column) = Position (fromIntegral
 
 -- | Create a 'FileDiagnostic'
 mkDiag
-  :: NormalizedFilePath
+  :: NormalizedUri
   -- ^ Cabal file path
   -> T.Text
   -- ^ Where does the diagnostic come from?

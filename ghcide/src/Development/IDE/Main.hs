@@ -110,6 +110,7 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            PluginDescriptor (PluginDescriptor, pluginCli),
                                                            PluginId (PluginId),
                                                            ipMap, pluginId)
+import           Language.LSP.Protocol.Types              (normalizedFilePathToUri)
 import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
@@ -407,10 +408,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
-            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
-            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
+            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles
+            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map (normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles)
+            _results <- runAction "GetHie" ide $ uses GetHieAst (map (normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles)
+            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map (normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles)
             let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
             when (failed /= []) $
                 putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed

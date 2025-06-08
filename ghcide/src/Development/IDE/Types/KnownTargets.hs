@@ -20,7 +20,7 @@ import           GHC.Generics
 
 -- | A mapping of module name to known files
 data KnownTargets = KnownTargets
-  { targetMap      :: !(HashMap Target (HashSet NormalizedFilePath))
+  { targetMap      :: !(HashMap Target (HashSet NormalizedUri))
   -- | 'normalisingMap' is a cached copy of `HMap.mapKey const targetMap`
   --
   -- At startup 'GetLocatedImports' is called on all known files. Say you have 10000
@@ -48,7 +48,7 @@ unionKnownTargets :: KnownTargets -> KnownTargets -> KnownTargets
 unionKnownTargets (KnownTargets tm nm) (KnownTargets tm' nm') =
   KnownTargets (HMap.unionWith (<>) tm tm') (HMap.union nm nm')
 
-mkKnownTargets :: [(Target, HashSet NormalizedFilePath)] -> KnownTargets
+mkKnownTargets :: [(Target, HashSet NormalizedUri)] -> KnownTargets
 mkKnownTargets vs = KnownTargets (HMap.fromList vs) (HMap.fromList [(k,k) | (k,_) <- vs ])
 
 instance NFData KnownTargets where
@@ -67,5 +67,5 @@ data Target = TargetModule ModuleName | TargetFile NormalizedFilePath
   deriving ( Eq, Ord, Generic, Show )
   deriving anyclass (Hashable, NFData)
 
-toKnownFiles :: KnownTargets -> HashSet NormalizedFilePath
+toKnownFiles :: KnownTargets -> HashSet NormalizedUri
 toKnownFiles = HSet.unions . HMap.elems . targetMap

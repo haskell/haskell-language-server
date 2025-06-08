@@ -67,37 +67,38 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
+      let nuri = toNormalizedUri _uri
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
-      whenUriFile _uri $ \file -> do
-          -- We don't know if the file actually exists, or if the contents match those on disk
-          -- For example, vscode restores previously unsaved contents on open
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=True}
+      -- We don't know if the file actually exists, or if the contents match those on disk
+      -- For example, vscode restores previously unsaved contents on open
+      setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False nuri $
+        addFileOfInterest ide nuri Modified{firstOpen=True}
+
       logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         atomically $ updatePositionMapping ide identifier changes
-        whenUriFile _uri $ \file -> do
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=False}
+        let nuri = toNormalizedUri _uri
+        setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False nuri $
+           addFileOfInterest ide nuri Modified{firstOpen=False}
         logWith recorder Debug $ LogModifiedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
-        whenUriFile _uri $ \file -> do
-            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file $
-                addFileOfInterest ide file OnDisk
+        let nuri = toNormalizedUri _uri
+        setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True nuri $
+            addFileOfInterest ide nuri OnDisk
         logWith recorder Debug $ LogSavedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
-          whenUriFile _uri $ \file -> do
-              let msg = "Closed text document: " <> getUri _uri
-              setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
-                scheduleGarbageCollection ide
-                deleteFileOfInterest ide file
-              logWith recorder Debug $ LogClosedTextDocument _uri
+         let msg = "Closed text document: " <> getUri _uri
+             nuri = toNormalizedUri _uri
+         setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
+           scheduleGarbageCollection ide
+           deleteFileOfInterest ide nuri
+         logWith recorder Debug $ LogClosedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWatchedFiles $
       \ide vfs _ (DidChangeWatchedFilesParams fileEvents) -> liftIO $ do
@@ -107,10 +108,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         -- filter also uris that do not map to filenames, since we cannot handle them
         filesOfInterest <- getFilesOfInterest ide
         let fileEvents' =
-                [ (nfp, event) | (FileEvent uri event) <- fileEvents
-                , Just fp <- [uriToFilePath uri]
-                , let nfp = toNormalizedFilePath fp
-                , not $ HM.member nfp filesOfInterest
+                [ (nuri, event) | (FileEvent uri event) <- fileEvents
+                , let nuri = toNormalizedUri uri
+                , not $ HM.member nuri filesOfInterest
                 ]
         unless (null fileEvents') $ do
             let msg = show fileEvents'
