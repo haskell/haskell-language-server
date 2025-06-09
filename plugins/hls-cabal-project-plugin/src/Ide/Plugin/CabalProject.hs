@@ -45,13 +45,16 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import           Distribution.Parsec.Error
 import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
+import           Ide.Plugin.CabalProject.Parse                 (parseCabalProjectContents)
 import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
+import           System.FilePath                               (takeFileName)
 import           Text.Regex.TDFA
+
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -81,7 +84,7 @@ instance Pretty Log where
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  (defaultCabalProjectPluginDescriptor plId "Provides a variety of IDE features in cabal files")
+  (defaultCabalProjectPluginDescriptor plId "Provides a variety of IDE features in cabal.project files")
     { pluginRules = cabalRules recorder plId
     , pluginHandlers =
         mconcat
@@ -92,11 +95,15 @@ descriptor recorder plId =
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
+                  result <- parseCabalProjectContents (fromNormalizedFilePath file)
+                  case result of
+                    Left err -> putStrLn $ "Cabal project parse failed: " ++ err
+                    Right project -> putStrLn $ "Cabal project parsed successfully: " ++ show project
                   restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                whenUriFile _uri $ \file-> do
                   log' Debug $ LogDocModified _uri
                   restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = False}
@@ -126,6 +133,7 @@ descriptor recorder plId =
 cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 cabalRules recorder _ = do
     ofInterestRules recorder
+    -- cabalProjectParseRules recorder
 
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
 No special logic, just group up a bunch of functions you need for the base

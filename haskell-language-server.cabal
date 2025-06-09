@@ -333,11 +333,12 @@ common cabalProject
 
 library hls-cabal-project-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabal)
+  if !flag(cabalProject)
     buildable: False
   exposed-modules:
     Ide.Plugin.CabalProject
-
+    Ide.Plugin.CabalProject.Parse
+    Ide.Plugin.CabalProject.Diagnostics
 
   build-depends:
     , bytestring
@@ -364,6 +365,7 @@ library hls-cabal-project-plugin
     , aeson
     , Cabal
     , pretty
+    , cabal-install-parsers >= 0.6  && < 0.7
 
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
 
