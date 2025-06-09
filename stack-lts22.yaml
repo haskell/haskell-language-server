@@ -15,6 +15,8 @@ ghc-options:
 allow-newer: true
 allow-newer-deps:
   - extensions
+  # stan dependencies
+  - directory-ospath-streaming
 
 extra-deps:
   - Diff-0.5
@@ -29,7 +31,7 @@ extra-deps:
   - retrie-1.2.3
 
   # stan and friends
-  - stan-0.1.3.0
+  - stan-0.2.1.0
   - dir-traverse-0.2.3.0
   - extensions-0.1.0.1
   - tomland-1.3.3.2
@@ -39,6 +41,7 @@ extra-deps:
   - validation-selective-0.2.0.0
   - cabal-add-0.1
   - cabal-install-parsers-0.6.1.1
+  - directory-ospath-streaming-0.2.2
 
 
 configure-options:
@@ -56,6 +59,9 @@ flags:
     BuildExecutable: false
   cabal-add:
     cabal-syntax: true
+  # stan dependencies
+  directory-ospath-streaming:
+      os-string: false
 
 nix:
   packages: [icu libcxx zlib]
