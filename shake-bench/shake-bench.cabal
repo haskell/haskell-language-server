@@ -1,45 +1,46 @@
 cabal-version: 2.2
-name:          shake-bench
-version:       0.2.0.0
-synopsis:      Build rules for historical benchmarking
-license:       Apache-2.0
-license-file:  LICENSE
-author:        Pepe Iborra
-maintainer:    pepeiborra@gmail.com
-category:      Development
-build-type:    Simple
+name: shake-bench
+version: 0.2.0.0
+synopsis: Build rules for historical benchmarking
+license: Apache-2.0
+license-file: LICENSE
+author: Pepe Iborra
+maintainer: pepeiborra@gmail.com
+category: Development
+build-type: Simple
 -- description is a single line so that implicit-hie can parse it
-description:   A library Shake rules to build and run benchmarks for multiple revisions of a project.  An example of usage can be found in the ghcide benchmark suite
+description: A library Shake rules to build and run benchmarks for multiple revisions of a project.  An example of usage can be found in the ghcide benchmark suite
 
 source-repository head
-    type:     git
-    location: https://github.com/haskell/haskell-language-server.git
+  type: git
+  location: https://github.com/haskell/haskell-language-server.git
 
 library
-  if impl(ghc > 9.11)
+  if impl(ghc >9.11)
     buildable: False
-  exposed-modules:  Development.Benchmark.Rules
-  hs-source-dirs:   src
+  exposed-modules: Development.Benchmark.Rules
+  hs-source-dirs: src
   build-depends:
-        aeson,
-        base == 4.*,
-        bytestring,
-        Chart,
-        Chart-diagrams,
-        diagrams-contrib,
-        diagrams-core,
-        diagrams-lib,
-        diagrams-svg,
-        directory,
-        extra >= 1.7.2,
-        filepath,
-        lens,
-        lens-aeson,
-        mtl,
-        shake,
-        text
+    Chart,
+    Chart-diagrams,
+    aeson,
+    base >=4 && <5,
+    bytestring,
+    diagrams-contrib,
+    diagrams-core,
+    diagrams-lib,
+    diagrams-svg,
+    directory,
+    extra >=1.7.2,
+    filepath,
+    lens,
+    lens-aeson,
+    mtl,
+    shake,
+    text,
+
   default-language: GHC2021
   default-extensions:
-        LambdaCase
-        RecordWildCards
-        ViewPatterns
+    LambdaCase
+    RecordWildCards
+    ViewPatterns
