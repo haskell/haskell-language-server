@@ -21,6 +21,8 @@ import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
+import           Control.Lens                                      hiding (List,
+                                                                    uncons, use)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
@@ -48,6 +50,9 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
+import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
+                                                                    _TcRnMessage,
+                                                                    msgEnvelopeErrorL)
 import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 #if !MIN_VERSION_ghc(9,11,0)
 import           Development.IDE.GHC.Compat.Util
@@ -103,6 +108,10 @@ import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Tc.Errors.Types                               (UnusedImportName (..),
+                                                                    UnusedImportReason (..))
+#endif
 
 #if !MIN_VERSION_ghc(9,9,0)
 import           Development.IDE.GHC.Compat.ExactPrint             (makeDeltaAst)
@@ -138,13 +147,13 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
+    allDiags <- atomically  $ filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
-               <> caRemoveInvalidExports parsedModule textContents allDiags range uri
-               <> caDeleteUnusedBindings parsedModule textContents allDiags range uri
+               <> caRemoveInvalidExports parsedModule textContents (map fdLspDiagnostic allDiags) range uri
+               <> caDeleteUnusedBindings parsedModule textContents (map fdLspDiagnostic allDiags) range uri
     pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
@@ -446,8 +455,9 @@ isUnusedImportedId
       maybe True (not . any (\(_, IdentifierDetails {..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
-suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
+suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+#if !MIN_VERSION_ghc(9,7,0)
+suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
@@ -473,6 +483,29 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         case matchRegexUnifySpaces binding "([^ ]+)\\(([^)]+)\\)" of
           Just [_, fields] -> [binding, fields]
           _                -> [binding]
+#else
+suggestRemoveRedundantImport _ contents
+  FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range}}
+    | Just (TcRnUnusedImport impDecl (UnusedImportSome names)) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+      , Just c <- contents
+      , let bindings = names >>= bindingsInImp
+      , ranges <- map (rangesForBindingImport impDecl . T.unpack) bindings
+    , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
+    , not (null ranges')
+      = [( "Remove " <> T.intercalate ", " (pprBinding <$> names) <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
+    | Just (TcRnUnusedImport _ UnusedImportNone) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage =
+      [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
+    | otherwise = []
+    where
+      bindingsInImp ::UnusedImportName -> [T.Text]
+      bindingsInImp (UnusedImportNameRecField NoParent name) = [printOutputable name]
+      bindingsInImp b@(UnusedImportNameRecField (ParentIs _) field) = [pprBinding b,printOutputable field]
+      bindingsInImp (UnusedImportNameRegular name) = [printOutputable name]
+      pprBinding ::UnusedImportName -> T.Text
+      pprBinding (UnusedImportNameRecField NoParent name) = printOutputable $ occName name
+      pprBinding (UnusedImportNameRecField (ParentIs parent) field) = printOutputable parent <> "("<> printOutputable  field <> ")"
+      pprBinding (UnusedImportNameRegular name) = printOutputable name
+#endif
 
 diagInRange :: Diagnostic -> Range -> Bool
 diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
@@ -487,19 +520,19 @@ diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
 -- is likely to be removed and less likely the warning will be disabled.
 -- Therefore actions to remove a single or all redundant imports should be
 -- preferred, so that the client can prioritize them higher.
-caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caRemoveRedundantImports m contents allDiags contextRange uri
   | Just pm <- m,
     r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) allDiags,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
-    ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
+    ctxEdits <- [ x | x@(d, _) <- r, fdLspDiagnostic d `diagInRange` contextRange],
     not $ null ctxEdits,
     caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [fdLspDiagnostic diagnostic] WorkspaceEdit{..} where
         _changes = Just $ M.singleton uri tedit
         _documentChanges = Nothing
         _changeAnnotations = Nothing
@@ -1910,7 +1943,7 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 -- | Returns the ranges for a binding in an import declaration
-rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
+rangesForBindingImport ::  OutputableBndrId p => ImportDecl (GhcPass p) -> String -> [Range]
 rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
   } b =
@@ -1952,7 +1985,7 @@ smallerRangesForBindingExport lies b =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
     ranges' _ = []
 
-rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
+rangesForBinding' :: OutputableBndrId p => String -> LIE ( GhcPass  p) -> [SrcSpan]
 #if MIN_VERSION_ghc(9,9,0)
 rangesForBinding' b (L (locA -> l) (IEVar _ nm _))
 #else
