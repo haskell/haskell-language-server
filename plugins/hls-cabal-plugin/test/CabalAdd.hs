@@ -12,45 +12,39 @@ import qualified Data.Text.Internal.Search   as T
 import           Distribution.Utils.Generic  (safeHead)
 import           Ide.Plugin.Cabal.CabalAdd   (hiddenPackageSuggestion)
 import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types (Diagnostic (..), mkRange)
+import           Language.LSP.Protocol.Types as J (Diagnostic (..))
 import           System.FilePath
-import           Test.Hls                    (Session, TestTree, _R, anyMessage,
-                                              assertEqual, documentContents,
-                                              executeCodeAction,
-                                              getAllCodeActions,
-                                              getDocumentEdit, liftIO, openDoc,
-                                              skipManyTill, testCase, testGroup,
-                                              waitForDiagnosticsFrom, (@?=))
+import           Test.Hls
 import           Utils
 
 cabalAddTests :: TestTree
 cabalAddTests =
   testGroup
     "CabalAdd Tests"
-    [ runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable" ("cabal-add-testdata" </> "exe")
+    [ ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable" ("cabal-add-testdata" </> "exe")
         (generateAddDependencyTestSession "exe.cabal" ("src" </> "Main.hs") "split" [253])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "lib")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a library" ("cabal-add-testdata" </> "lib")
         (generateAddDependencyTestSession "lib.cabal" ("src" </> "MyLib.hs") "split" [348])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "tests")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a test" ("cabal-add-testdata" </> "tests")
         (generateAddDependencyTestSession "tests.cabal" ("test" </> "Main.hs") "split" [478])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test with PackageImports" ("cabal-add-testdata" </> "tests")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a test with PackageImports" ("cabal-add-testdata" </> "tests")
         (generateAddDependencyTestSession "tests.cabal" ("test" </> "MainPackageImports.hs") "split" [731])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "bench")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark" ("cabal-add-testdata" </> "bench")
         (generateAddDependencyTestSession "bench.cabal" ("bench" </> "Main.hs") "split" [403])
 
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable, multiple targets" ("cabal-add-testdata" </> "multitarget")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to an executable, multiple targets" ("cabal-add-testdata" </> "multitarget")
         (generateAddDependencyTestSession "multitarget.cabal" ("src" </> "Main.hs") "split" [269])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a library, multiple targets" ("cabal-add-testdata" </> "multitarget")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a library, multiple targets" ("cabal-add-testdata" </> "multitarget")
         (generateAddDependencyTestSession "multitarget.cabal" ("lib" </> "MyLib.hs") "split" [413])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to an internal library, multiple targets" ("cabal-add-testdata" </> "multitarget")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to an internal library, multiple targets" ("cabal-add-testdata" </> "multitarget")
         (generateAddDependencyTestSession "multitarget.cabal" ("lib" </> "InternalLib.hs") "split" [413])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a test, multiple targets" ("cabal-add-testdata" </> "multitarget")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a test, multiple targets" ("cabal-add-testdata" </> "multitarget")
         (generateAddDependencyTestSession "multitarget.cabal" ("test" </> "Main.hs") "split" [655])
-    , runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark, multiple targets" ("cabal-add-testdata" </> "multitarget")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Can add hidden package to a benchmark, multiple targets" ("cabal-add-testdata" </> "multitarget")
         (generateAddDependencyTestSession "multitarget.cabal" ("bench" </> "Main.hs") "split" [776])
 
 
-    , runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "packageYaml")
+    , ignoreOnWindows $ runHaskellTestCaseSession "Code Actions - Guard against HPack" ("cabal-add-testdata" </> "packageYaml")
         (generatePackageYAMLTestSession ("src" </> "Main.hs"))
 
     , testHiddenPackageSuggestions "Check CabalAdd's parser, no version"
@@ -143,6 +137,10 @@ cabalAddTests =
                                    ]
     ]
  where
+    -- windows is suffering from long path issues for *some* reasons, as our XDG_CACHE_HOME
+    -- is freshly created for each test. The prefix for windows is like 40 characters, which is too long
+    -- for these tests in particular
+    ignoreOnWindows = ignoreInEnv [HostOS Windows] "Long Path issues on windows"
     generateAddDependencyTestSession :: FilePath -> FilePath -> T.Text -> [Int] -> Session ()
     generateAddDependencyTestSession cabalFile haskellFile dependency indicesRes = do
         hsdoc <- openDoc haskellFile "haskell"
@@ -164,15 +162,15 @@ cabalAddTests =
         in test
     messageToDiagnostic :: T.Text -> Diagnostic
     messageToDiagnostic msg = Diagnostic {
-            _range    = mkRange 0 0 0 0
-          , _severity = Nothing
-          , _code     = Nothing
-          , _source   = Nothing
-          , _message  = msg
-          , _relatedInformation = Nothing
-          , _tags     = Nothing
-          , _codeDescription = Nothing
-          , _data_ = Nothing
+            J._range    = mkRange 0 0 0 0
+          , J._severity = Nothing
+          , J._code     = Nothing
+          , J._source   = Nothing
+          , J._message  = msg
+          , J._relatedInformation = Nothing
+          , J._tags     = Nothing
+          , J._codeDescription = Nothing
+          , J._data_ = Nothing
         }
 
 
