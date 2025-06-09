@@ -78,7 +78,6 @@ import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
 
-
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
   | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
@@ -147,6 +146,29 @@ getModificationTimeImpl missingFileDiags file = do
                         then return (Nothing, ([], Nothing))
                         else return (Nothing, ([diag], Nothing))
 
+
+getPhysicalModificationTimeRule :: Recorder (WithPriority Log) -> Rules ()
+getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetPhysicalModificationTime file ->
+    getPhysicalModificationTimeImpl file
+
+getPhysicalModificationTimeImpl
+  :: NormalizedFilePath
+  -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
+getPhysicalModificationTimeImpl file = do
+    let file' = fromNormalizedFilePath file
+    let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
+
+    alwaysRerun
+
+    liftIO $ fmap wrap (getModTime file')
+        `catch` \(e :: IOException) -> do
+            let err | isDoesNotExistError e = "File does not exist: " ++ file'
+                    | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
+                diag = ideErrorText file (T.pack err)
+            if isDoesNotExistError e
+                then return (Nothing, ([], Nothing))
+                else return (Nothing, ([diag], Nothing))
+
 -- | Interface files cannot be watched, since they live outside the workspace.
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
@@ -170,7 +192,11 @@ resetFileStore ideState changes = mask $ \_ -> do
             case c of
                 LSP.FileChangeType_Changed
                     --  already checked elsewhere |  not $ HM.member nfp fois
-                    -> atomically $ deleteValue (shakeExtras ideState) GetModificationTime nfp
+                    ->
+                      atomically $ do
+                        ks <- deleteValue (shakeExtras ideState) GetModificationTime nfp
+                        vs <- deleteValue (shakeExtras ideState) GetPhysicalModificationTime nfp
+                        pure $ ks ++ vs
                 _ -> pure []
 
 
@@ -233,6 +259,7 @@ getVersionedTextDoc doc = do
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
+    getPhysicalModificationTimeRule recorder
     getFileContentsRule recorder
     addWatchedFileRule recorder isWatched
 
