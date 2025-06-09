@@ -1184,7 +1184,7 @@ type FormattingHandler a
   -> Maybe ProgressToken
   -> FormattingType
   -> T.Text
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> FormattingOptions
   -> ExceptT PluginError (HandlerM Config) ([TextEdit] |? Null)
 

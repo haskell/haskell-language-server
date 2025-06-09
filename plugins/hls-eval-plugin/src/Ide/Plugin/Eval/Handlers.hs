@@ -52,7 +52,6 @@ import           Development.IDE.GHC.Util                     (evalGhcEnv,
                                                                modifyDynFlags)
 import           Development.IDE.Import.DependencyInformation (transitiveDeps,
                                                                transitiveModuleDeps)
-import           Development.IDE.Types.Location               (toNormalizedFilePath')
 import           GHC                                          (ClsInst,
                                                                ExecOptions (execLineNumber, execSourceFile),
                                                                FamInst,
@@ -154,11 +153,11 @@ mkRangeCommands recorder st plId textDocument =
             do
                 let TextDocumentIdentifier uri = textDocument
                 fp <- uriToFilePathE uri
-                let nfp = toNormalizedFilePath' fp
+                let nuri = toNormalizedUri uri
                     isLHS = isLiterate fp
                 dbg $ LogCodeLensFp fp
                 (comments, _) <-
-                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
+                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nuri
                 dbg $ LogCodeLensComments comments
 
                 -- Extract tests from source code
@@ -209,20 +208,20 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
-            let nfp = toNormalizedFilePath' fp
+            let nuri = toNormalizedUri _uri
             mdlText <- moduleText st _uri
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                queueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
+                queueForEvaluation st nuri
+                return [toKey IsEvaluating nuri]
                 )
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                unqueueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
+                unqueueForEvaluation st nuri
+                return [toKey IsEvaluating nuri]
                 )
-              (initialiseSessionForEval (needsQuickCheck tests) st nfp)
+              (initialiseSessionForEval (needsQuickCheck tests) st nuri)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
@@ -246,7 +245,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 -- also be loaded into the environment.
 --
 -- The interactive context and interactive dynamic flags are also set appropiately.
-initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> IO HscEnv
+initialiseSessionForEval :: Bool -> IdeState -> NormalizedUri -> IO HscEnv
 initialiseSessionForEval needs_quickcheck st nfp = do
   (ms, env1) <- runAction "runEvalCmd" st $ do
 

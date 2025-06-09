@@ -21,8 +21,7 @@ import           Development.IDE.Core.Service     (IdeState)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util         (printOutputable)
 import           Generics.SYB                     (extQ, something)
-import           Ide.Plugin.Error                 (PluginError,
-                                                   getNormalizedFilePathE)
+import           Ide.Plugin.Error                 (PluginError)
 import           Ide.Types                        (PluginDescriptor (..),
                                                    PluginId (PluginId),
                                                    PluginMethodHandler,
@@ -38,12 +37,12 @@ descriptor plId = (defaultPluginDescriptor plId "Provides a code action to chang
 
 codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = do
-      nfp <- getNormalizedFilePathE uri
-      decls <- getDecls plId ideState nfp
+      let nuri = toNormalizedUri uri
+      decls <- getDecls plId ideState nuri
       let actions = mapMaybe (generateAction plId uri decls) diags
       pure $ InL actions
 
-getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
+getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedUri -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
     . fmap (hsmodDecls . unLoc . pm_parsed_source)

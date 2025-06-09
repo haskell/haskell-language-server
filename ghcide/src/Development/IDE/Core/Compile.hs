@@ -97,7 +97,7 @@ import qualified GHC.LanguageExtensions                       as LangExt
 import           GHC.Serialized
 import           HieDb                                        hiding (withHieDb)
 import qualified Language.LSP.Protocol.Message                as LSP
-import           Language.LSP.Protocol.Types                  (DiagnosticTag (..))
+import           Language.LSP.Protocol.Types                  (DiagnosticTag (..), uriToFilePath)
 import qualified Language.LSP.Server                          as LSP
 import           Prelude                                      hiding (mod)
 import           System.Directory
@@ -132,6 +132,7 @@ import           Development.IDE.GHC.Compat                   hiding (assert,
                                                                parseModule,
                                                                tcRnModule,
                                                                writeHieFile)
+import Control.Monad.Except (throwError)
 #else
 import           Development.IDE.GHC.Compat                   hiding
                                                               (loadInterface,
@@ -161,13 +162,13 @@ sourceParser = "parser"
 parseModule
     :: IdeOptions
     -> HscEnv
-    -> FilePath
+    -> Uri
     -> ModSummary
     -> IO (IdeResult ParsedModule)
-parseModule IdeOptions{..} env filename ms =
+parseModule IdeOptions{..} env uri ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
-        (diag, modu) <- parseFileContents env optPreprocessor filename ms
+        (diag, modu) <- parseFileContents env optPreprocessor uri ms
         return (diag, Just modu)
 
 
@@ -181,14 +182,14 @@ computePackageDeps env pkg = do
         Nothing ->
           return $ Left
             [ ideErrorText
-                (toNormalizedFilePath' noFilePath)
+                emptyPathUri
                 (T.pack $ "unknown package: " ++ show pkg)
             ]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
 data TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables   :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  { getLinkables   :: [NormalizedUri] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   , getModuleGraph :: IO DependencyInformation
   }
 
@@ -791,8 +792,12 @@ atomicFileWrite se targetPath write = do
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
-  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)) >> pure x)
-    `onException` cleanUp
+  (do
+     x <- write tempFilePath
+     renameFile tempFilePath targetPath
+     _ <- atomically $ resetInterfaceStore se $ filePathToUri' $ toNormalizedFilePath' targetPath
+     pure x
+     ) `onException` cleanUp
 
 generateHieAsts :: HscEnv -> TcModuleResult
 #if MIN_VERSION_ghc(9,11,0)
@@ -1068,19 +1073,19 @@ withBootSuffix _          = id
 --   Runs preprocessors as needed.
 getModSummaryFromImports
   :: HscEnv
-  -> FilePath
+  -> Uri
   -> UTCTime
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 -- modTime is only used in GHC < 9.4
-getModSummaryFromImports env fp _modTime mContents = do
+getModSummaryFromImports env uri _modTime mContents = do
 -- src_hash is only used in GHC >= 9.4
-    (contents, opts, ppEnv, _src_hash) <- preprocessor env fp mContents
+    (contents, opts, ppEnv, _src_hash) <- preprocessor env uri mContents
 
     let dflags = hsc_dflags ppEnv
 
     -- The warns will hopefully be reported when we actually parse the module
-    (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
+    (_warns, L main_loc hsmod) <- parseHeader dflags uri contents
 
     -- Copied from `HeaderInfo.getImports`, but we also need to keep the parsed imports
     let mb_mod = hsmodName hsmod
@@ -1120,42 +1125,47 @@ getModSummaryFromImports env fp _modTime mContents = do
     liftIO $ evaluate $ rnf textualImports
 
 
-    modLoc <- liftIO $ if mod == mAIN_NAME
-        -- specially in tests it's common to have lots of nameless modules
-        -- mkHomeModLocation will map them to the same hi/hie locations
-        then mkHomeModLocation dflags (pathToModuleName fp) fp
-        else mkHomeModLocation dflags mod fp
+    case uriToFilePath' uri of
+      Nothing -> do
+        let nuri = toNormalizedUri uri
+        throwError [ideErrorText nuri $ "Uri is not a file uri: " <> getUri uri]
+      Just file -> do
+        modLoc <- liftIO $ if mod == mAIN_NAME
+            -- specially in tests it's common to have lots of nameless modules
+            -- mkHomeModLocation will map them to the same hi/hie locations
+            then mkHomeModLocation dflags (pathToModuleName uri) file
+            else mkHomeModLocation dflags mod file
 
-    let modl = mkHomeModule (hscHomeUnit ppEnv) mod
-        sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary =
-            ModSummary
-                { ms_mod          = modl
-                , ms_hie_date     = Nothing
-                , ms_dyn_obj_date    = Nothing
-                , ms_ghc_prim_import = ghc_prim_import
-                , ms_hs_hash      = _src_hash
+        let modl = mkHomeModule (hscHomeUnit ppEnv) mod
+            sourceType = if "-boot" `isSuffixOf` takeExtension file then HsBootFile else HsSrcFile
+            msrModSummary =
+                ModSummary
+                    { ms_mod          = modl
+                    , ms_hie_date     = Nothing
+                    , ms_dyn_obj_date    = Nothing
+                    , ms_ghc_prim_import = ghc_prim_import
+                    , ms_hs_hash      = _src_hash
 
-                , ms_hsc_src      = sourceType
-                -- The contents are used by the GetModSummary rule
-                , ms_hspp_buf     = Just contents
-                , ms_hspp_file    = fp
-                , ms_hspp_opts    = dflags
-                , ms_iface_date   = Nothing
-                , ms_location     = withBootSuffix sourceType modLoc
-                , ms_obj_date     = Nothing
-                , ms_parsed_mod   = Nothing
-                , ms_srcimps      = srcImports
-                , ms_textual_imps = textualImports
-                }
+                    , ms_hsc_src      = sourceType
+                    -- The contents are used by the GetModSummary rule
+                    , ms_hspp_buf     = Just contents
+                    , ms_hspp_file    = file
+                    , ms_hspp_opts    = dflags
+                    , ms_iface_date   = Nothing
+                    , ms_location     = withBootSuffix sourceType modLoc
+                    , ms_obj_date     = Nothing
+                    , ms_parsed_mod   = Nothing
+                    , ms_srcimps      = srcImports
+                    , ms_textual_imps = textualImports
+                    }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
-    msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
-    return ModSummaryResult{..}
+        msrFingerprint <- liftIO $ computeFingerprint file opts msrModSummary
+        msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
+        return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps, the preprocessed source and other non relevant fields
-        computeFingerprint opts ModSummary{..} = do
+        computeFingerprint file opts ModSummary{..} = do
             fingerPrintImports <- fingerprintFromPut $ do
                   put $ Util.uniq $ moduleNameFS $ moduleName ms_mod
                   forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
@@ -1165,7 +1175,7 @@ getModSummaryFromImports env fp _modTime mContents = do
                       G.ThisPkg uid  -> put $ getKey $ getUnique uid
                       G.OtherPkg uid -> put $ getKey $ getUnique uid
             return $! Util.fingerprintFingerprints $
-                    [ Util.fingerprintString fp
+                    [ Util.fingerprintString file
                     , fingerPrintImports
                     , modLocationFingerprint ms_location
                     ] ++ map Util.fingerprintString opts
@@ -1183,11 +1193,11 @@ getModSummaryFromImports env fp _modTime mContents = do
 parseHeader
        :: Monad m
        => DynFlags -- ^ flags to use
-       -> FilePath  -- ^ the filename (for source locations)
+       -> Uri  -- ^ the filename (for source locations)
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located (HsModule GhcPs))
 parseHeader dflags filename contents = do
-   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
+   let loc  = mkRealSrcLoc (Util.mkFastString $ T.unpack $ getUri filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromGhcErrorMessages sourceParser dflags $ msgs dflags
@@ -1215,11 +1225,11 @@ parseHeader dflags filename contents = do
 parseFileContents
        :: HscEnv
        -> (GHC.ParsedSource -> IdePreprocessedSource)
-       -> FilePath  -- ^ the filename (for source locations)
+       -> Uri  -- ^ the filename (for source locations)
        -> ModSummary
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
 parseFileContents env customPreprocessor filename ms = do
-   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
+   let loc  = mkRealSrcLoc (Util.mkFastString $ T.unpack $ getUri filename) 1 1
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
@@ -1270,7 +1280,7 @@ parseFileContents env customPreprocessor filename ms = do
                --   - remove duplicates
                --   - filter out the .hs/.lhs source filename if we have one
                --
-               let n_hspp  = normalise filename
+               let n_hspp  = maybe (T.unpack $ getUri filename) normalise $ uriToFilePath filename
                    TempDir tmp_dir = tmpDir dflags
                    srcs0 = nubOrd $ filter (not . (tmp_dir `isPrefixOf`))
                                   $ filter (/= n_hspp)
@@ -1362,8 +1372,8 @@ data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
-  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
-  , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
+  , get_file_version :: NormalizedUri -> m (Maybe FileVersion)
+  , get_linkable_hashes :: [NormalizedUri] -> m [BS.ByteString]
   , get_module_graph :: m DependencyInformation
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
@@ -1402,7 +1412,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     mb_dest_version <- case mb_old_version of
       Just ver -> pure $ Just ver
-      Nothing  -> get_file_version (toNormalizedFilePath' iface_file)
+      Nothing  -> get_file_version (filePathToUri' $ toNormalizedFilePath' iface_file)
 
     -- The source is modified if it is newer than the destination (iface file)
     -- A more precise check for the core file is performed later
@@ -1484,7 +1494,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies :: MonadIO m => ([NormalizedUri] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
 checkLinkableDependencies get_linkable_hashes get_module_graph runtime_deps = do
   graph <- get_module_graph
   let go (mod, hash) = (,hash) <$> lookupModuleFile mod graph
@@ -1602,8 +1612,8 @@ lookupName hsc_env name = exceptionHandle $ do
   where
     exceptionHandle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
-pathToModuleName :: FilePath -> ModuleName
-pathToModuleName = mkModuleName . map rep
+pathToModuleName :: Uri -> ModuleName
+pathToModuleName = mkModuleName . map rep . T.unpack . getUri
   where
       rep c | isPathSeparator c = '_'
       rep ':' = '_'
