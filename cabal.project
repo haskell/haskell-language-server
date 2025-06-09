@@ -7,6 +7,17 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
+source-repository-package
+    type: git
+    location: https://github.com/VeryMilkyJoe/lsp.git
+    subdir: lsp
+    tag: 33673596e1b2eb619ca38244e001adda880c3657
+
+source-repository-package
+    type: git
+    location: https://github.com/VeryMilkyJoe/lsp.git
+    subdir: lsp-test
+    tag: 33673596e1b2eb619ca38244e001adda880c3657
 
 index-state: 2025-06-07T14:57:40Z
 
