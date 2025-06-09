@@ -1157,7 +1157,7 @@ extendImportTests = testGroup "extend import actions"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 3 4) (Position 3 8))
             [ "Add (:~:)(..) to the import list of Data.Type.Equality"
             , "Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
             (T.unlines
@@ -1221,7 +1221,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB)"
                     , "main = print (stuffB .* stuffB)"
                     ])
-            (Range (Position 2 17) (Position 2 18))
+            (Range (Position 2 22) (Position 2 24))
             ["Add (.*) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1235,7 +1235,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.List.NonEmpty (fromList)"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
-            (Range (Position 2 5) (Position 2 6))
+            (Range (Position 2 31) (Position 2 33))
             [ "Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"
             , "Add NonEmpty(..) to the import list of Data.List.NonEmpty"
             ]
@@ -1252,7 +1252,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.Maybe (catMaybes)"
                     , "x = Just 10"
                     ])
-            (Range (Position 3 5) (Position 2 6))
+            (Range (Position 3 4) (Position 3 8))
             [ "Add Maybe(Just) to the import list of Data.Maybe"
             , "Add Maybe(..) to the import list of Data.Maybe"
             ]
@@ -1484,7 +1484,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA ()"
                     , "foo = bar"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 3 6) (Position 3 9))
             ["Add bar to the import list of ModuleA",
             "Add bar to the import list of ModuleB"]
             (T.unlines
@@ -1501,7 +1501,7 @@ extendImportTests = testGroup "extend import actions"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 3 4) (Position 3 8))
             [ "Add type (:~:)(Refl) to the import list of Data.Type.Equality"
             , "Add (:~:)(..) to the import list of Data.Type.Equality"]
             (T.unlines
@@ -2425,7 +2425,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
     action <- pickActionWithTitle "Define select :: Int -> Bool"
-            =<< getCodeActions docB (R 1 0 0 50)
+            =<< getCodeActions docB (R 1 8 1 14)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2449,7 +2449,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
     action <- pickActionWithTitle "Define select :: Int -> Bool"
-        =<< getCodeActions docB (R 1 0 0 50)
+        =<< getCodeActions docB (R 1 8 1 14)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2750,7 +2750,7 @@ fixConstructorImportTests = testGroup "fix import actions"
             [ "module ModuleB where"
             , "import ModuleA(Constructor)"
             ])
-      (Range (Position 1 10) (Position 1 11))
+      (Range (Position 1 15) (Position 1 26))
       "Fix import of A(Constructor)"
       (T.unlines
             [ "module ModuleB where"
