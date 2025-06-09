@@ -3,6 +3,8 @@
 
 module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions, dependencyVersionLens) where
 
+import           Data.Array                        ((!))
+import           Data.ByteString                   (ByteString)
 import qualified Data.Char                         as Char
 import qualified Data.List                         as List
 import qualified Data.Maybe                        as Maybe
@@ -21,6 +23,8 @@ import           Language.LSP.Protocol.Types       (CodeLens (..), Command (..),
                                                     InlayHint (..),
                                                     InlayHintLabelPart (InlayHintLabelPart),
                                                     Range (..), type (|?) (..))
+import           Text.Regex.TDFA                   (Regex, makeRegex,
+                                                    matchAllText)
 
 dependencyVersionLens :: [Syntax.Field Syntax.Position] -> HscEnv -> [CodeLens]
 dependencyVersionLens cabalFields = fmap mkCodeLens . collectPackageDependencyVersions cabalFields
@@ -61,16 +65,13 @@ collectPackageDependencyVersions cabalFields hscEnv = cabalFields >>= collectPac
     collectPackageVersions _ = []
 
     fieldLinePackageVersions :: Syntax.FieldLine Syntax.Position -> [(Syntax.Position, Version)]
-    fieldLinePackageVersions (Syntax.FieldLine pos x) =
-      let splitted = T.splitOn "," $ Encoding.decodeUtf8Lenient x
-          calcStartPosition (prev, start) = T.length prev + 1 + start
-          potentialPkgs = List.foldl' (\a b -> a <> [(b, Maybe.maybe 0 calcStartPosition $ Maybe.listToMaybe $ reverse a)]) [] splitted
+    fieldLinePackageVersions (Syntax.FieldLine pos line) =
+      let linePackageNameRegex :: Regex = makeRegex ("(^|,)[[:space:]]*([a-zA-Z-]+)" :: ByteString)
+          packageNames = (\x -> x ! 2) <$> matchAllText linePackageNameRegex (Encoding.decodeUtf8Lenient line)
           versions = do
-            (pkg', pkgStartOffset) <- potentialPkgs
-            let pkgName = T.takeWhile (not . Char.isSpace) . T.strip $ pkg'
-                endOfPackage = T.length pkgName + (T.length $ T.takeWhile Char.isSpace pkg')
-            version <- Maybe.maybeToList $ lookupPackageVersion $ T.takeWhile (not . Char.isSpace) . T.strip $ pkg'
-            pure (Syntax.Position (Syntax.positionRow pos) (Syntax.positionCol pos + pkgStartOffset + endOfPackage), version)
+            (pkgName, (pkgIndex, pkgOffset)) <- packageNames
+            version <- Maybe.maybeToList $ lookupPackageVersion pkgName
+            pure (Syntax.Position (Syntax.positionRow pos) (Syntax.positionCol pos + pkgIndex + pkgOffset), version)
        in versions
 
 printVersion :: Version -> T.Text
