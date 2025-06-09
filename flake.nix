@@ -2,7 +2,9 @@
   description = "haskell-language-server development flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Don't use nixpkgs-unstable as aarch64-darwin is currently broken there.
+    # Check again, when https://github.com/NixOS/nixpkgs/pull/414242 is resolved.
+    nixpkgs.url = "github:NixOS/nixpkgs/c742ae7908a82c9bf23ce27bfca92a00e9bcd541";
     flake-utils.url = "github:numtide/flake-utils";
     # For default.nix
     flake-compat = {
@@ -66,6 +68,7 @@
           buildInputs = [
             # Compiler toolchain
             hpkgs.ghc
+            hpkgs.haskell-language-server
             pkgs.haskellPackages.cabal-install
             # Dependencies needed to build some parts of Hackage
             gmp zlib ncurses
