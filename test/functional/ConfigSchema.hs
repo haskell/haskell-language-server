@@ -31,6 +31,9 @@ tests = testGroup "generate schema"
   , goldenGitDiff "generate-default-config" (defaultConfigFp ghcVersion) $ do
       stdout <- readProcess hlsExeCommand ["generate-default-config"] ""
       pure $ BS.pack stdout
+  , goldenGitDiff "plugins-custom-config-markdown-reference" (markdownReferenceFp ghcVersion) $ do
+    stdout <- readProcess hlsExeCommand ["plugins-custom-config-markdown-reference"] ""
+    pure $ BS.pack stdout
   ]
 
 vscodeSchemaFp :: GhcVersion -> FilePath
@@ -39,11 +42,17 @@ vscodeSchemaFp ghcVer = "test" </> "testdata" </> "schema" </> prettyGhcVersion 
 defaultConfigFp :: GhcVersion -> FilePath
 defaultConfigFp ghcVer = "test" </> "testdata" </> "schema" </> prettyGhcVersion ghcVer </> generateDefaultConfigJson
 
+markdownReferenceFp :: GhcVersion -> FilePath
+markdownReferenceFp ghcVer = "test" </> "testdata" </> "schema" </> prettyGhcVersion ghcVer </> markdownReferenceMd
+
 vscodeSchemaJson :: FilePath
 vscodeSchemaJson = "vscode-extension-schema.golden.json"
 
 generateDefaultConfigJson :: FilePath
 generateDefaultConfigJson = "default-config.golden.json"
+
+markdownReferenceMd :: FilePath
+markdownReferenceMd = "markdown-reference.md"
 
 prettyGhcVersion :: GhcVersion -> String
 prettyGhcVersion ghcVer = map toLower (show ghcVer)

@@ -806,7 +806,7 @@ library hls-stan-plugin
     , lsp-types
     , text
     , unordered-containers
-    , stan >= 0.1.2.0
+    , stan >= 0.2.1.0
     , trial
     , directory
 
@@ -2115,7 +2115,7 @@ test-suite ghcide-tests
     , sqlite-simple
     , stm
     , stm-containers
-    , tasty                  >=1.5
+    , tasty
     , tasty-expected-failure
     , tasty-hunit             >=0.10
     , tasty-quickcheck
