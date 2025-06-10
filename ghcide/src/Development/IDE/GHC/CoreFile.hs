@@ -18,7 +18,6 @@ import           Data.Foldable
 import           Data.IORef
 import           Data.List                       (isPrefixOf)
 import           Data.Maybe
-import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.Core

@@ -4,7 +4,6 @@
 /hls-graph @wz1000
 /hls-plugin-api @michaelpj @fendor
 /hls-test-utils @fendor
-/hie-compat @wz1000
 
 # HLS main
 /src @fendor

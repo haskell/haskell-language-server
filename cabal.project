@@ -1,6 +1,5 @@
 packages:
          ./
-         ./hie-compat
          ./shake-bench
          ./hls-graph
          ./ghcide

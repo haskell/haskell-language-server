@@ -8,7 +8,6 @@
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
-import           Compat.HieTypes
 import           Control.Lens                          ((^.))
 import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
@@ -42,6 +41,10 @@ import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
+import           GHC.Iface.Ext.Types                   (HieAST (..),
+                                                        HieASTs (..),
+                                                        NodeOrigin (..),
+                                                        SourcedNodeInfo (..))
 import           HieDb.Query
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
