@@ -5,7 +5,7 @@ import           Data.Either                    (rights)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as TIO
-import           Ide.Plugin.ChangeTypeSignature (errorMessageRegexes)
+import           Ide.Plugin.ChangeTypeSignature (Log (..), errorMessageRegexes)
 import qualified Ide.Plugin.ChangeTypeSignature as ChangeTypeSignature
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls                       (CodeAction (..), Command,
@@ -21,8 +21,7 @@ import           Test.Hls                       (CodeAction (..), Command,
                                                  getCodeActions,
                                                  goldenWithHaskellDoc,
                                                  knownBrokenForGhcVersions,
-                                                 liftIO,
-                                                 mkPluginTestDescriptor',
+                                                 liftIO, mkPluginTestDescriptor,
                                                  openDoc, runSessionWithServer,
                                                  testCase, testGroup, toEither,
                                                  type (|?), waitForBuildQueue,
@@ -32,16 +31,19 @@ import           Text.Regex.TDFA                ((=~))
 main :: IO ()
 main = defaultTestRunner test
 
-changeTypeSignaturePlugin :: PluginTestDescriptor ()
-changeTypeSignaturePlugin = mkPluginTestDescriptor' ChangeTypeSignature.descriptor "changeTypeSignature"
+changeTypeSignaturePlugin :: PluginTestDescriptor Log
+changeTypeSignaturePlugin =
+    mkPluginTestDescriptor
+        ChangeTypeSignature.descriptor
+        "changeTypeSignature"
 
 test :: TestTree
 test = testGroup "changeTypeSignature" [
         testRegexes
         , codeActionTest "TExpectedActual" 4 11
-        , knownBrokenForGhcVersions [GHC96 .. GHC912] "Error Message in 9.2+ does not provide enough info" $
+        , knownBrokenForGhcVersions [GHC96 .. GHC912] "Error Message in 9.6+ does not provide enough info" $
             codeActionTest "TRigidType" 4 14
-        , codeActionTest "TRigidType2" 4 6
+        , codeActionTest "TRigidType2" 4 8
         , codeActionTest "TLocalBinding" 7 22
         , codeActionTest "TLocalBindingShadow1" 11 8
         , codeActionTest "TLocalBindingShadow2" 7 22
@@ -50,42 +52,16 @@ test = testGroup "changeTypeSignature" [
 
 testRegexes :: TestTree
 testRegexes = testGroup "Regex Testing" [
-        testRegexOne
-        , testRegexTwo
-        , testRegex921One
-    ]
-
-testRegexOne :: TestTree
-testRegexOne = testGroup "Regex One" [
-        regexTest "error1.txt" regex True
-        , regexTest "error2.txt" regex True
-        , regexTest "error3.txt" regex False
-        , regexTest "error4.txt" regex True
-        , regexTest "error5.txt" regex True
+        regexTest "TExpectedActual.txt" regex True
+        , regexTest "TLocalBinding.txt" regex True
+        , regexTest "TLocalBindingShadow1.txt" regex True
+        , regexTest "TLocalBindingShadow2.txt" regex True
+        -- Error message from GHC currently does not not provide enough info
+        , regexTest "TRigidType.txt" regex False
+        , regexTest "TRigidType2.txt" regex True
     ]
     where
         regex = errorMessageRegexes !! 0
-
-testRegexTwo :: TestTree
-testRegexTwo = testGroup "Regex Two" [
-        regexTest "error1.txt" regex False
-        , regexTest "error2.txt" regex False
-        , regexTest "error3.txt" regex True
-        , regexTest "error4.txt" regex False
-        , regexTest "error5.txt" regex False
-    ]
-    where
-        regex = errorMessageRegexes !! 1
-
--- test ghc-9.2 error message regex
-testRegex921One :: TestTree
-testRegex921One = testGroup "Regex One" [
-        regexTest "ghc921-error1.txt" regex True
-        , regexTest "ghc921-error2.txt" regex True
-        , regexTest "ghc921-error3.txt" regex True
-    ]
-    where
-        regex = errorMessageRegexes !! 2
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-change-type-signature-plugin" </> "test" </> "testdata"
@@ -123,8 +99,8 @@ regexTest :: FilePath -> Text -> Bool -> TestTree
 regexTest fp regex shouldPass = testCase fp $ do
     msg <- TIO.readFile (testDataDir </> fp)
     case (msg =~ regex  :: (Text, Text, Text, [Text]), shouldPass) of
-        ((_, _, _, [_, _, _, _]), True) -> pure ()
-        ((_, _, _, [_, _, _, _]), False) -> assertFailure $  "Unexpected match: " <> fp <> " with " <> T.unpack regex
+        ((_, _, _, [_]), True) -> pure ()
+        ((_, _, _, [_]), False) -> assertFailure $  "Unexpected match: " <> fp <> " with " <> T.unpack regex
         (_, True) -> assertFailure $ "Failed to match: " <> fp <> " with " <> T.unpack regex
         (_, False) -> pure ()
 
