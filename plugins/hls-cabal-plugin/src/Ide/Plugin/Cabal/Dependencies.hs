@@ -5,8 +5,6 @@ module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDepe
 
 import           Data.Array                        ((!))
 import           Data.ByteString                   (ByteString)
-import qualified Data.Char                         as Char
-import qualified Data.List                         as List
 import qualified Data.Maybe                        as Maybe
 import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as Encoding
@@ -21,7 +19,6 @@ import qualified Distribution.Parsec.Position      as Syntax
 import qualified Ide.Plugin.Cabal.Completion.Types as Types
 import           Language.LSP.Protocol.Types       (CodeLens (..), Command (..),
                                                     InlayHint (..),
-                                                    InlayHintLabelPart (InlayHintLabelPart),
                                                     Range (..), type (|?) (..))
 import           Text.Regex.TDFA                   (Regex, makeRegex,
                                                     matchAllText)
@@ -43,16 +40,15 @@ dependencyVersionHints cabalFields = fmap mkHint . collectPackageDependencyVersi
   where
     mkHint :: (Syntax.Position, Version) -> InlayHint
     mkHint (pos, dependencyVersion) =
-      let mkInlayHintLabelPart = InlayHintLabelPart (" (" <> printVersion dependencyVersion <> ")") Nothing Nothing Nothing
-      in  InlayHint { _position = Types.cabalPositionToLSPPosition pos
-                    , _label = InR $ pure mkInlayHintLabelPart
-                    , _kind = Nothing
-                    , _textEdits = Nothing
-                    , _tooltip = Nothing
-                    , _paddingLeft = Nothing
-                    , _paddingRight = Nothing
-                    , _data_ = Nothing
-                    }
+      InlayHint { _position = Types.cabalPositionToLSPPosition pos
+                , _label = InL $ " (" <> printVersion dependencyVersion <> ")"
+                , _kind = Nothing
+                , _textEdits = Nothing
+                , _tooltip = Nothing
+                , _paddingLeft = Nothing
+                , _paddingRight = Nothing
+                , _data_ = Nothing
+                }
 
 collectPackageDependencyVersions :: [Syntax.Field Syntax.Position] -> HscEnv -> [(Syntax.Position, Version)]
 collectPackageDependencyVersions cabalFields hscEnv = cabalFields >>= collectPackageVersions
