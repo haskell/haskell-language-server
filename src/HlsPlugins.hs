@@ -224,7 +224,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "codeRange" in CodeRange.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_changeTypeSignature
-      ChangeTypeSignature.descriptor "changeTypeSignature" :
+      let pId = "changeTypeSignature" in ChangeTypeSignature.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_gadt
       GADT.descriptor "gadt" :
