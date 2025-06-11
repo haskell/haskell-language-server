@@ -22,11 +22,13 @@ import           Data.Either                                  (fromRight,
 import           Data.Functor                                 ((<&>))
 import           Data.IORef.Extra
 import qualified Data.Map                                     as Map
-import           Data.Maybe                                   (fromMaybe)
+import           Data.Maybe                                   (fromMaybe,
+                                                               maybeToList)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE                              hiding
                                                               (pluginHandlers)
+import           Development.IDE.Core.PluginUtils             (activeDiagnosticsInRange)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
@@ -53,38 +55,42 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 -------------------------------------------------------------------------------------------------
 
 runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
-runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = diags}) codeAction = do
-  let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-      runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
-  caaGhcSession <- onceIO $ runRule GhcSession
-  caaExportsMap <-
-    onceIO $
-      caaGhcSession >>= \case
-        Just env -> do
-          pkgExports <- envPackageExports env
-          localExports <- readTVarIO (exportsMap $ shakeExtras state)
-          pure $ localExports <> pkgExports
-        _ -> pure mempty
-  caaIdeOptions <- onceIO $ runAction "GhcideCodeActions.getIdeOptions" state getIdeOptions
-  caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
-  caaContents <-
-    onceIO $
-      runRule GetFileContents <&> \case
-        Just (_, mbContents) -> fmap Rope.toText mbContents
-        Nothing       -> Nothing
-  caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
-  caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
-  caaTmr <- onceIO $ runRule TypeCheck
-  caaHar <- onceIO $ runRule GetHieAst
-  caaBindings <- onceIO $ runRule GetBindings
-  caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
-  results <- liftIO $
-      sequence
-        [ runReaderT (runExceptT codeAction) CodeActionArgs {..}
-          | caaDiagnostic <- diags
-        ]
-  let (_errs, successes) = partitionEithers results
-  pure $ concat successes
+runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range _) codeAction
+    | Just nfp <- toNormalizedFilePath' <$> uriToFilePath uri = do
+        let runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure (Just nfp)) >>= MaybeT . use key
+        caaGhcSession <- onceIO $ runRule GhcSession
+        caaExportsMap <-
+            onceIO $
+            caaGhcSession >>= \case
+                Just env -> do
+                    pkgExports <- envPackageExports env
+                    localExports <- readTVarIO (exportsMap $ shakeExtras state)
+                    pure $ localExports <> pkgExports
+                _ -> pure mempty
+        caaIdeOptions <- onceIO $ runAction "GhcideCodeActions.getIdeOptions" state getIdeOptions
+        caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
+        caaContents <-
+            onceIO $
+            runRule GetFileContents <&> \case
+                Just (_, mbContents) -> fmap Rope.toText mbContents
+                Nothing       -> Nothing
+        caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
+        caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
+        caaTmr <- onceIO $ runRule TypeCheck
+        caaHar <- onceIO $ runRule GetHieAst
+        caaBindings <- onceIO $ runRule GetBindings
+        caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
+        diags <- concat . maybeToList <$> activeDiagnosticsInRange (shakeExtras state) nfp _range
+        results <- liftIO $
+            sequence
+                [
+                    runReaderT (runExceptT codeAction) CodeActionArgs {..}
+                        | caaDiagnostic <- diags
+                ]
+        let (_errs, successes) = partitionEithers results
+        pure $ concat successes
+    | otherwise = pure []
+
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title kind isPreferred diags edit =
@@ -145,7 +151,7 @@ data CodeActionArgs = CodeActionArgs
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
     caaGblSigs      :: IO (Maybe GlobalBindingTypeSigsResult),
-    caaDiagnostic   :: Diagnostic
+    caaDiagnostic   :: FileDiagnostic
   }
 
 -- | There's no concurrency in each provider,
@@ -223,6 +229,9 @@ instance ToCodeAction r => ToCodeAction (IdeOptions -> r) where
   toCodeAction = toCodeAction3 caaIdeOptions
 
 instance ToCodeAction r => ToCodeAction (Diagnostic -> r) where
+  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaDiagnostic = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f (fdLspDiagnostic x)
+
+instance ToCodeAction r => ToCodeAction (FileDiagnostic -> r) where
   toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaDiagnostic = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f x
 
 instance ToCodeAction r => ToCodeAction (Maybe ParsedModule -> r) where

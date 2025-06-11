@@ -102,20 +102,19 @@ ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
       fdLspDiagnostic =
         lspDiag
           & attachReason (fmap (diagnosticReason . errMsgDiagnostic) mbOrigMsg)
-          & setGhcCode mbOrigMsg
+          & attachDiagnosticCode ((diagnosticCode . errMsgDiagnostic) =<< mbOrigMsg)
   in
   FileDiagnostic {..}
 
--- | Set the code of the 'LSP.Diagnostic' to the GHC diagnostic code which is linked
+-- | Set the code of the 'LSP.Diagnostic' to the GHC diagnostic code, and include the link
 -- to https://errors.haskell.org/.
-setGhcCode :: Maybe (MsgEnvelope GhcMessage) -> LSP.Diagnostic -> LSP.Diagnostic
-setGhcCode mbOrigMsg diag =
-  let mbGhcCode = do
-          origMsg <- mbOrigMsg
-          code <- diagnosticCode (errMsgDiagnostic origMsg)
-          pure (InR (showGhcCode code))
-  in
-  diag { _code = mbGhcCode <|> _code diag }
+attachDiagnosticCode :: Maybe DiagnosticCode -> LSP.Diagnostic -> LSP.Diagnostic
+attachDiagnosticCode Nothing diag = diag
+attachDiagnosticCode (Just code) diag =
+    let
+        textualCode = showGhcCode code
+        codeDesc = LSP.CodeDescription{ _href = Uri $ "https://errors.haskell.org/messages/" <> textualCode }
+    in diag { _code = Just (InR textualCode), _codeDescription = Just codeDesc}
 
 #if MIN_VERSION_ghc(9,9,0)
 -- DiagnosticCode only got a show instance in 9.10.1

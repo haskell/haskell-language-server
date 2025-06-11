@@ -16,7 +16,7 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Control.Concurrent.STM.Stats         (atomically)
 import           Control.DeepSeq                      (rwhnf)
-import           Control.Lens                         ((?~))
+import           Control.Lens                         (to, (?~), (^?))
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
@@ -25,13 +25,17 @@ import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, maybeToList)
+import           Data.Maybe                           (catMaybes, isJust,
+                                                       maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE                      (FileDiagnostic (..),
                                                        GhcSession (..),
                                                        HscEnvEq (hscEnv),
                                                        RuleResult, Rules, Uri,
-                                                       define, srcSpanToRange,
+                                                       _SomeStructuredMessage,
+                                                       define,
+                                                       fdStructuredMessageL,
+                                                       srcSpanToRange,
                                                        usePropertyAction)
 import           Development.IDE.Core.Compile         (TcModuleResult (..))
 import           Development.IDE.Core.PluginUtils
@@ -45,6 +49,10 @@ import           Development.IDE.Core.Shake           (getHiddenDiagnostics,
                                                        use)
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Error     (_TcRnMessage,
+                                                       _TcRnMissingSignature,
+                                                       msgEnvelopeErrorL,
+                                                       stripTcRnMessageContext)
 import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location       (Position (Position, _line),
@@ -129,9 +137,9 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
           -- dummy type to make sure HLS resolves our lens
           [ CodeLens _range Nothing (Just $ toJSON TypeLensesResolve)
             | diag <- diags
-            , let lspDiag@Diagnostic {_range} = fdLspDiagnostic diag
+            , let Diagnostic {_range} = fdLspDiagnostic diag
             , fdFilePath diag == nfp
-            , isGlobalDiagnostic lspDiag]
+            , isGlobalDiagnostic diag]
         -- The second option is to generate lenses from the GlobalBindingTypeSig
         -- rule. This is the only type that needs to have the range adjusted
         -- with PositionMapping.
@@ -200,7 +208,7 @@ commandHandler _ideState _ wedit = do
   pure $ InR Null
 
 --------------------------------------------------------------------------------
-suggestSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Diagnostic -> [(T.Text, TextEdit)]
+suggestSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> FileDiagnostic -> [(T.Text, TextEdit)]
 suggestSignature isQuickFix mGblSigs diag =
   maybeToList (suggestGlobalSignature isQuickFix mGblSigs diag)
 
@@ -208,14 +216,19 @@ suggestSignature isQuickFix mGblSigs diag =
 -- works with a diagnostic, which then calls the secondary function with
 -- whatever pieces of the diagnostic it needs. This allows the resolve function,
 -- which no longer has the Diagnostic, to still call the secondary functions.
-suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Diagnostic -> Maybe (T.Text, TextEdit)
-suggestGlobalSignature isQuickFix mGblSigs diag@Diagnostic{_range}
+suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> FileDiagnostic -> Maybe (T.Text, TextEdit)
+suggestGlobalSignature isQuickFix mGblSigs diag@FileDiagnostic {fdLspDiagnostic = Diagnostic {_range}}
   | isGlobalDiagnostic diag =
     suggestGlobalSignature' isQuickFix mGblSigs Nothing _range
   | otherwise = Nothing
 
-isGlobalDiagnostic :: Diagnostic -> Bool
-isGlobalDiagnostic Diagnostic{_message} = _message =~ ("(Top-level binding|Pattern synonym) with no type signature" :: T.Text)
+isGlobalDiagnostic :: FileDiagnostic -> Bool
+isGlobalDiagnostic diag = diag ^? fdStructuredMessageL
+                                  . _SomeStructuredMessage
+                                  . msgEnvelopeErrorL
+                                  .  _TcRnMessage
+                                  . _TcRnMissingSignature
+                                & isJust
 
 -- If a PositionMapping is supplied, this function will call
 -- gblBindingTypeSigToEdit with it to create a TextEdit in the right location.

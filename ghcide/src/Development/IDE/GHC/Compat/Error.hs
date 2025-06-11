@@ -19,9 +19,11 @@ module Development.IDE.GHC.Compat.Error (
   Diagnostic(..),
   -- * Prisms for error selection
   _TcRnMessage,
+  _TcRnMessageWithCtx,
   _GhcPsMessage,
   _GhcDsMessage,
   _GhcDriverMessage,
+  _TcRnMissingSignature,
   ) where
 
 import           Control.Lens
@@ -30,8 +32,20 @@ import           GHC.HsToCore.Errors.Types
 import           GHC.Tc.Errors.Types
 import           GHC.Types.Error
 
-_TcRnMessage :: Prism' GhcMessage TcRnMessage
-_TcRnMessage = prism' GhcTcRnMessage (\case
+-- | Some 'TcRnMessage's are nested in other constructors for additional context.
+-- For example, 'TcRnWithHsDocContext' and 'TcRnMessageWithInfo'.
+-- However, in most occasions you don't need the additional context and you just want
+-- the error message. @'_TcRnMessage'@ recursively unwraps these constructors,
+-- until there are no more constructors with additional context.
+--
+-- Use @'_TcRnMessageWithCtx'@ if you need the additional context. You can always
+-- strip it later using @'stripTcRnMessageContext'@.
+--
+_TcRnMessage :: Fold GhcMessage TcRnMessage
+_TcRnMessage = _TcRnMessageWithCtx . to stripTcRnMessageContext
+
+_TcRnMessageWithCtx :: Prism' GhcMessage TcRnMessage
+_TcRnMessageWithCtx = prism' GhcTcRnMessage (\case
   GhcTcRnMessage tcRnMsg -> Just tcRnMsg
   _ -> Nothing)
 
@@ -66,3 +80,5 @@ stripTcRnMessageContext = \case
 
 msgEnvelopeErrorL :: Lens' (MsgEnvelope e) e
 msgEnvelopeErrorL = lens errMsgDiagnostic (\envelope e -> envelope { errMsgDiagnostic = e } )
+
+makePrisms ''TcRnMessage

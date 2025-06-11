@@ -5,7 +5,6 @@
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE StrictData            #-}
@@ -54,8 +53,15 @@ import           Development.IDE.Core.FileStore                     (getVersione
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
+
+#if APPLY_REFACT
 import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact
+#if !MIN_VERSION_apply_refact(0,12,0)
+import           System.Environment                                 (setEnv,
+                                                                     unsetEnv)
+#endif
+#endif
 
 import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
@@ -105,6 +111,7 @@ import           Language.LSP.Protocol.Types                        hiding
                                                                     (Null)
 import qualified Language.LSP.Protocol.Types                        as LSP
 
+import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import qualified Development.IDE.Core.Shake                         as Shake
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
@@ -114,11 +121,6 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
 import           GHC.Generics                                       (Generic)
-#if !MIN_VERSION_apply_refact(0,12,0)
-import           System.Environment                                 (setEnv,
-                                                                     unsetEnv)
-#endif
-import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import           Text.Regex.TDFA.Text                               ()
 
 -- ---------------------------------------------------------------------
@@ -126,7 +128,9 @@ import           Text.Regex.TDFA.Text                               ()
 data Log
   = LogShake Shake.Log
   | LogApplying NormalizedFilePath (Either String WorkspaceEdit)
+#if APPLY_REFACT
   | LogGeneratedIdeas NormalizedFilePath [[Refact.Refactoring Refact.SrcSpan]]
+#endif
   | LogGetIdeas NormalizedFilePath
   | LogUsingExtensions NormalizedFilePath [String] -- Extension is only imported conditionally, so we just stringify them
   | forall a. (Pretty a) => LogResolve a
@@ -135,7 +139,9 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
     LogApplying fp res -> "Applying hint(s) for" <+> viaShow fp <> ":" <+> viaShow res
+#if APPLY_REFACT
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
+#endif
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <> line <> indent 4 (pretty exts)
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
     LogResolve msg -> pretty msg
@@ -413,12 +419,19 @@ resolveProvider recorder ideState _plId ca uri resolveValue = do
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
 
+applyRefactAvailable :: Bool
+#if APPLY_REFACT
+applyRefactAvailable = True
+#else
+applyRefactAvailable = False
+#endif
+
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
 diagnosticToCodeActions :: VersionedTextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
 diagnosticToCodeActions verTxtDocId diagnostic
   | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
-  , let isHintApplicable = "refact:" `T.isPrefixOf` code
+  , let isHintApplicable = "refact:" `T.isPrefixOf` code && applyRefactAvailable
   , let hint = T.replace "refact:" "" code
   , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
   , let suppressHintArguments = IgnoreHint verTxtDocId hint
@@ -506,6 +519,11 @@ data OneHint =
     } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
+#if !APPLY_REFACT
+applyHint _ _ _ _ _ =
+  -- https://github.com/ndmitchell/hlint/pull/1594#issuecomment-2338898673
+  evaluate $ error "Cannot apply refactoring: apply-refact does not work on GHC 9.10"
+#else
 applyHint recorder ide nfp mhint verTxtDocId =
   runExceptT $ do
     let runAction' :: Action a -> IO a
@@ -607,7 +625,7 @@ applyRefactorings ::
   -- with the @LANGUAGE@ pragmas, pragmas win.
   [String] ->
   IO String
-applyRefactorings =
+applyRefactorings  =
 #if MIN_VERSION_apply_refact(0,12,0)
   Refact.applyRefactorings
 #else
@@ -623,4 +641,5 @@ applyRefactorings =
     withRuntimeLibdir :: FilePath -> IO a -> IO a
     withRuntimeLibdir libdir = bracket_ (setEnv key libdir) (unsetEnv key)
         where key = "GHC_EXACTPRINT_GHC_LIBDIR"
+#endif
 #endif
