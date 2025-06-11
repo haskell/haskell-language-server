@@ -1173,12 +1173,14 @@ library hls-change-type-signature-plugin
   build-depends:
     , ghcide           == 2.11.0.0
     , hls-plugin-api   == 2.11.0.0
+    , lens
     , lsp-types
     , regex-tdfa
     , syb
     , text
     , transformers
     , containers
+    , ghc
   default-extensions:
     DataKinds
     ExplicitNamespaces
