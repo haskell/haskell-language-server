@@ -3,7 +3,11 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-module Ide.Plugin.ConfigUtils where
+module Ide.Plugin.ConfigUtils (
+  pluginsToDefaultConfig,
+  pluginsToVSCodeExtensionSchema,
+  pluginsCustomConfigToMarkdownTables
+  ) where
 
 import           Control.Lens                  (at, (&), (?~))
 import qualified Data.Aeson                    as A
@@ -15,8 +19,15 @@ import qualified Data.Dependent.Sum            as DSum
 import           Data.List.Extra               (nubOrd)
 import           Data.String                   (IsString (fromString))
 import qualified Data.Text                     as T
+import           GHC.TypeLits                  (symbolVal)
 import           Ide.Plugin.Config
-import           Ide.Plugin.Properties         (toDefaultJSON,
+import           Ide.Plugin.Properties         (KeyNameProxy, MetaData (..),
+                                                PluginCustomConfig (..),
+                                                PluginCustomConfigParam (..),
+                                                Properties (..),
+                                                SPropertyKey (..),
+                                                SomePropertyKeyWithMetaData (..),
+                                                toDefaultJSON,
                                                 toVSCodeExtensionSchema)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
@@ -31,10 +42,10 @@ pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
   -- Use '_Object' and 'at' to get at the "plugin" key
   -- and actually set it.
-  A.toJSON defaultConfig & _Object . at "plugin" ?~ elems
+  A.toJSON defaultConfig & _Object . at "plugin" ?~ pluginSpecificDefaultConfigs
   where
-    defaultConfig@Config {} = def
-    elems = A.object $ mconcat $ singlePlugin <$> ipMap
+    defaultConfig = def :: Config
+    pluginSpecificDefaultConfigs = A.object $ mconcat $ singlePlugin <$> ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
     --
@@ -48,6 +59,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     --     }
     --   }
     -- }
+    singlePlugin :: PluginDescriptor ideState -> [A.Pair]
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
        in [fromString (T.unpack pId) A..= A.object x | not $ null x]
@@ -66,8 +78,8 @@ pluginsToDefaultConfig IdePlugins {..} =
                         <> nubOrd (mconcat
                             (handlersToGenericDefaultConfig configInitialGenericConfig <$> handlers))
             in case x of
-                    -- if the plugin has only one capability, we produce globalOn instead of the specific one;
-                    -- otherwise we don't produce globalOn at all
+                    -- If the plugin has only one capability, we produce globalOn instead of the specific one;
+                    -- otherwise we omit globalOn
                     [_] -> ["globalOn" A..= plcGlobalOn configInitialGenericConfig]
                     _   -> x
         -- Example:
@@ -139,3 +151,92 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
             ]
         withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
         toKey' = fromString . T.unpack . withIdPrefix
+
+
+-- | Generates markdown tables for custom config
+pluginsCustomConfigToMarkdownTables :: IdePlugins a -> T.Text
+pluginsCustomConfigToMarkdownTables IdePlugins {..} = T.unlines
+    $ map renderCfg
+    $ filter (\(PluginCustomConfig _ params) -> not $ null params)
+    $ map toPluginCustomConfig ipMap
+  where
+    toPluginCustomConfig :: PluginDescriptor ideState -> PluginCustomConfig
+    toPluginCustomConfig PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {configCustomConfig = c}, pluginId = PluginId pId} =
+        PluginCustomConfig { pcc'Name = pId, pcc'Params = toPluginCustomConfigParams c}
+    toPluginCustomConfigParams :: CustomConfig -> [PluginCustomConfigParam]
+    toPluginCustomConfigParams (CustomConfig p) = toPluginCustomConfigParams' p
+    toPluginCustomConfigParams' :: Properties r -> [PluginCustomConfigParam]
+    toPluginCustomConfigParams' EmptyProperties = []
+    toPluginCustomConfigParams' (ConsProperties (keyNameProxy :: KeyNameProxy s) (k :: SPropertyKey k) (m :: MetaData t) xs) =
+        toEntry (SomePropertyKeyWithMetaData k m) : toPluginCustomConfigParams' xs
+        where
+            toEntry :: SomePropertyKeyWithMetaData -> PluginCustomConfigParam
+            toEntry (SomePropertyKeyWithMetaData SNumber MetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+            toEntry (SomePropertyKeyWithMetaData SInteger MetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+            toEntry (SomePropertyKeyWithMetaData SString MetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+            toEntry (SomePropertyKeyWithMetaData SBoolean MetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+            toEntry (SomePropertyKeyWithMetaData (SObject _) MetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = "TODO: nested object", -- T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+            toEntry (SomePropertyKeyWithMetaData (SArray _) MetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = "TODO: Array values", -- T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+            toEntry (SomePropertyKeyWithMetaData (SEnum _) EnumMetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = T.pack $ show defaultValue,
+                    pccp'EnumValues = map (T.pack . show) enumValues
+                }
+            toEntry (SomePropertyKeyWithMetaData SProperties PropertiesMetaData {..}) =
+                PluginCustomConfigParam {
+                    pccp'Name = T.pack $ symbolVal keyNameProxy,
+                    pccp'Description = description,
+                    pccp'Default = T.pack $ show defaultValue,
+                    pccp'EnumValues = []
+                }
+    renderCfg :: PluginCustomConfig -> T.Text
+    renderCfg (PluginCustomConfig pId pccParams) =
+        T.unlines (pluginHeader : tableHeader : rows pccParams)
+        where
+            pluginHeader = "## " <> pId
+            tableHeader =
+                "| Property | Description | Default | Allowed values |" <> "\n" <>
+                "| --- | --- | --- | --- |"
+            rows = map renderRow
+            renderRow PluginCustomConfigParam {..} =
+                "| `" <> pccp'Name <> "` | " <> pccp'Description <> " | `" <> pccp'Default <> "` | " <> renderEnum pccp'EnumValues <> " |"
+            renderEnum [] = " &nbsp; " -- Placeholder to prevent missing cells
+            renderEnum vs = "<ul> " <> (T.intercalate " " $ map (\x -> "<li><code>" <> x <> "</code></li>") vs) <> " </ul>"

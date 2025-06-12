@@ -15,8 +15,6 @@ import           Control.Concurrent.Extra                 (withNumCapabilities)
 import           Control.Concurrent.MVar                  (newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
-import           Control.Exception.Safe                   (SomeException,
-                                                           displayException)
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
 import           Control.Monad.IO.Class                   (liftIO)

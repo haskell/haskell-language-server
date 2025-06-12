@@ -1,10 +1,15 @@
 {-# LANGUAGE GADTs           #-}
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns    #-}
 
-module Ide.Plugin.Class.CodeAction where
+module Ide.Plugin.Class.CodeAction (
+    addMethodPlaceholders,
+    codeAction,
+) where
 
+import           Control.Arrow                        ((>>>))
 import           Control.Lens                         hiding (List, use)
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
@@ -13,8 +18,6 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           hiding (Null)
-import           Data.Bifunctor                       (second)
-import           Data.Either.Extra                    (rights)
 import           Data.List
 import           Data.List.Extra                      (nubOrdOn)
 import qualified Data.Map.Strict                      as Map
@@ -23,11 +26,14 @@ import           Data.Maybe                           (isNothing, listToMaybe,
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as T
 import           Development.IDE
-import           Development.IDE.Core.Compile         (sourceTypecheck)
 import           Development.IDE.Core.FileStore       (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Error     (TcRnMessage (..),
+                                                       _TcRnMessage,
+                                                       msgEnvelopeErrorL,
+                                                       stripTcRnMessageContext)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint        (pointCommand)
 import           Ide.Plugin.Class.ExactPrint
@@ -80,23 +86,25 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
+codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
-    actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
-    pure $ InL actions
+    activeDiagnosticsInRange (shakeExtras state) nfp caRange
+        >>= \case
+        Nothing -> pure $ InL []
+        Just fileDiags -> do
+            actions <- join <$> mapM (mkActions nfp verTxtDocId) (methodDiags fileDiags)
+            pure $ InL actions
     where
-        diags = context ^. L.diagnostics
-
-        ghcDiags = filter (\d -> d ^. L.source == Just sourceTypecheck) diags
-        methodDiags = filter (\d -> isClassMethodWarning (d ^. L.message)) ghcDiags
+        methodDiags fileDiags =
+            mapMaybe (\d -> (d,) <$> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
             :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
-            -> Diagnostic
+            -> (FileDiagnostic, ClassMinimalDef)
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]
-        mkActions docPath verTxtDocId diag = do
+        mkActions docPath verTxtDocId (diag, classMinDef) = do
             (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStaleE GetHieAst docPath
             instancePosition <- handleMaybe (PluginInvalidUserState "fromCurrentRange") $
@@ -108,21 +116,19 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                 $ useE GetInstanceBindTypeSigs docPath
             (tmrTypechecked -> gblEnv ) <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
             (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
-            implemented <- findImplementedMethods ast instancePosition
-            logWith recorder Info (LogImplementedMethods cls implemented)
+            logWith recorder Debug (LogImplementedMethods (hsc_dflags hsc) cls classMinDef)
             pure
                 $ concatMap mkAction
                 $ nubOrdOn snd
                 $ filter ((/=) mempty . snd)
-                $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
-                $ mkMethodGroups hsc gblEnv range sigs cls
+                $ mkMethodGroups hsc gblEnv range sigs classMinDef
             where
-                range = diag ^. L.range
+                range = diag ^. fdLspDiagnosticL . L.range
 
-                mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
-                mkMethodGroups hsc gblEnv range sigs cls = minimalDef <> [allClassMethods]
+                mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> ClassMinimalDef -> [MethodGroup]
+                mkMethodGroups hsc gblEnv range sigs classMinDef = minimalDef <> [allClassMethods]
                     where
-                        minimalDef = minDefToMethodGroups hsc gblEnv range sigs $ classMinimalDef cls
+                        minimalDef = minDefToMethodGroups hsc gblEnv range sigs classMinDef
                         allClassMethods = ("all missing methods", makeMethodDefinitions hsc gblEnv range sigs)
 
                 mkAction :: MethodGroup -> [Command |? CodeAction]
@@ -163,25 +169,6 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                         <=< nodeChildren
                     )
 
-        findImplementedMethods
-            :: HieASTs a
-            -> Position
-            -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [T.Text]
-        findImplementedMethods asts instancePosition = do
-            pure
-                $ concat
-                $ pointCommand asts instancePosition
-                $ map (T.pack . getOccString) . rights . findInstanceValBindIdentifiers
-
-        -- | Recurses through the given AST to find identifiers which are
-        -- 'InstanceValBind's.
-        findInstanceValBindIdentifiers :: HieAST a -> [Identifier]
-        findInstanceValBindIdentifiers ast =
-            let valBindIds = Map.keys
-                            . Map.filter (any isInstanceValBind . identInfo)
-                            $ getNodeIds ast
-            in valBindIds <> concatMap findInstanceValBindIdentifiers (nodeChildren ast)
-
         findClassFromIdentifier docPath (Right name) = do
             (hscEnv -> hscenv, _) <- runActionE "classplugin.findClassFromIdentifier.GhcSessionDeps" state
                 $ useWithStaleE GhcSessionDeps docPath
@@ -203,12 +190,15 @@ isClassNodeIdentifier :: Identifier -> IdentifierDetails a -> Bool
 isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occName i = (isNothing . identType) ident && Use `Set.member` identInfo ident
 isClassNodeIdentifier _ _ = False
 
-isClassMethodWarning :: T.Text -> Bool
-isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
+isClassMethodWarning :: StructuredMessage -> Maybe ClassMinimalDef
+isClassMethodWarning message = case message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
+    Nothing          -> Nothing
+    Just tcRnMessage -> isUnsatisfiedMinimalDefWarning tcRnMessage
 
-isInstanceValBind :: ContextInfo -> Bool
-isInstanceValBind (ValBind InstanceBind _ _) = True
-isInstanceValBind _                          = False
+isUnsatisfiedMinimalDefWarning :: TcRnMessage -> Maybe ClassMinimalDef
+isUnsatisfiedMinimalDefWarning = stripTcRnMessageContext >>> \case
+    TcRnUnsatisfiedMinimalDef classMinDef -> Just classMinDef
+    _ -> Nothing
 
 type MethodSignature = T.Text
 type MethodName = T.Text

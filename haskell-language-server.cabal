@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC ==9.10.1 || ==9.8.2 || ==9.6.5 || ==9.4.8
+tested-with:        GHC == {9.12.2, 9.10.1, 9.8.4, 9.6.7}
 extra-source-files:
   README.md
   ChangeLog.md
@@ -473,7 +473,7 @@ library hls-eval-plugin
     , bytestring
     , containers
     , deepseq
-    , Diff                  ^>=0.5
+    , Diff                  ^>=0.5 || ^>=1.0.0
     , dlist
     , extra
     , filepath
@@ -703,14 +703,14 @@ flag hlint
   manual:      True
 
 common hlint
-  if flag(hlint) && ((impl(ghc < 9.10) || impl(ghc > 9.11)) || flag(ignore-plugins-ghc-bounds))
+  if flag(hlint)
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
   import:           defaults, pedantic, warnings
   -- https://github.com/ndmitchell/hlint/pull/1594
-  if !(flag(hlint)) || ((impl(ghc >= 9.10) && impl(ghc < 9.11)) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(hlint)
     buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
@@ -735,9 +735,13 @@ library hls-hlint-plugin
     , transformers
     , unordered-containers
     , ghc-lib-parser-ex
-    , apply-refact
-    --
     , lsp-types
+
+  -- apply-refact doesn't work on 9.10, or even have a buildable
+  -- configuration
+  if impl(ghc >= 9.11) || impl(ghc < 9.10)
+    cpp-options:   -DAPPLY_REFACT
+    build-depends: apply-refact
 
   if flag(ghc-lib)
     cpp-options:   -DGHC_LIB
@@ -753,7 +757,7 @@ library hls-hlint-plugin
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(hlint) || ((impl(ghc >= 9.10) && impl(ghc < 9.11)) && !flag(ignore-plugins-ghc-bounds))
+  if !flag(hlint)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
@@ -761,6 +765,7 @@ test-suite hls-hlint-plugin-tests
   -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
   if os(darwin)
     ghc-options: -optl-Wl,-ld_classic
+
   build-depends:
       aeson
     , containers
@@ -801,7 +806,7 @@ library hls-stan-plugin
     , lsp-types
     , text
     , unordered-containers
-    , stan >= 0.1.2.0
+    , stan >= 0.2.1.0
     , trial
     , directory
 

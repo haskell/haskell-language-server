@@ -343,19 +343,9 @@ tests = testGroup "diagnostics"
       expectDiagnostics
         [ ( "Main.hs"
           , [(DiagnosticSeverity_Error, (6, 9),
-                if ghcVersion >= GHC96 then
-                  "Variable not in scope: ThisList.map"
-                else if ghcVersion >= GHC94 then
-                  "Variable not in scope: map" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
-                else
-                  "Not in scope: \8216ThisList.map\8217", Just "GHC-88464")
+                  "Variable not in scope: ThisList.map", Just "GHC-88464")
             ,(DiagnosticSeverity_Error, (7, 9),
-                if ghcVersion >= GHC96 then
-                  "Variable not in scope: BaseList.x"
-                else if ghcVersion >= GHC94 then
-                  "Variable not in scope: x" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
-                else
-                  "Not in scope: \8216BaseList.x\8217", Just "GHC-88464")
+                  "Variable not in scope: BaseList.x", Just "GHC-88464")
             ]
           )
         ]
@@ -373,7 +363,7 @@ tests = testGroup "diagnostics"
       -- where appropriate. The warning should use an unqualified name 'Ord', not
       -- something like 'GHC.Classes.Ord'. The choice of redundant-constraints to
       -- test this is fairly arbitrary.
-          , [(DiagnosticSeverity_Warning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a", Just "GHC-30606")
+          , [(DiagnosticSeverity_Warning, (2, 7), "Redundant constraint: Ord a", Just "GHC-30606")
             ]
           )
         ]

@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
@@ -1157,7 +1157,7 @@ extendImportTests = testGroup "extend import actions"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 3 4) (Position 3 8))
             [ "Add (:~:)(..) to the import list of Data.Type.Equality"
             , "Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
             (T.unlines
@@ -1221,7 +1221,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB)"
                     , "main = print (stuffB .* stuffB)"
                     ])
-            (Range (Position 2 17) (Position 2 18))
+            (Range (Position 2 22) (Position 2 24))
             ["Add (.*) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1235,7 +1235,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.List.NonEmpty (fromList)"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
-            (Range (Position 2 5) (Position 2 6))
+            (Range (Position 2 31) (Position 2 33))
             [ "Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"
             , "Add NonEmpty(..) to the import list of Data.List.NonEmpty"
             ]
@@ -1252,7 +1252,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.Maybe (catMaybes)"
                     , "x = Just 10"
                     ])
-            (Range (Position 3 5) (Position 2 6))
+            (Range (Position 3 4) (Position 3 8))
             [ "Add Maybe(Just) to the import list of Data.Maybe"
             , "Add Maybe(..) to the import list of Data.Maybe"
             ]
@@ -1359,8 +1359,7 @@ extendImportTests = testGroup "extend import actions"
                     [ "import Data.Monoid (First (..))"
                     , "f = (First Nothing) <> mempty"
                     ])
-        , brokenForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
-          testSession "extend single line qualified import with value" $ template
+        , testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
@@ -1485,7 +1484,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA ()"
                     , "foo = bar"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 3 6) (Position 3 9))
             ["Add bar to the import list of ModuleA",
             "Add bar to the import list of ModuleB"]
             (T.unlines
@@ -1502,7 +1501,7 @@ extendImportTests = testGroup "extend import actions"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 3 4) (Position 3 8))
             [ "Add type (:~:)(Refl) to the import list of Data.Type.Equality"
             , "Add (:~:)(..) to the import list of Data.Type.Equality"]
             (T.unlines
@@ -1552,8 +1551,7 @@ extendImportTests = testGroup "extend import actions"
                 )
                 (Range (Position 2 3) (Position 2 7))
             )
-        , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
-          testSession "type constructor name same as data constructor name" $ template
+        , testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "newtype Foo = Foo Int"
@@ -1855,7 +1853,7 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    ([ ignoreForGhcVersions [GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    ([ ignoreForGhcVersions [GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
     ++ [
         theTestIndirect qualifiedGhcRecords polymorphicType
@@ -2427,7 +2425,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
     action <- pickActionWithTitle "Define select :: Int -> Bool"
-            =<< getCodeActions docB (R 1 0 0 50)
+            =<< getCodeActions docB (R 1 8 1 14)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2451,7 +2449,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
     action <- pickActionWithTitle "Define select :: Int -> Bool"
-        =<< getCodeActions docB (R 1 0 0 50)
+        =<< getCodeActions docB (R 1 8 1 14)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2619,9 +2617,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = 1"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘1’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A (f) where"
@@ -2638,9 +2634,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    let x = 3"
       , "    in x"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘3’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2658,9 +2652,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , "    let x = let y = 5 in y"
       , "    in x"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable", Nothing) ]
       "Add type annotation ‘Integer’ to ‘5’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "module A where"
@@ -2679,15 +2671,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = seq \"debug\" traceShow \"debug\""
       ]
-      (if ghcVersion >= GHC94
-        then
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
-          ]
-        else
-          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint", Nothing)
-          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint", Nothing)
-          ])
+      [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable", Nothing)
+      , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable", Nothing)
+      ]
       ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2707,9 +2693,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f a = traceShow \"debug\" a"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable", Nothing) ]
       ("Add type annotation ‘" <> stringLit <> "’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2729,9 +2713,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       , ""
       , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
       ]
-      (if ghcVersion >= GHC94
-        then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
-        else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint", Nothing) ])
+      [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable", Nothing) ]
       ("Add type annotation ‘"<> stringLit <>"’ to ‘\"debug\"’")
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2768,7 +2750,7 @@ fixConstructorImportTests = testGroup "fix import actions"
             [ "module ModuleB where"
             , "import ModuleA(Constructor)"
             ])
-      (Range (Position 1 10) (Position 1 11))
+      (Range (Position 1 15) (Position 1 26))
       "Fix import of A(Constructor)"
       (T.unlines
             [ "module ModuleB where"
@@ -3405,8 +3387,7 @@ exportUnusedTests = testGroup "export unused actions"
       ]
       (R 2 0 2 11)
       "Export ‘bar’"
-    , ignoreForGhcVersions [GHC94] "Diagnostic message has no suggestions" $
-      testSession "type is exported but not the constructor of same name" $ templateNoAction
+    , testSession "type is exported but not the constructor of same name" $ templateNoAction
         [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
         , "module A (Foo) where"
         , "data Foo = Foo"
@@ -4049,6 +4030,3 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 -- @/var@
 withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir f = System.IO.Extra.withTempDir $ (canonicalizePath >=> f)
-
-brokenForGHC94 :: String -> TestTree -> TestTree
-brokenForGHC94 = knownBrokenForGhcVersions [GHC94]

@@ -33,7 +33,6 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
-
 tests :: TestTree
 tests
   = testGroup "completion"
@@ -61,6 +60,7 @@ completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, Co
 completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
     docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
+
     compls <- getAndResolveCompletions docId pos
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     let emptyToMaybe x = if T.null x then Nothing else Just x
@@ -211,7 +211,38 @@ localCompletionTests = [
 
         compls <- getCompletions doc (Position 0 15)
         liftIO $ filter ("AAA" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["AAAAA"]
-        pure ()
+        pure (),
+    completionTest
+        "polymorphic record dot completion"
+        [ "{-# LANGUAGE OverloadedRecordDot #-}"
+        , "module A () where"
+        , "data Record = Record"
+        , "  { field1 :: Int"
+        , "  , field2 :: Int"
+        , "  }"
+        , -- Without the following, this file doesn't trigger any diagnostics, so completionTest waits forever
+          "triggerDiag :: UnknownType"
+        , "foo record = record.f"
+        ]
+        (Position 7 21)
+        [("field1", CompletionItemKind_Function, "field1", True, False, Nothing)
+        ,("field2", CompletionItemKind_Function, "field2", True, False, Nothing)
+        ],
+    completionTest
+        "qualified polymorphic record dot completion"
+        [ "{-# LANGUAGE OverloadedRecordDot #-}"
+        , "module A () where"
+        , "data Record = Record"
+        , "  { field1 :: Int"
+        , "  , field2 :: Int"
+        , "  }"
+        , "someValue = undefined"
+        , "foo = A.someValue.f"
+        ]
+        (Position 7 19)
+        [("field1", CompletionItemKind_Function, "field1", True, False, Nothing)
+        ,("field2", CompletionItemKind_Function, "field2", True, False, Nothing)
+        ]
     ]
 
 nonLocalCompletionTests :: [TestTree]
@@ -276,8 +307,7 @@ nonLocalCompletionTests =
   where
     brokenForWinGhc = knownBrokenOnWindows "Windows has strange things in scope for some reason"
     brokenForWinOldGhc =
-      knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC94] "Windows (GHC == 9.4) has strange things in scope for some reason"
-      . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC96] "Windows (GHC == 9.6) has strange things in scope for some reason"
+      knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC96] "Windows (GHC == 9.6) has strange things in scope for some reason"
       . knownBrokenInSpecificEnv [HostOS Windows, GhcVer GHC98] "Windows (GHC == 9.8) has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
@@ -350,10 +380,11 @@ packageCompletionTests =
               , _label == "fromList"
               ]
         liftIO $ take 3 (sort compls') @?=
-          map ("Defined in "<>) (
-              [ "'Data.List.NonEmpty"
+          map ("Defined in "<>) [
+                "'Data.List.NonEmpty"
               , "'GHC.Exts"
-              ] ++ (["'GHC.IsList" | ghcVersion >= GHC94]))
+              , "'GHC.IsList"
+              ]
 
   , testSessionEmptyWithCradle "Map" "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, containers, A]}}" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines

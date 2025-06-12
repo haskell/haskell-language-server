@@ -84,8 +84,7 @@ tests =
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval "Evaluate a type with :kind!" "T10" "hs"
-  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs"
-        (if ghcVersion >= GHC94 then "ghc94.expected" else "expected")
+  , goldenWithEval "Reports an error for an incorrect type with :kind!" "T11" "hs"
   , goldenWithEval "Shows a kind with :kind" "T12" "hs"
   , goldenWithEval "Reports an error for an incorrect type with :kind" "T13" "hs"
   , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
@@ -138,7 +137,6 @@ tests =
           GHC910 -> "ghc910.expected"
           GHC98  -> "ghc98.expected"
           GHC96  -> "ghc96.expected"
-          GHC94  -> "ghc94.expected"
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
@@ -219,7 +217,7 @@ tests =
     knownBrokenInWindowsBeforeGHC912 msg =
         foldl (.) id
            [ knownBrokenInSpecificEnv [GhcVer ghcVer, HostOS Windows] msg
-           | ghcVer <- [GHC94 .. GHC910]
+           | ghcVer <- [GHC96 .. GHC910]
            ]
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree

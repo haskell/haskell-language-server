@@ -2,7 +2,9 @@
   description = "haskell-language-server development flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Don't use nixpkgs-unstable as aarch64-darwin is currently broken there.
+    # Check again, when https://github.com/NixOS/nixpkgs/pull/414242 is resolved.
+    nixpkgs.url = "github:NixOS/nixpkgs/c742ae7908a82c9bf23ce27bfca92a00e9bcd541";
     flake-utils.url = "github:numtide/flake-utils";
     # For default.nix
     flake-compat = {
@@ -13,7 +15,8 @@
 
   outputs =
     { nixpkgs, flake-utils, ... }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]
+    flake-utils.lib.eachSystem
+      [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]
     (system:
       let
         pkgs = import nixpkgs {
@@ -21,11 +24,18 @@
           config = { allowBroken = true; };
         };
 
-        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx ps.myst-parser ps.sphinx_rtd_theme ps.pip]);
+        pythonWithPackages = pkgs.python3.withPackages (ps:
+          [ ps.docutils
+            ps.myst-parser
+            ps.pip
+            ps.sphinx
+            ps.sphinx_rtd_theme
+          ]);
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";
-          src = pkgs.lib.sourceFilesBySuffices ./. [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
+          src = pkgs.lib.sourceFilesBySuffices ./.
+            [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
           buildInputs = [ pythonWithPackages ];
           buildPhase = ''
             cd docs
@@ -58,13 +68,14 @@
           buildInputs = [
             # Compiler toolchain
             hpkgs.ghc
+            hpkgs.haskell-language-server
             pkgs.haskellPackages.cabal-install
             # Dependencies needed to build some parts of Hackage
             gmp zlib ncurses
             # for compatibility of curl with provided gcc
             curl
             # Changelog tooling
-            (gen-hls-changelogs pkgs.haskellPackages)
+            (gen-hls-changelogs hpkgs)
             # For the documentation
             pythonWithPackages
             (pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.lib.dontCheck pkgs.haskellPackages.opentelemetry-extra))
@@ -92,21 +103,17 @@
           '';
         };
 
-      in rec {
+      in {
         # Developement shell with only dev tools
         devShells = {
           default = mkDevShell pkgs.haskellPackages;
-          shell-ghc94 = mkDevShell pkgs.haskell.packages.ghc94;
           shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
           shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
+          shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
         };
 
         packages = { inherit docs; };
-
-        # The attributes for the default shell and package changed in recent versions of Nix,
-        # these are here for backwards compatibility with the old versions.
-        devShell = devShells.default;
       });
 
   nixConfig = {

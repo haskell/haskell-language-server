@@ -112,15 +112,15 @@ instance NFData InstanceBindLensResult where
 type instance RuleResult GetInstanceBindLens = InstanceBindLensResult
 
 data Log
-  = LogImplementedMethods Class [T.Text]
+  = LogImplementedMethods DynFlags Class ClassMinimalDef
   | LogShake Shake.Log
 
 instance Pretty Log where
   pretty = \case
-    LogImplementedMethods cls methods ->
-      pretty ("Detected implemented methods for class" :: String)
+    LogImplementedMethods dflags cls methods ->
+      pretty ("The following methods are missing" :: String)
         <+> pretty (show (getOccString cls) <> ":") -- 'show' is used here to add quotes around the class name
-        <+> pretty methods
+        <+> pretty (showSDoc dflags $ ppr methods)
     LogShake log -> pretty log
 
 data BindInfo = BindInfo

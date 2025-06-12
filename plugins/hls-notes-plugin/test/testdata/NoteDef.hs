@@ -6,6 +6,9 @@ foo _ = 0 -- We always return zero, see Note [Returning zero from foo]
 -- The plugin is more liberal with the note definitions, see Note [Single line comments]
 -- It does not work on wrong note definitions, see Note [Not a valid Note]
 
+-- We can also have multiple references to the same note, see
+-- Note [Single line comments]
+
 {- Note [Returning zero from foo]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 This is a big long form note, with very important info
