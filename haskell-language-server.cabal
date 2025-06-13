@@ -365,7 +365,7 @@ library hls-cabal-project-plugin
     , aeson
     , Cabal
     , pretty
-    , cabal-install-parsers >= 0.6  && < 0.7
+    , cabal-install 
 
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
 

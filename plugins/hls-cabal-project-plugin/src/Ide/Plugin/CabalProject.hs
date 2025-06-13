@@ -15,7 +15,7 @@ import           Control.Monad.Trans.Class                     (lift)
 import           Control.Monad.Trans.Maybe                     (runMaybeT)
 import qualified Data.ByteString                               as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                           (HashMap)
+import           Data.HashMap.Strict                           (HashMap, toList)
 import qualified Data.HashMap.Strict                           as HashMap
 import qualified Data.List                                     as List
 import qualified Data.List.NonEmpty                            as NE
@@ -45,7 +45,7 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import           Distribution.Parsec.Error
 import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
-import           Ide.Plugin.CabalProject.Parse                 (parseCabalProjectContents)
+import           Ide.Plugin.CabalProject.Parse                 (parseCabalProjectFileContents)
 import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
@@ -95,16 +95,14 @@ descriptor recorder plId =
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
-                  result <- parseCabalProjectContents (fromNormalizedFilePath file)
-                  case result of
-                    Left err -> putStrLn $ "Cabal project parse failed: " ++ err
-                    Right project -> putStrLn $ "Cabal project parsed successfully: " ++ show project
+                  parseAndPrint (fromNormalizedFilePath file)
                   restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
                 whenUriFile _uri $ \file-> do
                   log' Debug $ LogDocModified _uri
+                  parseAndPrint (fromNormalizedFilePath file)
                   restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
@@ -130,10 +128,20 @@ descriptor recorder plId =
   whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
   whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
 
-cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
-cabalRules recorder _ = do
-    ofInterestRules recorder
-    -- cabalProjectParseRules recorder
+  parseAndPrint :: FilePath -> IO ()
+  parseAndPrint file = do
+    (warnings, res) <- parseCabalProjectFileContents file
+
+    mapM_ (putStrLn . ("[Cabal warning] " ++) . show) warnings
+
+    case res of
+      Left (_mbSpecVer, errs) ->
+        putStrLn $
+          "Cabal project parse failed:\n" ++ unlines (map show (NE.toList errs))
+
+      Right project ->
+        putStrLn $
+          "Cabal project parsed successfully:\n" ++ show project
 
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
 No special logic, just group up a bunch of functions you need for the base
@@ -149,6 +157,46 @@ restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = d
   restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
     return (toKey GetModificationTime file:keys)
+
+
+cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
+cabalRules recorder _ = do
+    -- Make sure we initialise the cabal files-of-interest.
+    ofInterestRules recorder
+    -- Rule to produce diagnostics for cabal files.
+    define (cmapWithPrio LogShake recorder) $ \ParseCabalProjectFields file -> do
+      config <- getPluginConfigAction plId
+      if not (plcGlobalOn config && plcDiagnosticsOn config)
+        then pure ([], Nothing)
+        else do
+          -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
+          -- we rerun this rule because this rule *depends* on GetModificationTime.
+          (t, mCabalSource) <- use_ GetFileContents file
+          log' Debug $ LogModificationTime file t
+          contents <- case mCabalSource of
+            Just sources ->
+              pure $ Encoding.encodeUtf8 $ Rope.toText sources
+            Nothing -> do
+              liftIO $ BS.readFile $ fromNormalizedFilePath file
+
+          case Parse.readCabalProjectFields file contents of
+            Left _ ->
+              pure ([], Nothing)
+            Right fields ->
+              pure ([], Just fields)
+
+{- | This is the kick function for the cabal plugin.
+We run this action, whenever we shake session us run/restarted, which triggers
+actions to produce diagnostics for cabal files.
+
+It is paramount that this kick-function can be run quickly, since it is a blocking
+function invocation.
+-}
+kick :: Action ()
+kick = do
+  files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
+  Shake.runWithSignal (Proxy @"kick/start/cabal-project") (Proxy @"kick/done/cabal-project") files Types.ParseCabalProjectFile
+
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

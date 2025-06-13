@@ -2,6 +2,8 @@ module Ide.Plugin.CabalProject.Diagnostics where
 
 diagnostic = undefined
 
+-- can use renderParseError: https://github.com/haskell/cabal/blob/master/cabal-install/src/Distribution/Client/Utils/Parsec.hs
+
 -- {-# LANGUAGE DuplicateRecordFields #-}
 -- {-# LANGUAGE OverloadedStrings     #-}
 -- module Ide.Plugin.CabalProject.Diagnostics
