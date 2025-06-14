@@ -339,6 +339,8 @@ library hls-cabal-project-plugin
     Ide.Plugin.CabalProject
     Ide.Plugin.CabalProject.Parse
     Ide.Plugin.CabalProject.Diagnostics
+    Ide.Plugin.CabalProject.Types
+    Ide.Plugin.CabalProject.Orphans
 
   build-depends:
     , bytestring
@@ -365,7 +367,8 @@ library hls-cabal-project-plugin
     , aeson
     , Cabal
     , pretty
-    , cabal-install 
+    , cabal-install
+    , cabal-install-solver
 
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
 

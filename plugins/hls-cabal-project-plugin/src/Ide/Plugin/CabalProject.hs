@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments        #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -45,7 +46,10 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import           Distribution.Parsec.Error
 import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
-import           Ide.Plugin.CabalProject.Parse                 (parseCabalProjectFileContents)
+import           Ide.Plugin.CabalProject.Diagnostics           as Diagnostics
+import           Ide.Plugin.CabalProject.Orphans               ()
+import           Ide.Plugin.CabalProject.Parse                 as Parse
+import           Ide.Plugin.CabalProject.Types                 as Types
 import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
@@ -130,7 +134,7 @@ descriptor recorder plId =
 
   parseAndPrint :: FilePath -> IO ()
   parseAndPrint file = do
-    (warnings, res) <- parseCabalProjectFileContents file
+    (warnings, res) <- Parse.parseCabalProjectFileContents file
 
     mapM_ (putStrLn . ("[Cabal warning] " ++) . show) warnings
 
@@ -142,6 +146,11 @@ descriptor recorder plId =
       Right project ->
         putStrLn $
           "Cabal project parsed successfully:\n" ++ show project
+
+    bs <- BS.readFile file
+    case Parse.readCabalProjectFields (toNormalizedFilePath' file) bs of
+      Left diag  -> putStrLn $ "readCabalProjectFields error:\n"   ++ show diag
+      Right flds -> putStrLn $ "readCabalProjectFields success:\n" ++ show flds
 
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
 No special logic, just group up a bunch of functions you need for the base
@@ -160,30 +169,64 @@ restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = d
 
 
 cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
-cabalRules recorder _ = do
-    -- Make sure we initialise the cabal files-of-interest.
-    ofInterestRules recorder
-    -- Rule to produce diagnostics for cabal files.
-    define (cmapWithPrio LogShake recorder) $ \ParseCabalProjectFields file -> do
-      config <- getPluginConfigAction plId
-      if not (plcGlobalOn config && plcDiagnosticsOn config)
-        then pure ([], Nothing)
-        else do
-          -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
-          -- we rerun this rule because this rule *depends* on GetModificationTime.
-          (t, mCabalSource) <- use_ GetFileContents file
-          log' Debug $ LogModificationTime file t
-          contents <- case mCabalSource of
-            Just sources ->
-              pure $ Encoding.encodeUtf8 $ Rope.toText sources
-            Nothing -> do
-              liftIO $ BS.readFile $ fromNormalizedFilePath file
+cabalRules recorder plId = do
+  -- Make sure we initialise the cabal files-of-interest.
+  ofInterestRules recorder
+  -- Rule to produce diagnostics for cabal files.
+  define (cmapWithPrio LogShake recorder) $ \ParseCabalProjectFields file -> do
+    config <- getPluginConfigAction plId
+    if not (plcGlobalOn config && plcDiagnosticsOn config)
+      then pure ([], Nothing)
+      else do
+        -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
+        -- we rerun this rule because this rule *depends* on GetModificationTime.
+        (t, mCabalSource) <- use_ GetFileContents file
+        log' Debug $ LogModificationTime file t
+        contents <- case mCabalSource of
+          Just sources ->
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
+          Nothing -> do
+            liftIO $ BS.readFile $ fromNormalizedFilePath file
 
-          case Parse.readCabalProjectFields file contents of
-            Left _ ->
-              pure ([], Nothing)
-            Right fields ->
-              pure ([], Just fields)
+        case Parse.readCabalProjectFields file contents of
+          Left _ ->
+            pure ([], Nothing)
+          Right fields ->
+            pure ([], Just fields)
+
+  define (cmapWithPrio LogShake recorder) $ \ParseCabalProjectFile file -> do
+    cfg <- getPluginConfigAction plId
+    if not (plcGlobalOn cfg && plcDiagnosticsOn cfg)
+      then pure ([], Nothing)
+      else do
+        -- 1. Grab file contents (virtual-file or disk)
+        (_hash, mRope) <- use_ GetFileContents file
+        bytes <- case mRope of
+          Just rope -> pure (Encoding.encodeUtf8 (Rope.toText rope))
+          Nothing   -> liftIO $ BS.readFile (fromNormalizedFilePath file)
+
+        -- 2. Run Cabal’s parser for cabal.project
+        (pWarnings, pResult) <- liftIO $ Parse.parseCabalProjectFileContents (fromNormalizedFilePath file)
+
+        -- 3. Convert warnings
+        let warnDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
+
+        -- 4. Convert result or errors
+        case pResult of
+          Left (_specVer, pErrNE) -> do
+            let errDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrNE
+            pure (errDiags ++ warnDiags, Nothing)
+
+          Right projCfg -> do
+            pure (warnDiags, Just projCfg)
+
+  action $ do
+    -- Run the cabal kick. This code always runs when 'shakeRestart' is run.
+    -- Must be careful to not impede the performance too much. Crucial to
+    -- a snappy IDE experience.
+    kick
+ where
+  log' = logWith recorder
 
 {- | This is the kick function for the cabal plugin.
 We run this action, whenever we shake session us run/restarted, which triggers
@@ -195,6 +238,7 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
+--   let keys = map Types.ParseCabalProjectFile files
   Shake.runWithSignal (Proxy @"kick/start/cabal-project") (Proxy @"kick/done/cabal-project") files Types.ParseCabalProjectFile
 
 
