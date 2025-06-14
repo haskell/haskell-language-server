@@ -1122,7 +1122,11 @@ getModSummaryFromImports env fp _modTime mContents = do
     liftIO $ evaluate $ rnf textualImports
 
 
-    modLoc <- liftIO $ mkHomeModLocation dflags mod fp
+    modLoc <- liftIO $ if mod == mAIN_NAME
+        -- specially in tests it's common to have lots of nameless modules
+        -- mkHomeModLocation will map them to the same hi/hie locations
+        then mkHomeModLocation dflags (pathToModuleName fp) fp
+        else mkHomeModLocation dflags mod fp
 
     let modl = mkHomeModule (hscHomeUnit ppEnv) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
