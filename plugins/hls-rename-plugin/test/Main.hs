@@ -113,7 +113,7 @@ goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
        renamePlugin title testDataDir path "expected" "hs" act
 
-renameExpectError :: (TResponseError Method_TextDocumentRename) -> TextDocumentIdentifier -> Position -> Text -> Session ()
+renameExpectError :: TResponseError Method_TextDocumentRename -> TextDocumentIdentifier -> Position -> Text -> Session ()
 renameExpectError expectedError doc pos newName = do
   let params = RenameParams Nothing doc pos newName
   rsp <- request SMethod_TextDocumentRename params

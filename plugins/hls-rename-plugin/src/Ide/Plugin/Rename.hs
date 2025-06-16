@@ -42,7 +42,9 @@ import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
+import           HieDb                                 ((:.) (..))
 import           HieDb.Query
+import           HieDb.Types                           (RefRow (refIsGenerated))
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
@@ -196,6 +198,11 @@ refsAtName state nfp name = do
     dbRefs <- case nameModule_maybe name of
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
+            -- GHC inserts `Use`s of record constructor everywhere where its record selectors are used,
+            -- which leads to fields being renamed whenever corresponding constructor is renamed.
+            -- see https://github.com/haskell/haskell-language-server/issues/2915
+            -- To work around this, we filter out compiler-generated references.
+            filter (\(refRow HieDb.:. _) -> not $ refIsGenerated refRow) <$>
             findReferences
                 hieDb
                 True
