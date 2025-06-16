@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 data Foo = Foo { a :: Int, b :: Bool }
 
 foo1 :: Foo
@@ -12,3 +13,6 @@ fun1 Foo {a} = a
 
 fun2 :: Foo -> Int
 fun2 Foo {a = i} = i
+
+fun3 :: Foo -> Int
+fun3 Foo {..} = a

@@ -1,5 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
-data Foo = FooRenamed { FooRenamed :: Int, FooRenamed :: Bool }
+{-# LANGUAGE RecordWildCards #-}
+data Foo = FooRenamed { a :: Int, b :: Bool }
 
 foo1 :: Foo
 foo1 = FooRenamed { a = 1, b = True }
@@ -12,3 +13,6 @@ fun1 FooRenamed {a} = a
 
 fun2 :: Foo -> Int
 fun2 FooRenamed {a = i} = i
+
+fun3 :: Foo -> Int
+fun3 FooRenamed {..} = a
