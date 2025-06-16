@@ -99,14 +99,14 @@ descriptor recorder plId =
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
-                  parseAndPrint (fromNormalizedFilePath file)
+                  -- parseAndPrint (fromNormalizedFilePath file)
                   restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
                 whenUriFile _uri $ \file-> do
                   log' Debug $ LogDocModified _uri
-                  parseAndPrint (fromNormalizedFilePath file)
+                  -- parseAndPrint (fromNormalizedFilePath file)
                   restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
@@ -132,6 +132,7 @@ descriptor recorder plId =
   whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
   whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
 
+  -- for development/debugging
   parseAndPrint :: FilePath -> IO ()
   parseAndPrint file = do
     (warnings, res) <- Parse.parseCabalProjectFileContents file

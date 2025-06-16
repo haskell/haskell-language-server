@@ -380,6 +380,7 @@ test-suite hls-cabal-project-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-project-plugin/test
   main-is:          Main.hs
   other-modules:
+    Utils
   build-depends:
     , bytestring
     , Cabal-syntax          >= 3.7

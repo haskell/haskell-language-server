@@ -5,10 +5,12 @@ module Ide.Plugin.CabalProject.Parse
     readCabalProjectFields
   ) where
 
--- base -----------------------------------------------------------------------
 import           Control.Monad                            (unless)
 import qualified Data.ByteString                          as BS
 import           Data.List.NonEmpty                       (NonEmpty (..))
+import qualified Data.List.NonEmpty                       as NE
+import qualified Data.Text                                as T
+import           Development.IDE
 import           Distribution.Client.HttpUtils            (configureTransport)
 import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton,
                                                            parseProject,
@@ -16,13 +18,8 @@ import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton
 import           Distribution.Client.ProjectConfig.Types  (ProjectConfigToParse (..))
 import           Distribution.Fields                      (PError (..),
                                                            PWarning (..))
-import qualified Distribution.Fields.ParseResult          as PR
--- import           Distribution.Fields.ParseResult          (ParseResult,
---                                                            runParseResult)
-import qualified Data.List.NonEmpty                       as NE
-import qualified Data.Text                                as T
-import           Development.IDE
 import qualified Distribution.Fields.Parser               as Syntax
+import qualified Distribution.Fields.ParseResult          as PR
 import qualified Distribution.Parsec.Position             as Syntax
 import           Distribution.Types.Version               (Version)
 import           Distribution.Verbosity                   (normal)
@@ -60,12 +57,3 @@ readCabalProjectFields file contents =
 
     (_warnings, Right fields) ->
       Right fields
-
--- parseCabalProjectContents :: FilePath -> IO (Either String (Project Void String String))
--- parseCabalProjectContents file = do
---   contents <- BS.readFile file
---   case parseProject file contents of
---     Left parseErr ->
---       pure $ Left ("Parse error in " ++ file ++ ": " ++ show parseErr)
---     Right project ->
---       pure $ Right project
