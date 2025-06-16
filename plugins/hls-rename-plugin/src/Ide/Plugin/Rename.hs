@@ -52,6 +52,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import Data.List
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -197,19 +198,22 @@ refsAtName state nfp name = do
     ast <- handleGetHieAst state nfp
     dbRefs <- case nameModule_maybe name of
         Nothing -> pure []
-        Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
+        Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb -> do
             -- GHC inserts `Use`s of record constructor everywhere where its record selectors are used,
             -- which leads to fields being renamed whenever corresponding constructor is renamed.
             -- see https://github.com/haskell/haskell-language-server/issues/2915
             -- To work around this, we filter out compiler-generated references.
-            filter (\(refRow HieDb.:. _) -> not $ refIsGenerated refRow) <$>
-            findReferences
+
+            xs <- findReferences
                 hieDb
                 True
                 (nameOccName name)
                 (Just $ moduleName mod)
                 (Just $ moduleUnit mod)
                 [fromNormalizedFilePath nfp]
+            let (gen,notGen) = partition (\(refRow HieDb.:. _) -> refIsGenerated refRow) xs
+            putStrLn $ "Found " ++ show (length xs) ++ " references in HieDb: " ++ show (length xs) ++ ", of which " ++ show (length gen) ++ " are generated"
+            pure notGen
             )
     pure $ nameLocs name ast ++ dbRefs
 
