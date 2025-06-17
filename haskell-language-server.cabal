@@ -369,6 +369,8 @@ library hls-cabal-project-plugin
     , pretty
     , cabal-install
     , cabal-install-solver
+    , haskell-language-server:hls-cabal-plugin
+
 
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
 
