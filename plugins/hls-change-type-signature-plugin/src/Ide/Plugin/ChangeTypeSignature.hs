@@ -29,7 +29,7 @@ import           Development.IDE                   (FileDiagnostic,
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes    (GetParsedModule (GetParsedModule))
 import           Development.IDE.GHC.Compat        hiding (vcat)
-import           Development.IDE.GHC.Compat.Error  (_TcRnMessage,
+import           Development.IDE.GHC.Compat.Error  (_TcRnMessageWithCtx,
                                                     msgEnvelopeErrorL)
 import           Development.IDE.GHC.Util          (printOutputable)
 import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
@@ -137,7 +137,7 @@ diagnosticToChangeSig recorder decls diagnostic = runMaybeT $ do
     -- Extract expected, actual, and extra error info
     (expectedType, actualType, errInfo) <- hoistMaybe $ do
         msg <- diagnostic ^. fdStructuredMessageL ^? _SomeStructuredMessage
-        tcRnMsg <- msg ^. msgEnvelopeErrorL ^? _TcRnMessage
+        tcRnMsg <- msg ^. msgEnvelopeErrorL ^? _TcRnMessageWithCtx
         TcRnMessageDetailed errInfo tcRnMsg' <- tcRnMsg ^? _TcRnMessageDetailed
         solverReport <- tcRnMsg' ^? _TcRnSolverReport . tcSolverReportMsgL
         mismatch <- solverReport ^? _MismatchMessage
