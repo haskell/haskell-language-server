@@ -138,12 +138,13 @@ diagnosticToChangeSig recorder decls diagnostic = runMaybeT $ do
     (expectedType, actualType, errInfo) <- hoistMaybe $ do
         msg <- diagnostic ^. fdStructuredMessageL ^? _SomeStructuredMessage
         tcRnMsg <- msg ^. msgEnvelopeErrorL ^? _TcRnMessage
-        (solverReport, errInfo) <- findSolverReport tcRnMsg
-        mismatch <- findMismatchMessage solverReport
-        (expectedType', actualType') <- findTypeEqMismatch mismatch
-        errInfo' <- errInfo
+        TcRnMessageDetailed errInfo tcRnMsg' <- tcRnMsg ^? _TcRnMessageDetailed
+        solverReport <- tcRnMsg' ^? _TcRnSolverReport . tcSolverReportMsgL
+        mismatch <- solverReport ^? _MismatchMessage
+        expectedType <- mismatch ^? _TypeEqMismatchExpected
+        actualType <- mismatch ^? _TypeEqMismatchActual
 
-        pure (showType expectedType', showType actualType', errInfo')
+        pure (showType expectedType, showType actualType, errInfo)
 
     logWith recorder Debug (LogErrInfoCtxt errInfo)
 
@@ -163,35 +164,48 @@ diagnosticToChangeSig recorder decls diagnostic = runMaybeT $ do
         showType :: Type -> Text
         showType = T.pack . showSDocUnsafe . pprTidiedType
 
--- TODO: Make this a prism?
-findSolverReport :: TcRnMessage -> Maybe (TcSolverReportMsg, Maybe ErrInfo)
-findSolverReport (TcRnMessageWithInfo _ (TcRnMessageDetailed errInfo msg)) =
-    case findSolverReport msg of
-        Just (mismatch, _) -> Just (mismatch, Just errInfo)
-        _                  -> Nothing
+_TcRnMessageDetailed :: Traversal' TcRnMessage TcRnMessageDetailed
+_TcRnMessageDetailed focus (TcRnMessageWithInfo errInfo detailed) =
+    (\detailed' -> TcRnMessageWithInfo errInfo detailed') <$> focus detailed
+_TcRnMessageDetailed _ msg = pure msg
+
+_TcRnSolverReport :: Traversal' TcRnMessage SolverReportWithCtxt
 #if MIN_VERSION_ghc(9,10,0)
-findSolverReport (TcRnSolverReport (SolverReportWithCtxt _ mismatch) _) =
-    Just (mismatch, Nothing)
+_TcRnSolverReport focus (TcRnSolverReport report reason) =
+    (\report' -> TcRnSolverReport report' reason) <$> focus report
 #else
-findSolverReport (TcRnSolverReport (SolverReportWithCtxt _ mismatch) _ _) =
-    Just (mismatch, Nothing)
+_TcRnSolverReport focus (TcRnSolverReport report reason hints) =
+    (\report' -> TcRnSolverReport report' reason hints) <$> focus report
 #endif
-findSolverReport _ = Nothing
+_TcRnSolverReport _ msg = pure msg
 
--- TODO: Make this a prism?
-findMismatchMessage :: TcSolverReportMsg -> Maybe MismatchMsg
-findMismatchMessage (Mismatch m _ _ _)        = Just m
-findMismatchMessage (CannotUnifyVariable m _) = Just m
-findMismatchMessage _                         = Nothing
+tcSolverReportMsgL :: Lens' SolverReportWithCtxt TcSolverReportMsg
+tcSolverReportMsgL = lens reportContent (\report content' -> report { reportContent = content' })
 
--- TODO: Make this a prism?
-findTypeEqMismatch :: MismatchMsg -> Maybe (Type, Type)
+_MismatchMessage :: Traversal' TcSolverReportMsg MismatchMsg
+_MismatchMessage focus (Mismatch msg t a c) = (\msg' -> Mismatch msg' t a c) <$> focus msg
+_MismatchMessage focus (CannotUnifyVariable msg a) = flip CannotUnifyVariable a <$> focus msg
+_MismatchMessage _ report = pure report
+
+_TypeEqMismatchExpected :: Traversal' MismatchMsg Type
 #if MIN_VERSION_ghc(9,12,0)
-findTypeEqMismatch (TypeEqMismatch _ _ _ expected actual _ _) = Just (expected, actual)
+_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ expected _ _ _) =
+    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
 #else
-findTypeEqMismatch (TypeEqMismatch _ _ _ _ expected actual _ _) = Just (expected, actual)
+_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ _ expected _ _ _) =
+    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
 #endif
-findTypeEqMismatch _ = Nothing
+_TypeEqMismatchExpected _ mismatch = pure mismatch
+
+_TypeEqMismatchActual :: Traversal' MismatchMsg Type
+#if MIN_VERSION_ghc(9,12,0)
+_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ actual _ _) =
+    (\actual' -> mismatch { teq_mismatch_actual = actual' }) <$> focus actual
+#else
+_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ _ actual _ _) =
+    (\actual' -> mismatch { teq_mismatch_expected = actual' }) <$> focus actual
+#endif
+_TypeEqMismatchActual _ mismatch = pure mismatch
 
 -- | If a diagnostic has the proper message create a ChangeSignature from it
 matchingDiagnostic :: ErrInfo -> Maybe DeclName
@@ -207,8 +221,7 @@ matchingDiagnostic ErrInfo{errInfoContext} =
 -- | List of regexes that match various Error Messages
 errorMessageRegexes :: [Text]
 errorMessageRegexes = [ -- be sure to add new Error Messages Regexes at the bottom to not fail any existing tests
-    "In an equation for ‘(.+)’:" -- TODO: Check if this is useful only for tests
-    , "In an equation for `(.+)':"
+    "In an equation for ‘(.+)’:"
     ]
 
 -- | Given a String with the name of a declaration, GHC's "Expected Type", find the declaration that matches
