@@ -24,6 +24,11 @@ tests :: TestTree
 tests = testGroup "Rename"
     [ goldenWithRename "Data constructor" "DataConstructor" $ \doc ->
         rename doc (Position 0 15) "Op"
+    , goldenWithRename "Data constructor with fields" "DataConstructorWithFields" $ \doc ->
+        rename doc (Position 1 13) "FooRenamed"
+    , knownBrokenForGhcVersions [GHC96, GHC98] "renaming Constructor{..} with RecordWildcard removes .." $
+        goldenWithRename "Data constructor with fields" "DataConstructorWithFieldsRecordWildcards" $ \doc ->
+          rename doc (Position 1 13) "FooRenamed"
     , goldenWithRename "Exported function" "ExportedFunction" $ \doc ->
         rename doc (Position 2 1) "quux"
     , goldenWithRename "Field Puns" "FieldPuns" $ \doc ->
@@ -113,7 +118,7 @@ goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
        renamePlugin title testDataDir path "expected" "hs" act
 
-renameExpectError :: (TResponseError Method_TextDocumentRename) -> TextDocumentIdentifier -> Position -> Text -> Session ()
+renameExpectError :: TResponseError Method_TextDocumentRename -> TextDocumentIdentifier -> Position -> Text -> Session ()
 renameExpectError expectedError doc pos newName = do
   let params = RenameParams Nothing doc pos newName
   rsp <- request SMethod_TextDocumentRename params
