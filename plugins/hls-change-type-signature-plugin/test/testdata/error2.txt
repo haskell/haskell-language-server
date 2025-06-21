@@ -1,6 +1,0 @@
-    • Couldn't match type ‘b0 -> t0 a0 -> b0’ with ‘Int’
-      Expected type: Int -> Int
-        Actual type: (b0 -> a0 -> b0) -> b0 -> t0 a0 -> b0
-    • Probable cause: ‘foldl’ is applied to too few arguments
-      In the expression: foldl
-      In an equation for ‘test’: test = foldl

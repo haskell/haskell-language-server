@@ -1,0 +1,8 @@
+In the expression: go
+In an equation for ‘fullSig’:
+fullSig
+      = go
+      where
+          go = head . reverse
+
+

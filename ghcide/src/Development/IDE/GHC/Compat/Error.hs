@@ -17,16 +17,24 @@ module Development.IDE.GHC.Compat.Error (
   DriverMessage (..),
   -- * General Diagnostics
   Diagnostic(..),
-  -- * Prisms for error selection
+  -- * Prisms and lenses for error selection
   _TcRnMessage,
   _TcRnMessageWithCtx,
   _GhcPsMessage,
   _GhcDsMessage,
   _GhcDriverMessage,
   _TcRnMissingSignature,
+  _TcRnSolverReport,
+  _TcRnMessageWithInfo,
+  reportContextL,
+  reportContentL,
+  _MismatchMessage,
+  _TypeEqMismatchActual,
+  _TypeEqMismatchExpected,
   ) where
 
 import           Control.Lens
+import           Development.IDE.GHC.Compat (Type)
 import           GHC.Driver.Errors.Types
 import           GHC.HsToCore.Errors.Types
 import           GHC.Tc.Errors.Types
@@ -82,3 +90,36 @@ msgEnvelopeErrorL :: Lens' (MsgEnvelope e) e
 msgEnvelopeErrorL = lens errMsgDiagnostic (\envelope e -> envelope { errMsgDiagnostic = e } )
 
 makePrisms ''TcRnMessage
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''SolverReportWithCtxt
+
+-- | Focus 'MismatchMsg' from 'TcSolverReportMsg'. Currently, 'MismatchMsg' can be
+-- extracted from 'CannotUnifyVariable' and 'Mismatch' constructors.
+_MismatchMessage :: Traversal' TcSolverReportMsg MismatchMsg
+_MismatchMessage focus (Mismatch msg t a c) = (\msg' -> Mismatch msg' t a c) <$> focus msg
+_MismatchMessage focus (CannotUnifyVariable msg a) = flip CannotUnifyVariable a <$> focus msg
+_MismatchMessage _ report = pure report
+
+-- | Focus 'teq_mismatch_expected' from 'TypeEqMismatch'.
+_TypeEqMismatchExpected :: Traversal' MismatchMsg Type
+#if MIN_VERSION_ghc(9,12,0)
+_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ expected _ _ _) =
+    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
+#else
+_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ _ expected _ _ _) =
+    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
+#endif
+_TypeEqMismatchExpected _ mismatch = pure mismatch
+
+-- | Focus 'teq_mismatch_actual' from 'TypeEqMismatch'.
+_TypeEqMismatchActual :: Traversal' MismatchMsg Type
+#if MIN_VERSION_ghc(9,12,0)
+_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ actual _ _) =
+    (\actual' -> mismatch { teq_mismatch_actual = actual' }) <$> focus actual
+#else
+_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ _ actual _ _) =
+    (\actual' -> mismatch { teq_mismatch_expected = actual' }) <$> focus actual
+#endif
+_TypeEqMismatchActual _ mismatch = pure mismatch

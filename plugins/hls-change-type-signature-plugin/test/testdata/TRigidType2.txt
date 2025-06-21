@@ -1,0 +1,6 @@
+In the expression: head
+In an equation for ‘test’: test = head
+Relevant bindings include
+  test :: a -> Int
+    (bound at /home/sgillespie/dev/haskell/haskell-language-server/plugins/hls-change-type-signature-plugin/test/testdata/TRigidType2.hs:4:1) [GHC-25897]
+
