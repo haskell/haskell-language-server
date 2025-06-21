@@ -29,17 +29,19 @@ import           Development.IDE                   (FileDiagnostic,
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes    (GetParsedModule (GetParsedModule))
 import           Development.IDE.GHC.Compat        hiding (vcat)
-import           Development.IDE.GHC.Compat.Error  (_TcRnMessageWithCtx,
-                                                    msgEnvelopeErrorL)
+import           Development.IDE.GHC.Compat.Error  (_MismatchMessage,
+                                                    _TcRnMessageWithCtx,
+                                                    _TcRnMessageWithInfo,
+                                                    _TcRnSolverReport,
+                                                    _TypeEqMismatchActual,
+                                                    _TypeEqMismatchExpected,
+                                                    msgEnvelopeErrorL,
+                                                    reportContentL)
 import           Development.IDE.GHC.Util          (printOutputable)
 import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
 import           Generics.SYB                      (extQ, something)
 import           GHC.Tc.Errors.Types               (ErrInfo (..),
-                                                    MismatchMsg (..),
-                                                    SolverReportWithCtxt (..),
-                                                    TcRnMessage (..),
-                                                    TcRnMessageDetailed (..),
-                                                    TcSolverReportMsg (..))
+                                                    TcRnMessageDetailed (..))
 import qualified Ide.Logger                        as Logger
 import           Ide.Plugin.Error                  (PluginError,
                                                     getNormalizedFilePathE)
@@ -138,8 +140,8 @@ diagnosticToChangeSig recorder decls diagnostic = runMaybeT $ do
     (expectedType, actualType, errInfo) <- hoistMaybe $ do
         msg <- diagnostic ^. fdStructuredMessageL ^? _SomeStructuredMessage
         tcRnMsg <- msg ^. msgEnvelopeErrorL ^? _TcRnMessageWithCtx
-        TcRnMessageDetailed errInfo tcRnMsg' <- tcRnMsg ^? _TcRnMessageDetailed
-        solverReport <- tcRnMsg' ^? _TcRnSolverReport . tcSolverReportMsgL
+        (_, TcRnMessageDetailed errInfo tcRnMsg') <- tcRnMsg ^? _TcRnMessageWithInfo
+        solverReport <- tcRnMsg' ^? _TcRnSolverReport . _1 . reportContentL
         mismatch <- solverReport ^? _MismatchMessage
         expectedType <- mismatch ^? _TypeEqMismatchExpected
         actualType <- mismatch ^? _TypeEqMismatchActual
@@ -163,49 +165,6 @@ diagnosticToChangeSig recorder decls diagnostic = runMaybeT $ do
     where
         showType :: Type -> Text
         showType = T.pack . showSDocUnsafe . pprTidiedType
-
-_TcRnMessageDetailed :: Traversal' TcRnMessage TcRnMessageDetailed
-_TcRnMessageDetailed focus (TcRnMessageWithInfo errInfo detailed) =
-    (\detailed' -> TcRnMessageWithInfo errInfo detailed') <$> focus detailed
-_TcRnMessageDetailed _ msg = pure msg
-
-_TcRnSolverReport :: Traversal' TcRnMessage SolverReportWithCtxt
-#if MIN_VERSION_ghc(9,10,0)
-_TcRnSolverReport focus (TcRnSolverReport report reason) =
-    (\report' -> TcRnSolverReport report' reason) <$> focus report
-#else
-_TcRnSolverReport focus (TcRnSolverReport report reason hints) =
-    (\report' -> TcRnSolverReport report' reason hints) <$> focus report
-#endif
-_TcRnSolverReport _ msg = pure msg
-
-tcSolverReportMsgL :: Lens' SolverReportWithCtxt TcSolverReportMsg
-tcSolverReportMsgL = lens reportContent (\report content' -> report { reportContent = content' })
-
-_MismatchMessage :: Traversal' TcSolverReportMsg MismatchMsg
-_MismatchMessage focus (Mismatch msg t a c) = (\msg' -> Mismatch msg' t a c) <$> focus msg
-_MismatchMessage focus (CannotUnifyVariable msg a) = flip CannotUnifyVariable a <$> focus msg
-_MismatchMessage _ report = pure report
-
-_TypeEqMismatchExpected :: Traversal' MismatchMsg Type
-#if MIN_VERSION_ghc(9,12,0)
-_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ expected _ _ _) =
-    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
-#else
-_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ _ expected _ _ _) =
-    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
-#endif
-_TypeEqMismatchExpected _ mismatch = pure mismatch
-
-_TypeEqMismatchActual :: Traversal' MismatchMsg Type
-#if MIN_VERSION_ghc(9,12,0)
-_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ actual _ _) =
-    (\actual' -> mismatch { teq_mismatch_actual = actual' }) <$> focus actual
-#else
-_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ _ actual _ _) =
-    (\actual' -> mismatch { teq_mismatch_expected = actual' }) <$> focus actual
-#endif
-_TypeEqMismatchActual _ mismatch = pure mismatch
 
 -- | If a diagnostic has the proper message create a ChangeSignature from it
 matchingDiagnostic :: ErrInfo -> Maybe DeclName
