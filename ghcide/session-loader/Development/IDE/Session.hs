@@ -223,7 +223,7 @@ instance Pretty Log where
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
-hiedbDataVersion = "1"
+hiedbDataVersion = "2"
 
 data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
@@ -955,6 +955,8 @@ CallStack (from HasCallStack):
   error, called at compiler\\utils\\Maybes.hs:55:27 in ghc:Maybes
   expectJust, called at compiler\\typecheck\\FamInst.hs:461:30 in ghc:FamInst
 ```
+
+and many more.
 
 To mitigate this, we set the cache directory for each component dependent
 on the components of the current `HscEnv`, additionally to the component options
