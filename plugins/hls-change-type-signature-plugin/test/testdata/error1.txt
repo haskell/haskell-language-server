@@ -1,6 +1,0 @@
-    • Couldn't match type ‘Int’
-                     with ‘Data.HashSet.Internal.HashSet Int’
-      Expected type: Int -> Int
-        Actual type: Data.HashSet.Internal.HashSet Int -> Int
-    • In the expression: head . toList
-      In an equation for ‘test’: test = head . toList
