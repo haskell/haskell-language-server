@@ -53,4 +53,4 @@ gh-release-artifacts/
 .hls/
 
 # local cabal package
-# vendor/
+vendor/parse-cabal-project
