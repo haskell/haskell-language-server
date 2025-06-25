@@ -1,1 +1,1 @@
-cradle: {direct: {arguments: ["Main","OtherModule","OtherOtherModule","References"]}}
+cradle: {direct: {arguments: ["Main","OtherModule","OtherOtherModule","References", "Fields"]}}
