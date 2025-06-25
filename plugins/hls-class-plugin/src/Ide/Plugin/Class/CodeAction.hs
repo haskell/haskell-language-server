@@ -36,6 +36,9 @@ import           Development.IDE.GHC.Compat.Error     (TcRnMessage (..),
                                                        stripTcRnMessageContext)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint        (pointCommand)
+import           GHC.Iface.Ext.Types                  (ContextInfo (..),
+                                                       HieAST (..), Identifier,
+                                                       IdentifierDetails (..))
 import           Ide.Plugin.Class.ExactPrint
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
