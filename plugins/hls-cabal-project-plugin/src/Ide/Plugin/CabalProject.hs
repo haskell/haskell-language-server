@@ -135,7 +135,8 @@ descriptor recorder plId =
   -- for development/debugging
   parseAndPrint :: FilePath -> IO ()
   parseAndPrint file = do
-    (warnings, res) <- Parse.parseCabalProjectFileContents file
+    bytes <- BS.readFile file
+    (warnings, res) <- Parse.parseCabalProjectFileContents file bytes
 
     mapM_ (putStrLn . ("[Cabal warning] " ++) . show) warnings
 
@@ -200,19 +201,18 @@ cabalRules recorder plId = do
     if not (plcGlobalOn cfg && plcDiagnosticsOn cfg)
       then pure ([], Nothing)
       else do
-        -- 1. Grab file contents (virtual-file or disk)
-        (_hash, mRope) <- use_ GetFileContents file
+        -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
+        -- we rerun this rule because this rule *depends* on GetModificationTime.
+        (t, mRope) <- use_ GetFileContents file
+        log' Debug $ LogModificationTime file t
+
         bytes <- case mRope of
-          Just rope -> pure (Encoding.encodeUtf8 (Rope.toText rope))
-          Nothing   -> liftIO $ BS.readFile (fromNormalizedFilePath file)
+          Just sources -> pure (Encoding.encodeUtf8 (Rope.toText sources))
+          Nothing      -> liftIO $ BS.readFile (fromNormalizedFilePath file)
 
-        -- 2. Run Cabal’s parser for cabal.project
-        (pWarnings, pResult) <- liftIO $ Parse.parseCabalProjectFileContents (fromNormalizedFilePath file)
-
-        -- 3. Convert warnings
+        (pWarnings, pResult) <- liftIO $ Parse.parseCabalProjectFileContents (fromNormalizedFilePath file) bytes
         let warnDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
 
-        -- 4. Convert result or errors
         case pResult of
           Left (_specVer, pErrNE) -> do
             let errDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrNE

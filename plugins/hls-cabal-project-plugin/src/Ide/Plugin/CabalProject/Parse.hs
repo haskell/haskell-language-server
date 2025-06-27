@@ -6,7 +6,10 @@ module Ide.Plugin.CabalProject.Parse
   ) where
 
 import           Control.Monad                            (unless)
+import qualified Crypto.Hash.SHA1                         as H
 import qualified Data.ByteString                          as BS
+import qualified Data.ByteString.Base16                   as B16
+import qualified Data.ByteString.Char8                    as B
 import           Data.List.NonEmpty                       (NonEmpty (..))
 import qualified Data.List.NonEmpty                       as NE
 import qualified Data.Text                                as T
@@ -25,21 +28,30 @@ import           Distribution.Types.Version               (Version)
 import           Distribution.Verbosity                   (normal)
 import qualified Ide.Plugin.CabalProject.Diagnostics      as Diagnostics
 import           System.Directory                         (doesFileExist)
-import           System.FilePath                          (takeDirectory)
+import           System.Directory.Extra                   (XdgDirectory (..),
+                                                           getXdgDirectory)
+import           System.FilePath                          (takeBaseName,
+                                                           takeDirectory, (</>))
+-- import  System.Directory.Extra               as SD
+
+
+
 
 parseCabalProjectFileContents
   :: FilePath
+  -> BS.ByteString
   -> IO ([PWarning]
          , Either (Maybe Version, NonEmpty PError) ProjectConfigSkeleton)
-parseCabalProjectFileContents fp = do
-  bytes <- BS.readFile fp
+parseCabalProjectFileContents fp bytes = do
+  cacheDir <- getCabalProjectCacheDir fp
+--   bytes <- BS.readFile fp
   let toParse = ProjectConfigToParse bytes
-      rootDir = takeDirectory fp
+    --   rootDir = takeDirectory fp
       verb    = normal
   httpTransport <- configureTransport verb [fp] Nothing
 
   parseRes :: PR.ParseResult ProjectConfigSkeleton
-    <- parseProject rootDir fp httpTransport verb toParse
+    <- parseProject fp cacheDir httpTransport verb toParse
 
   pure (PR.runParseResult parseRes)
 
@@ -57,3 +69,14 @@ readCabalProjectFields file contents =
 
     (_warnings, Right fields) ->
       Right fields
+
+getCabalProjectCacheDir :: FilePath -> IO FilePath
+getCabalProjectCacheDir fp = do
+    getXdgDirectory XdgCache (cacheDir </> prefix ++ "-" ++ opts_hash)
+    where
+        prefix = takeBaseName $ takeDirectory fp
+        -- Create a unique folder per cabal.project file
+        opts_hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init [B.pack fp]
+
+cacheDir :: String
+cacheDir = "ghcide"

@@ -370,6 +370,8 @@ library hls-cabal-project-plugin
     , cabal-install
     , cabal-install-solver
     , haskell-language-server:hls-cabal-plugin
+    , base16-bytestring
+    , cryptohash-sha1
 
 
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
