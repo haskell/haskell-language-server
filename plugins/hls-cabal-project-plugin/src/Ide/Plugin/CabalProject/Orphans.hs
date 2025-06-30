@@ -15,12 +15,21 @@ import           GHC.Generics                                (Generic)
 import qualified Distribution.Client.ProjectConfig.Types     as PC
 import           Ide.Plugin.Cabal.Orphans                    ()
 
+
+orphans = undefined
 -- Project Config Orphans
 
-deriving instance NFData PCPath.ProjectConfigPath
 
-instance NFData PC.ProjectConfig where
-  rnf !_ = ()
+-- more nfdata instances i need:
+-- Distribution.Client.Types.SourceRepo.SourceRepositoryPackage []
+-- NFData (NubList PathTemplate)
+-- NFData (InstallDirs (Flag PathTemplate))
+-- NFData (NubList FilePath)
+
+-- deriving instance NFData PCPath.ProjectConfigPath
+
+-- instance NFData PC.ProjectConfig where
+--   rnf !_ = ()
 
 -- {-# OPTIONS_GHC -Wno-orphans #-}
 -- {-# LANGUAGE FlexibleInstances #-}
