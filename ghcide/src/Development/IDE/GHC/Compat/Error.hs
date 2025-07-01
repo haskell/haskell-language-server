@@ -104,7 +104,7 @@ _MismatchMessage _ report = pure report
 
 -- | Focus 'teq_mismatch_expected' from 'TypeEqMismatch'.
 _TypeEqMismatchExpected :: Traversal' MismatchMsg Type
-#if MIN_VERSION_ghc(9,12,0)
+#if MIN_VERSION_ghc(9,10,2)
 _TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ expected _ _ _) =
     (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
 #else
@@ -115,7 +115,7 @@ _TypeEqMismatchExpected _ mismatch = pure mismatch
 
 -- | Focus 'teq_mismatch_actual' from 'TypeEqMismatch'.
 _TypeEqMismatchActual :: Traversal' MismatchMsg Type
-#if MIN_VERSION_ghc(9,12,0)
+#if MIN_VERSION_ghc(9,10,2)
 _TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ actual _ _) =
     (\actual' -> mismatch { teq_mismatch_actual = actual' }) <$> focus actual
 #else
