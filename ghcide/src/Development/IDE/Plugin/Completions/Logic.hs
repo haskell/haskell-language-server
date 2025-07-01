@@ -49,6 +49,9 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Options
+import           GHC.Iface.Ext.Types                      (HieAST,
+                                                           NodeInfo (..))
+import           GHC.Iface.Ext.Utils                      (nodeInfo)
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            IdePlugins (..),

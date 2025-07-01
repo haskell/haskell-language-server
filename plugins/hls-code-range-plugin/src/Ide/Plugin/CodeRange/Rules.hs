@@ -39,18 +39,17 @@ import qualified Data.Vector                        as V
 import           Development.IDE
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
-import           Development.IDE.GHC.Compat         (HieAST (..),
-                                                     HieASTs (getAsts), RefMap)
 import           Development.IDE.GHC.Compat.Util
 import           GHC.Generics                       (Generic)
+import           GHC.Iface.Ext.Types                (HieAST (..), HieASTs (..))
+import           GHC.Iface.Ext.Utils                (RefMap)
 import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
                                                      PreProcessEnv (..),
                                                      isCustomNode,
                                                      preProcessAST)
-import           Language.LSP.Protocol.Types        (FoldingRangeKind (FoldingRangeKind_Comment, FoldingRangeKind_Imports, FoldingRangeKind_Region))
-
 import           Language.LSP.Protocol.Lens         (HasEnd (end),
                                                      HasStart (start))
+import           Language.LSP.Protocol.Types        (FoldingRangeKind (FoldingRangeKind_Comment, FoldingRangeKind_Imports, FoldingRangeKind_Region))
 import           Prelude                            hiding (log)
 
 data Log = LogShake Shake.Log

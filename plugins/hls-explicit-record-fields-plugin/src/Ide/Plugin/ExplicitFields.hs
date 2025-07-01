@@ -58,8 +58,7 @@ import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        HsExpr (HsApp, HsVar, XExpr),
                                                        HsFieldBind (hfbLHS),
                                                        HsRecFields (..),
-                                                       HsWrap (HsWrap),
-                                                       Identifier, LPat,
+                                                       HsWrap (HsWrap), LPat,
                                                        Located,
                                                        NamedThing (getName),
                                                        Outputable,
@@ -90,6 +89,7 @@ import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
                                                        insertNewPragma)
 import           GHC.Generics                         (Generic)
+import           GHC.Iface.Ext.Types                  (Identifier)
 import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))

@@ -45,8 +45,6 @@ module Development.IDE.GHC.Compat(
     readHieFile,
     setHieDir,
     dontWriteHieFiles,
-    module Compat.HieTypes,
-    module Compat.HieUtils,
     -- * Compat modules
     module Development.IDE.GHC.Compat.Core,
     module Development.IDE.GHC.Compat.Env,
@@ -112,14 +110,8 @@ module Development.IDE.GHC.Compat(
 #if MIN_VERSION_ghc(9,7,0)
     tcInitTidyEnv,
 #endif
-    ) where
 
-import           Compat.HieAst                           (enrichHie)
-import           Compat.HieBin
-import           Compat.HieTypes                         hiding
-                                                         (nodeAnnotations)
-import qualified Compat.HieTypes                         as GHC (nodeAnnotations)
-import           Compat.HieUtils
+    ) where
 import           Control.Applicative                     ((<|>))
 import qualified Data.ByteString                         as BS
 import           Data.Coerce                             (coerce)
@@ -146,12 +138,18 @@ import           GHC.Core.Tidy                           (tidyExpr)
 import           GHC.CoreToStg.Prep                      (corePrepPgm)
 import qualified GHC.CoreToStg.Prep                      as GHC
 import           GHC.Driver.Hooks                        (hscCompileCoreExprHook)
+import           GHC.Iface.Ext.Types                     hiding
+                                                         (nodeAnnotations)
+import qualified GHC.Iface.Ext.Types                     as GHC (nodeAnnotations)
+import           GHC.Iface.Ext.Utils
 
 import           GHC.ByteCode.Asm                        (bcoFreeNames)
 import           GHC.Core
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                      hiding (ExposePackage)
+import           GHC.Iface.Ext.Ast                       (enrichHie)
+import           GHC.Iface.Ext.Binary
 import           GHC.Iface.Make                          (mkIfaceExports)
 import           GHC.SysTools.Tasks                      (runPp, runUnlit)
 import           GHC.Types.Annotations                   (AnnTarget (ModuleTarget),

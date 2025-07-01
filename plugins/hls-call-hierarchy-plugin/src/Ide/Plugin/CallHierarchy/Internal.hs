@@ -24,6 +24,12 @@ import           Development.IDE
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
+import           GHC.Iface.Ext.Types            (ContextInfo (..),
+                                                 DeclType (..), HieAST (..),
+                                                 HieASTs (..), Identifier,
+                                                 IdentifierDetails (..),
+                                                 RecFieldContext (..), Span)
+import           GHC.Iface.Ext.Utils            (getNameBinding)
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
