@@ -46,8 +46,8 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import           Distribution.Parsec.Error
 import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
+import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.CabalProject.Diagnostics           as Diagnostics
-import           Ide.Plugin.CabalProject.Orphans               ()
 import           Ide.Plugin.CabalProject.Parse                 as Parse
 import           Ide.Plugin.CabalProject.Types                 as Types
 import           Ide.Plugin.Error
@@ -58,7 +58,6 @@ import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
 import           System.FilePath                               (takeFileName)
 import           Text.Regex.TDFA
--- import           Ide.Plugin.Cabal.Orphans                    ()
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -99,14 +98,12 @@ descriptor recorder plId =
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
                 whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
-                  -- parseAndPrint (fromNormalizedFilePath file)
                   restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
                 whenUriFile _uri $ \file-> do
                   log' Debug $ LogDocModified _uri
-                  -- parseAndPrint (fromNormalizedFilePath file)
                   restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
                     addFileOfInterest recorder ide file Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
@@ -131,28 +128,6 @@ descriptor recorder plId =
 
   whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
   whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
-
-  -- for development/debugging
-  parseAndPrint :: FilePath -> IO ()
-  parseAndPrint file = do
-    bytes <- BS.readFile file
-    (warnings, res) <- Parse.parseCabalProjectFileContents file bytes
-
-    mapM_ (putStrLn . ("[Cabal warning] " ++) . show) warnings
-
-    case res of
-      Left (_mbSpecVer, errs) ->
-        putStrLn $
-          "Cabal project parse failed:\n" ++ unlines (map show (NE.toList errs))
-
-      Right project ->
-        putStrLn $
-          "Cabal project parsed successfully:\n" ++ show project
-
-    bs <- BS.readFile file
-    case Parse.readCabalProjectFields (toNormalizedFilePath' file) bs of
-      Left diag  -> putStrLn $ "readCabalProjectFields error:\n"   ++ show diag
-      Right flds -> putStrLn $ "readCabalProjectFields success:\n" ++ show flds
 
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
 No special logic, just group up a bunch of functions you need for the base

@@ -340,7 +340,6 @@ library hls-cabal-project-plugin
     Ide.Plugin.CabalProject.Parse
     Ide.Plugin.CabalProject.Diagnostics
     Ide.Plugin.CabalProject.Types
-    Ide.Plugin.CabalProject.Orphans
 
   build-depends:
     , bytestring
