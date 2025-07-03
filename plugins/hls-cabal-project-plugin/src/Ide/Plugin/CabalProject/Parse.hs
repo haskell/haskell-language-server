@@ -32,10 +32,6 @@ import           System.Directory.Extra                   (XdgDirectory (..),
                                                            getXdgDirectory)
 import           System.FilePath                          (takeBaseName,
                                                            takeDirectory, (</>))
--- import  System.Directory.Extra               as SD
-
-
-
 
 parseCabalProjectFileContents
   :: FilePath

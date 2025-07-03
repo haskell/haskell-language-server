@@ -58,7 +58,7 @@ import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
 import           System.FilePath                               (takeFileName)
 import           Text.Regex.TDFA
-
+-- import           Ide.Plugin.Cabal.Orphans                    ()
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -203,14 +203,16 @@ cabalRules recorder plId = do
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mRope) <- use_ GetFileContents file
+        (t, mCabalSource) <- use_ GetFileContents file
         log' Debug $ LogModificationTime file t
 
-        bytes <- case mRope of
-          Just sources -> pure (Encoding.encodeUtf8 (Rope.toText sources))
-          Nothing      -> liftIO $ BS.readFile (fromNormalizedFilePath file)
+        contents <- case mCabalSource of
+          Just sources ->
+            pure $ Encoding.encodeUtf8 $ Rope.toText sources
+          Nothing      ->
+            liftIO $ BS.readFile $ fromNormalizedFilePath file
 
-        (pWarnings, pResult) <- liftIO $ Parse.parseCabalProjectFileContents (fromNormalizedFilePath file) bytes
+        (pWarnings, pResult) <- liftIO $ Parse.parseCabalProjectFileContents (fromNormalizedFilePath file) contents
         let warnDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
 
         case pResult of

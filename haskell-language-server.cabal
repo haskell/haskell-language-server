@@ -397,6 +397,8 @@ test-suite hls-cabal-project-plugin-tests
     , lsp-types
     , text
     , hls-plugin-api
+    , cabal-install
+
 
 -----------------------------
 -- class plugin
