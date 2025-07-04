@@ -117,7 +117,11 @@ simpleSubDirectoryTest =
 
 multiTests :: FilePath -> [TestTree]
 multiTests dir =
-  [simpleMultiTest dir, simpleMultiTest2 dir, simpleMultiTest3 dir, simpleMultiDefTest dir]
+  [ simpleMultiTest dir
+  , simpleMultiTest2 dir
+  , simpleMultiTest3 dir
+  , simpleMultiDefTest dir
+  ]
 
 multiTestName :: FilePath -> String -> String
 multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
