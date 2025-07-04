@@ -70,6 +70,7 @@ import qualified HIE.Bios                            as HieBios
 import           HIE.Bios.Environment                hiding (getCacheDir)
 import           HIE.Bios.Types                      hiding (Log)
 import qualified HIE.Bios.Types                      as HieBios
+import qualified HIE.Bios.Cradle.Utils               as HieBios
 import           Ide.Logger                          (Pretty (pretty),
                                                       Priority (Debug, Error, Info, Warning),
                                                       Recorder, WithPriority,
@@ -1144,7 +1145,10 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
       initMulti unitArgFiles =
         forM unitArgFiles $ \f -> do
           args <- liftIO $ expandResponse [f]
-          initOne args
+          -- The reponse files may contain arguments like "+RTS",
+          -- and hie-bios doesn't expand the response files of @-unit@ arguments.
+          -- Thus, we need to do the stripping here.
+          initOne $ HieBios.removeRTS $ HieBios.removeVerbosityOpts args
       initOne this_opts = do
         (dflags', targets') <- addCmdOpts this_opts dflags
         let dflags'' =
