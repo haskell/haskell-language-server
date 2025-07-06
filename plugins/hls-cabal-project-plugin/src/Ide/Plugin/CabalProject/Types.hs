@@ -10,8 +10,6 @@ import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton
 import qualified Distribution.Fields                      as Syntax
 import qualified Distribution.Parsec.Position             as Syntax
 import           GHC.Generics                             (Generic)
--- import Ide.Plugin.Cabal.Completion.Types
-
 
 type instance RuleResult ParseCabalProjectFile = ProjectConfigSkeleton
 

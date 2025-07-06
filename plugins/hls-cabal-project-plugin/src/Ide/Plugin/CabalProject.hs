@@ -317,8 +317,6 @@ completion recorder ide _ complParams = do
   mContents <- liftIO $ runAction "cabal-project-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
   case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
-      -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
-      -- In case it fails, we still will get some completion results instead of an error.
       mFields <- liftIO $ runAction "cabal-project-plugin.fields" ide $ useWithStale ParseCabalProjectFields $ toNormalizedFilePath path
       case mFields of
         Nothing ->

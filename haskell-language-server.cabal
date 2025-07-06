@@ -341,8 +341,8 @@ library hls-cabal-project-plugin
     Ide.Plugin.CabalProject.Diagnostics
     Ide.Plugin.CabalProject.Types
     Ide.Plugin.CabalProject.Completion.Completions
-    Ide.Plugin.CabalProject.Completion.Completer.Simple
-    Ide.Plugin.CabalProject.Completion.Completer.Types
+    -- Ide.Plugin.CabalProject.Completion.Completer.Simple
+    -- Ide.Plugin.CabalProject.Completion.Completer.Types
     Ide.Plugin.CabalProject.Completion.CabalProjectFields
     Ide.Plugin.CabalProject.Completion.Data
 
