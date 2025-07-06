@@ -10,6 +10,7 @@ import           Development.IDE.GHC.Compat.ExactPrint as GHC
 import           Development.IDE.GHC.Dump              (showAstDataHtml)
 import           GHC.Stack
 import           GHC.Utils.Outputable
+import           System.Directory.Extra                (createDirectoryIfMissing)
 import           System.Environment.Blank              (getEnvDefault)
 import           System.IO.Unsafe
 import           Text.Printf
@@ -37,6 +38,7 @@ traceAst lbl x
     doTrace = unsafePerformIO $ do
         u <- U.newUnique
         let htmlDumpFileName = printf "/tmp/hls/%s-%s-%d.html" (show timestamp) lbl (U.hashUnique u)
+        createDirectoryIfMissing True "/tmp/hls"
         writeFile htmlDumpFileName $ renderDump htmlDump
         return $ unlines
             [prettyCallStack callStack ++ ":"
