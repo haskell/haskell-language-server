@@ -3045,7 +3045,7 @@ addFunctionConstraintTests = let
 
     [ "module Testing where"
     , "foo "
-    , "    :: (" <> constraint <> ") =>"
+    , "    :: ("<> constraint <> ") =>"
     , "    -- This is a comment"
     , "    m ()"
     , "foo = pure ()"
@@ -3098,7 +3098,7 @@ addFunctionConstraintTests = let
     "preexisting constraint, with haddock comment in type signature"
     "Add `Applicative m` to the context of the type signature for `foo`"
     (incompleteConstraintSourceCodeWithCommentInTypeSignature "")
-    (incompleteConstraintSourceCodeWithCommentInTypeSignature "Applicative m")
+    (incompleteConstraintSourceCodeWithCommentInTypeSignature " Applicative m")
   , checkCodeAction
     "missing Monad constraint"
     "Add `Monad m` to the context of the type signature for `f`"
