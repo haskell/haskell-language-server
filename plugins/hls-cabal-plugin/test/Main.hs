@@ -272,15 +272,15 @@ codeLensTests = testGroup "Code Lens"
     ]
     where
         dependencyVersionLenses =
-            runCabalTestCaseSession "Code Lens Test" "hover" $ do
-                doc <- openDoc "hover-deps.cabal" "cabal"
+            runCabalTestCaseSession "Code Lens Test" "dependencies" $ do
+                doc <- openDoc "deps-versions.cabal" "cabal"
                 lenses <- getCodeLenses doc
-                liftIO $ map (preview $ L.command . _Just . L.title) lenses @?= [Just "4.19.2.0"]
+                liftIO $ map (preview $ L.command . _Just . L.title) lenses @?= [Just "4.19.2.0", Just "text (2.1.1)", Just "transformers (0.6.1.0)"]
                 closeDoc doc
         dependencyVersionInlayHints =
-            runCabalTestCaseSession "InlayHints tests" "hover" $ do
-                doc <- openDoc "hover-deps.cabal" "cabal"
+            runCabalTestCaseSession "InlayHints tests" "dependencies" $ do
+                doc <- openDoc "deps-versions.cabal" "cabal"
                 let range = Range (Position 0 0) (Position 1000 1000)
                 hints <- getInlayHints doc range
-                liftIO $ map (view L.label) hints @?= [InL " (4.19.2.0)"]
+                liftIO $ map (view L.label) hints @?= [InL " (4.19.2.0)",InL " (2.1.1)",InL " (0.6.1.0)"]
                 closeDoc doc
