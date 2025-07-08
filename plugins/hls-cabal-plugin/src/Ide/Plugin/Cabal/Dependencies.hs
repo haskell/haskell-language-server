@@ -4,7 +4,7 @@
 module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions, dependencyVersionLens) where
 
 import           Data.Array                        ((!))
-import           Data.ByteString                   (ByteString, singleton)
+import           Data.ByteString                   (ByteString)
 import           Data.List
 import qualified Data.Maybe                        as Maybe
 import qualified Data.Text                         as T

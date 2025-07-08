@@ -275,7 +275,7 @@ codeLensTests = testGroup "Code Lens"
             runCabalTestCaseSession "Code Lens Test" "hover" $ do
                 doc <- openDoc "hover-deps.cabal" "cabal"
                 lenses <- getCodeLenses doc
-                liftIO $ map (preview $ L.command . _Just . L.title) lenses @?= [Just "Refresh..."]
+                liftIO $ map (preview $ L.command . _Just . L.title) lenses @?= [Just "4.19.2.0"]
                 closeDoc doc
         dependencyVersionInlayHints =
             runCabalTestCaseSession "InlayHints tests" "hover" $ do
