@@ -34,6 +34,7 @@ module Development.IDE.Graph.Internal.Key
     ) where
 
 --import Control.Monad.IO.Class ()
+import           Control.Exception             (evaluate)
 import           Data.Coerce
 import           Data.Dynamic
 import qualified Data.HashMap.Strict           as Map
@@ -85,8 +86,15 @@ newKey k = unsafePerformIO $ do
 
 lookupKeyValue :: Key -> KeyValue
 lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
+  -- NOTE:
+  -- The reason for this evaluate is that the x, if not forced yet, is a thunk
+  -- that forces the atomicModifyIORef' in the creation of the new key. If it
+  -- isn't forced *before* reading the keyMap, the keyMap will only obtain the new
+  -- key (x) *after* the IntMap is already copied out of the keyMap reference,
+  -- i.e. when it is forced for the lookup in the IntMap.
+  k <- evaluate x
   GlobalKeyValueMap _ im _ <- readIORef keyMap
-  pure $! im IM.! x
+  pure $! im IM.! k
 
 {-# NOINLINE lookupKeyValue #-}
 
