@@ -574,8 +574,7 @@ pointCommand hf pos k =
       --
       -- 'coerce' here to avoid an additional function for maintaining
       -- backwards compatibility.
-      case smallestContainingSatisfying (sp $ coerce fs) isFunction ast of
-      -- case selectSmallestContaining (sp $ coerce fs) ast of
+      case selectSmallestContaining (sp $ coerce fs) ast of
         Nothing   -> Nothing
         Just ast' -> Just $ k ast'
  where
@@ -584,8 +583,6 @@ pointCommand hf pos k =
    line :: UInt
    line = _line pos
    cha = _character pos
-   isFunction ast = not $ null $ flip M.mapMaybeWithKey (getSourcedNodeInfo $ sourcedNodeInfo ast) $ \_nodeOrigin (NodeInfo _nodeAnnotations _nodeType _nodeIdentifiers) ->
-       Just True
 
 -- In ghc9, nodeInfo is monomorphic, so we need a case split here
 nodeInfoH :: HieKind a -> HieAST a -> NodeInfo a
