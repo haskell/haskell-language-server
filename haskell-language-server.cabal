@@ -284,7 +284,7 @@ library hls-cabal-plugin
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
-    , cabal-add
+    , cabal-add             ^>=0.1
     , process
     , aeson
     , Cabal
@@ -409,7 +409,7 @@ library hls-call-hierarchy-plugin
     , containers
     , extra
     , ghcide                == 2.11.0.0
-    , hiedb                 ^>= 0.6.0.2
+    , hiedb                 ^>= 0.7.0.0
     , hls-plugin-api        == 2.11.0.0
     , lens
     , lsp                    >=2.7
@@ -596,7 +596,7 @@ library hls-rename-plugin
     , containers
     , ghcide                == 2.11.0.0
     , hashable
-    , hiedb                 ^>= 0.6.0.2
+    , hiedb                 ^>= 0.7.0.0
     , hie-compat
     , hls-plugin-api        == 2.11.0.0
     , haskell-language-server:hls-refactor-plugin
@@ -1175,12 +1175,14 @@ library hls-change-type-signature-plugin
   build-depends:
     , ghcide           == 2.11.0.0
     , hls-plugin-api   == 2.11.0.0
+    , lens
     , lsp-types
     , regex-tdfa
     , syb
     , text
     , transformers
     , containers
+    , ghc
   default-extensions:
     DataKinds
     ExplicitNamespaces
@@ -1198,6 +1200,7 @@ test-suite hls-change-type-signature-plugin-tests
   build-depends:
     , filepath
     , haskell-language-server:hls-change-type-signature-plugin
+    , hls-plugin-api
     , hls-test-utils       == 2.11.0.0
     , regex-tdfa
     , text

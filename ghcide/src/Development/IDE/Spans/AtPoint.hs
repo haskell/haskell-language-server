@@ -113,7 +113,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
 getNamesAtPoint hf pos mapping =
-  concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
+  concat $ pointCommand hf posFile (rights . M.keys . getSourceNodeIds)
     where
       posFile = fromMaybe pos $ fromCurrentPosition mapping pos
 

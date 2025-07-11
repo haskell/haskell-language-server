@@ -3036,6 +3036,21 @@ addFunctionConstraintTests = let
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
+  -- See https://github.com/haskell/haskell-language-server/issues/4648
+  -- When haddock comment appears after the =>, code action was introducing the
+  -- new constraint in the comment
+  incompleteConstraintSourceCodeWithCommentInTypeSignature :: T.Text -> T.Text
+  incompleteConstraintSourceCodeWithCommentInTypeSignature constraint =
+    T.unlines
+
+    [ "module Testing where"
+    , "foo "
+    , "    :: ("<> constraint <> ") =>"
+    , "    -- This is a comment"
+    , "    m ()"
+    , "foo = pure ()"
+    ]
+
   missingMonadConstraint constraint = T.unlines
     [ "module Testing where"
     , "f :: " <> constraint <> "m ()"
@@ -3079,6 +3094,11 @@ addFunctionConstraintTests = let
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a")
     (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a, Eq b")
+  , checkCodeAction
+    "preexisting constraint, with haddock comment in type signature"
+    "Add `Applicative m` to the context of the type signature for `foo`"
+    (incompleteConstraintSourceCodeWithCommentInTypeSignature "")
+    (incompleteConstraintSourceCodeWithCommentInTypeSignature " Applicative m")
   , checkCodeAction
     "missing Monad constraint"
     "Add `Monad m` to the context of the type signature for `f`"

@@ -63,6 +63,7 @@ import           GHC                                    (addAnns, ann)
 
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC                                    (NoAnn (..))
+import           GHC                                    (EpAnnComments (..))
 #endif
 
 ------------------------------------------------------------------------------
@@ -170,7 +171,7 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
     constraint <- liftParseAST df constraintT
     constraint <- pure $ setEntryDP constraint (SameLine 1)
 #if MIN_VERSION_ghc(9,9,0)
-    let l'' = fmap (addParensToCtxt close_dp) l'
+    let l'' = moveCommentsToTheEnd $ fmap (addParensToCtxt close_dp) l'
 #else
     let l'' = (fmap.fmap) (addParensToCtxt close_dp) l'
 #endif
@@ -204,6 +205,26 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
     ast <- pure $ setEntryDP (makeDeltaAst ast) (SameLine 1)
 
     return $ reLocA $ L lTop $ HsQualTy noExtField context ast
+
+#if MIN_VERSION_ghc(9,9,0)
+-- | This moves comment annotation toward the end of the block
+-- This is useful when extending a block, so the comment correctly appears
+-- after.
+--
+-- See https://github.com/haskell/haskell-language-server/issues/4648 for
+-- discussion.
+--
+-- For example, the following element, @(Foo) => -- hello@, when introducing an
+-- additionnal constraint, `Bar`, instead of getting `@(Foo, Bar) => -- hello@,
+-- we get @(Foo, -- hello Bar) =>@
+--
+-- This is a bit painful that the pretty printer is not able to realize that it
+-- introduces the token `=>` inside the comment and instead does something with
+-- meaning, but that's another story.
+moveCommentsToTheEnd :: EpAnn ann -> EpAnn ann
+moveCommentsToTheEnd (EpAnn entry anns (EpaComments priors)) = EpAnn entry anns (EpaCommentsBalanced { priorComments = [], followingComments = priors})
+moveCommentsToTheEnd (EpAnn entry anns (EpaCommentsBalanced priors following)) = EpAnn entry anns (EpaCommentsBalanced { priorComments = [], followingComments = priors <> following})
+#endif
 
 liftParseAST
     :: forall ast l.  (ASTElement l ast, ExactPrint (LocatedAn l ast))
@@ -500,7 +521,7 @@ extendHiding symbol (L l idecls) mlies df = do
     Nothing -> do
 #if MIN_VERSION_ghc(9,11,0)
         let ann :: EpAnn (AnnList (EpToken "hiding", [EpToken ","]))
-            ann = noAnnSrcSpanDP0 
+            ann = noAnnSrcSpanDP0
 #elif MIN_VERSION_ghc(9,9,0)
         let ann = noAnnSrcSpanDP0
 #else

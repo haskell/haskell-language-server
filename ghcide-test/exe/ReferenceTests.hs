@@ -156,6 +156,28 @@ tests = testGroup "references"
                           , ("References.hs", 16, 0)
                           ]
           ]
+        -- Fields.hs does not depend on Main.hs
+        -- so we can only find references in Fields.hs
+        , testGroup "references to record fields"
+          [ referenceTest "references record fields in the same file"
+                          ("Fields.hs", 5, 4)
+                          YesIncludeDeclaration
+                          [ ("Fields.hs", 5, 4)
+                          , ("Fields.hs", 10, 14)
+                          , ("Fields.hs", 13, 14)
+                          ]
+
+          -- Main.hs depends on Fields.hs, so we can find references
+          -- from Main.hs to Fields.hs
+          , referenceTest "references record fields cross modules"
+                          ("Main.hs", 16, 24)
+                          YesIncludeDeclaration
+                          [ ("Fields.hs", 5, 4)
+                          , ("Fields.hs", 10, 14)
+                          , ("Fields.hs", 13, 14)
+                          , ("Main.hs", 16, 24)
+                          ]
+          ]
     ]
 
 -- | When we ask for all references to symbol "foo", should the declaration "foo
