@@ -27,11 +27,13 @@ import           Data.Functor                         ((<&>))
 import           Data.Functor.Identity                (Identity (Identity))
 import           Data.Kind                            (Type)
 import           Data.String                          (fromString)
+import qualified Data.Text                            as T
 import           Development.IDE                      (Action, IdeRule,
-                                                       NormalizedFilePath,
-                                                       Range,
+                                                       NormalizedUri, Range,
+                                                       Uri (Uri),
                                                        rangeToRealSrcSpan,
-                                                       realSrcSpanToRange)
+                                                       realSrcSpanToRange,
+                                                       toNormalizedUri)
 import qualified Development.IDE.Core.PositionMapping as P
 import qualified Development.IDE.Core.Shake           as IDE
 import           Development.IDE.GHC.Compat           (RealSrcSpan, srcSpanFile)
@@ -111,7 +113,7 @@ instance MapAge Range where
 
 instance MapAge RealSrcSpan where
   mapAgeFrom =
-    invMapAge (\fs -> rangeToRealSrcSpan (fromString $ unpackFS fs))
+    invMapAge (\fs -> rangeToRealSrcSpan (toNormalizedUri $ Uri $ T.pack $ fromString $ unpackFS fs))
               (srcSpanFile &&& realSrcSpanToRange)
       .  mapAgeFrom
 
@@ -144,17 +146,17 @@ unsafeCopyAge _ = coerce
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
 useWithStale :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe (TrackedStale v))
-useWithStale key file = do
-  x <- IDE.useWithStale key file
+    => k -> NormalizedUri -> Action (Maybe (TrackedStale v))
+useWithStale key uri = do
+  x <- IDE.useWithStale key uri
   pure $ x <&> \(v, pm) ->
     TrackedStale (coerce v) (coerce pm)
 
 -- | Request a Rule result, it not available return the last computed result which may be stale.
 --   Errors out if none available.
 useWithStale_ :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (TrackedStale v)
-useWithStale_ key file = do
-  (v, pm) <- IDE.useWithStale_ key file
+    => k -> NormalizedUri -> Action (TrackedStale v)
+useWithStale_ key uri = do
+  (v, pm) <- IDE.useWithStale_ key uri
   pure $ TrackedStale (coerce v) (coerce pm)
 

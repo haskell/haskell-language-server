@@ -25,7 +25,6 @@ import           Ide.PluginUtils
 import           Ide.Types                        hiding (Config)
 import           Language.Haskell.Stylish
 import           Language.LSP.Protocol.Types      as LSP
-import           System.Directory
 import           System.FilePath
 
 data Log
@@ -47,9 +46,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
-provider recorder ide _token typ contents fp _opts = do
-  (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary fp
-  let file = fromNormalizedFilePath fp
+provider recorder ide _token typ contents nuri _opts | Just nfp <- uriToNormalizedFilePath nuri = do
+  (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary nuri
+  let file = fromNormalizedFilePath nfp
   config <- liftIO $ loadConfigFrom file
   mergedConfig <- liftIO $ getMergedConfig dyn config
   let (range, selectedContents) = case typ of
@@ -74,6 +73,8 @@ provider recorder ide _token typ contents fp _opts = do
 
     showExtension Cpp   = "CPP"
     showExtension other = show other
+provider _ _ _ _ _ nuri _ = throwError $ PluginInternalError $ "Stylish Haskell can only be used to file Uris, but " <> getUri (fromNormalizedUri nuri) <> " was not a file Uri"
+
 
 -- | Recursively search in every directory of the given filepath for .stylish-haskell.yaml.
 -- If no such file has been found, return default config.

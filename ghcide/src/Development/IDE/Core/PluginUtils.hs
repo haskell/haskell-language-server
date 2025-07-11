@@ -52,7 +52,7 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location       (NormalizedFilePath)
+import           Development.IDE.Types.Location       (NormalizedUri)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
@@ -80,30 +80,30 @@ runActionMT herald ide act =
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
 
 -- |ExceptT version of `use` that throws a PluginRuleFailed upon failure
-useE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
+useE :: IdeRule k v => k -> NormalizedUri -> ExceptT PluginError Action v
 useE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useMT k
 
 -- |MaybeT version of `use`
-useMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
+useMT :: IdeRule k v => k -> NormalizedUri -> MaybeT Action v
 useMT k = MaybeT . Shake.use k
 
 -- |ExceptT version of `uses` that throws a PluginRuleFailed upon failure
-usesE :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> ExceptT PluginError Action (f v)
+usesE :: (Traversable f, IdeRule k v) => k -> f NormalizedUri -> ExceptT PluginError Action (f v)
 usesE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . usesMT k
 
 -- |MaybeT version of `uses`
-usesMT :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> MaybeT Action (f v)
+usesMT :: (Traversable f, IdeRule k v) => k -> f NormalizedUri -> MaybeT Action (f v)
 usesMT k xs = MaybeT $ sequence <$> Shake.uses k xs
 
 -- |ExceptT version of `useWithStale` that throws a PluginRuleFailed upon
 -- failure
 useWithStaleE :: IdeRule k v
-    => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
+    => k -> NormalizedUri -> ExceptT PluginError Action (v, PositionMapping)
 useWithStaleE key = maybeToExceptT (PluginRuleFailed (T.pack $ show key)) . useWithStaleMT key
 
 -- |MaybeT version of `useWithStale`
 useWithStaleMT :: IdeRule k v
-    => k -> NormalizedFilePath -> MaybeT Action (v, PositionMapping)
+    => k -> NormalizedUri -> MaybeT Action (v, PositionMapping)
 useWithStaleMT key file = MaybeT $ runIdentity <$> Shake.usesWithStale key (Identity file)
 
 -- ----------------------------------------------------------------------------
@@ -120,11 +120,11 @@ runIdeActionMT _herald s i = MaybeT $ liftIO $ runReaderT (Shake.runIdeActionT $
 
 -- |ExceptT version of `useWithStaleFast` that throws a PluginRuleFailed upon
 -- failure
-useWithStaleFastE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
+useWithStaleFastE :: IdeRule k v => k -> NormalizedUri -> ExceptT PluginError IdeAction (v, PositionMapping)
 useWithStaleFastE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useWithStaleFastMT k
 
 -- |MaybeT version of `useWithStaleFast`
-useWithStaleFastMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
+useWithStaleFastMT :: IdeRule k v => k -> NormalizedUri -> MaybeT IdeAction (v, PositionMapping)
 useWithStaleFastMT k = MaybeT . Shake.useWithStaleFast k
 
 -- ----------------------------------------------------------------------------
@@ -207,10 +207,10 @@ fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
 --
 -- Thus, even when the client sends us the context, we should compute the
 -- diagnostics on the server side.
-activeDiagnosticsInRangeMT :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> MaybeT m [FileDiagnostic]
-activeDiagnosticsInRangeMT ide nfp range = do
+activeDiagnosticsInRangeMT :: MonadIO m => Shake.ShakeExtras -> NormalizedUri -> LSP.Range -> MaybeT m [FileDiagnostic]
+activeDiagnosticsInRangeMT ide nuri range = do
     MaybeT $ liftIO $ atomically $ do
-        mDiags <- STM.lookup (LSP.normalizedFilePathToUri nfp) (Shake.publishedDiagnostics ide)
+        mDiags <- STM.lookup nuri (Shake.publishedDiagnostics ide)
         case mDiags of
             Nothing -> pure Nothing
             Just fileDiags -> do
@@ -220,8 +220,8 @@ activeDiagnosticsInRangeMT ide nfp range = do
             rangesOverlap range (fileDiag ^. fdLspDiagnosticL . LSP.range)
 
 -- | Just like 'activeDiagnosticsInRangeMT'. See the docs of 'activeDiagnosticsInRangeMT' for details.
-activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m (Maybe [FileDiagnostic])
-activeDiagnosticsInRange ide nfp range = runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
+activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedUri -> LSP.Range -> m (Maybe [FileDiagnostic])
+activeDiagnosticsInRange ide nuri range = runMaybeT (activeDiagnosticsInRangeMT ide nuri range)
 
 -- ----------------------------------------------------------------------------
 -- Formatting handlers
@@ -237,19 +237,18 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
                       <> mkPluginHandler SMethod_TextDocumentRangeFormatting (provider SMethod_TextDocumentRangeFormatting)
   where
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
-    provider m ide _pid params
-      | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
-        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nfp
-        case contentsMaybe of
-          Just contents -> do
-            let (typ, mtoken) = case m of
-                  SMethod_TextDocumentFormatting -> (FormatText, params ^. LSP.workDoneToken)
-                  SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. LSP.range), params ^. LSP.workDoneToken)
-                  _ -> Prelude.error "mkFormattingHandlers: impossible"
-            f ide mtoken typ (Rope.toText contents) nfp opts
-          Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
+    provider m ide _pid params = do
+      let nuri = LSP.toNormalizedUri uri
+      contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nuri
+      case contentsMaybe of
+        Just contents -> do
+          let (typ, mtoken) = case m of
+                SMethod_TextDocumentFormatting -> (FormatText, params ^. LSP.workDoneToken)
+                SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. LSP.range), params ^. LSP.workDoneToken)
+                _ -> Prelude.error "mkFormattingHandlers: impossible"
+          f ide mtoken typ (Rope.toText contents) nuri opts
+        Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
-      | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       where
         uri = params ^. LSP.textDocument . LSP.uri
         opts = params ^. LSP.options
