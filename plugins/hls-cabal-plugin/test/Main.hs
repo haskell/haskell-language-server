@@ -9,7 +9,7 @@ module Main (
 import           CabalAdd                        (cabalAddTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
-import           Control.Lens                    ((^.), preview, _Just, view)
+import           Control.Lens                    (_Just, preview, view, (^.))
 import           Control.Lens.Fold               ((^?))
 import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
