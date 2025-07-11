@@ -7,9 +7,7 @@
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
-import           Development.IDE.GHC.Compat        hiding
-                                                   (DuplicateRecordFields,
-                                                    FieldSelectors)
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
@@ -24,9 +22,8 @@ import           GHC.ByteCode.Types
 import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer             as SB
+import           GHC.Iface.Ext.Types
 import           GHC.Parser.Annotation
-import           GHC.Types.FieldLabel              (DuplicateRecordFields (DuplicateRecordFields, NoDuplicateRecordFields),
-                                                    FieldSelectors (FieldSelectors, NoFieldSelectors))
 import           GHC.Types.PkgQual
 import           GHC.Types.SrcLoc
 

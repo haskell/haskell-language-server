@@ -22,6 +22,10 @@ import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error        (realSrcSpanToCodePointRange)
+import           GHC.Iface.Ext.Types              (HieAST (..), Identifier,
+                                                   NodeInfo (..),
+                                                   NodeOrigin (..),
+                                                   SourcedNodeInfo (..))
 import           Ide.Plugin.SemanticTokens.Types  (HsSemanticTokenType (TModule),
                                                    RangeHsSemanticTokenTypes (..))
 import           Language.LSP.Protocol.Types      (Position (Position),

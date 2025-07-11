@@ -34,6 +34,9 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
+import           GHC.Iface.Ext.Types                          (HieASTs,
+                                                               TypeIndex)
+import           GHC.Iface.Ext.Utils                          (RefMap)
 
 import           Data.ByteString                              (ByteString)
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
