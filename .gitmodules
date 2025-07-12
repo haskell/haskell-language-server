@@ -8,3 +8,7 @@
 #     Commit git commit -m "Removed submodule <name>"
 #     Delete the now untracked submodule files
 #     rm -rf path_to_submodule
+
+[submodule "vendor/cabal"]
+	path = vendor/cabal
+	url = https://github.com/rm41339/cabal.git
