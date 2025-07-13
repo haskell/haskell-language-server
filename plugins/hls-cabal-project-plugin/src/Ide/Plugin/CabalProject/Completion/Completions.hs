@@ -33,13 +33,13 @@ contextToCompleter :: Context -> Completer
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =
   constantCompleter $
-           Map.keys cabalProjectKeywords ++ Map.keys packageFields
+           Map.keys cabalProjectKeywords ++ Map.keys stanzaKeywordMap
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
--- contextToCompleter (TopLevel, KeyWord kw) =
---   case Map.lookup kw (cabalVersionKeyword <> cabalKeywords) of
---     Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
---     Just l  -> l
+contextToCompleter (TopLevel, KeyWord kw) =
+  case Map.lookup kw cabalProjectKeywords of
+    Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
+    Just l  -> l
 -- if we are in a stanza and not in a keyword context,
 -- we can write any of the stanza's keywords or a stanza declaration
 contextToCompleter (Stanza s _, None) =
@@ -47,19 +47,18 @@ contextToCompleter (Stanza s _, None) =
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just l  -> constantCompleter $ Map.keys l
 -- if we are in a stanza's keyword's context we can complete possible values of that keyword
--- contextToCompleter (Stanza s _, KeyWord kw) =
---   case Map.lookup s stanzaKeywordMap of
---     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
---     Just m -> case Map.lookup kw m of
---       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
---       Just l  -> l
+contextToCompleter (Stanza s _, KeyWord kw) =
+  case Map.lookup s stanzaKeywordMap of
+    Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
+    Just m -> case Map.lookup kw m of
+      Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
+      Just l  -> l
 
 -- | Takes prefix info about the previously written text
 --  and a rope (representing a file), returns the corresponding context.
 --
 --  Can return Nothing if an error occurs.
 --
---  TODO: first line can only have cabal-version: keyword
 getContext :: (MonadIO m) => Recorder (WithPriority Log) -> CabalPrefixInfo -> [Syntax.Field Syntax.Position] -> m Context
 getContext recorder prefInfo fields = do
     let ctx = findCursorContext cursor (NE.singleton (0, TopLevel)) (completionPrefix prefInfo) fields

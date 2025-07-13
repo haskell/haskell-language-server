@@ -16,6 +16,13 @@ import           Ide.Plugin.Cabal.Completion.Completer.Types  (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
 -- import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 
+-- | Ad-hoc data type for modelling the available top-level stanzas.
+-- Not intended right now for anything else but to avoid string
+-- comparisons in 'stanzaKeywordMap' and 'libExecTestBenchCommons'.
+data TopLevelStanza
+  = Package
+  | ProgramOptions
+
 -- ----------------------------------------------------------------
 -- Completion Data
 -- ----------------------------------------------------------------
@@ -44,7 +51,7 @@ cabalProjectKeywords =
       ("optional-packages:", noopCompleter),
       ("extra-packages:", noopCompleter),
       -- projectConfigBuildOnlyFieldGrammar
-      ("verbose:", constantCompleter ["0", "1", "2", "3"]), -- not sure if this works/makes sense?
+      ("verbose:", constantCompleter ["0", "1", "2", "3"]),
       ("build-summary:", noopCompleter),
       ("build-log:", noopCompleter),
       ("remote-build-reporting:", noopCompleter),
@@ -52,11 +59,11 @@ cabalProjectKeywords =
       ("symlink-bindir:", noopCompleter),
       ("jobs:", noopCompleter),
       ("semaphore:", noopCompleter),
-      ("keep-going:", noopCompleter),
+      ("keep-going:", constantCompleter ["False", "True"]),
       ("offline:", noopCompleter),
-      ("haddock-keep-temp-files:", noopCompleter),
-      ("http-transport:", noopCompleter),
-      ("ignore-expiry:", noopCompleter),
+      ("haddock-keep-temp-files:", constantCompleter ["False", "True"]),
+      ("http-transport:", constantCompleter ["curl", "wget", "powershell", "plain-http"]),
+      ("ignore-expiry:", constantCompleter ["False", "True"]),
       ("remote-repo-cache:", noopCompleter),
       ("logs-dir:", noopCompleter),
       -- projectConfigSharedFieldGrammar
@@ -64,7 +71,7 @@ cabalProjectKeywords =
       ("project-dir:", noopCompleter),
       ("project-file:", noopCompleter),
       ("ignore-project:", noopCompleter),
-      ("compiler:", noopCompleter),
+      ("compiler:", constantCompleter ["ghc", "ghcjs", "jhc", "lhc", "uhc", "haskell-suite"]),
       ("with-compiler:", noopCompleter),
       ("with-hc-pkg:", noopCompleter),
       ("doc-index-file:", noopCompleter),
@@ -75,73 +82,76 @@ cabalProjectKeywords =
       ("constraints:", noopCompleter),
       ("preferences:", noopCompleter),
       ("cabal-lib-version:", noopCompleter),
-      ("solver:", noopCompleter),
+      ("solver:", constantCompleter ["modular"]),
       ("allow-older:", noopCompleter),
       ("allow-newer:", noopCompleter),
-      ("write-ghc-environment-files:", noopCompleter),
+      ("write-ghc-environment-files:", constantCompleter ["never", "always", "ghc8.4.4+"]),
       ("max-backjumps:", noopCompleter),
-      ("reorder-goals:", noopCompleter),
-      ("count-conflicts:", noopCompleter),
-      ("fine-grained-conflicts:", noopCompleter),
-      ("minimize-conflict-set:", noopCompleter),
-      ("strong-flags:", noopCompleter),
-      ("allow-boot-library-installs:", noopCompleter),
+      ("reorder-goals:", constantCompleter ["False", "True"]),
+      ("count-conflicts:", constantCompleter ["True", "False"]),
+      ("fine-grained-conflicts:", constantCompleter ["True", "False"]),
+      ("minimize-conflict-set:", constantCompleter ["False", "True"]),
+      ("strong-flags:", constantCompleter ["False", "True"]),
+      ("allow-boot-library-installs:", constantCompleter ["False", "True"]),
       ("reject-unconstrained-dependencies:", noopCompleter),
       ("per-component:", noopCompleter),
       ("independent-goals:", noopCompleter),
       ("prefer-oldest:", noopCompleter),
       ("extra-prog-path-shared-only:", noopCompleter),
-      ("multi-repl:", noopCompleter)
+      ("multi-repl:", noopCompleter),
+      -- extras
+      ("benchmarks:", constantCompleter ["False", "True"])
+
     ]
 
 packageFields :: Map KeyWordName Completer
 packageFields =
   Map.fromList
     [ -- packageConfigFieldGrammar
-      ("haddock-all:", noopCompleter),
+      ("haddock-all:", constantCompleter ["False", "True"]),
       ("extra-prog-path:", noopCompleter),
       ("flags:", noopCompleter),
-      ("library-vanilla:", noopCompleter),
-      ("shared:", noopCompleter),
-      ("static:", noopCompleter),
-      ("exectable-dynamic:", noopCompleter),
-      ("executable-static:", noopCompleter),
-      ("profiling:", noopCompleter),
-      ("library-profiling:", noopCompleter),
+      ("library-vanilla:", constantCompleter ["True", "False"]),
+      ("shared:", constantCompleter ["False", "True"]),
+      ("static:", constantCompleter ["False", "True"]),
+      ("exectable-dynamic:", constantCompleter ["False", "True"]),
+      ("executable-static:", constantCompleter ["False", "True"]),
+      ("profiling:", constantCompleter ["False", "True"]),
+      ("library-profiling:", constantCompleter ["False", "True"]),
       ("profiling-shared:", noopCompleter),
-      ("exectable-profiling:", noopCompleter),
-      ("profiling-detail:", noopCompleter),
-      ("library-profiling-detail:", noopCompleter),
+      ("exectable-profiling:", constantCompleter ["False", "True"]),
+      ("profiling-detail:", constantCompleter ["default", "none", "exported-functions", "toplevel-functions", "all-functions"]),
+      ("library-profiling-detail:", constantCompleter ["default", "none", "exported-functions", "toplevel-functions", "all-functions"]),
       ("configure-options:", noopCompleter),
-      ("optimization:", noopCompleter),
+      ("optimization:", constantCompleter ["0", "1", "2", "True", "False"]),
       ("program-prefix:", noopCompleter),
       ("program-suffix:", noopCompleter),
       ("extra-lib-dirs:", noopCompleter),
       ("extra-lib-dirs-static:", noopCompleter),
       ("extra-framework-dirs:", noopCompleter),
       ("extra-include-dirs:", noopCompleter),
-      ("library-for-ghci:", noopCompleter),
-      ("split-sections:", noopCompleter),
-      ("split-objs:", noopCompleter),
-      ("executable-stripping:", noopCompleter),
-      ("library-stripping:", noopCompleter),
-      ("tests:", noopCompleter),
-      ("benchmarks:", noopCompleter),
-      ("relocatable:", noopCompleter),
+      ("library-for-ghci:", constantCompleter ["True", "False"]),
+      ("split-sections:", constantCompleter ["False", "True"]),
+      ("split-objs:", constantCompleter ["False", "True"]),
+      ("executable-stripping:", constantCompleter ["True", "False"]),
+      ("library-stripping:", constantCompleter ["False", "True"]),
+      ("tests:", constantCompleter ["False", "True"]),
+      ("benchmarks:", constantCompleter ["False", "True"]),
+      ("relocatable:", constantCompleter ["False", "True"]),
       ("debug-info:", noopCompleter),
       ("build-info:", noopCompleter),
-      ("run-tests:", noopCompleter),
-      ("documentation:", noopCompleter),
-      ("haddock-hoogle:", noopCompleter),
-      ("haddock-html:", noopCompleter),
+      ("run-tests:", constantCompleter ["False", "True"]),
+      ("documentation:", constantCompleter ["False", "True"]),
+      ("haddock-hoogle:", constantCompleter ["False", "True"]),
+      ("haddock-html:", constantCompleter ["True", "False"]),
       ("haddock-html-location:", noopCompleter),
       ("haddock-foreign-libraries:", noopCompleter),
-      ("haddock-executables:", noopCompleter),
-      ("haddock-tests:", noopCompleter),
-      ("haddock-benchmarks:", noopCompleter),
-      ("haddock-internal:", noopCompleter),
+      ("haddock-executables:", constantCompleter ["False", "True"]),
+      ("haddock-tests:", constantCompleter ["False", "True"]),
+      ("haddock-benchmarks:", constantCompleter ["False", "True"]),
+      ("haddock-internal:", constantCompleter ["False", "True"]),
       ("haddock-css:", noopCompleter),
-      ("haddock-hyperlink-source:", noopCompleter),
+      ("haddock-hyperlink-source:", constantCompleter ["False", "True"]),
       ("haddock-quickjump:", noopCompleter),
       ("haddock-hscolour-css:", noopCompleter),
       ("haddock-contents-location:", noopCompleter),
@@ -160,7 +170,34 @@ packageFields =
       ("test-options:", noopCompleter),
       ("benchmark-options:", noopCompleter),
       -- packageConfigCoverageGrammar
-      ("coverage:", noopCompleter)
+      ("coverage:", constantCompleter ["False", "True"]),
+      -- other
+      ("ghc-options:", noopCompleter)
+    ]
+
+-- just for testing right now, to be filled in later
+programOptionsFields :: Map KeyWordName Completer
+programOptionsFields = Map.fromList
+    [ ("ghc-options:", noopCompleter)
+    ]
+
+sourceRepoFields :: Map KeyWordName Completer
+sourceRepoFields = Map.fromList
+    [ ("type:", constantCompleter
+          [ "darcs",
+            "git",
+            "svn",
+            "cvs",
+            "mercurial",
+            "hg",
+            "bazaar",
+            "bzr",
+            "arch",
+            "monotone"
+          ]), -- just used the one from cabal
+      ("location:", noopCompleter),
+      ("tag:", noopCompleter),
+      ("subdir:", noopCompleter)
     ]
 
 -- | Map, containing all stanzas in a cabal file as keys,
@@ -168,5 +205,7 @@ packageFields =
 stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
 stanzaKeywordMap =
   Map.fromList
-    [ ("package", packageFields)
+    [ ("package", packageFields),
+      ("program-options", programOptionsFields),
+      ("source-repository-package", sourceRepoFields)
     ]

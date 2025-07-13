@@ -93,6 +93,12 @@ instance Pretty Log where
       "Closed text document:" <+> pretty (getUri uri)
     LogFOI files ->
       "Set files of interest to:" <+> viaShow files
+    LogCompletionContext context position ->
+      "Determined completion context:"
+        <+> pretty context
+        <+> "for cursor position:"
+        <+> pretty position
+    LogCompletions logs -> pretty logs
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
