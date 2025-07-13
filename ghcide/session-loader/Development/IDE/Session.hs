@@ -67,10 +67,10 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.ResponseFile
 import qualified HIE.Bios                            as HieBios
+import qualified HIE.Bios.Cradle.Utils               as HieBios
 import           HIE.Bios.Environment                hiding (getCacheDir)
 import           HIE.Bios.Types                      hiding (Log)
 import qualified HIE.Bios.Types                      as HieBios
-import qualified HIE.Bios.Cradle.Utils               as HieBios
 import           Ide.Logger                          (Pretty (pretty),
                                                       Priority (Debug, Error, Info, Warning),
                                                       Recorder, WithPriority,
