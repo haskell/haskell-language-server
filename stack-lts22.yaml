@@ -22,7 +22,7 @@ extra-deps:
   - Diff-0.5
   - floskell-0.11.1
   - hiedb-0.7.0.0
-  - hie-bios-0.15.0
+  - hie-bios-0.16.0
   - implicit-hie-0.1.4.0
   - lsp-2.7.0.0
   - lsp-test-0.17.1.0
