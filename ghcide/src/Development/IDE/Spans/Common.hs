@@ -191,9 +191,9 @@ haddockToMarkdown (H.DocDefList things)
   = '\n' : (unlines $ map (\(term, defn) -> "+ **" ++ haddockToMarkdown term ++ "**: " ++ haddockToMarkdown defn) things)
 
 haddockToMarkdown (H.DocMathInline s)
-  = "$" ++ s ++ "$"
+  = "`" ++ s ++ "`"
 haddockToMarkdown (H.DocMathDisplay s)
-  = "\n$$\n" ++ s ++ "\n$$\n"
+  = "\n```latex\n" ++ s ++ "\n```\n"
 
 -- TODO: render tables
 haddockToMarkdown (H.DocTable _t)
