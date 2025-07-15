@@ -167,12 +167,12 @@ type instance RuleResult GetCodeRange = CodeRange
 
 codeRangeRule :: Recorder (WithPriority Log) -> Rules ()
 codeRangeRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetCodeRange file -> handleError recorder $ do
+    define (cmapWithPrio LogShake recorder) $ \GetCodeRange nuri -> handleError recorder $ do
         -- We need both 'HieAST' (for basic AST) and api annotations (for comments and some keywords).
         -- See https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
-        HAR{hieAst, refMap} <- lift $ use_ GetHieAst file
+        HAR{hieAst, refMap} <- lift $ use_ GetHieAst nuri
         ast <- maybeToExceptT LogNoAST . MaybeT . pure $
-            getAsts hieAst Map.!? (coerce . mkFastString . T.unpack . getUri . fromNormalizedUri) file
+            getAsts hieAst Map.!? (coerce . mkFastString . T.unpack . getUri . fromNormalizedUri) nuri
         let (codeRange, warnings) = runWriter (buildCodeRange ast refMap)
         traverse_ (logWith recorder Warning) warnings
 

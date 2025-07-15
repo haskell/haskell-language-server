@@ -152,7 +152,7 @@ mkRangeCommands recorder st plId textDocument =
      in perf "evalMkRangeCommands" $
             do
                 let TextDocumentIdentifier uri = textDocument
-                fp <- uriToFilePathE uri
+                let fp = T.unpack $ getUri uri
                 let nuri = toNormalizedUri uri
                     isLHS = isLiterate fp
                 dbg $ LogCodeLensFp fp
@@ -207,7 +207,6 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
-            fp <- uriToFilePathE _uri
             let nuri = toNormalizedUri _uri
             mdlText <- moduleText st _uri
 
@@ -230,7 +229,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
                 perf "edits" $
                     liftIO $
                         evalGhcEnv final_hscEnv $ do
-                            runTests recorder evalCfg fp tests
+                            runTests recorder evalCfg (T.unpack $ getUri _uri) tests
 
             let workspaceEditsMap = Map.singleton _uri (addFinalReturn mdlText edits)
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing

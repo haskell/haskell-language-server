@@ -108,7 +108,7 @@ rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics nuri -> do
       case LSP.uriToNormalizedFilePath nuri of
-        Nothing -> pure ([ideErrorText nuri $ "Uri is no a file Uri: " <> getUri (fromNormalizedUri nuri)], Nothing)
+        Nothing -> pure ([], Nothing)
         Just nfp -> do
           config <- getPluginConfigAction plId
           if plcGlobalOn config && plcDiagnosticsOn config then do

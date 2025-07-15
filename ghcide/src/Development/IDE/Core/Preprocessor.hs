@@ -16,6 +16,7 @@ import           Language.LSP.Protocol.Types       (uriToFilePath)
 import           Control.DeepSeq                   (NFData (rnf))
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe            (catch, throw)
+import           Control.Monad                     (when)
 import           Control.Monad.Except              (throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
@@ -38,11 +39,11 @@ import           System.IO.Extra
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
 preprocessor :: HscEnv -> Uri -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv, Util.Fingerprint)
-preprocessor env uri mbContents = case uriToFilePath uri of
-  Nothing -> do
-    let nuri = toNormalizedUri uri
-    throwError [ideErrorText nuri $ "Uri is not a file uri: " <> getUri uri]
-  Just filename -> do
+preprocessor env uri mbContents = do
+    -- NOTE: thisis pretty bad as it relies on the prepropcessors not actually reading from a file when it's not needed
+    when (isNothing (uriToFilePath uri) && isNothing mbContents) $ do
+        throwError [ideErrorText (toNormalizedUri uri) $ "Uri is not a file uri and contents are not available: " <> getUri uri]
+    let filename = T.unpack $ getUri uri
     -- Perform unlit
     (isOnDisk, contents) <-
         if isLiterate uri then do
