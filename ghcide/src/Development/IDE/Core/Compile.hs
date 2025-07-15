@@ -1125,43 +1125,44 @@ getModSummaryFromImports env uri _modTime mContents = do
     liftIO $ evaluate $ rnf textualImports
 
 
-    case uriToFilePath' uri of
-      Nothing -> do
-        let nuri = toNormalizedUri uri
-        throwError [ideErrorText nuri $ "Uri is not a file uri: " <> getUri uri]
-      Just file -> do
-        modLoc <- liftIO $ if mod == mAIN_NAME
-            -- specially in tests it's common to have lots of nameless modules
-            -- mkHomeModLocation will map them to the same hi/hie locations
-            then mkHomeModLocation dflags (pathToModuleName uri) file
-            else mkHomeModLocation dflags mod file
+    -- NOTE: thisis pretty bad as it relies on the prepropcessors not actually reading from a file when it's not needed
+    when (isNothing (uriToFilePath' uri) && isNothing mContents) $ do
+      throwError [ideErrorText (toNormalizedUri uri) $ "Uri is not a file uri: " <> getUri uri]
 
-        let modl = mkHomeModule (hscHomeUnit ppEnv) mod
-            sourceType = if "-boot" `isSuffixOf` takeExtension file then HsBootFile else HsSrcFile
-            msrModSummary =
-                ModSummary
-                    { ms_mod          = modl
-                    , ms_hie_date     = Nothing
-                    , ms_dyn_obj_date    = Nothing
-                    , ms_ghc_prim_import = ghc_prim_import
-                    , ms_hs_hash      = _src_hash
+    let file = T.unpack $ getUri uri
 
-                    , ms_hsc_src      = sourceType
-                    -- The contents are used by the GetModSummary rule
-                    , ms_hspp_buf     = Just contents
-                    , ms_hspp_file    = file
-                    , ms_hspp_opts    = dflags
-                    , ms_iface_date   = Nothing
-                    , ms_location     = withBootSuffix sourceType modLoc
-                    , ms_obj_date     = Nothing
-                    , ms_parsed_mod   = Nothing
-                    , ms_srcimps      = srcImports
-                    , ms_textual_imps = textualImports
-                    }
+    modLoc <- liftIO $ if mod == mAIN_NAME
+        -- specially in tests it's common to have lots of nameless modules
+        -- mkHomeModLocation will map them to the same hi/hie locations
+        then mkHomeModLocation dflags (pathToModuleName uri) file
+        else mkHomeModLocation dflags mod file
 
-        msrFingerprint <- liftIO $ computeFingerprint file opts msrModSummary
-        msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
-        return ModSummaryResult{..}
+    let modl = mkHomeModule (hscHomeUnit ppEnv) mod
+        sourceType = if "-boot" `isSuffixOf` takeExtension file then HsBootFile else HsSrcFile
+        msrModSummary =
+            ModSummary
+                { ms_mod          = modl
+                , ms_hie_date     = Nothing
+                , ms_dyn_obj_date    = Nothing
+                , ms_ghc_prim_import = ghc_prim_import
+                , ms_hs_hash      = _src_hash
+
+                , ms_hsc_src      = sourceType
+                -- The contents are used by the GetModSummary rule
+                , ms_hspp_buf     = Just contents
+                , ms_hspp_file    = file
+                , ms_hspp_opts    = dflags
+                , ms_iface_date   = Nothing
+                , ms_location     = withBootSuffix sourceType modLoc
+                , ms_obj_date     = Nothing
+                , ms_parsed_mod   = Nothing
+                , ms_srcimps      = srcImports
+                , ms_textual_imps = textualImports
+                }
+
+    msrFingerprint <- liftIO $ computeFingerprint file opts msrModSummary
+    msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
+    return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps, the preprocessed source and other non relevant fields

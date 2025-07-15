@@ -173,6 +173,7 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
+import System.Process.Extra (proc, readCreateProcess)
 
 data Log
   = LogShake Shake.Log
@@ -708,11 +709,31 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         return (fingerprint, res)
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession uri -> do
+      -- let mk k = case uriToNormalizedFilePath nuri of
+      --       -- FIXME: awful hack to get cradles to work
+      --       Nothing -> withSystemTempDirectory "tmp_cradle" $ \dir -> do
+      --         writeFile (dir </> "hie.yaml") "cradle:\n  direct:\n    arguments: []"
+      --         k dir
+      --       Just file -> k $ fromNormalizedFilePath file
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         -- loading is always returning a absolute path now
         (val,deps) <- case uriToNormalizedFilePath uri of
-          Just file -> liftIO $ loadSessionFun $ fromNormalizedFilePath file
-          Nothing -> pure (([], Nothing), [])
+          Just fp -> liftIO $ loadSessionFun (fromNormalizedFilePath fp)
+          Nothing -> do
+            hscEnv :: HscEnv <- do
+              ShakeExtras{ideNc} <- getShakeExtras
+
+              liftIO $ do
+                -- TODO: clean up
+                -- e.g. the hack to drop the line break but also other stuff
+                libdir <- init <$> readCreateProcess (proc "ghc" ["--print-libdir"]) ""
+                env <- runGhc {- get lib dir from somewhere -} (Just libdir) $
+                  getSessionDynFlags >>= setSessionDynFlags >> getSession
+                pure $ (hscSetFlags ((hsc_dflags env){useUnicode = True }) env) {hsc_NC = ideNc}
+
+            hscEnvEq <- liftIO $ newHscEnvEq hscEnv
+            pure (([], Just hscEnvEq), [])
+
 
 
         -- add the deps to the Shake graph
