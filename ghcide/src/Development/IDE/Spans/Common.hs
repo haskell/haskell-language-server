@@ -190,11 +190,10 @@ haddockToMarkdown (H.DocOrderedList things) =
 haddockToMarkdown (H.DocDefList things)
   = '\n' : (unlines $ map (\(term, defn) -> "+ **" ++ haddockToMarkdown term ++ "**: " ++ haddockToMarkdown defn) things)
 
--- we cannot render math by default
-haddockToMarkdown (H.DocMathInline _)
-  = "*cannot render inline math formula*"
-haddockToMarkdown (H.DocMathDisplay _)
-  = "\n\n*cannot render display math formula*\n\n"
+haddockToMarkdown (H.DocMathInline s)
+  = "`" ++ s ++ "`"
+haddockToMarkdown (H.DocMathDisplay s)
+  = "\n```latex\n" ++ s ++ "\n```\n"
 
 -- TODO: render tables
 haddockToMarkdown (H.DocTable _t)
