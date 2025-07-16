@@ -44,7 +44,7 @@ import           Development.IDE.GHC.Compat (Type)
 import           GHC.Driver.Errors.Types
 import           GHC.HsToCore.Errors.Types
 import           GHC.Tc.Errors.Types
-import           GHC.Tc.Types.Constraint (Hole(..), HoleSort)
+import           GHC.Tc.Types.Constraint    (Hole (..), HoleSort)
 import           GHC.Types.Error
 
 -- | Some 'TcRnMessage's are nested in other constructors for additional context.
