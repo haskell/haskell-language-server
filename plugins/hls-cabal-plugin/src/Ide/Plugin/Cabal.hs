@@ -48,7 +48,6 @@ import qualified Ide.Plugin.Cabal.OfInterest                   as OfInterest
 import           Ide.Plugin.Cabal.Orphans                      ()
 import           Ide.Plugin.Cabal.Outline
 import qualified Ide.Plugin.Cabal.Rules                        as Rules
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
@@ -59,14 +58,14 @@ import qualified Text.Fuzzy.Parallel                           as Fuzzy
 import           Text.Regex.TDFA
 
 data Log
-  = LogModificationTime NormalizedFilePath FileVersion
+  = LogModificationTime NormalizedUri FileVersion
   | LogRule Rules.Log
   | LogOfInterest OfInterest.Log
   | LogDocOpened Uri
   | LogDocModified Uri
   | LogDocSaved Uri
   | LogDocClosed Uri
-  | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
+  | LogFOI (HashMap NormalizedUri FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
   | LogCabalAdd CabalAdd.Log
@@ -76,8 +75,8 @@ instance Pretty Log where
   pretty = \case
     LogRule log' -> pretty log'
     LogOfInterest log' -> pretty log'
-    LogModificationTime nfp modTime ->
-      "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
+    LogModificationTime nuri modTime ->
+      "Modified:" <+> pretty (fromNormalizedUri nuri) <+> pretty (show modTime)
     LogDocOpened uri ->
       "Opened text document:" <+> pretty (getUri uri)
     LogDocModified uri ->
@@ -133,28 +132,28 @@ descriptor recorder plId =
         mconcat
           [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocOpened _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
-                    OfInterest.addFileOfInterest ofInterestRecorder ide file Modified{firstOpen = True}
+                  let nuri = toNormalizedUri _uri
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(opened)" $
+                    OfInterest.addFileOfInterest ofInterestRecorder ide nuri Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocModified _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
-                    OfInterest.addFileOfInterest ofInterestRecorder ide file Modified{firstOpen = False}
+                  let nuri = toNormalizedUri _uri
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(changed)" $
+                    OfInterest.addFileOfInterest ofInterestRecorder ide nuri Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
               \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
                   log' Debug $ LogDocSaved _uri
-                  restartCabalShakeSessionPhysical (shakeExtras ide) vfs file "(saved)" $
-                    OfInterest.addFileOfInterest ofInterestRecorder ide file OnDisk
+                  let nuri = toNormalizedUri _uri
+                  restartCabalShakeSessionPhysical (shakeExtras ide) vfs nuri "(saved)" $
+                    OfInterest.addFileOfInterest ofInterestRecorder ide nuri OnDisk
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
               \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                  let nuri = toNormalizedUri _uri
                   log' Debug $ LogDocClosed _uri
-                  restartCabalShakeSession (shakeExtras ide) vfs file "(closed)" $
-                    OfInterest.deleteFileOfInterest ofInterestRecorder ide file
+                  restartCabalShakeSession (shakeExtras ide) vfs nuri "(closed)" $
+                    OfInterest.deleteFileOfInterest ofInterestRecorder ide nuri
           ]
     , pluginConfigDescriptor =
         defaultConfigDescriptor
@@ -166,9 +165,6 @@ descriptor recorder plId =
   ruleRecorder = cmapWithPrio LogRule recorder
   ofInterestRecorder = cmapWithPrio LogOfInterest recorder
 
-  whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-  whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
-
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
 No special logic, just group up a bunch of functions you need for the base
 Notification Handlers.
@@ -178,18 +174,18 @@ needs to be re-parsed. That's what we do when we record the dirty key that our p
 rule depends on.
 Then we restart the shake session, so that changes to our virtual files are actually picked up.
 -}
-restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
-restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = do
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedUri -> String -> IO [Key] -> IO ()
+restartCabalShakeSession shakeExtras vfs uri actionMsg actionBetweenSession = do
+  restartShakeSession shakeExtras (VFSModified vfs) (T.unpack (getUri $ fromNormalizedUri uri) ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
-    return (toKey GetModificationTime file:keys)
+    return (toKey GetModificationTime uri:keys)
 
 -- | Just like 'restartCabalShakeSession', but records that the 'file' has been changed on disk.
 -- So, any action that can only work with on-disk modifications may depend on the 'GetPhysicalModificationTime'
 -- rule to get re-run if the file changes on disk.
-restartCabalShakeSessionPhysical :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
+restartCabalShakeSessionPhysical :: ShakeExtras -> VFS.VFS -> NormalizedUri -> String -> IO [Key] -> IO ()
 restartCabalShakeSessionPhysical shakeExtras vfs file actionMsg actionBetweenSession = do
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+  restartShakeSession shakeExtras (VFSModified vfs) (show (fromNormalizedUri file) ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
     return (toKey GetModificationTime file:toKey GetPhysicalModificationTime file:keys)
 
@@ -214,13 +210,14 @@ use some sort of fuzzy matching in the future, see issue #4357.
 -}
 fieldSuggestCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics = diags}) = do
-  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
+  let nuri = toNormalizedUri uri
+  mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents nuri
   case (,) <$> mContents <*> uriToFilePath' uri of
     Nothing -> pure $ InL []
     Just (fileContents, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields nuri
       case mFields of
         Nothing ->
           pure $ InL []
@@ -235,7 +232,7 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       fakeLspCursorPosition = Position lineNr (col + fromIntegral (T.length fieldName))
       lspPrefixInfo = Ghcide.getCompletionPrefixFromRope fakeLspCursorPosition fileContents
       cabalPrefixInfo = Completions.getCabalPrefixInfo fp lspPrefixInfo
-    completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields $
+    completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo uri cabalFields $
       CompleterTypes.Matcher $
         Fuzzy.levenshteinScored Fuzzy.defChunkSize
     let completionTexts = fmap (^. JL.label) completions
@@ -257,7 +254,7 @@ cabalAddDependencyCodeAction _ state plId (CodeActionParams _ _ (TextDocumentIde
               lift $
                 getVersionedTextDoc $
                   TextDocumentIdentifier (filePathToUri cabalFilePath)
-          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ filePathToUri' $ toNormalizedFilePath cabalFilePath
           case mbGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
@@ -287,7 +284,7 @@ cabalAddModuleCodeAction recorder state plId (CodeActionParams _ _ (TextDocument
                 lift $
                   getVersionedTextDoc $
                     TextDocumentIdentifier (filePathToUri cabalFilePath)
-            (gpd, _) <- runActionE "cabal.cabal-add" state $ useWithStaleE ParseCabalFile $ toNormalizedFilePath cabalFilePath
+            (gpd, _) <- runActionE "cabal.cabal-add" state $ useWithStaleE ParseCabalFile $ filePathToUri' $ toNormalizedFilePath cabalFilePath
             actions <-
               CabalAdd.collectModuleInsertionOptions
                 (cmapWithPrio LogCabalAdd recorder)
@@ -306,13 +303,13 @@ If the cursor is hovering on a dependency, add a documentation link to that depe
 -}
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
-  nfp <- getNormalizedFilePathE uri
-  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
+  let nuri = toNormalizedUri uri
+  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nuri
   case CabalFields.findTextWord cursor cabalFields of
     Nothing ->
       pure $ InR Null
     Just cursorText -> do
-      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
+      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nuri
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
       case filterVersion cursorText of
         Nothing -> pure $ InR Null
@@ -356,19 +353,20 @@ completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.M
 completion recorder ide _ complParams = do
   let TextDocumentIdentifier uri = complParams ^. JL.textDocument
       position = complParams ^. JL.position
+      nuri = toNormalizedUri uri
   mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
   case (,) <$> mContents <*> uriToFilePath' uri of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields nuri
       case mFields of
         Nothing ->
           pure . InR $ InR Null
         Just (fields, _) -> do
           let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
               cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
-              res = computeCompletionsAt recorder ide cabalPrefInfo path fields $
+              res = computeCompletionsAt recorder ide cabalPrefInfo uri fields $
                 CompleterTypes.Matcher $
                   Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
           liftIO $ fmap InL res
@@ -378,11 +376,12 @@ computeCompletionsAt
   :: Recorder (WithPriority Log)
   -> IdeState
   -> Types.CabalPrefixInfo
-  -> FilePath
+  -> Uri
   -> [Syntax.Field Syntax.Position]
   -> CompleterTypes.Matcher T.Text
   -> IO [CompletionItem]
-computeCompletionsAt recorder ide prefInfo fp fields matcher = do
+computeCompletionsAt recorder ide prefInfo uri fields matcher = do
+  let nuri = toNormalizedUri uri
   runMaybeT (context fields) >>= \case
     Nothing -> pure []
     Just ctx -> do
@@ -394,9 +393,9 @@ computeCompletionsAt recorder ide prefInfo fp fields matcher = do
                   -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
                   -- thus, a quick response gives us the desired result most of the time.
                   -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
-                  mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath fp
+                  mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile nuri
                   pure $ fmap fst mGPD
-              , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections $ toNormalizedFilePath fp
+              , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections nuri
               , cabalPrefixInfo = prefInfo
               , stanzaName =
                   case fst ctx of

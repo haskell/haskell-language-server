@@ -43,13 +43,14 @@ import           Language.LSP.Protocol.Message        (Method (Method_TextDocume
                                                        SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
 import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
-                                                       NormalizedFilePath, Null,
+                                                       NormalizedUri, Null,
                                                        Position (..),
                                                        Range (_start),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                       Uri, type (|?) (InL))
+                                                       Uri, toNormalizedUri,
+                                                       type (|?) (InL))
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -68,14 +69,14 @@ instance Pretty Log where
 foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
 foldingRangeHandler _ ide _ FoldingRangeParams{..} =
     do
-        filePath <- getNormalizedFilePathE uri
-        foldingRanges <- runActionE "FoldingRange" ide $ getFoldingRanges filePath
+        foldingRanges <- runActionE "FoldingRange" ide $ getFoldingRanges nuri
         pure . InL $ foldingRanges
   where
     uri :: Uri
+    nuri = toNormalizedUri uri
     TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
+getFoldingRanges :: NormalizedUri -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
     codeRange <- useE GetCodeRange file
     pure $ findFoldingRanges codeRange
@@ -83,8 +84,8 @@ getFoldingRanges file = do
 selectionRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentSelectionRange
 selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
    do
-        filePath <- getNormalizedFilePathE uri
-        mapExceptT liftIO $ getSelectionRanges ide filePath positions
+        let nuri = toNormalizedUri uri
+        mapExceptT liftIO $ getSelectionRanges ide nuri positions
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
@@ -93,9 +94,9 @@ selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
     positions = _positions
 
 
-getSelectionRanges :: IdeState -> NormalizedFilePath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
-getSelectionRanges ide file positions = do
-    (codeRange, positionMapping) <- runIdeActionE "SelectionRange" (shakeExtras ide) $ useWithStaleFastE GetCodeRange file
+getSelectionRanges :: IdeState -> NormalizedUri -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
+getSelectionRanges ide nuri positions = do
+    (codeRange, positionMapping) <- runIdeActionE "SelectionRange" (shakeExtras ide) $ useWithStaleFastE GetCodeRange nuri
     -- 'positionMapping' should be applied to the input before using them
     positions' <-
         traverse (fromCurrentPositionE positionMapping) positions

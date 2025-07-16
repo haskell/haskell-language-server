@@ -52,7 +52,7 @@ tests = do
          let uri = Uri "file://"
          uriToFilePath' uri @?= Just ""
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
-         let diag = Diagnostics.FileDiagnostic "" Diagnostics.ShowDiag Diagnostic
+         let diag = Diagnostics.FileDiagnostic (filePathToUri' "") Diagnostics.ShowDiag Diagnostic
                {  _codeDescription = Nothing
                 , _data_ = Nothing
                 , _range = Range

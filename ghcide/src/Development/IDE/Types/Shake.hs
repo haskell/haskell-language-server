@@ -20,6 +20,7 @@ import           Control.Exception
 import qualified Data.ByteString.Char8                as BS
 import           Data.Dynamic
 import           Data.Hashable
+import qualified Data.Text                            as Text
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
@@ -75,16 +76,16 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey :: Shake.ShakeValue k => k -> NormalizedUri -> Key
 toKey = (newKey.) . curry Q
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedUri)
 fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedUri)
 fromKeyType (Key k)
   | App tc a <- typeOf k
   , Just HRefl <- tc `eqTypeRep` (typeRep @Q)
@@ -93,13 +94,13 @@ fromKeyType (Key k)
   | otherwise = Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = newKey $ Q (k, emptyFilePath)
+toNoFileKey k = newKey $ Q (k, emptyPathUri)
 
-newtype Q k = Q (k, NormalizedFilePath)
+newtype Q k = Q (k, NormalizedUri)
     deriving newtype (Eq, Hashable, NFData)
 
 instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
+    show (Q (k, uri)) = show k ++ "; " ++ Text.unpack (getUri (fromNormalizedUri uri))
 
 -- | Invariant: the @v@ must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database

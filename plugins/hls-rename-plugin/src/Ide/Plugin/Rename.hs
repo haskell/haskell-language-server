@@ -71,8 +71,8 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
 
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
-    nfp <- getNormalizedFilePathE uri
-    namesUnderCursor <- getNamesAtPos state nfp pos
+    let nuri = toNormalizedUri uri
+    namesUnderCursor <- getNamesAtPos state nuri pos
     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
     -- and doesn't even allow you to create full rename request.
     -- This handler deliberately approximates "things that definitely can't be renamed"
@@ -85,16 +85,16 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
-    nfp <- getNormalizedFilePathE uri
-    directOldNames <- getNamesAtPos state nfp pos
-    directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
+    let nuri = toNormalizedUri uri
+    directOldNames <- getNamesAtPos state nuri pos
+    directRefs <- concat <$> mapM (refsAtName state nuri) directOldNames
 
     {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
         indirect references through punned names. To find the transitive closure, we do a pass of
         the direct references to find the references for any punned names.
         See the `IndirectPuns` test for an example. -}
     indirectOldNames <- concat . filter ((>1) . length) <$>
-        mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
+        mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
     let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
            where
              matchesDirect n = occNameFS (nameOccName n) `elem` directFS
@@ -104,11 +104,11 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
         -- There were no Names at given position (e.g. rename triggered within a comment or on a keyword)
         [] -> throwError $ PluginInvalidParams "No symbol to rename at given position"
         _  -> do
-            refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
+            refs <- HS.fromList . concat <$> mapM (refsAtName state nuri) oldNames
 
             -- Validate rename
             crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
-            unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
+            unless crossModuleEnabled $ failWhenImportOrExport state nuri refs oldNames
             when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
 
             -- Perform rename
@@ -123,7 +123,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
     IdeState ->
-    NormalizedFilePath ->
+    NormalizedUri ->
     HashSet Location ->
     [Name] ->
     ExceptT PluginError (HandlerM config) ()
@@ -150,9 +150,9 @@ getSrcEdit ::
     ExceptT PluginError (HandlerM config) WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift pluginGetClientCapabilities
-    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    let nuri = toNormalizedUri (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
-        (useE GetAnnotatedParsedSource nfp)
+        (useE GetAnnotatedParsedSource nuri)
     let ps = annAst
         src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
@@ -192,12 +192,12 @@ replaceRefs newName refs = everywhere $
 refsAtName ::
     MonadIO m =>
     IdeState ->
-    NormalizedFilePath ->
+    NormalizedUri ->
     Name ->
     ExceptT PluginError m [Location]
-refsAtName state nfp name = do
+refsAtName state nuri name = do
     ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
-    ast <- handleGetHieAst state nfp
+    ast <- handleGetHieAst state nuri
     dbRefs <- case nameModule_maybe name of
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
@@ -209,7 +209,7 @@ refsAtName state nfp name = do
                 (nameOccName name)
                 (Just $ moduleName mod)
                 (Just $ moduleUnit mod)
-                [fromNormalizedFilePath nfp]
+                [T.unpack $ getUri $ fromNormalizedUri nuri]
             )
     pure $ nameLocs name ast ++ dbRefs
 
@@ -221,7 +221,7 @@ nameLocs name (HAR _ _ rm _ _) =
 ---------------------------------------------------------------------------------------------------
 -- Util
 
-getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
+getNamesAtPos :: MonadIO m => IdeState -> NormalizedUri -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
     HAR{hieAst} <- handleGetHieAst state nfp
     pure $ getNamesAtPoint' hieAst pos
@@ -229,13 +229,13 @@ getNamesAtPos state nfp pos = do
 handleGetHieAst ::
     MonadIO m =>
     IdeState ->
-    NormalizedFilePath ->
+    NormalizedUri ->
     ExceptT PluginError m HieAstResult
-handleGetHieAst state nfp =
+handleGetHieAst state nuri =
     -- We explicitly do not want to allow a stale version here - we only want to rename if
     -- the module compiles, otherwise we can't guarantee that we'll rename everything,
     -- which is bad (see https://github.com/haskell/haskell-language-server/issues/3799)
-    fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst nfp
+    fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst nuri
 
 {- Note [Generated references]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -278,8 +278,8 @@ unsafeSrcSpanToLoc srcSpan =
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-locToFilePos :: Monad m => Location -> ExceptT PluginError m (NormalizedFilePath, Position)
-locToFilePos (Location uri (Range pos _)) = (,pos) <$> getNormalizedFilePathE uri
+locToFilePos :: Location -> (NormalizedUri, Position)
+locToFilePos (Location uri (Range pos _)) = (toNormalizedUri uri, pos)
 
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =

@@ -30,7 +30,7 @@ data CradleErrorDetails =
 renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
 renderCradleError cradleError cradle nfp =
   let noDetails =
-        ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines $ map T.pack userFriendlyMessage) Nothing
+        ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (filePathToUri' nfp) (T.unlines $ map T.pack userFriendlyMessage) Nothing
   in
   if HieBios.isCabalCradle cradle
      then noDetails & fdLspDiagnosticL %~ \diag -> diag{_data_ = Just $ Aeson.toJSON CradleErrorDetails{cabalProjectFiles=absDeps}}
