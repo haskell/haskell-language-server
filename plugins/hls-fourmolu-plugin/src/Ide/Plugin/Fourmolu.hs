@@ -74,10 +74,10 @@ properties =
             False
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
+provider recorder plId ideState token typ contents nuri fo = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
-            <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
+            <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession nuri)
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     fourmoluExePath <- fmap T.unpack $ liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #path plId properties
     if useCLI
@@ -86,7 +86,7 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                     runExceptT (cliHandler fourmoluExePath fileOpts)
         else do
             logWith recorder Debug $ LogCompiledInVersion (showVersion Fourmolu.version)
-            FourmoluConfig{..} <- loadConfig recorder fp'
+            FourmoluConfig{..} <- loadConfig recorder uri
             let config =
                     refineConfig ModuleSource Nothing Nothing Nothing $
                         defaultConfig
@@ -98,10 +98,10 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                             }
             ExceptT . liftIO $
                 bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
-                    <$> try @OrmoluException (ormolu config fp' contents)
+                    <$> try @OrmoluException (ormolu config (T.unpack $ getUri uri) contents)
   where
-    fp' = fromNormalizedFilePath fp
-    title = "Formatting " <> T.pack (takeFileName fp')
+    uri = fromNormalizedUri nuri
+    title = "Formatting " <> getUri uri
     lspPrinterOpts = mempty{poIndentation = Just $ fromIntegral $ fo ^. tabSize}
     region = case typ of
         FormatText ->
@@ -128,6 +128,10 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                     pure CLIVersionInfo
                         { noCabal = True
                         }
+        fp <- case uriToFilePath uri of
+          Just fp -> pure fp
+          Nothing ->
+            throwError $ PluginInternalError $ "Tried to run Fourmolu in CLI mode but " <> getUri uri <> " was not a file URI"
         (exitCode, out, err) <- -- run Fourmolu
             liftIO $ readCreateProcessWithExitCode
                 ( proc path $
@@ -137,7 +141,7 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                             [ ("--start-line=" <>) . show <$> regionStartLine region
                             , ("--end-line=" <>) . show <$> regionEndLine region
                             ]
-                ){cwd = Just $ takeDirectory fp'}
+                ){cwd = Just $ takeDirectory fp}
                 contents
         case exitCode of
             ExitSuccess -> do
@@ -149,10 +153,10 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
 
 loadConfig ::
     Recorder (WithPriority LogEvent) ->
-    FilePath ->
+    Uri ->
     ExceptT PluginError (HandlerM Ide.Types.Config) FourmoluConfig
 #if MIN_VERSION_fourmolu(0,16,0)
-loadConfig recorder fp = do
+loadConfig recorder uri | Just fp <- uriToFilePath uri = do
     liftIO (findConfigFile fp) >>= \case
         Left (ConfigNotFound searchDirs) -> do
             logWith recorder Info $ NoConfigPath searchDirs
@@ -170,8 +174,16 @@ loadConfig recorder fp = do
                     throwError $ PluginInternalError errorMessage
                 Right cfg -> do
                   pure cfg
+loadConfig _ uri = do
+  let errorMessage = "Uri is not a file: " <> getUri uri
+  lift $ pluginSendNotification SMethod_WindowShowMessage $
+      ShowMessageParams
+          { _type_ = MessageType_Error
+          , _message = errorMessage
+          }
+  throwError $ PluginInternalError errorMessage
 #else
-loadConfig recorder fp = do
+loadConfig recorder uri | Just fp <- uriToFilePath uri = do
     liftIO (loadConfigFile fp) >>= \case
         ConfigLoaded file opts -> do
             logWith recorder Info $ ConfigPath file
@@ -188,6 +200,14 @@ loadConfig recorder fp = do
             throwError $ PluginInternalError errorMessage
           where
             errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
+loadConfig _ uri = do
+  let errorMessage = "Uri is not a file: " <> getUri uri
+  lift $ pluginSendNotification SMethod_WindowShowMessage $
+      ShowMessageParams
+          { _type_ = MessageType_Error
+          , _message = errorMessage
+          }
+  throwError $ PluginInternalError errorMessage
 #endif
 
 data LogEvent

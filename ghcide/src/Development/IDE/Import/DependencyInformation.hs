@@ -81,7 +81,7 @@ type FilePathIdSet = IntSet
 
 data PathIdMap = PathIdMap
   { idToPathMap :: !(FilePathIdMap ArtifactsLocation)
-  , pathToIdMap :: !(HashMap NormalizedFilePath FilePathId)
+  , pathToIdMap :: !(HashMap NormalizedUri FilePathId)
   , nextFreshId :: !Int
   }
   deriving (Show, Generic)
@@ -93,7 +93,7 @@ emptyPathIdMap = PathIdMap IntMap.empty HMS.empty 0
 
 getPathId :: ArtifactsLocation -> PathIdMap -> (FilePathId, PathIdMap)
 getPathId path m@PathIdMap{..} =
-    case HMS.lookup (artifactFilePath path) pathToIdMap of
+    case HMS.lookup (artifactUri path) pathToIdMap of
         Nothing ->
             let !newId = FilePathId nextFreshId
             in (newId, insertPathId newId )
@@ -103,20 +103,20 @@ getPathId path m@PathIdMap{..} =
     insertPathId fileId =
         PathIdMap
             (IntMap.insert (getFilePathId fileId) path idToPathMap)
-            (HMS.insert (artifactFilePath path) fileId pathToIdMap)
+            (HMS.insert (artifactUri path) fileId pathToIdMap)
             (succ nextFreshId)
 
 insertImport :: FilePathId -> Either ModuleParseError ModuleImports -> RawDependencyInformation -> RawDependencyInformation
 insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.insert k v (rawImports rawDepInfo) }
 
-pathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
+pathToId :: PathIdMap -> NormalizedUri -> Maybe FilePathId
 pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.!? path
 
-lookupPathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
+lookupPathToId :: PathIdMap -> NormalizedUri -> Maybe FilePathId
 lookupPathToId PathIdMap{pathToIdMap} path = HMS.lookup path pathToIdMap
 
-idToPath :: PathIdMap -> FilePathId -> NormalizedFilePath
-idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap filePathId
+idToPath :: PathIdMap -> FilePathId -> NormalizedUri
+idToPath pathIdMap filePathId = artifactUri $ idToModLocation pathIdMap filePathId
 
 idToModLocation :: PathIdMap -> FilePathId -> ArtifactsLocation
 idToModLocation PathIdMap{idToPathMap} (FilePathId i) = idToPathMap IntMap.! i
@@ -162,7 +162,7 @@ data DependencyInformation =
     -- ^ Map from FilePathId to the fingerprint of the immediate reverse dependencies of the module.
     } deriving (Show, Generic)
 
-lookupFingerprint :: NormalizedFilePath -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
+lookupFingerprint :: NormalizedUri -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
 lookupFingerprint fileId DependencyInformation {..} depFingerprintMap =
   do
     FilePathId cur_id <- lookupPathToId depPathIdMap fileId
@@ -182,7 +182,7 @@ instance NFData a => NFData (ShowableModuleEnv a) where
 
 instance Show ShowableModule where show = moduleNameString . moduleName . showableModule
 
-reachableModules :: DependencyInformation -> [NormalizedFilePath]
+reachableModules :: DependencyInformation -> [NormalizedUri]
 reachableModules DependencyInformation{..} =
     map (idToPath depPathIdMap . FilePathId) $ IntMap.keys depErrorNodes <> IntMap.keys depModuleDeps
 
@@ -341,9 +341,9 @@ partitionSCC (AcyclicSCC x:rest) = first (x:)   $ partitionSCC rest
 partitionSCC []                  = ([], [])
 
 -- | Transitive reverse dependencies of a file
-transitiveReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
-transitiveReverseDependencies file DependencyInformation{..} = do
-    FilePathId cur_id <- lookupPathToId depPathIdMap file
+transitiveReverseDependencies :: NormalizedUri -> DependencyInformation -> Maybe [NormalizedUri]
+transitiveReverseDependencies uri DependencyInformation{..} = do
+    FilePathId cur_id <- lookupPathToId depPathIdMap uri
     return $ map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
   where
     go :: Int -> IntSet -> IntSet
@@ -354,15 +354,15 @@ transitiveReverseDependencies file DependencyInformation{..} = do
       in IntSet.foldr go res new
 
 -- | Immediate reverse dependencies of a file
-immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
-immediateReverseDependencies file DependencyInformation{..} = do
-  FilePathId cur_id <- lookupPathToId depPathIdMap file
+immediateReverseDependencies :: NormalizedUri -> DependencyInformation -> Maybe [NormalizedUri]
+immediateReverseDependencies uri DependencyInformation{..} = do
+  FilePathId cur_id <- lookupPathToId depPathIdMap uri
   return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
 -- | returns all transitive dependencies in topological order.
-transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
-transitiveDeps DependencyInformation{..} file = do
-  !fileId <- pathToId depPathIdMap file
+transitiveDeps :: DependencyInformation -> NormalizedUri -> Maybe TransitiveDependencies
+transitiveDeps DependencyInformation{..} uri = do
+  !fileId <- pathToId depPathIdMap uri
   reachableVs <-
       -- Delete the starting node
       IntSet.delete (getFilePathId fileId) .
@@ -385,12 +385,12 @@ transitiveDeps DependencyInformation{..} file = do
 
     vs = topSort g
 
-lookupModuleFile :: Module -> DependencyInformation -> Maybe NormalizedFilePath
+lookupModuleFile :: Module -> DependencyInformation -> Maybe NormalizedUri
 lookupModuleFile mod DependencyInformation{..}
   = idToPath depPathIdMap <$> lookupModuleEnv (showableModuleEnv depModuleFiles) mod
 
 newtype TransitiveDependencies = TransitiveDependencies
-  { transitiveModuleDeps :: [NormalizedFilePath]
+  { transitiveModuleDeps :: [NormalizedUri]
   -- ^ Transitive module dependencies in topological order.
   -- The module itself is not included.
   } deriving (Eq, Show, Generic)
