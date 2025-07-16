@@ -868,17 +868,22 @@ library hls-signature-help-plugin
     , text
 
 
--- test-suite hls-signature-help-plugin-tests
---   import:           defaults, pedantic, test-defaults, warnings
---   if !flag(signatureHelp)
---     buildable: False
---   type:             exitcode-stdio-1.0
---   hs-source-dirs:   plugins/hls-signature-help-plugin/test
---   main-is:          Main.hs
---   build-depends:
---     , haskell-language-server:hls-signature-help-plugin
---     , hls-test-utils             == 2.11.0.0
---     , hls-plugin-api             == 2.11.0.0
+test-suite hls-signature-help-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(signatureHelp)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-signature-help-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , ghcide
+    , haskell-language-server:hls-signature-help-plugin
+    , hls-test-utils             == 2.11.0.0
+    , lens
+    , lsp-types
+    , text
+  default-extensions:
+    OverloadedStrings
 
 -----------------------------
 -- module name plugin
