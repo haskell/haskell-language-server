@@ -149,6 +149,9 @@
                 "variableToken": "variable"
             },
             "globalOn": false
+        },
+        "signatureHelp": {
+            "globalOn": true
         }
     },
     "sessionLoading": "singleComponent"

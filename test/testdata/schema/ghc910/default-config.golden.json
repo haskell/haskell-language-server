@@ -150,6 +150,9 @@
             },
             "globalOn": false
         },
+        "signatureHelp": {
+            "globalOn": true
+        },
         "stan": {
             "globalOn": false
         }
