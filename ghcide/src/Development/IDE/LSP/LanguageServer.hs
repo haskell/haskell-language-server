@@ -34,6 +34,7 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Exception                     (BlockedIndefinitelyOnMVar (..))
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
@@ -94,14 +95,14 @@ runLanguageServer
     -> (MVar ()
         -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
-               (LanguageContextEnv config, a) -> m config <~> IO))
+               (LanguageContextEnv config, a) -> m config <~> IO, [IO ()]))
     -> IO ()
 runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
 
-    (doInitialize, staticHandlers, interpretHandler) <- setup clientMsgVar
+    (doInitialize, staticHandlers, interpretHandler, onExit) <- setup clientMsgVar
 
     let serverDefinition = LSP.ServerDefinition
             { LSP.parseConfig = parseConfig
@@ -118,13 +119,14 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
     let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
         lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
-    void $ untilMVar clientMsgVar $
-          void $ LSP.runServerWithHandles
+    untilMVar clientMsgVar $
+          LSP.runServerWithHandles
             lspCologAction
             lspCologAction
             inH
             outH
             serverDefinition
+          `finally` sequence_ onExit
 
 setupLSP ::
      forall config err.
@@ -136,7 +138,8 @@ setupLSP ::
   -> MVar ()
   -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
-         (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
+         (LanguageContextEnv config, IdeState) -> ServerM config <~> IO,
+         [IO ()])
 setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar = do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
@@ -184,7 +187,9 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
-  pure (doInitialize, asyncHandlers, interpretHandler)
+  let finalHandlers = [stopReactorLoop, exit]
+
+  pure (doInitialize, asyncHandlers, interpretHandler, finalHandlers)
 
 
 handleInit
@@ -265,11 +270,13 @@ runWithWorkerThreads recorder dbLoc f = evalContT $ do
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
--- | Runs the action until it ends or until the given MVar is put.
+-- | Runs the action until it ends or until the given MVar is put or the thread to fill the mvar is dropped, in which case the MVar will never be filled.
+--   This happens when the thread that handles the shutdown notification dies. Ideally, this should not rely on the RTS detecting the blocked MVar
+--   and instead *also* run the shutdown inf a finally block enclosing the handlers. In which case the BlockedIndefinitelyOnMVar Exception also wouldn't
+--   be thrown.
 --   Rethrows any exceptions.
-untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
-untilMVar mvar io = void $
-    waitAnyCancel =<< traverse async [ io , readMVar mvar ]
+untilMVar :: MonadUnliftIO m => MVar () -> m a -> m ()
+untilMVar mvar io = race_ (readMVar mvar) io
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \TNotificationMessage{_params=CancelParams{_id}} ->
