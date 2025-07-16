@@ -12,7 +12,7 @@ module Development.IDE.Main
 ) where
 
 import           Control.Concurrent.Extra                 (withNumCapabilities)
-import           Control.Concurrent.MVar                  (newEmptyMVar,
+import           Control.Concurrent.MVar                  (MVar, newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Monad.Extra                      (concatMapM, unless,
@@ -318,9 +318,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             ioT <- offsetTime
             logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
-            ideStateVar <- newEmptyMVar
-            let getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
-                getIdeState env rootPath withHieDb threadQueue = do
+            let getIdeState :: MVar IdeState -> LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
+                getIdeState ideStateVar env rootPath withHieDb threadQueue = do
                   t <- ioT
                   logWith recorder Info $ LogLspStartDuration t
                   sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions rootPath (tLoaderQueue threadQueue)
@@ -353,9 +352,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   putMVar ideStateVar ide
                   pure ide
 
-            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+            let setup ideStateVar = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsGetHieDbLoc (pluginHandlers plugins) (getIdeState ideStateVar)
                 -- See Note [Client configuration in Rules]
-                onConfigChange cfg = do
+                onConfigChange ideStateVar cfg = do
                   -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
                   let cfgObj = J.toJSON cfg
                   mide <- liftIO $ tryReadMVar ideStateVar
@@ -368,7 +367,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                             modifyClientSettings ide (const $ Just cfgObj)
                             return [toNoFileKey Rules.GetClientSettings]
 
-            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
+            do
+                ideStateVar <- newEmptyMVar
+                runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig (onConfigChange ideStateVar) (setup ideStateVar)
             dumpSTMStats
         Check argFiles -> do
           let dir = argsProjectRoot
