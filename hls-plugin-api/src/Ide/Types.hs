@@ -423,6 +423,7 @@ pluginSupportsFileType :: (L.HasTextDocument m doc, L.HasUri doc Uri) => m -> Pl
 pluginSupportsFileType msgParams pluginDesc =
   case mfp of
     Just fp | T.pack (takeExtension fp) `elem` pluginFileType pluginDesc -> HandlesRequest
+    Nothing -> HandlesRequest -- NOTE: if there's no file path, we have to at least try the plugin on the respective buffer
     _ -> DoesNotHandleRequest $ DoesNotSupportFileType (maybe "(unable to determine file type)" (T.pack . takeExtension) mfp)
     where
       mfp = uriToFilePath uri
@@ -1193,7 +1194,7 @@ type FormattingHandler a
   -> Maybe ProgressToken
   -> FormattingType
   -> T.Text
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> FormattingOptions
   -> ExceptT PluginError (HandlerM Config) ([TextEdit] |? Null)
 
