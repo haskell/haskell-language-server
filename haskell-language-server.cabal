@@ -863,16 +863,9 @@ library hls-signature-help-plugin
     , containers
     , ghc
     , ghcide                == 2.11.0.0
-    , hashable
     , hls-plugin-api        == 2.11.0.0
-    , haskell-language-server:hls-refactor-plugin
-    , lens
     , lsp-types
-    , mtl
     , text
-    , transformers
-    , unordered-containers
-    , regex-tdfa
 
 
 -- test-suite hls-signature-help-plugin-tests
