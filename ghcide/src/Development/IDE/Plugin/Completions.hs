@@ -163,9 +163,9 @@ getCompletionsLSP ide plId
                   ,_context=completionContext} = ExceptT $ do
     contentsMaybe <-
       liftIO $ runAction "Completion" ide $ getUriContents $ toNormalizedUri uri
-    fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
-      (Just cnts, Just path) -> do
-        let nuri = filePathToUri' $ toNormalizedFilePath' path
+    fmap Right $ case contentsMaybe of
+      Just cnts -> do
+        let nuri = toNormalizedUri uri
         (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions nuri
@@ -209,7 +209,7 @@ getCompletionsLSP ide plId
                 let allCompletions = getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
                 pure $ InL (orderedCompletions allCompletions)
           _ -> return (InL [])
-      _ -> return (InL [])
+      Nothing -> return (InL [])
 
 getCompletionsConfig :: PluginId -> Action CompletionsConfig
 getCompletionsConfig pId =
