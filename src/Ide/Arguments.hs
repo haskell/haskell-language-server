@@ -16,7 +16,9 @@ module Ide.Arguments
 
 import           Data.Version
 import           Development.IDE               (IdeState)
-import           Development.IDE.Main          (Command (..), commandP)
+import           Development.IDE.Main          (Command (..),
+                                                CommunicationKind (..),
+                                                commandP)
 import           GitHash                       (giHash, tGitInfoCwdTry)
 import           Ide.Logger                    (Priority (..))
 import           Ide.Types                     (IdePlugins)
@@ -187,7 +189,7 @@ arguments plugins = GhcideArguments
       <*> switch (long "project-ghc-version"
                   <> help "Work out the project GHC version and print it")
     where
-        lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP server")
+        lspCommand = LSP StdIO <$ flag' True (long "lsp" <> help "Start talking to an LSP server")
         checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
 
 -- ---------------------------------------------------------------------
