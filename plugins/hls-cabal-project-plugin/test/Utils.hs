@@ -4,15 +4,17 @@
 
 module Utils where
 
-import           Control.Monad                 (guard)
-import           Data.List                     (sort)
-import           Data.Proxy                    (Proxy (Proxy))
-import qualified Data.Text                     as T
-import           Ide.Plugin.CabalProject       (descriptor)
+import           Control.Monad                     (guard)
+import           Data.List                         (sort)
+import           Data.Proxy                        (Proxy (Proxy))
+import qualified Data.Text                         as T
+import           Ide.Plugin.Cabal.Completion.Types
+import           Ide.Plugin.CabalProject           (descriptor)
 import qualified Ide.Plugin.CabalProject
 import           Ide.Plugin.CabalProject.Types
 import           System.FilePath
 import           Test.Hls
+
 
 
 cabalProjectPlugin :: PluginTestDescriptor Ide.Plugin.CabalProject.Log
@@ -46,3 +48,19 @@ cabalProjectCaptureKick = captureKickDiagnostics cabalProjectKickStart cabalProj
 -- | list comparison where the order in the list is irrelevant
 (@?==) :: (HasCallStack, Ord a, Show a) => [a] -> [a] -> Assertion
 (@?==) l1 l2 = sort l1 @?= sort l2
+
+-- potentially add these as imports?
+simpleCabalPrefixInfoFromFp :: T.Text -> FilePath -> CabalPrefixInfo
+simpleCabalPrefixInfoFromFp prefix fp =
+    CabalPrefixInfo
+        { completionPrefix = prefix
+        , isStringNotation = Nothing
+        , completionCursorPosition = Position 0 0
+        , completionRange = Range (Position 0 0) (Position 0 0)
+        , completionWorkingDir = fp
+        , completionFileName = "test"
+        }
+
+filePathComplTestDir :: FilePath
+filePathComplTestDir = addTrailingPathSeparator $ testDataDir </> "filepath-completions"
+

@@ -2,17 +2,19 @@
 
 module Ide.Plugin.CabalProject.Completion.Data where
 
-import           Data.Map                                     (Map)
-import qualified Data.Map                                     as Map
-import qualified Data.Text                                    as T
-import           Development.IDE.GHC.Compat.Core              (flagsForCompletion)
-import           Distribution.CabalSpecVersion                (CabalSpecVersion (CabalSpecV2_2),
-                                                               showCabalSpecVersion)
+import           Data.Map                                       (Map)
+import qualified Data.Map                                       as Map
+import qualified Data.Text                                      as T
+import           Development.IDE.GHC.Compat.Core                (flagsForCompletion)
+import           Distribution.CabalSpecVersion                  (CabalSpecVersion (CabalSpecV2_2),
+                                                                 showCabalSpecVersion)
 -- import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 -- import           Ide.Plugin.Cabal.Completion.Completer.Module
 -- import           Ide.Plugin.Cabal.Completion.Completer.Paths
+import           Ide.Plugin.Cabal.Completion.Completer.FilePath (directoryCompleter,
+                                                                 filePathCompleter)
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Types  (Completer)
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
 -- import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 
@@ -47,12 +49,12 @@ cabalProjectKeywords :: Map KeyWordName Completer
 cabalProjectKeywords =
   Map.fromList
     [ -- projectConfigFieldGrammar
-      ("packages:", noopCompleter),
-      ("optional-packages:", noopCompleter),
-      ("extra-packages:", noopCompleter),
+      ("packages:", filePathCompleter),
+      ("optional-packages:", filePathCompleter),
+      ("extra-packages:", filePathCompleter),
       -- projectConfigBuildOnlyFieldGrammar
       ("verbose:", constantCompleter ["0", "1", "2", "3"]),
-      ("build-summary:", noopCompleter),
+      ("build-summary:", filePathCompleter),
       ("build-log:", noopCompleter),
       ("remote-build-reporting:", noopCompleter),
       ("report-planning-failure:", noopCompleter),
@@ -72,8 +74,8 @@ cabalProjectKeywords =
       ("project-file:", noopCompleter),
       ("ignore-project:", noopCompleter),
       ("compiler:", constantCompleter ["ghc", "ghcjs", "jhc", "lhc", "uhc", "haskell-suite"]),
-      ("with-compiler:", noopCompleter),
-      ("with-hc-pkg:", noopCompleter),
+      ("with-compiler:", filePathCompleter),
+      ("with-hc-pkg:", filePathCompleter),
       ("doc-index-file:", noopCompleter),
       ("package-dbs:", noopCompleter),
       ("active-repositories:", noopCompleter),
@@ -93,15 +95,15 @@ cabalProjectKeywords =
       ("minimize-conflict-set:", constantCompleter ["False", "True"]),
       ("strong-flags:", constantCompleter ["False", "True"]),
       ("allow-boot-library-installs:", constantCompleter ["False", "True"]),
-      ("reject-unconstrained-dependencies:", noopCompleter),
+      ("reject-unconstrained-dependencies:", constantCompleter ["none", "all"]),
       ("per-component:", noopCompleter),
       ("independent-goals:", noopCompleter),
       ("prefer-oldest:", noopCompleter),
       ("extra-prog-path-shared-only:", noopCompleter),
       ("multi-repl:", noopCompleter),
       -- extras
-      ("benchmarks:", constantCompleter ["False", "True"])
-
+      ("benchmarks:", constantCompleter ["False", "True"]),
+      ("import:", filePathCompleter)
     ]
 
 packageFields :: Map KeyWordName Completer
@@ -109,7 +111,7 @@ packageFields =
   Map.fromList
     [ -- packageConfigFieldGrammar
       ("haddock-all:", constantCompleter ["False", "True"]),
-      ("extra-prog-path:", noopCompleter),
+      ("extra-prog-path:", filePathCompleter),
       ("flags:", noopCompleter),
       ("library-vanilla:", constantCompleter ["True", "False"]),
       ("shared:", constantCompleter ["False", "True"]),
@@ -126,10 +128,10 @@ packageFields =
       ("optimization:", constantCompleter ["0", "1", "2", "True", "False"]),
       ("program-prefix:", noopCompleter),
       ("program-suffix:", noopCompleter),
-      ("extra-lib-dirs:", noopCompleter),
-      ("extra-lib-dirs-static:", noopCompleter),
-      ("extra-framework-dirs:", noopCompleter),
-      ("extra-include-dirs:", noopCompleter),
+      ("extra-lib-dirs:", directoryCompleter),
+      ("extra-lib-dirs-static:", directoryCompleter),
+      ("extra-framework-dirs:", directoryCompleter),
+      ("extra-include-dirs:", directoryCompleter),
       ("library-for-ghci:", constantCompleter ["True", "False"]),
       ("split-sections:", constantCompleter ["False", "True"]),
       ("split-objs:", constantCompleter ["False", "True"]),
@@ -150,10 +152,10 @@ packageFields =
       ("haddock-tests:", constantCompleter ["False", "True"]),
       ("haddock-benchmarks:", constantCompleter ["False", "True"]),
       ("haddock-internal:", constantCompleter ["False", "True"]),
-      ("haddock-css:", noopCompleter),
+      ("haddock-css:", filePathCompleter),
       ("haddock-hyperlink-source:", constantCompleter ["False", "True"]),
       ("haddock-quickjump:", noopCompleter),
-      ("haddock-hscolour-css:", noopCompleter),
+      ("haddock-hscolour-css:", filePathCompleter),
       ("haddock-contents-location:", noopCompleter),
       ("haddock-index-location:", noopCompleter),
       ("haddock-base-url:", noopCompleter),

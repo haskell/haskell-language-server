@@ -6,6 +6,7 @@ module Main (
     main,
 ) where
 
+import           Completer                                (completerTests)
 import qualified Control.Exception                        as E
 import           Control.Lens                             ((^.))
 import           Control.Lens.Fold                        ((^?))
@@ -36,6 +37,7 @@ main = do
             "Cabal Plugin Tests"
             [ unitTests
             , pluginTests
+            , completerTests
             ]
 
 -- ------------------------------------------------------------------------

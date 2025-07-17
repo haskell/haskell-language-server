@@ -389,6 +389,7 @@ test-suite hls-cabal-project-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-project-plugin/test
   main-is:          Main.hs
   other-modules:
+    Completer
     Utils
   build-depends:
     , bytestring
@@ -403,6 +404,7 @@ test-suite hls-cabal-project-plugin-tests
     , text
     , hls-plugin-api
     , cabal-install
+    , haskell-language-server:hls-cabal-plugin
 
 
 -----------------------------
