@@ -31,13 +31,14 @@ isWildcardDiagnostic =
 -- | Extract the 'Hole' out of a 'FileDiagnostic'
 diagReportHoleError :: FileDiagnostic -> Maybe Hole
 diagReportHoleError diag = do
-    (solverReport, _, _) <-
+    solverReport <-
         diag
             ^? fdStructuredMessageL
                 . _SomeStructuredMessage
                 . msgEnvelopeErrorL
                 . _TcRnMessage
                 . _TcRnSolverReport
+                . _1
     (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
 
     Just hole
