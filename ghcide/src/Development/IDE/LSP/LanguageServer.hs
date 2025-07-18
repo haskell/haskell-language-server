@@ -34,6 +34,7 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Exception                     (BlockedIndefinitelyOnMVar (..))
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
@@ -265,11 +266,13 @@ runWithWorkerThreads recorder dbLoc f = evalContT $ do
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
--- | Runs the action until it ends or until the given MVar is put.
+-- | Runs the action until it ends or until the given MVar is put or the thread to fill the mvar is dropped, in which case the MVar will never be filled.
+--   This happens when the thread that handles the shutdown notification dies. Ideally, this should not rely on the RTS detecting the blocked MVar
+--   and instead *also* run the shutdown inf a finally block enclosing the handlers. In which case the BlockedIndefinitelyOnMVar Exception also wouldn't
+--   be thrown.
 --   Rethrows any exceptions.
 untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
-untilMVar mvar io = void $
-    waitAnyCancel =<< traverse async [ io , readMVar mvar ]
+untilMVar mvar io = race_ (readMVar mvar `catch` \BlockedIndefinitelyOnMVar -> pure ()) io
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \TNotificationMessage{_params=CancelParams{_id}} ->
