@@ -11,10 +11,13 @@ import qualified Development.IDE.GHC.Compat.Util   as Util
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
 import qualified Development.IDE.GHC.Util          as Util
+import           Language.LSP.Protocol.Types       (uriToFilePath)
 
 import           Control.DeepSeq                   (NFData (rnf))
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe            (catch, throw)
+import           Control.Monad                     (when)
+import           Control.Monad.Except              (throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Data.Char
@@ -35,11 +38,15 @@ import           System.IO.Extra
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
-preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv, Util.Fingerprint)
-preprocessor env filename mbContents = do
+preprocessor :: HscEnv -> Uri -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv, Util.Fingerprint)
+preprocessor env uri mbContents = do
+    -- NOTE: thisis pretty bad as it relies on the prepropcessors not actually reading from a file when it's not needed
+    when (isNothing (uriToFilePath uri) && isNothing mbContents) $ do
+        throwError [ideErrorText (toNormalizedUri uri) $ "Uri is not a file uri and contents are not available: " <> getUri uri]
+    let filename = T.unpack $ getUri uri
     -- Perform unlit
     (isOnDisk, contents) <-
-        if isLiterate filename then do
+        if isLiterate uri then do
             newcontent <- liftIO $ runLhs env filename mbContents
             return (False, newcontent)
         else do
@@ -52,7 +59,7 @@ preprocessor env filename mbContents = do
     !src_hash <- liftIO $ Util.fingerprintFromStringBuffer contents
 
     -- Perform cpp
-    (opts, pEnv) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
+    (opts, pEnv) <- ExceptT $ parsePragmasIntoHscEnv env uri contents
     let dflags = hsc_dflags pEnv
     let logger = hsc_logger pEnv
     (newIsOnDisk, newContents, newOpts, newEnv) <-
@@ -71,7 +78,7 @@ preprocessor env filename mbContents = do
                                   []    -> throw e
                                   diags -> return $ Left diags
                             )
-            (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv pEnv filename con
+            (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv pEnv uri con
             return (False, con, options, hscEnv)
 
     -- Perform preprocessor
@@ -79,7 +86,7 @@ preprocessor env filename mbContents = do
         return (newContents, newOpts, newEnv, src_hash)
     else do
         con <- liftIO $ runPreprocessor newEnv filename $ if newIsOnDisk then Nothing else Just newContents
-        (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv newEnv filename con
+        (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv newEnv uri con
         return (con, options, hscEnv, src_hash)
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
@@ -104,7 +111,7 @@ data CPPDiag
 
 diagsFromCPPLogs :: FilePath -> [CPPLog] -> [FileDiagnostic]
 diagsFromCPPLogs filename logs =
-  map (\d -> ideErrorFromLspDiag (cppDiagToDiagnostic d) (toNormalizedFilePath' filename) Nothing) $
+  map (\d -> ideErrorFromLspDiag (cppDiagToDiagnostic d) (filePathToUri' $ toNormalizedFilePath' filename) Nothing) $
     go [] logs
   where
     -- On errors, CPP calls logAction with a real span for the initial log and
@@ -133,18 +140,19 @@ diagsFromCPPLogs filename logs =
         }
 
 
-isLiterate :: FilePath -> Bool
-isLiterate x = takeExtension x `elem` [".lhs",".lhs-boot"]
+isLiterate :: Uri -> Bool
+isLiterate x | Just f <- uriToFilePath' x = takeExtension f `elem` [".lhs",".lhs-boot"]
+             | otherwise = False
 
 
 -- | This reads the pragma information directly from the provided buffer.
 parsePragmasIntoHscEnv
     :: HscEnv
-    -> FilePath
+    -> Uri
     -> Util.StringBuffer
     -> IO (Either [FileDiagnostic] ([String], HscEnv))
-parsePragmasIntoHscEnv env fp contents = catchSrcErrors dflags0 "pragmas" $ do
-    let (_warns,opts) = getOptions (initParserOpts dflags0) contents fp
+parsePragmasIntoHscEnv env uri contents = catchSrcErrors dflags0 "pragmas" $ do
+    let (_warns,opts) = getOptions (initParserOpts dflags0) contents (fromMaybe (show uri) $ uriToFilePath uri)
 
     -- Force bits that might keep the dflags and stringBuffer alive unnecessarily
     evaluate $ rnf opts

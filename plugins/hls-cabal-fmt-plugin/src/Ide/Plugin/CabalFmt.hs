@@ -63,8 +63,9 @@ provider :: Recorder (WithPriority Log) -> PluginId -> FormattingHandler IdeStat
 provider recorder _ _ _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
   throwError $ PluginInvalidParams "You cannot format a text-range using cabal-fmt."
-provider recorder plId ideState _ FormatText contents nfp opts = do
+provider recorder plId ideState _ FormatText contents nuri opts | Just nfp <- uriToNormalizedFilePath nuri = do
   let cabalFmtArgs = [ "--indent", show tabularSize]
+      fp = fromNormalizedFilePath nfp
   cabalFmtExePath <- fmap T.unpack $ liftIO $ runAction "cabal-fmt" ideState $ usePropertyAction #path plId properties
   x <- liftIO $ findExecutable cabalFmtExePath
   case x of
@@ -88,6 +89,6 @@ provider recorder plId ideState _ FormatText contents nfp opts = do
       log Error $ LogFormatterBinNotFound cabalFmtExePath
       throwError (PluginInternalError "No installation of cabal-fmt could be found. Please install it globally, or provide the full path to the executable")
   where
-    fp = fromNormalizedFilePath nfp
     tabularSize = opts ^. L.tabSize
     log = logWith recorder
+provider _ _ _ _ _ _ nuri _ = throwError $ PluginInternalError $ "Cabal fmt can only be invoked on files, but uri " <> getUri (fromNormalizedUri nuri) <> " was not a file URI"

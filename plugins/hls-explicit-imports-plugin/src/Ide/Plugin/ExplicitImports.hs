@@ -48,7 +48,6 @@ import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
-                                                       getNormalizedFilePathE,
                                                        handleMaybe)
 import qualified Ide.Plugin.RangeMap                  as RM (RangeMap,
                                                              filterByRange,
@@ -145,8 +144,8 @@ runImportCommand _ _ _ rd = do
 -- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
-    nfp <- getNormalizedFilePathE _uri
-    (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+    let nuri = toNormalizedUri _uri
+    (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nuri
     let lens = [ generateLens _uri newRange int
                -- provide ExplicitImport only if the client does not support inlay hints
                | not (isInlayHintsSupported state)
@@ -169,8 +168,8 @@ lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_
 
 lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeLensResolve
 lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid) = do
-    nfp <- getNormalizedFilePathE uri
-    (ImportActionsResult{forResolve}, _) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+    let nuri = toNormalizedUri uri
+    (ImportActionsResult{forResolve}, _) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nuri
     target <- handleMaybe PluginStaleResolve $ forResolve IM.!? uid
     let updatedCodeLens = cl & L.command ?~ mkCommand plId target
     pure updatedCodeLens
@@ -196,8 +195,8 @@ inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState
 inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} =
     if isInlayHintsSupported state
     then do
-        nfp <- getNormalizedFilePathE _uri
-        (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+        let nuri = toNormalizedUri _uri
+        (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nuri
         let inlayHints = [ inlayHint
                          | (range, (int, _)) <- forLens
                          , Just newRange <- [toCurrentRange pm range]
@@ -243,8 +242,8 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
 -- that specific import, and one code action to refine all imports.
 codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context) = do
-    nfp <- getNormalizedFilePathE _uri
-    (ImportActionsResult{forCodeActions}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+    let nuri = toNormalizedUri _uri
+    (ImportActionsResult{forCodeActions}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nuri
     newRange <- toCurrentRangeE pm range
     let relevantCodeActions = RM.filterByRange newRange forCodeActions
         allExplicit =
@@ -286,18 +285,18 @@ resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (HandlerM C
 -- Providing the edit for the command, or the resolve for the code action is
 -- completely generic, as all we need is the unique id and the text edit.
 resolveWTextEdit ideState (ResolveOne uri int) = do
-  nfp <- getNormalizedFilePathE uri
-  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+  let nuri = toNormalizedUri uri
+  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nuri
   iEdit <- handleMaybe PluginStaleResolve $ forResolve IM.!? int
   pure $ mkWorkspaceEdit uri [iEdit] pm
 resolveWTextEdit ideState (ExplicitAll uri) = do
-  nfp <- getNormalizedFilePathE uri
-  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+  let nuri = toNormalizedUri uri
+  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nuri
   let edits = [ ie | ie@ImportEdit{ieResType = ExplicitImport} <- IM.elems forResolve]
   pure $ mkWorkspaceEdit uri edits pm
 resolveWTextEdit ideState (RefineAll uri) = do
-  nfp <- getNormalizedFilePathE uri
-  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+  let nuri = toNormalizedUri uri
+  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nuri
   let edits = [ re | re@ImportEdit{ieResType = RefineImport} <- IM.elems forResolve]
   pure $ mkWorkspaceEdit uri edits pm
 mkWorkspaceEdit :: Uri -> [ImportEdit] -> PositionMapping -> WorkspaceEdit

@@ -12,7 +12,7 @@ module Development.IDE.Main
 ) where
 
 import           Control.Concurrent.Extra                 (withNumCapabilities)
-import           Control.Concurrent.MVar                  (newEmptyMVar,
+import           Control.Concurrent.MVar                  (MVar, newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Monad.Extra                      (concatMapM, unless,
@@ -110,6 +110,7 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            PluginDescriptor (PluginDescriptor, pluginCli),
                                                            PluginId (PluginId),
                                                            ipMap, pluginId)
+import           Language.LSP.Protocol.Types              (normalizedFilePathToUri)
 import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
@@ -318,9 +319,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             ioT <- offsetTime
             logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
-            ideStateVar <- newEmptyMVar
-            let getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
-                getIdeState env rootPath withHieDb threadQueue = do
+            let getIdeState :: MVar IdeState -> LSP.LanguageContextEnv Config -> FilePath -> WithHieDb -> Shake.ThreadQueue -> IO IdeState
+                getIdeState ideStateVar env rootPath withHieDb threadQueue = do
                   t <- ioT
                   logWith recorder Info $ LogLspStartDuration t
                   sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions rootPath (tLoaderQueue threadQueue)
@@ -353,9 +353,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   putMVar ideStateVar ide
                   pure ide
 
-            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+            let setup ideStateVar = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsGetHieDbLoc (pluginHandlers plugins) (getIdeState ideStateVar)
                 -- See Note [Client configuration in Rules]
-                onConfigChange cfg = do
+                onConfigChange ideStateVar cfg = do
                   -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
                   let cfgObj = J.toJSON cfg
                   mide <- liftIO $ tryReadMVar ideStateVar
@@ -368,7 +368,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                             modifyClientSettings ide (const $ Just cfgObj)
                             return [toNoFileKey Rules.GetClientSettings]
 
-            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
+            do
+                ideStateVar <- newEmptyMVar
+                runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig (onConfigChange ideStateVar) (setup ideStateVar)
             dumpSTMStats
         Check argFiles -> do
           let dir = argsProjectRoot
@@ -406,10 +408,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
-            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
-            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
+            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles
+            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map (normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles)
+            _results <- runAction "GetHie" ide $ uses GetHieAst (map (normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles)
+            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map (normalizedFilePathToUri . toNormalizedFilePath') absoluteFiles)
             let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
             when (failed /= []) $
                 putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed

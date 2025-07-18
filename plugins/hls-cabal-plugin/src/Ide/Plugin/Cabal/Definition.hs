@@ -10,6 +10,7 @@ import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.List                                     (find)
+import           Data.Maybe
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import           Development.IDE                               as D
@@ -36,7 +37,6 @@ import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommon
                                                                 ParseCabalFile (..))
 import qualified Ide.Plugin.Cabal.Completion.Types             as Types
 import           Ide.Plugin.Cabal.Orphans                      ()
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
@@ -54,19 +54,19 @@ import           System.FilePath                               (joinPath,
 -- TODO: Resolve more cases for go-to definition.
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ide _ msgParam = do
-    nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields nfp
+    let nuri = toNormalizedUri uri
+    cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields nuri
     -- Trim the AST tree, so multiple passes in subfunctions won't hurt the performance.
     let fieldsOfInterest = maybe cabalFields (:[] ) $ CabalFields.findFieldSection cursor cabalFields
 
-    commonSections <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalCommonSections nfp
+    commonSections <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalCommonSections nuri
     let mCommonSectionsDef = gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest
 
     mModuleDef <- do
-      mGPD <- liftIO $ runAction "cabal.GPD" ide $ useWithStale ParseCabalFile nfp
+      mGPD <- liftIO $ runAction "cabal.GPD" ide $ useWithStale ParseCabalFile nuri
       case mGPD of
         Nothing -> pure Nothing
-        Just (gpd, _) -> liftIO $ gotoModulesDefinition nfp gpd cursor fieldsOfInterest
+        Just (gpd, _) -> liftIO $ gotoModulesDefinition nuri gpd cursor fieldsOfInterest
 
     let defs = Maybe.catMaybes [ mCommonSectionsDef
                                , mModuleDef
@@ -114,12 +114,12 @@ gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest = do
 --
 -- See resolving @Config@ module in tests.
 gotoModulesDefinition
-  :: NormalizedFilePath -- ^ Normalized FilePath to the cabal file
+  :: NormalizedUri -- ^ Normalized Uri to the cabal file
   -> GenericPackageDescription
   -> Syntax.Position -- ^ Cursor position
   -> [Syntax.Field Syntax.Position] -- ^ Trimmed cabal AST on a cursor
   -> IO (Maybe Definition)
-gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
+gotoModulesDefinition nuri gpd cursor fieldsOfInterest = do
   let mCursorText = CabalFields.findTextWord cursor fieldsOfInterest
       moduleNames = CabalFields.getModulesNames fieldsOfInterest
       mModuleName = find (isModuleName mCursorText) moduleNames
@@ -131,7 +131,10 @@ gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
                                       (flattenPackageDescription gpd))
                                       mBuildTargetNames
           sourceDirs = map getSymbolicPath $ concatMap hsSourceDirs buildInfos
-          potentialPaths = map (\dir -> takeDirectory (fromNormalizedFilePath nfp) </> dir </> toHaskellFile moduleName) sourceDirs
+          potentialPaths = mapMaybe (\dir -> do
+            nfp <- uriToNormalizedFilePath nuri
+            pure $ takeDirectory (fromNormalizedFilePath nfp) </> dir </> toHaskellFile moduleName
+            ) sourceDirs
       allPaths <- liftIO $ filterM doesFileExist potentialPaths
       -- Don't provide the range, since there is little benefit for it
       let locations = map (\pth -> Location (filePathToUri pth) (mkRange 0 0 0 0)) allPaths
