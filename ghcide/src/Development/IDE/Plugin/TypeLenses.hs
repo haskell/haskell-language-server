@@ -89,6 +89,7 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
+                                                       toNormalizedUri,
                                                        type (|?) (..))
 import           Text.Regex.TDFA                      ((=~))
 
@@ -125,7 +126,7 @@ properties = emptyProperties
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
-    nfp <- getNormalizedFilePathE uri
+    let nuri = toNormalizedUri uri
     -- We have two ways we can possibly generate code lenses for type lenses.
     -- Different options are with different "modes" of the type-lenses plugin.
     -- (Remember here, as the code lens is not resolved yet, we only really need
@@ -138,7 +139,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
           [ CodeLens _range Nothing (Just $ toJSON TypeLensesResolve)
             | diag <- diags
             , let Diagnostic {_range} = fdLspDiagnostic diag
-            , fdFilePath diag == nfp
+            , fdUri diag == nuri
             , isGlobalDiagnostic diag]
         -- The second option is to generate lenses from the GlobalBindingTypeSig
         -- rule. This is the only type that needs to have the range adjusted
@@ -159,7 +160,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
         -- GlobalBindingTypeSigs rule.
         (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
           runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-          $ useWithStaleE GetGlobalBindingTypeSigs nfp
+          $ useWithStaleE GetGlobalBindingTypeSigs nuri
         -- Depending on whether we only want exported or not we filter our list
         -- of signatures to get what we want
         let relevantGlobalSigs =
@@ -177,10 +178,9 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
 
 codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
-  nfp <- getNormalizedFilePathE uri
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-    $ useWithStaleE GetGlobalBindingTypeSigs nfp
+    $ useWithStaleE GetGlobalBindingTypeSigs $ toNormalizedUri uri
   -- regardless of how the original lens was generated, we want to get the range
   -- that the global bindings rule would expect here, hence the need to reverse
   -- position map the range, regardless of whether it was position mapped in the

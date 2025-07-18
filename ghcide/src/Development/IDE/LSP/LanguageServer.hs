@@ -11,6 +11,7 @@ module Development.IDE.LSP.LanguageServer
     , Log(..)
     , ThreadQueue
     , runWithWorkerThreads
+    , Communication (..)
     ) where
 
 import           Control.Concurrent.STM
@@ -27,15 +28,19 @@ import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                   as LSP
-import           System.IO
 import           UnliftIO.Async
 import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Exception                     (BlockedIndefinitelyOnMVar (..))
+import           Control.Exception.Backtrace           (BacktraceMechanism (..),
+                                                        setBacktraceMechanismState)
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
+import           Data.ByteString
+import           Data.ByteString.Lazy
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
@@ -81,13 +86,17 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
+data Communication
+  = Communication
+  { inwards  :: IO StrictByteString
+  , outwards :: LazyByteString -> IO ()
+  }
 
 runLanguageServer
     :: forall config a m. (Show config)
     => Recorder (WithPriority Log)
     -> LSP.Options
-    -> Handle -- input
-    -> Handle -- output
+    -> Communication
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (config -> m config ())
@@ -96,7 +105,7 @@ runLanguageServer
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
-runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
+runLanguageServer recorder options comm defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -119,11 +128,11 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
         lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
     void $ untilMVar clientMsgVar $
-          void $ LSP.runServerWithHandles
+          void $ LSP.runServerWith
             lspCologAction
             lspCologAction
-            inH
-            outH
+            (inwards comm)
+            (outwards comm)
             serverDefinition
 
 setupLSP ::
@@ -265,11 +274,13 @@ runWithWorkerThreads recorder dbLoc f = evalContT $ do
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
--- | Runs the action until it ends or until the given MVar is put.
+-- | Runs the action until it ends or until the given MVar is put or the thread to fill the mvar is dropped, in which case the MVar will never be filled.
+--   This happens when the thread that handles the shutdown notification dies. Ideally, this should not rely on the RTS detecting the blocked MVar
+--   and instead *also* run the shutdown inf a finally block enclosing the handlers. In which case the BlockedIndefinitelyOnMVar Exception also wouldn't
+--   be thrown.
 --   Rethrows any exceptions.
 untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
-untilMVar mvar io = void $
-    waitAnyCancel =<< traverse async [ io , readMVar mvar ]
+untilMVar mvar io = race_ (readMVar mvar `catch` \BlockedIndefinitelyOnMVar -> pure ()) io
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \TNotificationMessage{_params=CancelParams{_id}} ->

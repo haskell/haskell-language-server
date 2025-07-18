@@ -95,8 +95,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     TextEdit (TextEdit, _range),
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                                    type (|?) (InL, InR),
-                                                                    uriToFilePath)
+                                                                    type (|?) (InL, InR))
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
@@ -135,9 +134,9 @@ codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
-    let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
-    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
+    let nuri = toNormalizedUri uri
+    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> nuri == fdUri d) <$> getDiagnostics state
+    parsedModule <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule nuri
     let
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
@@ -210,9 +209,9 @@ extendImportCommand =
 extendImportHandler :: CommandFunction IdeState ExtendImport
 extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
-  whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
+  whenJust res $ \(nuri, wedit@WorkspaceEdit {_changes}) -> do
     whenJust (listToMaybe =<< listToMaybe . M.elems =<< _changes) $ \TextEdit {_range} -> do
-      let srcSpan = rangeToSrcSpan nfp _range
+      let srcSpan = rangeToSrcSpan nuri _range
       pluginSendNotification SMethod_WindowShowMessage $
         ShowMessageParams MessageType_Info $
           "Import "
@@ -225,45 +224,41 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
       void $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right $ InR Null
 
-extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
-extendImportHandler' ideState ExtendImport {..}
-  | Just fp <- uriToFilePath doc,
-    nfp <- toNormalizedFilePath' fp =
-    do
-      (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
-        runAction "extend import" ideState $
-          runMaybeT $ do
-            -- We want accurate edits, so do not use stale data here
-            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
-            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
-            (_, contents) <- MaybeT $ use GetFileContents nfp
-            return (msr, ps, contents)
-      let df = ms_hspp_opts msrModSummary
-          wantedModule = mkModuleName (T.unpack importName)
-          wantedQual = mkModuleName . T.unpack <$> importQual
-          existingImport = find (isWantedModule wantedModule wantedQual) msrImports
-      case existingImport of
-        Just imp -> do
-            fmap (nfp,) $ liftEither $
-              rewriteToWEdit df doc $
-                  extendImport (T.unpack <$> thingParent) (T.unpack newThing)
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedUri, WorkspaceEdit)
+extendImportHandler' ideState ExtendImport {..} = do
+  let nuri = toNormalizedUri doc
+  (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
+    runAction "extend import" ideState $
+      runMaybeT $ do
+        -- We want accurate edits, so do not use stale data here
+        msr <- MaybeT $ use GetModSummaryWithoutTimestamps nuri
+        ps <- MaybeT $ use GetAnnotatedParsedSource nuri
+        (_, contents) <- MaybeT $ use GetFileContents nuri
+        return (msr, ps, contents)
+  let df = ms_hspp_opts msrModSummary
+      wantedModule = mkModuleName (T.unpack importName)
+      wantedQual = mkModuleName . T.unpack <$> importQual
+      existingImport = find (isWantedModule wantedModule wantedQual) msrImports
+  case existingImport of
+    Just imp -> do
+        fmap (nuri,) $ liftEither $
+          rewriteToWEdit df doc $
+              extendImport (T.unpack <$> thingParent) (T.unpack newThing)
 #if MIN_VERSION_ghc(9,9,0)
-                    imp
+                imp
 #else
-                    (makeDeltaAst imp)
+                (makeDeltaAst imp)
 #endif
 
-        Nothing -> do
-            let qns = (,) <$> importQual <*> Just (qualifiedImportStyle df)
-                n = newImport importName sym qns False
-                sym = if isNothing importQual then Just it else Nothing
-                it = case thingParent of
-                  Nothing -> newThing
-                  Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit n ps (Rope.toText (fromMaybe mempty contents))
-            return (nfp, WorkspaceEdit {_changes=Just (M.singleton doc [t]), _documentChanges=Nothing, _changeAnnotations=Nothing})
-  | otherwise =
-    mzero
+    Nothing -> do
+        let qns = (,) <$> importQual <*> Just (qualifiedImportStyle df)
+            n = newImport importName sym qns False
+            sym = if isNothing importQual then Just it else Nothing
+            it = case thingParent of
+              Nothing -> newThing
+              Just p  -> p <> "(" <> newThing <> ")"
+        t <- liftMaybe $ snd <$> newImportToEdit n ps (Rope.toText (fromMaybe mempty contents))
+        return (nuri, WorkspaceEdit {_changes=Just (M.singleton doc [t]), _documentChanges=Nothing, _changeAnnotations=Nothing})
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ ideclName
@@ -1175,12 +1170,12 @@ disambiguateSymbol ps fileContents Diagnostic {..} (T.unpack -> symbol) = \case
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
          in Right <$> [ if parensed
-                then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
+                then Rewrite (rangeToSrcSpan emptyPathUri _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
                     T.unpack $ printOutputable $
                         HsVar @GhcPs noExtField $
                             reLocA $ L (mkGeneralSrcSpan  "") rdr
-                else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
+                else Rewrite (rangeToSrcSpan emptyPathUri _range) $ \df ->
                     liftParseAST @RdrName df $
                     T.unpack $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
             ]

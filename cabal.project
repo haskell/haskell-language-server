@@ -10,6 +10,10 @@ packages:
 
 index-state: 2025-07-09T16:51:20Z
 
+optimization: False
+profiling: True
+profiling-detail: late
+
 tests: True
 test-show-details: direct
 
@@ -26,6 +30,8 @@ test-options: -j1
 -- haddock shown on hover
 package *
   ghc-options: -haddock
+  profiling: True
+  profiling-detail: late
 
 constraints:
   -- C++ is hard to distribute, especially on older GHCs

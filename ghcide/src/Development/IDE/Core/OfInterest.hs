@@ -57,7 +57,7 @@ instance Pretty Log where
   pretty = \case
     LogShake msg -> pretty msg
 
-newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedUri FileOfInterestStatus))
 
 instance IsIdeGlobal OfInterestVar
 
@@ -86,24 +86,24 @@ instance IsIdeGlobal GarbageCollectVar
 ------------------------------------------------------------
 -- Exposed API
 
-getFilesOfInterest :: IdeState -> IO( HashMap NormalizedFilePath FileOfInterestStatus)
+getFilesOfInterest :: IdeState -> IO( HashMap NormalizedUri FileOfInterestStatus)
 getFilesOfInterest state = do
     OfInterestVar var <- getIdeGlobalState state
     readVar var
 
 -- | Set the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
-setFilesOfInterest :: IdeState -> HashMap NormalizedFilePath FileOfInterestStatus -> IO ()
+setFilesOfInterest :: IdeState -> HashMap NormalizedUri FileOfInterestStatus -> IO ()
 setFilesOfInterest state files = do
     OfInterestVar var <- getIdeGlobalState state
     writeVar var files
 
-getFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getFilesOfInterestUntracked :: Action (HashMap NormalizedUri FileOfInterestStatus)
 getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
     liftIO $ readVar var
 
-addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
+addFileOfInterest :: IdeState -> NormalizedUri -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
     (prev, files) <- modifyVar var $ \dict -> do
@@ -116,7 +116,7 @@ addFileOfInterest state f v = do
         return [toKey IsFileOfInterest f]
     else return []
 
-deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO [Key]
+deleteFileOfInterest :: IdeState -> NormalizedUri -> IO [Key]
 deleteFileOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.delete f
@@ -138,7 +138,7 @@ kick = do
         signal msg = when testing $ liftIO $
             mRunLspT lspEnv $
                 LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
-                toJSON $ map fromNormalizedFilePath files
+                toJSON $ map fromNormalizedUri files
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress ProgressNewStarted

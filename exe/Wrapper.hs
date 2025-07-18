@@ -98,7 +98,7 @@ main = do
             Left err -> do
               T.hPutStrLn stderr (prettyError err NoShorten)
               case args of
-                Ghcide (GhcideArguments { argsCommand = Main.LSP }) ->
+                Ghcide (GhcideArguments { argsCommand = Main.LSP Main.StdIO }) ->
                     launchErrorLSP recorder (prettyError err Shorten)
 
                 _ -> exitFailure
@@ -274,10 +274,6 @@ launchErrorLSP recorder errorMsg = do
   cwd <- getCurrentDirectory
   let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) cwd (IdePlugins [])
 
-  inH <- Main.argsHandleIn defaultArguments
-
-  outH <- Main.argsHandleOut defaultArguments
-
   let parseConfig cfg _ = Right cfg
       onConfigChange _ = pure ()
 
@@ -302,14 +298,16 @@ launchErrorLSP recorder errorMsg = do
         let interpretHandler (env,  _st) = LSP.Iso (LSP.runLspT env . unErrorLSPM) liftIO
         pure (doInitialize, asyncHandlers, interpretHandler)
 
-  runLanguageServer (cmapWithPrio pretty recorder)
-    (Main.argsLspOptions defaultArguments)
-    inH
-    outH
-    (Main.argsDefaultHlsConfig defaultArguments)
-    parseConfig
-    onConfigChange
-    setup
+  let runServerWithCommunication comm =
+          runLanguageServer (cmapWithPrio pretty recorder)
+            (Main.argsLspOptions defaultArguments)
+            comm
+            (Main.argsDefaultHlsConfig defaultArguments)
+            parseConfig
+            onConfigChange
+            setup
+
+  Main.commKindToCommunication (cmapWithPrio pretty recorder) runServerWithCommunication Main.StdIO
 
 exitHandler :: IO () -> LSP.Handlers (ErrorLSPM c)
 exitHandler exit = LSP.notificationHandler SMethod_Exit $ const $ liftIO exit

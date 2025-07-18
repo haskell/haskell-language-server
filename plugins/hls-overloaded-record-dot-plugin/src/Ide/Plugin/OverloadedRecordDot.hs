@@ -26,7 +26,6 @@ import           Data.Maybe                           (mapMaybe, maybeToList)
 import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
 import           Development.IDE                      (IdeState,
-                                                       NormalizedFilePath,
                                                        Pretty (..), Range,
                                                        Recorder (..), Rules,
                                                        WithPriority (..),
@@ -60,7 +59,6 @@ import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
 import           Ide.Plugin.Error                     (PluginError (..),
-                                                       getNormalizedFilePathE,
                                                        handleMaybe)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
@@ -77,7 +75,7 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        CodeActionParams (..),
                                                        TextEdit (..), Uri (..),
                                                        WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                       type (|?) (..))
+                                                       type (|?) (..), toNormalizedUri, NormalizedUri)
 
 
 #if __GLASGOW_HASKELL__ < 910
@@ -167,17 +165,17 @@ descriptor recorder plId =
 resolveProvider :: ResolveFunction IdeState ORDResolveData 'Method_CodeActionResolve
 resolveProvider ideState plId ca uri (ORDRD _ int) =
   do
-    nfp <- getNormalizedFilePathE uri
-    CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
-    pragma <- getFirstPragma plId ideState nfp
+    let nuri = toNormalizedUri uri
+    CRSR _ crsDetails exts <- collectRecSelResult ideState nuri
+    pragma <- getFirstPragma plId ideState nuri
     rse <- handleMaybe PluginStaleResolve $ IntMap.lookup int crsDetails
     pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ caDocId caRange _) =
     do
-        nfp <- getNormalizedFilePathE (caDocId ^. L.uri)
-        CRSR crsMap _ exts <- collectRecSelResult ideState nfp
+        let nuri = toNormalizedUri $ caDocId ^. L.uri
+        CRSR crsMap _ exts <- collectRecSelResult ideState nuri
         let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
                   -- we can have the name of the record selector in the title of
@@ -310,7 +308,7 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
 getRecSels _ = ([], False)
 
-collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
+collectRecSelResult :: MonadIO m => IdeState -> NormalizedUri
                         -> ExceptT PluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
     runActionE "overloadedRecordDot.collectRecordSelectors" ideState

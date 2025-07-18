@@ -35,7 +35,7 @@ import qualified Data.Text                      as T
 
 data Log
   = LogWorkspaceSymbolRequest !T.Text
-  | LogRequest !T.Text !Position !NormalizedFilePath
+  | LogRequest !T.Text !Position !NormalizedUri
   deriving (Show)
 
 instance Pretty Log where
@@ -43,7 +43,7 @@ instance Pretty Log where
     LogWorkspaceSymbolRequest query -> "Workspace symbols request:" <+> pretty query
     LogRequest label pos nfp ->
       pretty label <+> "request at position" <+> pretty (showPosition pos) <+>
-        "in file:" <+> pretty (fromNormalizedFilePath nfp)
+        "in file:" <+> pretty (fromNormalizedUri nfp)
 
 gotoDefinition     :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentDefinition)
 hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (Hover |? Null)
@@ -58,9 +58,9 @@ documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
 
 references :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentReferences
 references recorder ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
-  nfp <- getNormalizedFilePathE uri
-  liftIO $ logWith recorder Debug $ LogRequest "References" pos nfp
-  InL <$> (liftIO $ Shake.runAction "references" ide $ refsAtPoint nfp pos)
+  let nuri = toNormalizedUri uri
+  liftIO $ logWith recorder Debug $ LogRequest "References" pos nuri
+  InL <$> (liftIO $ Shake.runAction "references" ide $ refsAtPoint nuri pos)
 
 wsSymbols :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_WorkspaceSymbol
 wsSymbols recorder ide _ (WorkspaceSymbolParams _ _ query) = liftIO $ do
@@ -74,7 +74,7 @@ foundHover (mbRange, contents) =
 -- | Respond to and log a hover or go-to-definition request
 request
   :: T.Text
-  -> (NormalizedFilePath -> Position -> IdeAction (Maybe a))
+  -> (NormalizedUri -> Position -> IdeAction (Maybe a))
   -> b
   -> (a -> b)
   -> Recorder (WithPriority Log)
@@ -82,13 +82,11 @@ request
   -> TextDocumentPositionParams
   -> ExceptT PluginError (HandlerM c) b
 request label getResults notFound found recorder ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
-    mbResult <- case uriToFilePath' uri of
-        Just path -> logAndRunRequest recorder label getResults ide pos path
-        Nothing   -> pure Nothing
-    pure $ maybe notFound found mbResult
+    res <- logAndRunRequest recorder label getResults ide pos uri
+    pure $ maybe notFound found res
 
-logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> String -> IO b
+logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedUri -> Position -> IdeAction b) -> IdeState -> Position -> Uri -> IO b
 logAndRunRequest recorder label getResults ide pos path = do
-  let filePath = toNormalizedFilePath' path
-  logWith recorder Debug $ LogRequest label pos filePath
-  runIdeAction (T.unpack label) (shakeExtras ide) (getResults filePath pos)
+  let nuri = toNormalizedUri path
+  logWith recorder Debug $ LogRequest label pos nuri
+  runIdeAction (T.unpack label) (shakeExtras ide) (getResults nuri pos)
