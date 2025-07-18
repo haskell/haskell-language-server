@@ -8,6 +8,7 @@ module Development.IDE.GHC.Compat.Error (
   -- * Error messages for the typechecking and renamer phase
   TcRnMessage (..),
   TcRnMessageDetailed (..),
+  Hole(..),
   stripTcRnMessageContext,
   -- * Parsing error message
   PsMessage(..),
@@ -23,9 +24,14 @@ module Development.IDE.GHC.Compat.Error (
   _GhcPsMessage,
   _GhcDsMessage,
   _GhcDriverMessage,
+  _ReportHoleError,
+  _TcRnIllegalWildcardInType,
+  _TcRnPartialTypeSignatures,
   _TcRnMissingSignature,
   _TcRnSolverReport,
   _TcRnMessageWithInfo,
+  _TypeHole,
+  _ConstraintHole,
   reportContextL,
   reportContentL,
   _MismatchMessage,
@@ -38,6 +44,7 @@ import           Development.IDE.GHC.Compat (Type)
 import           GHC.Driver.Errors.Types
 import           GHC.HsToCore.Errors.Types
 import           GHC.Tc.Errors.Types
+import           GHC.Tc.Types.Constraint    (Hole (..), HoleSort)
 import           GHC.Types.Error
 
 -- | Some 'TcRnMessage's are nested in other constructors for additional context.
@@ -94,6 +101,10 @@ makePrisms ''TcRnMessage
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
     ''SolverReportWithCtxt
+
+makePrisms ''TcSolverReportMsg
+
+makePrisms ''HoleSort
 
 -- | Focus 'MismatchMsg' from 'TcSolverReportMsg'. Currently, 'MismatchMsg' can be
 -- extracted from 'CannotUnifyVariable' and 'Mismatch' constructors.
