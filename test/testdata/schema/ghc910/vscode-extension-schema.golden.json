@@ -1037,6 +1037,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.signatureHelp.globalOn": {
+        "default": true,
+        "description": "Enables signatureHelp plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.stan.globalOn": {
         "default": false,
         "description": "Enables stan plugin",
