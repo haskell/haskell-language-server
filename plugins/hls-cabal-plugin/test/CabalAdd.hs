@@ -175,7 +175,6 @@ cabalAddTests =
           , _data_ = Nothing
         }
 
-
     generatePackageYAMLTestSession :: FilePath -> Session ()
     generatePackageYAMLTestSession haskellFile  = do
         hsdoc <- openDoc haskellFile "haskell"

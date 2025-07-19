@@ -9,7 +9,7 @@ module Main (
 import           CabalAdd                        (cabalAddTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
-import           Control.Lens                    ((^.))
+import           Control.Lens                    ((^.), preview, _Just, view)
 import           Control.Lens.Fold               ((^?))
 import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
@@ -39,6 +39,7 @@ main = do
             , codeActionTests
             , gotoDefinitionTests
             , hoverTests
+            , codeLensTests
             ]
 
 -- ------------------------------------------------------------------------
@@ -258,4 +259,28 @@ hoverOnDependencyTests = testGroup "Hover Dependency"
                 doc <- openDoc cabalFile "cabal"
                 h <- getHover doc pos
                 liftIO $ assertBool ("Found hover `" <> show h <> "`") $ Maybe.isNothing h
+                closeDoc doc
+
+-- ----------------------------------------------------------------------------
+-- Code Lens Tests
+-- ----------------------------------------------------------------------------
+
+codeLensTests :: TestTree
+codeLensTests = testGroup "Code Lens"
+    [ dependencyVersionLenses
+    , dependencyVersionInlayHints
+    ]
+    where
+        dependencyVersionLenses =
+            runCabalTestCaseSession "Code Lens Test" "dependencies" $ do
+                doc <- openDoc "deps-versions.cabal" "cabal"
+                lenses <- getCodeLenses doc
+                liftIO $ map (preview $ L.command . _Just . L.title) lenses @?= [Just "4.19.2.0", Just "text (2.1.1)", Just "transformers (0.6.1.0)"]
+                closeDoc doc
+        dependencyVersionInlayHints =
+            runCabalTestCaseSession "InlayHints tests" "dependencies" $ do
+                doc <- openDoc "deps-versions.cabal" "cabal"
+                let range = Range (Position 0 0) (Position 1000 1000)
+                hints <- getInlayHints doc range
+                liftIO $ map (view L.label) hints @?= [InL " (4.19.2.0)",InL " (2.1.1)",InL " (0.6.1.0)"]
                 closeDoc doc

@@ -3,12 +3,14 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                  ((^.))
+import           Control.Lens                                  (_Just, (^.),
+                                                                (^?))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class                     (lift)
@@ -55,6 +57,7 @@ import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalCommon
                                                                 ParseCabalFile (..))
 import qualified Ide.Plugin.Cabal.Completion.Types             as Types
 import           Ide.Plugin.Cabal.Definition                   (gotoDefinition)
+import qualified Ide.Plugin.Cabal.Dependencies                 as Dependencies
 import qualified Ide.Plugin.Cabal.Diagnostics                  as Diagnostics
 import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
 import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
@@ -135,6 +138,8 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
+          , mkPluginHandler LSP.SMethod_TextDocumentInlayHint hints
+          , mkPluginHandler LSP.SMethod_TextDocumentCodeLens lens
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -375,6 +380,36 @@ cabalAddCodeAction state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
                                                                               haskellFilePath cabalFilePath
                                                                               gpd
                   pure $ InL $ fmap InR actions
+
+lens :: PluginMethodHandler IdeState LSP.Method_TextDocumentCodeLens
+lens state _plId clp = do
+  packageDependenciesLens <-
+    fmap (Maybe.fromMaybe mempty) $
+      whenMaybe (not $ inlayHintCapabilityAvailable state) $ do
+        let uri = clp ^. JL.textDocument . JL.uri
+        nfp <- getNormalizedFilePathE uri
+        cabalFields <- runActionE "cabal.cabal-code-lens" state $ useE ParseCabalFields nfp
+        (hscEnv -> hsc) <- runActionE "cabal.cabal-code-lens" state $ useE GhcSession nfp
+        pure $ Dependencies.dependencyVersionLens cabalFields hsc
+
+  pure $ InL packageDependenciesLens
+
+hints :: PluginMethodHandler IdeState LSP.Method_TextDocumentInlayHint
+hints state _plId clp = do
+  packageDependenciesHints <-
+    fmap (Maybe.fromMaybe mempty) $
+      whenMaybe (inlayHintCapabilityAvailable state) $ do
+        let uri = clp ^. JL.textDocument . JL.uri
+        nfp <- getNormalizedFilePathE uri
+        cabalFields <- runActionE "cabal.cabal-hints" state $ useE ParseCabalFields nfp
+        (hscEnv -> hsc) <- runActionE "cabal.cabal-hints" state $ useE GhcSession nfp
+        pure $ Dependencies.dependencyVersionHints cabalFields hsc
+  pure $ InL packageDependenciesHints
+
+inlayHintCapabilityAvailable :: IdeState -> Bool
+inlayHintCapabilityAvailable state =
+  let clientCaps = Shake.clientCapabilities $ shakeExtras state
+  in  Maybe.isJust $ clientCaps ^? JL.textDocument . _Just . JL.inlayHint . _Just
 
 -- | Handler for hover messages.
 --
