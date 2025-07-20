@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StrictData        #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 

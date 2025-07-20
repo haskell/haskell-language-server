@@ -17,7 +17,7 @@ import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsTokenType,
                                                        RangeSemanticTokenTypeList,
                                                        SemanticTokenId,
-                                                       SemanticTokensConfig)
+                                                       SemanticTokensConfig, HsTokenType)
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
                                                        SemanticTokenAbsolute (SemanticTokenAbsolute),
