@@ -701,6 +701,10 @@ typeWildCardActionTests = testGroup "type wildcard actions"
                "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
+  , testNoUseTypeSignature "ignores typed holes"
+        [ "func :: a -> a"
+        , "func x = _"
+        ]
   , testGroup "add parens if hole is part of bigger type"
     [ testUseTypeSignature "subtype 1"
           [ "func :: _ -> Integer -> Integer"
@@ -736,18 +740,32 @@ typeWildCardActionTests = testGroup "type wildcard actions"
     -- | Test session of given name, checking action "Use type signature..."
     --   on a test file with given content and comparing to expected result.
     testUseTypeSignature name textIn textOut = testSession name $ do
-        let fileStart = "module Testing where"
+        let expectedContentAfterAction = T.unlines $ fileStart : textOut
             content = T.unlines $ fileStart : textIn
-            expectedContentAfterAction = T.unlines $ fileStart : textOut
         doc <- createDoc "Testing.hs" "haskell" content
-        _ <- waitForDiagnostics
-        actionsOrCommands <- getAllCodeActions doc
-        [addSignature] <- pure [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                       , "Use type signature" `T.isPrefixOf` actionTitle
-                               ]
+
+        (Just addSignature) <- getUseTypeSigAction doc
         executeCodeAction addSignature
         contentAfterAction <- documentContents doc
         liftIO $ expectedContentAfterAction @=? contentAfterAction
+
+    testNoUseTypeSignature name textIn = testSession name $ do
+        let content = T.unlines $ fileStart : textIn
+        doc <- createDoc "Testing.hs" "haskell" content
+        codeAction <- getUseTypeSigAction doc
+        liftIO $ Nothing @=? codeAction
+
+    fileStart = "module Testing where"
+
+    getUseTypeSigAction docIn = do
+        _ <- waitForDiagnostics
+        actionsOrCommands <- getAllCodeActions docIn
+
+        let addSignatures =
+                [ action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
+                         , "Use type signature" `T.isPrefixOf` actionTitle
+                ]
+        pure $ listToMaybe addSignatures
 
 
 removeImportTests :: TestTree
