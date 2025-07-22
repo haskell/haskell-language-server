@@ -5,6 +5,7 @@
 
 module Development.IDE.LSP.Outline
   ( moduleOutline
+  , documentSymbolForDecl
   )
 where
 
@@ -259,5 +260,3 @@ hsConDeclsBinders cons
     get_flds :: Located [LConDeclField GhcPs]
              -> [LFieldOcc GhcPs]
     get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
-
-
