@@ -68,10 +68,12 @@ data IdeOptions = IdeOptions
   , optCheckParents       :: IO CheckParents
     -- ^ When to typecheck reverse dependencies of a file
   , optHaddockParse       :: OptHaddockParse
-    -- ^ Whether to return result of parsing module with Opt_Haddock.
-    --   Otherwise, return the result of parsing without Opt_Haddock, so
-    --   that the parsed module contains the result of Opt_KeepRawTokenStream,
-    --   which might be necessary for hlint.
+    -- ^ Whether to parse modules with '-haddock' by default.
+    -- If 'HaddockParse' is given, we parse local haskell modules with the
+    -- '-haddock' flag enables.
+    -- If a plugin requires the parsed sources *without* '-haddock', it needs
+    -- to use rules that explicitly disable the '-haddock' flag.
+    -- See call sites of 'withoutOptHaddock' for rules that parse without '-haddock'.
   , optModifyDynFlags     :: Config -> DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used

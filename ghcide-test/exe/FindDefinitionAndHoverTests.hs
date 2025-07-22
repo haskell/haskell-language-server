@@ -187,7 +187,8 @@ tests = let
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
-  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], if ghcVersion < GHC910 then mkL bar 3 5 3 8 else mkL bar 3 0 3 14]
+  reexported = Position 55 14
+  reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], if ghcVersion < GHC910 || not isWindows then mkL bar 3 5 3 8 else mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
@@ -237,9 +238,9 @@ tests = let
   , testM yes            yes               imported   importedSig   "Imported symbol"
   , if isWindows then
         -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
-        testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
+        testM no     yes    reexported reexportedSig "Imported symbol reexported"
     else
-        testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
+        testM yes    yes    reexported reexportedSig "Imported symbol reexported"
   , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   , test yes yes import310 pkgTxt "show package name and its version"
   ]
