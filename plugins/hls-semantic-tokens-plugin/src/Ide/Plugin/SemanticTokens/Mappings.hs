@@ -13,6 +13,7 @@
 module Ide.Plugin.SemanticTokens.Mappings where
 
 import qualified Data.Array                      as A
+import           Data.Function
 import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (mapMaybe)
@@ -43,28 +44,34 @@ nameInfixOperator _ = Nothing
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
 -- | map from haskell semantic token type to LSP default token type
-toLspTokenType :: SemanticTokensConfig  -> HsSemanticTokenType -> SemanticTokenTypes
-toLspTokenType conf tk = case tk of
-  TFunction        -> stFunction conf
-  TVariable        -> stVariable conf
-  TClassMethod     -> stClassMethod conf
-  TTypeVariable    -> stTypeVariable conf
-  TDataConstructor -> stDataConstructor conf
-  TClass           -> stClass conf
-  TTypeConstructor -> stTypeConstructor conf
-  TTypeSynonym     -> stTypeSynonym conf
-  TTypeFamily      -> stTypeFamily conf
-  TRecordField     -> stRecordField conf
-  TPatternSynonym  -> stPatternSynonym conf
-  TModule          -> stModule conf
-  TOperator        -> stOperator conf
+toLspTokenType :: SemanticTokensConfig  -> HsTokenType -> SemanticTokenTypes
+toLspTokenType conf tk = conf & case tk of
+  HsSemanticTokenType TFunction        -> stFunction
+  HsSemanticTokenType TVariable        -> stVariable
+  HsSemanticTokenType TClassMethod     -> stClassMethod
+  HsSemanticTokenType TTypeVariable    -> stTypeVariable
+  HsSemanticTokenType TDataConstructor -> stDataConstructor
+  HsSemanticTokenType TClass           -> stClass
+  HsSemanticTokenType TTypeConstructor -> stTypeConstructor
+  HsSemanticTokenType TTypeSynonym     -> stTypeSynonym
+  HsSemanticTokenType TTypeFamily      -> stTypeFamily
+  HsSemanticTokenType TRecordField     -> stRecordField
+  HsSemanticTokenType TPatternSynonym  -> stPatternSynonym
+  HsSemanticTokenType TModule          -> stModule
+  HsSemanticTokenType TOperator        -> stOperator
+  HsSyntacticTokenType TKeyword        -> stKeyword
+  HsSyntacticTokenType TComment        -> stComment
+  HsSyntacticTokenType TStringLit      -> stStringLit
+  HsSyntacticTokenType TCharLit        -> stCharLit
+  HsSyntacticTokenType TNumberLit      -> stNumberLit
+  HsSyntacticTokenType TRecordSelector -> stRecordSelector
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
     | length xs /= Map.size mr = error "lspTokenReverseMap: token type mapping is not bijection"
     | otherwise = mr
     where xs = enumFrom minBound
-          mr = Map.fromList $ map (\x -> (toLspTokenType config x, x)) xs
+          mr = Map.fromList $ map (\x -> (toLspTokenType config (HsSemanticTokenType x), x)) xs
 
 lspTokenTypeHsTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> Maybe HsSemanticTokenType
 lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)

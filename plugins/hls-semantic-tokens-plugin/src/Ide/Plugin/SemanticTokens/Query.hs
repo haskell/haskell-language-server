@@ -17,6 +17,7 @@ import           GHC.Iface.Ext.Utils                  (RefMap)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModule),
+                                                       HsTokenType,
                                                        RangeSemanticTokenTypeList,
                                                        SemanticTokenId,
                                                        SemanticTokensConfig)
@@ -69,11 +70,11 @@ nameSemanticFromHie hieKind rm n = idSemanticFromRefMap rm (Right n)
 
 -------------------------------------------------
 
-rangeSemanticsSemanticTokens :: SemanticTokenId -> SemanticTokensConfig -> PositionMapping -> RangeSemanticTokenTypeList -> Either Text SemanticTokens
+rangeSemanticsSemanticTokens :: SemanticTokenId -> SemanticTokensConfig -> PositionMapping -> [(Range, HsTokenType)] -> Either Text SemanticTokens
 rangeSemanticsSemanticTokens sid stc mapping =
   makeSemanticTokensWithId (Just sid) . mapMaybe (\(ran, tk) -> toAbsSemanticToken <$> toCurrentRange mapping ran <*> return tk)
   where
-    toAbsSemanticToken :: Range -> HsSemanticTokenType -> SemanticTokenAbsolute
+    toAbsSemanticToken :: Range -> HsTokenType -> SemanticTokenAbsolute
     toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
       let len = endColumn - startColumn
        in SemanticTokenAbsolute

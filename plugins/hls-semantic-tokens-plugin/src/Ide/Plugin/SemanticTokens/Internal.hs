@@ -1,17 +1,23 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE OverloadedLabels    #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE UnicodeSyntax       #-}
+{-# LANGUAGE BlockArguments        #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE ImpredicativeTypes    #-}
+{-# LANGUAGE LiberalTypeSynonyms   #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE OverloadedLabels      #-}
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UnicodeSyntax         #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 -- |
 -- This module provides the core functionality of the plugin.
-module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, semanticConfigProperties, semanticTokensFullDelta) where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, getSyntacticTokensRule, semanticConfigProperties, semanticTokensFullDelta) where
 
 import           Control.Concurrent.STM                   (stateTVar)
 import           Control.Concurrent.STM.Stats             (atomically)
@@ -21,20 +27,28 @@ import           Control.Monad.Except                     (ExceptT, liftEither,
 import           Control.Monad.IO.Class                   (MonadIO (..))
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
+import           Control.Monad.Trans.Maybe
+import           Data.Data                                (Data (..))
+import           Data.List
 import qualified Data.Map.Strict                          as M
+import           Data.Maybe
+import           Data.Semigroup                           (First (..))
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
                                                            GetHieAst (GetHieAst),
+                                                           GetParsedModuleWithComments (..),
                                                            HieAstResult (HAR, hieAst, hieModule, refMap),
                                                            IdeResult, IdeState,
                                                            Priority (..),
                                                            Recorder, Rules,
                                                            WithPriority,
                                                            cmapWithPrio, define,
-                                                           fromNormalizedFilePath,
-                                                           hieKind)
+                                                           hieKind,
+                                                           srcSpanToRange,
+                                                           toNormalizedUri,
+                                                           useWithStale)
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
 import           Development.IDE.Core.Rules               (toIdeResult)
@@ -44,10 +58,11 @@ import           Development.IDE.Core.Shake               (ShakeExtras (..),
                                                            getVirtualFile)
 import           Development.IDE.GHC.Compat               hiding (Warning)
 import           Development.IDE.GHC.Compat.Util          (mkFastString)
+import           GHC.Parser.Annotation
 import           GHC.Iface.Ext.Types                      (HieASTs (getAsts),
                                                            pattern HiePath)
 import           Ide.Logger                               (logWith)
-import           Ide.Plugin.Error                         (PluginError (PluginInternalError),
+import           Ide.Plugin.Error                         (PluginError (PluginInternalError, PluginRuleFailed),
                                                            getNormalizedFilePathE,
                                                            handleMaybe,
                                                            handleMaybeM)
@@ -61,10 +76,17 @@ import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message            (MessageResult,
                                                            Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
 import           Language.LSP.Protocol.Types              (NormalizedFilePath,
+                                                           Range,
                                                            SemanticTokens,
+                                                           fromNormalizedFilePath,
                                                            type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
 import qualified StmContainers.Map                        as STM
+import           Type.Reflection                          (Typeable, eqTypeRep,
+                                                           pattern App,
+                                                           type (:~~:) (HRefl),
+                                                           typeOf, typeRep,
+                                                           withTypeable)
 
 
 $mkSemanticConfigFunctions
@@ -78,8 +100,17 @@ computeSemanticTokens recorder pid _ nfp = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
   semanticId <- lift getAndIncreaseSemanticTokensId
-  (RangeHsSemanticTokenTypes {rangeSemanticList}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping rangeSemanticList
+
+  (sortOn fst -> tokenList, First mapping) <- do
+    rangesyntacticTypes <- lift $ useWithStale GetSyntacticTokens nfp
+    rangesemanticTypes <- lift $ useWithStale GetSemanticTokens nfp
+    let mk w u (toks, mapping) = (map (fmap w) $ u toks, First mapping)
+    maybeToExceptT (PluginRuleFailed "no syntactic nor semantic tokens") $ hoistMaybe $
+      (mk HsSyntacticTokenType rangeSyntacticList <$> rangesyntacticTypes)
+      <>  (mk HsSemanticTokenType rangeSemanticList <$> rangesemanticTypes)
+
+  -- NOTE: rangeSemanticsSemanticTokens actually assumes that the tokesn are in order. that means they have to be sorted by position
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping tokenList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanticTokensFull" state computeSemanticTokensFull
@@ -133,6 +164,87 @@ getSemanticTokensRule recorder =
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
 
+getSyntacticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
+getSyntacticTokensRule recorder =
+  define (cmapWithPrio LogShake recorder) $ \GetSyntacticTokens nfp -> handleError recorder $ do
+    (parsedModule, _) <- withExceptT LogDependencyError $ useWithStaleE GetParsedModuleWithComments nfp
+    let tokList = computeRangeHsSyntacticTokenTypeList parsedModule
+    logWith recorder Debug $ LogSyntacticTokens tokList
+    pure tokList
+
+astTraversalWith :: forall b r. Data b => b -> (forall a. Data a => a -> [r]) -> [r]
+astTraversalWith ast f = mconcat $ flip gmapQ ast \y -> f y <> astTraversalWith y f
+
+{-# inline extractTyToTy #-}
+extractTyToTy :: forall f a. (Typeable f, Data a) => a -> Maybe (forall r. (forall b. Typeable b => f b -> r) -> r)
+extractTyToTy node
+  | App conRep argRep <- typeOf node
+  , Just HRefl <- eqTypeRep conRep (typeRep @f)
+  = Just $ withTypeable argRep $ (\k -> k node)
+  | otherwise = Nothing
+
+{-# inline extractTy #-}
+extractTy :: forall b a. (Typeable b, Data a) => a -> Maybe b
+extractTy node
+  | Just HRefl <- eqTypeRep (typeRep @b) (typeOf node)
+  = Just node
+  | otherwise = Nothing
+
+computeRangeHsSyntacticTokenTypeList :: ParsedModule -> RangeHsSyntacticTokenTypes
+computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
+  let toks = astTraversalWith pm_parsed_source \node -> mconcat
+         [ maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTy @EpToken node
+         -- FIXME: probably needs to be commented out for ghc > 9.10
+         , maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy @AddEpAnn node
+         , do
+           EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
+
+           mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p
+         , maybeToList $ mkFromLocatable TComment . (\x k -> k x) =<< extractTy @LEpaComment node
+         , do
+           L loc expr <- maybeToList $ extractTy @(LHsExpr GhcPs) node
+           let fromSimple = maybeToList . flip mkFromLocatable \k -> k loc
+           case expr of
+             HsOverLabel {} -> fromSimple TStringLit
+             HsOverLit _ (OverLit _ lit) -> fromSimple case lit of
+               HsIntegral {}   -> TNumberLit
+               HsFractional {} -> TNumberLit
+
+               HsIsString {}   -> TStringLit
+             HsLit _ lit -> fromSimple case lit of
+                 HsChar {}       -> TCharLit
+                 HsCharPrim {}   -> TCharLit
+
+                 HsInt {}        -> TNumberLit
+                 HsInteger {}    -> TNumberLit
+                 HsIntPrim {}    -> TNumberLit
+                 HsWordPrim {}   -> TNumberLit
+                 HsWord8Prim {}  -> TNumberLit
+                 HsWord16Prim {} -> TNumberLit
+                 HsWord32Prim {} -> TNumberLit
+                 HsWord64Prim {} -> TNumberLit
+                 HsInt8Prim {}   -> TNumberLit
+                 HsInt16Prim {}  -> TNumberLit
+                 HsInt32Prim {}  -> TNumberLit
+                 HsInt64Prim {}  -> TNumberLit
+                 HsFloatPrim {}  -> TNumberLit
+                 HsDoublePrim {} -> TNumberLit
+                 HsRat {}        -> TNumberLit
+
+                 HsString {}     -> TStringLit
+                 HsStringPrim {} -> TStringLit
+             HsGetField _ _ field -> maybeToList $ mkFromLocatable TRecordSelector \k -> k field
+             HsProjection _ projs -> foldMap (\proj -> maybeToList $ mkFromLocatable TRecordSelector \k -> k proj) projs
+             _ -> []
+         ]
+   in RangeHsSyntacticTokenTypes toks
+
+{-# inline mkFromLocatable #-}
+mkFromLocatable
+  :: HsSyntacticTokenType
+  -> (forall r. (forall a. HasSrcSpan a => a -> r) -> r)
+  -> Maybe (Range, HsSyntacticTokenType)
+mkFromLocatable tt w = w \tok -> let mrange = srcSpanToRange $ getLoc tok in fmap (, tt) mrange
 
 -- taken from /haskell-language-server/plugins/hls-code-range-plugin/src/Ide/Plugin/CodeRange/Rules.hs
 
