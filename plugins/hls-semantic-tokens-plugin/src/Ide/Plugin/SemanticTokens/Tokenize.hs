@@ -3,11 +3,10 @@
 
 module Ide.Plugin.SemanticTokens.Tokenize (computeRangeHsSemanticTokenTypeList) where
 
-import           Control.Lens                     (Identity (runIdentity))
 import           Control.Monad                    (foldM, guard)
 import           Control.Monad.State.Strict       (MonadState (get),
-                                                   MonadTrans (lift),
-                                                   evalStateT, modify, put)
+                                                   MonadTrans (lift), evalState,
+                                                   modify, put)
 import           Control.Monad.Trans.State.Strict (StateT, runStateT)
 import           Data.Char                        (isAlphaNum)
 import           Data.DList                       (DList)
@@ -72,7 +71,7 @@ foldMapM f ta = foldM (\b a -> mappend b <$> f a) mempty ta
 
 computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
 computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
-    RangeHsSemanticTokenTypes $ DL.toList $ runIdentity $ evalStateT (foldAst lookupHsTokenType ast) (mkPTokenState vf)
+    RangeHsSemanticTokenTypes $ DL.toList $ evalState (foldAst lookupHsTokenType ast) (mkPTokenState vf)
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
 foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))

@@ -26,21 +26,24 @@ import           Language.Haskell.TH
 import           Language.LSP.Protocol.Types     (LspEnum (..),
                                                   SemanticTokenTypes)
 
-docName :: HsSemanticTokenType -> T.Text
+docName :: HsTokenType -> T.Text
 docName tt = case tt of
-  TVariable        -> "variables"
-  TFunction        -> "functions"
-  TDataConstructor -> "data constructors"
-  TTypeVariable    -> "type variables"
-  TClassMethod     -> "typeclass methods"
-  TPatternSynonym  -> "pattern synonyms"
-  TTypeConstructor -> "type constructors"
-  TClass           -> "typeclasses"
-  TTypeSynonym     -> "type synonyms"
-  TTypeFamily      -> "type families"
-  TRecordField     -> "record fields"
-  TModule          -> "modules"
-  TOperator        -> "operators"
+  HsSemanticTokenType TVariable        -> "variables"
+  HsSemanticTokenType TFunction        -> "functions"
+  HsSemanticTokenType TDataConstructor -> "data constructors"
+  HsSemanticTokenType TTypeVariable    -> "type variables"
+  HsSemanticTokenType TClassMethod     -> "typeclass methods"
+  HsSemanticTokenType TPatternSynonym  -> "pattern synonyms"
+  HsSemanticTokenType TTypeConstructor -> "type constructors"
+  HsSemanticTokenType TClass           -> "typeclasses"
+  HsSemanticTokenType TTypeSynonym     -> "type synonyms"
+  HsSemanticTokenType TTypeFamily      -> "type families"
+  HsSemanticTokenType TRecordField     -> "record fields"
+  HsSemanticTokenType TModule          -> "modules"
+  HsSemanticTokenType TOperator        -> "operators"
+  HsSyntacticTokenType TKeyword        -> "keyword"
+  HsSyntacticTokenType TStringLit      -> "string literal"
+  HsSyntacticTokenType TComment        -> "comment"
 
 toConfigName :: String -> String
 toConfigName = ("st" <>)
@@ -55,15 +58,21 @@ lspTokenTypeDescriptions =
     )
     $ S.toList knownValues
 
-allHsTokenTypes :: [HsSemanticTokenType]
-allHsTokenTypes = enumFrom minBound
+allHsTokenTypes :: [HsTokenType]
+allHsTokenTypes = map HsSemanticTokenType (enumFrom minBound) <> map HsSyntacticTokenType (enumFrom minBound)
 
 lowerFirst :: String -> String
 lowerFirst []       = []
 lowerFirst (x : xs) = toLower x : xs
 
+-- TODO: drop the "syntax/semanticness" before showing
 allHsTokenNameStrings :: [String]
-allHsTokenNameStrings = map (drop 1 . show) allHsTokenTypes
+allHsTokenNameStrings = map (unwrap $ drop 1 . show) allHsTokenTypes
+  where
+    unwrap :: (forall a. Show a => a -> String) -> HsTokenType -> String
+    unwrap k tt' = case tt' of
+      HsSemanticTokenType tt  -> k tt
+      HsSyntacticTokenType tt -> k tt
 
 defineSemanticProperty ::
   (NotElem s r, KnownSymbol s) =>
