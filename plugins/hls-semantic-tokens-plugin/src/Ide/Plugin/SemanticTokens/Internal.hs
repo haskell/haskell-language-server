@@ -34,6 +34,7 @@ import qualified Data.Map.Strict                          as M
 import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
+import           Debug.Trace
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
                                                            GetHieAst (GetHieAst),

@@ -5,7 +5,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StrictData        #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
@@ -181,6 +180,7 @@ data SemanticLog
   | LogConfig SemanticTokensConfig
   | LogMsg String
   | LogNoVF
+  | LogSyntacticTokens RangeHsSyntacticTokenTypes
   | LogSemanticTokensDeltaMisMatch Text (Maybe Text)
 
 instance Pretty SemanticLog where
@@ -194,5 +194,4 @@ instance Pretty SemanticLog where
                       -> "SemanticTokensDeltaMisMatch: previousIdFromRequest: " <> pretty previousIdFromRequest
                       <> " previousIdFromCache: " <> pretty previousIdFromCache
     LogDependencyError err -> "SemanticTokens' dependency error: " <> pretty err
-
 type SemanticTokenId = Text
