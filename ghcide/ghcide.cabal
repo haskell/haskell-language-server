@@ -51,6 +51,7 @@ library
     , bytestring
     , case-insensitive
     , co-log-core
+    , websockets
     , containers
     , cryptohash-sha1              >=0.11.100 && <0.12
     , data-default

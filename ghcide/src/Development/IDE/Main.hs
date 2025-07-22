@@ -9,16 +9,21 @@ module Development.IDE.Main
 ,defaultMain
 ,testing
 ,Log(..)
+,commKindToCommunication
+,CommunicationKind(..)
 ) where
 
 import           Control.Concurrent.Extra                 (withNumCapabilities)
-import           Control.Concurrent.MVar                  (MVar, newEmptyMVar,
-                                                           putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
+import           Control.Monad                            (forever)
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
-import           Control.Monad.IO.Class                   (liftIO)
 import qualified Data.Aeson                               as J
+import qualified Data.ByteString                          as BS
+import           Data.ByteString.Builder.Extra            (defaultChunkSize)
+import qualified Data.ByteString.Char8                    as C8
+import qualified Data.ByteString.Lazy                     as BSL
+import qualified Data.ByteString.Lazy.Char8               as C8L
 import           Data.Coerce                              (coerce)
 import           Data.Default                             (Default (def))
 import           Data.Hashable                            (hashed)
@@ -28,8 +33,10 @@ import           Data.List.Extra                          (intercalate,
                                                            partition)
 import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
+import qualified Data.Text.Encoding                       as T
+import qualified Data.Text.Lazy.Encoding                  as TL
 import           Development.IDE                          (Action,
-                                                           Priority (Debug),
+                                                           Priority (Debug, Error),
                                                            Rules, hDuplicateTo')
 import           Development.IDE.Core.Debouncer           (Debouncer,
                                                            newAsyncDebouncer)
@@ -55,7 +62,8 @@ import           Development.IDE.Core.Shake               (IdeState (shakeExtras
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Graph                    (action)
-import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
+import           Development.IDE.LSP.LanguageServer       (Communication (..),
+                                                           runLanguageServer,
                                                            runWithWorkerThreads,
                                                            setupLSP)
 import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
@@ -112,6 +120,7 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            ipMap, pluginId)
 import           Language.LSP.Protocol.Types              (normalizedFilePathToUri)
 import qualified Language.LSP.Server                      as LSP
+import qualified Network.WebSockets                       as WS
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
 import qualified System.Directory.Extra                   as IO
@@ -119,19 +128,17 @@ import           System.Exit                              (ExitCode (ExitFailure
                                                            exitWith)
 import           System.FilePath                          (takeExtension,
                                                            takeFileName)
-import           System.IO                                (BufferMode (LineBuffering, NoBuffering),
-                                                           Handle, hFlush,
-                                                           hPutStrLn,
-                                                           hSetBuffering,
-                                                           hSetEncoding, stderr,
-                                                           stdin, stdout, utf8)
+import           System.IO                                (hPutStrLn,
+                                                           hSetEncoding, utf8)
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
+import           UnliftIO
 
 data Log
   = LogHeapStats !HeapStats.Log
   | LogLspStart [PluginId]
+  | LogLspInstanceSpawned
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
   | LogConfigurationChange T.Text
@@ -142,6 +149,17 @@ data Log
   | LogSession Session.Log
   | LogPluginHLS PluginHLS.Log
   | LogRules Rules.Log
+  | LogWebsocket WebsocketLog
+  deriving Show
+
+data WebsocketLog
+  = WebsocketShutDown
+  | WebsocketNewConnection
+  | WebsocketConnectionClosed
+  | WebsocketStarted
+  | WebsocketPing
+  | WebsocketIncomingRequest BS.StrictByteString
+  | WebsocketOutgoingResponse BSL.LazyByteString
   deriving Show
 
 instance Pretty Log where
@@ -153,6 +171,7 @@ instance Pretty Log where
         , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
         , "PluginIds:" <+> pretty (coerce @_ @[T.Text] pluginIds)
         ]
+    LogLspInstanceSpawned -> "Spawned a new instance."
     LogLspStartDuration duration ->
       "Started LSP server in" <+> pretty (showDuration duration)
     LogShouldRunSubset shouldRunSubset ->
@@ -165,12 +184,28 @@ instance Pretty Log where
     LogSession msg -> pretty msg
     LogPluginHLS msg -> pretty msg
     LogRules msg -> pretty msg
+    LogWebsocket wmsg -> "Websocket:" <+> pretty wmsg
+
+instance Pretty WebsocketLog where
+  pretty = \case
+    WebsocketStarted -> "starting websocket server, waiting for connections"
+    WebsocketShutDown -> "shut down server"
+    WebsocketNewConnection -> "new connection established"
+    WebsocketConnectionClosed -> "closed connection to client"
+    WebsocketPing -> "ping"
+    WebsocketIncomingRequest req -> vsep
+      [ "incoming request:"
+      , pretty (T.decodeUtf8 req)
+      ]
+    WebsocketOutgoingResponse resp -> vsep
+      ["outgoing response"
+      , pretty (TL.decodeUtf8 resp)]
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
     | Db {hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
-    | LSP   -- ^ Run the LSP server
+    | LSP CommunicationKind  -- ^ Run the LSP server
     | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
@@ -179,18 +214,20 @@ deriving instance Show HieDb.Command
 deriving instance Show HieDb.Options
 
 isLSP :: Command -> Bool
-isLSP LSP = True
-isLSP _   = False
+isLSP LSP {} = True
+isLSP _      = False
 
 commandP :: IdePlugins IdeState -> Parser Command
 commandP plugins =
     hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
             <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser) hieInfo)
-            <> command "lsp" (info (pure LSP) lspInfo)
+            <> command "lsp" (info (pure $ LSP StdIO) lspInfo)
+            <> command "ws" (info (fmap LSP $ Websocket <$> strOption (long "host" <> value  "localhost") <*> option auto (long "port" <> value 8007)) wsInfo)
             <> pluginCommands
             )
   where
     fileCmd = many (argument str (metavar "FILES/DIRS..."))
+    wsInfo = fullDesc <> progDesc "run the language server over a websocket connection"
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
     fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
     hieInfo = fullDesc <> progDesc "Query .hie files"
@@ -199,7 +236,6 @@ commandP plugins =
         [ command (T.unpack pId) (Custom <$> p)
         | PluginDescriptor{pluginCli = Just p, pluginId = PluginId pId} <- ipMap plugins
         ]
-
 
 data Arguments = Arguments
     { argsProjectRoot           :: FilePath
@@ -213,17 +249,20 @@ data Arguments = Arguments
     , argsDefaultHlsConfig      :: Config
     , argsGetHieDbLoc           :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
     , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
-    , argsHandleIn              :: IO Handle
-    , argsHandleOut             :: IO Handle
     , argsThreads               :: Maybe Natural
     , argsMonitoring            :: IO Monitoring
     , argsDisableKick           :: Bool -- ^ flag to disable kick used for testing
     }
 
+data CommunicationKind
+  = StdIO
+  | Websocket {host :: String, port :: Int}
+  deriving (Eq, Show)
+
 defaultArguments :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
 defaultArguments recorder projectRoot plugins = Arguments
         { argsProjectRoot = projectRoot -- ^ see Note [Root Directory]
-        , argCommand = LSP
+        , argCommand = LSP StdIO
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)) <> plugins
@@ -245,21 +284,6 @@ defaultArguments recorder projectRoot plugins = Arguments
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
         , argsThreads = Nothing
-        , argsHandleIn = pure stdin
-        , argsHandleOut = do
-                -- Move stdout to another file descriptor and duplicate stderr
-                -- to stdout. This guards against stray prints from corrupting the JSON-RPC
-                -- message stream.
-                newStdout <- hDuplicate stdout
-                stderr `hDuplicateTo'` stdout
-                hSetBuffering stdout NoBuffering
-
-                -- Print out a single space to assert that the above redirection works.
-                -- This is interleaved with the logger, hence we just print a space here in
-                -- order not to mess up the output too much. Verified that this breaks
-                -- the language server tests without the redirection.
-                putStr " " >> hFlush stdout
-                return newStdout
         , argsMonitoring = OpenTelemetry.monitoring
         , argsDisableKick = False
         }
@@ -286,6 +310,68 @@ testing recorder projectRoot plugins =
       , argsLspOptions = lspOptions
       }
 
+commKindToCommunication :: Recorder (WithPriority Log) -> (Communication -> IO ()) -> CommunicationKind -> IO ()
+commKindToCommunication recorder runServerWithCommunication = \case
+  StdIO -> runServerWithCommunication =<< do
+    hout <- do
+        -- Move stdout to another file descriptor and duplicate stderr
+        -- to stdout. This guards against stray prints from corrupting the JSON-RPC
+        -- message stream.
+        newStdout <- hDuplicate stdout
+        stderr `hDuplicateTo'` stdout
+        hSetBuffering stdout NoBuffering
+
+        -- Print out a single space to assert that the above redirection works.
+        -- This is interleaved with the logger, hence we just print a space here in
+        -- order not to mess up the output too much. Verified that this breaks
+        -- the language server tests without the redirection.
+        putStr " " >> hFlush stdout
+        return newStdout
+    let hin = stdin
+    hSetBuffering hin NoBuffering
+    hSetEncoding hin utf8
+    pure Communication
+      { inwards = BS.hGetSome hin defaultChunkSize
+      , outwards = \out -> do
+          BSL.hPut hout out
+          hFlush hout
+      }
+  Websocket host port -> do
+    let wsRec = cmapWithPrio LogWebsocket recorder
+    logWith wsRec Info WebsocketStarted
+    WS.runServer host port $ \pending -> do
+      -- NOTE: this is where to send back headers if any
+      conn <- WS.acceptRequest pending
+      logWith wsRec Info WebsocketNewConnection
+
+      (WS.withPingThread conn 30 (logWith wsRec Debug WebsocketPing) $ do
+        outChan <- newChan
+        inChan <- newChan
+
+        let comm = Communication {inwards = readChan inChan, outwards = writeChan outChan}
+
+        withAsync (runServerWithCommunication comm) $ \_lspAsync ->
+          -- NOTE: web clients don't add Content-Length headers since
+          -- websockets do the chunking for us, since the haskell lsp library
+          -- doesn't support this behaviour, we add and remove the header ourselves
+          -- We exploit the fact that LSP messages look like this:
+          -- <headers> Content-Length: <content length> \r\n\r\n { <json content> }
+          race_
+            (forever $ do
+              msg <- readChan outChan
+              let msg' = C8L.dropWhile (/= '{') msg
+              logWith wsRec Debug (WebsocketOutgoingResponse msg')
+              WS.sendTextData conn msg'
+            )
+            (forever $ do
+              msg <- WS.receiveData conn
+              let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
+              logWith wsRec Debug (WebsocketIncomingRequest  msg')
+              writeChan inChan msg'
+            )
+          ) `finally` (logWith wsRec Info WebsocketConnectionClosed)
+      logWith wsRec Error WebsocketShutDown
+
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
 defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats recorder) fun
  where
@@ -308,14 +394,11 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         -- Shake database restart, i.e. on every user edit.
 
     debouncer <- argsDebouncer
-    inH <- argsHandleIn
-    outH <- argsHandleOut
-
     numProcessors <- getNumProcessors
     let numCapabilities = max 1 $ maybe (numProcessors `div` 2) fromIntegral argsThreads
 
     case argCommand of
-        LSP -> withNumCapabilities numCapabilities $ do
+        LSP commKind -> withNumCapabilities numCapabilities $ do
             ioT <- offsetTime
             logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
@@ -323,6 +406,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 getIdeState ideStateVar env rootPath withHieDb threadQueue = do
                   t <- ioT
                   logWith recorder Info $ LogLspStartDuration t
+
                   sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions rootPath (tLoaderQueue threadQueue)
                   config <- LSP.runLspT env LSP.getConfig
                   let def_options = argsIdeOptions config sessionLoader
@@ -358,7 +442,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 onConfigChange ideStateVar cfg = do
                   -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
                   let cfgObj = J.toJSON cfg
-                  mide <- liftIO $ tryReadMVar ideStateVar
+                  mide <- tryReadMVar ideStateVar
                   case mide of
                     Nothing -> pure ()
                     Just ide -> liftIO $ do
@@ -368,9 +452,20 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                             modifyClientSettings ide (const $ Just cfgObj)
                             return [toNoFileKey Rules.GetClientSettings]
 
-            do
-                ideStateVar <- newEmptyMVar
-                runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig (onConfigChange ideStateVar) (setup ideStateVar)
+            let runServerWithCommunication comm = do
+                    ideStateVar <- newEmptyMVar
+                    logWith recorder Info LogLspInstanceSpawned
+                    runLanguageServer
+                      (cmapWithPrio LogLanguageServer recorder)
+                      options
+                      comm
+                      argsDefaultHlsConfig
+                      argsParseConfig
+                      (onConfigChange ideStateVar)
+                      (setup ideStateVar)
+
+            commKindToCommunication recorder runServerWithCommunication commKind
+
             dumpSTMStats
         Check argFiles -> do
           let dir = argsProjectRoot

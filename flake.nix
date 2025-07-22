@@ -66,6 +66,7 @@
           # This removes a rebuild with a different GHC version. The drawback of
           # this approach is that our shell may pull two GHC versions in scope.
           buildInputs = [
+            hpkgs.haskell-language-server
             # Compiler toolchain
             hpkgs.ghc
             hpkgs.haskell-language-server

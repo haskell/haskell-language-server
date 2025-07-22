@@ -4,7 +4,8 @@
 module Arguments(Arguments(..), getArguments) where
 
 import           Development.IDE      (IdeState)
-import           Development.IDE.Main (Command (..), commandP)
+import           Development.IDE.Main (Command (..), CommunicationKind (..),
+                                       commandP)
 import           Ide.Types            (IdePlugins)
 import           Options.Applicative
 
@@ -44,4 +45,4 @@ arguments plugins = Arguments
       <*> switch (long "conservative-change-tracking" <> help "disable reactive change tracking (for testing/debugging)")
       where
           checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
-          lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP client")
+          lspCommand = LSP StdIO <$ flag' True (long "lsp" <> help "Start talking to an LSP client")

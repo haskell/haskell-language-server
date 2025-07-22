@@ -11,6 +11,7 @@ module Development.IDE.LSP.LanguageServer
     , Log(..)
     , ThreadQueue
     , runWithWorkerThreads
+    , Communication (..)
     ) where
 
 import           Control.Concurrent.STM
@@ -27,7 +28,6 @@ import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                   as LSP
-import           System.IO
 import           UnliftIO.Async
 import           UnliftIO.Concurrent
 import           UnliftIO.Directory
@@ -35,8 +35,12 @@ import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
 import           Control.Exception                     (BlockedIndefinitelyOnMVar (..))
+import           Control.Exception.Backtrace           (BacktraceMechanism (..),
+                                                        setBacktraceMechanismState)
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
+import           Data.ByteString
+import           Data.ByteString.Lazy
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
@@ -82,13 +86,17 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
+data Communication
+  = Communication
+  { inwards  :: IO StrictByteString
+  , outwards :: LazyByteString -> IO ()
+  }
 
 runLanguageServer
     :: forall config a m. (Show config)
     => Recorder (WithPriority Log)
     -> LSP.Options
-    -> Handle -- input
-    -> Handle -- output
+    -> Communication
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (config -> m config ())
@@ -97,7 +105,7 @@ runLanguageServer
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO, [IO ()]))
     -> IO ()
-runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
+runLanguageServer recorder options comm defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -120,11 +128,11 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
         lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
     untilMVar clientMsgVar $
-          LSP.runServerWithHandles
+          LSP.runServerWith
             lspCologAction
             lspCologAction
-            inH
-            outH
+            (inwards comm)
+            (outwards comm)
             serverDefinition
           `finally` sequence_ onExit
 
