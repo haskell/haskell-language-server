@@ -48,9 +48,9 @@ resolveTests :: TestTree
 resolveTests = knownBrokenForGhcVersions [GHC910] "apply-refact doesn't work on 9.10" $ testGroup "hlint resolve tests"
   [
     ignoreHintGoldenResolveTest
-      "Resolve version of: Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
-      "UnrecognizedPragmasOff"
-      (Point 3 8)
+      "Resolve version of: Ignore hint in this module inserts hlint ignore pragma"
+      "IgnoreHintAction"
+      (Point 2 8)
       "Eta reduce"
   , applyHintGoldenResolveTest
       "Resolve version of: [#2612] Apply hint works when operator fixities go right-to-left"
@@ -64,14 +64,9 @@ ignoreHintTests :: TestTree
 ignoreHintTests = testGroup "hlint ignore hint tests"
   [
     ignoreHintGoldenTest
-      "Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
-      "UnrecognizedPragmasOff"
-      (Point 3 8)
-      "Eta reduce"
-  , ignoreHintGoldenTest
-      "Ignore hint in this module inserts only hlint ignore pragma if warn unrecognized pragmas is on"
-      "UnrecognizedPragmasOn"
-      (Point 3 9)
+      "Ignore hint in this module inserts hlint ignore pragma"
+      "IgnoreHintAction"
+      (Point 2 8)
       "Eta reduce"
   ]
 
