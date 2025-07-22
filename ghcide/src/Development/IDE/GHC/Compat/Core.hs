@@ -630,9 +630,35 @@ instance HasSrcSpan SrcSpan where
 instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
   getLoc = GHC.getLoc
 
+#if MIN_VERSION_ghc(9,11,0)
+instance HasSrcSpan (GHC.EpToken sym) where
+  getLoc = GHC.getHasLoc
+#else
+instance HasSrcSpan (GHC.EpToken sym) where
+  getLoc = GHC.getHasLoc . \case
+    GHC.NoEpTok -> Nothing
+    GHC.EpTok loc -> Just loc
+#endif
+
 #if MIN_VERSION_ghc(9,9,0)
 instance HasSrcSpan (EpAnn a) where
   getLoc = GHC.getHasLoc
+#endif
+
+#if !MIN_VERSION_ghc(9,11,0)
+instance HasSrcSpan GHC.AddEpAnn where
+  getLoc (GHC.AddEpAnn _ loc) = getLoc loc
+
+instance HasSrcSpan GHC.EpaLocation where
+  getLoc loc = GHC.getHasLoc loc
+#endif
+
+#if !MIN_VERSION_ghc(9,11,0)
+instance HasSrcSpan GHC.LEpaComment where
+  getLoc :: GHC.LEpaComment -> SrcSpan
+  getLoc (GHC.L l _) = case l of
+    SrcLoc.EpaDelta {} -> panic "compiler inserted epadelta into NoCommentsLocation"
+    SrcLoc.EpaSpan span -> span
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
