@@ -180,7 +180,7 @@ extractTyToTy :: forall f a. (Typeable f, Data a) => a -> Maybe (forall r. (fora
 extractTyToTy node
   | App conRep argRep <- typeOf node
   , Just HRefl <- eqTypeRep conRep (typeRep @f)
-  = Just $ withTypeable argRep $ (\k -> k node)
+  = Just $ withTypeable argRep \k -> k node
   | otherwise = Nothing
 
 {-# inline extractTy #-}
@@ -193,13 +193,17 @@ extractTy node
 computeRangeHsSyntacticTokenTypeList :: ParsedModule -> RangeHsSyntacticTokenTypes
 computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
   let toks = astTraversalWith pm_parsed_source \node -> mconcat
-         [ maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTy @EpToken node
-         -- FIXME: probably needs to be commented out for ghc > 9.10
-         -- , maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy node
-         -- , do
-         --   EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
+         [
+#if MIN_VERSION_ghc(9,9,0)
+           maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTy @EpToken node,
+#endif
+#if !MIN_VERSION_ghc(9,11,0)
+           maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy @AddEpAnn node
+         , do
+           EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
 
-         --   mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p
+           mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p
+#endif
          , maybeToList $ mkFromLocatable TComment . (\x k -> k x) =<< extractTy @LEpaComment node
          , do
            L loc expr <- maybeToList $ extractTy @(LHsExpr GhcPs) node
@@ -219,13 +223,17 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
                  HsInteger {}         -> TNumberLit
                  HsIntPrim {}         -> TNumberLit
                  HsWordPrim {}        -> TNumberLit
+#if MIN_VERSION_ghc(9,9,0)
                  HsWord8Prim {}       -> TNumberLit
                  HsWord16Prim {}      -> TNumberLit
                  HsWord32Prim {}      -> TNumberLit
+#endif
                  HsWord64Prim {}      -> TNumberLit
+#if MIN_VERSION_ghc(9,9,0)
                  HsInt8Prim {}        -> TNumberLit
                  HsInt16Prim {}       -> TNumberLit
                  HsInt32Prim {}       -> TNumberLit
+#endif
                  HsInt64Prim {}       -> TNumberLit
                  HsFloatPrim {}       -> TNumberLit
                  HsDoublePrim {}      -> TNumberLit
