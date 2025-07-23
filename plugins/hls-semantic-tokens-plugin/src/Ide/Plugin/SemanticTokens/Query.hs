@@ -67,9 +67,9 @@ nameSemanticFromHie hieKind rm n = idSemanticFromRefMap rm (Right n)
 
 -------------------------------------------------
 
-rangeSemanticsSemanticTokens :: SemanticTokenId -> SemanticTokensConfig -> PositionMapping -> [(Range, HsTokenType)] -> Either Text SemanticTokens
-rangeSemanticsSemanticTokens sid stc mapping =
-  makeSemanticTokensWithId (Just sid) . mapMaybe (\(ran, tk) -> toAbsSemanticToken <$> toCurrentRange mapping ran <*> return tk)
+rangeSemanticsSemanticTokens :: SemanticTokenId -> SemanticTokensConfig -> [(Maybe Range, HsTokenType)] -> Either Text SemanticTokens
+rangeSemanticsSemanticTokens sid stc =
+  makeSemanticTokensWithId (Just sid) . mapMaybe (\(ran, tk) -> toAbsSemanticToken <$> ran <*> return tk)
   where
     toAbsSemanticToken :: Range -> HsTokenType -> SemanticTokenAbsolute
     toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =

@@ -14,7 +14,6 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UnicodeSyntax         #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 -- |
 -- This module provides the core functionality of the plugin.
@@ -33,7 +32,6 @@ import           Data.Data                                (Data (..))
 import           Data.List
 import qualified Data.Map.Strict                          as M
 import           Data.Maybe
-import           Data.Semigroup                           (First (..))
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
@@ -51,6 +49,7 @@ import           Development.IDE                          (Action,
                                                            useWithStale)
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
+import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Rules               (toIdeResult)
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake               (ShakeExtras (..),
@@ -99,16 +98,16 @@ computeSemanticTokens recorder pid _ nfp = do
   logWith recorder Debug (LogConfig config)
   semanticId <- lift getAndIncreaseSemanticTokensId
 
-  (sortOn fst -> tokenList, First mapping) <- do
+  tokenList <- sortOn fst <$> do
     rangesyntacticTypes <- lift $ useWithStale GetSyntacticTokens nfp
     rangesemanticTypes <- lift $ useWithStale GetSemanticTokens nfp
-    let mk w u (toks, mapping) = (map (fmap w) $ u toks, First mapping)
+    let mk w u (toks, mapping) = map (\(ran, tok) -> (toCurrentRange mapping ran, w tok)) $ u toks
     maybeToExceptT (PluginRuleFailed "no syntactic nor semantic tokens") $ hoistMaybe $
       (mk HsSyntacticTokenType rangeSyntacticList <$> rangesyntacticTypes)
       <>  (mk HsSemanticTokenType rangeSemanticList <$> rangesemanticTypes)
 
   -- NOTE: rangeSemanticsSemanticTokens actually assumes that the tokesn are in order. that means they have to be sorted by position
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping tokenList
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config tokenList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanticTokensFull" state computeSemanticTokensFull
@@ -166,9 +165,7 @@ getSyntacticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
 getSyntacticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSyntacticTokens nfp -> handleError recorder $ do
     (parsedModule, _) <- withExceptT LogDependencyError $ useWithStaleE GetParsedModuleWithComments nfp
-    let tokList = computeRangeHsSyntacticTokenTypeList parsedModule
-    logWith recorder Debug $ LogSyntacticTokens tokList
-    pure tokList
+    pure $ computeRangeHsSyntacticTokenTypeList parsedModule
 
 astTraversalWith :: forall b r. Data b => b -> (forall a. Data a => a -> [r]) -> [r]
 astTraversalWith ast f = mconcat $ flip gmapQ ast \y -> f y <> astTraversalWith y f
