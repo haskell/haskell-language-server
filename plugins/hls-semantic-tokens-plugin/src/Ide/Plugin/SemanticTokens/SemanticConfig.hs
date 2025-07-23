@@ -44,6 +44,9 @@ docName tt = case tt of
   HsSyntacticTokenType TKeyword        -> "keyword"
   HsSyntacticTokenType TStringLit      -> "string literal"
   HsSyntacticTokenType TComment        -> "comment"
+  HsSyntacticTokenType TCharLit        -> "char literal"
+  HsSyntacticTokenType TNumberLit      -> "number literal"
+  HsSyntacticTokenType TRecordSelector -> "record selector"
 
 toConfigName :: String -> String
 toConfigName = ("st" <>)
