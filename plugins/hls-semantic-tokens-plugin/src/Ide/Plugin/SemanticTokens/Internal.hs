@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments        #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE ImpredicativeTypes    #-}
@@ -47,7 +48,6 @@ import           Development.IDE                          (Action,
                                                            cmapWithPrio, define,
                                                            hieKind,
                                                            srcSpanToRange,
-                                                           toNormalizedUri,
                                                            useWithStale)
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
@@ -195,11 +195,11 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
   let toks = astTraversalWith pm_parsed_source \node -> mconcat
          [ maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTy @EpToken node
          -- FIXME: probably needs to be commented out for ghc > 9.10
-         , maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy @AddEpAnn node
-         , do
-           EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
+         -- , maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy node
+         -- , do
+         --   EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
 
-           mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p
+         --   mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p
          , maybeToList $ mkFromLocatable TComment . (\x k -> k x) =<< extractTy @LEpaComment node
          , do
            L loc expr <- maybeToList $ extractTy @(LHsExpr GhcPs) node
@@ -212,29 +212,36 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
 
                HsIsString {}   -> TStringLit
              HsLit _ lit -> fromSimple case lit of
-                 HsChar {}       -> TCharLit
-                 HsCharPrim {}   -> TCharLit
+                 HsChar {}            -> TCharLit
+                 HsCharPrim {}        -> TCharLit
 
-                 HsInt {}        -> TNumberLit
-                 HsInteger {}    -> TNumberLit
-                 HsIntPrim {}    -> TNumberLit
-                 HsWordPrim {}   -> TNumberLit
-                 HsWord8Prim {}  -> TNumberLit
-                 HsWord16Prim {} -> TNumberLit
-                 HsWord32Prim {} -> TNumberLit
-                 HsWord64Prim {} -> TNumberLit
-                 HsInt8Prim {}   -> TNumberLit
-                 HsInt16Prim {}  -> TNumberLit
-                 HsInt32Prim {}  -> TNumberLit
-                 HsInt64Prim {}  -> TNumberLit
-                 HsFloatPrim {}  -> TNumberLit
-                 HsDoublePrim {} -> TNumberLit
-                 HsRat {}        -> TNumberLit
+                 HsInt {}             -> TNumberLit
+                 HsInteger {}         -> TNumberLit
+                 HsIntPrim {}         -> TNumberLit
+                 HsWordPrim {}        -> TNumberLit
+                 HsWord8Prim {}       -> TNumberLit
+                 HsWord16Prim {}      -> TNumberLit
+                 HsWord32Prim {}      -> TNumberLit
+                 HsWord64Prim {}      -> TNumberLit
+                 HsInt8Prim {}        -> TNumberLit
+                 HsInt16Prim {}       -> TNumberLit
+                 HsInt32Prim {}       -> TNumberLit
+                 HsInt64Prim {}       -> TNumberLit
+                 HsFloatPrim {}       -> TNumberLit
+                 HsDoublePrim {}      -> TNumberLit
+                 HsRat {}             -> TNumberLit
 
-                 HsString {}     -> TStringLit
-                 HsStringPrim {} -> TStringLit
+                 HsString {}          -> TStringLit
+                 HsStringPrim {}      -> TStringLit
+#if MIN_VERSION_ghc(9,11,0)
+                 HsMultilineString {} -> TStringLit
+#endif
              HsGetField _ _ field -> maybeToList $ mkFromLocatable TRecordSelector \k -> k field
+#if MIN_VERSION_ghc(9,11,0)
+             HsProjection _ projs -> foldMap (\dotFieldOcc -> maybeToList $ mkFromLocatable TRecordSelector \k -> k dotFieldOcc.dfoLabel) projs
+#else
              HsProjection _ projs -> foldMap (\proj -> maybeToList $ mkFromLocatable TRecordSelector \k -> k proj) projs
+#endif
              _ -> []
          ]
    in RangeHsSyntacticTokenTypes toks
