@@ -196,14 +196,14 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
            maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTy @EpToken node,
 #endif
 #if !MIN_VERSION_ghc(9,11,0)
-           maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy @AddEpAnn node
-         , do
+           maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy @AddEpAnn node,
+           do
            EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
 
-           mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p
+           mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p,
 #endif
-         , maybeToList $ mkFromLocatable TComment . (\x k -> k x) =<< extractTy @LEpaComment node
-         , do
+           maybeToList $ mkFromLocatable TComment . (\x k -> k x) =<< extractTy @LEpaComment node,
+           do
            L loc expr <- maybeToList $ extractTy @(LHsExpr GhcPs) node
            let fromSimple = maybeToList . flip mkFromLocatable \k -> k loc
            case expr of
