@@ -653,7 +653,7 @@ instance HasSrcSpan GHC.EpaLocation where
   getLoc loc = GHC.getHasLoc loc
 #endif
 
-#if !MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,9,0)
 instance HasSrcSpan GHC.LEpaComment where
   getLoc :: GHC.LEpaComment -> SrcSpan
   getLoc (GHC.L l _) = case l of
