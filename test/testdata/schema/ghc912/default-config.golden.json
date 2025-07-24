@@ -134,21 +134,27 @@
         },
         "semanticTokens": {
             "config": {
+                "charLitToken": "string",
                 "classMethodToken": "method",
                 "classToken": "class",
+                "commentToken": "comment",
                 "dataConstructorToken": "enumMember",
                 "functionToken": "function",
+                "keywordToken": "keyword",
                 "moduleToken": "namespace",
+                "numberLitToken": "number",
                 "operatorToken": "operator",
                 "patternSynonymToken": "macro",
                 "recordFieldToken": "property",
+                "recordSelectorToken": "property",
+                "stringLitToken": "string",
                 "typeConstructorToken": "enum",
                 "typeFamilyToken": "interface",
                 "typeSynonymToken": "type",
                 "typeVariableToken": "typeParameter",
                 "variableToken": "variable"
             },
-            "globalOn": false
+            "globalOn": true
         },
         "signatureHelp": {
             "globalOn": true
