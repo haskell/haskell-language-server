@@ -148,7 +148,9 @@ extractInfoFromSmallestContainingFunctionApplicationAst position hieAsts extract
 type Annotation = (FastStringCompat, FastStringCompat)
 
 nodeHasAnnotation :: Annotation -> HieAST a -> Bool
-nodeHasAnnotation annotation = sourceNodeInfo >>> maybe False (isAnnotationInNodeInfo annotation)
+nodeHasAnnotation annotation hieAst = case sourceNodeInfo hieAst of
+    Nothing       -> False
+    Just nodeInfo -> isAnnotationInNodeInfo annotation nodeInfo
 
 -- TODO(@linj): the left most node may not be the function node. example: (if True then f else g) x
 getLeftMostNode :: HieAST a -> HieAST a
