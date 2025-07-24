@@ -33,9 +33,9 @@ main =
                     Nothing,
                     Nothing,
                     Nothing,
-                    Just $ SignatureHelp [SignatureInformation "f :: Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)), -- TODO(@linj) or Nothing?
+                    Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Nothing -- TODO(@linj) or highlight the last parameter?
+                    Just $ SignatureHelp [SignatureInformation "f :: Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
                   "2 parameters"
@@ -47,7 +47,7 @@ main =
                   |]
                   [ Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Nothing, -- TODO(@linj) or highligt the first/second parameter?
+                    Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ],
               mkTest
@@ -75,7 +75,7 @@ main =
                     Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Nothing, -- TODO(@linj) or the first/second parameter of f
+                    Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ],
               mkTest
@@ -119,8 +119,8 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Nothing,
                     Just $ SignatureHelp [SignatureInformation "g :: Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "g :: Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Nothing, -- TODO(@linj) or the first/second parameter of f
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ],
               mkTest
