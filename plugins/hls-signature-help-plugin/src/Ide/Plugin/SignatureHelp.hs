@@ -74,31 +74,26 @@ descriptor _recorder pluginId =
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken _mContext) = do
     nfp <- getNormalizedFilePathE uri
-    mResult <- runIdeActionE "signatureHelp" (shakeExtras ideState) $ do
+    results <- runIdeActionE "signatureHelp" (shakeExtras ideState) $ do
         -- TODO(@linj) why HAR {hieAst} may have more than one AST?
         (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
         case fromCurrentPosition positionMapping position of
-            Nothing -> pure Nothing
+            Nothing -> pure []
             Just oldPosition -> do
-                let functionName =
-                        extractInfoFromSmallestContainingFunctionApplicationAst
-                            oldPosition
-                            hieAst
-                            (\span -> getLeftMostNode >>> getNodeName span)
-                    functionType =
-                        extractInfoFromSmallestContainingFunctionApplicationAst
-                            oldPosition
-                            hieAst
-                            (\span -> getLeftMostNode >>> getNodeType hieKind span)
-                    argumentNumber =
-                        extractInfoFromSmallestContainingFunctionApplicationAst
-                            oldPosition
-                            hieAst
-                            getArgumentNumber
-                pure $ Just (functionName, functionType, argumentNumber)
-    case mResult of
-        -- TODO(@linj) what do non-singleton lists mean?
-        Just (functionName : _, functionType : _, argumentNumber : _) -> do
+                pure $
+                    extractInfoFromSmallestContainingFunctionApplicationAst
+                        oldPosition
+                        hieAst
+                        ( \span hieAst -> do
+                              let functionNode = getLeftMostNode hieAst
+                              functionName <- getNodeName span functionNode
+                              functionType <- getNodeType hieKind span functionNode
+                              argumentNumber <- getArgumentNumber span hieAst
+                              Just (functionName, functionType, argumentNumber)
+                        )
+    case results of
+        -- TODO(@linj) what does non-singleton list mean?
+        [(functionName, functionType, argumentNumber)] ->
             pure $ InL $ mkSignatureHelp functionName functionType (fromIntegral argumentNumber - 1)
         _ -> pure $ InR Null
 
