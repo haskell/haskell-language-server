@@ -1,4 +1,11 @@
-4:6-9 TTypeConstructor "Foo"
-4:12-15 TDataConstructor "Foo"
-4:18-21 TRecordField "foo"
-4:25-28 TTypeConstructor "Int"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:16-21 HsSyntacticTokenType TKeyword "where"]
+[4:1-5 HsSyntacticTokenType TKeyword "data"]
+[4:6-9 HsSemanticTokenType TTypeConstructor "Foo"]
+[4:10-11 HsSyntacticTokenType TKeyword "="]
+[4:12-15 HsSemanticTokenType TDataConstructor "Foo"]
+[4:16-17 HsSyntacticTokenType TKeyword "{"]
+[4:18-21 HsSyntacticTokenType TRecordSelector "foo",4:18-21 HsSemanticTokenType TRecordField "foo"]
+[4:22-24 HsSyntacticTokenType TKeyword "::"]
+[4:25-28 HsSemanticTokenType TTypeConstructor "Int"]
+[4:29-30 HsSyntacticTokenType TKeyword "}"]

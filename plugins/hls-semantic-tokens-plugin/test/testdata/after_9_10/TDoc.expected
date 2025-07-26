@@ -1,6 +1,13 @@
-1:8-12 TModule "TDoc"
-4:5-10 TVariable "hello"
-5:1-6 TVariable "hello"
-5:10-13 TTypeConstructor "Int"
-6:1-6 TVariable "hello"
-6:9-15 TClassMethod "length"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-12 HsSemanticTokenType TModule "TDoc"]
+[1:13-18 HsSyntacticTokenType TKeyword "where"]
+[3:1-5 HsSyntacticTokenType TComment "-- |"]
+[4:1-11 HsSyntacticTokenType TComment "-- `hello`"]
+[4:5-10 HsSemanticTokenType TVariable "hello"]
+[5:1-6 HsSemanticTokenType TVariable "hello"]
+[5:7-9 HsSyntacticTokenType TKeyword "::"]
+[5:10-13 HsSemanticTokenType TTypeConstructor "Int"]
+[6:1-6 HsSemanticTokenType TVariable "hello"]
+[6:7-8 HsSyntacticTokenType TKeyword "="]
+[6:9-15 HsSemanticTokenType TClassMethod "length"]
+[6:16-33 HsSyntacticTokenType TStringLit "\"Hello, Haskell!\""]

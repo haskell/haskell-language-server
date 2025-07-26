@@ -633,11 +633,17 @@ instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
 #if MIN_VERSION_ghc(9,11,0)
 instance HasSrcSpan (GHC.EpToken sym) where
   getLoc = GHC.getHasLoc
+instance HasSrcSpan (GHC.EpUniToken sym sym') where
+  getLoc = GHC.getHasLoc
 #elif MIN_VERSION_ghc(9,9,0)
 instance HasSrcSpan (GHC.EpToken sym) where
   getLoc = GHC.getHasLoc . \case
     GHC.NoEpTok -> Nothing
     GHC.EpTok loc -> Just loc
+instance HasSrcSpan (GHC.EpUniToken sym sym') where
+  getLoc = GHC.getHasLoc . \case
+    GHC.NoEpUniTok -> Nothing
+    GHC.EpUniTok loc _ -> Just loc
 #endif
 
 #if MIN_VERSION_ghc(9,9,0)
