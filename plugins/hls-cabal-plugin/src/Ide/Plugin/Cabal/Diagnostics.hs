@@ -5,6 +5,8 @@ module Ide.Plugin.Cabal.Diagnostics
 , warningDiagnostic
 , positionFromCabalPosition
 , fatalParseErrorDiagnostic
+, toBeginningOfNextLine
+, mkDiag
   -- * Re-exports
 , FileDiagnostic
 , Diagnostic(..)
