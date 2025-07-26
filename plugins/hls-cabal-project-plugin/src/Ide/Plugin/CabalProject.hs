@@ -9,55 +9,31 @@ module Ide.Plugin.CabalProject where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class                     (lift)
-import           Control.Monad.Trans.Maybe                     (runMaybeT)
-import qualified Data.ByteString                               as BS
+import qualified Data.ByteString                     as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                           (HashMap, toList)
-import qualified Data.HashMap.Strict                           as HashMap
-import qualified Data.List                                     as List
-import qualified Data.List.NonEmpty                            as NE
-import qualified Data.Maybe                                    as Maybe
+import           Data.HashMap.Strict                 (HashMap)
+import qualified Data.HashMap.Strict                 as HashMap
+import qualified Data.List.NonEmpty                  as NE
 import           Data.Proxy
-import qualified Data.Text                                     ()
-import qualified Data.Text                                     as T
-import qualified Data.Text.Encoding                            as Encoding
-import           Data.Text.Utf16.Rope.Mixed                    as Rope
-import           Development.IDE                               as D
-import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
-import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.Shake                    (restartShakeSession)
-import qualified Development.IDE.Core.Shake                    as Shake
-import           Development.IDE.Graph                         (Key,
-                                                                alwaysRerun)
-import           Development.IDE.LSP.HoverDefinition           (foundHover)
-import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
-import           Development.IDE.Types.Shake                   (toKey)
-import qualified Distribution.CabalSpecVersion                 as Cabal
-import qualified Distribution.Fields                           as Syntax
-import           Distribution.Package                          (Dependency)
-import           Distribution.PackageDescription               (allBuildDepends,
-                                                                depPkgName,
-                                                                unPackageName)
-import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import           Distribution.Parsec.Error
-import qualified Distribution.Parsec.Position                  as Syntax
+import qualified Data.Text                           ()
+import qualified Data.Text.Encoding                  as Encoding
+import           Data.Text.Utf16.Rope.Mixed          as Rope
+import           Development.IDE                     as D
+import           Development.IDE.Core.Shake          (restartShakeSession)
+import qualified Development.IDE.Core.Shake          as Shake
+import           Development.IDE.Graph               (Key, alwaysRerun)
+import           Development.IDE.Types.Shake         (toKey)
 import           GHC.Generics
-import           Ide.Plugin.Cabal.Orphans                      ()
-import           Ide.Plugin.CabalProject.Diagnostics           as Diagnostics
-import           Ide.Plugin.CabalProject.Parse                 as Parse
-import           Ide.Plugin.CabalProject.Types                 as Types
-import           Ide.Plugin.Error
+import           Ide.Plugin.Cabal.Orphans            ()
+import           Ide.Plugin.CabalProject.Diagnostics as Diagnostics
+import           Ide.Plugin.CabalProject.Parse       as Parse
+import           Ide.Plugin.CabalProject.Types       as Types
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens                    as JL
-import qualified Language.LSP.Protocol.Message                 as LSP
+import qualified Language.LSP.Protocol.Message       as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                              as VFS
-import           System.FilePath                               (takeFileName)
-import           Text.Regex.TDFA
+import qualified Language.LSP.VFS                    as VFS
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
