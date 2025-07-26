@@ -9,7 +9,7 @@ module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
   FileDiagnostic(..),
-  fdFilePathL,
+  fdUriL,
   fdLspDiagnosticL,
   fdShouldShowDiagnosticL,
   fdStructuredMessageL,
@@ -73,14 +73,14 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
--- | Produce a 'FileDiagnostic' for the given 'NormalizedFilePath'
+-- | Produce a 'FileDiagnostic' for the given 'NormalizedUri'
 -- with an error message.
-ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText nfp msg =
-  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nfp msg Nothing
+ideErrorText :: NormalizedUri -> T.Text -> FileDiagnostic
+ideErrorText nuri msg =
+  ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nuri msg Nothing
 
 -- | Create a 'FileDiagnostic' from an existing 'LSP.Diagnostic' for a
--- specific 'NormalizedFilePath'.
+-- specific 'NormalizedUri'.
 -- The optional 'MsgEnvelope GhcMessage' is the original error message
 -- that was used for creating the 'LSP.Diagnostic'.
 -- It is included here, to allow downstream consumers, such as HLS plugins,
@@ -90,10 +90,10 @@ ideErrorText nfp msg =
 -- to provide documentation and explanations for error messages.
 ideErrorFromLspDiag
   :: LSP.Diagnostic
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
-ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
+ideErrorFromLspDiag lspDiag fdUri mbOrigMsg =
   let fdShouldShowDiagnostic = ShowDiag
       fdStructuredMessage =
         case mbOrigMsg of
@@ -145,11 +145,11 @@ showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpec
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> T.Text
   -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
-ideErrorWithSource source sev fdFilePath msg origMsg =
+ideErrorWithSource source sev fdUri msg origMsg =
   let lspDiagnostic =
         LSP.Diagnostic {
           _range = noRange,
@@ -163,7 +163,7 @@ ideErrorWithSource source sev fdFilePath msg origMsg =
           _data_ = Nothing
         }
   in
-  ideErrorFromLspDiag lspDiagnostic fdFilePath origMsg
+  ideErrorFromLspDiag lspDiagnostic fdUri origMsg
 
 -- | Defines whether a particular diagnostic should be reported
 --   back to the user.
@@ -235,7 +235,7 @@ instance NFData StructuredMessage where
 --   StructuredMessage.
 --
 data FileDiagnostic = FileDiagnostic
-  { fdFilePath             :: NormalizedFilePath
+  { fdUri                  :: NormalizedUri
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic        :: Diagnostic
     -- | The original diagnostic that was used to produce 'fdLspDiagnostic'.
@@ -271,9 +271,9 @@ prettyDiagnostics :: [FileDiagnostic] -> Doc Terminal.AnsiStyle
 prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
-prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
+prettyDiagnostic FileDiagnostic { fdUri, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     vcat
-        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fdFilePath)
+        [ slabel_ "File:    " $ pretty (fromNormalizedUri fdUri)
         , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source

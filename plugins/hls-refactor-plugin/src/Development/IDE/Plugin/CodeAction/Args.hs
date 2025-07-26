@@ -55,9 +55,10 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 -------------------------------------------------------------------------------------------------
 
 runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
-runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range _) codeAction
-    | Just nfp <- toNormalizedFilePath' <$> uriToFilePath uri = do
-        let runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure (Just nfp)) >>= MaybeT . use key
+runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range _) codeAction = do
+        let
+          nuri = toNormalizedUri uri
+          runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure (Just nuri)) >>= MaybeT . use key
         caaGhcSession <- onceIO $ runRule GhcSession
         caaExportsMap <-
             onceIO $
@@ -80,7 +81,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
         caaHar <- onceIO $ runRule GetHieAst
         caaBindings <- onceIO $ runRule GetBindings
         caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
-        diags <- concat . maybeToList <$> activeDiagnosticsInRange (shakeExtras state) nfp _range
+        diags <- concat . maybeToList <$> activeDiagnosticsInRange (shakeExtras state) nuri _range
         results <- liftIO $
             sequence
                 [
@@ -89,7 +90,6 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
                 ]
         let (_errs, successes) = partitionEithers results
         pure $ concat successes
-    | otherwise = pure []
 
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)

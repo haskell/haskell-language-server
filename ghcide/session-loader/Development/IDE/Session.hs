@@ -138,7 +138,7 @@ data Log
   | LogHieDbWriterThreadSQLiteError !SQLError
   | LogHieDbWriterThreadException !SomeException
   | LogInterfaceFilesCacheDir !FilePath
-  | LogKnownFilesUpdated !(HashMap Target (HashSet NormalizedFilePath))
+  | LogKnownFilesUpdated !(HashMap Target (HashSet NormalizedUri))
   | LogMakingNewHscEnv ![UnitId]
   | LogDLLLoadError !String
   | LogCradlePath !FilePath
@@ -199,7 +199,7 @@ instance Pretty Log where
       nest 2 $
         vcat
           [ "Known files updated:"
-          , viaShow $ (HM.map . Set.map) fromNormalizedFilePath targetToPathsMap
+          , viaShow $ (HM.map . Set.map) fromNormalizedUri targetToPathsMap
           ]
     LogMakingNewHscEnv inPlaceUnitIds ->
       "Making new HscEnv. In-place unit ids:" <+> pretty (map show inPlaceUnitIds)
@@ -477,13 +477,13 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
                 -- and also not find 'TargetModule Foo'.
                 fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
+                pure $ map (\fp -> (TargetFile fp, Set.singleton $ filePathToUri' fp)) (nubOrd (f:fs))
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                return [(targetTarget, Set.fromList found)]
+                return [(targetTarget, Set.fromList $ map filePathToUri' found)]
           hasUpdate <- atomically $ do
             known <- readTVar knownTargetsVar
-            let known' = flip mapHashed known $ \k -> unionKnownTargets k (mkKnownTargets knownTargets)
+            let known' = flip mapHashed known $ \k -> unionKnownTargets k (mkKnownTargets $ knownTargets)
                 hasUpdate = if known /= known' then Just (unhashed known') else Nothing
             writeTVar knownTargetsVar known'
             pure hasUpdate
@@ -567,7 +567,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                         this_target_details = TargetDetails (TargetFile _cfp) this_error_env this_dep_info [_cfp]
                         this_flags = (this_error_env, this_dep_info)
                         this_error_env = ([this_error], Nothing)
-                        this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) _cfp
+                        this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (filePathToUri' _cfp)
                                        (T.unlines
                                          [ "No cradle target found. Is this file listed in the targets of your cradle?"
                                          , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
@@ -588,8 +588,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
           unless (null new_deps || not checkProject) $ do
                 cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                    mmt <- uses GetModificationTime cfps'
-                    let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+                    mmt <- uses GetModificationTime $ map filePathToUri' cfps'
+                    let cs_exist = mapMaybe (fmap filePathToUri') (zipWith (<$) cfps' mmt)
                     modIfaces <- uses GetModIface cs_exist
                     -- update exports map
                     shakeExtras <- getShakeExtras
@@ -888,7 +888,7 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
     let closure_errs = maybeToList $ checkHomeUnitsClosed' (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv')
         closure_err_to_multi_err err =
             ideErrorWithSource
-                (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
+                (Just "cradle") (Just DiagnosticSeverity_Warning) (filePathToUri' _cfp)
                 (T.pack (Compat.printWithoutUniques (singleMessage err)))
                 (Just (fmap GhcDriverMessage err))
         multi_errs = map closure_err_to_multi_err closure_errs
@@ -1255,4 +1255,4 @@ showPackageSetupException PackageSetupException{..} = unwords
 
 renderPackageSetupException :: FilePath -> PackageSetupException -> FileDiagnostic
 renderPackageSetupException fp e =
-  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e) Nothing
+  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (filePathToUri' $ toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e) Nothing

@@ -63,8 +63,9 @@ provider :: Recorder (WithPriority Log) -> PluginId -> FormattingHandler IdeStat
 provider recorder _ _ _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
   throwError $ PluginInvalidParams "You cannot format a text-range using cabal-gild."
-provider recorder plId ideState _ FormatText contents nfp _ = do
+provider recorder plId ideState _ FormatText contents nuri _ | Just nfp <- uriToNormalizedFilePath nuri = do
   let cabalGildArgs = ["--stdin=" <> fp, "--input=-"] -- < Read from stdin
+      fp = fromNormalizedFilePath nfp
 
   cabalGildExePath <- fmap T.unpack $ liftIO $ runAction "cabal-gild" ideState $ usePropertyAction #path plId properties
   x <- liftIO $ findExecutable cabalGildExePath
@@ -89,5 +90,5 @@ provider recorder plId ideState _ FormatText contents nfp _ = do
       log Error $ LogFormatterBinNotFound cabalGildExePath
       throwError (PluginInternalError "No installation of cabal-gild could be found. Please install it globally, or provide the full path to the executable.")
   where
-    fp = fromNormalizedFilePath nfp
     log = logWith recorder
+provider _ _ _ _ _ _ nuri _ = throwError $ PluginInternalError $ "Cabal gild can only be invoked on files, but uri " <> getUri (fromNormalizedUri nuri) <> " was not a file URI"
