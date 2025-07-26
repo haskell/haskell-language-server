@@ -300,7 +300,7 @@ launchErrorLSP recorder errorMsg = do
               [ exitHandler exit ]
 
         let interpretHandler (env,  _st) = LSP.Iso (LSP.runLspT env . unErrorLSPM) liftIO
-        pure (doInitialize, asyncHandlers, interpretHandler)
+        pure (doInitialize, asyncHandlers, interpretHandler, [exit])
 
   runLanguageServer (cmapWithPrio pretty recorder)
     (Main.argsLspOptions defaultArguments)
