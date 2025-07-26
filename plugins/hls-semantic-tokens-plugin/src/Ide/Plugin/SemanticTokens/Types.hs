@@ -46,13 +46,12 @@ data HsSyntacticTokenType
   = TKeyword
   | TComment
   | TStringLit
-  | TCharLit
   | TNumberLit
   | TRecordSelector
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
 
-data HsTokenType =
-  HsSyntacticTokenType HsSyntacticTokenType
+data HsTokenType
+  = HsSyntacticTokenType HsSyntacticTokenType
   | HsSemanticTokenType HsSemanticTokenType
   deriving stock (Eq, Ord, Show, Generic, Lift)
 

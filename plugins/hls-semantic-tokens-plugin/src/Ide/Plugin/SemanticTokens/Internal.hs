@@ -172,6 +172,14 @@ getSyntacticTokensRule recorder =
 astTraversalWith :: forall b r. Data b => b -> (forall a. Data a => a -> [r]) -> [r]
 astTraversalWith ast f = mconcat $ flip gmapQ ast \y -> f y <> astTraversalWith y f
 
+{-# inline extractTyToTyToTy #-}
+extractTyToTyToTy :: forall f a. (Typeable f, Data a) => a -> Maybe (forall r. (forall b c. (Typeable b, Typeable c) => f b c -> r) -> r)
+extractTyToTyToTy node
+  | App (App conRep argRep1) argRep2 <- typeOf node
+  , Just HRefl <- eqTypeRep conRep (typeRep @f)
+  = Just $ withTypeable argRep1 $ withTypeable argRep2 \k -> k node
+  | otherwise = Nothing
+
 {-# inline extractTyToTy #-}
 extractTyToTy :: forall f a. (Typeable f, Data a) => a -> Maybe (forall r. (forall b. Typeable b => f b -> r) -> r)
 extractTyToTy node
@@ -193,15 +201,38 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
          [
 #if MIN_VERSION_ghc(9,9,0)
            maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTy @EpToken node,
+           maybeToList $ mkFromLocatable TKeyword . (\k -> k \x k' -> k' x) =<< extractTyToTyToTy @EpUniToken node,
+           do
+           AnnContext {ac_darrow, ac_open, ac_close} <- maybeToList $ extractTy node
+           let mkFromTok :: (Foldable f, HasSrcSpan a) => f a -> [(Range,HsSyntacticTokenType)]
+               mkFromTok = foldMap (\tok -> maybeToList $ mkFromLocatable TKeyword \k -> k tok)
+           mconcat
+#if MIN_VERSION_ghc(9,11,0)
+             [ mkFromTok ac_darrow
+#else
+             [ foldMap (\(_, loc) -> maybeToList $ mkFromLocatable TKeyword \k -> k loc) ac_darrow
 #endif
+             , mkFromTok ac_open
+             , mkFromTok ac_close
+             ],
+#endif
+
 #if !MIN_VERSION_ghc(9,11,0)
            maybeToList $ mkFromLocatable TKeyword . (\x k -> k x) =<< extractTy @AddEpAnn node,
            do
            EpAnnImportDecl i p s q pkg a <- maybeToList $ extractTy @EpAnnImportDecl node
-
            mapMaybe (mkFromLocatable TKeyword . (\x k -> k x)) $ catMaybes $ [Just i, s, q, pkg, a] <> foldMap (\(l, l') -> [Just l, Just l']) p,
 #endif
-           maybeToList $ mkFromLocatable TComment . (\x k -> k x) =<< extractTy @LEpaComment node,
+           maybeToList do
+             comment <- extractTy @LEpaComment node
+#if !MIN_VERSION_ghc(9,7,0)
+             -- NOTE: on ghc 9.6 there's an empty comment that is supposed to
+             -- located the end of file
+             case comment of
+               L _ (EpaComment {ac_tok = EpaEofComment}) -> Nothing
+               _ -> pure ()
+#endif
+             mkFromLocatable TComment \k -> k comment,
            do
            L loc expr <- maybeToList $ extractTy @(LHsExpr GhcPs) node
            let fromSimple = maybeToList . flip mkFromLocatable \k -> k loc
@@ -213,8 +244,9 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
 
                HsIsString {}   -> TStringLit
              HsLit _ lit -> fromSimple case lit of
-                 HsChar {}            -> TCharLit
-                 HsCharPrim {}        -> TCharLit
+                 -- NOTE: unfortunately, lsp semantic tokens doesn't have a notion of char literals
+                 HsChar {}            -> TStringLit
+                 HsCharPrim {}        -> TStringLit
 
                  HsInt {}             -> TNumberLit
                  HsInteger {}         -> TNumberLit

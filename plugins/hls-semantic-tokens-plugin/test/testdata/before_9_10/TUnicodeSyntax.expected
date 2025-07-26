@@ -1,1 +1,5 @@
-3:1-4 TVariable "a\66560b"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:23-28 HsSyntacticTokenType TKeyword "where"]
+[3:1-4 HsSemanticTokenType TVariable "a\66560b"]
+[3:4-5 HsSyntacticTokenType TKeyword " "]
+[3:6-10 HsSyntacticTokenType TStringLit " \"a\66560"]

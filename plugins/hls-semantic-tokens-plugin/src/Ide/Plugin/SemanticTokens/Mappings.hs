@@ -12,28 +12,30 @@
 -- 4. Mapping from LSP tokens to SemanticTokenOriginal.
 module Ide.Plugin.SemanticTokens.Mappings where
 
-import qualified Data.Array                      as A
+import qualified Data.Array                               as A
 import           Data.Function
-import           Data.List.Extra                 (chunksOf, (!?))
-import qualified Data.Map.Strict                 as Map
-import           Data.Maybe                      (mapMaybe)
-import qualified Data.Set                        as Set
-import           Data.Text                       (Text, unpack)
-import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
+import           Data.List.Extra                          (chunksOf, (!?))
+import qualified Data.Map.Strict                          as Map
+import           Data.Maybe                               (mapMaybe)
+import qualified Data.Set                                 as Set
+import           Data.Text                                (Text, unpack)
+import           Development.IDE                          (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
+import           Ide.Plugin.SemanticTokens.SemanticConfig (allHsTokenTypes)
 import           GHC.Iface.Ext.Types             (BindType (..),
                                                   ContextInfo (..),
                                                   DeclType (..), HieType (..),
                                                   HieTypeFlat, TypeIndex)
 import           Ide.Plugin.SemanticTokens.Types
-import           Ide.Plugin.SemanticTokens.Utils (mkRange)
-import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
-                                                  SemanticTokenAbsolute (SemanticTokenAbsolute),
-                                                  SemanticTokenRelative (SemanticTokenRelative),
-                                                  SemanticTokenTypes (..),
-                                                  SemanticTokens (SemanticTokens),
-                                                  UInt, absolutizeTokens)
-import           Language.LSP.VFS                hiding (line)
+import           Ide.Plugin.SemanticTokens.Utils          (mkRange)
+import           Language.LSP.Protocol.Types              (LspEnum (knownValues),
+                                                           SemanticTokenAbsolute (SemanticTokenAbsolute),
+                                                           SemanticTokenRelative (SemanticTokenRelative),
+                                                           SemanticTokenTypes (..),
+                                                           SemanticTokens (SemanticTokens),
+                                                           UInt,
+                                                           absolutizeTokens)
+import           Language.LSP.VFS                         hiding (line)
 
 -- * 0. Mapping name to Hs semantic token type.
 
@@ -62,19 +64,16 @@ toLspTokenType conf tk = conf & case tk of
   HsSyntacticTokenType TKeyword        -> stKeyword
   HsSyntacticTokenType TComment        -> stComment
   HsSyntacticTokenType TStringLit      -> stStringLit
-  HsSyntacticTokenType TCharLit        -> stCharLit
   HsSyntacticTokenType TNumberLit      -> stNumberLit
   HsSyntacticTokenType TRecordSelector -> stRecordSelector
 
-lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
-lspTokenReverseMap config
-    | length xs /= Map.size mr = error "lspTokenReverseMap: token type mapping is not bijection"
-    | otherwise = mr
-    where xs = enumFrom minBound
-          mr = Map.fromList $ map (\x -> (toLspTokenType config (HsSemanticTokenType x), x)) xs
+lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes [HsTokenType]
+lspTokenReverseMap config = mr
+    where xs = allHsTokenTypes
+          mr = Map.fromListWith (<>) $ map (\x -> (toLspTokenType config x, [x])) xs
 
-lspTokenTypeHsTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> Maybe HsSemanticTokenType
-lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
+lspTokenTypeHsTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> [HsTokenType]
+lspTokenTypeHsTokenType cf tk = Map.findWithDefault [] tk (lspTokenReverseMap cf)
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
@@ -190,20 +189,20 @@ infoTokenType x = case x of
 -- this function is used to recover the original tokens(with token in haskell token type zoon)
 -- from the lsp semantic tokens(with token in lsp token type zoon)
 -- the `SemanticTokensConfig` used should be a map with bijection property
-recoverSemanticTokens :: SemanticTokensConfig -> VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal HsSemanticTokenType]
+recoverSemanticTokens :: SemanticTokensConfig -> VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal HsTokenType]
 recoverSemanticTokens config v s = do
     tks <- recoverLspSemanticTokens v s
-    return $ map (lspTokenHsToken config) tks
+    return $ foldMap (lspTokenHsToken config) tks
 
 -- | lspTokenHsToken
 -- for debug and test.
 -- use the `SemanticTokensConfig` to convert lsp token type to haskell token type
 -- the `SemanticTokensConfig` used should be a map with bijection property
-lspTokenHsToken :: SemanticTokensConfig -> SemanticTokenOriginal SemanticTokenTypes -> SemanticTokenOriginal HsSemanticTokenType
+lspTokenHsToken :: SemanticTokensConfig -> SemanticTokenOriginal SemanticTokenTypes -> [SemanticTokenOriginal HsTokenType]
 lspTokenHsToken config (SemanticTokenOriginal tokenType location name) =
         case lspTokenTypeHsTokenType config tokenType of
-        Just t  -> SemanticTokenOriginal t location name
-        Nothing -> error "recoverSemanticTokens: unknown lsp token type"
+        [] -> error "recoverSemanticTokens: unknown lsp token type"
+        ts -> map (\t -> SemanticTokenOriginal t location name) ts
 
 -- | recoverLspSemanticTokens
 -- for debug and test.
