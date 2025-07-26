@@ -140,7 +140,7 @@ descriptor recorder plId =
   whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
   whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
 
-{- | Helper function to restart the shake session, specifically for modifying .cabal files.
+{- | Helper function to restart the shake session, specifically for modifying cabal.project files.
 No special logic, just group up a bunch of functions you need for the base
 Notification Handlers.
 
@@ -158,9 +158,9 @@ restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = d
 
 cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 cabalRules recorder plId = do
-  -- Make sure we initialise the cabal files-of-interest.
+  -- Make sure we initialise the cabal project files-of-interest.
   ofInterestRules recorder
-  -- Rule to produce diagnostics for cabal files.
+  -- Rule to produce diagnostics for cabal project files.
   define (cmapWithPrio LogShake recorder) $ \ParseCabalProjectFields file -> do
     config <- getPluginConfigAction plId
     if not (plcGlobalOn config && plcDiagnosticsOn config)
@@ -210,16 +210,16 @@ cabalRules recorder plId = do
             pure (warnDiags, Just projCfg)
 
   action $ do
-    -- Run the cabal kick. This code always runs when 'shakeRestart' is run.
+    -- Run the cabal project kick. This code always runs when 'shakeRestart' is run.
     -- Must be careful to not impede the performance too much. Crucial to
     -- a snappy IDE experience.
     kick
  where
   log' = logWith recorder
 
-{- | This is the kick function for the cabal plugin.
+{- | This is the kick function for the cabal project plugin.
 We run this action, whenever we shake session us run/restarted, which triggers
-actions to produce diagnostics for cabal files.
+actions to produce diagnostics for cabal project files.
 
 It is paramount that this kick-function can be run quickly, since it is a blocking
 function invocation.
@@ -227,12 +227,11 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
---   let keys = map Types.ParseCabalProjectFile files
   Shake.runWithSignal (Proxy @"kick/start/cabal-project") (Proxy @"kick/done/cabal-project") files Types.ParseCabalProjectFile
 
 
 -- ----------------------------------------------------------------
--- Cabal file of Interest rules and global variable
+-- Cabal project file of Interest rules and global variable
 -- ----------------------------------------------------------------
 
 {- | Cabal files that are currently open in the lsp-client.

@@ -30,19 +30,19 @@ import           Language.LSP.Protocol.Types       (Diagnostic (..),
                                                     Range (Range),
                                                     fromNormalizedFilePath)
 
--- | Produce a diagnostic for a fatal Cabal parser error.
+-- | Produce a diagnostic for a fatal Cabal Project parser error.
 fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic
 fatalParseErrorDiagnostic fp msg =
   mkDiag fp "cabal-project" DiagnosticSeverity_Error (toBeginningOfNextLine Syntax.zeroPos) msg
 
--- | Produce a diagnostic from a Cabal parser error
+-- | Produce a diagnostic from a Cabal Project parser error
 errorDiagnostic :: NormalizedFilePath -> Syntax.PError -> FileDiagnostic
 errorDiagnostic fp err@(Syntax.PError pos _) =
   mkDiag fp "cabal-project" DiagnosticSeverity_Error (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPError (fromNormalizedFilePath fp) err
 
--- | Produce a diagnostic from a Cabal parser warning
+-- | Produce a diagnostic from a Cabal Project parser warning
 warningDiagnostic :: NormalizedFilePath -> Syntax.PWarning -> FileDiagnostic
 warningDiagnostic fp warning@(Syntax.PWarning _ pos _) =
   mkDiag fp "cabal-project" DiagnosticSeverity_Warning (toBeginningOfNextLine pos) msg

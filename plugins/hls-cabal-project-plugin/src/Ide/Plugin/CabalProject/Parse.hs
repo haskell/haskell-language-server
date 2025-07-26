@@ -40,9 +40,7 @@ parseCabalProjectFileContents
          , Either (Maybe Version, NonEmpty PError) ProjectConfigSkeleton)
 parseCabalProjectFileContents fp bytes = do
   cacheDir <- getCabalProjectCacheDir fp
---   bytes <- BS.readFile fp
   let toParse = ProjectConfigToParse bytes
-    --   rootDir = takeDirectory fp
       verb    = normal
   httpTransport <- configureTransport verb [fp] Nothing
 
