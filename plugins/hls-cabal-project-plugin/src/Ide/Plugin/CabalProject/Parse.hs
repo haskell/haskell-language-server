@@ -5,7 +5,6 @@ module Ide.Plugin.CabalProject.Parse
     readCabalProjectFields
   ) where
 
-import           Control.Monad                            (unless)
 import qualified Crypto.Hash.SHA1                         as H
 import qualified Data.ByteString                          as BS
 import qualified Data.ByteString.Base16                   as B16
@@ -27,7 +26,6 @@ import qualified Distribution.Parsec.Position             as Syntax
 import           Distribution.Types.Version               (Version)
 import           Distribution.Verbosity                   (normal)
 import qualified Ide.Plugin.CabalProject.Diagnostics      as Diagnostics
-import           System.Directory                         (doesFileExist)
 import           System.Directory.Extra                   (XdgDirectory (..),
                                                            getXdgDirectory)
 import           System.FilePath                          (takeBaseName,

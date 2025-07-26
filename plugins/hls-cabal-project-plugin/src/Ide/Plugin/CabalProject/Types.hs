@@ -4,8 +4,7 @@ module Ide.Plugin.CabalProject.Types where
 
 import           Control.DeepSeq                          (NFData)
 import           Data.Hashable                            (Hashable)
-import           Development.IDE                          (NormalizedFilePath,
-                                                           RuleResult)
+import           Development.IDE                          (RuleResult)
 import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton)
 import qualified Distribution.Fields                      as Syntax
 import qualified Distribution.Parsec.Position             as Syntax
