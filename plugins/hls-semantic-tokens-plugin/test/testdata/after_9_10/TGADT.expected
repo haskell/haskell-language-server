@@ -1,14 +1,34 @@
-3:8-13 TModule "TGADT"
-5:6-9 TTypeConstructor "Lam"
-6:3-7 TDataConstructor "Lift"
-6:11-12 TTypeVariable "a"
-6:36-39 TTypeConstructor "Lam"
-6:40-41 TTypeVariable "a"
-7:3-6 TDataConstructor "Lam"
-7:12-15 TTypeConstructor "Lam"
-7:16-17 TTypeVariable "a"
-7:21-24 TTypeConstructor "Lam"
-7:25-26 TTypeVariable "b"
-7:36-39 TTypeConstructor "Lam"
-7:41-42 TTypeVariable "a"
-7:46-47 TTypeVariable "b"
+[1:1-30 HsSyntacticTokenType TComment "{-# LANGUAGE TypeFamilies #-}"]
+[2:1-23 HsSyntacticTokenType TComment "{-# LANGUAGE GADTs #-}"]
+[3:1-7 HsSyntacticTokenType TKeyword "module"]
+[3:8-13 HsSemanticTokenType TModule "TGADT"]
+[3:14-19 HsSyntacticTokenType TKeyword "where"]
+[5:1-5 HsSyntacticTokenType TKeyword "data"]
+[5:6-9 HsSemanticTokenType TTypeConstructor "Lam"]
+[5:10-12 HsSyntacticTokenType TKeyword "::"]
+[5:15-17 HsSyntacticTokenType TKeyword "->"]
+[5:20-25 HsSyntacticTokenType TKeyword "where"]
+[6:3-7 HsSemanticTokenType TDataConstructor "Lift"]
+[6:8-10 HsSyntacticTokenType TKeyword "::"]
+[6:11-12 HsSemanticTokenType TTypeVariable "a"]
+[6:33-35 HsSyntacticTokenType TKeyword "->"]
+[6:36-39 HsSemanticTokenType TTypeConstructor "Lam"]
+[6:40-41 HsSemanticTokenType TTypeVariable "a"]
+[6:49-66 HsSyntacticTokenType TComment "-- ^ lifted value"]
+[7:3-6 HsSemanticTokenType TDataConstructor "Lam"]
+[7:8-10 HsSyntacticTokenType TKeyword "::"]
+[7:11-12 HsSyntacticTokenType TKeyword "("]
+[7:12-15 HsSemanticTokenType TTypeConstructor "Lam"]
+[7:16-17 HsSemanticTokenType TTypeVariable "a"]
+[7:18-20 HsSyntacticTokenType TKeyword "->"]
+[7:21-24 HsSemanticTokenType TTypeConstructor "Lam"]
+[7:25-26 HsSemanticTokenType TTypeVariable "b"]
+[7:26-27 HsSyntacticTokenType TKeyword ")"]
+[7:33-35 HsSyntacticTokenType TKeyword "->"]
+[7:36-39 HsSemanticTokenType TTypeConstructor "Lam"]
+[7:40-41 HsSyntacticTokenType TKeyword "("]
+[7:41-42 HsSemanticTokenType TTypeVariable "a"]
+[7:43-45 HsSyntacticTokenType TKeyword "->"]
+[7:46-47 HsSemanticTokenType TTypeVariable "b"]
+[7:47-48 HsSyntacticTokenType TKeyword ")"]
+[7:49-72 HsSyntacticTokenType TComment "-- ^ lambda abstraction"]

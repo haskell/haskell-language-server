@@ -1,4 +1,13 @@
-5:6-9 TTypeConstructor "Foo"
-5:12-15 TDataConstructor "Foo"
-5:18-21 TRecordField "boo"
-5:26-32 TTypeSynonym "String"
+[1:1-44 HsSyntacticTokenType TComment "{-# LANGUAGE DuplicateRecordFields      #-}"]
+[3:1-7 HsSyntacticTokenType TKeyword "module"]
+[3:37-42 HsSyntacticTokenType TKeyword "where"]
+[5:1-5 HsSyntacticTokenType TKeyword "data"]
+[5:6-9 HsSemanticTokenType TTypeConstructor "Foo"]
+[5:10-11 HsSyntacticTokenType TKeyword "="]
+[5:12-15 HsSemanticTokenType TDataConstructor "Foo"]
+[5:16-17 HsSyntacticTokenType TKeyword "{"]
+[5:18-21 HsSyntacticTokenType TRecordSelector "boo",5:18-21 HsSemanticTokenType TRecordField "boo"]
+[5:22-24 HsSyntacticTokenType TKeyword "::"]
+[5:25-26 HsSyntacticTokenType TKeyword "!"]
+[5:26-32 HsSemanticTokenType TTypeSynonym "String"]
+[5:33-34 HsSyntacticTokenType TKeyword "}"]

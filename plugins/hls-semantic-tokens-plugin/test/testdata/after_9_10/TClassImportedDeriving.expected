@@ -1,4 +1,19 @@
-2:8-30 TModule "TClassImportedDeriving"
-4:6-9 TTypeConstructor "Foo"
-4:12-15 TDataConstructor "Foo"
-4:26-30 TClass "Show"
+[1:1-36 HsSyntacticTokenType TComment "{-# LANGUAGE StandaloneDeriving #-}"]
+[2:1-7 HsSyntacticTokenType TKeyword "module"]
+[2:8-30 HsSemanticTokenType TModule "TClassImportedDeriving"]
+[2:31-36 HsSyntacticTokenType TKeyword "where"]
+[3:1-50 HsSyntacticTokenType TComment "-- deriving method source span of Show occurrence"]
+[4:1-5 HsSyntacticTokenType TKeyword "data"]
+[4:6-9 HsSemanticTokenType TTypeConstructor "Foo"]
+[4:10-11 HsSyntacticTokenType TKeyword "="]
+[4:12-15 HsSemanticTokenType TDataConstructor "Foo"]
+[4:16-24 HsSyntacticTokenType TKeyword "deriving"]
+[4:25-26 HsSyntacticTokenType TKeyword "("]
+[4:25-26 HsSyntacticTokenType TKeyword "("]
+[4:26-30 HsSemanticTokenType TClass "Show"]
+[4:30-31 HsSyntacticTokenType TKeyword ")"]
+[4:30-31 HsSyntacticTokenType TKeyword ")"]
+[6:1-55 HsSyntacticTokenType TComment "-- standalone deriving method not in the same position"]
+[7:1-28 HsSyntacticTokenType TComment "-- deriving instance Eq Foo"]
+[9:1-27 HsSyntacticTokenType TComment "-- a :: Foo -> Foo -> Bool"]
+[10:1-12 HsSyntacticTokenType TComment "-- a = (==)"]
