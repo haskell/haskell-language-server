@@ -34,7 +34,6 @@ import qualified Data.Map.Strict                          as M
 import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
-import           Debug.Trace
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
                                                            GetHieAst (GetHieAst),
@@ -61,7 +60,6 @@ import           Development.IDE.GHC.Compat.Util          (mkFastString)
 import           GHC.Parser.Annotation
 import           Ide.Logger                               (logWith)
 import           Ide.Plugin.Error                         (PluginError (PluginInternalError, PluginRuleFailed),
-                                                           getNormalizedFilePathE,
                                                            handleMaybe,
                                                            handleMaybeM)
 import           Ide.Plugin.SemanticTokens.Mappings
@@ -73,10 +71,9 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message            (MessageResult,
                                                            Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
-import           Language.LSP.Protocol.Types              (NormalizedFilePath,
+import           Language.LSP.Protocol.Types              (NormalizedUri, toNormalizedUri, fromNormalizedUri, getUri,
                                                            Range,
                                                            SemanticTokens,
-                                                           fromNormalizedFilePath,
                                                            type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
 import qualified StmContainers.Map                        as STM
@@ -100,8 +97,8 @@ computeSemanticTokens recorder pid _ nuri = do
   semanticId <- lift getAndIncreaseSemanticTokensId
 
   tokenList <- sortOn fst <$> do
-    rangesyntacticTypes <- lift $ useWithStale GetSyntacticTokens nfp
-    rangesemanticTypes <- lift $ useWithStale GetSemanticTokens nfp
+    rangesyntacticTypes <- lift $ useWithStale GetSyntacticTokens nuri
+    rangesemanticTypes <- lift $ useWithStale GetSemanticTokens nuri
     let mk w u (toks, mapping) = map (\(ran, tok) -> (toCurrentRange mapping ran, w tok)) $ u toks
     maybeToExceptT (PluginRuleFailed "no syntactic nor semantic tokens") $ hoistMaybe $
       (mk HsSyntacticTokenType rangeSyntacticList <$> rangesyntacticTypes)

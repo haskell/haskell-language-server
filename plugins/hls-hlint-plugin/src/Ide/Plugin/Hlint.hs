@@ -520,8 +520,9 @@ applyHint recorder ide nuri mhint verTxtDocId =
     ideas <- bimapExceptT (PluginInternalError . T.pack . showParseError) id $ ExceptT $ runAction' $ getIdeas recorder nuri
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
-    logWith recorder Debug $ LogGeneratedIdeas nuri commands
-    let fp = fromNormalizedFilePath nuri
+    nfp <- getNormalizedFilePathE $ fromNormalizedUri nuri
+    logWith recorder Debug $ LogGeneratedIdeas nfp commands
+    let fp = fromNormalizedFilePath nfp
     mbOldContent <- fmap (fmap Rope.toText) $ liftIO $ runAction' $ getFileContents nuri
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nuri
