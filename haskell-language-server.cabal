@@ -340,12 +340,6 @@ library hls-cabal-project-plugin
     Ide.Plugin.CabalProject.Parse
     Ide.Plugin.CabalProject.Diagnostics
     Ide.Plugin.CabalProject.Types
-    Ide.Plugin.CabalProject.Completion.Completions
-    Ide.Plugin.CabalProject.Completion.Completer.Simple
-    Ide.Plugin.CabalProject.Completion.Completer.Types
-    Ide.Plugin.CabalProject.Completion.CabalProjectFields
-    Ide.Plugin.CabalProject.Completion.Data
-
 
   build-depends:
     , bytestring
@@ -378,7 +372,6 @@ library hls-cabal-project-plugin
     , base16-bytestring
     , cryptohash-sha1
 
-
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
 
 test-suite hls-cabal-project-plugin-tests
@@ -403,7 +396,6 @@ test-suite hls-cabal-project-plugin-tests
     , text
     , hls-plugin-api
     , cabal-install
-
 
 -----------------------------
 -- class plugin

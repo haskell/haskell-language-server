@@ -9,62 +9,55 @@ module Ide.Plugin.CabalProject where
 
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Lens                                   ((^.))
+import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class                      (lift)
-import           Control.Monad.Trans.Maybe                      (runMaybeT)
-import qualified Data.ByteString                                as BS
+import           Control.Monad.Trans.Class                     (lift)
+import           Control.Monad.Trans.Maybe                     (runMaybeT)
+import qualified Data.ByteString                               as BS
 import           Data.Hashable
-import           Data.HashMap.Strict                            (HashMap,
-                                                                 toList)
-import qualified Data.HashMap.Strict                            as HashMap
-import qualified Data.List                                      as List
-import qualified Data.List.NonEmpty                             as NE
-import qualified Data.Maybe                                     as Maybe
+import           Data.HashMap.Strict                           (HashMap, toList)
+import qualified Data.HashMap.Strict                           as HashMap
+import qualified Data.List                                     as List
+import qualified Data.List.NonEmpty                            as NE
+import qualified Data.Maybe                                    as Maybe
 import           Data.Proxy
-import qualified Data.Text                                      ()
-import qualified Data.Text                                      as T
-import qualified Data.Text.Encoding                             as Encoding
-import           Data.Text.Utf16.Rope.Mixed                     as Rope
-import           Development.IDE                                as D
-import           Development.IDE.Core.FileStore                 (getVersionedTextDoc)
+import qualified Data.Text                                     ()
+import qualified Data.Text                                     as T
+import qualified Data.Text.Encoding                            as Encoding
+import           Data.Text.Utf16.Rope.Mixed                    as Rope
+import           Development.IDE                               as D
+import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.Shake                     (restartShakeSession)
-import qualified Development.IDE.Core.Shake                     as Shake
-import           Development.IDE.Graph                          (Key,
-                                                                 alwaysRerun)
-import           Development.IDE.LSP.HoverDefinition            (foundHover)
-import qualified Development.IDE.Plugin.Completions.Logic       as Ghcide
-import           Development.IDE.Types.Shake                    (toKey)
-import qualified Distribution.CabalSpecVersion                  as Cabal
-import qualified Distribution.Fields                            as Syntax
-import           Distribution.Package                           (Dependency)
-import           Distribution.PackageDescription                (allBuildDepends,
-                                                                 depPkgName,
-                                                                 unPackageName)
-import           Distribution.PackageDescription.Configuration  (flattenPackageDescription)
+import           Development.IDE.Core.Shake                    (restartShakeSession)
+import qualified Development.IDE.Core.Shake                    as Shake
+import           Development.IDE.Graph                         (Key,
+                                                                alwaysRerun)
+import           Development.IDE.LSP.HoverDefinition           (foundHover)
+import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
+import           Development.IDE.Types.Shake                   (toKey)
+import qualified Distribution.CabalSpecVersion                 as Cabal
+import qualified Distribution.Fields                           as Syntax
+import           Distribution.Package                          (Dependency)
+import           Distribution.PackageDescription               (allBuildDepends,
+                                                                depPkgName,
+                                                                unPackageName)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Parsec.Error
-import qualified Distribution.Parsec.Position                   as Syntax
+import qualified Distribution.Parsec.Position                  as Syntax
 import           GHC.Generics
-import           Ide.Plugin.Cabal.Completion.CabalFields        as CabalFields
-import qualified Ide.Plugin.Cabal.Completion.Completer.Types    as CompleterTypes
-import qualified Ide.Plugin.Cabal.Completion.Data               as Data
-import qualified Ide.Plugin.Cabal.Completion.Types              as CTypes
-import           Ide.Plugin.Cabal.Orphans                       ()
-import qualified Ide.Plugin.CabalProject.Completion.Completions as Completions
-import           Ide.Plugin.CabalProject.Diagnostics            as Diagnostics
-import           Ide.Plugin.CabalProject.Parse                  as Parse
-import           Ide.Plugin.CabalProject.Types                  as Types
+import           Ide.Plugin.Cabal.Orphans                      ()
+import           Ide.Plugin.CabalProject.Diagnostics           as Diagnostics
+import           Ide.Plugin.CabalProject.Parse                 as Parse
+import           Ide.Plugin.CabalProject.Types                 as Types
 import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens                     as JL
-import qualified Language.LSP.Protocol.Message                  as LSP
+import qualified Language.LSP.Protocol.Lens                    as JL
+import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                               as VFS
-import           System.FilePath                                (takeFileName)
+import qualified Language.LSP.VFS                              as VFS
+import           System.FilePath                               (takeFileName)
 import           Text.Regex.TDFA
-
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -74,8 +67,6 @@ data Log
   | LogDocSaved Uri
   | LogDocClosed Uri
   | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
-  | LogCompletionContext CTypes.Context Position
-  | LogCompletions CTypes.Log
   deriving (Show)
 
 instance Pretty Log where
@@ -100,9 +91,7 @@ descriptor recorder plId =
     { pluginRules = cabalProjectRules recorder plId
     , pluginHandlers =
         mconcat
-          [
-          mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
-          ]
+          []
     , pluginNotificationHandlers =
         mconcat
           [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
@@ -304,49 +293,3 @@ deleteFileOfInterest recorder state f = do
   return [toKey IsFileOfInterest f]
  where
   log' = logWith recorder
-
--- ----------------------------------------------------------------
--- Completion
--- ----------------------------------------------------------------
-
-completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
-completion recorder ide _ complParams = do
-  let TextDocumentIdentifier uri = complParams ^. JL.textDocument
-      position = complParams ^. JL.position
-  mContents <- liftIO $ runAction "cabal-project-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
-  case (,) <$> mContents <*> uriToFilePath' uri of
-    Just (cnts, path) -> do
-      -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
-      -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-project-plugin.fields" ide $ useWithStale ParseCabalProjectFields $ toNormalizedFilePath path
-      case mFields of
-        Nothing ->
-          pure . InR $ InR Null
-        Just (fields, _) -> do
-          let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
-              cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
-          let res = computeCompletionsAt recorder ide cabalPrefInfo path fields
-          liftIO $ fmap InL res
-    Nothing -> pure . InR $ InR Null
-
-computeCompletionsAt :: Recorder (WithPriority Log) -> IdeState -> CTypes.CabalPrefixInfo -> FilePath -> [Syntax.Field Syntax.Position] -> IO [CompletionItem]
-computeCompletionsAt recorder ide prefInfo fp fields = do
-  runMaybeT (context fields) >>= \case
-    Nothing -> pure []
-    Just ctx -> do
-      logWith recorder Debug $ LogCompletionContext ctx pos
-      let completer = Completions.contextToCompleter ctx
-      let completerData = CompleterTypes.CompleterData
-            {
-            cabalPrefixInfo = prefInfo
-            , stanzaName =
-            case fst ctx of
-                CTypes.Stanza _ name -> name
-                _                    -> Nothing
-            }
-      completions <- completer completerRecorder completerData
-      pure completions
-  where
-    pos = CTypes.completionCursorPosition prefInfo
-    context fields = Completions.getContext completerRecorder prefInfo fields
-    completerRecorder = cmapWithPrio LogCompletions recorder
