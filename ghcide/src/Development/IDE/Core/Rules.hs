@@ -162,7 +162,7 @@ import           Ide.Types                                    (DynFlagsModificat
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
-                                                               ShowMessageParams (ShowMessageParams), normalizedFilePathToUri, uriToNormalizedFilePath)
+                                                               ShowMessageParams (ShowMessageParams), normalizedFilePathToUri, uriToNormalizedFilePath, filePathToUri)
 import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -990,7 +990,7 @@ setFileCacheHook :: HscEnv -> Action HscEnv
 setFileCacheHook old_hsc_env = do
 #if MIN_VERSION_ghc(9,11,0)
   unlift <- askUnliftIO
-  return $ old_hsc_env { hsc_FC = (hsc_FC old_hsc_env) { lookupFileCache = unliftIO unlift . use_ GetFileHash . toNormalizedFilePath'  } }
+  return $ old_hsc_env { hsc_FC = (hsc_FC old_hsc_env) { lookupFileCache = unliftIO unlift . use_ GetFileHash . toNormalizedUri . filePathToUri  } }
 #else
   return old_hsc_env
 #endif
