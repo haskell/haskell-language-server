@@ -1729,6 +1729,7 @@ library hls-semantic-tokens-plugin
     , containers
     , extra
     , text-rope
+    , ghc
     , mtl                   >= 2.2
     , ghcide                == 2.11.0.0
     , hls-plugin-api        == 2.11.0.0
