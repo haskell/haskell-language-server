@@ -8,19 +8,15 @@ import qualified Data.Text                                      as T
 import           Development.IDE.GHC.Compat.Core                (flagsForCompletion)
 import           Distribution.CabalSpecVersion                  (CabalSpecVersion (CabalSpecV2_2),
                                                                  showCabalSpecVersion)
--- import           Ide.Plugin.Cabal.Completion.Completer.FilePath
--- import           Ide.Plugin.Cabal.Completion.Completer.Module
--- import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath (directoryCompleter,
                                                                  filePathCompleter)
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
--- import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 
 -- | Ad-hoc data type for modelling the available top-level stanzas.
 -- Not intended right now for anything else but to avoid string
--- comparisons in 'stanzaKeywordMap' and 'libExecTestBenchCommons'.
+-- comparisons in 'stanzaKeywordMap'.
 data TopLevelStanza
   = Package
   | ProgramOptions
@@ -29,30 +25,16 @@ data TopLevelStanza
 -- Completion Data
 -- ----------------------------------------------------------------
 
--- supportedCabalVersions :: [CabalSpecVersion]
--- supportedCabalVersions = [CabalSpecV2_2 .. maxBound]
-
--- -- | Keyword for cabal version; required to be the top line in a cabal file
--- cabalVersionKeyword :: Map KeyWordName Completer
--- cabalVersionKeyword =
---   Map.singleton "cabal-version:" $
---     constantCompleter $
---       -- We only suggest cabal versions newer than 2.2
---       -- since we don't recommend using older ones.
---       map (T.pack . showCabalSpecVersion) supportedCabalVersions
-
--- | Top level keywords of a cabal file.
+-- | Top level keywords of a cabal.project file.
 --
 -- TODO: we could add descriptions of field values and
 -- then show them when inside the field's context
 cabalProjectKeywords :: Map KeyWordName Completer
 cabalProjectKeywords =
   Map.fromList
-    [ -- projectConfigFieldGrammar
-      ("packages:", filePathCompleter),
+    [ ("packages:", filePathCompleter),
       ("optional-packages:", filePathCompleter),
       ("extra-packages:", filePathCompleter),
-      -- projectConfigBuildOnlyFieldGrammar
       ("verbose:", constantCompleter ["0", "1", "2", "3"]),
       ("build-summary:", filePathCompleter),
       ("build-log:", noopCompleter),
@@ -68,7 +50,6 @@ cabalProjectKeywords =
       ("ignore-expiry:", constantCompleter ["False", "True"]),
       ("remote-repo-cache:", noopCompleter),
       ("logs-dir:", noopCompleter),
-      -- projectConfigSharedFieldGrammar
       ("builddir:", noopCompleter),
       ("project-dir:", noopCompleter),
       ("project-file:", noopCompleter),
@@ -101,7 +82,6 @@ cabalProjectKeywords =
       ("prefer-oldest:", noopCompleter),
       ("extra-prog-path-shared-only:", noopCompleter),
       ("multi-repl:", noopCompleter),
-      -- extras
       ("benchmarks:", constantCompleter ["False", "True"]),
       ("import:", filePathCompleter)
     ]
@@ -109,8 +89,7 @@ cabalProjectKeywords =
 packageFields :: Map KeyWordName Completer
 packageFields =
   Map.fromList
-    [ -- packageConfigFieldGrammar
-      ("haddock-all:", constantCompleter ["False", "True"]),
+    [ ("haddock-all:", constantCompleter ["False", "True"]),
       ("extra-prog-path:", filePathCompleter),
       ("flags:", noopCompleter),
       ("library-vanilla:", constantCompleter ["True", "False"]),
@@ -171,16 +150,8 @@ packageFields =
       ("test-fail-when-no-test-suites:", noopCompleter),
       ("test-options:", noopCompleter),
       ("benchmark-options:", noopCompleter),
-      -- packageConfigCoverageGrammar
       ("coverage:", constantCompleter ["False", "True"]),
-      -- other
       ("ghc-options:", noopCompleter)
-    ]
-
--- just for testing right now, to be filled in later
-programOptionsFields :: Map KeyWordName Completer
-programOptionsFields = Map.fromList
-    [ ("ghc-options:", noopCompleter)
     ]
 
 sourceRepoFields :: Map KeyWordName Completer
@@ -196,18 +167,18 @@ sourceRepoFields = Map.fromList
             "bzr",
             "arch",
             "monotone"
-          ]), -- just used the one from cabal
+          ]),
       ("location:", noopCompleter),
       ("tag:", noopCompleter),
       ("subdir:", noopCompleter)
     ]
 
--- | Map, containing all stanzas in a cabal file as keys,
+-- | Map, containing all stanzas in a cabal.project file as keys,
 --  and lists of their possible nested keywords as values.
 stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
 stanzaKeywordMap =
   Map.fromList
     [ ("package", packageFields),
-      ("program-options", programOptionsFields),
+      ("program-options", packageFields),
       ("source-repository-package", sourceRepoFields)
     ]

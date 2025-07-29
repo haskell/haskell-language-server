@@ -14,7 +14,6 @@ import qualified Distribution.Fields                          as Syntax
 import qualified Distribution.Parsec.Position                 as Syntax
 import           Ide.Plugin.Cabal.Completion.CabalFields
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
--- import           Ide.Plugin.Cabal.Completion.Completer.Snippet
 import           Ide.Plugin.Cabal.Completion.Completer.Types  (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
 import           Ide.Plugin.CabalProject.Completion.Data
@@ -29,7 +28,7 @@ import           System.FilePath                              (takeBaseName)
 -- | Takes information about the completion context within the file
 --  and finds the correct completer to be applied.
 contextToCompleter :: Context -> Completer
--- if we are in the top level of the cabal file and not in a keyword context,
+-- if we are in the top level of the cabal.project file and not in a keyword context,
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =
   constantCompleter $
