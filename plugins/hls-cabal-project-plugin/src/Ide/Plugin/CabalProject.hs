@@ -312,7 +312,7 @@ completion recorder ide _ complParams = do
           pure . InR $ InR Null
         Just (fields, _) -> do
           let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
-              cabalProjectPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
+              cabalProjectPrefInfo = Completions.getCabalProjectPrefixInfo path lspPrefInfo
           let res = computeCompletionsAt recorder ide cabalProjectPrefInfo path fields
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null
