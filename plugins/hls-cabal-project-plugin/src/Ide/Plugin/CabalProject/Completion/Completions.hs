@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.CabalProject.Completion.Completions (contextToCompleter, getContext, getCabalPrefixInfo) where
+module Ide.Plugin.CabalProject.Completion.Completions (contextToCompleter, getContext, getCabalProjectPrefixInfo) where
 
 import           Control.Lens                                 ((^.))
 import           Control.Monad.IO.Class                       (MonadIO)
@@ -67,13 +67,13 @@ getContext recorder prefInfo fields = do
     cursor = lspPositionToCabalPosition (completionCursorPosition prefInfo)
 
 -- | Takes information about the current file's file path,
---  and the cursor position in the file; and builds a CabalPrefixInfo
+--  and the cursor position in the file; and builds a CabalPrefixInfo, reused from hls-cabal-plugin
 --  with the prefix up to that cursor position.
 --  Checks whether a suffix needs to be completed
 --  and calculates the range in the document
 --  where the completion action should be applied.
-getCabalPrefixInfo :: FilePath -> Ghcide.PosPrefixInfo -> CabalPrefixInfo
-getCabalPrefixInfo fp prefixInfo =
+getCabalProjectPrefixInfo :: FilePath -> Ghcide.PosPrefixInfo -> CabalPrefixInfo
+getCabalProjectPrefixInfo fp prefixInfo =
   CabalPrefixInfo
     { completionPrefix = completionPrefix',
       isStringNotation = mkIsStringNotation separator afterCursorText,
@@ -148,7 +148,7 @@ findCursorContext cursor parentHistory prefixText fields =
 
 -- | Finds the cursor's context, where the cursor is already found to be in a specific field
 --
--- Due to the way the field context is recognised for incomplete cabal files,
+-- Due to the way the field context is recognised for incomplete cabal.project files,
 -- an incomplete keyword is also recognised as a field, therefore we need to determine
 -- the specific context as we could still be in a stanza context in this case.
 classifyFieldContext :: NonEmpty (Int, StanzaContext) -> Syntax.Position -> Syntax.Field Syntax.Position -> Context
