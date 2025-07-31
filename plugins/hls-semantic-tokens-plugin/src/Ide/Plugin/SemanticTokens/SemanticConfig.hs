@@ -16,8 +16,8 @@ import           Development.IDE                 (Action, usePropertyAction)
 import           GHC.TypeLits                    (KnownSymbol)
 import           Ide.Plugin.Properties           (KeyNameProxy, NotElem,
                                                   Properties,
-                                                  PropertyKey (type PropertyKey),
-                                                  PropertyType (type TEnum),
+                                                  PropertyKey (PropertyKey),
+                                                  PropertyType (TEnum),
                                                   defineEnumProperty,
                                                   emptyProperties)
 import           Ide.Plugin.SemanticTokens.Types
