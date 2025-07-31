@@ -333,11 +333,15 @@ common cabalProject
 
 library hls-cabal-project-plugin
   import:           defaults, pedantic, warnings
-  if !flag(cabal)
+  if !flag(cabalProject)
     buildable: False
   exposed-modules:
     Ide.Plugin.CabalProject
-
+    Ide.Plugin.CabalProject.Parse
+    Ide.Plugin.CabalProject.Diagnostics
+    Ide.Plugin.CabalProject.Types
+    Ide.Plugin.CabalProject.Completion.Completions
+    Ide.Plugin.CabalProject.Completion.Data
 
   build-depends:
     , bytestring
@@ -347,10 +351,10 @@ library hls-cabal-project-plugin
     , directory
     , filepath
     , extra                 >=1.7.4
-    , ghcide                == 2.9.0.1
+    , ghcide                == 2.11.0.0
     , hashable
-    , hls-plugin-api        == 2.9.0.1
-    , hls-graph             == 2.9.0.1
+    , hls-plugin-api        == 2.11.0.0
+    , hls-graph             == 2.11.0.0
     , lens
     , lsp                   ^>=2.7
     , lsp-types             ^>=2.3
@@ -364,6 +368,11 @@ library hls-cabal-project-plugin
     , aeson
     , Cabal
     , pretty
+    , cabal-install
+    , cabal-install-solver
+    , haskell-language-server:hls-cabal-plugin
+    , base16-bytestring
+    , cryptohash-sha1
 
   hs-source-dirs:   plugins/hls-cabal-project-plugin/src
 
@@ -375,6 +384,8 @@ test-suite hls-cabal-project-plugin-tests
   hs-source-dirs:   plugins/hls-cabal-project-plugin/test
   main-is:          Main.hs
   other-modules:
+    Completer
+    Utils
   build-depends:
     , bytestring
     , Cabal-syntax          >= 3.7
@@ -382,11 +393,13 @@ test-suite hls-cabal-project-plugin-tests
     , filepath
     , ghcide
     , haskell-language-server:hls-cabal-project-plugin
-    , hls-test-utils    == 2.9.0.1
+    , hls-test-utils    == 2.11.0.0
     , lens
     , lsp-types
     , text
     , hls-plugin-api
+    , cabal-install
+    , haskell-language-server:hls-cabal-plugin
 
 -----------------------------
 -- class plugin
