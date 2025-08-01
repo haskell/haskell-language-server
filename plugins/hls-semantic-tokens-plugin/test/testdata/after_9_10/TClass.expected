@@ -1,6 +1,12 @@
-1:8-14 TModule "TClass"
-4:7-10 TClass "Foo"
-4:11-12 TTypeVariable "a"
-5:3-6 TClassMethod "foo"
-5:10-11 TTypeVariable "a"
-5:15-18 TTypeConstructor "Int"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-14 HsSemanticTokenType TModule "TClass"]
+[1:15-20 HsSyntacticTokenType TKeyword "where"]
+[4:1-6 HsSyntacticTokenType TKeyword "class"]
+[4:7-10 HsSemanticTokenType TClass "Foo"]
+[4:11-12 HsSemanticTokenType TTypeVariable "a"]
+[4:13-18 HsSyntacticTokenType TKeyword "where"]
+[5:3-6 HsSemanticTokenType TClassMethod "foo"]
+[5:7-9 HsSyntacticTokenType TKeyword "::"]
+[5:10-11 HsSemanticTokenType TTypeVariable "a"]
+[5:12-14 HsSyntacticTokenType TKeyword "->"]
+[5:15-18 HsSemanticTokenType TTypeConstructor "Int"]
