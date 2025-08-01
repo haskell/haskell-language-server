@@ -162,8 +162,12 @@ semanticTokensConfigTest =
             void waitForBuildQueue
             result1 <- docLspSemanticTokensString doc
             liftIO $ unlines (map show result1) @?=
-                T.unlines (["1:8-13 SemanticTokenTypes_Namespace \"Hello\"" | compilerVersion >= Version [9, 10] []]
-                        ++ ["2:1-3 SemanticTokenTypes_Variable \"go\""])
+                T.unlines ( [ "1:1-7 SemanticTokenTypes_Keyword \"module\"" ]
+                        ++ ["1:8-13 SemanticTokenTypes_Namespace \"Hello\"" | compilerVersion >= Version [9, 10] []]
+                        ++ [ "1:14-19 SemanticTokenTypes_Keyword \"where\""
+                           , "2:1-3 SemanticTokenTypes_Variable \"go\""
+                           , "2:6-7 SemanticTokenTypes_Keyword \"=\""
+                           , "2:8-9 SemanticTokenTypes_Number \"1\"" ])
     ]
 
 
@@ -182,8 +186,8 @@ semanticTokensFullDeltaTests =
       testCase "add tokens" $ do
         let file1 = "TModuleA.hs"
         let expectDelta
-                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 25 0 (Just [2, 0, 3, 8, 0])]))
-                | otherwise = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2, 0, 3, 8, 0])]))
+                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit {_start = 60, _deleteCount = 0, _data_ = Just [2,0,3,8,0,0,4,1,15,0,0,2,1,19,0]}]))
+                | otherwise = InR (InL (SemanticTokensDelta {_resultId = Just "1", _edits = [SemanticTokensEdit {_start = 55, _deleteCount = 0, _data_ = Just [2,0,3,8,0,0,4,1,15,0,0,2,1,19,0]}]}))
         --                                                                                         r c l t m
         --                                      where r = row, c = column, l = length, t = token, m = modifier
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
@@ -203,8 +207,8 @@ semanticTokensFullDeltaTests =
       testCase "remove tokens" $ do
         let file1 = "TModuleA.hs"
         let expectDelta
-                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 5 20 (Just [])]))
-                | otherwise = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
+                | compilerVersion >= Version [9, 10] [] = InR (InL (SemanticTokensDelta {_resultId = Just "1", _edits = [SemanticTokensEdit {_start = 21, _deleteCount = 12, _data_ = Just []},SemanticTokensEdit {_start = 34, _deleteCount = 3, _data_ = Just []},SemanticTokensEdit {_start = 41, _deleteCount = 0, _data_ = Just [7]},SemanticTokensEdit {_start = 42, _deleteCount = 2, _data_ = Just [15]},SemanticTokensEdit {_start = 46, _deleteCount = 1, _data_ = Just [5]},SemanticTokensEdit {_start = 51, _deleteCount = 6, _data_ = Just [6]}]}))
+                | otherwise =  InR (InL (SemanticTokensDelta {_resultId = Just "1", _edits = [SemanticTokensEdit {_start = 16, _deleteCount = 12, _data_ = Just []},SemanticTokensEdit {_start = 29, _deleteCount = 3, _data_ = Just []},SemanticTokensEdit {_start = 36, _deleteCount = 0, _data_ = Just [7]},SemanticTokensEdit {_start = 37, _deleteCount = 2, _data_ = Just [15]},SemanticTokensEdit {_start = 41, _deleteCount = 1, _data_ = Just [5]},SemanticTokensEdit {_start = 46, _deleteCount = 6, _data_ = Just [6]}]}))
         -- delete all tokens
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
           doc1 <- openDoc file1 "haskell"
@@ -244,19 +248,26 @@ semanticTokensTests =
           let expect =
                 unlines
                   (
+                     [ "[1:1-7 HsSyntacticTokenType TKeyword \"module\"]" ]
                     -- > 9.10 have module name in the token
-                    (["1:8-16 TModule \"TModuleB\"" | compilerVersion >= Version [9, 10] []])
-                      ++
-                    [
-                    "3:8-16 TModule \"TModuleA\"",
-                    "4:18-26 TModule \"TModuleA\"",
-                    "6:1-3 TVariable \"go\"",
-                    "6:6-10 TDataConstructor \"Game\"",
-                    "8:1-5 TVariable \"a\\66560bb\"",
-                    "8:8-17 TModule \"TModuleA.\"",
-                    "8:17-20 TRecordField \"a\\66560b\"",
-                    "8:21-23 TVariable \"go\""
-                  ])
+                     ++ ["[1:8-16 HsSemanticTokenType TModule \"TModuleB\"]" | compilerVersion >= Version [9, 10] []]
+                     ++ [ "[1:17-22 HsSyntacticTokenType TKeyword \"where\"]"
+                     , "[3:1-7 HsSyntacticTokenType TKeyword \"import\"]"
+                     , "[3:8-16 HsSemanticTokenType TModule \"TModuleA\"]"
+                     , "[4:1-7 HsSyntacticTokenType TKeyword \"import\"]"
+                     , "[4:8-17 HsSyntacticTokenType TKeyword \"qualified\"]"
+                     , "[4:18-26 HsSemanticTokenType TModule \"TModuleA\"]"
+                     , "[6:1-3 HsSemanticTokenType TVariable \"go\"]"
+                     , "[6:4-5 HsSyntacticTokenType TKeyword \"=\"]"
+                     , "[6:6-10 HsSemanticTokenType TDataConstructor \"Game\"]"
+                     , "[6:11-12 HsSyntacticTokenType TNumberLit \"1\"]"
+                     , "[8:1-5 HsSemanticTokenType TVariable \"a\\66560bb\"]"
+                     , "[8:5-6 HsSyntacticTokenType TKeyword \" \"]"
+                     , "[8:8-17 HsSemanticTokenType TModule \"TModuleA.\"]"
+                     , "[8:17-20 HsSyntacticTokenType TRecordSelector \"a\\66560b\",8:17-20 HsSemanticTokenType TRecordField \"a\\66560b\"]"
+                     , "[8:21-23 HsSemanticTokenType TVariable \"go\"]"
+                     ]
+                    )
           liftIO $ result @?= expect,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",

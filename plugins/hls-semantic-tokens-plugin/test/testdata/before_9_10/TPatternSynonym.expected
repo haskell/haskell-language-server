@@ -1,1 +1,6 @@
-5:9-12 TPatternSynonym "Foo"
+[1:1-33 HsSyntacticTokenType TComment "{-# LANGUAGE PatternSynonyms #-}"]
+[2:1-7 HsSyntacticTokenType TKeyword "module"]
+[2:24-29 HsSyntacticTokenType TKeyword "where"]
+[5:1-8 HsSyntacticTokenType TKeyword "pattern"]
+[5:9-12 HsSemanticTokenType TPatternSynonym "Foo"]
+[5:13-14 HsSyntacticTokenType TKeyword "="]

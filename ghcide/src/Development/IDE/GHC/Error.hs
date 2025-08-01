@@ -39,7 +39,6 @@ module Development.IDE.GHC.Error
 
 import           Control.Lens
 import           Data.Maybe
-import           Data.String                       (fromString)
 import qualified Data.Text                         as T
 import           Data.Tuple.Extra                  (uncurry3)
 import           Development.IDE.GHC.Compat        (GhcMessage, MsgEnvelope,
@@ -62,7 +61,7 @@ diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> Maybe (Ms
 diagFromText diagSource sev loc msg origMsg =
   D.ideErrorWithSource
     (Just diagSource) (Just sev)
-    (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc)
+    (filePathToUri' $ toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc)
     msg origMsg
     & fdLspDiagnosticL %~ \diag -> diag { D._range = fromMaybe noRange $ srcSpanToRange loc }
 
@@ -153,19 +152,19 @@ srcSpanToLocation src = do
   -- important that the URI's we produce have been properly normalized, otherwise they point at weird places in VS Code
   pure $ Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' fs) rng
 
-rangeToSrcSpan :: NormalizedFilePath -> Range -> SrcSpan
+rangeToSrcSpan :: NormalizedUri -> Range -> SrcSpan
 rangeToSrcSpan = fmap (\x -> Compat.RealSrcSpan x Nothing) . rangeToRealSrcSpan
 
 rangeToRealSrcSpan
-    :: NormalizedFilePath -> Range -> RealSrcSpan
-rangeToRealSrcSpan nfp =
+    :: NormalizedUri -> Range -> RealSrcSpan
+rangeToRealSrcSpan nuri =
     Compat.mkRealSrcSpan
-        <$> positionToRealSrcLoc nfp . _start
-        <*> positionToRealSrcLoc nfp . _end
+        <$> positionToRealSrcLoc nuri . _start
+        <*> positionToRealSrcLoc nuri . _end
 
-positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
-positionToRealSrcLoc nfp (Position l c)=
-    Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral $ c + 1)
+positionToRealSrcLoc :: NormalizedUri -> Position -> RealSrcLoc
+positionToRealSrcLoc nuri (Position l c)=
+    Compat.mkRealSrcLoc (Compat.mkFastString $ T.unpack $ getUri $ fromNormalizedUri nuri) (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of
