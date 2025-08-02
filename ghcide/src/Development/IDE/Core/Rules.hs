@@ -138,6 +138,8 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Development.IDE.Types.Shake                  as Shake
+import           GHC.Iface.Ext.Types                          (HieASTs (..))
+import           GHC.Iface.Ext.Utils                          (generateReferencesMap)
 import qualified GHC.LanguageExtensions                       as LangExt
 import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
@@ -510,7 +512,7 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
   (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
     Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
     Just vf -> pure (virtualFileText vf, Just $ virtualFileVersion vf)
-  let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
+  let refmap = generateReferencesMap . getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
@@ -538,8 +540,8 @@ getHieAstRuleDefinition f hsc tmr = do
           liftIO $ writeAndIndexHieFile hsc se modSummary f exports asts source
     _ -> pure []
 
-  let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
-      typemap = AtPoint.computeTypeReferences . Compat.getAsts <$> masts
+  let refmap = generateReferencesMap . getAsts <$> masts
+      typemap = AtPoint.computeTypeReferences . getAsts <$> masts
   pure (diags <> diagsWrite, HAR (ms_mod $ tmrModSummary tmr) <$> masts <*> refmap <*> typemap <*> pure HieFresh)
 
 getImportMapRule :: Recorder (WithPriority Log) -> Rules ()
