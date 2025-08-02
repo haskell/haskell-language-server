@@ -124,6 +124,17 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (12,15)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ],
               mkTest
+                  "higher-order function"
+                  [trimming|
+                      f :: (Int -> Int) -> Int -> Int
+                      f = _
+                      x = f (+ 1) 2
+                          ^ ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: (Int -> Int) -> Int -> Int" Nothing (Just [ParameterInformation (InR (5,17)) Nothing, ParameterInformation (InR (21,24)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
                   "type constraint"
                   [trimming|
                       f :: (Num a) => a -> a -> a
