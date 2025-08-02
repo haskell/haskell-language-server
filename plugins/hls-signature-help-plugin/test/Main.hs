@@ -136,6 +136,16 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: forall a. Num a => a -> a -> a" Nothing (Just [ParameterInformation (InR (24,25)) Nothing, ParameterInformation (InR (29,30)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ],
               mkTest
+                  "type constraint with kind signatures"
+                  [trimming|
+                      x :: IO Bool
+                      x = pure True
+                           ^   ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" Nothing (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
                   "dynamic function"
                   [trimming|
                       f :: Int -> Int -> Int
