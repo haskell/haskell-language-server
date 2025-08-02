@@ -1043,6 +1043,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.signatureHelp.globalOn": {
+        "default": true,
+        "description": "Enables signatureHelp plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.splice.globalOn": {
         "default": true,
         "description": "Enables splice plugin",
