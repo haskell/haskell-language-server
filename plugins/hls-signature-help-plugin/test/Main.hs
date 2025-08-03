@@ -143,8 +143,8 @@ main =
                           ^ ^ ^
                   |]
                   [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Num a => a -> a -> a" Nothing (Just [ParameterInformation (InR (24,25)) Nothing, ParameterInformation (InR (29,30)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Num a => a -> a -> a" Nothing (Just [ParameterInformation (InR (24,25)) Nothing, ParameterInformation (InR (29,30)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Num a => a -> a -> a" Nothing (Just [ParameterInformation (InR (24,25)) Nothing, ParameterInformation (InR (29,30)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (16,23)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Num a => a -> a -> a" Nothing (Just [ParameterInformation (InR (24,25)) Nothing, ParameterInformation (InR (29,30)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (16,23)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ],
               mkTest
                   "type constraint with kind signatures"
@@ -154,7 +154,7 @@ main =
                            ^   ^
                   |]
                   [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" Nothing (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                    Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" Nothing (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: Bool -> IO Bool" Nothing (Just [ParameterInformation (InR (8,12)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: forall a. a -> IO a" Nothing (Just [ParameterInformation (InR (18,19)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
                   "dynamic function"

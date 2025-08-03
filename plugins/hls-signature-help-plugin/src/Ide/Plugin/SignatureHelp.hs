@@ -5,8 +5,8 @@ module Ide.Plugin.SignatureHelp (descriptor) where
 
 import           Control.Arrow                        ((>>>))
 import           Data.Bifunctor                       (bimap)
+import           Data.Function                        ((&))
 import qualified Data.Map.Strict                      as M
-import           Data.Maybe                           (mapMaybe)
 import qualified Data.Set                             as S
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
@@ -34,10 +34,12 @@ import           Development.IDE.GHC.Compat           (ContextInfo (Use),
                                                        mkRealSrcLoc,
                                                        mkRealSrcSpan,
                                                        nodeChildren, nodeSpan,
-                                                       ppr, recoverFullType,
+                                                       nodeType, ppr,
+                                                       recoverFullType,
                                                        smallestContainingSatisfying,
                                                        sourceNodeInfo)
 import           Development.IDE.GHC.Compat.Util      (LexicalFastString (LexicalFastString))
+import           GHC.Core.Map.Type                    (deBruijnize)
 import           GHC.Data.Maybe                       (rightToMaybe)
 import           GHC.Types.SrcLoc                     (isRealSubspanOf)
 import           Ide.Plugin.Error                     (getNormalizedFilePathE)
@@ -86,28 +88,30 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
                         hieAst
                         ( \span hieAst -> do
                               let functionNode = getLeftMostNode hieAst
-                              functionName <- getNodeName span functionNode
-                              functionType <- getNodeType hieKind span functionNode
+                              (functionName, functionTypes) <- getNodeNameAndTypes hieKind functionNode
                               argumentNumber <- getArgumentNumber span hieAst
-                              Just (functionName, functionType, argumentNumber)
+                              Just (functionName, functionTypes, argumentNumber)
                         )
     case results of
         -- TODO(@linj) what does non-singleton list mean?
-        [(functionName, functionType, argumentNumber)] ->
-            pure $ InL $ mkSignatureHelp functionName functionType (fromIntegral argumentNumber - 1)
+        [(functionName, functionTypes, argumentNumber)] ->
+            pure $ InL $ mkSignatureHelp (fromIntegral argumentNumber - 1) functionName functionTypes
         _ -> pure $ InR Null
 
-mkSignatureHelp :: Name -> Text -> UInt -> SignatureHelp
-mkSignatureHelp functionName functionType argumentNumber =
+mkSignatureHelp :: UInt -> Name -> [Text] -> SignatureHelp
+mkSignatureHelp argumentNumber functionName functionTypes =
+    SignatureHelp
+        (mkSignatureInformation argumentNumber functionName <$> functionTypes)
+        (Just 0)
+        (Just $ InL argumentNumber)
+
+mkSignatureInformation :: UInt -> Name -> Text -> SignatureInformation
+mkSignatureInformation argumentNumber functionName functionType =
     let functionNameLabelPrefix = printOutputable (ppr functionName) <> " :: "
-     in SignatureHelp
-            [ SignatureInformation
-                  (functionNameLabelPrefix <> functionType)
-                  Nothing
-                  (Just $ mkArguments (fromIntegral $ T.length functionNameLabelPrefix) functionType)
-                  (Just $ InL argumentNumber)
-            ]
-            (Just 0)
+     in SignatureInformation
+            (functionNameLabelPrefix <> functionType)
+            Nothing
+            (Just $ mkArguments (fromIntegral $ T.length functionNameLabelPrefix) functionType)
             (Just $ InL argumentNumber)
 
 -- TODO(@linj) can type string be a multi-line string?
@@ -154,27 +158,33 @@ getLeftMostNode thisNode =
         []           -> thisNode
         leftChild: _ -> getLeftMostNode leftChild
 
-getNodeName :: RealSrcSpan -> HieAST a -> Maybe Name
-getNodeName _span hieAst =
+getNodeNameAndTypes :: forall a. HieKind a -> HieAST a -> Maybe (Name, [Text])
+getNodeNameAndTypes hieKind hieAst =
     if nodeHasAnnotation ("HsVar", "HsExpr") hieAst
-        then
-            case mapMaybe extractName $ M.keys $ M.filter isUse $ getSourceNodeIds hieAst of
-                [name] -> Just name -- TODO(@linj) will there be more than one name?
-                _      -> Nothing
+        then case hieAst & getSourceNodeIds & M.filter isUse & M.assocs of
+            [(identifier, identifierDetails)] ->
+                case extractName identifier of
+                    Nothing -> Nothing
+                    Just name ->
+                        let mTypeOfName = identType identifierDetails
+                            typesOfNode = case sourceNodeInfo hieAst of
+                                Nothing       -> []
+                                Just nodeInfo -> nodeType nodeInfo
+                            allTypes = case mTypeOfName of
+                                Nothing -> typesOfNode
+                                Just typeOfName -> typeOfName : filter (isDifferentType typeOfName) typesOfNode
+                         in Just (name, prettyType <$> allTypes)
+            [] -> Nothing
+            _ -> Nothing -- seems impossible
         else Nothing -- TODO(@linj) must function node be HsVar?
     where
         extractName = rightToMaybe
 
--- TODO(@linj) share code with getNodeName
-getNodeType :: HieKind a -> RealSrcSpan -> HieAST a -> Maybe Text
-getNodeType (hieKind :: HieKind a) _span hieAst =
-    if nodeHasAnnotation ("HsVar", "HsExpr") hieAst
-       then
-           case M.elems $ M.filter isUse $ getSourceNodeIds hieAst of
-               [identifierDetails] -> identType identifierDetails >>= (prettyType >>> Just)
-               _ -> Nothing -- TODO(@linj) will there be more than one identifierDetails?
-       else Nothing
-    where
+        isDifferentType :: a -> a -> Bool
+        isDifferentType type1 type2 = case hieKind of
+            HieFresh             -> deBruijnize type1 /= deBruijnize type2
+            HieFromDisk _hieFile -> type1 /= type2
+
         -- modified from Development.IDE.Spans.AtPoint.atPoint
         prettyType :: a -> Text
         prettyType = expandType >>> printOutputable
