@@ -155,7 +155,7 @@ main =
                           ^ ^
                   |]
                   [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "f :: Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int" Nothing Nothing (Just (InL 0))] (Just 0) (Just (InL 0)) -- TODO(@linj) write the correct ParameterInformation after figuring out how to calculate ranges when newline exists
+                    Just $ SignatureHelp [SignatureInformation "f :: Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int\n-> Int" Nothing (Just [ParameterInformation (InR (5,8)) Nothing, ParameterInformation (InR (13,16)) Nothing, ParameterInformation (InR (21,24)) Nothing, ParameterInformation (InR (29,32)) Nothing, ParameterInformation (InR (37,40)) Nothing, ParameterInformation (InR (45,48)) Nothing, ParameterInformation (InR (53,56)) Nothing, ParameterInformation (InR (61,64)) Nothing, ParameterInformation (InR (69,72)) Nothing, ParameterInformation (InR (77,80)) Nothing, ParameterInformation (InR (85,88)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
                   "multi-line type with type constraint"
@@ -166,7 +166,7 @@ main =
                           ^ ^
                   |]
                   [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "f :: forall abcdefghijklmn.\nNum abcdefghijklmn =>\nabcdefghijklmn\n-> abcdefghijklmn\n-> abcdefghijklmn\n-> abcdefghijklmn\n-> abcdefghijklmn" Nothing Nothing (Just (InL 0))] (Just 0) (Just (InL 0)) -- TODO(@linj) write the correct ParameterInformation after figuring out how to calculate ranges when newline exists
+                    Just $ SignatureHelp [SignatureInformation "f :: forall abcdefghijklmn.\nNum abcdefghijklmn =>\nabcdefghijklmn\n-> abcdefghijklmn\n-> abcdefghijklmn\n-> abcdefghijklmn\n-> abcdefghijklmn" Nothing (Just [ParameterInformation (InR (52,66)) Nothing, ParameterInformation (InR (71,85)) Nothing, ParameterInformation (InR (90,104)) Nothing, ParameterInformation (InR (109,123)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Integer -> Integer -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (16,23)) Nothing, ParameterInformation (InR (27,34)) Nothing, ParameterInformation (InR (38,45)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 
