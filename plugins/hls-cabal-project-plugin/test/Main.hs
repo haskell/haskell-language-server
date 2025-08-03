@@ -33,7 +33,7 @@ main :: IO ()
 main = do
     defaultTestRunner $
         testGroup
-            "Cabal Plugin Tests"
+            "Cabal.project Plugin Tests"
             [ unitTests
             , pluginTests
             ]
@@ -52,7 +52,7 @@ unitTests =
 cabalProjectParserUnitTests :: TestTree
 cabalProjectParserUnitTests =
     testGroup
-        "Parsing Cabal Project"
+        "Parsing Cabal.project"
         [ testCase "Simple Parsing works" $ do
             let fp    = testDataDir </> "cabal.project"
             bytes <- BS.readFile fp

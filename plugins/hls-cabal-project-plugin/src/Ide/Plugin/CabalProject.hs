@@ -65,9 +65,6 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId =
   (defaultCabalProjectPluginDescriptor plId "Provides a variety of IDE features in cabal.project files")
     { pluginRules = cabalProjectRules recorder plId
-    , pluginHandlers =
-        mconcat
-          []
     , pluginNotificationHandlers =
         mconcat
           [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
@@ -123,9 +120,9 @@ restartCabalProjectShakeSession shakeExtras vfs file actionMsg actionBetweenSess
 
 cabalProjectRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 cabalProjectRules recorder plId = do
-  -- Make sure we initialise the cabal project files-of-interest.
+  -- Make sure we initialise the cabal.project files-of-interest.
   ofInterestRules recorder
-  -- Rule to produce diagnostics for cabal project files.
+  -- Rule to produce diagnostics for cabal.project files.
   define (cmapWithPrio LogShake recorder) $ \ParseCabalProjectFields file -> do
     config <- getPluginConfigAction plId
     if not (plcGlobalOn config && plcDiagnosticsOn config)
@@ -175,16 +172,16 @@ cabalProjectRules recorder plId = do
             pure (warnDiags, Just projCfg)
 
   action $ do
-    -- Run the cabal project kick. This code always runs when 'shakeRestart' is run.
+    -- Run the cabal.project kick. This code always runs when 'shakeRestart' is run.
     -- Must be careful to not impede the performance too much. Crucial to
     -- a snappy IDE experience.
     kick
  where
   log' = logWith recorder
 
-{- | This is the kick function for the cabal project plugin.
-We run this action, whenever we shake session us run/restarted, which triggers
-actions to produce diagnostics for cabal project files.
+{- | This is the kick function for the cabal.project plugin.
+We run this action, whenever a shake session is run/restarted, which triggers
+actions to produce diagnostics for cabal.project files.
 
 It is paramount that this kick-function can be run quickly, since it is a blocking
 function invocation.
@@ -196,10 +193,10 @@ kick = do
 
 
 -- ----------------------------------------------------------------
--- Cabal project file of Interest rules and global variable
+-- Cabal.project file of Interest rules and global variable
 -- ----------------------------------------------------------------
 
-{- | Cabal project files that are currently open in the lsp-client.
+{- | Cabal.project files that are currently open in the lsp-client.
 Specific actions happen when these files are saved, closed or modified,
 such as generating diagnostics, re-parsing, etc...
 
