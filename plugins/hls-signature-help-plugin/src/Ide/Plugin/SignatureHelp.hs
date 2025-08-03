@@ -20,27 +20,25 @@ import           Development.IDE                      (GetHieAst (GetHieAst),
 import           Development.IDE.Core.PluginUtils     (runIdeActionE,
                                                        useWithStaleFastE)
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
-import           Development.IDE.GHC.Compat           (ContextInfo (Use),
-                                                       FastStringCompat, HieAST,
-                                                       HieASTs,
-                                                       IdentifierDetails, Name,
+import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        RealSrcSpan, SDoc,
-                                                       getAsts,
                                                        getSourceNodeIds,
-                                                       hieTypeToIface,
-                                                       hie_types, identInfo,
-                                                       identType,
+                                                       hie_types,
                                                        isAnnotationInNodeInfo,
                                                        mkRealSrcLoc,
-                                                       mkRealSrcSpan,
-                                                       nodeChildren, nodeSpan,
-                                                       nodeType, ppr,
-                                                       recoverFullType,
-                                                       smallestContainingSatisfying,
+                                                       mkRealSrcSpan, ppr,
                                                        sourceNodeInfo)
 import           Development.IDE.GHC.Compat.Util      (LexicalFastString (LexicalFastString))
 import           GHC.Core.Map.Type                    (deBruijnize)
 import           GHC.Data.Maybe                       (rightToMaybe)
+import           GHC.Iface.Ext.Types                  (ContextInfo (Use),
+                                                       HieAST (nodeChildren, nodeSpan),
+                                                       HieASTs (getAsts),
+                                                       IdentifierDetails (identInfo, identType),
+                                                       nodeType)
+import           GHC.Iface.Ext.Utils                  (hieTypeToIface,
+                                                       recoverFullType,
+                                                       smallestContainingSatisfying)
 import           GHC.Types.SrcLoc                     (isRealSubspanOf)
 import           Ide.Plugin.Error                     (getNormalizedFilePathE)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers),
