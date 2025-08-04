@@ -6,24 +6,13 @@ module Main (
     main,
 ) where
 
-import qualified Control.Exception                        as E
-import           Control.Lens                             ((^.))
-import           Control.Lens.Fold                        ((^?))
-import           Control.Monad                            (guard)
-import qualified Data.ByteString                          as BS
-import           Data.ByteString.Char8                    (pack)
-import           Data.Either                              (isRight)
-import           Data.List.Extra                          (nubOrdOn)
-import           Data.List.NonEmpty                       (NonEmpty (..))
-import qualified Data.List.NonEmpty                       as NE
-import qualified Data.Maybe                               as Maybe
-import qualified Data.Text                                as T
-import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton)
-import           Distribution.Fields                      (PError (..),
-                                                           PWarning (..))
-import           Distribution.Types.Version               (Version)
-import qualified Ide.Plugin.CabalProject.Parse            as Lib
-import qualified Language.LSP.Protocol.Lens               as L
+import qualified Control.Exception             as E
+import           Control.Lens                  ((^.))
+import qualified Data.ByteString               as BS
+import           Data.ByteString.Char8         (pack)
+import           Data.Either                   (isRight)
+import qualified Ide.Plugin.CabalProject.Parse as Lib
+import qualified Language.LSP.Protocol.Lens    as L
 import           System.FilePath
 import           Test.Hls
 import           Utils
@@ -65,13 +54,6 @@ cabalProjectParserUnitTests =
               let cabalFp = root </> "cabal.project"
               bytes <- BS.readFile cabalFp
               result <- E.try @E.IOException (Lib.parseCabalProjectFileContents cabalFp bytes)
-                        :: IO ( Either
-                            E.IOException
-                            ( [PWarning]
-                            , Either (Maybe Version, NonEmpty PError)
-                                 ProjectConfigSkeleton
-                            )
-                    )
               case result of
                 Left err ->
                   let errStr = show err
