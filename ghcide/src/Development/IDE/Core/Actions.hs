@@ -28,6 +28,7 @@ import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
+import           GHC.Iface.Ext.Types                  (Identifier)
 import qualified HieDb
 import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..),

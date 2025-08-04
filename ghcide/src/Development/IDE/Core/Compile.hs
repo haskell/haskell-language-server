@@ -109,6 +109,7 @@ import qualified Data.Set                                     as Set
 import qualified GHC                                          as G
 import           GHC.Core.Lint.Interactive
 import           GHC.Driver.Config.CoreToStg.Prep
+import           GHC.Iface.Ext.Types                          (HieASTs)
 import qualified GHC.Runtime.Loader                           as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.Error
@@ -145,6 +146,7 @@ import           Development.IDE.GHC.Compat                   hiding
 import qualified Data.List.NonEmpty                           as NE
 import           Data.Time                                    (getCurrentTime)
 import           GHC.Driver.Env                               (hsc_all_home_unit_ids)
+import           GHC.Iface.Ext.Types                          (NameEntityInfo)
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)

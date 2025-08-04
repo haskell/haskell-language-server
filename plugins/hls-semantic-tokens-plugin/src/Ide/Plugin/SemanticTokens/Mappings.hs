@@ -20,6 +20,10 @@ import qualified Data.Set                        as Set
 import           Data.Text                       (Text, unpack)
 import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
+import           GHC.Iface.Ext.Types             (BindType (..),
+                                                  ContextInfo (..),
+                                                  DeclType (..), HieType (..),
+                                                  HieTypeFlat, TypeIndex)
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Plugin.SemanticTokens.Utils (mkRange)
 import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
