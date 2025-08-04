@@ -11,6 +11,7 @@ module Development.IDE.LSP.LanguageServer
     , Log(..)
     , ThreadQueue
     , runWithWorkerThreads
+    , Setup (..)
     ) where
 
 import           Control.Concurrent.STM
