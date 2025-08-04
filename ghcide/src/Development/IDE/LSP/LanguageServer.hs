@@ -34,7 +34,6 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
-import           Control.Exception                     (BlockedIndefinitelyOnMVar (..))
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
@@ -82,6 +81,17 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
+data Setup config m a
+  = MkSetup
+  { doInitialize :: LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a))
+  -- ^ the callback invoked when the language server receives the 'Method_Initialize' request
+  , staticHandlers :: LSP.Handlers m
+  -- ^ the statically known handlers of the lsp server
+  , interpretHandler :: (LanguageContextEnv config, a) -> m <~> IO
+  -- ^ how to interpret @m@ to 'IO' and how to lift 'IO' into @m@
+  , onExit :: [IO ()]
+  -- ^ a list of 'IO' actions that clean up resources and must be run when the server shuts down
+  }
 
 runLanguageServer
     :: forall config a m. (Show config)
@@ -91,18 +101,16 @@ runLanguageServer
     -> Handle -- output
     -> config
     -> (config -> Value -> Either T.Text config)
-    -> (config -> m config ())
-    -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
-               LSP.Handlers (m config),
-               (LanguageContextEnv config, a) -> m config <~> IO, [IO ()]))
+    -> (config -> m ())
+    -> (MVar () -> IO (Setup config m a))
     -> IO ()
 runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
 
-    (doInitialize, staticHandlers, interpretHandler, onExit) <- setup clientMsgVar
+    MkSetup
+      { doInitialize, staticHandlers, interpretHandler, onExit } <- setup clientMsgVar
 
     let serverDefinition = LSP.ServerDefinition
             { LSP.parseConfig = parseConfig
@@ -116,30 +124,29 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             , LSP.options = modifyOptions options
             }
 
-    let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
+    let lspCologAction :: forall io. MonadIO io => Colog.LogAction io (Colog.WithSeverity LspServerLog)
         lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
-    untilMVar clientMsgVar $
+    let runServer =
           LSP.runServerWithHandles
             lspCologAction
             lspCologAction
             inH
             outH
             serverDefinition
-          `finally` sequence_ onExit
+
+    untilMVar clientMsgVar $
+        runServer `finally` sequence_ onExit
 
 setupLSP ::
-     forall config err.
+     forall config.
      Recorder (WithPriority Log)
   -> FilePath -- ^ root directory, see Note [Root Directory]
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
   -> MVar ()
-  -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
-         LSP.Handlers (ServerM config),
-         (LanguageContextEnv config, IdeState) -> ServerM config <~> IO,
-         [IO ()])
+  -> IO (Setup config (ServerM config) IdeState)
 setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar = do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
@@ -174,7 +181,7 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
           cancelled <- readTVar cancelledRequests
           unless (reqId `Set.member` cancelled) retry
 
-  let asyncHandlers = mconcat
+  let staticHandlers = mconcat
         [ userHandlers
         , cancelHandler cancelRequest
         , exitHandler exit
@@ -187,9 +194,9 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
-  let finalHandlers = [stopReactorLoop, exit]
+  let onExit = [stopReactorLoop, exit]
 
-  pure (doInitialize, asyncHandlers, interpretHandler, finalHandlers)
+  pure MkSetup {doInitialize, staticHandlers, interpretHandler, onExit}
 
 
 handleInit
@@ -270,10 +277,10 @@ runWithWorkerThreads recorder dbLoc f = evalContT $ do
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
--- | Runs the action until it ends or until the given MVar is put or the thread to fill the mvar is dropped, in which case the MVar will never be filled.
---   This happens when the thread that handles the shutdown notification dies. Ideally, this should not rely on the RTS detecting the blocked MVar
---   and instead *also* run the shutdown inf a finally block enclosing the handlers. In which case the BlockedIndefinitelyOnMVar Exception also wouldn't
---   be thrown.
+-- | Runs the action until it ends or until the given MVar is put.
+--   It is important, that the thread that puts the 'MVar' is not dropped before it puts the 'MVar' i.e. it should
+--   occur as the final action in a 'finally' or 'bracket', because otherwise this thread will finish early (as soon
+--   as the thread receives the BlockedIndefinitelyOnMVar exception)
 --   Rethrows any exceptions.
 untilMVar :: MonadUnliftIO m => MVar () -> m a -> m ()
 untilMVar mvar io = race_ (readMVar mvar) io
