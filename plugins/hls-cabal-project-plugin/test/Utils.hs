@@ -4,13 +4,10 @@
 
 module Utils where
 
-import           Control.Monad                 (guard)
-import           Data.List                     (sort)
-import           Data.Proxy                    (Proxy (Proxy))
-import qualified Data.Text                     as T
-import           Ide.Plugin.CabalProject       (descriptor)
+import           Control.Monad           (guard)
+import           Data.Proxy              (Proxy (Proxy))
+import           Ide.Plugin.CabalProject (descriptor)
 import qualified Ide.Plugin.CabalProject
-import           Ide.Plugin.CabalProject.Types
 import           System.FilePath
 import           Test.Hls
 

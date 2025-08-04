@@ -11,7 +11,6 @@ import qualified Data.ByteString.Base16                   as B16
 import qualified Data.ByteString.Char8                    as B
 import           Data.List.NonEmpty                       (NonEmpty (..))
 import qualified Data.List.NonEmpty                       as NE
-import qualified Data.Text                                as T
 import           Development.IDE
 import           Distribution.Client.HttpUtils            (configureTransport)
 import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton,
@@ -31,6 +30,7 @@ import           System.Directory.Extra                   (XdgDirectory (..),
 import           System.FilePath                          (takeBaseName,
                                                            takeDirectory, (</>))
 
+-- High level parsing of cabal.project file to produce errors, warnings, and ProjectConfigSkeleton
 parseCabalProjectFileContents
   :: FilePath
   -> BS.ByteString
@@ -47,21 +47,21 @@ parseCabalProjectFileContents fp bytes = do
 
   pure (PR.runParseResult parseRes)
 
+-- Extract fields from cabal.project file
 readCabalProjectFields
   :: NormalizedFilePath
   -> BS.ByteString
-  -> Either FileDiagnostic [Syntax.Field Syntax.Position]
+  -> Either [FileDiagnostic] [Syntax.Field Syntax.Position]
 readCabalProjectFields file contents =
   case PR.runParseResult (readPreprocessFields contents) of
+    -- we don't want to double report diagnostics, all diagnostics are produced by 'parseCabalProjectFileContents'.
     (_warnings, Left (_mbVer, errs)) ->
-      let perr = NE.head errs
-       in Left $
-            Diagnostics.fatalParseErrorDiagnostic file
-              ("Failed to parse cabal.project file: " <> T.pack (show perr))
+        Left (map (Diagnostics.errorDiagnostic file) (NE.toList errs))
 
     (_warnings, Right fields) ->
       Right fields
 
+-- Helper for parseCabalProjectFileContents, returns unique cache directory for given cabal.project file
 getCabalProjectCacheDir :: FilePath -> IO FilePath
 getCabalProjectCacheDir fp = do
     getXdgDirectory XdgCache (cacheDir </> prefix ++ "-" ++ opts_hash)
