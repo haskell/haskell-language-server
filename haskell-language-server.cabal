@@ -688,6 +688,43 @@ test-suite hls-retrie-plugin-tests
     , text
 
 -----------------------------
+-- underlying-type plugin
+-----------------------------
+
+flag underlyingType
+  description: Enable underlying-type plugin
+  default:     True
+  manual:      True
+
+common underlying-type
+  if flag(underlyingType) || flag(ignore-plugins-ghc-bounds)
+    build-depends: haskell-language-server:hls-underlying-type-plugin
+    cpp-options: -Dhls_underlyingType
+
+library hls-underlying-type-plugin
+  import:           defaults, pedantic, warnings
+  if !(flag(underlyingType) || flag(ignore-plugins-ghc-bounds))
+    buildable: True
+  exposed-modules:  Ide.Plugin.UnderlyingType
+  hs-source-dirs:   plugins/hls-underlying-type-plugin/src
+  build-depends:
+    , directory
+    , filepath
+    , ghcide          == 2.11.0.0
+    , hls-plugin-api  == 2.11.0.0
+    , lens
+    , lsp-types
+    , mtl
+    , process-extras
+    , text
+    , containers
+    , ghc
+    , aeson
+
+  default-extensions:
+    DataKinds
+
+-----------------------------
 -- hlint plugin
 -----------------------------
 
@@ -1870,6 +1907,7 @@ library
                   , overloadedRecordDot
                   , semanticTokens
                   , notes
+                  , underlying-type
 
   exposed-modules:
     Ide.Arguments

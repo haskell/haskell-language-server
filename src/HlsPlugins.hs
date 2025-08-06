@@ -45,9 +45,13 @@ import qualified Ide.Plugin.Rename                 as Rename
 import qualified Ide.Plugin.Retrie                 as Retrie
 #endif
 
-#if hls_hlint
+-- #if hls_underlyingType
+import qualified Ide.Plugin.UnderlyingType         as UnderlyingType
+-- #endif
+
+-- #if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
-#endif
+-- #endif
 
 #if hls_stan
 import qualified Ide.Plugin.Stan                   as Stan
@@ -186,6 +190,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_retrie
       let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_underlyingType
+      let pId = "underlying-type" in UnderlyingType.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
