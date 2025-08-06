@@ -94,7 +94,6 @@ import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
 import           Ide.Plugin.Error                     (PluginError (PluginInternalError, PluginStaleResolve),
-                                                       getNormalizedFilePathE,
                                                        handleMaybe)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
@@ -117,6 +116,7 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
+                                                       toNormalizedUri,
                                                        type (|?) (InL, InR))
 
 #if __GLASGOW_HASKELL__ < 910
@@ -151,8 +151,8 @@ descriptor recorder plId =
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
-  nfp <- getNormalizedFilePathE (docId ^. L.uri)
-  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  let nuri = toNormalizedUri $ docId ^. L.uri
+  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nuri
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
   let recordUids = [ uid
@@ -184,9 +184,9 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
 
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
-  nfp <- getNormalizedFilePathE uri
-  pragma <- getFirstPragma pId ideState nfp
-  CRR {crCodeActionResolve, nameMap, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  let nuri = toNormalizedUri uri
+  pragma <- getFirstPragma pId ideState nuri
+  CRR {crCodeActionResolve, nameMap, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nuri
   -- If we are unable to find the unique id in our IntMap of records, it means
   -- that this resolve is stale.
   record <- handleMaybe PluginStaleResolve $ IntMap.lookup uid crCodeActionResolve
@@ -205,17 +205,17 @@ codeActionResolveProvider ideState pId ca uri uid = do
 
 inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
-  nfp <- getNormalizedFilePathE uri
-  pragma <- getFirstPragma pId state nfp
+  let nuri = toNormalizedUri uri
+  pragma <- getFirstPragma pId state nuri
   runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
-    (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
+    (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nuri
     let -- Get all records with dotdot in current nfp
         records = [ record
                   | Just range <- [toCurrentRange pm visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
         -- Get the definition of each dotdot of record
-        locations = [ fmap (,record) (getDefinition nfp pos)
+        locations = [ fmap (,record) (getDefinition nuri pos)
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
@@ -256,9 +256,9 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
 
 inlayHintPosRecProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
-  nfp <- getNormalizedFilePathE uri
+  let nuri = toNormalizedUri uri
   runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
-    (CRR {crCodeActions, nameMap, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
+    (CRR {crCodeActions, nameMap, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nuri
     let records = [ record
                   | Just range <- [toCurrentRange pm visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions

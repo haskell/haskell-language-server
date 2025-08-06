@@ -72,7 +72,8 @@ import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEd
                                                                 Null (Null),
                                                                 VersionedTextDocumentIdentifier,
                                                                 WorkspaceEdit,
-                                                                toNormalizedFilePath,
+                                                                filePathToUri,
+                                                                toNormalizedUri,
                                                                 type (|?) (InR))
 import           System.Directory                              (doesFileExist,
                                                                 listDirectory)
@@ -246,9 +247,10 @@ getDependencyEdit :: MonadIO m => Recorder (WithPriority Log) -> (IdeState, Clie
 getDependencyEdit recorder env cabalFilePath buildTarget dependency = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-        contents <- getFileContents $ toNormalizedFilePath cabalFilePath
-        inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
-        inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+        let nuri = toNormalizedUri $ filePathToUri cabalFilePath
+        contents <- getFileContents nuri
+        inFields <- useWithStale ParseCabalFields nuri
+        inPackDescr <- useWithStale ParseCabalFile nuri
         let mbCnfOrigContents = case contents of
                     (Just txt) -> Just $ encodeUtf8 $ Rope.toText txt
                     _          -> Nothing

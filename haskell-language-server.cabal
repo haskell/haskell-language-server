@@ -1117,6 +1117,7 @@ library hls-code-range-plugin
     Ide.Plugin.CodeRange.ASTPreProcess
   hs-source-dirs: plugins/hls-code-range-plugin/src
   build-depends:
+    , text
     , containers
     , deepseq
     , extra
