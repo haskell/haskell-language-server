@@ -45,13 +45,13 @@ import qualified Ide.Plugin.Rename                 as Rename
 import qualified Ide.Plugin.Retrie                 as Retrie
 #endif
 
--- #if hls_underlyingType
+#if hls_underlyingType
 import qualified Ide.Plugin.UnderlyingType         as UnderlyingType
--- #endif
+#endif
 
--- #if hls_hlint
+#if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
--- #endif
+#endif
 
 #if hls_stan
 import qualified Ide.Plugin.Stan                   as Stan
