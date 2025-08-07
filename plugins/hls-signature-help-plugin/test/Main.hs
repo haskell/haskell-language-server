@@ -157,6 +157,17 @@ main =
                     Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" Nothing (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: Bool -> IO Bool" Nothing (Just [ParameterInformation (InR (8,12)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: forall a. a -> IO a" Nothing (Just [ParameterInformation (InR (18,19)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
+                  "2 type constraints"
+                  [trimming|
+                      f :: forall a. (Eq a, Num a) => a -> a -> a
+                      f = _
+                      x = f True
+                          ^   ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. (Eq a, Num a) => a -> a -> a" Nothing (Just [ParameterInformation (InR (32,33)) Nothing, ParameterInformation (InR (37,38)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Bool -> Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,9)) Nothing, ParameterInformation (InR (13,17)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
                   "dynamic function"
                   [trimming|
                       f :: Int -> Int -> Int
