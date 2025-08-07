@@ -251,6 +251,17 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15,22)) Nothing, ParameterInformation (InR (36,42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Integer -> forall b. (Integer, b) -> b" Nothing (Just [ParameterInformation (InR (5,18)) Nothing, ParameterInformation (InR (32,44)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
+                  "RankNTypes(forall in middle), another"
+                  [trimming|
+                      f :: l -> forall a. a -> a
+                      f = _
+                      x = f 1
+                          ^ ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall l. l -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (30,31)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
                   "RankNTypes(forall in middle), again"
                   [trimming|
                       f :: a -> forall a. a -> a
