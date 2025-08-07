@@ -2,24 +2,24 @@
 
 module Ide.Plugin.CabalProject.Completion.Completions (contextToCompleter, getContext, getCabalProjectPrefixInfo) where
 
-import           Control.Lens                                 ((^.))
-import           Control.Monad.IO.Class                       (MonadIO)
-import           Data.List.NonEmpty                           (NonEmpty)
-import qualified Data.List.NonEmpty                           as NE
-import qualified Data.Map                                     as Map
-import qualified Data.Text                                    as T
-import           Development.IDE                              as D
-import qualified Development.IDE.Plugin.Completions.Types     as Ghcide
-import qualified Distribution.Fields                          as Syntax
-import qualified Distribution.Parsec.Position                 as Syntax
+import           Control.Lens                                       ((^.))
+import           Control.Monad.IO.Class                             (MonadIO)
+import           Data.List.NonEmpty                                 (NonEmpty)
+import qualified Data.List.NonEmpty                                 as NE
+import qualified Data.Map                                           as Map
+import qualified Data.Text                                          as T
+import           Development.IDE                                    as D
+import qualified Development.IDE.Plugin.Completions.Types           as Ghcide
+import qualified Distribution.Fields                                as Syntax
+import qualified Distribution.Parsec.Position                       as Syntax
 import           Ide.Plugin.Cabal.Completion.CabalFields
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Types  (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
+import           Ide.Plugin.CabalProject.Completion.Completer.Types (CabalProjectCompleter)
 import           Ide.Plugin.CabalProject.Completion.Data
-import qualified Language.LSP.Protocol.Lens                   as JL
-import qualified System.FilePath                              as FP
-import           System.FilePath                              (takeBaseName)
+import qualified Language.LSP.Protocol.Lens                         as JL
+import qualified System.FilePath                                    as FP
+import           System.FilePath                                    (takeBaseName)
 
 -- ----------------------------------------------------------------
 -- Public API for Completions
@@ -27,12 +27,12 @@ import           System.FilePath                              (takeBaseName)
 
 -- | Takes information about the completion context within the file
 --  and finds the correct completer to be applied.
-contextToCompleter :: Context -> Completer
+contextToCompleter :: Context -> CabalProjectCompleter
 -- if we are in the top level of the cabal.project file and not in a keyword context,
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =
   constantCompleter $
-           Map.keys cabalProjectKeywords ++ Map.keys stanzaKeywordMap
+           Map.keys cabalProjectKeywords ++ Map.keys cabalProjectStanzaKeywordMap
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
 contextToCompleter (TopLevel, KeyWord kw) =
@@ -42,12 +42,12 @@ contextToCompleter (TopLevel, KeyWord kw) =
 -- if we are in a stanza and not in a keyword context,
 -- we can write any of the stanza's keywords or a stanza declaration
 contextToCompleter (Stanza s _, None) =
-  case Map.lookup s stanzaKeywordMap of
+  case Map.lookup s cabalProjectStanzaKeywordMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just l  -> constantCompleter $ Map.keys l
 -- if we are in a stanza's keyword's context we can complete possible values of that keyword
 contextToCompleter (Stanza s _, KeyWord kw) =
-  case Map.lookup s stanzaKeywordMap of
+  case Map.lookup s cabalProjectStanzaKeywordMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just m -> case Map.lookup kw m of
       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)

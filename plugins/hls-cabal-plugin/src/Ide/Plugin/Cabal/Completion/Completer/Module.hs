@@ -27,7 +27,7 @@ import qualified Text.Fuzzy.Parallel                            as Fuzzy
 --
 -- Takes an extraction function which extracts the source directories
 -- to be used by the completer.
-modulesCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> Completer
+modulesCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> CabalCompleter
 modulesCompleter extractionFunction recorder cData = do
   mGPD <- getLatestGPD cData
   case mGPD of

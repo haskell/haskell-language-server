@@ -15,7 +15,7 @@ import qualified Distribution.Parsec.Position                  as Syntax
 import           Ide.Plugin.Cabal.Completion.CabalFields
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Snippet
-import           Ide.Plugin.Cabal.Completion.Completer.Types   (Completer)
+import           Ide.Plugin.Cabal.Completion.Completer.Types   (CabalCompleter)
 import           Ide.Plugin.Cabal.Completion.Data
 import           Ide.Plugin.Cabal.Completion.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
@@ -28,7 +28,7 @@ import           System.FilePath                               (takeBaseName)
 
 -- | Takes information about the completion context within the file
 --  and finds the correct completer to be applied.
-contextToCompleter :: Context -> Completer
+contextToCompleter :: Context -> CabalCompleter
 -- if we are in the top level of the cabal file and not in a keyword context,
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =

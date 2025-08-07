@@ -21,9 +21,9 @@ import qualified Text.Fuzzy.Parallel                          as Fuzzy
 
 -- | Completer to be used when a file path can be completed for a field.
 --  Completes file paths as well as directories.
-filePathCompleter :: Completer
+filePathCompleter :: HasPrefixInfo d => Completer d
 filePathCompleter recorder cData = do
-  let prefInfo = cabalPrefixInfo cData
+  let prefInfo = getPrefixInfo cData
       complInfo = pathCompletionInfoFromCabalPrefixInfo "" prefInfo
   filePathCompletions <- listFileCompletions recorder complInfo
   let scored =
@@ -40,7 +40,7 @@ filePathCompleter recorder cData = do
         pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
     )
 
-mainIsCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> Completer
+mainIsCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> CabalCompleter
 mainIsCompleter extractionFunction recorder cData = do
   mGPD <- getLatestGPD cData
   case mGPD of
@@ -74,9 +74,9 @@ mainIsCompleter extractionFunction recorder cData = do
 
 -- | Completer to be used when a directory can be completed for the field.
 --  Only completes directories.
-directoryCompleter :: Completer
+directoryCompleter :: HasPrefixInfo d => Completer d
 directoryCompleter recorder cData = do
-  let prefInfo = cabalPrefixInfo cData
+  let prefInfo = getPrefixInfo cData
       complInfo = pathCompletionInfoFromCabalPrefixInfo "" prefInfo
   directoryCompletions <- listDirectoryCompletions recorder complInfo
   let scored =

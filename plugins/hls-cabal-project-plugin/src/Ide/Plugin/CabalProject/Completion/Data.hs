@@ -2,24 +2,13 @@
 
 module Ide.Plugin.CabalProject.Completion.Data where
 
-import           Data.Map                                       (Map)
-import qualified Data.Map                                       as Map
-import qualified Data.Text                                      as T
-import           Development.IDE.GHC.Compat.Core                (flagsForCompletion)
-import           Distribution.CabalSpecVersion                  (CabalSpecVersion (CabalSpecV2_2),
-                                                                 showCabalSpecVersion)
-import           Ide.Plugin.Cabal.Completion.Completer.FilePath (directoryCompleter,
-                                                                 filePathCompleter)
+import           Data.Map                                           (Map)
+import qualified Data.Map                                           as Map
+import           Ide.Plugin.Cabal.Completion.Completer.FilePath     (directoryCompleter,
+                                                                     filePathCompleter)
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
-
--- | Ad-hoc data type for modelling the available top-level stanzas.
--- Not intended right now for anything else but to avoid string
--- comparisons in 'stanzaKeywordMap'.
-data TopLevelStanza
-  = Package
-  | ProgramOptions
+import           Ide.Plugin.CabalProject.Completion.Completer.Types (CabalProjectCompleter)
 
 -- ----------------------------------------------------------------
 -- Completion Data
@@ -29,7 +18,7 @@ data TopLevelStanza
 --
 -- TODO: we could add descriptions of field values and
 -- then show them when inside the field's context
-cabalProjectKeywords :: Map KeyWordName Completer
+cabalProjectKeywords :: Map KeyWordName CabalProjectCompleter
 cabalProjectKeywords =
   Map.fromList
     [ ("packages:", filePathCompleter),
@@ -86,7 +75,7 @@ cabalProjectKeywords =
       ("import:", filePathCompleter)
     ]
 
-packageFields :: Map KeyWordName Completer
+packageFields :: Map KeyWordName CabalProjectCompleter
 packageFields =
   Map.fromList
     [ ("haddock-all:", constantCompleter ["False", "True"]),
@@ -154,7 +143,7 @@ packageFields =
       ("ghc-options:", noopCompleter)
     ]
 
-sourceRepoFields :: Map KeyWordName Completer
+sourceRepoFields :: Map KeyWordName CabalProjectCompleter
 sourceRepoFields = Map.fromList
     [ ("type:", constantCompleter
           [ "darcs",
@@ -175,8 +164,8 @@ sourceRepoFields = Map.fromList
 
 -- | Map, containing all stanzas in a cabal.project file as keys,
 --  and lists of their possible nested keywords as values.
-stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
-stanzaKeywordMap =
+cabalProjectStanzaKeywordMap :: Map StanzaType (Map KeyWordName CabalProjectCompleter)
+cabalProjectStanzaKeywordMap =
   Map.fromList
     [ ("package", packageFields),
       ("program-options", packageFields),

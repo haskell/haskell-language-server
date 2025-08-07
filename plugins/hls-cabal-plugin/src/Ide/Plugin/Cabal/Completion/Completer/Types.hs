@@ -9,9 +9,12 @@ import qualified Distribution.Parsec.Position      as Syntax
 import           Ide.Plugin.Cabal.Completion.Types
 import           Language.LSP.Protocol.Types       (CompletionItem)
 
--- | Takes information needed to build possible completion items
+-- | Takes information and completer type needed to build possible completion items
 -- and returns the list of possible completion items
-type Completer = Recorder (WithPriority Log) -> CompleterData -> IO [CompletionItem]
+type Completer d = Recorder (WithPriority Log) -> d -> IO [CompletionItem]
+
+-- Cabal specific completer
+type CabalCompleter = Completer CompleterData
 
 -- | Contains information to be used by completers.
 data CompleterData = CompleterData
@@ -26,3 +29,10 @@ data CompleterData = CompleterData
     -- | The name of the stanza in which the completer is applied
     stanzaName             :: Maybe StanzaName
   }
+
+-- Allows CabalCompleter and CabalProjectCompleter to be passed into the same completers
+class HasPrefixInfo d where
+  getPrefixInfo :: d -> CabalPrefixInfo
+
+instance HasPrefixInfo CompleterData where
+  getPrefixInfo = cabalPrefixInfo
