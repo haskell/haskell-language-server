@@ -16,7 +16,6 @@ import           Control.Monad.Trans.Maybe                          (runMaybeT)
 import qualified Data.ByteString                                    as BS
 import           Data.Hashable
 import           Data.HashMap.Strict                                (HashMap)
-                                                                --  toList)
 import qualified Data.HashMap.Strict                                as HashMap
 import qualified Data.List.NonEmpty                                 as NE
 import           Data.Proxy
@@ -31,9 +30,6 @@ import           Development.IDE.Graph                              (Key,
 import qualified Development.IDE.Plugin.Completions.Logic           as Ghcide
 import           Development.IDE.Types.Shake                        (toKey)
 import qualified Distribution.Fields                                as Syntax
--- import           Distribution.PackageDescription                (allBuildDepends,
---                                                                  depPkgName,
---                                                                  unPackageName)
 import qualified Distribution.Parsec.Position                       as Syntax
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Completion.Types                  as CTypes
