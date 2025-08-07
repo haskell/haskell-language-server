@@ -217,6 +217,21 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1)),
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Bool -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,9)) Nothing, ParameterInformation (InR (28,35)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (31,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "=> in argument"
+                  [trimming|
+                      f :: Eq a => a -> (Num b => b -> b) -> a
+                      f = _
+                      x = f 1
+                          ^ ^
+                      y = f 1 negate
+                            ^ ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num b => b -> b) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num Any => Any -> Any) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> (Num Any => Any -> Any) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,38)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
                   ]
             ]
 
