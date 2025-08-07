@@ -232,6 +232,34 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num b => b -> b) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num Any => Any -> Any) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> (Num Any => Any -> Any) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,38)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
+                  ],
+              mkTest
+                  "RankNTypes(forall in middle)"
+                  [trimming|
+                      f :: Maybe a -> forall b. (a, b) -> b
+                      f = _
+                      x1 = f Nothing
+                           ^ ^
+                      x2 = f (Just True)
+                             ^
+                      x3 = f Nothing (1, True)
+                             ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15,22)) Nothing, ParameterInformation (InR (36,42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15,22)) Nothing, ParameterInformation (InR (36,42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Bool -> forall b. (Bool, b) -> b" Nothing (Just [ParameterInformation (InR (5,15)) Nothing, ParameterInformation (InR (29,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15,22)) Nothing, ParameterInformation (InR (36,42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Integer -> forall b. (Integer, b) -> b" Nothing (Just [ParameterInformation (InR (5,18)) Nothing, ParameterInformation (InR (32,44)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "RankNTypes(forall in middle), again"
+                  [trimming|
+                      f :: a -> forall a. a -> a
+                      f = _
+                      x = f 1
+                          ^ ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a. a -> forall a1. a1 -> a1" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (31,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 
