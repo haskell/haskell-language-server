@@ -260,6 +260,21 @@ main =
                   |]
                   [ Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: forall a. a -> forall a1. a1 -> a1" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (31,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "LinearTypes"
+                  [trimming|
+                      {-# LANGUAGE LinearTypes #-}
+                      f :: (a -> b) %1 -> a -> b
+                      f = _
+                      x1 = f negate
+                           ^ ^
+                      x2 = f _ 1
+                             ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. (a -> b) %1 -> a -> b" Nothing (Just [ParameterInformation (InR (18,24)) Nothing, ParameterInformation (InR (32,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: (Integer -> Integer) %1 -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (6,24)) Nothing, ParameterInformation (InR (32,39)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. (a -> b) %1 -> a -> b" Nothing (Just [ParameterInformation (InR (18,24)) Nothing, ParameterInformation (InR (32,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: (Integer -> b) %1 -> Integer -> b" Nothing (Just [ParameterInformation (InR (6,18)) Nothing, ParameterInformation (InR (26,33)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 
