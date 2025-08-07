@@ -16,29 +16,29 @@ import           Development.IDE                      (GetHieAst (GetHieAst),
                                                        IdeState (shakeExtras),
                                                        Pretty (pretty),
                                                        Recorder, WithPriority,
-                                                       printOutputable)
+                                                       printOutputableOneLine)
 import           Development.IDE.Core.PluginUtils     (runIdeActionE,
                                                        useWithStaleFastE)
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
 import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
-                                                       RealSrcSpan, SDoc,
+                                                       RealSrcSpan,
                                                        getSourceNodeIds,
-                                                       hie_types,
                                                        isAnnotationInNodeInfo,
                                                        mkRealSrcLoc,
                                                        mkRealSrcSpan, ppr,
                                                        sourceNodeInfo)
 import           Development.IDE.GHC.Compat.Util      (LexicalFastString (LexicalFastString))
 import           GHC.Core.Map.Type                    (deBruijnize)
+import           GHC.Core.Type                        (FunTyFlag (FTF_T_T),
+                                                       Type, dropForAlls,
+                                                       splitFunTy_maybe)
 import           GHC.Data.Maybe                       (rightToMaybe)
 import           GHC.Iface.Ext.Types                  (ContextInfo (Use),
                                                        HieAST (nodeChildren, nodeSpan),
                                                        HieASTs (getAsts),
                                                        IdentifierDetails (identInfo, identType),
                                                        nodeType)
-import           GHC.Iface.Ext.Utils                  (hieTypeToIface,
-                                                       recoverFullType,
-                                                       smallestContainingSatisfying)
+import           GHC.Iface.Ext.Utils                  (smallestContainingSatisfying)
 import           GHC.Types.SrcLoc                     (isRealSubspanOf)
 import           Ide.Plugin.Error                     (getNormalizedFilePathE)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers),
@@ -91,44 +91,99 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
                               Just (functionName, functionTypes, argumentNumber)
                         )
     case results of
-        -- TODO(@linj) what does non-singleton list mean?
+        [(_functionName, [], _argumentNumber)] -> pure $ InR Null
         [(functionName, functionTypes, argumentNumber)] ->
             pure $ InL $ mkSignatureHelp (fromIntegral argumentNumber - 1) functionName functionTypes
+        -- TODO(@linj) what does non-singleton list mean?
         _ -> pure $ InR Null
 
-mkSignatureHelp :: UInt -> Name -> [Text] -> SignatureHelp
+mkSignatureHelp :: UInt -> Name -> [Type] -> SignatureHelp
 mkSignatureHelp argumentNumber functionName functionTypes =
     SignatureHelp
         (mkSignatureInformation argumentNumber functionName <$> functionTypes)
         (Just 0)
         (Just $ InL argumentNumber)
 
-mkSignatureInformation :: UInt -> Name -> Text -> SignatureInformation
+mkSignatureInformation :: UInt -> Name -> Type -> SignatureInformation
 mkSignatureInformation argumentNumber functionName functionType =
-    let functionNameLabelPrefix = printOutputable (ppr functionName) <> " :: "
+    let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
      in SignatureInformation
-            (functionNameLabelPrefix <> functionType)
+            (functionNameLabelPrefix <> printOutputableOneLine functionType)
             Nothing
             (Just $ mkArguments (fromIntegral $ T.length functionNameLabelPrefix) functionType)
             (Just $ InL argumentNumber)
 
--- TODO(@linj) can type string be a multi-line string?
-mkArguments :: UInt -> Text -> [ParameterInformation]
+mkArguments :: UInt -> Type -> [ParameterInformation]
 mkArguments offset functionType =
-    let separator = " -> "
-        separatorLength = fromIntegral $ T.length separator
-        splits = T.breakOnAll separator functionType
-        prefixes = fst <$> splits
-        prefixLengths = fmap (T.length >>> fromIntegral) prefixes
-        ranges =
-            [ ( if previousPrefixLength == 0 then 0 else previousPrefixLength + separatorLength,
-                currentPrefixLength
-              )
-            | (previousPrefixLength, currentPrefixLength) <- zip (0: prefixLengths) prefixLengths
-            ]
-     in [ ParameterInformation (InR range) Nothing
-        | range <- bimap (+offset) (+offset) <$> ranges
-        ]
+    [ ParameterInformation (InR range) Nothing
+    | range <- bimap (+offset) (+offset) <$> findArgumentRanges functionType
+    ]
+
+findArgumentRanges :: Type -> [(UInt, UInt)]
+findArgumentRanges functionType =
+    let functionTypeString = printOutputableOneLine functionType
+        functionTypeStringLength = fromIntegral $ T.length functionTypeString
+        splitFunctionTypes = filter notTypeConstraint $ splitFunTysIgnoringForAll functionType
+        splitFunctionTypeStrings = printOutputableOneLine . fst <$> splitFunctionTypes
+        -- reverse to avoid matching "a" of "forall a" in "forall a. a -> a"
+        reversedRanges =
+            drop 1 $ -- do not need the range of the result (last) type
+                findArgumentStringRanges
+                    0
+                    (T.reverse functionTypeString)
+                    (T.reverse <$> reverse splitFunctionTypeStrings)
+     in reverse $ modifyRange functionTypeStringLength <$> reversedRanges
+    where
+        modifyRange functionTypeStringLength (start, end) =
+            (functionTypeStringLength - end, functionTypeStringLength - start)
+
+{-
+The implemented method uses both structured type and unstructured type string.
+It provides good enough results and is easier to implement than alternative
+method 1 or 2.
+
+Alternative method 1: use only structured type
+This method is hard to implement because we need to duplicate some logic of 'ppr' for 'Type'.
+Some tricky cases are as follows:
+- 'Eq a => Num b -> c' is shown as '(Eq a, Numb) => c'
+- 'forall' can appear anywhere in a type when RankNTypes is enabled
+  f :: forall a. Maybe a -> forall b. (a, b) -> b
+- '=>' can appear anywhere in a type
+  g :: forall a b. Eq a => a -> Num b => b -> b
+- ppr the first argument type of '(a -> b) -> a -> b' is 'a -> b' (no parentheses)
+- 'forall' is not always shown
+
+Alternative method 2: use only unstructured type string
+This method is hard to implement because we need to parse the type string.
+Some tricky cases are as follows:
+- h :: forall a (m :: Type -> Type). Monad m => a -> m a
+-}
+findArgumentStringRanges :: UInt -> Text -> [Text] -> [(UInt, UInt)]
+findArgumentStringRanges _totalPrefixLength _functionTypeString [] = []
+findArgumentStringRanges totalPrefixLength functionTypeString (argumentTypeString:restArgumentTypeStrings) =
+    let (prefix, match) = T.breakOn argumentTypeString functionTypeString
+        prefixLength = fromIntegral $ T.length prefix
+        argumentTypeStringLength = fromIntegral $ T.length argumentTypeString
+        start = totalPrefixLength + prefixLength
+     in (start, start + argumentTypeStringLength)
+            : findArgumentStringRanges
+              (totalPrefixLength + prefixLength + argumentTypeStringLength)
+              (T.drop (fromIntegral argumentTypeStringLength) match)
+              restArgumentTypeStrings
+
+-- similar to 'splitFunTys' but
+--   1) the result (last) type is included and
+--   2) toplevel foralls are ignored
+splitFunTysIgnoringForAll :: Type -> [(Type, Maybe FunTyFlag)]
+splitFunTysIgnoringForAll ty = case ty & dropForAlls & splitFunTy_maybe of
+    Just (funTyFlag, _mult, argumentType, resultType) ->
+        (argumentType, Just funTyFlag) : splitFunTysIgnoringForAll resultType
+    Nothing -> [(ty, Nothing)]
+
+notTypeConstraint :: (Type, Maybe FunTyFlag) -> Bool
+notTypeConstraint (_type, Just FTF_T_T) = True
+notTypeConstraint (_type, Nothing)      = True
+notTypeConstraint _                     = False
 
 extractInfoFromSmallestContainingFunctionApplicationAst ::
     Position -> HieASTs a -> (RealSrcSpan -> HieAST a -> Maybe b) -> [b]
@@ -156,7 +211,7 @@ getLeftMostNode thisNode =
         []           -> thisNode
         leftChild: _ -> getLeftMostNode leftChild
 
-getNodeNameAndTypes :: forall a. HieKind a -> HieAST a -> Maybe (Name, [Text])
+getNodeNameAndTypes :: HieKind a -> HieAST a -> Maybe (Name, [Type])
 getNodeNameAndTypes hieKind hieAst =
     if nodeHasAnnotation ("HsVar", "HsExpr") hieAst
         then case hieAst & getSourceNodeIds & M.filter isUse & M.assocs of
@@ -171,26 +226,21 @@ getNodeNameAndTypes hieKind hieAst =
                             allTypes = case mTypeOfName of
                                 Nothing -> typesOfNode
                                 Just typeOfName -> typeOfName : filter (isDifferentType typeOfName) typesOfNode
-                         in Just (name, prettyType <$> allTypes)
+                         in Just (name, filterCoreTypes allTypes)
             [] -> Nothing
             _ -> Nothing -- seems impossible
         else Nothing -- TODO(@linj) must function node be HsVar?
     where
         extractName = rightToMaybe
 
-        isDifferentType :: a -> a -> Bool
         isDifferentType type1 type2 = case hieKind of
-            HieFresh             -> deBruijnize type1 /= deBruijnize type2
-            HieFromDisk _hieFile -> type1 /= type2
+            HieFresh       -> deBruijnize type1 /= deBruijnize type2
+            HieFromDisk {} -> type1 /= type2
 
-        -- modified from Development.IDE.Spans.AtPoint.atPoint
-        prettyType :: a -> Text
-        prettyType = expandType >>> printOutputable
-
-        expandType :: a -> SDoc
-        expandType t = case hieKind of
-            HieFresh -> ppr t
-            HieFromDisk hieFile -> ppr $ hieTypeToIface $ recoverFullType t (hie_types hieFile)
+        filterCoreTypes types = case hieKind of
+            HieFresh       -> types
+            -- ignore this case since this only happens before we finish startup
+            HieFromDisk {} -> []
 
 isUse :: IdentifierDetails a -> Bool
 isUse = identInfo >>> S.member Use
