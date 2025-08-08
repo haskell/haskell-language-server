@@ -38,7 +38,7 @@ extra-deps:
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
   - validation-selective-0.2.0.0
-  - cabal-add-0.1
+  - cabal-add-0.2
   - cabal-install-parsers-0.6.1.1
   - directory-ospath-streaming-0.2.2
 
@@ -56,8 +56,6 @@ flags:
     ghc-lib: true
   retrie:
     BuildExecutable: false
-  cabal-add:
-    cabal-syntax: true
   # stan dependencies
   directory-ospath-streaming:
       os-string: false

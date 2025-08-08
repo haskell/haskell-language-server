@@ -6,7 +6,8 @@ module Main (
     main,
 ) where
 
-import           CabalAdd                        (cabalAddTests)
+import           CabalAdd                        (cabalAddDependencyTests,
+                                                  cabalAddModuleTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
@@ -58,7 +59,8 @@ cabalParserUnitTests =
     testGroup
         "Parsing Cabal"
         [ testCase "Simple Parsing works" $ do
-            (warnings, pm) <- Lib.parseCabalFileContents =<< BS.readFile (testDataDir </> "simple.cabal")
+            fileContents <- BS.readFile (testDataDir </> "simple.cabal")
+            let (warnings, pm) = Lib.parseCabalFileContents fileContents
             liftIO $ do
                 null warnings @? "Found unexpected warnings"
                 isRight pm @? "Failed to parse GenericPackageDescription"
@@ -89,7 +91,7 @@ codeActionUnitTests =
     maxCompletions = 100
 
 
--- ------------------------ ------------------------------------------------
+-- ------------------------------------------------------------------------
 -- Integration Tests
 -- ------------------------------------------------------------------------
 
@@ -208,7 +210,8 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
-    , cabalAddTests
+    , cabalAddDependencyTests
+    , cabalAddModuleTests
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
