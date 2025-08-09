@@ -9,6 +9,7 @@ module Development.IDE.GHC.Compat.Outputable (
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest, punctuate,
     printSDocQualifiedUnsafe,
     printWithoutUniques,
+    printWithoutUniquesOneLine,
     mkPrintUnqualifiedDefault,
     PrintUnqualified,
     defaultUserStyle,
@@ -27,6 +28,7 @@ module Development.IDE.GHC.Compat.Outputable (
     pprMsgEnvelopeBagWithLoc,
     Error.getMessages,
     renderWithContext,
+    showSDocOneLine,
     defaultSDocContext,
     errMsgDiagnostic,
     unDecorated,
@@ -76,8 +78,14 @@ type PrintUnqualified = NamePprCtx
 --
 -- It print with a user-friendly style like: `a_a4ME` as `a`.
 printWithoutUniques :: Outputable a => a -> String
-printWithoutUniques =
-  renderWithContext (defaultSDocContext
+printWithoutUniques = printWithoutUniques' renderWithContext
+
+printWithoutUniquesOneLine :: Outputable a => a -> String
+printWithoutUniquesOneLine = printWithoutUniques' showSDocOneLine
+
+printWithoutUniques' :: Outputable a => (SDocContext -> SDoc -> String) -> a -> String
+printWithoutUniques' showSDoc =
+  showSDoc (defaultSDocContext
     {
       sdocStyle = defaultUserStyle
     , sdocSuppressUniques = True
