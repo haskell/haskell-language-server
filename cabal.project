@@ -5,7 +5,16 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+         ./vendor/cabal/Cabal
+         ./vendor/cabal/Cabal-syntax
+         ./vendor/cabal/cabal-install
+         ./vendor/cabal/cabal-install-solver
+         ./vendor/cabal/Cabal-described
+         ./vendor/cabal/Cabal-tree-diff
 
+package cabal-install
+  tests: False
+  benchmarks: False
 
 index-state: 2025-08-08T12:31:54Z
 
