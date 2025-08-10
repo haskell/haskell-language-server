@@ -2,12 +2,10 @@ resolver: lts-23.18 # ghc-9.8.4
 
 packages:
   - .
-  - ./hie-compat
   - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils
-  # - ./shake-bench
 
 ghc-options:
   "$everything": -haddock
@@ -23,8 +21,9 @@ allow-newer-deps:
 extra-deps:
   - floskell-0.11.1
   - hiedb-0.7.0.0
+  - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
-  - hie-bios-0.15.0
+  - hie-bios-0.17.0
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
   - retrie-1.2.3
@@ -37,7 +36,7 @@ extra-deps:
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
   - directory-ospath-streaming-0.2.2
-
+  - cabal-add-0.2
 configure-options:
   ghcide:
     - --disable-library-for-ghci
@@ -51,8 +50,6 @@ flags:
     ghc-lib: true
   retrie:
     BuildExecutable: false
-  cabal-add:
-    cabal-syntax: true
   # stan dependencies
   directory-ospath-streaming:
       os-string: false

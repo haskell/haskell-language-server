@@ -2,12 +2,10 @@ resolver: lts-22.43 # ghc-9.6.6
 
 packages:
   - .
-  - ./hie-compat
   - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils
-  # - ./shake-bench
 
 ghc-options:
   "$everything": -haddock
@@ -22,7 +20,8 @@ extra-deps:
   - Diff-0.5
   - floskell-0.11.1
   - hiedb-0.7.0.0
-  - hie-bios-0.15.0
+  - hie-bios-0.17.0
+  - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
   - lsp-2.7.0.0
   - lsp-test-0.17.1.0
@@ -39,7 +38,7 @@ extra-deps:
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
   - validation-selective-0.2.0.0
-  - cabal-add-0.1
+  - cabal-add-0.2
   - cabal-install-parsers-0.6.1.1
   - directory-ospath-streaming-0.2.2
 
@@ -57,8 +56,6 @@ flags:
     ghc-lib: true
   retrie:
     BuildExecutable: false
-  cabal-add:
-    cabal-syntax: true
   # stan dependencies
   directory-ospath-streaming:
       os-string: false

@@ -67,6 +67,23 @@ import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
+import           GHC.Iface.Ext.Types                  (EvVarSource (..),
+                                                       HieAST (..),
+                                                       HieASTs (..),
+                                                       HieArgs (..),
+                                                       HieType (..), Identifier,
+                                                       IdentifierDetails (..),
+                                                       NodeInfo (..), Scope,
+                                                       Span)
+import           GHC.Iface.Ext.Utils                  (EvidenceInfo (..),
+                                                       RefMap, getEvidenceTree,
+                                                       getScopeFromContext,
+                                                       hieTypeToIface,
+                                                       isEvidenceContext,
+                                                       isEvidenceUse,
+                                                       isOccurrence, nodeInfo,
+                                                       recoverFullType,
+                                                       selectSmallestContaining)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
 import           System.Directory                     (doesFileExist)
@@ -488,7 +505,7 @@ instanceLocationsAtPoint
 instanceLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _rm _ _) =
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       evTrees = mapMaybe (eitherToMaybe >=> getEvidenceTree _rm) ns
-      evNs = concatMap (map (evidenceVar) . T.flatten) evTrees
+      evNs = concatMap (map evidenceVar . T.flatten) evTrees
    in fmap (nubOrd . concat) $ mapMaybeM
         (nameToLocation withHieDb lookupModule)
         evNs

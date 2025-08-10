@@ -64,11 +64,9 @@ import           System.Environment                                 (setEnv,
 #endif
 
 import           Development.IDE.GHC.Compat                         (DynFlags,
-                                                                     WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
-                                                                     topDir,
-                                                                     wopt)
+                                                                     topDir)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
 #if MIN_GHC_API_VERSION(9,4,0)
@@ -466,19 +464,10 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
     nextPragmaLinePosition = Position (fromIntegral nextPragmaLine) 0
     nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
-    wnoUnrecognisedPragmasText =
-      if wopt Opt_WarnUnrecognisedPragmas dynFlags
-      then Just "{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}\n"
-      else Nothing
-    hlintIgnoreText = Just ("{-# HLINT ignore \"" <> hint <> "\" #-}\n")
-    -- we combine the texts into a single text because lsp-test currently
-    -- applies text edits backwards and I want the options pragma to
-    -- appear above the hlint pragma in the tests
-    combinedText = mconcat $ catMaybes [wnoUnrecognisedPragmasText, hlintIgnoreText]
-    combinedTextEdit = LSP.TextEdit nextPragmaRange combinedText
+    textEdit = LSP.TextEdit nextPragmaRange $ "{- HLINT ignore \"" <> hint <> "\" -}\n"
     lineSplitTextEditList = maybe [] (\LineSplitTextEdits{..} -> [lineSplitInsertTextEdit, lineSplitDeleteTextEdit]) lineSplitTextEdits
   in
-    combinedTextEdit : lineSplitTextEditList
+    textEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
 ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)

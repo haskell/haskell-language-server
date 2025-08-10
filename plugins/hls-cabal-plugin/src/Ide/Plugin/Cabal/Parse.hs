@@ -22,9 +22,9 @@ import qualified Distribution.Parsec.Position                 as Syntax
 
 parseCabalFileContents
   :: BS.ByteString -- ^ UTF-8 encoded bytestring
-  -> IO ([PWarning], Either (Maybe Version, NonEmpty PError) GenericPackageDescription)
+  -> ([PWarning], Either (Maybe Version, NonEmpty PError) GenericPackageDescription)
 parseCabalFileContents bs =
-  pure $ runParseResult (parseGenericPackageDescription bs)
+  runParseResult (parseGenericPackageDescription bs)
 
 readCabalFields ::
   NormalizedFilePath ->

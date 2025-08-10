@@ -38,7 +38,8 @@ import           Control.Monad.Trans.Except         (ExceptT, runExceptT,
 import           Data.Maybe
 import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as T
-import           Development.IDE.LSP.LanguageServer (runLanguageServer)
+import           Development.IDE.LSP.LanguageServer (Setup (..),
+                                                     runLanguageServer)
 import qualified Development.IDE.Main               as Main
 import           Ide.Logger                         (Doc, Pretty (pretty),
                                                      Recorder, WithPriority,
@@ -300,7 +301,12 @@ launchErrorLSP recorder errorMsg = do
               [ exitHandler exit ]
 
         let interpretHandler (env,  _st) = LSP.Iso (LSP.runLspT env . unErrorLSPM) liftIO
-        pure (doInitialize, asyncHandlers, interpretHandler)
+        pure MkSetup
+          { doInitialize
+          , staticHandlers = asyncHandlers
+          , interpretHandler
+          , onExit = [exit]
+          }
 
   runLanguageServer (cmapWithPrio pretty recorder)
     (Main.argsLspOptions defaultArguments)

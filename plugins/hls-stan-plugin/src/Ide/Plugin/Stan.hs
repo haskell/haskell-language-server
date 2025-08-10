@@ -2,7 +2,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
-import           Compat.HieTypes             (HieFile (..))
 import           Control.DeepSeq             (NFData)
 import           Control.Monad               (void)
 import           Control.Monad.IO.Class      (liftIO)
@@ -14,6 +13,7 @@ import qualified Data.Text                   as T
 import           Development.IDE
 import           Development.IDE.Core.Rules  (getHieFile)
 import qualified Development.IDE.Core.Shake  as Shake
+import           Development.IDE.GHC.Compat  (HieFile (..))
 import           GHC.Generics                (Generic)
 import           Ide.Plugin.Config           (PluginConfig (..))
 import           Ide.Types                   (PluginDescriptor (..), PluginId,

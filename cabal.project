@@ -1,6 +1,5 @@
 packages:
          ./
-         ./hie-compat
          ./shake-bench
          ./hls-graph
          ./ghcide
@@ -8,7 +7,7 @@ packages:
          ./hls-test-utils
 
 
-index-state: 2025-06-16T09:44:13Z
+index-state: 2025-08-08T12:31:54Z
 
 tests: True
 test-show-details: direct

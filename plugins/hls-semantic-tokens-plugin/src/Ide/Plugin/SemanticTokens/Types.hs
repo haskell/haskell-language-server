@@ -10,16 +10,16 @@ module Ide.Plugin.SemanticTokens.Types where
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Default                  (Default (def))
+import           Data.Text                     (Text)
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
 import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
-import           Language.LSP.Protocol.Types
--- import template haskell
-import           Data.Text                     (Text)
+import           GHC.Iface.Ext.Types           (TypeIndex)
 import           Ide.Plugin.Error              (PluginError)
 import           Language.Haskell.TH.Syntax    (Lift)
+import           Language.LSP.Protocol.Types
 
 
 -- !!!! order of declarations matters deriving enum and ord

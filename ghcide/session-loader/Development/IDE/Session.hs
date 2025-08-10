@@ -67,6 +67,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.ResponseFile
 import qualified HIE.Bios                            as HieBios
+import qualified HIE.Bios.Cradle.Utils               as HieBios
 import           HIE.Bios.Environment                hiding (getCacheDir)
 import           HIE.Bios.Types                      hiding (Log)
 import qualified HIE.Bios.Types                      as HieBios
@@ -451,6 +452,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
               , optExtensions
+              , optHaddockParse
               } <- getIdeOptions
 
         -- populate the knownTargetsVar with all the
@@ -495,9 +497,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          newTargetDfs <- evalGhcEnv hscEnv $ setOptions cfp opts (hsc_dflags hscEnv) rootDir
+          newTargetDfs <- evalGhcEnv hscEnv $ setOptions optHaddockParse cfp opts (hsc_dflags hscEnv) rootDir
           let deps = componentDependencies opts ++ maybeToList hieYaml
-          dep_info <- getDependencyInfo deps
+          dep_info <- getDependencyInfo (fmap toAbsolutePath deps)
           -- Now lookup to see whether we are combining with an existing HscEnv
           -- or making a new one. The lookup returns the HscEnv and a list of
           -- information about other components loaded into the HscEnv
@@ -1109,12 +1111,13 @@ addUnit unit_str = liftEwM $ do
 
 -- | Throws if package flags are unsatisfiable
 setOptions :: GhcMonad m
-    => NormalizedFilePath
+    => OptHaddockParse
+    -> NormalizedFilePath
     -> ComponentOptions
     -> DynFlags
     -> FilePath -- ^ root dir, see Note [Root Directory]
     -> m (NonEmpty (DynFlags, [GHC.Target]))
-setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
+setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
     ((theOpts',_errs,_warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
     case NE.nonEmpty units of
       Just us -> initMulti us
@@ -1144,7 +1147,10 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
       initMulti unitArgFiles =
         forM unitArgFiles $ \f -> do
           args <- liftIO $ expandResponse [f]
-          initOne args
+          -- The reponse files may contain arguments like "+RTS",
+          -- and hie-bios doesn't expand the response files of @-unit@ arguments.
+          -- Thus, we need to do the stripping here.
+          initOne $ HieBios.removeRTS $ HieBios.removeVerbosityOpts args
       initOne this_opts = do
         (dflags', targets') <- addCmdOpts this_opts dflags
         let dflags'' =
@@ -1175,6 +1181,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags rootDir = do
               dontWriteHieFiles $
               setIgnoreInterfacePragmas $
               setBytecodeLinkerOptions $
+              enableOptHaddock haddockOpt $
               disableOptimisation $
               Compat.setUpTypedHoles $
               makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
@@ -1187,6 +1194,14 @@ setIgnoreInterfacePragmas df =
 
 disableOptimisation :: DynFlags -> DynFlags
 disableOptimisation df = updOptLevel 0 df
+
+-- | We always compile with '-haddock' unless explicitly disabled.
+--
+-- This avoids inconsistencies when doing recompilation checking which was
+-- observed in https://github.com/haskell/haskell-language-server/issues/4511
+enableOptHaddock :: OptHaddockParse -> DynFlags -> DynFlags
+enableOptHaddock HaddockParse d   = gopt_set d Opt_Haddock
+enableOptHaddock NoHaddockParse d = d
 
 setHiDir :: FilePath -> DynFlags -> DynFlags
 setHiDir f d =

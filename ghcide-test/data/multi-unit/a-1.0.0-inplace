@@ -16,3 +16,6 @@ base
 text
 -XHaskell98
 A
++RTS
+-A32M
+-RTS

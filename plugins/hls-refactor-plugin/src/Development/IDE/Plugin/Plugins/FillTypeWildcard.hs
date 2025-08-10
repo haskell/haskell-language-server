@@ -2,78 +2,106 @@ module Development.IDE.Plugin.Plugins.FillTypeWildcard
   ( suggestFillTypeWildcard
   ) where
 
-import           Data.Char
-import qualified Data.Text                   as T
-import           Language.LSP.Protocol.Types (Diagnostic (..),
-                                              TextEdit (TextEdit))
+import           Control.Lens
+import           Data.Maybe                        (isJust)
+import qualified Data.Text                         as T
+import           Development.IDE                   (FileDiagnostic (..),
+                                                    fdStructuredMessageL,
+                                                    printOutputable)
+import           Development.IDE.GHC.Compat        hiding (vcat)
+import           Development.IDE.GHC.Compat.Error
+import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
+import           GHC.Tc.Errors.Types               (ErrInfo (..))
+import           Language.LSP.Protocol.Types       (Diagnostic (..),
+                                                    TextEdit (TextEdit))
 
-suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillTypeWildcard Diagnostic{_range=_range,..}
+suggestFillTypeWildcard :: FileDiagnostic -> [(T.Text, TextEdit)]
+suggestFillTypeWildcard diag@FileDiagnostic{fdLspDiagnostic = Diagnostic {..}}
 -- Foo.hs:3:8: error:
 --     * Found type wildcard `_' standing for `p -> p1 -> p'
-    | "Found type wildcard" `T.isInfixOf` _message
-    , " standing for " `T.isInfixOf` _message
-    , typeSignature <- extractWildCardTypeSignature _message
-        =  [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
+    | isWildcardDiagnostic diag
+    , typeSignature <- extractWildCardTypeSignature diag =
+        [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
     | otherwise = []
+
+isWildcardDiagnostic :: FileDiagnostic -> Bool
+isWildcardDiagnostic =
+    maybe False (isJust . (^? _TypeHole) . hole_sort) . diagReportHoleError
+
+-- | Extract the 'Hole' out of a 'FileDiagnostic'
+diagReportHoleError :: FileDiagnostic -> Maybe Hole
+diagReportHoleError diag = do
+    solverReport <-
+        diag
+            ^? fdStructuredMessageL
+                . _SomeStructuredMessage
+                . msgEnvelopeErrorL
+                . _TcRnMessage
+                . _TcRnSolverReport
+                . _1
+    (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
+
+    Just hole
 
 -- | Extract the type and surround it in parentheses except in obviously safe cases.
 --
 -- Inferring when parentheses are actually needed around the type signature would
 -- require understanding both the precedence of the context of the hole and of
 -- the signature itself. Inserting them (almost) unconditionally is ugly but safe.
-extractWildCardTypeSignature :: T.Text -> T.Text
-extractWildCardTypeSignature msg
-  | enclosed || not isApp || isToplevelSig = sig
-  | otherwise                              = "(" <> sig <> ")"
-  where
-    msgSigPart      = snd $ T.breakOnEnd "standing for " msg
-    (sig, rest)     = T.span (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
-    -- If we're completing something like ‘foo :: _’ parens can be safely omitted.
-    isToplevelSig   = errorMessageRefersToToplevelHole rest
-    -- Parenthesize type applications, e.g. (Maybe Char).
-    isApp           = T.any isSpace sig
-    -- Do not add extra parentheses to lists, tuples and already parenthesized types.
-    enclosed        =
-      case T.uncons sig of
+extractWildCardTypeSignature :: FileDiagnostic -> T.Text
+extractWildCardTypeSignature diag =
+    case hole_ty <$> diagReportHoleError diag of
+        Just ty
+            | isTopLevel || not (isApp ty) || enclosed ty -> printOutputable ty
+            | otherwise -> "(" <> printOutputable ty <> ")"
         Nothing -> error "GHC provided invalid type"
-        Just (firstChr, _) -> not (T.null sig) && (firstChr, T.last sig) `elem` [('(', ')'), ('[', ']')]
+    where
+        isTopLevel :: Bool
+        isTopLevel =
+            maybe False errorMessageRefersToToplevelHole (diagErrInfoContext diag)
 
--- | Detect whether user wrote something like @foo :: _@ or @foo :: (_, Int)@.
+        isApp :: Type -> Bool
+        isApp (AppTy _ _)          = True
+        isApp (TyConApp _ (_ : _)) = True
+        isApp (FunTy{})            = True
+        isApp _                    = False
+
+        enclosed :: Type -> Bool
+        enclosed (TyConApp con _)
+            | con == listTyCon || isTupleTyCon con = True
+        enclosed _ = False
+
+-- | Extract the 'ErrInfo' context out of a 'FileDiagnostic' and render it to
+-- 'Text'
+diagErrInfoContext :: FileDiagnostic -> Maybe T.Text
+diagErrInfoContext diag = do
+    (_, detailedMsg) <-
+        diag
+            ^? fdStructuredMessageL
+                . _SomeStructuredMessage
+                . msgEnvelopeErrorL
+                . _TcRnMessageWithCtx
+                . _TcRnMessageWithInfo
+    let TcRnMessageDetailed err _ = detailedMsg
+        ErrInfo errInfoCtx _ = err
+
+    Just (printOutputable errInfoCtx)
+
+-- | Detect whether user wrote something like @foo :: _@ or @foo :: Maybe _@.
 -- The former is considered toplevel case for which the function returns 'True',
 -- the latter is not toplevel and the returned value is 'False'.
 --
--- When type hole is at toplevel then there’s a line starting with
--- "• In the type signature" which ends with " :: _" like in the
+-- When type hole is at toplevel then the ErrInfo context starts with
+-- "In the type signature" which ends with " :: _" like in the
 -- following snippet:
 --
--- source/library/Language/Haskell/Brittany/Internal.hs:131:13: error:
---     • Found type wildcard ‘_’ standing for ‘HsDecl GhcPs’
---       To use the inferred type, enable PartialTypeSignatures
---     • In the type signature: decl :: _
---       In an equation for ‘splitAnnots’:
---           splitAnnots m@HsModule {hsmodAnn, hsmodDecls}
---             = undefined
---             where
---                 ann :: SrcSpanAnnA
---                 decl :: _
---                 L ann decl = head hsmodDecls
---     • Relevant bindings include
---       [REDACTED]
+--     Just "In the type signature: decl :: _"
 --
 -- When type hole is not at toplevel there’s a stack of where
 -- the hole was located ending with "In the type signature":
 --
--- source/library/Language/Haskell/Brittany/Internal.hs:130:20: error:
---     • Found type wildcard ‘_’ standing for ‘GhcPs’
---       To use the inferred type, enable PartialTypeSignatures
---     • In the first argument of ‘HsDecl’, namely ‘_’
---       In the type ‘HsDecl _’
---       In the type signature: decl :: HsDecl _
---     • Relevant bindings include
---       [REDACTED]
+--     Just "In the first argument of ‘HsDecl’\nIn the type signature: decl :: HsDecl _"
 errorMessageRefersToToplevelHole :: T.Text -> Bool
 errorMessageRefersToToplevelHole msg =
-  not (T.null prefix) && " :: _" `T.isSuffixOf` T.takeWhile (/= '\n') rest
-  where
-    (prefix, rest) = T.breakOn "• In the type signature:" msg
+    "In the type signature:" `T.isPrefixOf` msg
+        && " :: _" `T.isSuffixOf` T.takeWhile (/= '\n') msg

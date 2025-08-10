@@ -14,6 +14,7 @@ import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.FilePath
 import           Test.Hls
+import           Test.Hls.FileSystem               (VirtualFileTree)
 
 
 cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
@@ -57,6 +58,13 @@ runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
 
+runCabalTestCaseSessionVft :: TestName -> VirtualFileTree -> Session () -> TestTree
+runCabalTestCaseSessionVft title vft = testCase title . runCabalSessionVft vft
+
+runCabalSessionVft :: VirtualFileTree -> Session a -> IO a
+runCabalSessionVft vft =
+    failIfSessionTimeout . runSessionWithServerInTmpDir def cabalPlugin vft
+
 runHaskellAndCabalSession :: FilePath -> Session a -> IO a
 runHaskellAndCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def (cabalPlugin <> cabalHaskellPlugin) (testDataDir </> subdir)
@@ -82,3 +90,4 @@ cabalCaptureKick = captureKickDiagnostics cabalKickStart cabalKickDone
 -- | list comparison where the order in the list is irrelevant
 (@?==) :: (HasCallStack, Ord a, Show a) => [a] -> [a] -> Assertion
 (@?==) l1 l2 = sort l1 @?= sort l2
+

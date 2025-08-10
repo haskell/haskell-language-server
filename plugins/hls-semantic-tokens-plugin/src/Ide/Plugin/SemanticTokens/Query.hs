@@ -11,6 +11,9 @@ import           Data.Text                            (Text)
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat
+import           GHC.Iface.Ext.Types                  (ContextInfo, Identifier,
+                                                       IdentifierDetails (..))
+import           GHC.Iface.Ext.Utils                  (RefMap)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModule),

@@ -255,8 +255,13 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.Definition
     Ide.Plugin.Cabal.FieldSuggest
+    Ide.Plugin.Cabal.Files
+    Ide.Plugin.Cabal.OfInterest
     Ide.Plugin.Cabal.LicenseSuggest
-    Ide.Plugin.Cabal.CabalAdd
+    Ide.Plugin.Cabal.Rules
+    Ide.Plugin.Cabal.CabalAdd.Command
+    Ide.Plugin.Cabal.CabalAdd.CodeAction
+    Ide.Plugin.Cabal.CabalAdd.Types
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
     Ide.Plugin.Cabal.Parse
@@ -278,14 +283,14 @@ library hls-cabal-plugin
     , lens
     , lsp                   ^>=2.7
     , lsp-types             ^>=2.3
+    , mtl
     , regex-tdfa            ^>=1.3.1
     , text
     , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
     , containers
-    , cabal-add             ^>=0.1
-    , process
+    , cabal-add             ^>=0.2
     , aeson
     , Cabal
     , pretty
@@ -315,9 +320,9 @@ test-suite hls-cabal-plugin-tests
     , haskell-language-server:hls-cabal-plugin
     , hls-test-utils    == 2.11.0.0
     , lens
+    , lsp
     , lsp-types
     , text
-    , hls-plugin-api
 
 -----------------------------
 -- class plugin
@@ -408,6 +413,7 @@ library hls-call-hierarchy-plugin
     , aeson
     , containers
     , extra
+    , ghc
     , ghcide                == 2.11.0.0
     , hiedb                 ^>= 0.7.0.0
     , hls-plugin-api        == 2.11.0.0
@@ -594,10 +600,10 @@ library hls-rename-plugin
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
     , containers
+    , ghc
     , ghcide                == 2.11.0.0
     , hashable
     , hiedb                 ^>= 0.7.0.0
-    , hie-compat
     , hls-plugin-api        == 2.11.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
@@ -802,7 +808,6 @@ library hls-stan-plugin
   build-depends:
     , deepseq
     , hashable
-    , hie-compat
     , hls-plugin-api
     , ghcide
     , lsp-types
@@ -1068,6 +1073,7 @@ library hls-qualify-imported-names-plugin
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/src
   build-depends:
     , containers
+    , ghc
     , ghcide                == 2.11.0.0
     , hls-plugin-api        == 2.11.0.0
     , lens
@@ -1121,6 +1127,7 @@ library hls-code-range-plugin
     , containers
     , deepseq
     , extra
+    , ghc
     , ghcide           == 2.11.0.0
     , hashable
     , hls-plugin-api   == 2.11.0.0
@@ -1324,6 +1331,7 @@ library hls-explicit-record-fields-plugin
     buildable: False
   exposed-modules:  Ide.Plugin.ExplicitFields
   build-depends:
+    , ghc
     , ghcide                == 2.11.0.0
     , hls-plugin-api        == 2.11.0.0
     , lsp
@@ -1732,6 +1740,7 @@ library hls-semantic-tokens-plugin
     , extra
     , text-rope
     , mtl                   >= 2.2
+    , ghc
     , ghcide                == 2.11.0.0
     , hls-plugin-api        == 2.11.0.0
     , lens

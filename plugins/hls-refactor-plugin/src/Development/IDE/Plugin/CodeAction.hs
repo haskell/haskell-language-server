@@ -75,6 +75,8 @@ import           Development.IDE.Types.Options
 import           GHC                                               (DeltaPos (..),
                                                                     EpAnn (..),
                                                                     LEpaComment)
+import           GHC.Iface.Ext.Types                               (ContextInfo (..),
+                                                                    IdentifierDetails (..))
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.Logger                                        hiding
                                                                    (group)
