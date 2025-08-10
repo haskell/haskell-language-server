@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
@@ -12,11 +13,12 @@ import qualified Data.Maybe                          as Maybe
 import qualified Data.Text                           as T
 import qualified Data.Text.Encoding                  as Encoding
 import           Data.Version                        (Version (..))
-import           Development.IDE.GHC.Compat          (HscEnv, filterUniqMap,
-                                                      getUnitInfoMap,
-                                                      nonDetEltsUniqMap,
+import           Development.IDE.GHC.Compat          (HscEnv, getUnitInfoMap,
                                                       unitPackageNameString,
                                                       unitPackageVersion)
+#if MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
+import           Development.IDE.GHC.Compat          (nonDetEltsUniqMap)
+#endif
 import           Development.IDE.LSP.HoverDefinition (foundHover)
 import qualified Distribution.Fields                 as Syntax
 import qualified Distribution.Parsec.Position        as Syntax
@@ -84,7 +86,12 @@ dependencyHover cabalFields hsc cursorPosition =
 collectPackageDependencyVersions ::  [Syntax.Field Syntax.Position] -> HscEnv -> [DependencyInfo]
 collectPackageDependencyVersions cabalFields hscEnv = cabalFields >>= collectPackageVersions
   where
-    lookupPackageVersion pkgName = Maybe.listToMaybe $ nonDetEltsUniqMap $ fmap unitPackageVersion $ filterUniqMap ((==) (T.unpack pkgName) . unitPackageNameString) $ getUnitInfoMap hscEnv
+#if MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
+    unitInfoList = nonDetEltsUniqMap $ getUnitInfoMap hscEnv
+#else
+    unitInfoList = getUnitInfoMap hscEnv
+#endif
+    lookupPackageVersion pkgName = fmap unitPackageVersion $ find ((==) (T.unpack pkgName) . unitPackageNameString) unitInfoList
 
     collectPackageVersions :: Syntax.Field Syntax.Position -> [DependencyInfo]
     collectPackageVersions (Syntax.Field (Syntax.Name _ "build-depends") pos) = concatMap fieldLinePackageVersions pos
