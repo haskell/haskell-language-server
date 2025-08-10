@@ -1,7 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions, dependencyVersionLens) where
+module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions, dependencyVersionLens, collectPackageDependencyVersions', printVersion) where
 
 import           Data.Array                        ((!))
 import           Data.ByteString                   (ByteString)
@@ -78,6 +78,28 @@ collectPackageDependencyVersions cabalFields hscEnv = cabalFields >>= collectPac
             (pkgName, (pkgIndex, pkgOffset)) <- packageNames
             version <- Maybe.maybeToList $ lookupPackageVersion pkgName
             pure (Syntax.Position (Syntax.positionRow pos) (Syntax.positionCol pos + pkgIndex + pkgOffset), pkgName, version)
+       in versions
+
+collectPackageDependencyVersions' ::  [Syntax.Field Syntax.Position] -> HscEnv -> [(Range, T.Text, Version)]
+collectPackageDependencyVersions' cabalFields hscEnv = cabalFields >>= collectPackageVersions
+  where
+    lookupPackageVersion pkgName = Maybe.listToMaybe $ nonDetEltsUniqMap $ fmap unitPackageVersion $ filterUniqMap ((==) (T.unpack pkgName) . unitPackageNameString) $ getUnitInfoMap hscEnv
+
+    collectPackageVersions :: Syntax.Field Syntax.Position -> [(Range, T.Text, Version)]
+    collectPackageVersions (Syntax.Field (Syntax.Name _ "build-depends") pos) = concatMap fieldLinePackageVersions pos
+    collectPackageVersions (Syntax.Section _ _ fields) = concatMap collectPackageVersions fields
+    collectPackageVersions _ = []
+
+    fieldLinePackageVersions :: Syntax.FieldLine Syntax.Position -> [(Range, T.Text, Version)]
+    fieldLinePackageVersions (Syntax.FieldLine pos line) =
+      let linePackageNameRegex :: Regex = makeRegex ("(^|,)[[:space:]]*([a-zA-Z-]+)" :: ByteString)
+          packageNames = (\x -> x ! 2) <$> matchAllText linePackageNameRegex (Encoding.decodeUtf8Lenient line)
+          versions = do
+            (pkgName, (pkgIndex, pkgOffset)) <- packageNames
+            version <- Maybe.maybeToList $ lookupPackageVersion pkgName
+            let pkgPosStart = Types.cabalPositionToLSPPosition $ Syntax.Position (Syntax.positionRow pos) (Syntax.positionCol pos + pkgIndex)
+                pkgPosEnd = Types.cabalPositionToLSPPosition $ Syntax.Position (Syntax.positionRow pos) (Syntax.positionCol pos + pkgIndex + pkgOffset)
+            pure (Range pkgPosStart pkgPosEnd, pkgName, version)
        in versions
 
 printVersion :: Version -> T.Text
