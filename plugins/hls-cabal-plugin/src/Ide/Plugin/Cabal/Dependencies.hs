@@ -1,30 +1,35 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, collectPackageDependencyVersions, dependencyVersionLens, printVersion) where
+module Ide.Plugin.Cabal.Dependencies (dependencyVersionHints, dependencyVersionLens, dependencyHover) where
 
-import           Control.Lens                      ((^.))
-import           Data.Array                        ((!))
-import           Data.ByteString                   (ByteString)
+import           Control.Lens                        ((^.))
+import           Data.Array                          ((!))
+import           Data.ByteString                     (ByteString)
 import           Data.List
-import qualified Data.Maybe                        as Maybe
-import qualified Data.Text                         as T
-import qualified Data.Text.Encoding                as Encoding
-import           Data.Version                      (Version (..))
-import           Development.IDE.GHC.Compat        (HscEnv, filterUniqMap,
-                                                    getUnitInfoMap,
-                                                    nonDetEltsUniqMap,
-                                                    unitPackageNameString,
-                                                    unitPackageVersion)
-import qualified Distribution.Fields               as Syntax
-import qualified Distribution.Parsec.Position      as Syntax
-import qualified Ide.Plugin.Cabal.Completion.Types as Types
-import qualified Language.LSP.Protocol.Lens        as JL
-import           Language.LSP.Protocol.Types       (CodeLens (..), Command (..),
-                                                    InlayHint (..), Range (..),
-                                                    type (|?) (..))
-import           Text.Regex.TDFA                   (Regex, makeRegex,
-                                                    matchAllText)
+import qualified Data.List                           as List
+import qualified Data.Maybe                          as Maybe
+import qualified Data.Text                           as T
+import qualified Data.Text.Encoding                  as Encoding
+import           Data.Version                        (Version (..))
+import           Development.IDE.GHC.Compat          (HscEnv, filterUniqMap,
+                                                      getUnitInfoMap,
+                                                      nonDetEltsUniqMap,
+                                                      unitPackageNameString,
+                                                      unitPackageVersion)
+import           Development.IDE.LSP.HoverDefinition (foundHover)
+import qualified Distribution.Fields                 as Syntax
+import qualified Distribution.Parsec.Position        as Syntax
+import qualified Ide.Plugin.Cabal.Completion.Types   as Types
+import qualified Language.LSP.Protocol.Lens          as JL
+import           Language.LSP.Protocol.Types         (CodeLens (..),
+                                                      Command (..), Hover,
+                                                      InlayHint (..), Null (..),
+                                                      Position, Range (..),
+                                                      positionInRange,
+                                                      type (|?) (..))
+import           Text.Regex.TDFA                     (Regex, makeRegex,
+                                                      matchAllText)
 
 dependencyVersionLens :: [Syntax.Field Syntax.Position] -> HscEnv -> [CodeLens]
 dependencyVersionLens cabalFields = (>>= foo) . groupBy (\(a,_,_) (b,_,_)-> (a ^. JL.start . JL.line) == (b ^. JL.start . JL.line)) . collectPackageDependencyVersions cabalFields
@@ -60,6 +65,16 @@ dependencyVersionHints cabalFields = fmap mkHint . collectPackageDependencyVersi
                 , _paddingRight = Nothing
                 , _data_ = Nothing
                 }
+
+dependencyHover :: [Syntax.Field Syntax.Position] -> HscEnv -> Position -> Hover |? Null
+dependencyHover cabalFields hsc cursorPosition =
+  let hoveredDep = List.find (positionInRange cursorPosition . (\(x, _, _) -> x)) $ collectPackageDependencyVersions cabalFields hsc
+  in  case hoveredDep of
+    Just (_, pkgName, version) -> foundHover (Nothing, [pkgName <> " (" <> printVersion version <> ")\n", documentationText (pkgName <> "-" <> printVersion version)])
+    Nothing -> InR Null
+  where
+  documentationText :: T.Text -> T.Text
+  documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
 
 collectPackageDependencyVersions ::  [Syntax.Field Syntax.Position] -> HscEnv -> [(Range, T.Text, Version)]
 collectPackageDependencyVersions cabalFields hscEnv = cabalFields >>= collectPackageVersions

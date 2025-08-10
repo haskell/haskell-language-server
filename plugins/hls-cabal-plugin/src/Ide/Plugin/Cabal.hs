@@ -24,7 +24,6 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Shake                  (restartShakeSession)
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (Key)
-import           Development.IDE.LSP.HoverDefinition         (foundHover)
 import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
 import           Development.IDE.Types.Shake                 (toKey)
 import qualified Distribution.Fields                         as Syntax
@@ -334,14 +333,10 @@ hover ide _ msgParam = do
   nfp <- getNormalizedFilePathE uri
   cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
   (hscEnv -> hsc) <- runActionE "cabal.cabal-hover" ide $ useE GhcSession nfp
-  let hoveredDep = List.find (positionInRange (msgParam ^. JL.position) . (\(x, _, _) -> x)) $ Dependencies.collectPackageDependencyVersions cabalFields hsc
-  pure $ case hoveredDep of
-    Just (_, pkgName, version) -> foundHover (Nothing, [pkgName <> " (" <> Dependencies.printVersion version <> ")\n", documentationText (pkgName <> "-" <> Dependencies.printVersion version)])
-    Nothing -> InR Null
+  pure $ Dependencies.dependencyHover cabalFields hsc cursor
   where
+  cursor = msgParam ^. JL.position
   uri = msgParam ^. JL.textDocument . JL.uri
-  documentationText :: T.Text -> T.Text
-  documentationText package = "[Documentation](https://hackage.haskell.org/package/" <> package <> ")"
 
 -- ----------------------------------------------------------------
 -- Completion
