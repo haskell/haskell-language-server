@@ -334,7 +334,7 @@ hover ide _ msgParam = do
   nfp <- getNormalizedFilePathE uri
   cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
   (hscEnv -> hsc) <- runActionE "cabal.cabal-hover" ide $ useE GhcSession nfp
-  let hoveredDep = List.find (positionInRange (msgParam ^. JL.position) . (\(x, _, _) -> x)) $ Dependencies.collectPackageDependencyVersions' cabalFields hsc
+  let hoveredDep = List.find (positionInRange (msgParam ^. JL.position) . (\(x, _, _) -> x)) $ Dependencies.collectPackageDependencyVersions cabalFields hsc
   pure $ case hoveredDep of
     Just (_, pkgName, version) -> foundHover (Nothing, [pkgName <> " (" <> Dependencies.printVersion version <> ")\n", documentationText (pkgName <> "-" <> Dependencies.printVersion version)])
     Nothing -> InR Null
