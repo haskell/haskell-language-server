@@ -134,13 +134,13 @@ jobs:
         enable-stack: false
 
     - name: Download cabal home
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: cabal-home-${{ matrix.ghc }}-${{ matrix.os }}
         path: .
 
     - name: Download workspace
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: workspace-${{ matrix.ghc }}-${{ matrix.os }}
         path: .
