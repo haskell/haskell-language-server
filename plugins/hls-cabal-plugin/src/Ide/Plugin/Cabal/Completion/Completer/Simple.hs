@@ -26,21 +26,21 @@ import qualified Text.Fuzzy.Parallel                         as Fuzzy
 
 -- | Completer to be used when no completion suggestions
 --  are implemented for the field
-noopCompleter :: Completer
+noopCompleter :: Completer d
 noopCompleter _ _ = pure []
 
 -- | Completer to be used when no completion suggestions
 --  are implemented for the field and a log message should be emitted.
-errorNoopCompleter :: Log -> Completer
+errorNoopCompleter :: Log -> Completer d
 errorNoopCompleter l recorder _ = do
   logWith recorder Warning l
   pure []
 
 -- | Completer to be used when a simple set of values
 --  can be completed for a field.
-constantCompleter :: [T.Text] -> Completer
+constantCompleter :: [T.Text] -> HasPrefixInfo d => Completer d
 constantCompleter completions _ cData = do
-  let prefInfo = cabalPrefixInfo cData
+  let prefInfo = getPrefixInfo cData
       scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults (completionPrefix prefInfo) completions
       range = completionRange prefInfo
   pure $ map (mkSimpleCompletionItem range . Fuzzy.original) scored
@@ -49,7 +49,7 @@ constantCompleter completions _ cData = do
 --
 -- TODO: Does not exclude imports, defined after the current cursor position
 -- which are not allowed according to the cabal specification
-importCompleter :: Completer
+importCompleter :: CabalCompleter
 importCompleter l cData = do
   cabalCommonsM <- getCabalCommonSections cData
   case cabalCommonsM of
@@ -66,7 +66,7 @@ importCompleter l cData = do
 -- This is almost always the name of the cabal file. However,
 -- it is not forbidden by the specification to have a different name,
 -- it is just forbidden on hackage.
-nameCompleter :: Completer
+nameCompleter :: CabalCompleter
 nameCompleter _ cData = do
   let scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults (completionPrefix prefInfo) [completionFileName prefInfo]
       prefInfo = cabalPrefixInfo cData
@@ -80,7 +80,7 @@ nameCompleter _ cData = do
 --  the value in the completion suggestion.
 --
 --  If the value does not occur in the weighted map its weight is defaulted to zero.
-weightedConstantCompleter :: [T.Text] -> Map T.Text Double -> Completer
+weightedConstantCompleter :: [T.Text] -> Map T.Text Double -> CabalCompleter
 weightedConstantCompleter completions weights _ cData = do
   let scored =
         if perfectScore > 0

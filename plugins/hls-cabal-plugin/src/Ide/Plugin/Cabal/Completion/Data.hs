@@ -12,7 +12,7 @@ import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (CabalCompleter)
 import           Ide.Plugin.Cabal.Completion.Types
 import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 
@@ -35,7 +35,7 @@ supportedCabalVersions :: [CabalSpecVersion]
 supportedCabalVersions = [CabalSpecV2_2 .. maxBound]
 
 -- | Keyword for cabal version; required to be the top line in a cabal file
-cabalVersionKeyword :: Map KeyWordName Completer
+cabalVersionKeyword :: Map KeyWordName CabalCompleter
 cabalVersionKeyword =
   Map.singleton "cabal-version:" $
     constantCompleter $
@@ -47,7 +47,7 @@ cabalVersionKeyword =
 --
 -- TODO: we could add descriptions of field values and
 -- then show them when inside the field's context
-cabalKeywords :: Map KeyWordName Completer
+cabalKeywords :: Map KeyWordName CabalCompleter
 cabalKeywords =
   Map.fromList
     [ ("name:", nameCompleter),
@@ -76,7 +76,7 @@ cabalKeywords =
 
 -- | Map, containing all stanzas in a cabal file as keys,
 --  and lists of their possible nested keywords as values.
-stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
+stanzaKeywordMap :: Map StanzaType (Map KeyWordName CabalCompleter)
 stanzaKeywordMap =
   Map.fromList
     [ ("library", libraryFields <> libExecTestBenchCommons Library),
@@ -90,7 +90,7 @@ stanzaKeywordMap =
       ("source-repository", sourceRepositoryFields)
     ]
 
-libraryFields :: Map KeyWordName Completer
+libraryFields :: Map KeyWordName CabalCompleter
 libraryFields =
   Map.fromList
     [ ("exposed-modules:", modulesCompleter sourceDirsExtractionLibrary),
@@ -102,7 +102,7 @@ libraryFields =
       ("other-modules:", modulesCompleter sourceDirsExtractionLibrary)
     ]
 
-executableFields :: Map KeyWordName Completer
+executableFields :: Map KeyWordName CabalCompleter
 executableFields =
   Map.fromList
     [ ("main-is:", mainIsCompleter sourceDirsExtractionExecutable),
@@ -110,7 +110,7 @@ executableFields =
       ("other-modules:", modulesCompleter sourceDirsExtractionExecutable)
     ]
 
-testSuiteFields :: Map KeyWordName Completer
+testSuiteFields :: Map KeyWordName CabalCompleter
 testSuiteFields =
   Map.fromList
     [ ("type:", constantCompleter ["exitcode-stdio-1.0", "detailed-0.9"]),
@@ -118,7 +118,7 @@ testSuiteFields =
       ("other-modules:", modulesCompleter sourceDirsExtractionTestSuite)
     ]
 
-benchmarkFields :: Map KeyWordName Completer
+benchmarkFields :: Map KeyWordName CabalCompleter
 benchmarkFields =
   Map.fromList
     [ ("type:", noopCompleter),
@@ -126,7 +126,7 @@ benchmarkFields =
       ("other-modules:", modulesCompleter sourceDirsExtractionBenchmark)
     ]
 
-foreignLibraryFields :: Map KeyWordName Completer
+foreignLibraryFields :: Map KeyWordName CabalCompleter
 foreignLibraryFields =
   Map.fromList
     [ ("type:", constantCompleter ["native-static", "native-shared"]),
@@ -136,7 +136,7 @@ foreignLibraryFields =
       ("lib-version-linux:", noopCompleter)
     ]
 
-sourceRepositoryFields :: Map KeyWordName Completer
+sourceRepositoryFields :: Map KeyWordName CabalCompleter
 sourceRepositoryFields =
   Map.fromList
     [ ( "type:",
@@ -160,7 +160,7 @@ sourceRepositoryFields =
       ("subdir:", directoryCompleter)
     ]
 
-flagFields :: Map KeyWordName Completer
+flagFields :: Map KeyWordName CabalCompleter
 flagFields =
   Map.fromList
     [ ("description:", noopCompleter),
@@ -171,7 +171,7 @@ flagFields =
       ("lib-version-linux:", noopCompleter)
     ]
 
-libExecTestBenchCommons :: TopLevelStanza -> Map KeyWordName Completer
+libExecTestBenchCommons :: TopLevelStanza -> Map KeyWordName CabalCompleter
 libExecTestBenchCommons st =
   Map.fromList
     [ ("import:", importCompleter),

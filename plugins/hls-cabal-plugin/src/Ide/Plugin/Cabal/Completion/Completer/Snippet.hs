@@ -18,7 +18,7 @@ import qualified Language.LSP.Protocol.Types                  as LSP
 import qualified Text.Fuzzy.Parallel                          as Fuzzy
 
 -- | Maps snippet triggerwords with their completers
-snippetCompleter :: Completer
+snippetCompleter :: CabalCompleter
 snippetCompleter recorder cData = do
   let scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults (completionPrefix prefInfo) $ Map.keys snippets
   mapMaybeM

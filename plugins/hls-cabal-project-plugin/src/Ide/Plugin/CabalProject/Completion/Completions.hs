@@ -1,26 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.Cabal.Completion.Completions (contextToCompleter, getContext, getCabalPrefixInfo) where
+module Ide.Plugin.CabalProject.Completion.Completions (contextToCompleter, getContext, getCabalProjectPrefixInfo) where
 
-import           Control.Lens                                  ((^.))
-import           Control.Monad.IO.Class                        (MonadIO)
-import           Data.List.NonEmpty                            (NonEmpty)
-import qualified Data.List.NonEmpty                            as NE
-import qualified Data.Map                                      as Map
-import qualified Data.Text                                     as T
-import           Development.IDE                               as D
-import qualified Development.IDE.Plugin.Completions.Types      as Ghcide
-import qualified Distribution.Fields                           as Syntax
-import qualified Distribution.Parsec.Position                  as Syntax
+import           Control.Lens                                       ((^.))
+import           Control.Monad.IO.Class                             (MonadIO)
+import           Data.List.NonEmpty                                 (NonEmpty)
+import qualified Data.List.NonEmpty                                 as NE
+import qualified Data.Map                                           as Map
+import qualified Data.Text                                          as T
+import           Development.IDE                                    as D
+import qualified Development.IDE.Plugin.Completions.Types           as Ghcide
+import qualified Distribution.Fields                                as Syntax
+import qualified Distribution.Parsec.Position                       as Syntax
 import           Ide.Plugin.Cabal.Completion.CabalFields
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Snippet
-import           Ide.Plugin.Cabal.Completion.Completer.Types   (CabalCompleter)
-import           Ide.Plugin.Cabal.Completion.Data
 import           Ide.Plugin.Cabal.Completion.Types
-import qualified Language.LSP.Protocol.Lens                    as JL
-import qualified System.FilePath                               as FP
-import           System.FilePath                               (takeBaseName)
+import           Ide.Plugin.CabalProject.Completion.Completer.Types (CabalProjectCompleter)
+import           Ide.Plugin.CabalProject.Completion.Data
+import qualified Language.LSP.Protocol.Lens                         as JL
+import qualified System.FilePath                                    as FP
+import           System.FilePath                                    (takeBaseName)
 
 -- ----------------------------------------------------------------
 -- Public API for Completions
@@ -28,29 +27,27 @@ import           System.FilePath                               (takeBaseName)
 
 -- | Takes information about the completion context within the file
 --  and finds the correct completer to be applied.
-contextToCompleter :: Context -> CabalCompleter
--- if we are in the top level of the cabal file and not in a keyword context,
+contextToCompleter :: Context -> CabalProjectCompleter
+-- if we are in the top level of the cabal.project file and not in a keyword context,
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =
-  snippetCompleter
-    <> ( constantCompleter $
-           Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap
-       )
+  constantCompleter $
+           Map.keys cabalProjectKeywords ++ Map.keys cabalProjectStanzaKeywordMap
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
 contextToCompleter (TopLevel, KeyWord kw) =
-  case Map.lookup kw (cabalVersionKeyword <> cabalKeywords) of
+  case Map.lookup kw cabalProjectKeywords of
     Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
     Just l  -> l
 -- if we are in a stanza and not in a keyword context,
 -- we can write any of the stanza's keywords or a stanza declaration
 contextToCompleter (Stanza s _, None) =
-  case Map.lookup s stanzaKeywordMap of
+  case Map.lookup s cabalProjectStanzaKeywordMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just l  -> constantCompleter $ Map.keys l
 -- if we are in a stanza's keyword's context we can complete possible values of that keyword
 contextToCompleter (Stanza s _, KeyWord kw) =
-  case Map.lookup s stanzaKeywordMap of
+  case Map.lookup s cabalProjectStanzaKeywordMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just m -> case Map.lookup kw m of
       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
@@ -61,7 +58,6 @@ contextToCompleter (Stanza s _, KeyWord kw) =
 --
 --  Can return Nothing if an error occurs.
 --
---  TODO: first line can only have cabal-version: keyword
 getContext :: (MonadIO m) => Recorder (WithPriority Log) -> CabalPrefixInfo -> [Syntax.Field Syntax.Position] -> m Context
 getContext recorder prefInfo fields = do
     let ctx = findCursorContext cursor (NE.singleton (0, TopLevel)) (completionPrefix prefInfo) fields
@@ -71,13 +67,13 @@ getContext recorder prefInfo fields = do
     cursor = lspPositionToCabalPosition (completionCursorPosition prefInfo)
 
 -- | Takes information about the current file's file path,
---  and the cursor position in the file; and builds a CabalPrefixInfo
+--  and the cursor position in the file; and builds a CabalPrefixInfo, reused from hls-cabal-plugin
 --  with the prefix up to that cursor position.
 --  Checks whether a suffix needs to be completed
 --  and calculates the range in the document
 --  where the completion action should be applied.
-getCabalPrefixInfo :: FilePath -> Ghcide.PosPrefixInfo -> CabalPrefixInfo
-getCabalPrefixInfo fp prefixInfo =
+getCabalProjectPrefixInfo :: FilePath -> Ghcide.PosPrefixInfo -> CabalPrefixInfo
+getCabalProjectPrefixInfo fp prefixInfo =
   CabalPrefixInfo
     { completionPrefix = completionPrefix',
       isStringNotation = mkIsStringNotation separator afterCursorText,
@@ -152,7 +148,7 @@ findCursorContext cursor parentHistory prefixText fields =
 
 -- | Finds the cursor's context, where the cursor is already found to be in a specific field
 --
--- Due to the way the field context is recognised for incomplete cabal files,
+-- Due to the way the field context is recognised for incomplete cabal.project files,
 -- an incomplete keyword is also recognised as a field, therefore we need to determine
 -- the specific context as we could still be in a stanza context in this case.
 classifyFieldContext :: NonEmpty (Int, StanzaContext) -> Syntax.Position -> Syntax.Field Syntax.Position -> Context
