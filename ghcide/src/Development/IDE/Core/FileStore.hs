@@ -289,9 +289,12 @@ typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePat
 typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
   where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
 
+
+useReverseTransDeps :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
+useReverseTransDeps file = transitiveReverseDependencies file <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
 typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
-    revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph nfp
+    revs <- useReverseTransDeps nfp
     case revs of
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
