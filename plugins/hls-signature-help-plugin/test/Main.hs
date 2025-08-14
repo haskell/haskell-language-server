@@ -286,6 +286,18 @@ main =
                   [ Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. (a -> b) %1 -> a -> b" Nothing (Just [ParameterInformation (InR (18,24)) Nothing, ParameterInformation (InR (32,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: (Integer -> Integer) %1 -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (6,24)) Nothing, ParameterInformation (InR (32,39)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SignatureHelp [SignatureInformation "f :: forall a b. (a -> b) %1 -> a -> b" Nothing (Just [ParameterInformation (InR (18,24)) Nothing, ParameterInformation (InR (32,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: (Integer -> b) %1 -> Integer -> b" Nothing (Just [ParameterInformation (InR (6,18)) Nothing, ParameterInformation (InR (26,33)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "function documentation"
+                  [trimming|
+                      -- |The 'f' function does something to a bool value.
+                      f :: Bool -> Bool
+                      f = _
+                      x = f True
+                          ^ ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: Bool -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe  `f`  function does something to a bool value.\n\n") (Just [ParameterInformation (InR (5,9)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 

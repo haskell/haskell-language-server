@@ -10,7 +10,9 @@ import qualified Data.Map.Strict                      as M
 import qualified Data.Set                             as S
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
-import           Development.IDE                      (GetHieAst (GetHieAst),
+import           Development.IDE                      (DocAndTyThingMap (DKMap),
+                                                       GetDocMap (GetDocMap),
+                                                       GetHieAst (GetHieAst),
                                                        HieAstResult (HAR, hieAst, hieKind),
                                                        HieKind (..),
                                                        IdeState (shakeExtras),
@@ -28,6 +30,8 @@ import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        mkRealSrcSpan, ppr,
                                                        sourceNodeInfo)
 import           Development.IDE.GHC.Compat.Util      (LexicalFastString (LexicalFastString))
+import           Development.IDE.Spans.Common         (DocMap,
+                                                       spanDocToMarkdown)
 import           GHC.Core.Map.Type                    (deBruijnize)
 import           GHC.Core.Type                        (FunTyFlag (FTF_T_T),
                                                        Type, dropForAlls,
@@ -39,6 +43,7 @@ import           GHC.Iface.Ext.Types                  (ContextInfo (Use),
                                                        IdentifierDetails (identInfo, identType),
                                                        nodeType)
 import           GHC.Iface.Ext.Utils                  (smallestContainingSatisfying)
+import           GHC.Types.Name.Env                   (lookupNameEnv)
 import           GHC.Types.SrcLoc                     (isRealSubspanOf)
 import           Ide.Plugin.Error                     (getNormalizedFilePathE)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers),
@@ -48,7 +53,9 @@ import           Ide.Types                            (PluginDescriptor (pluginH
                                                        mkPluginHandler)
 import           Language.LSP.Protocol.Message        (Method (Method_TextDocumentSignatureHelp),
                                                        SMethod (SMethod_TextDocumentSignatureHelp))
-import           Language.LSP.Protocol.Types          (Null (Null),
+import           Language.LSP.Protocol.Types          (MarkupContent (MarkupContent),
+                                                       MarkupKind (MarkupKind_Markdown),
+                                                       Null (Null),
                                                        ParameterInformation (ParameterInformation),
                                                        Position (Position),
                                                        SignatureHelp (SignatureHelp),
@@ -74,7 +81,7 @@ descriptor _recorder pluginId =
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken _mContext) = do
     nfp <- getNormalizedFilePathE uri
-    results <- runIdeActionE "signatureHelp" (shakeExtras ideState) $ do
+    results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
         -- TODO(@linj) why HAR {hieAst} may have more than one AST?
         (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
         case fromCurrentPosition positionMapping position of
@@ -90,26 +97,37 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
                               argumentNumber <- getArgumentNumber span hieAst
                               Just (functionName, functionTypes, argumentNumber)
                         )
+    docMap <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
+        (DKMap docMap _tyThingMap, _positionMapping) <- useWithStaleFastE GetDocMap nfp
+        pure docMap
     case results of
         [(_functionName, [], _argumentNumber)] -> pure $ InR Null
         [(functionName, functionTypes, argumentNumber)] ->
-            pure $ InL $ mkSignatureHelp (fromIntegral argumentNumber - 1) functionName functionTypes
+            pure $ InL $ mkSignatureHelp docMap (fromIntegral argumentNumber - 1) functionName functionTypes
         -- TODO(@linj) what does non-singleton list mean?
         _ -> pure $ InR Null
 
-mkSignatureHelp :: UInt -> Name -> [Type] -> SignatureHelp
-mkSignatureHelp argumentNumber functionName functionTypes =
+mkSignatureHelp :: DocMap -> UInt -> Name -> [Type] -> SignatureHelp
+mkSignatureHelp docMap argumentNumber functionName functionTypes =
     SignatureHelp
-        (mkSignatureInformation argumentNumber functionName <$> functionTypes)
+        (mkSignatureInformation docMap argumentNumber functionName <$> functionTypes)
         (Just 0)
         (Just $ InL argumentNumber)
 
-mkSignatureInformation :: UInt -> Name -> Type -> SignatureInformation
-mkSignatureInformation argumentNumber functionName functionType =
+mkSignatureInformation :: DocMap -> UInt -> Name -> Type -> SignatureInformation
+mkSignatureInformation docMap argumentNumber functionName functionType =
     let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
+        mFunctionDoc = case lookupNameEnv docMap functionName of
+            Nothing -> Nothing
+            Just spanDoc ->
+                Just $
+                    InR $
+                        MarkupContent
+                            MarkupKind_Markdown
+                            (T.unlines . spanDocToMarkdown $ spanDoc)
      in SignatureInformation
             (functionNameLabelPrefix <> printOutputableOneLine functionType)
-            Nothing
+            mFunctionDoc
             (Just $ mkArguments (fromIntegral $ T.length functionNameLabelPrefix) functionType)
             (Just $ InL argumentNumber)
 
