@@ -12,6 +12,7 @@ import qualified Data.ByteString.Char8                    as B
 import           Data.List.NonEmpty                       (NonEmpty (..))
 import qualified Data.List.NonEmpty                       as NE
 import           Development.IDE
+import           Development.IDE.Session                  (cacheDir)
 import           Distribution.Client.HttpUtils            (configureTransport)
 import           Distribution.Client.ProjectConfig.Parsec (ProjectConfigSkeleton,
                                                            parseProject,
@@ -30,7 +31,7 @@ import           System.Directory.Extra                   (XdgDirectory (..),
 import           System.FilePath                          (takeBaseName,
                                                            takeDirectory, (</>))
 
--- High level parsing of cabal.project file to produce errors, warnings, and ProjectConfigSkeleton
+-- | High level parsing of cabal.project file to produce errors, warnings, and ProjectConfigSkeleton
 parseCabalProjectFileContents
   :: FilePath
   -> BS.ByteString
@@ -47,21 +48,22 @@ parseCabalProjectFileContents fp bytes = do
 
   pure (PR.runParseResult parseRes)
 
--- Extract fields from cabal.project file
+-- | Extract fields from cabal.project file
 readCabalProjectFields
   :: NormalizedFilePath
   -> BS.ByteString
   -> Either [FileDiagnostic] [Syntax.Field Syntax.Position]
 readCabalProjectFields file contents =
   case PR.runParseResult (readPreprocessFields contents) of
-    -- we don't want to double report diagnostics, all diagnostics are produced by 'parseCabalProjectFileContents'.
-    (_warnings, Left (_mbVer, errs)) ->
-        Left (map (Diagnostics.errorDiagnostic file) (NE.toList errs))
+    (warnings, Left (_mbVer, errs)) ->
+        let errorDiags = map (Diagnostics.errorDiagnostic file) (NE.toList errs)
+            warningDiags = map (Diagnostics.warningDiagnostic file) warnings
+        in Left (errorDiags ++ warningDiags)
 
     (_warnings, Right fields) ->
       Right fields
 
--- Helper for parseCabalProjectFileContents, returns unique cache directory for given cabal.project file
+-- | Returns unique cache directory for given cabal.project file
 getCabalProjectCacheDir :: FilePath -> IO FilePath
 getCabalProjectCacheDir fp = do
     getXdgDirectory XdgCache (cacheDir </> prefix ++ "-" ++ opts_hash)
@@ -70,5 +72,3 @@ getCabalProjectCacheDir fp = do
         -- Create a unique folder per cabal.project file
         opts_hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init [B.pack fp]
 
-cacheDir :: String
-cacheDir = "ghcide"
