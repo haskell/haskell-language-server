@@ -298,6 +298,24 @@ main =
                   |]
                   [ Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: Bool -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe  `f`  function does something to a bool value.\n\n") (Just [ParameterInformation (InR (5,9)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "function and arguments documentation"
+                  [trimming|
+                      -- |Doc for function 'f'.
+                      f ::
+                        -- | The first 'Bool' argument
+                        Bool ->
+                        -- | The second 'Int' argument
+                        Int ->
+                        -- | The return value
+                        Bool
+                      f = _
+                      x = f True 1
+                          ^ ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: Bool -> Int -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nDoc for function  `f` .\n\n") (Just [ParameterInformation (InR (5,9)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe first  `Bool`  argument\n\n"), ParameterInformation (InR (13,16)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe second  `Int`  argument\n\n")]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 

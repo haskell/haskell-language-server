@@ -13,6 +13,7 @@ module Development.IDE.Spans.Common (
 , spanDocToMarkdownForTest
 , DocMap
 , TyThingMap
+, ArgDocMap
 , srcSpanToMdLink
 ) where
 
@@ -29,6 +30,7 @@ import           GHC.Generics
 import           System.FilePath
 
 import           Control.Lens
+import           Data.IntMap                  (IntMap)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
 import qualified Language.LSP.Protocol.Lens   as JL
@@ -36,6 +38,7 @@ import           Language.LSP.Protocol.Types
 
 type DocMap = NameEnv SpanDoc
 type TyThingMap = NameEnv TyThing
+type ArgDocMap = NameEnv (IntMap SpanDoc)
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName GhcPs -> T.Text

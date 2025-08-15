@@ -249,9 +249,9 @@ type instance RuleResult GetHieAst = HieAstResult
 -- | A IntervalMap telling us what is in scope at each point
 type instance RuleResult GetBindings = Bindings
 
-data DocAndTyThingMap = DKMap {getDocMap :: !DocMap, getTyThingMap :: !TyThingMap}
+data DocAndTyThingMap = DKMap {getDocMap :: !DocMap, getTyThingMap :: !TyThingMap, getArgDocMap :: !ArgDocMap}
 instance NFData DocAndTyThingMap where
-    rnf (DKMap a b) = rwhnf a `seq` rwhnf b
+    rnf (DKMap a b c) = rwhnf a `seq` rwhnf b `seq` rwhnf c
 
 instance Show DocAndTyThingMap where
     show = const "docmap"

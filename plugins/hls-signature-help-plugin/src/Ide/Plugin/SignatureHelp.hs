@@ -6,6 +6,8 @@ module Ide.Plugin.SignatureHelp (descriptor) where
 import           Control.Arrow                        ((>>>))
 import           Data.Bifunctor                       (bimap)
 import           Data.Function                        ((&))
+import           Data.IntMap                          (IntMap)
+import qualified Data.IntMap                          as IntMap
 import qualified Data.Map.Strict                      as M
 import qualified Data.Set                             as S
 import           Data.Text                            (Text)
@@ -30,7 +32,8 @@ import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        mkRealSrcSpan, ppr,
                                                        sourceNodeInfo)
 import           Development.IDE.GHC.Compat.Util      (LexicalFastString (LexicalFastString))
-import           Development.IDE.Spans.Common         (DocMap,
+import           Development.IDE.Spans.Common         (ArgDocMap, DocMap,
+                                                       SpanDoc,
                                                        spanDocToMarkdown)
 import           GHC.Core.Map.Type                    (deBruijnize)
 import           GHC.Core.Type                        (FunTyFlag (FTF_T_T),
@@ -97,25 +100,25 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
                               argumentNumber <- getArgumentNumber span hieAst
                               Just (functionName, functionTypes, argumentNumber)
                         )
-    docMap <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
-        (DKMap docMap _tyThingMap, _positionMapping) <- useWithStaleFastE GetDocMap nfp
-        pure docMap
+    (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
+        (DKMap docMap _tyThingMap argDocMap, _positionMapping) <- useWithStaleFastE GetDocMap nfp
+        pure (docMap, argDocMap)
     case results of
         [(_functionName, [], _argumentNumber)] -> pure $ InR Null
         [(functionName, functionTypes, argumentNumber)] ->
-            pure $ InL $ mkSignatureHelp docMap (fromIntegral argumentNumber - 1) functionName functionTypes
+            pure $ InL $ mkSignatureHelp docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
         -- TODO(@linj) what does non-singleton list mean?
         _ -> pure $ InR Null
 
-mkSignatureHelp :: DocMap -> UInt -> Name -> [Type] -> SignatureHelp
-mkSignatureHelp docMap argumentNumber functionName functionTypes =
+mkSignatureHelp :: DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
+mkSignatureHelp docMap argDocMap argumentNumber functionName functionTypes =
     SignatureHelp
-        (mkSignatureInformation docMap argumentNumber functionName <$> functionTypes)
+        (mkSignatureInformation docMap argDocMap argumentNumber functionName <$> functionTypes)
         (Just 0)
         (Just $ InL argumentNumber)
 
-mkSignatureInformation :: DocMap -> UInt -> Name -> Type -> SignatureInformation
-mkSignatureInformation docMap argumentNumber functionName functionType =
+mkSignatureInformation :: DocMap -> ArgDocMap -> UInt -> Name -> Type -> SignatureInformation
+mkSignatureInformation docMap argDocMap argumentNumber functionName functionType =
     let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
         mFunctionDoc = case lookupNameEnv docMap functionName of
             Nothing -> Nothing
@@ -125,16 +128,25 @@ mkSignatureInformation docMap argumentNumber functionName functionType =
                         MarkupContent
                             MarkupKind_Markdown
                             (T.unlines . spanDocToMarkdown $ spanDoc)
+        thisArgDocMap = case lookupNameEnv argDocMap functionName of
+            Nothing              -> mempty
+            Just argumentDocMap' -> argumentDocMap'
      in SignatureInformation
             (functionNameLabelPrefix <> printOutputableOneLine functionType)
             mFunctionDoc
-            (Just $ mkArguments (fromIntegral $ T.length functionNameLabelPrefix) functionType)
+            (Just $ mkArguments thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType)
             (Just $ InL argumentNumber)
 
-mkArguments :: UInt -> Type -> [ParameterInformation]
-mkArguments offset functionType =
-    [ ParameterInformation (InR range) Nothing
-    | range <- bimap (+offset) (+offset) <$> findArgumentRanges functionType
+mkArguments :: IntMap SpanDoc -> UInt -> Type -> [ParameterInformation]
+mkArguments thisArgDocMap offset functionType =
+    [ ParameterInformation (InR range) mArgDoc
+    | (argIndex, range) <- zip [0..] (bimap (+offset) (+offset) <$> findArgumentRanges functionType)
+    , let mArgDoc = case IntMap.lookup argIndex thisArgDocMap of
+              Nothing -> Nothing
+              Just spanDoc ->
+                  Just $
+                      InR $
+                          MarkupContent MarkupKind_Markdown (T.unlines . spanDocToMarkdown $ spanDoc)
     ]
 
 findArgumentRanges :: Type -> [(UInt, UInt)]
