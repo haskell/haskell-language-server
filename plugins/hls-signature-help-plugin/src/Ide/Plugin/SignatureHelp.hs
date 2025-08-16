@@ -4,6 +4,7 @@
 module Ide.Plugin.SignatureHelp (descriptor) where
 
 import           Control.Arrow                        ((>>>))
+import           Control.Monad.Trans.Except           (ExceptT (ExceptT))
 import           Data.Bifunctor                       (bimap)
 import           Data.Function                        ((&))
 import           Data.IntMap                          (IntMap)
@@ -20,7 +21,8 @@ import           Development.IDE                      (DocAndTyThingMap (DKMap),
                                                        IdeState (shakeExtras),
                                                        Pretty (pretty),
                                                        Recorder, WithPriority,
-                                                       printOutputableOneLine)
+                                                       printOutputableOneLine,
+                                                       useWithStaleFast)
 import           Development.IDE.Core.PluginUtils     (runIdeActionE,
                                                        useWithStaleFastE)
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
@@ -101,8 +103,10 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
                               Just (functionName, functionTypes, argumentNumber)
                         )
     (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
-        (DKMap docMap _tyThingMap argDocMap, _positionMapping) <- useWithStaleFastE GetDocMap nfp
-        pure (docMap, argDocMap)
+        mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
+        case mResult of
+            Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
+            Nothing -> pure (mempty, mempty)
     case results of
         [(_functionName, [], _argumentNumber)] -> pure $ InR Null
         [(functionName, functionTypes, argumentNumber)] ->
