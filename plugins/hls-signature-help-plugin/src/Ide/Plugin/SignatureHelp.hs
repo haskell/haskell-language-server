@@ -129,8 +129,8 @@ mkSignatureInformation docMap argDocMap argumentNumber functionName functionType
                             MarkupKind_Markdown
                             (T.unlines . spanDocToMarkdown $ spanDoc)
         thisArgDocMap = case lookupNameEnv argDocMap functionName of
-            Nothing              -> mempty
-            Just argumentDocMap' -> argumentDocMap'
+            Nothing             -> mempty
+            Just thisArgDocMap' -> thisArgDocMap'
      in SignatureInformation
             (functionNameLabelPrefix <> printOutputableOneLine functionType)
             mFunctionDoc
