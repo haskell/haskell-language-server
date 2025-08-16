@@ -125,13 +125,8 @@ mkSignatureInformation :: DocMap -> ArgDocMap -> UInt -> Name -> Type -> Signatu
 mkSignatureInformation docMap argDocMap argumentNumber functionName functionType =
     let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
         mFunctionDoc = case lookupNameEnv docMap functionName of
-            Nothing -> Nothing
-            Just spanDoc ->
-                Just $
-                    InR $
-                        MarkupContent
-                            MarkupKind_Markdown
-                            (T.unlines . spanDocToMarkdown $ spanDoc)
+            Nothing      -> Nothing
+            Just spanDoc -> Just $ InR $ mkMarkdownDoc spanDoc
         thisArgDocMap = case lookupNameEnv argDocMap functionName of
             Nothing             -> mempty
             Just thisArgDocMap' -> thisArgDocMap'
@@ -146,12 +141,12 @@ mkArguments thisArgDocMap offset functionType =
     [ ParameterInformation (InR range) mArgDoc
     | (argIndex, range) <- zip [0..] (bimap (+offset) (+offset) <$> findArgumentRanges functionType)
     , let mArgDoc = case IntMap.lookup argIndex thisArgDocMap of
-              Nothing -> Nothing
-              Just spanDoc ->
-                  Just $
-                      InR $
-                          MarkupContent MarkupKind_Markdown (T.unlines . spanDocToMarkdown $ spanDoc)
+              Nothing      -> Nothing
+              Just spanDoc -> Just $ InR $ mkMarkdownDoc spanDoc
     ]
+
+mkMarkdownDoc :: SpanDoc -> MarkupContent
+mkMarkdownDoc = spanDocToMarkdown >>> T.unlines >>> MarkupContent MarkupKind_Markdown
 
 findArgumentRanges :: Type -> [(UInt, UInt)]
 findArgumentRanges functionType =
