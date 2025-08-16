@@ -132,11 +132,11 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
     name <- liftIO $ lookupNameCache nc mod occ
     mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
     let (dm,km) = case mdkm of
-          Just (DKMap docMap tyThingMap, _) -> (docMap,tyThingMap)
-          Nothing                           -> (mempty, mempty)
+          Just (DKMap docMap tyThingMap _argDocMap, _) -> (docMap,tyThingMap)
+          Nothing                                      -> (mempty, mempty)
     doc <- case lookupNameEnv dm name of
       Just doc -> pure $ spanDocToMarkdown doc
-      Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
+      Nothing -> liftIO $ spanDocToMarkdown . fst <$> getDocumentationTryGhc (hscEnv sess) name
     typ <- case lookupNameEnv km name of
       _ | not needType -> pure Nothing
       Just ty -> pure (safeTyThingType ty)

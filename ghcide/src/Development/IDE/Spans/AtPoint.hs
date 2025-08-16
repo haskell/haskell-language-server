@@ -256,7 +256,7 @@ atPoint
   -> HscEnv
   -> Position
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km) env pos =
+atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
