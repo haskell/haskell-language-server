@@ -57,7 +57,7 @@ import qualified Data.Text                            as T
 
 import qualified Data.Array                           as A
 import           Data.Either
-import           Data.List.Extra                      (nubOrd)
+import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 
 import           Control.Lens                         ((^.))
@@ -279,9 +279,14 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
               Left _moduleName -> Nothing) $ fromMaybe [] locationsWithIdentifier
 
         prettyNames <- mapM (prettyName locationsMap) names
-
-        pure (Just range, prettyNames ++ prettyTypes Nothing locationsMap)
+        pure (Just range, prettyNames ++ pTypes locationsMap)
       where
+        pTypes :: M.Map Name Location -> [T.Text]
+        pTypes locationsMap =
+          case names of
+            [_singleName] -> dropEnd1 $ prettyTypes Nothing locationsMap
+            _             -> prettyTypes Nothing locationsMap
+
         range :: Range
         range = realSrcSpanToRange $ nodeSpan ast
 
