@@ -3,28 +3,30 @@ module Development.IDE.Plugin.Plugins.FillHole
   ) where
 
 import           Control.Lens
-import           Control.Monad                     (guard)
+import           Control.Monad                             (guard)
 import           Data.Char
-import qualified Data.Text                         as T
-import           Development.IDE                   (FileDiagnostic,
-                                                    fdLspDiagnosticL,
-                                                    printOutputable)
-import           Development.IDE.GHC.Compat        (defaultSDocContext,
-                                                    renderWithContext, SDoc)
-import           Development.IDE.GHC.Compat.Error  (TcRnMessageDetailed (..),
-                                                    _TcRnMessageWithCtx,
-                                                    _TcRnMessageWithInfo,
-                                                    hole_occ,
-                                                    msgEnvelopeErrorL)
-import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage,
-                                                    fdStructuredMessageL)
-import           GHC.Tc.Errors.Types               (ErrInfo (..))
-import           Ide.PluginUtils                   (unescape)
-import           Language.LSP.Protocol.Lens        (HasRange (..))
-import           Language.LSP.Protocol.Types       (TextEdit (..))
-import           Text.Regex.TDFA                   (MatchResult (..), (=~))
-import GHC.Utils.Outputable (SDocContext(..))
-import Development.IDE.Plugin.Plugins.Diagnostic (diagReportHoleError)
+import qualified Data.Text                                 as T
+import           Development.IDE                           (FileDiagnostic,
+                                                            fdLspDiagnosticL,
+                                                            printOutputable)
+import           Development.IDE.GHC.Compat                (SDoc,
+                                                            defaultSDocContext,
+                                                            renderWithContext)
+import           Development.IDE.GHC.Compat.Error          (TcRnMessageDetailed (..),
+                                                            _TcRnMessageWithCtx,
+                                                            _TcRnMessageWithInfo,
+                                                            hole_occ,
+                                                            msgEnvelopeErrorL)
+import           Development.IDE.Plugin.Plugins.Diagnostic (diagReportHoleError)
+import           Development.IDE.Types.Diagnostics         (_SomeStructuredMessage,
+                                                            fdStructuredMessageL)
+import           GHC.Tc.Errors.Types                       (ErrInfo (..))
+import           GHC.Utils.Outputable                      (SDocContext (..))
+import           Ide.PluginUtils                           (unescape)
+import           Language.LSP.Protocol.Lens                (HasRange (..))
+import           Language.LSP.Protocol.Types               (TextEdit (..))
+import           Text.Regex.TDFA                           (MatchResult (..),
+                                                            (=~))
 
 suggestFillHole :: FileDiagnostic -> [(T.Text, TextEdit)]
 suggestFillHole diag
