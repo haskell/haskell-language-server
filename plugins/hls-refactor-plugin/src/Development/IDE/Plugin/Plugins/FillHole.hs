@@ -131,6 +131,11 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
+-- TODO: This doesn't seem to handle qualified imports properly:
+--
+-- plugins/hls-refactor-plugin/test/Main.hs:4011:
+-- CodeAction with title "Replace _toException with E.toException" not found in
+-- [..., "Replace _toException with toException", ...]
 printErr :: SDoc -> T.Text
 printErr =
     unescape
