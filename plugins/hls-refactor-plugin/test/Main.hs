@@ -2918,6 +2918,32 @@ fillTypedHoleTests = let
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "<$>" @=? modifiedCode
+  , testSession "fill hole with one suggestion" $ do
+      let mkDoc a = T.unlines
+              [ "module Testing where"
+              , "test :: a -> a"
+              , "test a = " <> a
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 0) (Position 2 maxBound))
+      chosen <- pickActionWithTitle "Replace _ with a" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "a" @=? modifiedCode
+  , testSession "fill hole with one refinement suggestion" $ do
+      let mkDoc a = T.unlines
+              [ "module Testing where"
+              , "test :: a -> a"
+              , "test a = " <> a
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 0) (Position 2 maxBound))
+      chosen <- pickActionWithTitle "Replace _ with test _" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "(test _)" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
