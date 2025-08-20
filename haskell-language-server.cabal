@@ -264,7 +264,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
     Ide.Plugin.Cabal.Parse
-
+    Ide.Plugin.Cabal.FoldingRange
 
   build-depends:
     , bytestring
