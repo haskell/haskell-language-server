@@ -59,6 +59,9 @@ constraints:
 -- cabal-add depends on cabal-install-parsers.
 allow-newer:
   cabal-install-parsers:Cabal-syntax,
+  *:Cabal-syntax,
+  *:cabal-install,
+  *:Cabal
 
 if impl(ghc >= 9.11)
   benchmarks: False
