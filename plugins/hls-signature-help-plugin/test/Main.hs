@@ -317,6 +317,16 @@ main =
                   |]
                   [ Nothing,
                     Just $ SignatureHelp [SignatureInformation "f :: Bool -> Int -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nDoc for function  `f` .\n\n") (Just [ParameterInformation (InR (5,9)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe first  `Bool`  argument\n\n"), ParameterInformation (InR (13,16)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe second  `Int`  argument\n\n")]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "imported function with argument documentation"
+                  [trimming|
+                      import Language.Haskell.TH.Lib (mkBytes)
+                      x = mkBytes _
+                          ^       ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "mkBytes :: ForeignPtr Word8 -> Word -> Word -> Bytes" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nCreate a Bytes datatype representing raw bytes to be embedded into the\n program/library binary.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (11,27)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nPointer to the data\n\n"), ParameterInformation (InR (31,35)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nOffset from the pointer\n\n"), ParameterInformation (InR (39,43)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nNumber of bytes\n\n")]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 
