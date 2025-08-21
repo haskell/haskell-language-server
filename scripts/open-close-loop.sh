@@ -79,7 +79,7 @@ while true; do
     echo "[loop] Broken pipe reproduced in iteration ${iter}. Stopping." | tee -a "${log}" >&2
     echo "[loop] --- Tail (last 60 lines) ---" >&2
     tail -n 60 "${log}" >&2
-    exit 0
+    exit 1
   else
     if [[ ${DEBUG_DETECT} -eq 1 ]]; then
       echo "[loop][debug] No match for '${BROKEN_PIPE_RE}' in iteration ${iter}." | tee -a "${log}" >&2
@@ -88,7 +88,7 @@ while true; do
 
   if [[ -n "${MAX_ITER}" && ${iter} -ge ${MAX_ITER} ]]; then
     echo "[loop] Reached MAX_ITER=${MAX_ITER} without reproducing Broken pipe." >&2
-    exit 1
+    exit 0
   fi
 
   echo "[loop] Iteration ${iter} complete (exit code ${ec}). No Broken pipe yet." | tee -a "${log}" >&2

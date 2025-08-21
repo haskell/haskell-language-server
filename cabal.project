@@ -5,9 +5,9 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
---         /Volumes/src/lsp/lsp
---         /Volumes/src/lsp/lsp-types
---         /Volumes/src/lsp/lsp-test
+        -- /Volumes/src/lsp/lsp
+        -- /Volumes/src/lsp/lsp-types
+        -- /Volumes/src/lsp/lsp-test
 
 
 index-state: 2025-08-08T12:31:54Z
@@ -63,5 +63,5 @@ if impl(ghc >= 9.11)
 source-repository-package
   type: git
   location: https://github.com/soulomoon/lsp.git
-  tag: 6f217e8a1afcb77a926023d0ac9cbc0da7ef4d3c
+  tag: 839c458771455f5792f0fa4ead706f3eaf785d13
   subdir: lsp lsp-types lsp-test
