@@ -65,6 +65,7 @@ import           Language.LSP.Protocol.Types          (MarkupContent (MarkupCont
                                                        ParameterInformation (ParameterInformation),
                                                        Position (Position),
                                                        SignatureHelp (SignatureHelp),
+                                                       SignatureHelpContext (SignatureHelpContext),
                                                        SignatureHelpParams (SignatureHelpParams),
                                                        SignatureInformation (SignatureInformation),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
@@ -84,7 +85,7 @@ descriptor _recorder pluginId =
         }
 
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
-signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken _mContext) = do
+signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken mSignatureHelpContext) = do
     nfp <- getNormalizedFilePathE uri
     results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
         -- TODO(@linj) why HAR {hieAst} may have more than one AST?
@@ -110,16 +111,26 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
     case results of
         [(_functionName, [], _argumentNumber)] -> pure $ InR Null
         [(functionName, functionTypes, argumentNumber)] ->
-            pure $ InL $ mkSignatureHelp docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
+            pure $ InL $ mkSignatureHelp mSignatureHelpContext docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
         -- TODO(@linj) what does non-singleton list mean?
         _ -> pure $ InR Null
 
-mkSignatureHelp :: DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
-mkSignatureHelp docMap argDocMap argumentNumber functionName functionTypes =
+mkSignatureHelp :: Maybe SignatureHelpContext -> DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
+mkSignatureHelp mSignatureHelpContext docMap argDocMap argumentNumber functionName functionTypes =
     SignatureHelp
         (mkSignatureInformation docMap argDocMap argumentNumber functionName <$> functionTypes)
-        (Just 0)
+        activeSignature
         (Just $ InL argumentNumber)
+    where
+        activeSignature = case mSignatureHelpContext of
+            Just
+                ( SignatureHelpContext
+                      _triggerKind
+                      _triggerCharacter
+                      True
+                      (Just (SignatureHelp _signatures oldActivateSignature _activeParameter))
+                  ) -> oldActivateSignature
+            _ -> Just 0
 
 mkSignatureInformation :: DocMap -> ArgDocMap -> UInt -> Name -> Type -> SignatureInformation
 mkSignatureInformation docMap argDocMap argumentNumber functionName functionType =
