@@ -16,7 +16,9 @@ package cabal-install
   tests: False
   benchmarks: False
 
-index-state: 2025-08-08T12:31:54Z
+flags: -ormolu -stylishHaskell -stan -fourmolu
+
+index-state: 2025-05-12T13:26:29Z
 
 tests: True
 test-show-details: direct

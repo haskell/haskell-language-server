@@ -23,11 +23,11 @@ import           Ide.Plugin.Cabal.Completion.CabalFields (onelineSectionArgs)
 import           Ide.Plugin.Cabal.Completion.Types       (ParseCabalFields (..),
                                                           cabalPositionToLSPPosition)
 import           Ide.Plugin.Cabal.Orphans                ()
+import           Ide.Plugin.Cabal.Outline
 import           Ide.Types                               (PluginMethodHandler)
 import           Language.LSP.Protocol.Message           (Method (..))
 import           Language.LSP.Protocol.Types             (FoldingRange (..))
 import qualified Language.LSP.Protocol.Types             as LSP
-
 
 moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentFoldingRange
 moduleOutline ideState _ LSP.FoldingRangeParams {_textDocument = LSP.TextDocumentIdentifier uri} =
@@ -35,13 +35,13 @@ moduleOutline ideState _ LSP.FoldingRangeParams {_textDocument = LSP.TextDocumen
     Just (toNormalizedFilePath' -> fp) -> do
       mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields fp)
       case fmap fst mFields of
-        Just fieldPositions -> pure $ LSP.InR (LSP.InL allSymbols)
+        Just fieldPositions -> pure allRanges
           where
-            allSymbols = mapMaybe documentSymbolForField fieldPositions
-        Nothing -> pure $ LSP.InL []
-    Nothing -> pure $ LSP.InL []
+            allRanges = mapMaybe foldingRangeForField fieldPositions
+        Nothing -> pure []
+    Nothing -> pure []
 
--- | Creates a @DocumentSymbol@ object for the
+-- | Creates a @FoldingRange@ object for the
 --   cabal AST, without displaying @fieldLines@ and
 --   displaying @Section Name@ and @SectionArgs@ in one line.
 --
@@ -73,21 +73,18 @@ moduleOutline ideState _ LSP.FoldingRangeParams {_textDocument = LSP.TextDocumen
 foldingRangeForField :: Field Position -> Maybe FoldingRange
 foldingRangeForField (Field (Name pos fieldName) _) =
   Just
-    (defDocumentSymbol range)
-      { _name = decodeUtf8 fieldName,
-        _kind = LSP.SymbolKind_Field,
-        _children = Nothing
+    (defFoldingRange lspPos)
+      { _collapsedText = decodeUtf8 fieldName
       }
   where
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` decodeUtf8 fieldName
-documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
+    lspPos@(LSP.Position startLine startChar) = cabalPositionToLSPPosition pos
+
+foldingRangeForField (Section (Name pos fieldName) sectionArgs fields) =
   Just
-    (defDocumentSymbol range)
-      { _name = joinedName,
-        _kind = LSP.SymbolKind_Object,
-        _children =
-          Just
-            (mapMaybe documentSymbolForField fields)
+    (defFoldingRange lspPos)
+      { _endLine = endLine,
+        _endCharacter = endChar,
+        _collapsedText = Just (decodeUtf8 fieldName <> )
       }
   where
     joinedName = decodeUtf8 fieldName <> " " <> onelineSectionArgs sectionArgs
@@ -95,25 +92,17 @@ documentSymbolForField (Section (Name pos fieldName) sectionArgs fields) =
 
 -- | Creates a single point LSP range
 --   using cabal position
-cabalPositionToLSPRange :: Position -> LSP.Range
-cabalPositionToLSPRange pos = LSP.Range lspPos lspPos
-  where
-    lspPos = cabalPositionToLSPPosition pos
+-- cabalPositionToLSPRange :: Position -> LSP.Range
+-- cabalPositionToLSPRange pos = LSP.Range lspPos lspPos
+--   where
+--     lspPos = cabalPositionToLSPPosition pos
 
-addNameLengthToLSPRange :: LSP.Range -> T.Text -> LSP.Range
-addNameLengthToLSPRange (LSP.Range pos1 (LSP.Position line char)) name =
-  LSP.Range
-    pos1
-    (LSP.Position line (char + fromIntegral (T.length name)))
-
-defFoldingRange :: LSP.Range -> FoldingRange
-defFoldingRange range = FoldingRange
-  { _detail = Nothing
-  , _deprecated = Nothing
-  , _name = ""
-  , _kind = LSP.SymbolKind_File
-  , _range = range
-  , _selectionRange = range
-  , _children = Nothing
-  , _tags = Nothing
+defFoldingRange :: LSP.Position -> FoldingRange
+defFoldingRange (LSP.Position line char) = FoldingRange
+  { _startLine = line
+  , _startCharacter = Just char
+  , _endLine = line
+  , _endCharacter = Just char
+  , _kind = Just LSP.FoldingRangeKind
+  , _collapsedText = Nothing
   }
