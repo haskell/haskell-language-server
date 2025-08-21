@@ -386,7 +386,7 @@ mkVirtualFileTreeWithSingleFile fileName sourceCode =
               file fileName (text sourceCode)
             ]
 
--- TODO(@linj) upstream it to lsp-test
+-- TODO(@linj) use the one from lsp-test when we have https://github.com/haskell/lsp/pull/621
 -- | Returns the signature help at the specified position.
 getSignatureHelp :: TextDocumentIdentifier -> Position -> Session (Maybe SignatureHelp)
 getSignatureHelp doc pos =
