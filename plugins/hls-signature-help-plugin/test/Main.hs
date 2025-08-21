@@ -336,6 +336,19 @@ main =
                   |]
                   [ Nothing,
                     Just $ SignatureHelp [SignatureInformation "mkBytes :: ForeignPtr Word8 -> Word -> Word -> Bytes" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nCreate a Bytes datatype representing raw bytes to be embedded into the\n program/library binary.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (11,27)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nPointer to the data\n\n"), ParameterInformation (InR (31,35)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nOffset from the pointer\n\n"), ParameterInformation (InR (39,43)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nNumber of bytes\n\n")]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
+                  "TypeApplications"
+                  [trimming|
+                      f :: a -> b -> c
+                      f = _
+                      x = f @Int @_ 1 True
+                          ^  ^    ^ ^
+                  |]
+                  [ Nothing,
+                    Nothing,
+                    Nothing,
+                    Just $ SignatureHelp [SignatureInformation "f :: forall a b c. a -> b -> c" Nothing (Just [ParameterInformation (InR (19,20)) Nothing, ParameterInformation (InR (24,25)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ]
             ]
 

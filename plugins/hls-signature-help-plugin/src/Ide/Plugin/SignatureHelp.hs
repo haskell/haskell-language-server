@@ -291,19 +291,23 @@ getNodeNameAndTypes hieKind hieAst =
 isUse :: IdentifierDetails a -> Bool
 isUse = identInfo >>> S.member Use
 
+-- TODO(@linj) handle more cases
 -- Just 1 means the first argument
 getArgumentNumber :: RealSrcSpan -> HieAST a -> Maybe Integer
-getArgumentNumber span hieAst =
-    if nodeHasAnnotation ("HsApp", "HsExpr") hieAst
-        then
-            case nodeChildren hieAst of
-                [leftChild, _] ->
-                    if span `isRealSubspanOf` nodeSpan leftChild
-                        then Nothing
-                        else getArgumentNumber span leftChild >>= \argumentNumber -> Just (argumentNumber + 1)
-                _ -> Nothing -- impossible
-        else
-            case nodeChildren hieAst of
-                []      -> Just 0 -- the function is found
-                [child] -> getArgumentNumber span child -- ignore irrelevant nodes
-                _       -> Nothing -- TODO(@linj) handle more cases such as `if`
+getArgumentNumber span hieAst
+    | nodeHasAnnotation ("HsApp", "HsExpr") hieAst =
+          case nodeChildren hieAst of
+              [leftChild, _] ->
+                  if span `isRealSubspanOf` nodeSpan leftChild
+                      then Nothing
+                      else getArgumentNumber span leftChild >>= \argumentNumber -> Just (argumentNumber + 1)
+              _ -> Nothing -- impossible
+    | nodeHasAnnotation ("HsAppType", "HsExpr") hieAst =
+          case nodeChildren hieAst of
+              [leftChild, _] -> getArgumentNumber span leftChild
+              _              -> Nothing -- impossible
+    | otherwise =
+          case nodeChildren hieAst of
+              []      -> Just 0 -- the function is found
+              [child] -> getArgumentNumber span child -- ignore irrelevant nodes
+              _       -> Nothing
