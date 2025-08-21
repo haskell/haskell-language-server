@@ -35,7 +35,8 @@ import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        sourceNodeInfo)
 import           Development.IDE.GHC.Compat.Util      (LexicalFastString (LexicalFastString))
 import           Development.IDE.Spans.Common         (ArgDocMap, DocMap,
-                                                       SpanDoc,
+                                                       SpanDoc (..),
+                                                       SpanDocUris (SpanDocUris),
                                                        spanDocToMarkdown)
 import           GHC.Core.Map.Type                    (deBruijnize)
 import           GHC.Core.Type                        (FunTyFlag (FTF_T_T),
@@ -142,8 +143,14 @@ mkArguments thisArgDocMap offset functionType =
     | (argIndex, range) <- zip [0..] (bimap (+offset) (+offset) <$> findArgumentRanges functionType)
     , let mArgDoc = case IntMap.lookup argIndex thisArgDocMap of
               Nothing      -> Nothing
-              Just spanDoc -> Just $ InR $ mkMarkdownDoc spanDoc
+              Just spanDoc -> Just $ InR $ mkMarkdownDoc $ removeUris spanDoc
     ]
+    where
+        -- we already show uris in the function doc, no need to duplicate them in the arg doc
+        removeUris (SpanDocString docs _uris) = SpanDocString docs emptyUris
+        removeUris (SpanDocText docs _uris)   = SpanDocText docs emptyUris
+
+        emptyUris = SpanDocUris Nothing Nothing
 
 mkMarkdownDoc :: SpanDoc -> MarkupContent
 mkMarkdownDoc = spanDocToMarkdown >>> T.unlines >>> MarkupContent MarkupKind_Markdown
