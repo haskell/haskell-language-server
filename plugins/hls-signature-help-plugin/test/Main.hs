@@ -1,7 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 
 import           Control.Exception                        (throw)
-import           Control.Lens                             ((^.))
+import           Control.Lens                             ((%~), (^.))
 import           Data.Maybe                               (fromJust)
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
@@ -13,6 +13,7 @@ import           Test.Hls.FileSystem                      (VirtualFileTree,
                                                            directCradle, file,
                                                            mkVirtualFileTree,
                                                            text)
+import           Text.Regex.TDFA                          ((=~))
 
 
 main :: IO ()
@@ -154,7 +155,7 @@ main =
                            ^   ^
                   |]
                   [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" Nothing (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: Bool -> IO Bool" Nothing (Just [ParameterInformation (InR (8,12)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: forall a. a -> IO a" Nothing (Just [ParameterInformation (InR (18,19)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                    Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: Bool -> IO Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (8,12)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: forall a. a -> IO a" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (18,19)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
                   "2 type constraints"
@@ -334,7 +335,28 @@ getSignatureHelpFromSession sourceCode (PosPrefixInfo _ _ _ position) =
         virtualFileTree = mkVirtualFileTreeWithSingleFile fileName sourceCode
      in runSessionWithServerInTmpDir def plugin virtualFileTree $ do
             doc <- openDoc fileName "haskell"
-            getSignatureHelp doc position
+            (fmap . fmap) mkReproducibleSignatureHelp (getSignatureHelp doc position)
+
+mkReproducibleSignatureHelp :: SignatureHelp -> SignatureHelp
+mkReproducibleSignatureHelp = L.signatures . traverse . L.documentation %~ unifyLocalFilePath
+    where
+        unifyLocalFilePath (Just (InR (MarkupContent MarkupKind_Markdown doc))) =
+            let (prefix, match, suffix) = doc =~ documentationRegex :: (Text, Text, Text)
+                (prefix', match', suffix') = suffix =~ sourceRegex :: (Text, Text, Text)
+                reproducibleDoc =
+                    if T.null match
+                        then prefix
+                        else
+                            prefix
+                                <> documentationRegex
+                                <> ( if T.null match'
+                                         then prefix'
+                                         else prefix' <> sourceRegex <> suffix'
+                                   )
+             in Just $ InR $ MarkupContent MarkupKind_Markdown reproducibleDoc
+        unifyLocalFilePath mDoc = mDoc
+        documentationRegex = "\\[Documentation\\]\\(file://.*\\)\n\n"
+        sourceRegex = "\\[Source\\]\\(file://.*\\)\n\n"
 
 mkVirtualFileTreeWithSingleFile :: FilePath -> Text -> VirtualFileTree
 mkVirtualFileTreeWithSingleFile fileName sourceCode =
