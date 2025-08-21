@@ -319,6 +319,15 @@ main =
                     Just $ SignatureHelp [SignatureInformation "f :: Bool -> Int -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nDoc for function  `f` .\n\n") (Just [ParameterInformation (InR (5,9)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe first  `Bool`  argument\n\n"), ParameterInformation (InR (13,16)) (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nThe second  `Int`  argument\n\n")]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
+                  "imported function with no documentation"
+                  [trimming|
+                      x = even 1
+                          ^    ^
+                  |]
+                  [ Nothing,
+                    Just $ SignatureHelp [SignatureInformation "even :: forall a. Integral a => a -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (32,33)) Nothing]) (Just (InL 0)), SignatureInformation "even :: Integer -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (8,15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                  ],
+              mkTest
                   "imported function with argument documentation"
                   [trimming|
                       import Language.Haskell.TH.Lib (mkBytes)
