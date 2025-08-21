@@ -1,0 +1,93 @@
+name: flakiness
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  # Run on PRs that touch relevant areas and on manual dispatch
+  pull_request:
+    branches:
+      - '**'
+    paths:
+      - 'scripts/open-close-loop.sh'
+      - 'ghcide/**'
+      - 'hls-test-utils/**'
+      - 'src/**'
+      - 'exe/**'
+      - 'plugins/**'
+      - 'cabal.project'
+  workflow_dispatch:
+    inputs:
+      max_iter:
+        description: 'Maximum iterations to attempt'
+        required: false
+        default: '100'
+      sleep_secs:
+        description: 'Seconds to sleep between iterations'
+        required: false
+        default: '0'
+
+jobs:
+  loop:
+    name: open-close loop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup GHC and caching
+        uses: ./.github/actions/setup-build
+        with:
+          ghc: '9.12'
+          os: ${{ runner.os }}
+
+      - name: Show cabal and GHC versions
+        run: |
+          cabal --version
+          ghc --version
+
+      - name: Run open-close loop
+        id: run-loop
+        # Let this run for a while; build is done once inside the script
+        timeout-minutes: 45
+        env:
+          # Use workflow_dispatch inputs when present, else defaults
+          SLEEP_SECS: ${{ inputs.sleep_secs || '0' }}
+          TRACE_FD: '1'
+          LOG_STDERR: '1'
+        run: |
+          # Run with a sensible default of 100 iterations on PRs; allow override on manual runs
+          max_iter="${{ inputs.max_iter || '100' }}"
+          bash scripts/open-close-loop.sh "${max_iter}"
+          ec=$?
+          # Interpret: 0 = flake reproduced (fail the job), 1 = not reproduced within budget (pass), others = infra error
+          if [[ $ec -eq 0 ]]; then
+            echo "Broken pipe reproduced: marking job as failed"
+            exit 1
+          elif [[ $ec -eq 1 ]]; then
+            echo "No flake reproduced within MAX_ITER=${max_iter}: passing"
+            exit 0
+          else
+            echo "Loop script error (exit $ec): failing"
+            exit $ec
+          fi
+
+      # - name: Upload loop logs
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: open-close-loop-logs-${{ matrix.os }}
+      #     path: test-logs/
+      #     if-no-files-found: ignore
