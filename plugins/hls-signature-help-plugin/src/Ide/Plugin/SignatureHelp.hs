@@ -83,7 +83,6 @@ descriptor _recorder pluginId =
         { Ide.Types.pluginHandlers = mkPluginHandler SMethod_TextDocumentSignatureHelp signatureHelpProvider
         }
 
--- TODO(@linj) get doc
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken _mContext) = do
     nfp <- getNormalizedFilePathE uri
