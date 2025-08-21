@@ -390,11 +390,16 @@ addPersistentRule k getVal = do
 
 class Typeable a => IsIdeGlobal a where
 
+-- data VirtualFileEntry = Open VirtualFile | Closed ClosedVirtualFile
+getOpenFile :: VirtualFileEntry -> Maybe VirtualFile
+getOpenFile (Open vf) = Just vf
+getOpenFile _         = Nothing
 -- | Read a virtual file from the current snapshot
 getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
-  pure $! Map.lookup (filePathToUri' nf) vfs -- Don't leak a reference to the entire map
+  let file = getOpenFile =<< Map.lookup (filePathToUri' nf) vfs
+  pure $! file -- Don't leak a reference to the entire map
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS

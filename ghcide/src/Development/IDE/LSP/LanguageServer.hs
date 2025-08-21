@@ -35,6 +35,9 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Concurrent.Extra              (newBarrier,
+                                                        signalBarrier,
+                                                        waitBarrier)
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
@@ -136,8 +139,7 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             outH
             serverDefinition
 
-    untilMVar clientMsgVar $
-        runServer `finally` sequence_ onExit
+    void $ runServer `finally` sequence_ onExit
 
 setupLSP ::
      forall config.
@@ -156,7 +158,10 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
   -- An MVar to control the lifetime of the reactor loop.
   -- The loop will be stopped and resources freed when it's full
   reactorLifetime <- newEmptyMVar
+  reactorLifetimeConfirmBarrier <- newBarrier
   let stopReactorLoop = void $ tryPutMVar reactorLifetime ()
+  let stopReactorLoopConfirm = signalBarrier reactorLifetimeConfirmBarrier ()
+  let untilReactorLifetimeConfirm = waitBarrier reactorLifetimeConfirmBarrier
 
   -- Forcefully exit
   let exit = void $ tryPutMVar clientMsgVar ()
@@ -185,17 +190,16 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
   let staticHandlers = mconcat
         [ userHandlers
         , cancelHandler cancelRequest
-        , exitHandler exit
-        , shutdownHandler recorder stopReactorLoop
+        , shutdownHandler recorder (stopReactorLoop, untilReactorLifetimeConfirm)
         ]
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
 
-  let doInitialize = handleInit recorder defaultRoot getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
+  let doInitialize = handleInit recorder defaultRoot getHieDbLoc getIdeState (reactorLifetime, stopReactorLoopConfirm) exit clearReqId waitForCancel clientMsgChan
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
-  let onExit = [stopReactorLoop, exit]
+  let onExit = [stopReactorLoop, untilReactorLifetimeConfirm, exit]
 
   pure MkSetup {doInitialize, staticHandlers, interpretHandler, onExit}
 
@@ -205,13 +209,13 @@ handleInit
     -> FilePath -- ^ root directory, see Note [Root Directory]
     -> (FilePath -> IO FilePath)
     -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
-    -> MVar ()
+    -> (MVar (), IO ())
     -> IO ()
     -> (SomeLspId -> IO ())
     -> (SomeLspId -> IO ())
     -> Chan ReactorMessage
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+handleInit recorder defaultRoot getHieDbLoc getIdeState (lifetime, lifetimeConfirm) exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     -- only shift if lsp root is different from the rootDir
     -- see Note [Root Directory]
@@ -227,7 +231,7 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState lifetime exitClientMsg c
     let handleServerException (Left e) = do
             logWith recorder Error $ LogReactorThreadException e
             exitClientMsg
-        handleServerException (Right _) = pure ()
+        handleServerException (Right _) = lifetimeConfirm
 
         exceptionInHandler e = do
             logWith recorder Error $ LogReactorMessageActionException e
@@ -293,18 +297,16 @@ cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \T
         toLspId (InL x) = IdInt x
         toLspId (InR y) = IdString y
 
-shutdownHandler :: Recorder (WithPriority Log) -> IO () -> LSP.Handlers (ServerM c)
-shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
+shutdownHandler :: Recorder (WithPriority Log) -> (IO (), IO ()) -> LSP.Handlers (ServerM c)
+shutdownHandler recorder (stopReactor, confirmVar) = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
     (_, ide) <- ask
     liftIO $ logWith recorder Debug LogServerShutdownMessage
     -- stop the reactor to free up the hiedb connection
     liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
+    liftIO confirmVar
     resp $ Right Null
-
-exitHandler :: IO () -> LSP.Handlers (ServerM c)
-exitHandler exit = LSP.notificationHandler SMethod_Exit $ const $ liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.optTextDocumentSync   = Just $ tweakTDS origTDS
