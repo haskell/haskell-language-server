@@ -51,6 +51,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-class-plugin`                   | 2    |                          |
 | `hls-change-type-signature-plugin`   | 2    |                          |
 | `hls-eval-plugin`                    | 2    |                          |
+| `hls-signature-help-plugin`          | 2    |                          |
 | `hls-explicit-fixity-plugin`         | 2    |                          |
 | `hls-explicit-record-fields-plugin`  | 2    |                          |
 | `hls-fourmolu-plugin`                | 2    |                          |
