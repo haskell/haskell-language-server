@@ -233,11 +233,17 @@ main =
                       y = f 1 negate
                             ^ ^
                   |]
-                  [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num b => b -> b) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num Any => Any -> Any) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> (Num Any => Any -> Any) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,38)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
-                  ],
+                  ( let typ =
+                            if ghcVersion <= GHC98
+                                then "f :: Integer -> (Num Any => Any -> Any) -> Integer"
+                                else "f :: Integer -> (Num (ZonkAny 0) => ZonkAny 0 -> ZonkAny 0) -> Integer"
+                        range = if ghcVersion <= GHC98 then (17,38) else (17,58)
+                     in [ Nothing,
+                          Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> (Num b => b -> b) -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (17,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                          Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 0)), SignatureInformation typ Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR range) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                          Just $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> (Num b => b -> b) -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (31,46)) Nothing]) (Just (InL 1)), SignatureInformation typ Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR range) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
+                        ]
+                  ),
               mkTest
                   "RankNTypes(forall in middle)"
                   [trimming|
