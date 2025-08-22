@@ -155,7 +155,11 @@ main =
                            ^   ^
                   |]
                   [ Nothing,
-                    Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: Bool -> IO Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (8,12)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: forall a. a -> IO a" (Just $ InR $ MarkupContent MarkupKind_Markdown "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n") (Just [ParameterInformation (InR (18,19)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                    let doc =
+                            if ghcVersion <= GHC98
+                                then "\n\nLift a value.\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n"
+                                else "\n\nLift a value into the Structure. #### **Examples** \n```haskell\n>>> pure 1 :: Maybe Int\nJust 1\n\n\n```\n \n```haskell\n>>> pure 'z' :: [Char]\n\"z\"\n\n\n```\n \n```haskell\n>>> pure (pure \":D\") :: Maybe [String]\nJust [\":D\"]\n\n\n```\n\n\\[Documentation\\]\\(file://.*\\)\n\n\\[Source\\]\\(file://.*\\)\n\n"
+                     in Just $ SignatureHelp [SignatureInformation "pure :: forall (f :: Type -> Type) a. Applicative f => a -> f a" (Just $ InR $ MarkupContent MarkupKind_Markdown doc) (Just [ParameterInformation (InR (55,56)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: Bool -> IO Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown doc) (Just [ParameterInformation (InR (8,12)) Nothing]) (Just (InL 0)), SignatureInformation "pure :: forall a. a -> IO a" (Just $ InR $ MarkupContent MarkupKind_Markdown doc) (Just [ParameterInformation (InR (18,19)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
               mkTest
                   "2 type constraints"
