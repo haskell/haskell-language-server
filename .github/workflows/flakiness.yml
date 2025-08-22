@@ -69,7 +69,7 @@ jobs:
           LOG_STDERR: '1'
         run: |
           # Run with a sensible default of 1000 iterations on PRs;
-          max_iter="${{ inputs.max_iter }}"
+          max_iter="${{ inputs.max_iter || 1000 }}"
           bash scripts/open-close-loop.sh "${max_iter}"
           ec=$?
           # Interpret: 1 = issue reproduced (fail the job), 1 = not reproduced within budget (pass), others = infra error
