@@ -12,7 +12,7 @@ module Development.IDE.LSP.LanguageServer
     , ThreadQueue
     , runWithWorkerThreads
     , Setup (..)
-    , InitParameters (..)
+    , InitializationContext (..)
     ) where
 
 import           Control.Concurrent.STM
@@ -91,27 +91,27 @@ instance Pretty Log where
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
 
--- | Parameters for initializing the LSP language server.
+-- | Context for initializing the LSP language server.
 -- This record encapsulates all the configuration and callback functions
 -- needed to set up and run the language server initialization process.
-data InitParameters config = InitParameters
-  { initRecorder :: Recorder (WithPriority Log)
+data InitializationContext config = InitializationContext
+  { ctxRecorder :: Recorder (WithPriority Log)
     -- ^ Logger for recording server events and diagnostics
-  , initDefaultRoot :: FilePath
+  , ctxDefaultRoot :: FilePath
     -- ^ Default root directory for the workspace, see Note [Root Directory]
-  , initGetHieDbLoc :: FilePath -> IO FilePath
+  , ctxGetHieDbLoc :: FilePath -> IO FilePath
     -- ^ Function to determine the HIE database location for a given root path
-  , initGetIdeState :: LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState
+  , ctxGetIdeState :: LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState
     -- ^ Function to create and initialize the IDE state with the given environment
-  , initLifetime :: (MVar (), IO ())
+  , ctxLifetime :: (MVar (), IO ())
     -- ^ Lifetime control: MVar to signal shutdown and confirmation action
-  , initForceShutdown :: IO ()
+  , ctxForceShutdown :: IO ()
     -- ^ Action to forcefully exit the server when exception occurs
-  , initClearReqId :: SomeLspId -> IO ()
+  , ctxClearReqId :: SomeLspId -> IO ()
     -- ^ Function to clear/cancel a request by its ID
-  , initWaitForCancel :: SomeLspId -> IO ()
+  , ctxWaitForCancel :: SomeLspId -> IO ()
     -- ^ Function to wait for a request cancellation by its ID
-  , initClientMsgChan :: Chan ReactorMessage
+  , ctxClientMsgChan :: Chan ReactorMessage
     -- ^ Channel for communicating with the reactor message loop
   }
 
@@ -169,7 +169,7 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             outH
             serverDefinition
 
-    void $ runServer `finally` sequence_ onExit
+    untilMVar clientMsgVar $ runServer `finally` sequence_ onExit
 
 setupLSP ::
      forall config.
@@ -232,16 +232,16 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
 
-  let initParams = InitParameters
-        { initRecorder = recorder
-        , initDefaultRoot = defaultRoot
-        , initGetHieDbLoc = getHieDbLoc
-        , initGetIdeState = getIdeState
-        , initLifetime = (reactorLifetime, stopReactorLoopConfirm)
-        , initForceShutdown = exit
-        , initClearReqId = clearReqId
-        , initWaitForCancel = waitForCancel
-        , initClientMsgChan = clientMsgChan
+  let initParams = InitializationContext
+        { ctxRecorder = recorder
+        , ctxDefaultRoot = defaultRoot
+        , ctxGetHieDbLoc = getHieDbLoc
+        , ctxGetIdeState = getIdeState
+        , ctxLifetime = (reactorLifetime, stopReactorLoopConfirm)
+        , ctxForceShutdown = exit
+        , ctxClearReqId = clearReqId
+        , ctxWaitForCancel = waitForCancel
+        , ctxClientMsgChan = clientMsgChan
         }
 
   let doInitialize = handleInit initParams
@@ -254,19 +254,19 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
 
 
 handleInit
-    :: InitParameters config
+    :: InitializationContext config
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
 handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     -- only shift if lsp root is different from the rootDir
     -- see Note [Root Directory]
-    let recorder = initRecorder initParams
-        defaultRoot = initDefaultRoot initParams
-        (lifetime, lifetimeConfirm) = initLifetime initParams
+    let recorder = ctxRecorder initParams
+        defaultRoot = ctxDefaultRoot initParams
+        (lifetime, lifetimeConfirm) = ctxLifetime initParams
     root <- case LSP.resRootPath env of
         Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
         _ -> pure defaultRoot
-    dbLoc <- initGetHieDbLoc initParams root
+    dbLoc <- ctxGetHieDbLoc initParams root
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
     ideMVar <- newEmptyMVar
@@ -280,7 +280,7 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
             case me of
                 Left e -> do
                     logWith recorder Error $ LogReactorThreadException e
-                    initForceShutdown initParams
+                    ctxForceShutdown initParams
                 _ -> return ()
 
         exceptionInHandler e = do
@@ -289,13 +289,13 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
         checkCancelled :: forall m . LspId m -> IO () -> (TResponseError m -> IO ()) -> IO ()
         checkCancelled _id act k =
             let sid = SomeLspId _id
-            in flip finally (initClearReqId initParams sid) $
+            in flip finally (ctxClearReqId initParams sid) $
                 catch (do
                     -- We could optimize this by first checking if the id
                     -- is in the cancelled set. However, this is unlikely to be a
                     -- bottleneck and the additional check might hide
                     -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (initWaitForCancel initParams sid) act
+                    cancelOrRes <- race (ctxWaitForCancel initParams sid) act
                     case cancelOrRes of
                         Left () -> do
                             logWith recorder Debug $ LogCancelledRequest sid
@@ -306,10 +306,10 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
                     k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerExceptionOrShutDown $ do
         untilMVar lifetime $ runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
-            ide <- initGetIdeState initParams env root withHieDb' threadQueue'
+            ide <- ctxGetIdeState initParams env root withHieDb' threadQueue'
             putMVar ideMVar ide
             forever $ do
-                msg <- readChan $ initClientMsgChan initParams
+                msg <- readChan $ ctxClientMsgChan initParams
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled
                 case msg of
