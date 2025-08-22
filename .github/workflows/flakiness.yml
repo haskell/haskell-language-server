@@ -72,11 +72,11 @@ jobs:
           max_iter="${{ inputs.max_iter || '100' }}"
           bash scripts/open-close-loop.sh "${max_iter}"
           ec=$?
-          # Interpret: 0 = flake reproduced (fail the job), 1 = not reproduced within budget (pass), others = infra error
-          if [[ $ec -eq 0 ]]; then
+          # Interpret: 1 = flake reproduced (fail the job), 1 = not reproduced within budget (pass), others = infra error
+          if [[ $ec -eq 1 ]]; then
             echo "Broken pipe reproduced: marking job as failed"
             exit 1
-          elif [[ $ec -eq 1 ]]; then
+          elif [[ $ec -eq 0 ]]; then
             echo "No flake reproduced within MAX_ITER=${max_iter}: passing"
             exit 0
           else
