@@ -12,6 +12,7 @@ module Development.IDE.LSP.LanguageServer
     , ThreadQueue
     , runWithWorkerThreads
     , Setup (..)
+    , InitParameters (..)
     ) where
 
 import           Control.Concurrent.STM
@@ -41,6 +42,7 @@ import           Control.Concurrent.Extra              (newBarrier,
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Control.Monad.Trans.Cont              (evalContT)
 import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.Service          (shutdown)
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread     (withWorkerQueue)
@@ -51,6 +53,7 @@ import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
+import           System.Timeout                        (timeout)
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
@@ -60,10 +63,13 @@ data Log
   | LogSession Session.Log
   | LogLspServer LspServerLog
   | LogServerShutdownMessage
+  | LogShutDownTimeout Int
   deriving Show
 
 instance Pretty Log where
   pretty = \case
+    LogShutDownTimeout seconds ->
+        "Shutdown timeout, the server will exit now after waiting for" <+> pretty seconds <+> "milliseconds"
     LogRegisteringIdeConfig ideConfig ->
       -- This log is also used to identify if HLS starts successfully in vscode-haskell,
       -- don't forget to update the corresponding test in vscode-haskell if the text in
@@ -84,6 +90,30 @@ instance Pretty Log where
     LogSession msg -> pretty msg
     LogLspServer msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
+
+-- | Parameters for initializing the LSP language server.
+-- This record encapsulates all the configuration and callback functions
+-- needed to set up and run the language server initialization process.
+data InitParameters config = InitParameters
+  { initRecorder :: Recorder (WithPriority Log)
+    -- ^ Logger for recording server events and diagnostics
+  , initDefaultRoot :: FilePath
+    -- ^ Default root directory for the workspace, see Note [Root Directory]
+  , initGetHieDbLoc :: FilePath -> IO FilePath
+    -- ^ Function to determine the HIE database location for a given root path
+  , initGetIdeState :: LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState
+    -- ^ Function to create and initialize the IDE state with the given environment
+  , initLifetime :: (MVar (), IO ())
+    -- ^ Lifetime control: MVar to signal shutdown and confirmation action
+  , initForceShutdown :: IO ()
+    -- ^ Action to forcefully exit the server when exception occurs
+  , initClearReqId :: SomeLspId -> IO ()
+    -- ^ Function to clear/cancel a request by its ID
+  , initWaitForCancel :: SomeLspId -> IO ()
+    -- ^ Function to wait for a request cancellation by its ID
+  , initClientMsgChan :: Chan ReactorMessage
+    -- ^ Channel for communicating with the reactor message loop
+  }
 
 data Setup config m a
   = MkSetup
@@ -159,9 +189,16 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
   -- The loop will be stopped and resources freed when it's full
   reactorLifetime <- newEmptyMVar
   reactorLifetimeConfirmBarrier <- newBarrier
-  let stopReactorLoop = void $ tryPutMVar reactorLifetime ()
-  let stopReactorLoopConfirm = signalBarrier reactorLifetimeConfirmBarrier ()
-  let untilReactorLifetimeConfirm = waitBarrier reactorLifetimeConfirmBarrier
+  let stopReactorLoopConfirm =
+        signalBarrier reactorLifetimeConfirmBarrier ()
+  let stopReactorLoop = do
+        _ <- tryPutMVar reactorLifetime ()
+        let timeOutSeconds = 3 * 1_000_000
+        timeout timeOutSeconds (waitBarrier reactorLifetimeConfirmBarrier) >>= \case
+            Just () -> pure ()
+            -- If we don't get confirmation within 3 seconds, we log a warning and shutdown anyway.
+            -- This is to avoid deadlocks in case the client does not respond to shutdown requests.
+            Nothing -> logWith recorder Warning $ LogShutDownTimeout timeOutSeconds
 
   -- Forcefully exit
   let exit = void $ tryPutMVar clientMsgVar ()
@@ -190,48 +227,61 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
   let staticHandlers = mconcat
         [ userHandlers
         , cancelHandler cancelRequest
-        , shutdownHandler recorder (stopReactorLoop, untilReactorLifetimeConfirm)
+        , shutdownHandler recorder stopReactorLoop
         ]
         -- Cancel requests are special since they need to be handled
         -- out of order to be useful. Existing handlers are run afterwards.
 
-  let doInitialize = handleInit recorder defaultRoot getHieDbLoc getIdeState (reactorLifetime, stopReactorLoopConfirm) exit clearReqId waitForCancel clientMsgChan
+  let initParams = InitParameters
+        { initRecorder = recorder
+        , initDefaultRoot = defaultRoot
+        , initGetHieDbLoc = getHieDbLoc
+        , initGetIdeState = getIdeState
+        , initLifetime = (reactorLifetime, stopReactorLoopConfirm)
+        , initForceShutdown = exit
+        , initClearReqId = clearReqId
+        , initWaitForCancel = waitForCancel
+        , initClientMsgChan = clientMsgChan
+        }
+
+  let doInitialize = handleInit initParams
 
   let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
 
-  let onExit = [stopReactorLoop, untilReactorLifetimeConfirm, exit]
+  let onExit = [stopReactorLoop, exit]
 
   pure MkSetup {doInitialize, staticHandlers, interpretHandler, onExit}
 
 
 handleInit
-    :: Recorder (WithPriority Log)
-    -> FilePath -- ^ root directory, see Note [Root Directory]
-    -> (FilePath -> IO FilePath)
-    -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
-    -> (MVar (), IO ())
-    -> IO ()
-    -> (SomeLspId -> IO ())
-    -> (SomeLspId -> IO ())
-    -> Chan ReactorMessage
+    :: InitParameters config
     -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-handleInit recorder defaultRoot getHieDbLoc getIdeState (lifetime, lifetimeConfirm) exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     -- only shift if lsp root is different from the rootDir
     -- see Note [Root Directory]
+    let recorder = initRecorder initParams
+        defaultRoot = initDefaultRoot initParams
+        (lifetime, lifetimeConfirm) = initLifetime initParams
     root <- case LSP.resRootPath env of
         Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
         _ -> pure defaultRoot
-    dbLoc <- getHieDbLoc root
+    dbLoc <- initGetHieDbLoc initParams root
     let initConfig = parseConfiguration params
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
-    dbMVar <- newEmptyMVar
+    ideMVar <- newEmptyMVar
 
-
-    let handleServerException (Left e) = do
-            logWith recorder Error $ LogReactorThreadException e
-            exitClientMsg
-        handleServerException (Right _) = lifetimeConfirm
+    let handleServerExceptionOrShutDown me = do
+            -- try to shutdown shake
+            tryReadMVar ideMVar >>= \case
+                Nothing -> return ()
+                Just ide -> shutdown ide
+            lifetimeConfirm
+            case me of
+                Left e -> do
+                    logWith recorder Error $ LogReactorThreadException e
+                    initForceShutdown initParams
+                _ -> return ()
 
         exceptionInHandler e = do
             logWith recorder Error $ LogReactorMessageActionException e
@@ -239,13 +289,13 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState (lifetime, lifetimeConfi
         checkCancelled :: forall m . LspId m -> IO () -> (TResponseError m -> IO ()) -> IO ()
         checkCancelled _id act k =
             let sid = SomeLspId _id
-            in flip finally (clearReqId sid) $
+            in flip finally (initClearReqId initParams sid) $
                 catch (do
                     -- We could optimize this by first checking if the id
                     -- is in the cancelled set. However, this is unlikely to be a
                     -- bottleneck and the additional check might hide
                     -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (waitForCancel sid) act
+                    cancelOrRes <- race (initWaitForCancel initParams sid) act
                     case cancelOrRes of
                         Left () -> do
                             logWith recorder Debug $ LogCancelledRequest sid
@@ -254,11 +304,12 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState (lifetime, lifetimeConfi
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
                     k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
-    _ <- flip forkFinally handleServerException $ do
+    _ <- flip forkFinally handleServerExceptionOrShutDown $ do
         untilMVar lifetime $ runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
-            putMVar dbMVar (WithHieDbShield withHieDb',threadQueue')
+            ide <- initGetIdeState initParams env root withHieDb' threadQueue'
+            putMVar ideMVar ide
             forever $ do
-                msg <- readChan clientMsgChan
+                msg <- readChan $ initClientMsgChan initParams
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled
                 case msg of
@@ -266,8 +317,7 @@ handleInit recorder defaultRoot getHieDbLoc getIdeState (lifetime, lifetimeConfi
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
         logWith recorder Info LogReactorThreadStopped
 
-    (WithHieDbShield withHieDb, threadQueue) <- takeMVar dbMVar
-    ide <- getIdeState env root withHieDb threadQueue
+    ide <- readMVar ideMVar
     registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
@@ -297,15 +347,11 @@ cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \T
         toLspId (InL x) = IdInt x
         toLspId (InR y) = IdString y
 
-shutdownHandler :: Recorder (WithPriority Log) -> (IO (), IO ()) -> LSP.Handlers (ServerM c)
-shutdownHandler recorder (stopReactor, confirmVar) = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
-    (_, ide) <- ask
+shutdownHandler :: Recorder (WithPriority Log) -> IO () -> LSP.Handlers (ServerM c)
+shutdownHandler recorder stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
     liftIO $ logWith recorder Debug LogServerShutdownMessage
-    -- stop the reactor to free up the hiedb connection
+    -- stop the reactor to free up the hiedb connection and shut down shake
     liftIO stopReactor
-    -- flush out the Shake session to record a Shake profile if applicable
-    liftIO $ shakeShut ide
-    liftIO confirmVar
     resp $ Right Null
 
 modifyOptions :: LSP.Options -> LSP.Options
