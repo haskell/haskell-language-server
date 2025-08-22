@@ -115,7 +115,6 @@ codeGutsToCoreFile
   -> CgGuts
   -> CoreFile
 -- In GHC 9.6, implicit binds are tidied and part of core binds
--- codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) cg_binds) hash
 codeGutsToCoreFile hash CgGuts{..} = CoreFile (map toIfaceTopBind cg_binds) hash
 
 getImplicitBinds :: TyCon -> [CoreBind]
