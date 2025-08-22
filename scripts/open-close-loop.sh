@@ -32,7 +32,7 @@ echo "[loop] Starting at ${start_ts}" >&2
 
 # Pattern strings to detect issues (keep simple & literal for robustness)
 BROKEN_PIPE_RE='Broken pipe'
-TEST_FAILED_RE='tests failed'
+TEST_FAILED_RE='fail'
 DEBUG_DETECT="${DEBUG_DETECT:-0}"
 
 if [[ -z "${NO_BUILD_ONCE:-}" ]]; then

@@ -70,8 +70,10 @@ data Log
 
 instance Pretty Log where
   pretty = \case
+    LogServerExitWith (Right 0) ->
+      "Server exited with succefully"
     LogServerExitWith (Right code) ->
-      "Server exited with code" <+> pretty code
+      "Server exited with failure code" <+> pretty code
     LogServerExitWith (Left _) ->
       "Server forcefully exited due to exception in reactor thread"
     LogShutDownTimeout seconds ->
