@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Loop running the "open close" test until a Broken pipe is observed.
+# Loop running the "open close" test until a Broken pipe or test failure is observed.
 # Writes each iteration's full output to test-logs/open-close-loop-<n>.log
 # Environment you can tweak:
 #   MAX_ITER   : maximum iterations before giving up (default: unlimited)
@@ -8,7 +8,7 @@
 #   LOG_STDERR : set to 1 to enable verbose stderr logging (HLS_TEST_LOG_STDERR & HLS_TEST_HARNESS_STDERR) (default: 1)
 #
 # Exit codes:
-#   0 on success (broken pipe reproduced)
+#   0 on success (broken pipe or test failure reproduced)
 #   1 on reaching MAX_ITER without reproduction
 #   2 on other setup error
 
@@ -30,8 +30,9 @@ iter=0
 start_ts=$(date -Iseconds)
 echo "[loop] Starting at ${start_ts}" >&2
 
-# Pattern string to detect (keep simple & literal for robustness)
+# Pattern strings to detect issues (keep simple & literal for robustness)
 BROKEN_PIPE_RE='Broken pipe'
+TEST_FAILED_RE='tests failed'
 DEBUG_DETECT="${DEBUG_DETECT:-0}"
 
 if [[ -z "${NO_BUILD_ONCE:-}" ]]; then
@@ -79,19 +80,24 @@ while true; do
     echo "[loop] Broken pipe reproduced in iteration ${iter}. Stopping." | tee -a "${log}" >&2
     echo "[loop] --- Tail (last 60 lines) ---" >&2
     tail -n 60 "${log}" >&2
-    exit 1
+    exit 0
+  elif grep -aFq -- "${TEST_FAILED_RE}" "${log}"; then
+    echo "[loop] Test failure detected in iteration ${iter}. Stopping." | tee -a "${log}" >&2
+    echo "[loop] --- Tail (last 60 lines) ---" >&2
+    tail -n 60 "${log}" >&2
+    exit 0
   else
     if [[ ${DEBUG_DETECT} -eq 1 ]]; then
-      echo "[loop][debug] No match for '${BROKEN_PIPE_RE}' in iteration ${iter}." | tee -a "${log}" >&2
+      echo "[loop][debug] No match for '${BROKEN_PIPE_RE}' or '${TEST_FAILED_RE}' in iteration ${iter}." | tee -a "${log}" >&2
     fi
   fi
 
   if [[ -n "${MAX_ITER}" && ${iter} -ge ${MAX_ITER} ]]; then
-    echo "[loop] Reached MAX_ITER=${MAX_ITER} without reproducing Broken pipe." >&2
-    exit 0
+    echo "[loop] Reached MAX_ITER=${MAX_ITER} without reproducing issues." >&2
+    exit 1
   fi
 
-  echo "[loop] Iteration ${iter} complete (exit code ${ec}). No Broken pipe yet." | tee -a "${log}" >&2
+  echo "[loop] Iteration ${iter} complete (exit code ${ec}). No issues detected yet." | tee -a "${log}" >&2
   if [[ ${SLEEP_SECS} -gt 0 ]]; then
     echo "[loop] Sleeping ${SLEEP_SECS}s" | tee -a "${log}" >&2
     sleep "${SLEEP_SECS}"

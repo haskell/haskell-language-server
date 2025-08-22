@@ -13,6 +13,7 @@ module Development.IDE.LSP.LanguageServer
     , runWithWorkerThreads
     , Setup (..)
     , InitializationContext (..)
+    , untilMVar'
     ) where
 
 import           Control.Concurrent.STM
@@ -64,10 +65,15 @@ data Log
   | LogLspServer LspServerLog
   | LogServerShutdownMessage
   | LogShutDownTimeout Int
+  | LogServerExitWith (Either () Int)
   deriving Show
 
 instance Pretty Log where
   pretty = \case
+    LogServerExitWith (Right code) ->
+      "Server exited with code" <+> pretty code
+    LogServerExitWith (Left _) ->
+      "Server forcefully exited due to exception in reactor thread"
     LogShutDownTimeout seconds ->
         "Shutdown timeout, the server will exit now after waiting for" <+> pretty seconds <+> "milliseconds"
     LogRegisteringIdeConfig ideConfig ->
@@ -169,7 +175,8 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             outH
             serverDefinition
 
-    untilMVar clientMsgVar $ runServer `finally` sequence_ onExit
+    untilMVar' clientMsgVar runServer `finally` sequence_ onExit
+        >>= logWith recorder Info . LogServerExitWith
 
 setupLSP ::
      forall config.
@@ -339,6 +346,9 @@ runWithWorkerThreads recorder dbLoc f = evalContT $ do
 --   Rethrows any exceptions.
 untilMVar :: MonadUnliftIO m => MVar () -> m a -> m ()
 untilMVar mvar io = race_ (readMVar mvar) io
+
+untilMVar' :: MonadUnliftIO m => MVar a -> m b -> m (Either a b)
+untilMVar' mvar io = race (readMVar mvar) io
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \TNotificationMessage{_params=CancelParams{_id}} ->
