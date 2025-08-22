@@ -13,7 +13,6 @@ module Development.IDE.GHC.CoreFile
   ) where
 
 import           Control.Monad
-import           Data.Foldable
 import           Data.IORef
 import           Data.Maybe
 import           Development.IDE.GHC.Compat
@@ -43,33 +42,6 @@ data CoreFile
   -- ^ The actual core file bindings, deserialized lazily
   , cf_iface_hash :: !Fingerprint
   }
-
--- | Like IfaceBinding, but lets us serialize internal names as well
-data TopIfaceBinding v
-  = TopIfaceNonRec v IfaceExpr
-  | TopIfaceRec    [(v, IfaceExpr)]
-  deriving (Functor, Foldable, Traversable)
-
--- | GHC doesn't export 'tcIdDetails', 'tcIfaceInfo', or 'tcIfaceType',
--- but it does export 'tcIfaceDecl'
--- so we use `IfaceDecl` as a container for all of these
--- invariant: 'IfaceId' is always a 'IfaceId' constructor
-type IfaceId = IfaceDecl
-
-instance Binary (TopIfaceBinding IfaceId) where
-  put_ bh (TopIfaceNonRec d e) = do
-    putByte bh 0
-    put_ bh d
-    put_ bh e
-  put_ bh (TopIfaceRec vs) = do
-    putByte bh 1
-    put_ bh vs
-  get bh = do
-    t <- getByte bh
-    case t of
-      0 -> TopIfaceNonRec <$> get bh <*> get bh
-      1 -> TopIfaceRec <$> get bh
-      _ -> error "Binary TopIfaceBinding"
 
 instance Binary CoreFile where
   put_ bh (CoreFile core fp) = lazyPut bh core >> put_ bh fp
