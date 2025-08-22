@@ -24,6 +24,11 @@ if [[ $# -ge 1 && -z "${MAX_ITER}" ]]; then
   MAX_ITER="$1"
 fi
 
+# fallback to default if not set
+if [[ -z "${MAX_ITER}" ]]; then
+  MAX_ITER=1000
+fi
+
 mkdir -p test-logs
 
 iter=0
@@ -56,8 +61,13 @@ REBUILD_EACH="${REBUILD_EACH:-0}" # set to 1 to rebuild before every iteration
 while true; do
   iter=$((iter+1))
   ts=$(date -Iseconds)
-  log="test-logs/open-close-loop-${iter}.log"
-  echo "[loop] Iteration ${iter} starting at ${ts}, logging to ${log}" | tee -a "${log}" >&2
+  file_num=$((iter % 100))
+  if [[ ${file_num} -eq 0 ]]; then file_num=100; fi
+  log="test-logs/open-close-loop-${file_num}.log"
+  # Only show iteration start for first iteration or every 100th iteration
+  if [[ ${iter} -eq 1 || $((iter % 100)) -eq 0 ]]; then
+    echo "[loop] Iteration ${iter} starting at ${ts}, logging to ${log}" | tee -a "${log}" >&2
+  fi
   # Run the single test pattern. We don't fail the loop on non-zero exit (capture output then decide).
   set +e
   if [[ ${REBUILD_EACH} -eq 1 ]]; then
@@ -67,7 +77,7 @@ while true; do
     TEST_BIN_NEW=$(find dist-newstyle -type f -name ghcide-tests -perm -111 2>/dev/null | head -n1 || true)
     if [[ -n "${TEST_BIN_NEW}" ]]; then TEST_BIN="${TEST_BIN_NEW}"; fi
   fi
-  HLS_TEST_TRACE_FD="${TRACE_FD}" \
+  # LSP_TEST_LOG_MESSAGES=1 LSP_TEST_LOG_STDERR=1\
   HLS_TEST_LOG_STDERR="${LOG_STDERR}" \
   HLS_TEST_HARNESS_STDERR="${LOG_STDERR}" \
   TASTY_NUM_THREADS=1 \
@@ -97,7 +107,11 @@ while true; do
     exit 1
   fi
 
-  echo "[loop] Iteration ${iter} complete (exit code ${ec}). No issues detected yet." | tee -a "${log}" >&2
+  # Show progress every 100 iterations instead of every iteration
+  if [[ $((iter % 100)) -eq 0 ]]; then
+    echo "[loop] Progress: Completed ${iter} iterations without detecting issues." >&2
+  fi
+
   if [[ ${SLEEP_SECS} -gt 0 ]]; then
     echo "[loop] Sleeping ${SLEEP_SECS}s" | tee -a "${log}" >&2
     sleep "${SLEEP_SECS}"
