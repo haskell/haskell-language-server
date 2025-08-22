@@ -26,7 +26,7 @@ on:
       max_iter:
         description: 'Maximum iterations to attempt'
         required: false
-        default: '100'
+        default: '1000'
       sleep_secs:
         description: 'Seconds to sleep between iterations'
         required: false
