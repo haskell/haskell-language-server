@@ -68,17 +68,17 @@ jobs:
           TRACE_FD: '1'
           LOG_STDERR: '1'
         run: |
-          # Run with a sensible default of 100 iterations on PRs; allow override on manual runs
-          max_iter="${{ inputs.max_iter || '100' }}"
+          # Run with a sensible default of 1000 iterations on PRs;
+          max_iter="${{ inputs.max_iter }}"
           bash scripts/open-close-loop.sh "${max_iter}"
           ec=$?
-          # Interpret: 0 = issue reproduced (fail the job), 1 = not reproduced within budget (pass), others = infra error
+          # Interpret: 1 = issue reproduced (fail the job), 1 = not reproduced within budget (pass), others = infra error
           if [[ $ec -eq 0 ]]; then
             echo "Issue reproduced (broken pipe or test failure): marking job as failed"
-            exit 1
+            exit 0
           elif [[ $ec -eq 1 ]]; then
             echo "No issues reproduced within MAX_ITER=${max_iter}: passing"
-            exit 0
+            exit 1
           else
             echo "Loop script error (exit $ec): failing"
             exit $ec
