@@ -90,12 +90,12 @@ while true; do
     echo "[loop] Broken pipe reproduced in iteration ${iter}. Stopping." | tee -a "${log}" >&2
     echo "[loop] --- Tail (last 60 lines) ---" >&2
     tail -n 60 "${log}" >&2
-    exit 0
+    exit 1
   elif grep -aFq -- "${TEST_FAILED_RE}" "${log}"; then
     echo "[loop] Test failure detected in iteration ${iter}. Stopping." | tee -a "${log}" >&2
     echo "[loop] --- Tail (last 60 lines) ---" >&2
     tail -n 60 "${log}" >&2
-    exit 0
+    exit 1
   else
     if [[ ${DEBUG_DETECT} -eq 1 ]]; then
       echo "[loop][debug] No match for '${BROKEN_PIPE_RE}' or '${TEST_FAILED_RE}' in iteration ${iter}." | tee -a "${log}" >&2
@@ -104,7 +104,7 @@ while true; do
 
   if [[ -n "${MAX_ITER}" && ${iter} -ge ${MAX_ITER} ]]; then
     echo "[loop] Reached MAX_ITER=${MAX_ITER} without reproducing issues." >&2
-    exit 1
+    exit 0
   fi
 
   # Show progress every 100 iterations instead of every iteration
