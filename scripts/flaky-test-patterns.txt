@@ -1,0 +1,9 @@
+# One tasty pattern per line. Lines starting with # are comments.
+# Blank lines are ignored.
+open close
+# bidirectional module dependency with hs-boot
+# InternalError over InvalidParams
+# ghcide restarts shake session on config changes:
+# addDependentFile
+# Another interesting one you can try:
+# sends indefinite progress notifications
