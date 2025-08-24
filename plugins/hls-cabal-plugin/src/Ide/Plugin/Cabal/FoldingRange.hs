@@ -74,7 +74,7 @@ foldingRangeForField :: Field Position -> Maybe FoldingRange
 foldingRangeForField (Field (Name pos fieldName) _) =
   Just
     (defFoldingRange lspPos)
-      { _collapsedText = decodeUtf8 fieldName
+      { _collapsedText = Just (decodeUtf8 fieldName)
       }
   where
     lspPos@(LSP.Position startLine startChar) = cabalPositionToLSPPosition pos
@@ -83,12 +83,21 @@ foldingRangeForField (Section (Name pos fieldName) sectionArgs fields) =
   Just
     (defFoldingRange lspPos)
       { _endLine = endLine,
-        _endCharacter = endChar,
-        _collapsedText = Just (decodeUtf8 fieldName <> )
+        _endCharacter = Just endChar,
+        _collapsedText = Just joinedName
       }
   where
+    lspPos = cabalPositionToLSPPosition pos
+    LSP.Position startLine startChar = lspPos
     joinedName = decodeUtf8 fieldName <> " " <> onelineSectionArgs sectionArgs
-    range = cabalPositionToLSPRange pos `addNameLengthToLSPRange` joinedName
+    LSP.Position endLine endChar = fromMaybe lspPos (lastFieldPosition fields)
+
+lastFieldPosition :: [Field Position] -> Maybe LSP.Position
+lastFieldPosition [] = Nothing
+lastFieldPosition xs =
+    case last xs of
+        Field (Name pos _) _     -> Just (cabalPositionToLSPPosition pos)
+        Section (Name pos _) _ _ -> Just (cabalPositionToLSPPosition pos)
 
 -- | Creates a single point LSP range
 --   using cabal position
@@ -103,6 +112,6 @@ defFoldingRange (LSP.Position line char) = FoldingRange
   , _startCharacter = Just char
   , _endLine = line
   , _endCharacter = Just char
-  , _kind = Just LSP.FoldingRangeKind
+  , _kind = Just LSP.FoldingRangeKind_Region
   , _collapsedText = Nothing
   }
