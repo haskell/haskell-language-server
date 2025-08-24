@@ -70,6 +70,8 @@ jobs:
         run: |
           cabal --version
           ghc --version
+      - name: Build ghcide-tests
+        run: cabal build ghcide-tests
 
       - name: Run flakiness loop
         id: run-loop
@@ -81,6 +83,7 @@ jobs:
           LOG_STDERR: '1'
           TEST_PATTERNS: ${{ github.event.inputs.test_patterns }}
           PATTERN_FILE: ${{ github.event.inputs.pattern_file }}
+          NO_BUILD_ONCE: '1'
         run: |
           # Run with a sensible default of 1000 iterations on PRs;
           max_iter="${{ github.event.inputs.max_iter }}"

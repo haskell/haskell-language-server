@@ -8,7 +8,6 @@
 #   SLEEP_SECS    : seconds to sleep between iterations (default: 0)
 #   SHOW_EVERY    : print progress/iteration header every N iterations (default: 100, 1 = every run, <=0 = disabled)
 #   LOG_STDERR    : set to 1 to enable verbose stderr logging (HLS_TEST_LOG_STDERR & HLS_TEST_HARNESS_STDERR) (default: 1)
-#   REBUILD_EACH  : set to 1 to cabal build ghcide-tests before every iteration (default: 0)
 #   TEST_BIN      : path to the built test binary (auto-discovered if not set)
 #   NO_BUILD_ONCE : set to non-empty to skip the initial cabal build step
 #
@@ -102,8 +101,6 @@ if [[ -z "${TEST_BIN}" || ! -x "${TEST_BIN}" ]]; then
 fi
 echo "[loop] Using test binary: ${TEST_BIN}" >&2
 
-REBUILD_EACH="${REBUILD_EACH:-0}" # set to 1 to rebuild before every iteration
-
 while true; do
   iter=$((iter+1))
   ts=$(date -Iseconds)
@@ -123,14 +120,7 @@ while true; do
     fi
 
     # We don't fail the loop on non-zero exit (capture output then decide).
-    set +e
-    if [[ ${REBUILD_EACH} -eq 1 ]]; then
-      echo "[loop] Rebuilding before iteration ${iter} (pattern='${pattern}')" | tee -a "${log}" >&2
-      cabal build ghcide-tests >>"${log}" 2>&1
-      # refresh TEST_BIN if path changed
-      TEST_BIN_NEW=$(find dist-newstyle -type f -name ghcide-tests -perm -111 2>/dev/null | head -n1 || true)
-      if [[ -n "${TEST_BIN_NEW}" ]]; then TEST_BIN="${TEST_BIN_NEW}"; fi
-    fi
+  set +e
     # HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP=1 \
     HLS_TEST_LOG_STDERR="${LOG_STDERR}" \
     HLS_TEST_HARNESS_STDERR="${LOG_STDERR}" \
