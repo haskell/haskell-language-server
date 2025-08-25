@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -27,8 +28,13 @@ import qualified Data.Text                                as T
 import           Development.IDE                          hiding (line)
 import           Development.IDE.Core.Compile             (sourceParser,
                                                            sourceTypecheck)
+import           Development.IDE.Core.FileStore           (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Error         (GhcHint (SuggestExtension),
+                                                           LanguageExtensionHint (..),
+                                                           diagnosticHints,
+                                                           msgEnvelopeErrorL)
 import           Development.IDE.Plugin.Completions       (ghcideCompletionsPluginPriority)
 import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
@@ -69,13 +75,33 @@ data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
 suggestPragmaProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-suggestPragmaProvider = mkCodeActionProvider suggest
+suggestPragmaProvider = if ghcVersion /= GHC96 then
+    mkCodeActionProvider suggestAddPragma
+    else mkCodeActionProvider96 suggestAddPragma96
 
 suggestDisableWarningProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
 
-mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+mkCodeActionProvider :: (Maybe DynFlags -> FileDiagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 mkCodeActionProvider mkSuggest state _plId
+  (LSP.CodeActionParams _ _ docId@LSP.TextDocumentIdentifier{ _uri = uri } caRange _) = do
+    verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
+    normalizedFilePath <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    -- ghc session to get some dynflags even if module isn't parsed
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+    let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+        nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
+    activeDiagnosticsInRange (shakeExtras state) normalizedFilePath caRange >>= \case
+        Nothing -> pure $ LSP.InL []
+        Just fileDiags -> do
+            let actions = concatMap (mkSuggest parsedModuleDynFlags) fileDiags
+            pure $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> nubOrdOn snd actions
+
+mkCodeActionProvider96 :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+mkCodeActionProvider96 mkSuggest state _plId
   (LSP.CodeActionParams _ _ LSP.TextDocumentIdentifier{ _uri = uri } _ (LSP.CodeActionContext diags _monly _)) = do
     normalizedFilePath <- getNormalizedFilePathE uri
     -- ghc session to get some dynflags even if module isn't parsed
@@ -87,7 +113,6 @@ mkCodeActionProvider mkSuggest state _plId
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
         pedits = nubOrdOn snd $ concatMap (mkSuggest parsedModuleDynFlags) diags
     pure  $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
-
 
 
 -- | Add a Pragma to the given URI at the top of the file.
@@ -108,22 +133,17 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
          , let LSP.TextEdit{ _range, _newText } = insertTextEdit ->
              [LSP.TextEdit _range (render p <> _newText), deleteTextEdit]
          | otherwise -> [LSP.TextEdit pragmaInsertRange (render p)]
-
     edit =
       LSP.WorkspaceEdit
         (Just $ M.singleton uri textEdits)
         Nothing
         Nothing
 
-suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
-suggest dflags diag =
-  suggestAddPragma dflags diag
-
 -- ---------------------------------------------------------------------
 
-suggestDisableWarning :: Diagnostic -> [PragmaEdit]
+suggestDisableWarning :: FileDiagnostic -> [PragmaEdit]
 suggestDisableWarning diagnostic
-  | Just (Just (JSON.Array attachedReasons)) <- diagnostic ^? attachedReason
+  | Just (Just (JSON.Array attachedReasons)) <- diagnostic ^? fdLspDiagnosticL . attachedReason
     =
     [ ("Disable \"" <> w <> "\" warnings", OptGHC w)
     | JSON.String attachedReason <- Foldable.toList attachedReasons
@@ -143,9 +163,23 @@ warningBlacklist =
 -- ---------------------------------------------------------------------
 
 -- | Offer to add a missing Language Pragma to the top of a file.
+suggestAddPragma :: Maybe DynFlags -> FileDiagnostic -> [PragmaEdit]
+suggestAddPragma mDynflags fd= [("Add \"" <> r <> "\"", LangExt r) | r <- map (T.pack . show) $ suggestsExtension fd, r `notElem` disabled]
+  where
+    disabled
+      | Just dynFlags <- mDynflags =
+        -- GHC does not export 'OnOff', so we have to view it as string
+        mapMaybe (T.stripPrefix "Off " . printOutputable) (extensions dynFlags)
+      | otherwise =
+        -- When the module failed to parse, we don't have access to its
+        -- dynFlags. In that case, simply don't disable any pragmas.
+        []
+
+-- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
-suggestAddPragma :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
-suggestAddPragma mDynflags Diagnostic {_message, _source}
+-- Kept for compatibility with ghc9.6 - it is missing some structured diagnostics
+suggestAddPragma96 :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
+suggestAddPragma96 mDynflags Diagnostic {_message, _source}
     | _source == Just sourceTypecheck || _source == Just sourceParser = genPragma _message
   where
     genPragma target =
@@ -158,7 +192,7 @@ suggestAddPragma mDynflags Diagnostic {_message, _source}
         -- When the module failed to parse, we don't have access to its
         -- dynFlags. In that case, simply don't disable any pragmas.
         []
-suggestAddPragma _ _ = []
+suggestAddPragma96 _ _ = []
 
 -- | Find all Pragmas are an infix of the search term.
 findPragma :: T.Text -> [T.Text]
@@ -177,6 +211,20 @@ findPragma str = concatMap check possiblePragmas
        | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
        , "Strict" /= name
        ]
+
+suggestsExtension :: FileDiagnostic -> [Extension]
+suggestsExtension message = case   message ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL of
+    Just s -> concat $ map (\case
+      SuggestExtension s -> ghcHintSuggestsExtension s
+      _ -> []) (diagnosticHints s)
+    _          -> []
+
+ghcHintSuggestsExtension :: LanguageExtensionHint -> [Extension]
+ghcHintSuggestsExtension (SuggestSingleExtension _ ext)    = [ext]
+ghcHintSuggestsExtension (SuggestAnyExtension _ (ext:_))   = [ext] -- ghc suggests any of those, we pick first
+ghcHintSuggestsExtension (SuggestAnyExtension _ [])        = []
+ghcHintSuggestsExtension (SuggestExtensions _ ext)         = ext
+ghcHintSuggestsExtension (SuggestExtensionInOrderTo _ ext) = [ext]
 
 -- | All language pragmas, including the No- variants
 allPragmas :: [T.Text]
