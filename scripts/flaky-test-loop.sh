@@ -12,11 +12,18 @@
 #   NO_BUILD_ONCE : set to non-empty to skip the initial cabal build step
 #
 # Test selection:
-#   TEST_PATTERNS : comma-separated list of tasty patterns to run each iteration.
-#                   Example: TEST_PATTERNS='open close,bidirectional module dependency with hs-boot'
+#   TEST_PATTERNS : comma-separated list of entries to run each iteration.
+#                   Each entry can be either a plain tasty pattern, or 'BIN::PATTERN' to select a test binary.
+#                   Examples:
+#                     TEST_PATTERNS='open close'
+#                     TEST_PATTERNS='ghcide-tests::open close,func-test::sends indefinite progress notifications'
 #                   If set and non-empty, this takes precedence over PATTERN_FILE.
-#                   If unset, defaults to 'open close' to match prior behavior.
-#   PATTERN_FILE  : path to a file with one pattern per line (lines starting with # or blank are ignored).
+#                   If unset, defaults to 'ghcide-tests::open close' to match prior behavior.
+#   PATTERN_FILE  : path to a file with one entry per line.
+#                   Lines start with optional 'BIN::', then the tasty pattern. '#' comments and blank lines ignored.
+#                   Examples:
+#                     ghcide-tests::open close
+#                     func-test::sends indefinite progress notifications
 #                   Used only if TEST_PATTERNS is empty/unset; otherwise ignored.
 #
 # Exit codes:
@@ -54,54 +61,78 @@ BROKEN_PIPE_RE='Broken pipe'
 TEST_FAILED_RE='fail|timeout'
 DEBUG_DETECT="${DEBUG_DETECT:-0}"
 
-# Resolve which tasty patterns to run each iteration
-patterns=()
+# Resolve what to run each iteration as pairs of BIN and PATTERN
+items=() # each item is 'BIN::PATTERN'
 if [[ -n "${TEST_PATTERNS:-}" ]]; then
-  IFS=',' read -r -a patterns <<< "${TEST_PATTERNS}"
-  # trim whitespace and drop empty entries
-  tmp_patterns=()
-  for p in "${patterns[@]}"; do
-    # trim leading
-    p="${p#${p%%[![:space:]]*}}"
-    # trim trailing
-    p="${p%${p##*[![:space:]]}}"
-    [[ -z "$p" ]] && continue
-    tmp_patterns+=("$p")
+  IFS=',' read -r -a raw_items <<< "${TEST_PATTERNS}"
+  for it in "${raw_items[@]}"; do
+    # trim
+    it="${it#${it%%[![:space:]]*}}"; it="${it%${it##*[![:space:]]}}"
+    [[ -z "$it" ]] && continue
+    if [[ "$it" == *"::"* ]]; then
+      items+=("$it")
+    else
+      items+=("ghcide-tests::${it}")
+    fi
   done
-  patterns=("${tmp_patterns[@]}")
 elif [[ -n "${PATTERN_FILE:-}" && -r "${PATTERN_FILE}" ]]; then
   while IFS= read -r line; do
     # trim whitespace, skip comments and blank lines
-    trimmed="${line#${line%%[![:space:]]*}}"
-    trimmed="${trimmed%${trimmed##*[![:space:]]}}"
+    trimmed="${line#${line%%[![:space:]]*}}"; trimmed="${trimmed%${trimmed##*[![:space:]]}}"
     [[ -z "${trimmed}" || "${trimmed}" =~ ^[[:space:]]*# ]] && continue
-    patterns+=("${trimmed}")
+    if [[ "${trimmed}" == *"::"* ]]; then
+      items+=("${trimmed}")
+    else
+      items+=("ghcide-tests::${trimmed}")
+    fi
   done < "${PATTERN_FILE}"
 else
   # default to the original single test
-  patterns+=("open close")
+  items+=("ghcide-tests::open close")
 fi
 
-if [[ ${#patterns[@]} -eq 0 ]]; then
-  echo "[loop][error] No test patterns provided (via PATTERN_FILE or TEST_PATTERNS)." >&2
+if [[ ${#items[@]} -eq 0 ]]; then
+  echo "[loop][error] No test entries provided (via PATTERN_FILE or TEST_PATTERNS)." >&2
   exit 2
 fi
 
-if [[ -z "${NO_BUILD_ONCE:-}" ]]; then
-  echo "[loop] Building test target ghcide-tests once upfront" >&2
-  cabal build ghcide-tests >&2
+# Build required test binaries once upfront (unless NO_BUILD_ONCE is set or TEST_BIN overrides)
+if [[ -z "${NO_BUILD_ONCE:-}" && -z "${TEST_BIN:-}" ]]; then
+  # collect unique BIN names
+  declare -a bins_to_build=()
+  for it in "${items[@]}"; do
+    bin="${it%%::*}"; seen=0
+    if (( ${#bins_to_build[@]} > 0 )); then
+      for b in "${bins_to_build[@]}"; do [[ "$b" == "$bin" ]] && seen=1 && break; done
+    fi
+    [[ $seen -eq 0 ]] && bins_to_build+=("$bin")
+  done
+  if (( ${#bins_to_build[@]} > 0 )); then
+    echo "[loop] Building test targets once upfront: ${bins_to_build[*]}" >&2
+    cabal build "${bins_to_build[@]}" >&2 || true
+  fi
 fi
 
-# Locate the built test binary (simple heuristic similar to run_progress_test.sh)
-if [[ -z "${TEST_BIN:-}" ]]; then
-  TEST_BIN=$(find dist-newstyle -type f -name ghcide-tests -perm -111 2>/dev/null | head -n1 || true)
-fi
-
-if [[ -z "${TEST_BIN}" || ! -x "${TEST_BIN}" ]]; then
-  echo "[loop][error] Could not locate executable test binary 'ghcide-tests'. Set TEST_BIN explicitly or ensure build succeeded." >&2
-  exit 2
-fi
-echo "[loop] Using test binary: ${TEST_BIN}" >&2
+# Resolve binary path by name (cache results)
+BIN_NAMES=()
+BIN_PATHS=()
+get_bin_path() {
+  local name="$1"
+  local i
+  for ((i=0; i<${#BIN_NAMES[@]}; i++)); do
+    if [[ "${BIN_NAMES[i]}" == "$name" ]]; then
+      echo "${BIN_PATHS[i]}"; return
+    fi
+  done
+  local path=""
+  if [[ -n "${TEST_BIN:-}" ]]; then
+    path="${TEST_BIN}"
+  else
+    path=$(find dist-newstyle -type f -name "$name" -perm -111 2>/dev/null | head -n1 || true)
+  fi
+  BIN_NAMES+=("$name"); BIN_PATHS+=("$path")
+  echo "$path"
+}
 
 while true; do
   iter=$((iter+1))
@@ -109,10 +140,12 @@ while true; do
   file_num=$((iter % 100))
   if [[ ${file_num} -eq 0 ]]; then file_num=100; fi
 
-  # Run each selected pattern in this iteration
-  for pattern in "${patterns[@]}"; do
+  # Run each selected item (BIN::PATTERN) in this iteration
+  for item in "${items[@]}"; do
+    bin_name="${item%%::*}"
+    pattern="${item#*::}"
     # sanitize pattern for a log slug
-    slug=$(printf '%s' "${pattern}" | tr -cs 'A-Za-z0-9._-' '-' | sed -E 's/^-+|-+$//g')
+    slug=$(printf '%s' "${bin_name}-${pattern}" | tr -cs 'A-Za-z0-9._-' '-' | sed -E 's/^-+|-+$//g')
     [[ -z "${slug}" ]] && slug="pattern"
     log="test-logs/${slug}-loop-${file_num}.log"
 
@@ -127,8 +160,8 @@ while true; do
     HLS_TEST_LOG_STDERR="${LOG_STDERR}" \
     HLS_TEST_HARNESS_STDERR="${LOG_STDERR}" \
     TASTY_NUM_THREADS=1 \
-    TASTY_PATTERN="${pattern}" \
-    "${TEST_BIN}" >"${log}" 2>&1
+  TASTY_PATTERN="${pattern}" \
+  "$(get_bin_path "${bin_name}")" >"${log}" 2>&1
     set -e
 
   if grep -aFiq -- "${BROKEN_PIPE_RE}" "${log}"; then
