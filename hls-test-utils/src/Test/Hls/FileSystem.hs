@@ -251,7 +251,6 @@ simpleCabalProject' fps =
   ] <> fps
 
 
--- | Also resets the interface store
 atomicFileWrite :: FilePath -> (FilePath -> IO a) -> IO a
 atomicFileWrite targetPath write = do
   let dir = takeDirectory targetPath
