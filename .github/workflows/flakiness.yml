@@ -43,7 +43,7 @@ on:
       pattern_file:
         description: 'Path to a file with one Tasty pattern per line (overrides test_patterns)'
         required: false
-        default: 'flaky-test-patterns.txt'
+        default: 'scripts/flaky-test-patterns.txt'
 
 jobs:
   loop:
@@ -70,6 +70,9 @@ jobs:
         run: |
           cabal --version
           ghc --version
+      - name: build ghcide-tests
+        run: |
+          cabal build ghcide-tests
 
       - name: Run flakiness loop
         id: run-loop
@@ -81,6 +84,7 @@ jobs:
           LOG_STDERR: '1'
           TEST_PATTERNS: ${{ github.event.inputs.test_patterns }}
           PATTERN_FILE: ${{ github.event.inputs.pattern_file }}
+          NO_BUILD_ONCE: '1'
         run: |
           # Run with a sensible default of 1000 iterations on PRs;
           max_iter="${{ github.event.inputs.max_iter }}"
@@ -88,8 +92,8 @@ jobs:
           bash scripts/flaky-test-loop.sh "${max_iter}"
           ec=$?
           # Interpret exit codes from flaky-test-loop.sh
-          #   1 => issue reproduced (broken pipe or test failure) -> fail job
           #   0 => no issues reproduced within MAX_ITER          -> pass job
+          #   1 => issue reproduced (broken pipe or test failure) -> fail job
           #   2+ => setup/infra error                            -> fail job
           if [[ $ec -eq 1 ]]; then
             echo "Issue reproduced (broken pipe or test failure): failing job"
