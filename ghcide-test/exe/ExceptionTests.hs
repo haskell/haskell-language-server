@@ -13,9 +13,8 @@ import           Development.IDE.Core.Shake        (IdeState (..))
 import qualified Development.IDE.LSP.Notifications as Notifications
 import           Development.IDE.Plugin.HLS        (toResponseError)
 import           GHC.Base                          (coerce)
-import           Ide.Logger                        (Priority (Debug), Recorder,
-                                                    WithPriority, cmapWithPrio,
-                                                    logWith)
+import           Ide.Logger                        (Recorder, WithPriority,
+                                                    cmapWithPrio)
 import           Ide.Plugin.Error
 import           Ide.Plugin.HandleRequestTypes     (RejectionReason (DisabledGlobally))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -29,9 +28,7 @@ import           Language.LSP.Protocol.Types       hiding
                                                     mkRange)
 import           Language.LSP.Test
 import           LogType                           (Log (..))
-import           System.Time.Extra                 (sleep)
 import           Test.Hls                          (TestConfig (testDisableDefaultPlugin, testPluginDescriptor),
-                                                    hlsHelperTestRecorder,
                                                     runSessionWithTestConfig,
                                                     testCheckProject,
                                                     waitForProgressDone)
@@ -102,21 +99,13 @@ tests = do
                           ]
                         }] ++ [Notifications.descriptor (cmapWithPrio LogNotifications r) "ghcide-core"]
           runSessionWithTestConfig def {testPluginDescriptor = plugins, testDisableDefaultPlugin=True, testCheckProject=False} $ const $ do
-              testRecorder :: Recorder (WithPriority [Char]) <- liftIO hlsHelperTestRecorder
               doc <- createDoc "A.hs" "haskell" "module A where"
-              logWith testRecorder Debug "notification-exception 0"
-            --   waitForProgressDone
-              liftIO $ sleep 0.14
-              logWith testRecorder Debug "notification-exception 1"
-            --   liftIO $
-            --   liftIO $ threadDelay 100
+              waitForProgressDone
               (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
-              logWith testRecorder Debug "notification-exception 2"
               case lens of
-                Right (InL []) -> do
+                Right (InL []) ->
                   -- We don't get error responses from notification handlers, so
                   -- we can only make sure that the server is still responding
-                  logWith testRecorder Debug "notification-exception success"
                   pure ()
                 _ -> liftIO $ assertFailure $ "We should have had an empty list" <> show lens]
 
