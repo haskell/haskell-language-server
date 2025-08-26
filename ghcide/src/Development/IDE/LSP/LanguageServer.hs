@@ -46,7 +46,7 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service          (shutdown)
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
-import           Development.IDE.Core.WorkerThread     (withWorkerQueue)
+import           Development.IDE.Core.WorkerThread
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb,
                                                         WithHieDbShield (..))
@@ -293,11 +293,10 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
 
     let handleServerExceptionOrShutDown me = do
             -- shutdown shake
-            readMVar ideMVar >>= \case
-                ide -> shutdown ide
+            tryReadMVar ideMVar >>= mapM_ shutdown
             case me of
                 Left e -> do
-                    lifetimeConfirm "due to exception in reactor thread or shutdown message"
+                    lifetimeConfirm "due to exception in reactor thread"
                     logWith recorder Error $ LogReactorThreadException e
                     ctxForceShutdown initParams
                 _ -> do
@@ -339,8 +338,6 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
                     case msg of
                         ReactorNotification act -> handle exceptionInHandler act
                         ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-                logWith recorder Info $ LogReactorThreadStopped 1
-            logWith recorder Info $ LogReactorThreadStopped 2
 
     ide <- readMVar ideMVar
     registerIdeConfiguration (shakeExtras ide) initConfig
@@ -352,9 +349,9 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
 -- see Note [Serializing runs in separate thread]
 runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
 runWithWorkerThreads recorder dbLoc f = evalContT $ do
-            sessionRestartTQueue <- withWorkerQueue id
-            sessionLoaderTQueue <- withWorkerQueue id
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
+            sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
+            sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.

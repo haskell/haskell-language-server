@@ -63,6 +63,7 @@ import           GHC.IO.Handle.Types
 import           Ide.PluginUtils                   (unescape)
 import           System.FilePath
 
+import qualified Control.Monad.Catch               as MC
 import           Data.Monoid                       (First (..))
 import           GHC.Data.EnumSet
 import           GHC.Data.FastString
@@ -130,6 +131,7 @@ runGhcEnv :: HscEnv -> Ghc a -> IO (HscEnv, a)
 runGhcEnv env act = do
     hsc_env <- initTempFs env
     ref <- newIORef hsc_env
+    -- we mask_ here because asynchronous exceptions might be swallowed
     res <- unGhc (withCleanupSession act) (Session ref)
     (,res) <$> readIORef ref
 

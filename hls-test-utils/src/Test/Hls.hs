@@ -29,6 +29,7 @@ module Test.Hls
     goldenWithCabalDocFormatter,
     goldenWithCabalDocFormatterInTmpDir,
     goldenWithTestConfig,
+    hlsHelperTestRecorder,
     def,
     -- * Running HLS for integration tests
     runSessionWithServer,
