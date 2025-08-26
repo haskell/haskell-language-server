@@ -15,6 +15,7 @@ import           Language.LSP.Protocol.Types    hiding
                                                  mkRange)
 import           Language.LSP.Test
 import           Test.Hls
+import           Test.Hls.FileSystem
 
 
 tests :: TestTree
@@ -31,7 +32,7 @@ tests = testGroup "addDependentFile"
         -- If the file contains B then no type error
         -- otherwise type error
         let depFilePath = "dep-file.txt"
-        liftIO $ writeFile depFilePath "A"
+        liftIO $ atomicFileWriteString depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
               , "module Foo where"
@@ -48,7 +49,7 @@ tests = testGroup "addDependentFile"
         expectDiagnostics
             [("Foo.hs", [(DiagnosticSeverity_Error, (4,11), "Couldn't match type", Just "GHC-83865")])]
         -- Now modify the dependent file
-        liftIO $ writeFile depFilePath "B"
+        liftIO $ atomicFileWriteString depFilePath "B"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
             [FileEvent (filePathToUri depFilePath) FileChangeType_Changed ]
 

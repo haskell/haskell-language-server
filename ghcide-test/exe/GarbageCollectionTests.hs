@@ -12,6 +12,7 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Text.Printf                 (printf)
@@ -20,14 +21,14 @@ tests :: TestTree
 tests = testGroup "garbage collection"
   [ testGroup "dirty keys"
         [ testWithDummyPluginEmpty' "are collected" $ \dir -> do
-            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            liftIO $ atomicFileWriteString (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             doc <- generateGarbage "A" dir
             closeDoc doc
             garbage <- waitForGC
             liftIO $ assertBool "no garbage was found" $ not $ null garbage
 
         , testWithDummyPluginEmpty' "are deleted from the state" $ \dir -> do
-            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            liftIO $ atomicFileWriteString (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             docA <- generateGarbage "A" dir
             keys0 <- getStoredKeys
             closeDoc docA
@@ -37,7 +38,7 @@ tests = testGroup "garbage collection"
             liftIO $ assertBool "keys were not deleted from the state" (length keys1 < length keys0)
 
         , testWithDummyPluginEmpty' "are not regenerated unless needed" $ \dir -> do
-            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
+            liftIO $ atomicFileWriteString (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
             docA <- generateGarbage "A" dir
             _docB <- generateGarbage "B" dir
 
@@ -58,7 +59,7 @@ tests = testGroup "garbage collection"
             liftIO $ regeneratedKeys @?= mempty
 
         , testWithDummyPluginEmpty' "regenerate successfully" $ \dir -> do
-            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            liftIO $ atomicFileWriteString (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             docA <- generateGarbage "A" dir
             closeDoc docA
             garbage <- waitForGC
@@ -83,7 +84,7 @@ tests = testGroup "garbage collection"
         let fp = modName <> ".hs"
             body = printf "module %s where" modName
         doc <- createDoc fp "haskell" (T.pack body)
-        liftIO $ writeFile (dir </> fp) body
+        liftIO $ atomicFileWriteString (dir </> fp) body
         builds <- waitForTypecheck doc
         liftIO $ assertBool "something is wrong with this test" builds
         return doc

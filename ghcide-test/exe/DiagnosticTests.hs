@@ -39,7 +39,7 @@ import           System.Time.Extra
 import           Test.Hls                        (TestConfig (testConfigCaps, testDirLocation, testDisableKick, testPluginDescriptor),
                                                   runSessionWithTestConfig,
                                                   waitForProgressBegin)
-import           Test.Hls.FileSystem             (directCradle, file, text)
+import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -383,7 +383,7 @@ tests = testGroup "diagnostics"
               let (drive, suffix) = splitDrive pathB
               in filePathToUri (joinDrive (lower drive) suffix)
           liftIO $ createDirectoryIfMissing True (takeDirectory pathB)
-          liftIO $ writeFileUTF8 pathB $ T.unpack bContent
+          liftIO $ atomicFileWriteStringUTF8 pathB $ T.unpack bContent
           uriA <- getDocUri "A/A.hs"
           Just pathA <- pure $ uriToFilePath uriA
           uriA <- pure $
