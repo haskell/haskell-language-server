@@ -47,9 +47,11 @@ iter=0
 start_ts=$(date -Iseconds)
 echo "[loop] Starting at ${start_ts}" >&2
 
-# Pattern strings to detect issues (keep simple & literal for robustness)
+# Patterns to detect issues
+# - Use case-insensitive extended regex for failures/timeouts in logs
+# - Broken pipe: case-insensitive fixed-string search
 BROKEN_PIPE_RE='Broken pipe'
-TEST_FAILED_RE='fail'
+TEST_FAILED_RE='fail|timeout'
 DEBUG_DETECT="${DEBUG_DETECT:-0}"
 
 # Resolve which tasty patterns to run each iteration
@@ -129,13 +131,13 @@ while true; do
     "${TEST_BIN}" >"${log}" 2>&1
     set -e
 
-    if grep -aFq -- "${BROKEN_PIPE_RE}" "${log}"; then
+  if grep -aFiq -- "${BROKEN_PIPE_RE}" "${log}"; then
       echo "[loop] Broken pipe reproduced in iteration ${iter} for pattern '${pattern}'. Stopping." | tee -a "${log}" >&2
       echo "[loop] Log file: ${log} (abs: $(pwd)/${log})" | tee -a "${log}" >&2
       echo "[loop] --- Tail (last 60 lines) ---" >&2
       tail -n 60 "${log}" >&2
       exit 1
-    elif grep -aFq -- "${TEST_FAILED_RE}" "${log}"; then
+  elif grep -aEqi -- "${TEST_FAILED_RE}" "${log}"; then
       echo "[loop] Test failure detected in iteration ${iter} for pattern '${pattern}'. Stopping." | tee -a "${log}" >&2
       echo "[loop] Log file: ${log} (abs: $(pwd)/${log})" | tee -a "${log}" >&2
       echo "[loop] --- Tail (last 60 lines) ---" >&2
