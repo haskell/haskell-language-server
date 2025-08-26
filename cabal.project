@@ -60,5 +60,5 @@ if impl(ghc >= 9.11)
 source-repository-package
   type: git
   location: https://github.com/soulomoon/lsp.git
-  tag: df83bb0fe7ea3f09339dae4593efe6b4a5284413
+  tag: b23e47622b85f2577d7cfa5c2d89eaa8965d1961
   subdir: lsp lsp-types lsp-test
