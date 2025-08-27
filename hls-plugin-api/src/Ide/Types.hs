@@ -14,7 +14,7 @@
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 module Ide.Types
-( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
+( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor, defaultCabalProjectPluginDescriptor
 , defaultPluginPriority
 , describePlugin
 , IdeCommand(..)
@@ -1076,6 +1076,21 @@ defaultCabalPluginDescriptor plId desc =
     mempty
     Nothing
     [".cabal"]
+
+defaultCabalProjectPluginDescriptor :: PluginId -> T.Text -> PluginDescriptor ideState
+defaultCabalProjectPluginDescriptor plId desc =
+  PluginDescriptor
+    plId
+    desc
+    defaultPluginPriority
+    mempty
+    mempty
+    mempty
+    defaultConfigDescriptor
+    mempty
+    mempty
+    Nothing
+    [".project"]
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)
