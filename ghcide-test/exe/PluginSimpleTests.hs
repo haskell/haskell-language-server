@@ -9,6 +9,7 @@ import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import           Test.Hls.FileSystem
 import           Test.Tasty
 
 tests :: TestTree
@@ -36,7 +37,7 @@ tests =
   -- required by plugin-1.0.0). See the build log above for details.
   testWithExtraFiles "simple plugin"  "plugin-knownnat" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
-    liftIO $ writeFile (dir</>"hie.yaml")
+    liftIO $ atomicFileWriteString (dir</>"hie.yaml")
       "cradle: {cabal: [{path: '.', component: 'lib:plugin'}]}"
 
     expectDiagnostics
