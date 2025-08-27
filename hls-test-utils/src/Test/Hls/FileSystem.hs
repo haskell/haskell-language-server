@@ -29,8 +29,12 @@ module Test.Hls.FileSystem
   , directProjectMulti
   , simpleCabalProject
   , simpleCabalProject'
+  , atomicFileWriteString
+  , atomicFileWriteStringUTF8
+  , atomicFileWriteText
   ) where
 
+import           Control.Exception           (onException)
 import           Data.Foldable               (traverse_)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
@@ -38,6 +42,7 @@ import           Development.IDE             (NormalizedFilePath)
 import           Language.LSP.Protocol.Types (toNormalizedFilePath)
 import           System.Directory
 import           System.FilePath             as FP
+import           System.IO.Extra             (newTempFileWithin, writeFileUTF8)
 import           System.Process.Extra        (readProcess)
 
 -- ----------------------------------------------------------------------------
@@ -244,3 +249,25 @@ simpleCabalProject' :: [FileTree] -> [FileTree]
 simpleCabalProject' fps =
   [ simpleCabalCradle
   ] <> fps
+
+
+atomicFileWrite :: FilePath -> (FilePath -> IO a) -> IO a
+atomicFileWrite targetPath write = do
+  let dir = takeDirectory targetPath
+  createDirectoryIfMissing True dir
+  (tempFilePath, cleanUp) <- newTempFileWithin dir
+  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> pure x)
+    `onException` cleanUp
+
+
+atomicFileWriteString :: FilePath -> String -> IO ()
+atomicFileWriteString targetPath content =
+  atomicFileWrite targetPath (flip writeFile content)
+
+atomicFileWriteStringUTF8 :: FilePath -> String -> IO ()
+atomicFileWriteStringUTF8 targetPath content =
+  atomicFileWrite targetPath (flip writeFileUTF8 content)
+
+atomicFileWriteText :: FilePath -> T.Text -> IO ()
+atomicFileWriteText targetPath content =
+    atomicFileWrite targetPath (flip T.writeFile content)

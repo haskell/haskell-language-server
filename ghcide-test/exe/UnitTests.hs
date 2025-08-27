@@ -31,6 +31,7 @@ import           System.Mem                        (performGC)
 import           Test.Hls                          (IdeState, def,
                                                     runSessionWithServerInTmpDir,
                                                     waitForProgressDone)
+import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
@@ -104,9 +105,9 @@ findResolution_us :: Int -> IO Int
 findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
 findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     performGC
-    writeFile f ""
+    atomicFileWriteString f ""
     threadDelay delay_us
-    writeFile f' ""
+    atomicFileWriteString f' ""
     t <- getModTime f
     t' <- getModTime f'
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)

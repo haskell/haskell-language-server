@@ -29,7 +29,7 @@ tests :: TestTree
 tests = testGroup "watched files"
   [ testGroup "Subscriptions"
     [ testWithDummyPluginEmpty' "workspace files" $ \sessionDir -> do
-        liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        liftIO $ atomicFileWriteString (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
         _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
         setIgnoringRegistrationRequests False
         watchedFileRegs <- getWatchedFilesSubscriptionsUntil SMethod_TextDocumentPublishDiagnostics
@@ -40,7 +40,7 @@ tests = testGroup "watched files"
     , testWithDummyPluginEmpty' "non workspace file" $ \sessionDir -> do
         tmpDir <- liftIO getTemporaryDirectory
         let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
-        liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
+        liftIO $ atomicFileWriteString (sessionDir </> "hie.yaml") yaml
         _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
         setIgnoringRegistrationRequests False
         watchedFileRegs <- getWatchedFilesSubscriptionsUntil SMethod_TextDocumentPublishDiagnostics
@@ -53,8 +53,8 @@ tests = testGroup "watched files"
   , testGroup "Changes"
     [
       testWithDummyPluginEmpty' "workspace files" $ \sessionDir -> do
-        liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
-        liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
+        liftIO $ atomicFileWriteString (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
+        liftIO $ atomicFileWriteString (sessionDir </> "B.hs") $ unlines
           ["module B where"
           ,"b :: Bool"
           ,"b = False"]
@@ -66,7 +66,7 @@ tests = testGroup "watched files"
           ]
         expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'", Just "GHC-83865")])]
         -- modify B off editor
-        liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
+        liftIO $ atomicFileWriteString (sessionDir </> "B.hs") $ unlines
           ["module B where"
           ,"b :: Int"
           ,"b = 0"]
@@ -80,7 +80,7 @@ tests = testGroup "watched files"
           let cabalFile = "reload.cabal"
           cabalContent <- liftIO $ T.readFile cabalFile
           let fix = T.replace "build-depends:    base" "build-depends:    base, split"
-          liftIO $ T.writeFile cabalFile (fix cabalContent)
+          liftIO $ atomicFileWriteText cabalFile (fix cabalContent)
           sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
             [ FileEvent (filePathToUri $ sessionDir </> cabalFile) FileChangeType_Changed ]
           expectDiagnostics [(hsFile, [])]
