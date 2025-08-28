@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Loop running HLS tasty tests until a Broken pipe or test failure is observed.
 # Originally ran only the "open close" test; now supports multiple patterns.
+# Ensures successful build before running any tests.
 # Logs each run to test-logs/<pattern-slug>-loop-<n>.log, rotating every 100 files per pattern.
 #
 # Environment you can tweak:
@@ -8,7 +9,6 @@
 #   SLEEP_SECS    : seconds to sleep between iterations (default: 0)
 #   SHOW_EVERY    : print progress/iteration header every N iterations (default: 100, 1 = every run, <=0 = disabled)
 #   LOG_STDERR    : set to 1 to enable verbose stderr logging (HLS_TEST_LOG_STDERR & HLS_TEST_HARNESS_STDERR) (default: 1)
-#   TEST_BIN      : path to the built test binary (auto-discovered if not set)
 #   NO_BUILD_ONCE : set to non-empty to skip the initial cabal build step
 #
 # Test selection:
@@ -58,7 +58,7 @@ echo "[loop] Starting at ${start_ts}" >&2
 # - Use case-insensitive extended regex for failures/timeouts in logs
 # - Broken pipe: case-insensitive fixed-string search
 BROKEN_PIPE_RE='Broken pipe'
-TEST_FAILED_RE='fail|timeout'
+TEST_FAILED_RE='failed|timeout'
 DEBUG_DETECT="${DEBUG_DETECT:-0}"
 
 # Resolve what to run each iteration as pairs of BIN and PATTERN
@@ -96,8 +96,8 @@ if [[ ${#items[@]} -eq 0 ]]; then
   exit 2
 fi
 
-# Build required test binaries once upfront (unless NO_BUILD_ONCE is set or TEST_BIN overrides)
-if [[ -z "${NO_BUILD_ONCE:-}" && -z "${TEST_BIN:-}" ]]; then
+# Build required test binaries once upfront (unless NO_BUILD_ONCE is set)
+if [[ -z "${NO_BUILD_ONCE:-}" ]]; then
   # collect unique BIN names
   declare -a bins_to_build=()
   for it in "${items[@]}"; do
@@ -109,7 +109,11 @@ if [[ -z "${NO_BUILD_ONCE:-}" && -z "${TEST_BIN:-}" ]]; then
   done
   if (( ${#bins_to_build[@]} > 0 )); then
     echo "[loop] Building test targets once upfront: ${bins_to_build[*]}" >&2
-    cabal build "${bins_to_build[@]}" >&2 || true
+    if ! cabal build "${bins_to_build[@]}" >&2; then
+      echo "[loop][error] Build failed. Cannot proceed with tests." >&2
+      exit 2
+    fi
+    echo "[loop] Build succeeded. Proceeding with tests." >&2
   fi
 fi
 
@@ -125,11 +129,7 @@ get_bin_path() {
     fi
   done
   local path=""
-  if [[ -n "${TEST_BIN:-}" ]]; then
-    path="${TEST_BIN}"
-  else
-    path=$(find dist-newstyle -type f -name "$name" -perm -111 2>/dev/null | head -n1 || true)
-  fi
+  path=$(find dist-newstyle -type f -name "$name" -perm -111 2>/dev/null | head -n1 || true)
   BIN_NAMES+=("$name"); BIN_PATHS+=("$path")
   echo "$path"
 }
