@@ -81,15 +81,13 @@ jobs:
           TEST_PATTERNS: ${{ github.event.inputs.test_patterns }}
           PATTERN_FILE: 'scripts/flaky-test-patterns.txt'
           NO_BUILD_ONCE: '1'
-          # HLS_TEST_EXE: 'hls'
-          # HLS_WRAPPER_TEST_EXE: 'hls-wrapper'
+          # HLS_TEST_EXE: 'hls' # HLS_WRAPPER_TEST_EXE: 'hls-wrapper'
         run: |
           # Run with a sensible default of 1000 iterations on PRs;
           max_iter="${{ github.event.inputs.max_iter }}"
           max_iter="${max_iter:-1000}"
           # copy hls to current dir so the script can find it
-          HLS_TEST_EXE="$(cabal exec which hls)"
-          bash scripts/flaky-test-loop.sh "${max_iter}"
+          HLS_TEST_EXE="$(cabal exec which hls)" bash scripts/flaky-test-loop.sh "${max_iter}"
           ec=$?
           # Interpret exit codes from flaky-test-loop.sh
           #   0 => no issues reproduced within MAX_ITER          -> pass job
