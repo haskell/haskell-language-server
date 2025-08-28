@@ -77,8 +77,9 @@ import           Development.IDE.Types.Location           (NormalizedUri,
                                                            toNormalizedFilePath')
 import           Development.IDE.Types.Monitoring         (Monitoring)
 import           Development.IDE.Types.Options            (IdeGhcSession,
-                                                           IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
+                                                           IdeOptions (..),
                                                            IdeTesting (IdeTesting),
+                                                           ProgressReportingStyle (TestReporting),
                                                            clientSupportsProgress,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
@@ -276,7 +277,10 @@ testing recorder projectRoot plugins =
       let
         defOptions = argsIdeOptions config sessionLoader
       in
-        defOptions{ optTesting = IdeTesting True }
+        defOptions{
+            optTesting = IdeTesting True
+            , optProgressStyle = TestReporting
+            }
     lspOptions = argsLspOptions { LSP.optProgressStartDelay = 0, LSP.optProgressUpdateDelay = 0 }
   in
     arguments
