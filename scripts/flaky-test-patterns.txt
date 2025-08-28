@@ -10,4 +10,4 @@ Notification Handlers
 # ghcide restarts shake session on config changes:
 addDependentFile
 # Another interesting one you can try:
-# func-test::sends indefinite progress notifications
+func-test::sends indefinite progress notifications

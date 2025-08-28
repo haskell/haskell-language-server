@@ -66,9 +66,10 @@ jobs:
         run: |
           cabal --version
           ghc --version
-      - name: build ghcide-tests
+      - name: build tests
         run: |
           cabal build ghcide-tests
+          cabal build func-test
 
       - name: Run flakiness loop
         id: run-loop
