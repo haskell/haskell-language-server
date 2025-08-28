@@ -7,6 +7,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | [Diagnostics](#diagnostics)                         | `textDocument/publishDiagnostics`                                                                 |
 | [Hovers](#hovers)                                   | `textDocument/hover`                                                                              |
+| [Signature help](#signature-help)                   | `textDocument/signatureHelp`                                                                      |
 | [Jump to definition](#jump-to-definition)           | `textDocument/definition`                                                                         |
 | [Jump to type definition](#jump-to-type-definition) | `textDocument/typeDefinition`                                                                     |
 | [Find references](#find-references)                 | `textDocument/references`                                                                         |
@@ -62,6 +63,12 @@ Type information and documentation on hover, [including from local definitions](
 Provided by: `hls-explicit-fixity-plugin`
 
 Provides fixity information.
+
+## Signature help
+
+Provided by: `hls-signature-help-plugin`
+
+Shows and highlights the function signature, the function documentation and the arguments documentation when the cursor is at a function argument.
 
 ## Jump to definition
 
@@ -445,7 +452,6 @@ Contributions welcome!
 
 | Feature                | Status            | [LSP method](./what-is-hls.md#lsp-terminology) |
 | ---------------------- | ----------------- | ---------------------------------------------- |
-| Signature help         | Unimplemented     | `textDocument/signatureHelp`                   |
 | Jump to declaration    | Unclear if useful | `textDocument/declaration`                     |
 | Jump to implementation | Unclear if useful | `textDocument/implementation`                  |
 | Linked editing         | Unimplemented     | `textDocument/linkedEditingRange`              |

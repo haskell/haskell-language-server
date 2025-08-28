@@ -16,6 +16,7 @@ import           Control.Monad.Extra             (findM)
 import           Control.Monad.IO.Class
 import           Data.Either
 import           Data.Foldable
+import           Data.IntMap                     (IntMap)
 import           Data.List.Extra
 import qualified Data.Map                        as M
 import           Data.Maybe
@@ -42,21 +43,27 @@ mkDocMap
   -> IO DocAndTyThingMap
 mkDocMap env rm this_mod =
   do
-     (Just Docs{docs_decls = UniqMap this_docs}) <- extractDocs (hsc_dflags env) this_mod
+     (Just Docs{docs_decls = UniqMap this_docs, docs_args = UniqMap this_arg_docs}) <- extractDocs (hsc_dflags env) this_mod
      d <- foldrM getDocs (fmap (\(_, x) -> (map hsDocString x) `SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
      k <- foldrM getType (tcg_type_env this_mod) names
-     pure $ DKMap d k
+     a <- foldrM getArgDocs (fmap (\(_, m) -> fmap (\x -> [hsDocString x] `SpanDocString` SpanDocUris Nothing Nothing) m) this_arg_docs) names
+     pure $ DKMap d k a
   where
     getDocs n nameMap
       | maybe True (mod ==) $ nameModule_maybe n = pure nameMap -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
-      doc <- getDocumentationTryGhc env n
+      (doc, _argDoc) <- getDocumentationTryGhc env n
       pure $ extendNameEnv nameMap n doc
     getType n nameMap
       | Nothing <- lookupNameEnv nameMap n
       = do kind <- lookupKind env n
            pure $ maybe nameMap (extendNameEnv nameMap n) kind
       | otherwise = pure nameMap
+    getArgDocs n nameMap
+      | maybe True (mod ==) $ nameModule_maybe n = pure nameMap
+      | otherwise = do
+      (_doc, argDoc) <- getDocumentationTryGhc env n
+      pure $ extendNameEnv nameMap n argDoc
     names = rights $ S.toList idents
     idents = M.keysSet rm
     mod = tcg_mod this_mod
@@ -65,23 +72,23 @@ lookupKind :: HscEnv -> Name -> IO (Maybe TyThing)
 lookupKind env =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
-getDocumentationTryGhc :: HscEnv -> Name -> IO SpanDoc
+getDocumentationTryGhc :: HscEnv -> Name -> IO (SpanDoc, IntMap SpanDoc)
 getDocumentationTryGhc env n =
-  (fromMaybe emptySpanDoc . listToMaybe <$> getDocumentationsTryGhc env [n])
-    `catch` (\(_ :: IOEnvFailure) -> pure emptySpanDoc)
+  (fromMaybe (emptySpanDoc, mempty) . listToMaybe <$> getDocumentationsTryGhc env [n])
+    `catch` (\(_ :: IOEnvFailure) -> pure (emptySpanDoc, mempty))
 
-getDocumentationsTryGhc :: HscEnv -> [Name] -> IO [SpanDoc]
+getDocumentationsTryGhc :: HscEnv -> [Name] -> IO [(SpanDoc, IntMap SpanDoc)]
 getDocumentationsTryGhc env names = do
   resOr <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env names
   case resOr of
       Left _    -> return []
       Right res -> zipWithM unwrap res names
   where
-    unwrap (Right (Just docs, _)) n = SpanDocString (map hsDocString docs) <$> getUris n
+    unwrap (Right (Just docs, argDocs)) n = (\uris -> (SpanDocString (map hsDocString docs) uris, fmap (\x -> SpanDocString [hsDocString x] uris) argDocs)) <$> getUris n
     unwrap _ n                      = mkSpanDocText n
 
     mkSpanDocText name =
-      SpanDocText [] <$> getUris name
+      (\uris -> (SpanDocText [] uris, mempty)) <$> getUris name
 
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do

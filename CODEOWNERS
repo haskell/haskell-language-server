@@ -37,6 +37,7 @@
 /plugins/hls-rename-plugin
 /plugins/hls-retrie-plugin @wz1000
 /plugins/hls-semantic-tokens-plugin @soulomoon
+/plugins/hls-signature-help-plugin @jian-lin
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stan-plugin @0rphee
 /plugins/hls-stylish-haskell-plugin @michaelpj
