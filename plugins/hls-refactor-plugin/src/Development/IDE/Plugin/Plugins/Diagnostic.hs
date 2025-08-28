@@ -4,12 +4,22 @@ module Development.IDE.Plugin.Plugins.Diagnostic (
   unifySpaces,
   matchFoundHole,
   matchFoundHoleIncludeUnderscore,
+  diagReportHoleError,
   )
   where
 
-import           Data.Bifunctor  (Bifunctor (..))
-import qualified Data.Text       as T
-import           Text.Regex.TDFA ((=~~))
+import           Control.Lens                      (_1, (^?))
+import           Data.Bifunctor                    (Bifunctor (..))
+import qualified Data.Text                         as T
+import           Development.IDE                   (FileDiagnostic)
+import           Development.IDE.GHC.Compat.Error  (Hole, _ReportHoleError,
+                                                    _TcRnMessage,
+                                                    _TcRnSolverReport,
+                                                    msgEnvelopeErrorL,
+                                                    reportContentL)
+import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage,
+                                                    fdStructuredMessageL)
+import           Text.Regex.TDFA                   ((=~~))
 
 unifySpaces :: T.Text -> T.Text
 unifySpaces    = T.unwords . T.words
@@ -57,3 +67,18 @@ matchVariableNotInScope message
       | Just [name] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+)" =
           Just name
       | otherwise = Nothing
+
+-- | Extract the 'Hole' out of a 'FileDiagnostic'
+diagReportHoleError :: FileDiagnostic -> Maybe Hole
+diagReportHoleError diag = do
+    solverReport <-
+        diag
+            ^? fdStructuredMessageL
+                . _SomeStructuredMessage
+                . msgEnvelopeErrorL
+                . _TcRnMessage
+                . _TcRnSolverReport
+                . _1
+    (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
+
+    Just hole
