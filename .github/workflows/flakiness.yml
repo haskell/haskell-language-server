@@ -81,6 +81,8 @@ jobs:
           TEST_PATTERNS: ${{ github.event.inputs.test_patterns }}
           PATTERN_FILE: 'scripts/flaky-test-patterns.txt'
           NO_BUILD_ONCE: '1'
+          HLS_TEST_EXE: 'hls'
+          HLS_WRAPPER_TEST_EXE: 'hls-wrapper'
         run: |
           # Run with a sensible default of 1000 iterations on PRs;
           max_iter="${{ github.event.inputs.max_iter }}"
