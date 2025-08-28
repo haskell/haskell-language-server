@@ -35,11 +35,11 @@ moduleOutline ideState _ LSP.FoldingRangeParams {_textDocument = LSP.TextDocumen
     Just (toNormalizedFilePath' -> fp) -> do
       mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields fp)
       case fmap fst mFields of
-        Just fieldPositions -> pure allRanges
+        Just fieldPositions -> pure (LSP.InL allRanges)
           where
             allRanges = mapMaybe foldingRangeForField fieldPositions
-        Nothing -> pure []
-    Nothing -> pure []
+        Nothing -> pure (LSP.InL [])
+    Nothing -> pure (LSP.InL [])
 
 -- | Creates a @FoldingRange@ object for the
 --   cabal AST, without displaying @fieldLines@ and

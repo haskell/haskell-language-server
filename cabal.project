@@ -12,6 +12,17 @@ packages:
          ./vendor/cabal/Cabal-described
          ./vendor/cabal/Cabal-tree-diff
 
+source-repository-package
+   type:     git
+   location: https://github.com/fendor/cabal-add/
+   tag: 3ae65c28bfc6eff66a7a05bb9547665f62a35b63
+
+source-repository-package
+   type:     git
+   location: https://github.com/fendor/haskell-ci/
+   tag: e3e68f064f9610267bb47ea6404ccaa6924c2201
+   subdir: cabal-install-parsers
+
 package cabal-install
   tests: False
   benchmarks: False
