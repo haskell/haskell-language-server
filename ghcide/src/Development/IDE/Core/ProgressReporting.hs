@@ -24,8 +24,7 @@ import           Control.Concurrent.STM.Stats   (TVar, atomically,
                                                  atomicallyNamed, modifyTVar',
                                                  newTVarIO, readTVar, retry)
 import           Control.Concurrent.Strict      (modifyVar_, newBarrier, newVar,
-                                                 signalBarrier, threadDelay,
-                                                 waitBarrier)
+                                                 signalBarrier, threadDelay)
 import           Control.Monad.Extra            hiding (loop)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
@@ -212,15 +211,18 @@ withProgressDummy ::
   ((ProgressAmount -> m ()) -> m a) ->
   m a
 withProgressDummy title _ _ f = do
-    t <- L.ProgressToken . L.InR . T.pack . show . hashUnique <$> liftIO newUnique
-    r <- liftIO newBarrier
-    _ <- sendRequest SMethod_WindowWorkDoneProgressCreate (WorkDoneProgressCreateParams t) $
-        \_ -> liftIO $ signalBarrier r ()
-    -- liftIO $ waitBarrier r
-    sendProgressReport t $ WorkDoneProgressBegin L.AString title Nothing Nothing Nothing
-    f (const $ return ()) `UE.finally` sendProgressReport t (WorkDoneProgressEnd L.AString Nothing)
+        UE.bracket start end $ \_ ->
+            f (const $ return ())
   where
     sendProgressReport token report = sendNotification SMethod_Progress $ ProgressParams token $ J.toJSON report
+    start = UE.uninterruptibleMask_ $ do
+        t <- L.ProgressToken . L.InR . T.pack . show . hashUnique <$> liftIO newUnique
+        r <- liftIO newBarrier
+        _ <- sendRequest SMethod_WindowWorkDoneProgressCreate (WorkDoneProgressCreateParams t) $ \_ -> liftIO $ signalBarrier r ()
+        sendProgressReport t $ WorkDoneProgressBegin L.AString title Nothing Nothing Nothing
+        return t
+    end t = do
+        sendProgressReport t (WorkDoneProgressEnd L.AString Nothing)
 
 -- Kill this to complete the progress session
 progressCounter ::
@@ -231,7 +233,7 @@ progressCounter ::
   STM Int ->
   IO ()
 progressCounter lspEnv title optProgressStyle getTodo getDone =
-  LSP.runLspT lspEnv $ withProgressChoice title Nothing NotCancellable $ \update -> loop update 0
+    LSP.runLspT lspEnv $ withProgressChoice title Nothing NotCancellable $ \update -> loop update 0
   where
     withProgressChoice = case optProgressStyle of
         TestReporting -> withProgressDummy
