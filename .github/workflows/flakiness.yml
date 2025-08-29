@@ -73,7 +73,7 @@ jobs:
       - name: Run flakiness loop
         id: run-loop
         # Let this run for a while; build is done once inside the script
-        timeout-minutes: 45
+        timeout-minutes: 60
         env:
           # Use workflow_dispatch inputs when present, else defaults
           SLEEP_SECS: ${{ github.event.inputs.sleep_secs || '0' }}
