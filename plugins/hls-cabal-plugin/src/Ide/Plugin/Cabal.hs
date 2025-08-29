@@ -127,6 +127,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
+          , mkPluginHandler LSP.SMethod_TextDocumentFoldingRange moduleOutline
           ]
     , pluginNotificationHandlers =
         mconcat
