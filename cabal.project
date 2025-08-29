@@ -29,7 +29,7 @@ package cabal-install
 
 flags: -ormolu -stylishHaskell -stan -fourmolu
 
-index-state: 2025-05-12T13:26:29Z
+index-state: 2025-08-08T12:31:54Z 
 
 tests: True
 test-show-details: direct
