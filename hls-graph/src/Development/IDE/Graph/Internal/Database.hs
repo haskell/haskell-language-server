@@ -40,11 +40,11 @@ import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
 import           System.Time.Extra                    (duration, sleep)
+import           UnliftIO                             (MonadUnliftIO (withRunInIO))
+import qualified UnliftIO.Exception                   as UE
 
 #if MIN_VERSION_base(4,19,0)
 import           Data.Functor                         (unzip)
-import           UnliftIO                             (MonadUnliftIO (withRunInIO))
-import qualified UnliftIO.Exception                   as UE
 #else
 import           Data.List.NonEmpty                   (unzip)
 #endif
