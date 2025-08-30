@@ -502,7 +502,7 @@ instance (IsSimilar a, IsSimilar b) => IsSimilar (a |? b) where
     InR x ~= InR y = x ~= y
     _ ~= _         = False
 
--- TODO(@linj) use the one from lsp-test when we have https://github.com/haskell/lsp/pull/621
+-- TODO use the one from lsp-test when we have https://github.com/haskell/lsp/pull/621
 -- | Returns the signature help at the specified position.
 getSignatureHelp :: TextDocumentIdentifier -> Position -> Session (Maybe SignatureHelp)
 getSignatureHelp doc pos =

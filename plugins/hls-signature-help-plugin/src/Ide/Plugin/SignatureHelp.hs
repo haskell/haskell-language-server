@@ -72,11 +72,10 @@ import           Language.LSP.Protocol.Types          (MarkupContent (MarkupCont
                                                        UInt,
                                                        type (|?) (InL, InR))
 
-data Log = LogDummy
+data Log
 
 instance Pretty Log where
     pretty = \case
-        LogDummy -> "TODO(@linj) remove this dummy log"
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor _recorder pluginId =
@@ -88,7 +87,6 @@ signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatu
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken mSignatureHelpContext) = do
     nfp <- getNormalizedFilePathE uri
     results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
-        -- TODO(@linj) why HAR {hieAst} may have more than one AST?
         (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
         case fromCurrentPosition positionMapping position of
             Nothing -> pure []
@@ -112,7 +110,6 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
         [(_functionName, [], _argumentNumber)] -> pure $ InR Null
         [(functionName, functionTypes, argumentNumber)] ->
             pure $ InL $ mkSignatureHelp mSignatureHelpContext docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
-        -- TODO(@linj) what does non-singleton list mean?
         _ -> pure $ InR Null
 
 mkSignatureHelp :: Maybe SignatureHelpContext -> DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
@@ -250,7 +247,6 @@ nodeHasAnnotation annotation hieAst = case sourceNodeInfo hieAst of
     Nothing       -> False
     Just nodeInfo -> isAnnotationInNodeInfo annotation nodeInfo
 
--- TODO(@linj): the left most node may not be the function node. example: (if True then f else g) x
 getLeftMostNode :: HieAST a -> HieAST a
 getLeftMostNode thisNode =
     case nodeChildren thisNode of
@@ -275,7 +271,7 @@ getNodeNameAndTypes hieKind hieAst =
                          in Just (name, filterCoreTypes allTypes)
             [] -> Nothing
             _ -> Nothing -- seems impossible
-        else Nothing -- TODO(@linj) must function node be HsVar?
+        else Nothing
     where
         extractName = rightToMaybe
 
@@ -291,7 +287,6 @@ getNodeNameAndTypes hieKind hieAst =
 isUse :: IdentifierDetails a -> Bool
 isUse = identInfo >>> S.member Use
 
--- TODO(@linj) handle more cases
 -- Just 1 means the first argument
 getArgumentNumber :: RealSrcSpan -> HieAST a -> Maybe Integer
 getArgumentNumber span hieAst

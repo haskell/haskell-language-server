@@ -848,7 +848,6 @@ common signatureHelp
     build-depends: haskell-language-server:hls-signature-help-plugin
     cpp-options: -Dhls_signatureHelp
 
--- TODO(@linj) remove unneeded deps
 library hls-signature-help-plugin
   import:           defaults, pedantic, warnings
   if !flag(signatureHelp)

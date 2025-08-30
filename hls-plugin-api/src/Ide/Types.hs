@@ -770,7 +770,6 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
             si = SymbolInformation name' (ds ^. L.kind) Nothing parent (ds ^. L.deprecated) loc
         in [si] <> children'
 
--- TODO(@linj) is this correct?
 instance PluginRequestMethod Method_TextDocumentSignatureHelp where
   combineResponses _ _ _ _ (x :| _) = x
 
