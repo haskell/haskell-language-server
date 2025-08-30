@@ -6,7 +6,6 @@
 module Development.IDE.Graph.Internal.Types where
 
 import           Control.Concurrent.STM             (STM)
-import           Control.Monad                      ((>=>))
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
