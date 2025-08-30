@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DerivingStrategies #-}
 module Ide.Plugin.Conversion (
     alternateFormat
     , toOctal
@@ -54,8 +55,8 @@ data FracFormatType = FracDecimalFormat
 
 instance NFData FracFormatType
 
-data ExtensionNeeded = NoExtension
-                     | NeedsExtension Extension
+newtype ExtensionNeeded = ExtensionNeeded [Extension]
+    deriving newtype (Semigroup, Monoid)
 
 type AlternateFormat = (Text, ExtensionNeeded)
 
@@ -76,19 +77,24 @@ data UnderscoreFormatType
     | UseUnderscores Int
     deriving (Show, Eq)
 
+underscoreExtensions :: UnderscoreFormatType -> ExtensionNeeded
+underscoreExtensions = \case
+    NoUnderscores -> mempty
+    UseUnderscores _ -> ExtensionNeeded [NumericUnderscores]
+
 alternateIntFormat :: Integer -> IntFormatType -> UnderscoreFormatType -> AlternateFormat
 alternateIntFormat val formatType underscoreFormat = case formatType of
-    IntDecimalFormat -> (T.pack $ toDecimal underscoreFormat val , NoExtension)
-    HexFormat        -> (T.pack $ toHex underscoreFormat val , NoExtension)
-    OctalFormat      -> (T.pack $ toOctal underscoreFormat val , NoExtension)
-    BinaryFormat     -> (T.pack $ toBinary underscoreFormat val , NeedsExtension BinaryLiterals)
-    NumDecimalFormat -> (T.pack $ toFloatExpDecimal underscoreFormat (fromInteger @Double val) , NeedsExtension NumDecimals)
+    IntDecimalFormat -> (T.pack $ toDecimal underscoreFormat val , underscoreExtensions underscoreFormat)
+    HexFormat        -> (T.pack $ toHex underscoreFormat val , underscoreExtensions underscoreFormat)
+    OctalFormat      -> (T.pack $ toOctal underscoreFormat val , underscoreExtensions underscoreFormat)
+    BinaryFormat     -> (T.pack $ toBinary underscoreFormat val , underscoreExtensions underscoreFormat <> ExtensionNeeded [BinaryLiterals])
+    NumDecimalFormat -> (T.pack $ toFloatExpDecimal underscoreFormat (fromInteger @Double val) , underscoreExtensions underscoreFormat <> ExtensionNeeded [NumDecimals])
 
 alternateFracFormat :: Rational -> FracFormatType -> UnderscoreFormatType -> AlternateFormat
 alternateFracFormat val formatType underscoreFormat = case formatType of
-  FracDecimalFormat -> (T.pack $ toFloatDecimal underscoreFormat (fromRational @Double val), NoExtension)
-  ExponentFormat    -> (T.pack $ toFloatExpDecimal underscoreFormat (fromRational @Double val), NoExtension)
-  HexFloatFormat    -> (T.pack $ toHexFloat underscoreFormat (fromRational @Double val), NeedsExtension HexFloatLiterals)
+  FracDecimalFormat -> (T.pack $ toFloatDecimal underscoreFormat (fromRational @Double val), mempty)
+  ExponentFormat    -> (T.pack $ toFloatExpDecimal underscoreFormat (fromRational @Double val), mempty)
+  HexFloatFormat    -> (T.pack $ toHexFloat underscoreFormat (fromRational @Double val), underscoreExtensions underscoreFormat <> ExtensionNeeded [HexFloatLiterals])
 
 intFormats :: Map.Map IntFormatType [UnderscoreFormatType]
 intFormats = Map.fromList $ map (\t -> (t, intFormatUnderscore t)) enumerate

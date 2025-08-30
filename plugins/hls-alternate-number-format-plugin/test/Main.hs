@@ -25,9 +25,13 @@ test = testGroup "alternateNumberFormat" [
     codeActionHex 0 "TIntDtoH" 3 13
     , codeActionOctal 0 "TIntDtoO" 3 13
     , codeActionBinary 0 "TIntDtoB" 4 13
+    , codeActionBinary 6 "TIntDtoBU0toU4MultiplePragma" 4 13
     , codeActionNumDecimal 0 "TIntDtoND" 5 13
+    , codeActionDecimal 2 "TIntDtoDU0toU3" 4 13
     , codeActionFracExp 0 "TFracDtoE" 3 13
+    , codeActionFracExp 3 "TFracDtoEU0toU3" 3 13
     , codeActionFloatHex 0 "TFracDtoHF" 4 13
+    , codeActionFloatHex 6 "TFracDtoHFU0toU2" 4 13
     , codeActionDecimal 0 "TIntHtoD" 3 13
     , codeActionDecimal 0 "TFracHFtoD" 4 13
     , codeActionDecimal 3 "TFracDtoDU0toU3" 3 13
@@ -117,7 +121,7 @@ pointRange
 convertPrefix, intoInfix, maybeExtension, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
 convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"
 intoInfix = " into "
-maybeExtension = "( \\(needs extension: .*)?"
+maybeExtension = "( \\(needs extensions: .*)?"
 hexRegex = intoInfix <> Conversion.hexRegex <> maybeExtension
 hexFloatRegex = intoInfix <> Conversion.hexFloatRegex <> maybeExtension
 binaryRegex = intoInfix <> Conversion.binaryRegex <> maybeExtension
