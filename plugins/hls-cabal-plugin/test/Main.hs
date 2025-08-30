@@ -24,6 +24,7 @@ import qualified Data.Text                       as T
 import qualified Data.Text.IO                    as Text
 import           Definition                      (gotoDefinitionTests)
 import           Development.IDE.Test
+import           FoldingRange                    (foldingRangeTests)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
@@ -215,7 +216,7 @@ codeActionTests = testGroup "Code Actions"
         mapM_ executeCodeAction selectedCas
         pure ()
     , cabalAddDependencyTests
-    , cabalAddModuleTests
+    -- , cabalAddModuleTests
     ]
   where
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]

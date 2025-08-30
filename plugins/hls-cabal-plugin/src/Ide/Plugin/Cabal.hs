@@ -44,6 +44,7 @@ import qualified Ide.Plugin.Cabal.Completion.Types             as Types
 import           Ide.Plugin.Cabal.Definition                   (gotoDefinition)
 import qualified Ide.Plugin.Cabal.FieldSuggest                 as FieldSuggest
 import qualified Ide.Plugin.Cabal.Files                        as CabalAdd
+import           Ide.Plugin.Cabal.FoldingRange
 import qualified Ide.Plugin.Cabal.LicenseSuggest               as LicenseSuggest
 import qualified Ide.Plugin.Cabal.OfInterest                   as OfInterest
 import           Ide.Plugin.Cabal.Orphans                      ()
@@ -127,7 +128,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
-          , mkPluginHandler LSP.SMethod_TextDocumentFoldingRange moduleOutline
+          , mkPluginHandler LSP.SMethod_TextDocumentFoldingRange foldingRangeModuleOutline
           ]
     , pluginNotificationHandlers =
         mconcat

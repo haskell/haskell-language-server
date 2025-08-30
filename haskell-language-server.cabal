@@ -322,6 +322,7 @@ test-suite hls-cabal-plugin-tests
     , lsp
     , lsp-types
     , text
+    , haskell-language-server:hls-code-range-plugin
 
 -----------------------------
 -- cabal project plugin

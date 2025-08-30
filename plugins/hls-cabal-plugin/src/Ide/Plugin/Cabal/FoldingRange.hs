@@ -29,8 +29,8 @@ import           Language.LSP.Protocol.Message           (Method (..))
 import           Language.LSP.Protocol.Types             (FoldingRange (..))
 import qualified Language.LSP.Protocol.Types             as LSP
 
-moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentFoldingRange
-moduleOutline ideState _ LSP.FoldingRangeParams {_textDocument = LSP.TextDocumentIdentifier uri} =
+foldingRangeModuleOutline :: PluginMethodHandler IdeState Method_TextDocumentFoldingRange
+foldingRangeModuleOutline ideState _ LSP.FoldingRangeParams {_textDocument = LSP.TextDocumentIdentifier uri} =
   case LSP.uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
       mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields fp)
