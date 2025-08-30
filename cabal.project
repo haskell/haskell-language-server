@@ -56,3 +56,9 @@ if impl(ghc >= 9.11)
   allow-newer:
     cabal-install-parsers:base,
     cabal-install-parsers:time,
+
+source-repository-package
+  type: git
+  location: https://github.com/soulomoon/lsp.git
+  tag: 640c7c755bf16128e3cb19c257688aa3305ff9f5
+  subdir: lsp lsp-types lsp-test
