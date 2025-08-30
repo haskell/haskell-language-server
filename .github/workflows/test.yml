@@ -92,6 +92,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Init submodules
+        run: git submodule update --init
+
       - uses: ./.github/actions/setup-build
         with:
           ghc: ${{ matrix.ghc }}
@@ -237,6 +240,10 @@ jobs:
       - if: matrix.test
         name: Test hls-cabal-plugin test suite
         run: cabal test hls-cabal-plugin-tests || cabal test hls-cabal-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-cabal-project-plugin test suite
+        run: cabal test hls-cabal-project-plugin-tests || cabal test hls-cabal-project-plugin-tests
 
       # TODO enable when it supports 9.10
       - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
