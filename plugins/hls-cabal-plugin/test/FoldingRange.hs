@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module FoldingRange (
-  outlineTests,
+  foldingRangeTests,
 ) where
 
-import           Language.LSP.Protocol.Types (DocumentSymbol (..),
-                                              Position (..), Range (..))
-import qualified Test.Hls                    as T
+import           Language.LSP.Protocol.Message (Method (Method_TextDocumentFoldingRange, Method_TextDocumentSelectionRange),
+                                                SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
+import qualified Language.LSP.Protocol.Types   as LSP
+import qualified Test.Hls                      as T
 import           Utils
 
 testFoldingRanges :: (T.HasCallStack)
@@ -15,9 +16,9 @@ testFoldingRanges :: (T.HasCallStack)
                   -> [LSP.FoldingRange]
                   -> T.TestTree
 testFoldingRanges testName path expectedRanges =
-  runCabalTestCaseSession testName "outline-cabal" $ do
+  runCabalTestCaseSession testName "folding-range-cabal" $ do
     docId <- T.openDoc path "cabal"
-    ranges <- T.getFoldingRanges docId
+    ranges <- getFoldingRanges docId
     T.liftIO $ ranges T.@?= Right expectedRanges
 
 foldingRangeTests :: T.TestTree
@@ -45,39 +46,50 @@ foldingRangeTests =
 fieldFoldingRange :: LSP.FoldingRange
 fieldFoldingRange =
   (defFoldingRange (LSP.Position 0 0))
-    { _endLine       = 0
-    , _endCharacter  = Just 8
-    , _collapsedText = Just "homepage"
+    { LSP._endLine       = 0
+    , LSP._endCharacter  = Just 8
+    , LSP._collapsedText = Just "homepage"
     }
 
 -- Expected folding range for fieldline.cabal
 fieldLineFoldingRange :: LSP.FoldingRange
 fieldLineFoldingRange =
   (defFoldingRange (LSP.Position 0 0))
-    { _endLine       = 0
-    , _endCharacter  = Just 13
-    , _collapsedText = Just "cabal-version"
+    { LSP._endLine       = 0
+    , LSP._endCharacter  = Just 13
+    , LSP._collapsedText = Just "cabal-version"
     }
 
 -- Expected folding range for section.cabal
 sectionFoldingRange :: LSP.FoldingRange
 sectionFoldingRange =
   (defFoldingRange (LSP.Position 0 2))
-    { _endLine       = 0
-    , _endCharacter  = Just 15
-    , _collapsedText = Just "build-depends"
+    { LSP._endLine       = 0
+    , LSP._endCharacter  = Just 15
+    , LSP._collapsedText = Just "build-depends"
     }
 
 -- Expected folding range for sectionarg.cabal
 sectionArgFoldingRange :: LSP.FoldingRange
 sectionArgFoldingRange =
   (defFoldingRange (LSP.Position 0 2))
-    { _endLine       = 1
-    , _endCharacter  = Just 17
-    , _collapsedText = Just "if os ( windows )"
+    { LSP._endLine       = 1
+    , LSP._endCharacter  = Just 17
+    , LSP._collapsedText = Just "if os(windows)"
     }
 
-getFoldingRanges :: LSP.TextDocumentIdentifier -> Session (Either ResponseError [FoldingRange])
+getFoldingRanges :: LSP.TextDocumentIdentifier -> Session (Either ResponseError [LSP.FoldingRange])
 getFoldingRanges docId = do
   let params = LSP.FoldingRangeParams docId Nothing
   request SMethod_TextDocumentFoldingRange params
+
+defFoldingRange :: LSP.Position -> LSP.FoldingRange
+defFoldingRange startPos =
+  LSP.FoldingRange
+    { LSP._startLine      = LSP._line startPos
+    , LSP._startCharacter = Just (LSP._character startPos)
+    , LSP._endLine        = LSP._line startPos
+    , LSP._endCharacter   = Just (LSP._character startPos)
+    , LSP._kind           = Nothing
+    , LSP._collapsedText  = Nothing
+    }
