@@ -103,7 +103,7 @@ cabalRules recorder plId = do
         -- we would much rather re-use the already parsed results of 'ParseCabalFields'.
         -- Unfortunately, Cabal-syntax doesn't expose the function 'parseGenericPackageDescription''
         -- which allows us to resume the parsing pipeline with '[Field Position]'.
-        let (pWarnings, pm) = Parse.parseCabalFileContents contents
+        (pWarnings, pm) <- Parse.parseCabalFileContents (fromNormalizedFilePath file) contents
         let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do

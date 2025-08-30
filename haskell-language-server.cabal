@@ -307,6 +307,7 @@ test-suite hls-cabal-plugin-tests
     Completer
     Context
     Definition
+    FoldingRange
     Outline
     Utils
   build-depends:

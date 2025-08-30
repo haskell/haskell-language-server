@@ -44,6 +44,7 @@ main = do
             , completerTests
             , contextTests
             , outlineTests
+            , foldingRangeTests
             , codeActionTests
             , gotoDefinitionTests
             , hoverTests
