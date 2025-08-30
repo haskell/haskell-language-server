@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds   #-}
 {-# LANGUAGE QuasiQuotes #-}
 
+import           Control.Arrow                            ((>>>))
 import           Control.Exception                        (throw)
 import           Control.Lens                             ((^.))
 import           Data.Maybe                               (fromJust)
@@ -201,7 +203,9 @@ main =
                   [ Nothing,
                     Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall abcdefghijklmn. Num abcdefghijklmn => abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn" Nothing (Just [ParameterInformation (InR (50,64)) Nothing, ParameterInformation (InR (68,82)) Nothing, ParameterInformation (InR (86,100)) Nothing, ParameterInformation (InR (104,118)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Integer -> Integer -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (16,23)) Nothing, ParameterInformation (InR (27,34)) Nothing, ParameterInformation (InR (38,45)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
-              mkTest
+              -- TODO fix bug of wrong arg range in the function type string
+              -- https://github.com/haskell/haskell-language-server/pull/4626#discussion_r2261133076
+              mkTestExpectFail
                   "middle =>"
                   [__i|
                       f :: Eq a => a -> Num b => b -> b
@@ -213,12 +217,22 @@ main =
                       z = f 1
                             ^
                   |]
-                  [ Nothing,
-                    Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1)),
-                    Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Bool -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,9)) Nothing, ParameterInformation (InR (28,35)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
-                    Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (31,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
-                  ],
+                  ( BrokenIdeal
+                        [ Nothing,
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1)),
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Bool -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,9)) Nothing, ParameterInformation (InR (28,35)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (31,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                        ]
+                  )
+                  ( BrokenCurrent
+                        [ Nothing,
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 1)), SignatureInformation "f :: Integer -> Num Bool => Bool -> Bool" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (28,32)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1)),
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Bool -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (5,9)) Nothing, ParameterInformation (InR (28,35)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b. Eq a => a -> Num b => b -> b" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (39,40)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Num Integer => Integer -> Integer" Nothing (Just [ParameterInformation (InR (20,27)) Nothing, ParameterInformation (InR (31,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                        ]
+                  ),
               mkTest
                   "=> in argument"
                   [__i|
@@ -257,7 +271,9 @@ main =
                     Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15,22)) Nothing, ParameterInformation (InR (36,42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Bool -> forall b. (Bool, b) -> b" Nothing (Just [ParameterInformation (InR (5,15)) Nothing, ParameterInformation (InR (29,38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
                     Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15,22)) Nothing, ParameterInformation (InR (36,42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Integer -> forall b. (Integer, b) -> b" Nothing (Just [ParameterInformation (InR (5,18)) Nothing, ParameterInformation (InR (32,44)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
                   ],
-              mkTest
+              -- TODO fix bug of wrong arg range in the function type string
+              -- https://github.com/haskell/haskell-language-server/pull/4626#discussion_r2261133076
+              mkTestExpectFail
                   "RankNTypes(forall in middle), another"
                   [__i|
                       f :: l -> forall a. a -> a
@@ -265,10 +281,19 @@ main =
                       x = f 1
                           ^ ^
                   |]
-                  [ Nothing,
-                    Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall l. l -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (30,31)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
-                  ],
-              mkTest
+                  ( BrokenIdeal
+                        [ Nothing,
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall l. l -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (30,31)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                        ]
+                  )
+                  ( BrokenCurrent
+                        [ Nothing,
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall l. l -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (25,26)) Nothing, ParameterInformation (InR (30,31)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                        ]
+                  ),
+              -- TODO fix bug of wrong arg range in the function type string
+              -- https://github.com/haskell/haskell-language-server/pull/4626#discussion_r2261133076
+              mkTestExpectFail
                   "RankNTypes(forall in middle), again"
                   [__i|
                       f :: a -> forall a. a -> a
@@ -276,9 +301,16 @@ main =
                       x = f 1
                           ^ ^
                   |]
-                  [ Nothing,
-                    Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. a -> forall a1. a1 -> a1" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (31,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
-                  ],
+                  ( BrokenIdeal
+                        [ Nothing,
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. a -> forall a1. a1 -> a1" Nothing (Just [ParameterInformation (InR (15,16)) Nothing, ParameterInformation (InR (31,33)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                        ]
+                  )
+                  ( BrokenCurrent
+                        [ Nothing,
+                          Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. a -> forall a1. a1 -> a1" Nothing (Just [ParameterInformation (InR (27,28)) Nothing, ParameterInformation (InR (31,32)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5,12)) Nothing, ParameterInformation (InR (26,27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+                        ]
+                  ),
               mkTest
                   "LinearTypes"
                   [__i|
@@ -365,6 +397,14 @@ mkTest name sourceCode expectedSignatureHelps =
         sourceCode
         expectedSignatureHelps
         getSignatureHelpFromSession
+
+mkTestExpectFail ::
+    TestName ->
+    Text ->
+    ExpectBroken 'Ideal [Maybe SimilarSignatureHelp] ->
+    ExpectBroken 'Current [Maybe SimilarSignatureHelp] ->
+    TestTree
+mkTestExpectFail name sourceCode _idealSignatureHelps = unCurrent >>> mkTest name sourceCode
 
 getSignatureHelpFromSession :: Text -> PosPrefixInfo -> IO (Maybe SimilarSignatureHelp)
 getSignatureHelpFromSession sourceCode (PosPrefixInfo _ _ _ position) =
