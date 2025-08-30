@@ -159,13 +159,13 @@ isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 refreshDeps :: KeySet -> Database -> Stack -> Key -> Result -> [KeySet] -> AIO Result
 refreshDeps visited db stack key result = \case
     -- no more deps to refresh
-    [] -> compute db stack key RunDependenciesSame (Just result)
+    [] -> compute' db stack key RunDependenciesSame (Just result)
     (dep:deps) -> do
         let newVisited = dep <> visited
         res <- builder db stack (toListKeySet (dep `differenceKeySet` visited))
         if isDirty result res
                 -- restart the computation if any of the deps are dirty
-                then compute db stack key RunDependenciesChanged (Just result)
+                then compute' db stack key RunDependenciesChanged (Just result)
                 -- else kick the rest of the deps
                 else refreshDeps newVisited db stack key result deps
 
@@ -176,10 +176,12 @@ refresh :: Database -> Stack -> Key -> Maybe Result -> AIO Result
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
     (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> refreshDeps mempty db stack key me (reverse deps)
-    (Right stack, _) -> compute db stack key RunDependenciesChanged result
+    (Right stack, _) -> compute' db stack key RunDependenciesChanged result
 
+compute' :: Database -> Stack -> Key -> RunMode -> Maybe Result -> AIO Result
+compute' db stack key mode result = liftIO $ compute db stack key mode result
 -- | Compute a key.
-compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> AIO Result
+compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> IO Result
 -- compute _ st k _ _ | traceShow ("compute", st, k) False = undefined
 compute db@Database{..} stack key mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
