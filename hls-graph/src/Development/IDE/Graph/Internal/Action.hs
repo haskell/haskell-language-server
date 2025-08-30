@@ -81,8 +81,10 @@ actionFork act k = do
 
 isAsyncException :: SomeException -> Bool
 isAsyncException e
+    | Just (_ :: SomeAsyncException) <- fromException e = True
     | Just (_ :: AsyncCancelled) <- fromException e = True
     | Just (_ :: AsyncException) <- fromException e = True
+    | Just (_ :: AsyncParentKill) <- fromException e = True
     | Just (_ :: ExitCode) <- fromException e = True
     | otherwise = False
 

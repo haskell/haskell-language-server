@@ -28,7 +28,7 @@ import qualified ListT
 import qualified StmContainers.Map                  as SMap
 import           StmContainers.Map                  (Map)
 import           System.Time.Extra                  (Seconds)
-import           UnliftIO                           (MonadUnliftIO)
+import           UnliftIO                           (MonadUnliftIO, readTVarIO)
 
 #if !MIN_VERSION_base(4,18,0)
 import           Control.Applicative                (liftA2)
@@ -80,8 +80,8 @@ getDatabase :: Action Database
 getDatabase = Action $ asks actionDatabase
 
 -- | waitForDatabaseRunningKeysAction waits for all keys in the database to finish running.
-waitForDatabaseRunningKeysAction :: Action ()
-waitForDatabaseRunningKeysAction = getDatabase >>= liftIO . waitForDatabaseRunningKeys
+-- waitForDatabaseRunningKeysAction :: Action ()
+-- waitForDatabaseRunningKeysAction = getDatabase >>= liftIO . waitForDatabaseRunningKeys
 
 ---------------------------------------------------------------------
 -- DATABASE
@@ -90,6 +90,12 @@ data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 newtype Step = Step Int
     deriving newtype (Eq,Ord,Hashable,Show)
+
+
+getShakeStep :: MonadIO m => ShakeDatabase -> m Step
+getShakeStep (ShakeDatabase _ _ db) = do
+    s <- readTVarIO $ databaseStep db
+    return s
 
 ---------------------------------------------------------------------
 -- Keys
@@ -115,8 +121,8 @@ data Database = Database {
     databaseValues :: !(Map Key KeyDetails)
     }
 
-waitForDatabaseRunningKeys :: Database -> IO ()
-waitForDatabaseRunningKeys = getDatabaseValues >=> mapM_ (waitRunning . snd)
+-- waitForDatabaseRunningKeys :: Database -> IO ()
+-- waitForDatabaseRunningKeys = getDatabaseValues >=> mapM_ (waitRunning . snd)
 
 getDatabaseValues :: Database -> IO [(Key, Status)]
 getDatabaseValues = atomically
@@ -129,24 +135,24 @@ data Status
     = Clean !Result
     | Dirty (Maybe Result)
     | Running {
-        runningStep   :: !Step,
-        runningWait   :: !(IO ()),
-        runningResult :: Result,     -- LAZY
-        runningPrev   :: !(Maybe Result)
+        runningStep :: !Step,
+        -- runningWait   :: !(IO ()),
+        -- runningResult :: Result,     -- LAZY
+        runningPrev :: !(Maybe Result)
         }
 
 viewDirty :: Step -> Status -> Status
-viewDirty currentStep (Running s _ _ re) | currentStep /= s = Dirty re
+viewDirty currentStep (Running s re) | currentStep /= s = Dirty re
 viewDirty _ other = other
 
 getResult :: Status -> Maybe Result
-getResult (Clean re)           = Just re
-getResult (Dirty m_re)         = m_re
-getResult (Running _ _ _ m_re) = m_re -- watch out: this returns the previous result
+getResult (Clean re)       = Just re
+getResult (Dirty m_re)     = m_re
+getResult (Running _ m_re) = m_re -- watch out: this returns the previous result
 
-waitRunning :: Status -> IO ()
-waitRunning Running{..} = runningWait
-waitRunning _           = return ()
+-- waitRunning :: Status -> IO ()
+-- waitRunning Running{..} = runningWait
+-- waitRunning _           = return ()
 
 data Result = Result {
     resultValue     :: !Value,
