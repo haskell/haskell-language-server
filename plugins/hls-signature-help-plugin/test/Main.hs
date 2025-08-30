@@ -3,6 +3,7 @@
 import           Control.Exception                        (throw)
 import           Control.Lens                             ((^.))
 import           Data.Maybe                               (fromJust)
+import           Data.String.Interpolate                  (__i)
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (PosPrefixInfo))
@@ -22,7 +23,7 @@ main =
             "signatureHelp"
             [ mkTest
                   "1 parameter"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int
                       f = _
                       x = f 1
@@ -39,7 +40,7 @@ main =
                   ],
               mkTest
                   "2 parameters"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int
                       f = _
                       x = f 1 2
@@ -52,7 +53,7 @@ main =
                   ],
               mkTest
                   "3 parameters"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int -> Int
                       f = _
                       x = f 1 2 3
@@ -65,7 +66,7 @@ main =
                   ],
               mkTest
                   "parentheses"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int
                       f = _
                       x = (f 1) 2
@@ -80,7 +81,7 @@ main =
                   ],
               mkTest
                   "newline"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int
                       f = _
                       x =
@@ -106,7 +107,7 @@ main =
                   ],
               mkTest
                   "nested"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int
                       f = _
                       g :: Int -> Int
@@ -125,7 +126,7 @@ main =
                   ],
               mkTest
                   "higher-order function"
-                  [trimming|
+                  [__i|
                       f :: (Int -> Int) -> Int -> Int
                       f = _
                       x = f (+ 1) 2
@@ -136,7 +137,7 @@ main =
                   ],
               mkTest
                   "type constraint"
-                  [trimming|
+                  [__i|
                       f :: (Num a) => a -> a -> a
                       f = _
                       x = f 1 2
@@ -148,7 +149,7 @@ main =
                   ],
               mkTest
                   "type constraint with kind signatures"
-                  [trimming|
+                  [__i|
                       x :: IO Bool
                       x = pure True
                            ^   ^
@@ -158,7 +159,7 @@ main =
                   ],
               mkTest
                   "2 type constraints"
-                  [trimming|
+                  [__i|
                       f :: forall a. (Eq a, Num a) => a -> a -> a
                       f = _
                       x = f True
@@ -169,7 +170,7 @@ main =
                   ],
               mkTest
                   "dynamic function"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int
                       f = _
                       g :: Int -> Int -> Int
@@ -180,7 +181,7 @@ main =
                   (replicate 18 Nothing),
               mkTest
                   "very long type"
-                  [trimming|
+                  [__i|
                       f :: Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
                       f = _
                       x = f 1
@@ -191,7 +192,7 @@ main =
                   ],
               mkTest
                   "very long type with type constraint"
-                  [trimming|
+                  [__i|
                       f :: Num abcdefghijklmn => abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn
                       f = _
                       x = f 1
@@ -202,7 +203,7 @@ main =
                   ],
               mkTest
                   "middle =>"
-                  [trimming|
+                  [__i|
                       f :: Eq a => a -> Num b => b -> b
                       f = _
                       x = f 1 True
@@ -220,7 +221,7 @@ main =
                   ],
               mkTest
                   "=> in argument"
-                  [trimming|
+                  [__i|
                       f :: Eq a => a -> (Num b => b -> b) -> a
                       f = _
                       x = f 1
@@ -241,7 +242,7 @@ main =
                   ),
               mkTest
                   "RankNTypes(forall in middle)"
-                  [trimming|
+                  [__i|
                       f :: Maybe a -> forall b. (a, b) -> b
                       f = _
                       x1 = f Nothing
@@ -258,7 +259,7 @@ main =
                   ],
               mkTest
                   "RankNTypes(forall in middle), another"
-                  [trimming|
+                  [__i|
                       f :: l -> forall a. a -> a
                       f = _
                       x = f 1
@@ -269,7 +270,7 @@ main =
                   ],
               mkTest
                   "RankNTypes(forall in middle), again"
-                  [trimming|
+                  [__i|
                       f :: a -> forall a. a -> a
                       f = _
                       x = f 1
@@ -280,8 +281,8 @@ main =
                   ],
               mkTest
                   "LinearTypes"
-                  [trimming|
-                      {-# LANGUAGE LinearTypes #-}
+                  [__i|
+                      {-\# LANGUAGE LinearTypes \#-}
                       f :: (a -> b) %1 -> a -> b
                       f = _
                       x1 = f negate
@@ -295,7 +296,7 @@ main =
                   ],
               mkTest
                   "function documentation"
-                  [trimming|
+                  [__i|
                       -- |The 'f' function does something to a bool value.
                       f :: Bool -> Bool
                       f = _
@@ -307,7 +308,7 @@ main =
                   ],
               mkTest
                   "function and arguments documentation"
-                  [trimming|
+                  [__i|
                       -- |Doc for function 'f'.
                       f ::
                         -- | The first 'Bool' argument
@@ -325,7 +326,7 @@ main =
                   ],
               mkTest
                   "imported function with no documentation"
-                  [trimming|
+                  [__i|
                       x = even 1
                           ^    ^
                   |]
@@ -334,7 +335,7 @@ main =
                   ],
               mkTest
                   "imported function with argument documentation"
-                  [trimming|
+                  [__i|
                       import Language.Haskell.TH.Lib (mkBytes)
                       x = mkBytes _
                           ^       ^
@@ -344,7 +345,7 @@ main =
                   ],
               mkTest
                   "TypeApplications"
-                  [trimming|
+                  [__i|
                       f :: a -> b -> c
                       f = _
                       x = f @Int @_ 1 True
