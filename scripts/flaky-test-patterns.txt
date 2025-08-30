@@ -3,11 +3,15 @@
 
 open close
 # non local variable
-Notification Handlers
+# Notification Handlers
 # bidirectional module dependency with hs-boot
 
 # InternalError over InvalidParams
 # ghcide restarts shake session on config changes:
-addDependentFile
+# addDependentFile
 # Another interesting one you can try:
-func-test::sends indefinite progress notifications
+# func-test::sends indefinite progress notifications
+# hls-pragmas-plugin-tests::/inline: RULES/
+
+# hls-graph cancel leaks asynchronous exception to the next session
+hls-hlint-plugin-tests::adding hlint flags to plugin configuration removes hlint diagnostics

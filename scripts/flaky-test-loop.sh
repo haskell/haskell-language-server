@@ -137,8 +137,8 @@ get_bin_path() {
 while true; do
   iter=$((iter+1))
   ts=$(date -Iseconds)
-  file_num=$((iter % 100))
-  if [[ ${file_num} -eq 0 ]]; then file_num=100; fi
+  file_num=$((iter % 2))
+  # if [[ ${file_num} -eq 0 ]]; then file_num=100; fi
 
   # Run each selected item (BIN::PATTERN) in this iteration
   for item in "${items[@]}"; do
