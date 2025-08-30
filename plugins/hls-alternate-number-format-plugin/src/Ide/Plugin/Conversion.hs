@@ -16,8 +16,11 @@ module Ide.Plugin.Conversion (
     , toFloatDecimal
     , toFloatExpDecimal
     , toHexFloat
+    , intFormats
+    , fracFormats
     , AlternateFormat
     , ExtensionNeeded(..)
+    , UnderscoreFormatType(..)
 ) where
 
 import           Data.List                     (delete)
@@ -171,17 +174,26 @@ toBinary = toBase showBin_ "0b"
     showBin_ = showIntAtBase 2 intToDigit
 
 toOctal = toBase showOct "0o"
+data UnderscoreFormatType
+    = NoUnderscores
+    | UseUnderscores Int
+    deriving (Show, Eq)
 
 toHex = toBase showHex "0x"
 
 toDecimal :: Integral a => a -> String
 toDecimal = toBase showInt ""
 
-toFloatDecimal :: RealFloat a => a -> String
-toFloatDecimal val = showFFloat Nothing val ""
+intFormats :: Map.Map IntFormatType [UnderscoreFormatType]
+intFormats = Map.fromList $ map (\t -> (t, intFormatUnderscore t)) enumerate
 
-toFloatExpDecimal :: RealFloat a => a -> String
-toFloatExpDecimal val = showEFloat Nothing val ""
+intFormatUnderscore :: IntFormatType -> [UnderscoreFormatType]
+intFormatUnderscore formatType = NoUnderscores : map UseUnderscores (case formatType of
+    IntDecimalFormat -> [3, 4]
+    HexFormat        -> [2, 4]
+    OctalFormat      -> [2, 4, 8]
+    BinaryFormat     -> [4]
+    NumDecimalFormat -> [3, 4])
 
 toHexFloat :: RealFloat a => a -> String
 toHexFloat val = showHFloat val ""
