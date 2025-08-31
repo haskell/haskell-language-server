@@ -161,7 +161,7 @@ while true; do
     HLS_TEST_HARNESS_STDERR="${LOG_STDERR}" \
     TASTY_NUM_THREADS=1 \
   TASTY_PATTERN="${pattern}" \
-  "$(get_bin_path "${bin_name}")" >"${log}" 2>&1
+  "$(get_bin_path "${bin_name}")" +RTS -l -olhlint.eventlog -RTS >"${log}" 2>&1
     set -e
 
   if grep -aFiq -- "${BROKEN_PIPE_RE}" "${log}"; then
@@ -170,7 +170,7 @@ while true; do
       echo "[loop] --- Tail (last 60 lines) ---" >&2
       tail -n 60 "${log}" >&2
       exit 1
-  elif grep -aEqi -- "${TEST_FAILED_RE}" "${log}"; then
+  elif grep -aEq -- "${TEST_FAILED_RE}" "${log}"; then
       echo "[loop] Test failure detected in iteration ${iter} for pattern '${pattern}'. Stopping." | tee -a "${log}" >&2
       echo "[loop] Log file: ${log} (abs: $(pwd)/${log})" | tee -a "${log}" >&2
       echo "[loop] --- Tail (last 60 lines) ---" >&2
