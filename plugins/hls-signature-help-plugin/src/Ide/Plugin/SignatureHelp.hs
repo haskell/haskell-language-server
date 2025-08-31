@@ -75,110 +75,110 @@ import           Language.LSP.Protocol.Types          (MarkupContent (MarkupCont
 data Log
 
 instance Pretty Log where
-    pretty = \case
+  pretty = \case
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor _recorder pluginId =
-    (defaultPluginDescriptor pluginId "Provides signature help of something callable")
-        { Ide.Types.pluginHandlers = mkPluginHandler SMethod_TextDocumentSignatureHelp signatureHelpProvider
-        }
+  (defaultPluginDescriptor pluginId "Provides signature help of something callable")
+    { Ide.Types.pluginHandlers = mkPluginHandler SMethod_TextDocumentSignatureHelp signatureHelpProvider
+    }
 
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken mSignatureHelpContext) = do
-    nfp <- getNormalizedFilePathE uri
-    results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
-        (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
-        case fromCurrentPosition positionMapping position of
-            Nothing -> pure []
-            Just oldPosition -> do
-                pure $
-                    extractInfoFromSmallestContainingFunctionApplicationAst
-                        oldPosition
-                        hieAst
-                        ( \span hieAst -> do
-                              let functionNode = getLeftMostNode hieAst
-                              (functionName, functionTypes) <- getNodeNameAndTypes hieKind functionNode
-                              argumentNumber <- getArgumentNumber span hieAst
-                              Just (functionName, functionTypes, argumentNumber)
-                        )
-    (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
-        mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
-        case mResult of
-            Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
-            Nothing -> pure (mempty, mempty)
-    case results of
-        [(_functionName, [], _argumentNumber)] -> pure $ InR Null
-        [(functionName, functionTypes, argumentNumber)] ->
-            pure $ InL $ mkSignatureHelp mSignatureHelpContext docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
-        _ -> pure $ InR Null
+  nfp <- getNormalizedFilePathE uri
+  results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
+    (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
+    case fromCurrentPosition positionMapping position of
+      Nothing -> pure []
+      Just oldPosition -> do
+        pure $
+          extractInfoFromSmallestContainingFunctionApplicationAst
+            oldPosition
+            hieAst
+            ( \span hieAst -> do
+                let functionNode = getLeftMostNode hieAst
+                (functionName, functionTypes) <- getNodeNameAndTypes hieKind functionNode
+                argumentNumber <- getArgumentNumber span hieAst
+                Just (functionName, functionTypes, argumentNumber)
+            )
+  (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
+    mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
+    case mResult of
+      Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
+      Nothing -> pure (mempty, mempty)
+  case results of
+    [(_functionName, [], _argumentNumber)] -> pure $ InR Null
+    [(functionName, functionTypes, argumentNumber)] ->
+      pure $ InL $ mkSignatureHelp mSignatureHelpContext docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
+    _ -> pure $ InR Null
 
 mkSignatureHelp :: Maybe SignatureHelpContext -> DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
 mkSignatureHelp mSignatureHelpContext docMap argDocMap argumentNumber functionName functionTypes =
-    SignatureHelp
-        (mkSignatureInformation docMap argDocMap argumentNumber functionName <$> functionTypes)
-        activeSignature
-        (Just $ InL argumentNumber)
-    where
-        activeSignature = case mSignatureHelpContext of
-            Just
-                ( SignatureHelpContext
-                      _triggerKind
-                      _triggerCharacter
-                      True
-                      (Just (SignatureHelp _signatures oldActivateSignature _activeParameter))
-                  ) -> oldActivateSignature
-            _ -> Just 0
+  SignatureHelp
+    (mkSignatureInformation docMap argDocMap argumentNumber functionName <$> functionTypes)
+    activeSignature
+    (Just $ InL argumentNumber)
+  where
+    activeSignature = case mSignatureHelpContext of
+      Just
+        ( SignatureHelpContext
+            _triggerKind
+            _triggerCharacter
+            True
+            (Just (SignatureHelp _signatures oldActivateSignature _activeParameter))
+          ) -> oldActivateSignature
+      _ -> Just 0
 
 mkSignatureInformation :: DocMap -> ArgDocMap -> UInt -> Name -> Type -> SignatureInformation
 mkSignatureInformation docMap argDocMap argumentNumber functionName functionType =
-    let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
-        mFunctionDoc = case lookupNameEnv docMap functionName of
-            Nothing      -> Nothing
-            Just spanDoc -> Just $ InR $ mkMarkdownDoc spanDoc
-        thisArgDocMap = case lookupNameEnv argDocMap functionName of
-            Nothing             -> mempty
-            Just thisArgDocMap' -> thisArgDocMap'
-     in SignatureInformation
-            (functionNameLabelPrefix <> printOutputableOneLine functionType)
-            mFunctionDoc
-            (Just $ mkArguments thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType)
-            (Just $ InL argumentNumber)
+  let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
+      mFunctionDoc = case lookupNameEnv docMap functionName of
+        Nothing      -> Nothing
+        Just spanDoc -> Just $ InR $ mkMarkdownDoc spanDoc
+      thisArgDocMap = case lookupNameEnv argDocMap functionName of
+        Nothing             -> mempty
+        Just thisArgDocMap' -> thisArgDocMap'
+   in SignatureInformation
+        (functionNameLabelPrefix <> printOutputableOneLine functionType)
+        mFunctionDoc
+        (Just $ mkArguments thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType)
+        (Just $ InL argumentNumber)
 
 mkArguments :: IntMap SpanDoc -> UInt -> Type -> [ParameterInformation]
 mkArguments thisArgDocMap offset functionType =
-    [ ParameterInformation (InR range) mArgDoc
-    | (argIndex, range) <- zip [0..] (bimap (+offset) (+offset) <$> findArgumentRanges functionType)
-    , let mArgDoc = case IntMap.lookup argIndex thisArgDocMap of
-              Nothing      -> Nothing
-              Just spanDoc -> Just $ InR $ mkMarkdownDoc $ removeUris spanDoc
-    ]
-    where
-        -- we already show uris in the function doc, no need to duplicate them in the arg doc
-        removeUris (SpanDocString docs _uris) = SpanDocString docs emptyUris
-        removeUris (SpanDocText docs _uris)   = SpanDocText docs emptyUris
+  [ ParameterInformation (InR range) mArgDoc
+    | (argIndex, range) <- zip [0 ..] (bimap (+ offset) (+ offset) <$> findArgumentRanges functionType),
+      let mArgDoc = case IntMap.lookup argIndex thisArgDocMap of
+            Nothing      -> Nothing
+            Just spanDoc -> Just $ InR $ mkMarkdownDoc $ removeUris spanDoc
+  ]
+  where
+    -- we already show uris in the function doc, no need to duplicate them in the arg doc
+    removeUris (SpanDocString docs _uris) = SpanDocString docs emptyUris
+    removeUris (SpanDocText docs _uris)   = SpanDocText docs emptyUris
 
-        emptyUris = SpanDocUris Nothing Nothing
+    emptyUris = SpanDocUris Nothing Nothing
 
 mkMarkdownDoc :: SpanDoc -> MarkupContent
 mkMarkdownDoc = spanDocToMarkdown >>> T.unlines >>> MarkupContent MarkupKind_Markdown
 
 findArgumentRanges :: Type -> [(UInt, UInt)]
 findArgumentRanges functionType =
-    let functionTypeString = printOutputableOneLine functionType
-        functionTypeStringLength = fromIntegral $ T.length functionTypeString
-        splitFunctionTypes = filter notTypeConstraint $ splitFunTysIgnoringForAll functionType
-        splitFunctionTypeStrings = printOutputableOneLine . fst <$> splitFunctionTypes
-        -- reverse to avoid matching "a" of "forall a" in "forall a. a -> a"
-        reversedRanges =
-            drop 1 $ -- do not need the range of the result (last) type
-                findArgumentStringRanges
-                    0
-                    (T.reverse functionTypeString)
-                    (T.reverse <$> reverse splitFunctionTypeStrings)
-     in reverse $ modifyRange functionTypeStringLength <$> reversedRanges
-    where
-        modifyRange functionTypeStringLength (start, end) =
-            (functionTypeStringLength - end, functionTypeStringLength - start)
+  let functionTypeString = printOutputableOneLine functionType
+      functionTypeStringLength = fromIntegral $ T.length functionTypeString
+      splitFunctionTypes = filter notTypeConstraint $ splitFunTysIgnoringForAll functionType
+      splitFunctionTypeStrings = printOutputableOneLine . fst <$> splitFunctionTypes
+      -- reverse to avoid matching "a" of "forall a" in "forall a. a -> a"
+      reversedRanges =
+        drop 1 $ -- do not need the range of the result (last) type
+          findArgumentStringRanges
+            0
+            (T.reverse functionTypeString)
+            (T.reverse <$> reverse splitFunctionTypeStrings)
+   in reverse $ modifyRange functionTypeStringLength <$> reversedRanges
+  where
+    modifyRange functionTypeStringLength (start, end) =
+      (functionTypeStringLength - end, functionTypeStringLength - start)
 
 {-
 The implemented method uses both structured type and unstructured type string.
@@ -203,25 +203,25 @@ Some tricky cases are as follows:
 -}
 findArgumentStringRanges :: UInt -> Text -> [Text] -> [(UInt, UInt)]
 findArgumentStringRanges _totalPrefixLength _functionTypeString [] = []
-findArgumentStringRanges totalPrefixLength functionTypeString (argumentTypeString:restArgumentTypeStrings) =
-    let (prefix, match) = T.breakOn argumentTypeString functionTypeString
-        prefixLength = fromIntegral $ T.length prefix
-        argumentTypeStringLength = fromIntegral $ T.length argumentTypeString
-        start = totalPrefixLength + prefixLength
-     in (start, start + argumentTypeStringLength)
-            : findArgumentStringRanges
-              (totalPrefixLength + prefixLength + argumentTypeStringLength)
-              (T.drop (fromIntegral argumentTypeStringLength) match)
-              restArgumentTypeStrings
+findArgumentStringRanges totalPrefixLength functionTypeString (argumentTypeString : restArgumentTypeStrings) =
+  let (prefix, match) = T.breakOn argumentTypeString functionTypeString
+      prefixLength = fromIntegral $ T.length prefix
+      argumentTypeStringLength = fromIntegral $ T.length argumentTypeString
+      start = totalPrefixLength + prefixLength
+   in (start, start + argumentTypeStringLength)
+        : findArgumentStringRanges
+          (totalPrefixLength + prefixLength + argumentTypeStringLength)
+          (T.drop (fromIntegral argumentTypeStringLength) match)
+          restArgumentTypeStrings
 
 -- similar to 'splitFunTys' but
 --   1) the result (last) type is included and
 --   2) toplevel foralls are ignored
 splitFunTysIgnoringForAll :: Type -> [(Type, Maybe FunTyFlag)]
 splitFunTysIgnoringForAll ty = case ty & dropForAlls & splitFunTy_maybe of
-    Just (funTyFlag, _mult, argumentType, resultType) ->
-        (argumentType, Just funTyFlag) : splitFunTysIgnoringForAll resultType
-    Nothing -> [(ty, Nothing)]
+  Just (funTyFlag, _mult, argumentType, resultType) ->
+    (argumentType, Just funTyFlag) : splitFunTysIgnoringForAll resultType
+  Nothing -> [(ty, Nothing)]
 
 notTypeConstraint :: (Type, Maybe FunTyFlag) -> Bool
 notTypeConstraint (_type, Just FTF_T_T) = True
@@ -229,60 +229,60 @@ notTypeConstraint (_type, Nothing)      = True
 notTypeConstraint _                     = False
 
 extractInfoFromSmallestContainingFunctionApplicationAst ::
-    Position -> HieASTs a -> (RealSrcSpan -> HieAST a -> Maybe b) -> [b]
+  Position -> HieASTs a -> (RealSrcSpan -> HieAST a -> Maybe b) -> [b]
 extractInfoFromSmallestContainingFunctionApplicationAst position hieAsts extractInfo =
-    M.elems $ flip M.mapMaybeWithKey (getAsts hieAsts) $ \hiePath hieAst ->
-        smallestContainingSatisfying (positionToSpan hiePath position) (nodeHasAnnotation ("HsApp", "HsExpr")) hieAst
-            >>= extractInfo (positionToSpan hiePath position)
-    where
-        positionToSpan hiePath position =
-            let loc = mkLoc hiePath position in mkRealSrcSpan loc loc
-        mkLoc (LexicalFastString hiePath) (Position line character) =
-            mkRealSrcLoc hiePath (fromIntegral line + 1) (fromIntegral character + 1)
+  M.elems $ flip M.mapMaybeWithKey (getAsts hieAsts) $ \hiePath hieAst ->
+    smallestContainingSatisfying (positionToSpan hiePath position) (nodeHasAnnotation ("HsApp", "HsExpr")) hieAst
+      >>= extractInfo (positionToSpan hiePath position)
+  where
+    positionToSpan hiePath position =
+      let loc = mkLoc hiePath position in mkRealSrcSpan loc loc
+    mkLoc (LexicalFastString hiePath) (Position line character) =
+      mkRealSrcLoc hiePath (fromIntegral line + 1) (fromIntegral character + 1)
 
 type Annotation = (FastStringCompat, FastStringCompat)
 
 nodeHasAnnotation :: Annotation -> HieAST a -> Bool
 nodeHasAnnotation annotation hieAst = case sourceNodeInfo hieAst of
-    Nothing       -> False
-    Just nodeInfo -> isAnnotationInNodeInfo annotation nodeInfo
+  Nothing       -> False
+  Just nodeInfo -> isAnnotationInNodeInfo annotation nodeInfo
 
 getLeftMostNode :: HieAST a -> HieAST a
 getLeftMostNode thisNode =
-    case nodeChildren thisNode of
-        []           -> thisNode
-        leftChild: _ -> getLeftMostNode leftChild
+  case nodeChildren thisNode of
+    []            -> thisNode
+    leftChild : _ -> getLeftMostNode leftChild
 
 getNodeNameAndTypes :: HieKind a -> HieAST a -> Maybe (Name, [Type])
 getNodeNameAndTypes hieKind hieAst =
-    if nodeHasAnnotation ("HsVar", "HsExpr") hieAst
-        then case hieAst & getSourceNodeIds & M.filter isUse & M.assocs of
-            [(identifier, identifierDetails)] ->
-                case extractName identifier of
-                    Nothing -> Nothing
-                    Just name ->
-                        let mTypeOfName = identType identifierDetails
-                            typesOfNode = case sourceNodeInfo hieAst of
-                                Nothing       -> []
-                                Just nodeInfo -> nodeType nodeInfo
-                            allTypes = case mTypeOfName of
-                                Nothing -> typesOfNode
-                                Just typeOfName -> typeOfName : filter (isDifferentType typeOfName) typesOfNode
-                         in Just (name, filterCoreTypes allTypes)
-            [] -> Nothing
-            _ -> Nothing -- seems impossible
-        else Nothing
-    where
-        extractName = rightToMaybe
+  if nodeHasAnnotation ("HsVar", "HsExpr") hieAst
+    then case hieAst & getSourceNodeIds & M.filter isUse & M.assocs of
+      [(identifier, identifierDetails)] ->
+        case extractName identifier of
+          Nothing -> Nothing
+          Just name ->
+            let mTypeOfName = identType identifierDetails
+                typesOfNode = case sourceNodeInfo hieAst of
+                  Nothing       -> []
+                  Just nodeInfo -> nodeType nodeInfo
+                allTypes = case mTypeOfName of
+                  Nothing -> typesOfNode
+                  Just typeOfName -> typeOfName : filter (isDifferentType typeOfName) typesOfNode
+             in Just (name, filterCoreTypes allTypes)
+      [] -> Nothing
+      _ -> Nothing -- seems impossible
+    else Nothing
+  where
+    extractName = rightToMaybe
 
-        isDifferentType type1 type2 = case hieKind of
-            HieFresh       -> deBruijnize type1 /= deBruijnize type2
-            HieFromDisk {} -> type1 /= type2
+    isDifferentType type1 type2 = case hieKind of
+      HieFresh       -> deBruijnize type1 /= deBruijnize type2
+      HieFromDisk {} -> type1 /= type2
 
-        filterCoreTypes types = case hieKind of
-            HieFresh       -> types
-            -- ignore this case since this only happens before we finish startup
-            HieFromDisk {} -> []
+    filterCoreTypes types = case hieKind of
+      HieFresh       -> types
+      -- ignore this case since this only happens before we finish startup
+      HieFromDisk {} -> []
 
 isUse :: IdentifierDetails a -> Bool
 isUse = identInfo >>> S.member Use
@@ -290,19 +290,19 @@ isUse = identInfo >>> S.member Use
 -- Just 1 means the first argument
 getArgumentNumber :: RealSrcSpan -> HieAST a -> Maybe Integer
 getArgumentNumber span hieAst
-    | nodeHasAnnotation ("HsApp", "HsExpr") hieAst =
-          case nodeChildren hieAst of
-              [leftChild, _] ->
-                  if span `isRealSubspanOf` nodeSpan leftChild
-                      then Nothing
-                      else getArgumentNumber span leftChild >>= \argumentNumber -> Just (argumentNumber + 1)
-              _ -> Nothing -- impossible
-    | nodeHasAnnotation ("HsAppType", "HsExpr") hieAst =
-          case nodeChildren hieAst of
-              [leftChild, _] -> getArgumentNumber span leftChild
-              _              -> Nothing -- impossible
-    | otherwise =
-          case nodeChildren hieAst of
-              []      -> Just 0 -- the function is found
-              [child] -> getArgumentNumber span child -- ignore irrelevant nodes
-              _       -> Nothing
+  | nodeHasAnnotation ("HsApp", "HsExpr") hieAst =
+      case nodeChildren hieAst of
+        [leftChild, _] ->
+          if span `isRealSubspanOf` nodeSpan leftChild
+            then Nothing
+            else getArgumentNumber span leftChild >>= \argumentNumber -> Just (argumentNumber + 1)
+        _ -> Nothing -- impossible
+  | nodeHasAnnotation ("HsAppType", "HsExpr") hieAst =
+      case nodeChildren hieAst of
+        [leftChild, _] -> getArgumentNumber span leftChild
+        _              -> Nothing -- impossible
+  | otherwise =
+      case nodeChildren hieAst of
+        []      -> Just 0 -- the function is found
+        [child] -> getArgumentNumber span child -- ignore irrelevant nodes
+        _       -> Nothing
