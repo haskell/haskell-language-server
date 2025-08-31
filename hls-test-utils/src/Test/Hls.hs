@@ -357,7 +357,7 @@ goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
 -- For example:
 --
 -- @
---  parameterisedCursorTest "Cursor Test" [trimming|
+--  parameterisedCursorTest "Cursor Test" [__i|
 --       foo = 2
 --        ^
 --       bar = 3
@@ -380,7 +380,7 @@ goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
 -- TODO: Many Haskell and Cabal source may contain '^' characters for good reasons.
 -- We likely need a way to change the character for certain test cases in the future.
 --
--- The quasi quoter 'trimming' is very helpful to define such tests, as it additionally
+-- The quasi quoter '__i' is very helpful to define such tests, as it additionally
 -- allows to interpolate haskell values and functions. We reexport this quasi quoter
 -- for easier usage.
 parameterisedCursorTest :: (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
