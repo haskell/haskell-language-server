@@ -98,8 +98,8 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
             ( \span hieAst -> do
                 let functionNode = getLeftMostNode hieAst
                 (functionName, functionTypes) <- getNodeNameAndTypes hieKind functionNode
-                argumentNumber <- getArgumentNumber span hieAst
-                Just (functionName, functionTypes, argumentNumber)
+                parameterIndex <- getParameterIndex span hieAst
+                Just (functionName, functionTypes, parameterIndex)
             )
   (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
     mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
@@ -107,17 +107,17 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
       Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
       Nothing -> pure (mempty, mempty)
   case results of
-    [(_functionName, [], _argumentNumber)] -> pure $ InR Null
-    [(functionName, functionTypes, argumentNumber)] ->
-      pure $ InL $ mkSignatureHelp mSignatureHelpContext docMap argDocMap (fromIntegral argumentNumber - 1) functionName functionTypes
+    [(_functionName, [], _parameterIndex)] -> pure $ InR Null
+    [(functionName, functionTypes, parameterIndex)] ->
+      pure $ InL $ mkSignatureHelp mSignatureHelpContext docMap argDocMap (fromIntegral parameterIndex - 1) functionName functionTypes
     _ -> pure $ InR Null
 
 mkSignatureHelp :: Maybe SignatureHelpContext -> DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
-mkSignatureHelp mSignatureHelpContext docMap argDocMap argumentNumber functionName functionTypes =
+mkSignatureHelp mSignatureHelpContext docMap argDocMap parameterIndex functionName functionTypes =
   SignatureHelp
-    (mkSignatureInformation docMap argDocMap argumentNumber functionName <$> functionTypes)
+    (mkSignatureInformation docMap argDocMap parameterIndex functionName <$> functionTypes)
     activeSignature
-    (Just $ InL argumentNumber)
+    (Just $ InL parameterIndex)
   where
     activeSignature = case mSignatureHelpContext of
       Just
@@ -130,7 +130,7 @@ mkSignatureHelp mSignatureHelpContext docMap argDocMap argumentNumber functionNa
       _ -> Just 0
 
 mkSignatureInformation :: DocMap -> ArgDocMap -> UInt -> Name -> Type -> SignatureInformation
-mkSignatureInformation docMap argDocMap argumentNumber functionName functionType =
+mkSignatureInformation docMap argDocMap parameterIndex functionName functionType =
   let functionNameLabelPrefix = printOutputableOneLine (ppr functionName) <> " :: "
       mFunctionDoc = case lookupNameEnv docMap functionName of
         Nothing      -> Nothing
@@ -141,19 +141,19 @@ mkSignatureInformation docMap argDocMap argumentNumber functionName functionType
    in SignatureInformation
         (functionNameLabelPrefix <> printOutputableOneLine functionType)
         mFunctionDoc
-        (Just $ mkArguments thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType)
-        (Just $ InL argumentNumber)
+        (Just $ mkParameterInformations thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType)
+        (Just $ InL parameterIndex)
 
-mkArguments :: IntMap SpanDoc -> UInt -> Type -> [ParameterInformation]
-mkArguments thisArgDocMap offset functionType =
-  [ ParameterInformation (InR range) mArgDoc
-    | (argIndex, range) <- zip [0 ..] (bimap (+ offset) (+ offset) <$> findArgumentRanges functionType),
-      let mArgDoc = case IntMap.lookup argIndex thisArgDocMap of
+mkParameterInformations :: IntMap SpanDoc -> UInt -> Type -> [ParameterInformation]
+mkParameterInformations thisArgDocMap offset functionType =
+  [ ParameterInformation (InR range) mParameterDoc
+    | (parameterIndex, range) <- zip [0 ..] (bimap (+ offset) (+ offset) <$> findParameterRanges functionType),
+      let mParameterDoc = case IntMap.lookup parameterIndex thisArgDocMap of
             Nothing      -> Nothing
             Just spanDoc -> Just $ InR $ mkMarkdownDoc $ removeUris spanDoc
   ]
   where
-    -- we already show uris in the function doc, no need to duplicate them in the arg doc
+    -- we already show uris in the function doc, no need to duplicate them in the parameter doc
     removeUris (SpanDocString docs _uris) = SpanDocString docs emptyUris
     removeUris (SpanDocText docs _uris)   = SpanDocText docs emptyUris
 
@@ -162,8 +162,8 @@ mkArguments thisArgDocMap offset functionType =
 mkMarkdownDoc :: SpanDoc -> MarkupContent
 mkMarkdownDoc = spanDocToMarkdown >>> T.unlines >>> MarkupContent MarkupKind_Markdown
 
-findArgumentRanges :: Type -> [(UInt, UInt)]
-findArgumentRanges functionType =
+findParameterRanges :: Type -> [(UInt, UInt)]
+findParameterRanges functionType =
   let functionTypeString = printOutputableOneLine functionType
       functionTypeStringLength = fromIntegral $ T.length functionTypeString
       splitFunctionTypes = filter notTypeConstraint $ splitFunTysIgnoringForAll functionType
@@ -171,7 +171,7 @@ findArgumentRanges functionType =
       -- reverse to avoid matching "a" of "forall a" in "forall a. a -> a"
       reversedRanges =
         drop 1 $ -- do not need the range of the result (last) type
-          findArgumentStringRanges
+          findParameterStringRanges
             0
             (T.reverse functionTypeString)
             (T.reverse <$> reverse splitFunctionTypeStrings)
@@ -193,7 +193,7 @@ Some tricky cases are as follows:
   f :: forall a. Maybe a -> forall b. (a, b) -> b
 - '=>' can appear anywhere in a type
   g :: forall a b. Eq a => a -> Num b => b -> b
-- ppr the first argument type of '(a -> b) -> a -> b' is 'a -> b' (no parentheses)
+- ppr the first parameter type of '(a -> b) -> a -> b' is 'a -> b' (no parentheses)
 - 'forall' is not always shown
 
 Alternative method 2: use only unstructured type string
@@ -201,26 +201,26 @@ This method is hard to implement because we need to parse the type string.
 Some tricky cases are as follows:
 - h :: forall a (m :: Type -> Type). Monad m => a -> m a
 -}
-findArgumentStringRanges :: UInt -> Text -> [Text] -> [(UInt, UInt)]
-findArgumentStringRanges _totalPrefixLength _functionTypeString [] = []
-findArgumentStringRanges totalPrefixLength functionTypeString (argumentTypeString : restArgumentTypeStrings) =
-  let (prefix, match) = T.breakOn argumentTypeString functionTypeString
+findParameterStringRanges :: UInt -> Text -> [Text] -> [(UInt, UInt)]
+findParameterStringRanges _totalPrefixLength _functionTypeString [] = []
+findParameterStringRanges totalPrefixLength functionTypeString (parameterTypeString : restParameterTypeStrings) =
+  let (prefix, match) = T.breakOn parameterTypeString functionTypeString
       prefixLength = fromIntegral $ T.length prefix
-      argumentTypeStringLength = fromIntegral $ T.length argumentTypeString
+      parameterTypeStringLength = fromIntegral $ T.length parameterTypeString
       start = totalPrefixLength + prefixLength
-   in (start, start + argumentTypeStringLength)
-        : findArgumentStringRanges
-          (totalPrefixLength + prefixLength + argumentTypeStringLength)
-          (T.drop (fromIntegral argumentTypeStringLength) match)
-          restArgumentTypeStrings
+   in (start, start + parameterTypeStringLength)
+        : findParameterStringRanges
+          (totalPrefixLength + prefixLength + parameterTypeStringLength)
+          (T.drop (fromIntegral parameterTypeStringLength) match)
+          restParameterTypeStrings
 
 -- similar to 'splitFunTys' but
 --   1) the result (last) type is included and
 --   2) toplevel foralls are ignored
 splitFunTysIgnoringForAll :: Type -> [(Type, Maybe FunTyFlag)]
 splitFunTysIgnoringForAll ty = case ty & dropForAlls & splitFunTy_maybe of
-  Just (funTyFlag, _mult, argumentType, resultType) ->
-    (argumentType, Just funTyFlag) : splitFunTysIgnoringForAll resultType
+  Just (funTyFlag, _mult, parameterType, resultType) ->
+    (parameterType, Just funTyFlag) : splitFunTysIgnoringForAll resultType
   Nothing -> [(ty, Nothing)]
 
 notTypeConstraint :: (Type, Maybe FunTyFlag) -> Bool
@@ -287,22 +287,22 @@ getNodeNameAndTypes hieKind hieAst =
 isUse :: IdentifierDetails a -> Bool
 isUse = identInfo >>> S.member Use
 
--- Just 1 means the first argument
-getArgumentNumber :: RealSrcSpan -> HieAST a -> Maybe Integer
-getArgumentNumber span hieAst
+-- Just 1 means the first parameter
+getParameterIndex :: RealSrcSpan -> HieAST a -> Maybe Integer
+getParameterIndex span hieAst
   | nodeHasAnnotation ("HsApp", "HsExpr") hieAst =
       case nodeChildren hieAst of
         [leftChild, _] ->
           if span `isRealSubspanOf` nodeSpan leftChild
             then Nothing
-            else getArgumentNumber span leftChild >>= \argumentNumber -> Just (argumentNumber + 1)
+            else getParameterIndex span leftChild >>= \parameterIndex -> Just (parameterIndex + 1)
         _ -> Nothing -- impossible
   | nodeHasAnnotation ("HsAppType", "HsExpr") hieAst =
       case nodeChildren hieAst of
-        [leftChild, _] -> getArgumentNumber span leftChild
+        [leftChild, _] -> getParameterIndex span leftChild
         _              -> Nothing -- impossible
   | otherwise =
       case nodeChildren hieAst of
         []      -> Just 0 -- the function is found
-        [child] -> getArgumentNumber span child -- ignore irrelevant nodes
+        [child] -> getParameterIndex span child -- ignore irrelevant nodes
         _       -> Nothing

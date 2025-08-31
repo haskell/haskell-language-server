@@ -202,7 +202,7 @@ main =
           [ Nothing,
             Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall abcdefghijklmn. Num abcdefghijklmn => abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn -> abcdefghijklmn" Nothing (Just [ParameterInformation (InR (50, 64)) Nothing, ParameterInformation (InR (68, 82)) Nothing, ParameterInformation (InR (86, 100)) Nothing, ParameterInformation (InR (104, 118)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> Integer -> Integer -> Integer -> Integer" Nothing (Just [ParameterInformation (InR (5, 12)) Nothing, ParameterInformation (InR (16, 23)) Nothing, ParameterInformation (InR (27, 34)) Nothing, ParameterInformation (InR (38, 45)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
           ],
-        -- TODO fix bug of wrong arg range in the function type string
+        -- TODO fix bug of wrong parameter range in the function type string
         -- https://github.com/haskell/haskell-language-server/pull/4626#discussion_r2261133076
         mkTestExpectFail
           "middle =>"
@@ -233,7 +233,7 @@ main =
               ]
           ),
         mkTest
-          "=> in argument"
+          "=> in parameter"
           [__i|
             f :: Eq a => a -> (Num b => b -> b) -> a
             f = _
@@ -270,7 +270,7 @@ main =
             Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15, 22)) Nothing, ParameterInformation (InR (36, 42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Bool -> forall b. (Bool, b) -> b" Nothing (Just [ParameterInformation (InR (5, 15)) Nothing, ParameterInformation (InR (29, 38)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
             Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a. Maybe a -> forall b. (a, b) -> b" Nothing (Just [ParameterInformation (InR (15, 22)) Nothing, ParameterInformation (InR (36, 42)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Maybe Integer -> forall b. (Integer, b) -> b" Nothing (Just [ParameterInformation (InR (5, 18)) Nothing, ParameterInformation (InR (32, 44)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
           ],
-        -- TODO fix bug of wrong arg range in the function type string
+        -- TODO fix bug of wrong parameter range in the function type string
         -- https://github.com/haskell/haskell-language-server/pull/4626#discussion_r2261133076
         mkTestExpectFail
           "RankNTypes(forall in middle), another"
@@ -290,7 +290,7 @@ main =
                 Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall l. l -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (25, 26)) Nothing, ParameterInformation (InR (30, 31)) Nothing]) (Just (InL 0)), SignatureInformation "f :: Integer -> forall a. a -> a" Nothing (Just [ParameterInformation (InR (5, 12)) Nothing, ParameterInformation (InR (26, 27)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
               ]
           ),
-        -- TODO fix bug of wrong arg range in the function type string
+        -- TODO fix bug of wrong parameter range in the function type string
         -- https://github.com/haskell/haskell-language-server/pull/4626#discussion_r2261133076
         mkTestExpectFail
           "RankNTypes(forall in middle), again"
@@ -338,13 +338,13 @@ main =
             Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: Bool -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "The  `f`  function does something to a bool value") (Just [ParameterInformation (InR (5, 9)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
           ],
         mkTest
-          "function and arguments documentation"
+          "function and parameters documentation"
           [__i|
             -- |Doc for function 'f'.
             f ::
-              -- | The first 'Bool' argument
+              -- | The first 'Bool' parameter
               Bool ->
-              -- | The second 'Int' argument
+              -- | The second 'Int' parameter
               Int ->
               -- | The return value
               Bool
@@ -353,7 +353,7 @@ main =
                 ^ ^
           |]
           [ Nothing,
-            Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: Bool -> Int -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "Doc for function  `f`") (Just [ParameterInformation (InR (5, 9)) (Just $ InR $ MarkupContent MarkupKind_Markdown "The first  `Bool`  argument"), ParameterInformation (InR (13, 16)) (Just $ InR $ MarkupContent MarkupKind_Markdown "The second  `Int`  argument")]) (Just (InL 0))] (Just 0) (Just (InL 0))
+            Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: Bool -> Int -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "Doc for function  `f`") (Just [ParameterInformation (InR (5, 9)) (Just $ InR $ MarkupContent MarkupKind_Markdown "The first  `Bool`  parameter"), ParameterInformation (InR (13, 16)) (Just $ InR $ MarkupContent MarkupKind_Markdown "The second  `Int`  parameter")]) (Just (InL 0))] (Just 0) (Just (InL 0))
           ],
         mkTest
           "imported function with no documentation"
@@ -365,7 +365,7 @@ main =
             Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "even :: forall a. Integral a => a -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "") (Just [ParameterInformation (InR (32, 33)) Nothing]) (Just (InL 0)), SignatureInformation "even :: Integer -> Bool" (Just $ InR $ MarkupContent MarkupKind_Markdown "") (Just [ParameterInformation (InR (8, 15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
           ],
         mkTest
-          "imported function with argument documentation"
+          "imported function with parameter documentation"
           [__i|
             import Language.Haskell.TH.Lib (mkBytes)
             x = mkBytes _
