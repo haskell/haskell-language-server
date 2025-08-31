@@ -217,93 +217,93 @@ getContextTests =
 -- ------------------------------------------------------------------------
 
 libraryStanzaData :: T.Text
-libraryStanzaData = [trimming|
-cabal-version:      3.0
-name:               simple-cabal
-library
-    default-language: Haskell98
-    build-depends:
+libraryStanzaData = [__i|
+    cabal-version:      3.0
+    name:               simple-cabal
+    library
+        default-language: Haskell98
+        build-depends:
 
-ma
+    ma
 |]
 
 executableStanzaData :: T.Text
-executableStanzaData = [trimming|
-cabal-version:      3.0
-name:               simple-cabal
-executable exeName
-    default-language: Haskell2010
-    hs-source-dirs: test/preprocessor
+executableStanzaData = [__i|
+    cabal-version:      3.0
+    name:               simple-cabal
+    executable exeName
+        default-language: Haskell2010
+        hs-source-dirs: test/preprocessor
 |]
 
 topLevelData :: T.Text
-topLevelData = [trimming|
-cabal-version:      3.0
-name:
+topLevelData = [__i|
+    cabal-version:      3.0
+    name:
 
 
 
-          eee
+              eee
 |]
 
 conditionalData :: T.Text
-conditionalData = [trimming|
-cabal-version:      3.0
-name:               simple-cabal
-library
-    if os(windows)
-       buildable:
-    elif os(linux)
-       buildable:
-    else
-       buildable:
+conditionalData = [__i|
+    cabal-version:      3.0
+    name:               simple-cabal
+    library
+        if os(windows)
+           buildable:
+        elif os(linux)
+           buildable:
+        else
+           buildable:
 |]
 multiLineOptsData :: T.Text
-multiLineOptsData = [trimming|
-cabal-version:      3.0
-name:
+multiLineOptsData = [__i|
+    cabal-version:      3.0
+    name:
 
 
-library
-    build-depends:
-        base,
+    library
+        build-depends:
+            base,
 
-        text ,
+            text ,
 |]
 
 multiPositionTestData :: T.Text
-multiPositionTestData = [trimming|
-cabal-version:      3.4
-       ^             ^
-category:           Development
-^
-name:               haskell-language-server
-description:
-  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+multiPositionTestData = [__i|
+    cabal-version:      3.4
+           ^             ^
+    category:           Development
     ^
-extra-source-files:
-  README.md
-  ChangeLog.md
-  test/testdata/**/*.project
-  test/testdata/**/*.cabal
-  test/testdata/**/*.yaml
-  test/testdata/**/*.hs
-  test/testdata/**/*.json
-    ^
-  -- These globs should only match test/testdata
-  plugins/**/*.project
+    name:               haskell-language-server
+    description:
+      Please see the README on GitHub at <https://github.com/haskell/haskell-language-server\#readme>
+        ^
+    extra-source-files:
+      README.md
+      ChangeLog.md
+      test/testdata/**/*.project
+      test/testdata/**/*.cabal
+      test/testdata/**/*.yaml
+      test/testdata/**/*.hs
+      test/testdata/**/*.json
+        ^
+      -- These globs should only match test/testdata
+      plugins/**/*.project
 
-source-repository head
-     ^              ^   ^
-  type:     git
-    ^    ^    ^  ^
-  location: https://github.com/haskell/haskell-language-server
+    source-repository head
+         ^              ^   ^
+      type:     git
+        ^    ^    ^  ^
+      location: https://github.com/haskell/haskell-language-server
 
-  ^
-common cabalfmt
+      ^
+    common cabalfmt
 
-  ^
-  build-depends: haskell-language-server:hls-cabal-fmt-plugin
-    ^            ^
-  cpp-options: -Dhls_cabalfmt
+      ^
+      build-depends: haskell-language-server:hls-cabal-fmt-plugin
+        ^            ^
+      cpp-options: -Dhls_cabalfmt
 |]
