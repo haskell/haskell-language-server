@@ -1,5 +1,6 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs     #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE GADTs                    #-}
 
 module Ide.Plugin.SignatureHelp (descriptor) where
 
@@ -64,10 +65,10 @@ import           Language.LSP.Protocol.Types          (MarkupContent (MarkupCont
                                                        Null (Null),
                                                        ParameterInformation (ParameterInformation),
                                                        Position (Position),
-                                                       SignatureHelp (SignatureHelp),
-                                                       SignatureHelpContext (SignatureHelpContext),
+                                                       SignatureHelp (..),
+                                                       SignatureHelpContext (..),
                                                        SignatureHelpParams (SignatureHelpParams),
-                                                       SignatureInformation (SignatureInformation),
+                                                       SignatureInformation (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        UInt,
                                                        type (|?) (InL, InR))
@@ -115,17 +116,19 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
 mkSignatureHelp :: Maybe SignatureHelpContext -> DocMap -> ArgDocMap -> UInt -> Name -> [Type] -> SignatureHelp
 mkSignatureHelp mSignatureHelpContext docMap argDocMap parameterIndex functionName functionTypes =
   SignatureHelp
-    (mkSignatureInformation docMap argDocMap parameterIndex functionName <$> functionTypes)
-    activeSignature
-    (Just $ InL parameterIndex)
+    { _signatures = mkSignatureInformation docMap argDocMap parameterIndex functionName <$> functionTypes,
+      _activeSignature = activeSignature,
+      _activeParameter = Just $ InL parameterIndex
+    }
   where
     activeSignature = case mSignatureHelpContext of
       Just
         ( SignatureHelpContext
-            _triggerKind
-            _triggerCharacter
-            True
-            (Just (SignatureHelp _signatures oldActivateSignature _activeParameter))
+            { _triggerKind,
+              _triggerCharacter,
+              _isRetrigger = True,
+              _activeSignatureHelp = Just (SignatureHelp _signatures oldActivateSignature _activeParameter)
+            }
           ) -> oldActivateSignature
       _ -> Just 0
 
@@ -139,10 +142,11 @@ mkSignatureInformation docMap argDocMap parameterIndex functionName functionType
         Nothing             -> mempty
         Just thisArgDocMap' -> thisArgDocMap'
    in SignatureInformation
-        (functionNameLabelPrefix <> printOutputableOneLine functionType)
-        mFunctionDoc
-        (Just $ mkParameterInformations thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType)
-        (Just $ InL parameterIndex)
+        { _label = functionNameLabelPrefix <> printOutputableOneLine functionType,
+          _documentation = mFunctionDoc,
+          _parameters = Just $ mkParameterInformations thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType,
+          _activeParameter = Just $ InL parameterIndex
+        }
 
 mkParameterInformations :: IntMap SpanDoc -> UInt -> Type -> [ParameterInformation]
 mkParameterInformations thisArgDocMap offset functionType =
