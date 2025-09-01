@@ -76,7 +76,7 @@ import           Language.LSP.Protocol.Types          (MarkupContent (MarkupCont
 data Log
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \case {}
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor _recorder pluginId =
