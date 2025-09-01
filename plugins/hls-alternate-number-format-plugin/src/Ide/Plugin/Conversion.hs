@@ -84,11 +84,11 @@ underscoreExtensions = \case
 
 alternateIntFormat :: Integer -> IntFormatType -> UnderscoreFormatType -> AlternateFormat
 alternateIntFormat val formatType underscoreFormat = case formatType of
-    IntDecimalFormat -> (T.pack $ toDecimal underscoreFormat val , underscoreExtensions underscoreFormat)
-    HexFormat        -> (T.pack $ toHex underscoreFormat val , underscoreExtensions underscoreFormat)
-    OctalFormat      -> (T.pack $ toOctal underscoreFormat val , underscoreExtensions underscoreFormat)
-    BinaryFormat     -> (T.pack $ toBinary underscoreFormat val , underscoreExtensions underscoreFormat <> ExtensionNeeded [BinaryLiterals])
-    NumDecimalFormat -> (T.pack $ toFloatExpDecimal underscoreFormat (fromInteger @Double val) , underscoreExtensions underscoreFormat <> ExtensionNeeded [NumDecimals])
+    IntDecimalFormat -> (T.pack $ toDecimal underscoreFormat val, underscoreExtensions underscoreFormat)
+    HexFormat        -> (T.pack $ toHex underscoreFormat val, underscoreExtensions underscoreFormat)
+    OctalFormat      -> (T.pack $ toOctal underscoreFormat val, underscoreExtensions underscoreFormat)
+    BinaryFormat     -> (T.pack $ toBinary underscoreFormat val, underscoreExtensions underscoreFormat <> ExtensionNeeded [BinaryLiterals])
+    NumDecimalFormat -> (T.pack $ toFloatExpDecimal underscoreFormat (fromInteger @Double val), underscoreExtensions underscoreFormat <> ExtensionNeeded [NumDecimals])
 
 alternateFracFormat :: Rational -> FracFormatType -> UnderscoreFormatType -> AlternateFormat
 alternateFracFormat val formatType underscoreFormat = case formatType of
