@@ -2,25 +2,42 @@ module Development.IDE.Plugin.Plugins.FillHole
   ( suggestFillHole
   ) where
 
+import           Control.Lens
 import           Control.Monad                             (guard)
 import           Data.Char
 import qualified Data.Text                                 as T
-import           Development.IDE.Plugin.Plugins.Diagnostic
-import           Language.LSP.Protocol.Types               (Diagnostic (..),
-                                                            TextEdit (TextEdit))
+import           Development.IDE                           (FileDiagnostic,
+                                                            fdLspDiagnosticL,
+                                                            printOutputable)
+import           Development.IDE.GHC.Compat                (SDoc,
+                                                            defaultSDocContext,
+                                                            renderWithContext)
+import           Development.IDE.GHC.Compat.Error          (TcRnMessageDetailed (..),
+                                                            _TcRnMessageWithCtx,
+                                                            _TcRnMessageWithInfo,
+                                                            hole_occ,
+                                                            msgEnvelopeErrorL)
+import           Development.IDE.Plugin.Plugins.Diagnostic (diagReportHoleError)
+import           Development.IDE.Types.Diagnostics         (_SomeStructuredMessage,
+                                                            fdStructuredMessageL)
+import           GHC.Tc.Errors.Types                       (ErrInfo (..))
+import           GHC.Utils.Outputable                      (SDocContext (..))
+import           Ide.PluginUtils                           (unescape)
+import           Language.LSP.Protocol.Lens                (HasRange (..))
+import           Language.LSP.Protocol.Types               (TextEdit (..))
 import           Text.Regex.TDFA                           (MatchResult (..),
                                                             (=~))
 
-suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillHole Diagnostic{_range=_range,..}
-    | Just holeName <- extractHoleName _message
-    , (holeFits, refFits) <- processHoleSuggestions (T.lines _message) =
-      let isInfixHole = _message =~ addBackticks holeName :: Bool in
-        map (proposeHoleFit holeName False isInfixHole) holeFits
-        ++ map (proposeHoleFit holeName True isInfixHole) refFits
+suggestFillHole :: FileDiagnostic -> [(T.Text, TextEdit)]
+suggestFillHole diag
+    | Just holeName <- extractHoleName diag
+    , Just (ErrInfo ctx suppl) <- extractErrInfo diag
+    , (holeFits, refFits) <- processHoleSuggestions $ T.lines (printErr suppl) = do
+        let isInfixHole = printErr ctx =~ addBackticks holeName :: Bool in
+          map (proposeHoleFit holeName False isInfixHole) holeFits
+          ++ map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
     where
-      extractHoleName = fmap (headOrThrow "impossible") . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
       addBackticks text = "`" <> text <> "`"
       addParens text = "(" <> text <> ")"
       proposeHoleFit holeName parenthise isInfixHole name =
@@ -30,14 +47,30 @@ suggestFillHole Diagnostic{_range=_range,..}
             let isInfixOperator = firstChr == '('
                 name' = getOperatorNotation isInfixHole isInfixOperator name in
               ( "Replace " <> holeName <> " with " <> name
-              , TextEdit _range (if parenthise then addParens name' else name')
+              , TextEdit
+                    (diag ^. fdLspDiagnosticL . range)
+                    (if parenthise then addParens name' else name')
               )
       getOperatorNotation True False name                    = addBackticks name
       getOperatorNotation True True name                     = T.drop 1 (T.dropEnd 1 name)
       getOperatorNotation _isInfixHole _isInfixOperator name = name
-      headOrThrow msg = \case
-        [] -> error msg
-        (x:_) -> x
+
+extractHoleName :: FileDiagnostic -> Maybe T.Text
+extractHoleName diag = do
+    hole <- diagReportHoleError diag
+    Just $ printOutputable (hole_occ hole)
+
+extractErrInfo :: FileDiagnostic -> Maybe ErrInfo
+extractErrInfo diag = do
+    (_, TcRnMessageDetailed errInfo _) <-
+        diag
+            ^? fdStructuredMessageL
+            . _SomeStructuredMessage
+            . msgEnvelopeErrorL
+            . _TcRnMessageWithCtx
+            . _TcRnMessageWithInfo
+
+    Just errInfo
 
 processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
 processHoleSuggestions mm = (holeSuggestions, refSuggestions)
@@ -76,22 +109,19 @@ processHoleSuggestions mm = (holeSuggestions, refSuggestions)
       -- get the text indented under Valid refinement hole fits
       refinementSection <-
         getIndentedGroupsBy (=~ t " *Valid refinement hole fits include") mm
-      case refinementSection of
-        [] -> error "GHC provided invalid hole fit options"
-        (_:refinementSection) -> do
-          -- get the text for each hole fit
-          holeFitLines <- getIndentedGroups refinementSection
-          let holeFit = T.strip $ T.unwords holeFitLines
-          guard $ not $ holeFit =~ t "Some refinement hole fits suppressed"
-          return holeFit
+      -- Valid refinement hole fits line can contain a hole fit
+      refinementFitLine <-
+        mapHead
+            (mrAfter . (=~ t " *Valid refinement hole fits include"))
+            refinementSection
+      let refinementHoleFit = T.strip $ T.takeWhile (/= ':') refinementFitLine
+      guard $ not $ refinementHoleFit  =~ t "Some refinement hole fits suppressed"
+      guard $ not $ T.null refinementHoleFit
+      return refinementHoleFit
 
     mapHead f (a:aa) = f a : aa
     mapHead _ []     = []
 
--- > getIndentedGroups [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1,", "  l1", "  l2"], [" H2", "  l3"]]
-getIndentedGroups :: [T.Text] -> [[T.Text]]
-getIndentedGroups [] = []
-getIndentedGroups ll@(l:_) = getIndentedGroupsBy ((== indentation l) . indentation) ll
 -- |
 -- > getIndentedGroupsBy (" H" `isPrefixOf`) [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1", "  l1", "  l2"], [" H2", "  l3"]]
 getIndentedGroupsBy :: (T.Text -> Bool) -> [T.Text] -> [[T.Text]]
@@ -103,3 +133,18 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
+-- TODO: This doesn't seem to handle qualified imports properly:
+--
+-- plugins/hls-refactor-plugin/test/Main.hs:4011:
+-- CodeAction with title "Replace _toException with E.toException" not found in
+-- [..., "Replace _toException with toException", ...]
+printErr :: SDoc -> T.Text
+printErr =
+    unescape
+    . T.pack
+    . renderWithContext
+        ( defaultSDocContext
+            { sdocCanUseUnicode = False
+            , sdocSuppressUniques = True
+            }
+        )
