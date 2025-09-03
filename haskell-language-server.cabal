@@ -242,6 +242,7 @@ library hls-cabal-plugin
   exposed-modules:
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.Dependencies
     Ide.Plugin.Cabal.Completion.CabalFields
     Ide.Plugin.Cabal.Completion.Completer.FilePath
     Ide.Plugin.Cabal.Completion.Completer.Module
@@ -267,6 +268,7 @@ library hls-cabal-plugin
 
 
   build-depends:
+    , array
     , bytestring
     , Cabal-syntax          >= 3.7
     , containers
