@@ -84,10 +84,33 @@ descriptor _recorder pluginId =
     { Ide.Types.pluginHandlers = mkPluginHandler SMethod_TextDocumentSignatureHelp signatureHelpProvider
     }
 
+{- Note [Stale Results in Signature Help]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Stale results work well when users are reading code.
+
+When we add support for writing code, such as automatically triggering signature
+help when a space char is inserted, we probably have to use up-to-date results.
+-}
+
+{-
+Here is a brief description of the algorithm of finding relevant bits from HIE AST
+1. let 'hsAppNode' = the smallest 'HsApp' AST node which contains the cursor postion
+   See 'extractInfoFromSmallestContainingFunctionApplicationAst'
+2. let 'functionNode' = the left-most node of 'hsAppNode'
+   See 'getLeftMostNode'
+3. try to get 'functionName' and 'functionTypes' from 'functionNode'
+   We get 'Nothing' when we cannot get that info
+   See 'getNodeNameAndTypes'
+4. count 'parameterIndex' by traversing the 'hsAppNode' subtree from its root to the cursor position
+   We get 'Nothing' when either the cursor position is at 'functionNode'
+   or we encounter some AST node we do not yet know how to continue our traversal
+   See 'getParameterIndex'
+-}
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken mSignatureHelpContext) = do
   nfp <- getNormalizedFilePathE uri
   results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
+    -- see Note [Stale Results in Signature Help]
     (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
     case fromCurrentPosition positionMapping position of
       Nothing -> pure []
@@ -103,6 +126,7 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
                 Just (functionName, functionTypes, parameterIndex)
             )
   (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
+    -- see Note [Stale Results in Signature Help]
     mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
     case mResult of
       Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
@@ -142,7 +166,12 @@ mkSignatureInformation docMap argDocMap parameterIndex functionName functionType
         Nothing             -> mempty
         Just thisArgDocMap' -> thisArgDocMap'
    in SignatureInformation
-        { _label = functionNameLabelPrefix <> printOutputableOneLine functionType,
+        { -- Server-side line wrapping may be better since more context is available.
+          -- However, server-side line wrapping may make it harder to calculate
+          -- parameter ranges.  In addition, some clients, such as vscode, ignore
+          -- server-side line wrapping and instead does client-side line wrapping.
+          -- So we choose not to do server-side line wrapping.
+          _label = functionNameLabelPrefix <> printOutputableOneLine functionType,
           _documentation = mFunctionDoc,
           _parameters = Just $ mkParameterInformations thisArgDocMap (fromIntegral $ T.length functionNameLabelPrefix) functionType,
           _activeParameter = Just $ InL parameterIndex
@@ -271,6 +300,10 @@ getNodeNameAndTypes hieKind hieAst =
                   Just nodeInfo -> nodeType nodeInfo
                 allTypes = case mTypeOfName of
                   Nothing -> typesOfNode
+                  -- (the last?) one type of 'typesOfNode' may (always?) be the same as 'typeOfName'
+                  -- To avoid generating two identical signature helps, we do a filtering here
+                  -- This is similar to 'dropEnd1' in Development.IDE.Spans.AtPoint.atPoint
+                  -- TODO perhaps extract a common function
                   Just typeOfName -> typeOfName : filter (isDifferentType typeOfName) typesOfNode
              in Just (name, filterCoreTypes allTypes)
       [] -> Nothing
