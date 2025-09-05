@@ -46,14 +46,15 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service          (shutdown)
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
-import           Development.IDE.Core.WorkerThread
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb,
                                                         WithHieDbShield (..))
+import           Development.IDE.WorkerThread
 import           Ide.Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
+import           System.Time.Extra                     (Seconds, sleep)
 import           System.Timeout                        (timeout)
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
@@ -67,10 +68,13 @@ data Log
   | LogShutDownTimeout Int
   | LogServerExitWith (Either () Int)
   | LogReactorShutdownConfirmed !T.Text
+  | LogInitializeIdeStateTookTooLong Seconds
   deriving Show
 
 instance Pretty Log where
   pretty = \case
+    LogInitializeIdeStateTookTooLong seconds ->
+        "Building the initial session took more than" <+> pretty seconds <+> "seconds"
     LogReactorShutdownRequested b ->
       "Requested reactor shutdown; stop signal posted: " <+> pretty b
     LogReactorShutdownConfirmed msg ->
@@ -350,8 +354,8 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
 runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
 runWithWorkerThreads recorder dbLoc f = evalContT $ do
             (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
-            sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
-            sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
+            sessionRestartTQueue <- withWorkerQueueSimple (logWith (cmapWithPrio Session.LogSessionWorkerThread recorder) Debug) "RestartTQueue"
+            sessionLoaderTQueue <- withWorkerQueueSimple (logWith (cmapWithPrio Session.LogSessionWorkerThread recorder) Debug) "SessionLoaderTQueue"
             liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.

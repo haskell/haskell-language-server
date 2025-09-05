@@ -45,7 +45,6 @@ import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
-import           Development.IDE.Core.WorkerThread
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -53,6 +52,7 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake                  (toKey)
+import           Development.IDE.WorkerThread
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Logger                                   (Pretty (pretty),
                                                                Priority (Info),

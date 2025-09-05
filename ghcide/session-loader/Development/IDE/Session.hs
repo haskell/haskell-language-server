@@ -105,12 +105,12 @@ import qualified Data.HashSet                        as Set
 import qualified Data.Set                            as OS
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing        (withTrace)
-import           Development.IDE.Core.WorkerThread
 import qualified Development.IDE.GHC.Compat.Util     as Compat
 import           Development.IDE.Session.Diagnostics (renderCradleError)
 import           Development.IDE.Types.Shake         (WithHieDb,
                                                       WithHieDbShield (..),
                                                       toNoFileKey)
+import           Development.IDE.WorkerThread
 import           GHC.Data.Graph.Directed
 import           HieDb.Create
 import           HieDb.Types
@@ -152,6 +152,14 @@ data Log
   | LogSessionLoadingChanged
   | LogSessionWorkerThread LogWorkerThread
 deriving instance Show Log
+
+instance Pretty LogWorkerThread where
+  pretty = \case
+    LogThreadEnding t -> "Worker thread ending:" <+> pretty t
+    LogThreadEnded t -> "Worker thread ended:" <+> pretty t
+    LogSingleWorkStarting t -> "Worker starting a unit of work: " <+> pretty t
+    LogSingleWorkEnded t -> "Worker ended a unit of work: " <+> pretty t
+    LogMainThreadId t tid -> "Main thread for" <+> pretty t <+> "is" <+> pretty (show tid)
 
 instance Pretty Log where
   pretty = \case
@@ -384,7 +392,7 @@ runWithDb recorder fp = ContT $ \k -> do
     _ <- withWriteDbRetryable deleteMissingRealFiles
     _ <- withWriteDbRetryable garbageCollectTypeNames
 
-    runContT (withWorkerQueue (cmapWithPrio LogSessionWorkerThread recorder) "hiedb thread" (writer withWriteDbRetryable))
+    runContT (withWorkerQueue (logWith (cmapWithPrio LogSessionWorkerThread recorder) Debug) "hiedb thread" (writer withWriteDbRetryable))
         $ \chan -> withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
   where
     writer withHieDbRetryable l = do

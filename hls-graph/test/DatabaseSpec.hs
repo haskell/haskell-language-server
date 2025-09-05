@@ -2,6 +2,8 @@
 
 module DatabaseSpec where
 
+import           Control.Monad.IO.Class                  (MonadIO (..))
+import           Control.Monad.Trans.Cont                (evalContT)
 import           Development.IDE.Graph                   (newKey, shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabase)
@@ -9,16 +11,22 @@ import           Development.IDE.Graph.Internal.Action   (apply1)
 import           Development.IDE.Graph.Internal.Database (compute, incDatabase)
 import           Development.IDE.Graph.Internal.Rules    (addRule)
 import           Development.IDE.Graph.Internal.Types
+import           Development.IDE.WorkerThread
 import           Example
 import           System.Time.Extra                       (timeout)
 import           Test.Hspec
 
 
+itInThread :: String -> (TaskQueue (IO ()) -> IO ()) -> SpecWith ()
+itInThread name ex = it name $ evalContT $ do
+    thread <- withWorkerQueueSimple (const $ return ()) "hls-graph test"
+    liftIO $ ex thread
+
 spec :: Spec
 spec = do
     describe "Evaluation" $ do
-        it "detects cycles" $ do
-            db <- shakeNewDatabase shakeOptions $ do
+        itInThread "detects cycles" $ \q -> do
+            db <- shakeNewDatabase q shakeOptions $ do
                 ruleBool
                 addRule $ \Rule _old _mode -> do
                     True <- apply1 (Rule @Bool)
@@ -27,10 +35,9 @@ spec = do
             timeout 1 res `shouldThrow` \StackException{} -> True
 
     describe "compute" $ do
-      it "build step and changed step updated correctly" $ do
-        (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $ do
+      itInThread "build step and changed step updated correctly" $ \q -> do
+        (ShakeDatabase _ _ theDb) <- shakeNewDatabase q shakeOptions $ do
           ruleStep
-
         let k = newKey $ Rule @()
         -- ChangedRecomputeSame
         r1@Result{resultChanged=rc1, resultBuilt=rb1} <- compute theDb emptyStack k RunDependenciesChanged Nothing

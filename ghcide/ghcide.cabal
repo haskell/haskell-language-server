@@ -142,7 +142,6 @@ library
     Development.IDE.Core.Shake
     Development.IDE.Core.Tracing
     Development.IDE.Core.UseStale
-    Development.IDE.Core.WorkerThread
     Development.IDE.GHC.Compat
     Development.IDE.GHC.Compat.Core
     Development.IDE.GHC.Compat.CmdLine
