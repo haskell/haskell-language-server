@@ -122,17 +122,17 @@ builder db stack keys = do
     return res
 
 builderOne :: Database -> Stack -> Key -> AIO (Key, IO Result)
-builderOne db@Database {..} stack id = UE.mask_ $ do
+builderOne db@Database {..} stack id = UE.uninterruptibleMask $ \restore -> do
   current <- liftIO $ readTVarIO databaseStep
-  (k, registerWaitResult) <- liftIO $ atomicallyNamed "builder" $ do
+  (k, registerWaitResult) <- restore $ liftIO $ atomicallyNamed "builder" $ do
     -- Spawn the id if needed
     status <- SMap.lookup id databaseValues
     val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
       Dirty s -> do
         let act =
               asyncWithCleanUp
-                ( refresh db stack id s
-                    `UE.onException` liftIO (atomicallyNamed "builder - onException" (SMap.focus updateDirty id databaseValues))
+                ((restore $ refresh db stack id s)
+                    `UE.onException` UE.uninterruptibleMask_ (liftIO (atomicallyNamed "builder - onException" (SMap.focus updateDirty id databaseValues)))
                 )
         SMap.focus (updateStatus $ Running current s) id databaseValues
         return act
