@@ -18,6 +18,9 @@ module Development.IDE.GHC.Compat.Error (
   DriverMessage (..),
   -- * General Diagnostics
   Diagnostic(..),
+  -- * GHC Hints
+  GhcHint (SuggestExtension),
+  LanguageExtensionHint (..),
   -- * Prisms and lenses for error selection
   _TcRnMessage,
   _TcRnMessageWithCtx,

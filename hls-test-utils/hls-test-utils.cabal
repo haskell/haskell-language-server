@@ -49,8 +49,8 @@ library
     , lsp
     , lsp-test                ^>=0.17
     , lsp-types               ^>=2.3
-    , neat-interpolation
     , safe-exceptions
+    , string-interpolate
     , tasty
     , tasty-expected-failure
     , tasty-golden

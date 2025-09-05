@@ -292,7 +292,7 @@ reloadOnCabalChangeTests = testGroup "Reload on .cabal changes"
         cabalDoc <- openDoc "simple-reload.cabal" "cabal"
         skipManyTill anyMessage cabalKickDone
         saveDoc cabalDoc
-            [trimming|
+            [__i|
             cabal-version:      3.4
             name:               simple-reload
             version:            0.1.0.0

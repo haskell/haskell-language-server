@@ -47,7 +47,7 @@ module Test.Hls.Util
     -- * Extract positions from input file.
     , extractCursorPositions
     , mkParameterisedLabel
-    , trimming
+    , __i
   )
 where
 
@@ -81,11 +81,11 @@ import           Test.Tasty.ExpectedFailure               (expectFailBecause,
 import           Test.Tasty.HUnit                         (assertFailure)
 
 import qualified Data.List                                as List
+import           Data.String.Interpolate                  (__i)
 import qualified Data.Text.Internal.Search                as T
 import qualified Data.Text.Utf16.Rope.Mixed               as Rope
 import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
-import           NeatInterpolation                        (trimming)
 
 noLiteralCaps :: ClientCapabilities
 noLiteralCaps = def & L.textDocument ?~ textDocumentCaps

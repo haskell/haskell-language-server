@@ -244,9 +244,7 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
-  , testWithDummyPlugin "bidirectional module dependency with hs-boot"
-        (mkIdeTestFs [directCradle ["ModuleA", "ModuleB"]])
-        $ do
+  , testWithDummyPluginEmpty "bidirectional module dependency with hs-boot" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "import {-# SOURCE #-} ModuleB"

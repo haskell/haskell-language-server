@@ -443,22 +443,20 @@ This will install `eglot` and enable it by default in `haskell-mode`.
 To configure `haskell-language-server` we use the `eglot-workspace-configuration` variable.
 With `M-x eglot-show-workspace-configuration` you can see the JSON that `eglot` will send to `haskell-language-server`.
 See <https://joaotavora.github.io/eglot/#Customizing-Eglot> for more information.
-As an example, the setting below will disable the `stan` plugin.
+As an example, the setting below will disable the `stan` plugin and use `fourmolu` for formatting:
 
 ```emacs-lisp
 (use-package eglot
   :ensure t
   :config
-  (add-hook 'haskell-mode-hook 'eglot-ensure)
+  (add-hook 'haskell-mode-hook 'eglot-ensure) ; start eglot automatically in haskell projects
   :config
   (setq-default eglot-workspace-configuration
-                '((haskell
-                   (plugin
-                    (stan
-                     (globalOn . :json-false))))))  ;; disable stan
+                '(:haskell (:plugin (:stan (:globalOn :json-false)) ; disable stan
+                            :formattingProvider "fourmolu")))       ; use fourmolu instead of ormolu
   :custom
-  (eglot-autoshutdown t)  ;; shutdown language server after closing last file
-  (eglot-confirm-server-initiated-edits nil)  ;; allow edits without confirmation
+  (eglot-autoshutdown t)  ; shutdown language server after closing last file
+  (eglot-confirm-server-initiated-edits nil)  ; allow edits without confirmation
   )
 ```
 

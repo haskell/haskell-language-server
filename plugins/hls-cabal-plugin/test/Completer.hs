@@ -392,39 +392,39 @@ extract item = case item ^. L.textEdit of
   _            -> error ""
 
 importTestData :: T.Text
-importTestData = [trimming|
-cabal-version:      3.0
-name:               hls-cabal-plugin
-version:            0.1.0.0
-synopsis:
-homepage:
-license:            MIT
-license-file:       LICENSE
-author:             Fendor
-maintainer:         fendor@posteo.de
-category:           Development
-extra-source-files: CHANGELOG.md
+importTestData = [__i|
+  cabal-version:      3.0
+  name:               hls-cabal-plugin
+  version:            0.1.0.0
+  synopsis:
+  homepage:
+  license:            MIT
+  license-file:       LICENSE
+  author:             Fendor
+  maintainer:         fendor@posteo.de
+  category:           Development
+  extra-source-files: CHANGELOG.md
 
-common defaults
-  default-language: GHC2021
-  -- Should have been in GHC2021, an oversight
-  default-extensions: ExplicitNamespaces
+  common defaults
+    default-language: GHC2021
+    -- Should have been in GHC2021, an oversight
+    default-extensions: ExplicitNamespaces
 
-common test-defaults
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  common test-defaults
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
 
-library
+  library
+      import:
+              ^
+      exposed-modules:  IDE.Plugin.Cabal
+      build-depends:    base ^>=4.14.3.0
+      hs-source-dirs:   src
+      default-language: Haskell2010
+
+  common notForLib
+    default-language: GHC2021
+
+  test-suite tests
     import:
             ^
-    exposed-modules:  IDE.Plugin.Cabal
-    build-depends:    base ^>=4.14.3.0
-    hs-source-dirs:   src
-    default-language: Haskell2010
-
-common notForLib
-  default-language: GHC2021
-
-test-suite tests
-  import:
-          ^
 |]
