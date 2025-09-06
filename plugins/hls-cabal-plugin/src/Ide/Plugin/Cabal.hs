@@ -55,6 +55,8 @@ import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
+import qualified Text.Fuzzy.Levenshtein                        as Fuzzy
+import qualified Text.Fuzzy.Parallel                           as Fuzzy
 import           Text.Regex.TDFA
 
 data Log
@@ -234,7 +236,9 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       fakeLspCursorPosition = Position lineNr (col + fromIntegral (T.length fieldName))
       lspPrefixInfo = Ghcide.getCompletionPrefixFromRope fakeLspCursorPosition fileContents
       cabalPrefixInfo = Completions.getCabalPrefixInfo fp lspPrefixInfo
-    completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields
+    completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields $
+      Fuzzy.Matcher $
+        Fuzzy.levenshteinScored Fuzzy.defChunkSize
     let completionTexts = fmap (^. JL.label) completions
     pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
 
@@ -365,12 +369,21 @@ completion recorder ide _ complParams = do
         Just (fields, _) -> do
           let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
               cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
-          let res = computeCompletionsAt recorder ide cabalPrefInfo path fields
+              res = computeCompletionsAt recorder ide cabalPrefInfo path fields $
+                Fuzzy.Matcher $
+                  Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null
 
-computeCompletionsAt :: Recorder (WithPriority Log) -> IdeState -> Types.CabalPrefixInfo -> FilePath -> [Syntax.Field Syntax.Position] -> IO [CompletionItem]
-computeCompletionsAt recorder ide prefInfo fp fields = do
+computeCompletionsAt
+  :: Recorder (WithPriority Log)
+  -> IdeState
+  -> Types.CabalPrefixInfo
+  -> FilePath
+  -> [Syntax.Field Syntax.Position]
+  -> Fuzzy.Matcher T.Text
+  -> IO [CompletionItem]
+computeCompletionsAt recorder ide prefInfo fp fields matcher = do
   runMaybeT (context fields) >>= \case
     Nothing -> pure []
     Just ctx -> do
@@ -390,6 +403,7 @@ computeCompletionsAt recorder ide prefInfo fp fields = do
                   case fst ctx of
                     Types.Stanza _ name -> name
                     _                   -> Nothing
+              , matcher = matcher
               }
       completions <- completer completerRecorder completerData
       pure completions
