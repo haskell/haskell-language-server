@@ -58,7 +58,7 @@ echo "[loop] Starting at ${start_ts}" >&2
 # - Use case-insensitive extended regex for failures/timeouts in logs
 # - Broken pipe: case-insensitive fixed-string search
 BROKEN_PIPE_RE='Broken pipe'
-TEST_FAILED_RE='failed|timeout'
+TEST_FAILED_RE='tests failed|timeout'
 DEBUG_DETECT="${DEBUG_DETECT:-0}"
 
 # Resolve what to run each iteration as pairs of BIN and PATTERN
