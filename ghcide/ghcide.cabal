@@ -83,6 +83,7 @@ library
     , list-t
     , lsp                          ^>=2.7
     , lsp-types                    ^>=2.3
+    , MemoTrie
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
@@ -196,6 +197,7 @@ library
     Development.IDE.Types.Shake
     Generics.SYB.GHC
     Text.Fuzzy.Parallel
+    Text.Fuzzy.Levenshtein
 
   other-modules:
     Development.IDE.Core.FileExists
