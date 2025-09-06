@@ -60,6 +60,7 @@ library
     , Diff                         ^>=0.5 || ^>=1.0.0
     , directory
     , dlist
+    , edit-distance
     , enummapset
     , exceptions
     , extra                        >=1.7.14
@@ -83,7 +84,6 @@ library
     , list-t
     , lsp                          ^>=2.7
     , lsp-types                    ^>=2.3
-    , MemoTrie
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative
