@@ -263,6 +263,7 @@ data PluginConfig =
       , plcDiagnosticsOn    :: !Bool
       , plcHoverOn          :: !Bool
       , plcSymbolsOn        :: !Bool
+      , plcSignatureHelpOn  :: !Bool
       , plcCompletionOn     :: !Bool
       , plcRenameOn         :: !Bool
       , plcSelectionRangeOn :: !Bool
@@ -281,6 +282,7 @@ instance Default PluginConfig where
       , plcDiagnosticsOn    = True
       , plcHoverOn          = True
       , plcSymbolsOn        = True
+      , plcSignatureHelpOn  = True
       , plcCompletionOn     = True
       , plcRenameOn         = True
       , plcSelectionRangeOn = True
@@ -290,7 +292,7 @@ instance Default PluginConfig where
       }
 
 instance ToJSON PluginConfig where
-    toJSON (PluginConfig g ch ca ih cl d h s c rn sr fr st cfg) = r
+    toJSON (PluginConfig g ch ca ih cl d h s sh c rn sr fr st cfg) = r
       where
         r = object [ "globalOn"         .= g
                    , "callHierarchyOn"  .= ch
@@ -300,6 +302,7 @@ instance ToJSON PluginConfig where
                    , "diagnosticsOn"    .= d
                    , "hoverOn"          .= h
                    , "symbolsOn"        .= s
+                   , "signatureHelpOn"  .= sh
                    , "completionOn"     .= c
                    , "renameOn"         .= rn
                    , "selectionRangeOn" .= sr
@@ -541,6 +544,9 @@ instance PluginMethod Request Method_TextDocumentHover where
 instance PluginMethod Request Method_TextDocumentDocumentSymbol where
   handlesRequest = pluginEnabledWithFeature plcSymbolsOn
 
+instance PluginMethod Request Method_TextDocumentSignatureHelp where
+  handlesRequest = pluginEnabledWithFeature plcSignatureHelpOn
+
 instance PluginMethod Request Method_CompletionItemResolve where
   -- See Note [Resolve in PluginHandlers]
   handlesRequest = pluginEnabledResolve plcCompletionOn
@@ -763,6 +769,9 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
             name' = ds ^. L.name
             si = SymbolInformation name' (ds ^. L.kind) Nothing parent (ds ^. L.deprecated) loc
         in [si] <> children'
+
+instance PluginRequestMethod Method_TextDocumentSignatureHelp where
+  combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_CompletionItemResolve where
   -- A resolve request should only have one response.

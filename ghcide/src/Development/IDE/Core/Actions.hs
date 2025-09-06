@@ -63,7 +63,7 @@ getAtPoint file pos = runMaybeT $ do
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
-  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+  dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf dkMap env pos'

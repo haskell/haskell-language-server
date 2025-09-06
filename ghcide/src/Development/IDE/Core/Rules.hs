@@ -582,7 +582,7 @@ getDocMapRule recorder =
 
 -- | Persistent rule to ensure that hover doesn't block on startup
 persistentDocMapRule :: Rules ()
-persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty, idDelta, Nothing)
+persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty mempty, idDelta, Nothing)
 
 readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk recorder file = do
