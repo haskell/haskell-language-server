@@ -116,7 +116,7 @@ actions to produce diagnostics for cabal files.
 It is paramount that this kick-function can be run quickly, since it is a blocking
 function invocation.
 -}
-kick :: Action ()
-kick = do
+kick :: Recorder (WithPriority Shake.Log) -> Action ()
+kick recorder = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
-  Shake.runWithSignal (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") files Types.ParseCabalFile
+  Shake.runWithSignal recorder (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") files Types.ParseCabalFile

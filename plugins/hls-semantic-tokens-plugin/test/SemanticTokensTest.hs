@@ -90,7 +90,7 @@ docLspSemanticTokensString :: (HasCallStack) => TextDocumentIdentifier -> Sessio
 docLspSemanticTokensString doc = do
   res <- Test.getSemanticTokens doc
   textContent <- documentContents doc
-  let vfs = VirtualFile 0 0 (Rope.fromText textContent)
+  let vfs = VirtualFile 0 0 (Rope.fromText textContent) (Just LanguageKind_Haskell)
   case res ^? Language.LSP.Protocol.Types._L of
     Just tokens -> do
       either (error . show) pure $ recoverLspSemanticTokens vfs tokens

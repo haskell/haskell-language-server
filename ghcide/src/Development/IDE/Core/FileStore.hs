@@ -52,6 +52,7 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake                  (toKey)
+import           Development.IDE.WorkerThread
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Logger                                   (Pretty (pretty),
                                                                Priority (Info),
@@ -252,8 +253,8 @@ getVersionedTextDoc doc = do
     maybe (pure Nothing) getVirtualFile $
         uriToNormalizedFilePath $ toNormalizedUri uri
   let ver = case mvf of
-        Just (VirtualFile lspver _ _) -> lspver
-        Nothing                       -> 0
+        Just (VirtualFile lspver _ _ _) -> lspver
+        Nothing                         -> 0
   return (VersionedTextDocumentIdentifier uri ver)
 
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
@@ -304,7 +305,7 @@ typecheckParentsAction recorder nfp = do
 setSomethingModified :: VFSModified -> IdeState -> String -> IO [Key] -> IO ()
 setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
-    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
+    atomically $ writeTaskQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
     void $ restartShakeSession (shakeExtras state) vfs reason [] actionBetweenSession
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
