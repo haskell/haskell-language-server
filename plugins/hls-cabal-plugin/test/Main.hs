@@ -14,10 +14,9 @@ import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
 import           Control.Lens.Fold               ((^?))
-import           Control.Monad                   (guard)
+import           Control.Monad                   (forM_, guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
-import           Data.List.Extra                 (nubOrdOn)
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -26,6 +25,7 @@ import           Definition                      (gotoDefinitionTests)
 import           Development.IDE.Test
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
+import           Language.LSP.Protocol.Lens      (HasRange (..))
 import qualified Language.LSP.Protocol.Lens      as L
 import qualified Language.LSP.Protocol.Message   as L
 import           Outline                         (outlineTests)
@@ -191,32 +191,29 @@ codeActionTests = testGroup "Code Actions"
                     , "    build-depends:    base"
                     , "    default-language: Haskell2010"
                     ]
-    , runCabalGoldenSession "Code Actions - Can fix field names" "code-actions" "FieldSuggestions" $ \doc -> do
-        _ <- waitForDiagnosticsFrom doc
-        cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
-        -- Filter out the code actions we want to invoke.
-        -- We only want to invoke Code Actions with certain titles, and
-        -- we want to invoke them only once, not once for each cursor request.
-        -- 'getAllCodeActions' iterates over each cursor position and requests code actions.
-        let selectedCas = nubOrdOn (^. L.title) $ filter
-                (\ca -> (ca ^. L.title) `elem`
-                    [ "Replace with license"
-                    , "Replace with build-type"
-                    , "Replace with extra-doc-files"
-                    , "Replace with ghc-options"
-                    , "Replace with location"
-                    , "Replace with default-language"
-                    , "Replace with import"
-                    , "Replace with build-depends"
-                    , "Replace with main-is"
-                    , "Replace with hs-source-dirs"
-                    ]) cas
-        mapM_ executeCodeAction selectedCas
-        pure ()
+    , runCabalGoldenSession
+        "Code Actions - Can complete field names"
+        "code-actions"
+        "FieldSuggestions"
+        executeFirstActionPerDiagnostic
+    , runCabalGoldenSession
+        "Code Actions - Can fix field typos"
+        "code-actions"
+        "FieldSuggestionsTypos"
+        executeFirstActionPerDiagnostic
     , cabalAddDependencyTests
     , cabalAddModuleTests
     ]
   where
+    executeFirstActionPerDiagnostic doc = do
+      _ <- waitForDiagnosticsFrom doc
+      diagnotics <- getCurrentDiagnostics doc
+      -- Execute the first code action at each diagnostic point
+      forM_ diagnotics $ \diagnostic -> do
+        codeActions <- getCodeActions doc (diagnostic ^. range)
+        case codeActions of
+          []     -> pure ()
+          ca : _ -> mapM_ executeCodeAction (ca ^? _R)
     getLicenseAction :: T.Text -> [Command |? CodeAction] -> [CodeAction]
     getLicenseAction license codeActions = do
         InR action@CodeAction{_title} <- codeActions
