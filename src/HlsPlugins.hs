@@ -53,6 +53,10 @@ import qualified Ide.Plugin.Hlint                  as Hlint
 import qualified Ide.Plugin.Stan                   as Stan
 #endif
 
+#if hls_signatureHelp
+import qualified Ide.Plugin.SignatureHelp          as SignatureHelp
+#endif
+
 #if hls_moduleName
 import qualified Ide.Plugin.ModuleName             as ModuleName
 #endif
@@ -214,6 +218,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_stan
       let pId = "stan" in Stan.descriptor (pluginRecorder pId) pId :
 #endif
+#if hls_signatureHelp
+      let pId = "signatureHelp" in SignatureHelp.descriptor (pluginRecorder pId) pId:
+#endif
 #if hls_splice
       Splice.descriptor "splice" :
 #endif
@@ -249,4 +256,3 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
-

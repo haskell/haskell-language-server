@@ -840,6 +840,59 @@ test-suite hls-stan-plugin-tests
     OverloadedStrings
 
 -----------------------------
+-- signature help plugin
+-----------------------------
+
+flag signatureHelp
+  description: Enable signature help plugin
+  default:     True
+  manual:      True
+
+common signatureHelp
+  if flag(signatureHelp)
+    build-depends: haskell-language-server:hls-signature-help-plugin
+    cpp-options: -Dhls_signatureHelp
+
+library hls-signature-help-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(signatureHelp)
+    buildable: False
+  exposed-modules:  Ide.Plugin.SignatureHelp
+  hs-source-dirs:   plugins/hls-signature-help-plugin/src
+  default-extensions:
+    DerivingStrategies
+    LambdaCase
+    OverloadedStrings
+  build-depends:
+    , containers
+    , ghc
+    , ghcide                == 2.11.0.0
+    , hls-plugin-api        == 2.11.0.0
+    , lsp-types
+    , text
+    , transformers
+
+
+test-suite hls-signature-help-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(signatureHelp)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-signature-help-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , ghcide
+    , haskell-language-server:hls-signature-help-plugin
+    , hls-test-utils             == 2.11.0.0
+    , lens
+    , lsp-types
+    , string-interpolate
+    , text
+  default-extensions:
+    DerivingStrategies
+    OverloadedStrings
+
+-----------------------------
 -- module name plugin
 -----------------------------
 
@@ -1858,6 +1911,7 @@ library
                   , retrie
                   , hlint
                   , stan
+                  , signatureHelp
                   , moduleName
                   , pragmas
                   , splice

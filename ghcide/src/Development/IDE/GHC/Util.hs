@@ -27,6 +27,7 @@ module Development.IDE.GHC.Util(
     dontWriteHieFiles,
     disableWarningsAsErrors,
     printOutputable,
+    printOutputableOneLine,
     getExtensions,
     stripOccNamePrefix,
     ) where
@@ -264,11 +265,17 @@ ioe_dupHandlesNotCompatible h =
 --   1. print with a user-friendly style: `a_a4ME` as `a`.
 --   2. unescape escape sequences of printable unicode characters within a pair of double quotes
 printOutputable :: Outputable a => a -> T.Text
-printOutputable =
+printOutputable = printOutputable' printWithoutUniques
+
+printOutputableOneLine :: Outputable a => a -> T.Text
+printOutputableOneLine = printOutputable' printWithoutUniquesOneLine
+
+printOutputable' :: Outputable a => (a -> String) -> a -> T.Text
+printOutputable' print =
     -- IfaceTyLit from GHC.Iface.Type implements Outputable with 'show'.
     -- Showing a String escapes non-ascii printable characters. We unescape it here.
     -- More discussion at https://github.com/haskell/haskell-language-server/issues/3115.
-    unescape . T.pack . printWithoutUniques
+    unescape . T.pack . print
 {-# INLINE printOutputable #-}
 
 getExtensions :: ParsedModule -> [Extension]

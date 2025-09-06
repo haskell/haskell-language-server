@@ -72,6 +72,7 @@ parsePluginConfig def = A.withObject "PluginConfig" $ \o -> PluginConfig
       <*> o .:? "diagnosticsOn"    .!= plcDiagnosticsOn def -- AZ
       <*> o .:? "hoverOn"          .!= plcHoverOn       def
       <*> o .:? "symbolsOn"        .!= plcSymbolsOn     def
+      <*> o .:? "signatureHelpOn"  .!= plcSignatureHelpOn def
       <*> o .:? "completionOn"     .!= plcCompletionOn  def
       <*> o .:? "renameOn"         .!= plcRenameOn      def
       <*> o .:? "selectionRangeOn" .!= plcSelectionRangeOn def

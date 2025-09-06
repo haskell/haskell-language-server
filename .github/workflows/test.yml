@@ -261,6 +261,10 @@ jobs:
         name: Compile the plugin-tutorial
         run: cabal build plugin-tutorial
 
+      - if: matrix.test
+        name: Test hls-signature-help-plugin test suite
+        run: cabal test hls-signature-help-plugin-tests || cabal test hls-signature-help-plugin-tests
+
   test_post_job:
     if: always()
     runs-on: ubuntu-latest
