@@ -155,6 +155,6 @@ cabalRules recorder plId = do
     -- Run the cabal kick. This code always runs when 'shakeRestart' is run.
     -- Must be careful to not impede the performance too much. Crucial to
     -- a snappy IDE experience.
-    OfInterest.kick (cmapWithPrio LogShake recorder)
+    OfInterest.kick
  where
   log' = logWith recorder

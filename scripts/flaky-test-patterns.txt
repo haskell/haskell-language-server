@@ -1,12 +1,12 @@
 # One tasty pattern per line. Lines starting with # are comments.
 # Blank lines are ignored.
 
-open close
+# open close
 # non local variable
 # Notification Handlers
-bidirectional module dependency with hs-boot
+# bidirectional module dependency with hs-boot
 
-InternalError over InvalidParams
+# InternalError over InvalidParams
 # ghcide restarts shake session on config changes:
 # addDependentFile
 # Another interesting one you can try:

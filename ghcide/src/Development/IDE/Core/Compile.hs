@@ -75,7 +75,7 @@ import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.ProgressReporting       (progressUpdate)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
-import           Development.IDE.WorkerThread            (writeTaskQueue)
+import           Development.IDE.Core.WorkerThread            (writeTaskQueue)
 import           Development.IDE.Core.Tracing                 (withTrace)
 import qualified Development.IDE.GHC.Compat                   as Compat
 import qualified Development.IDE.GHC.Compat                   as GHC

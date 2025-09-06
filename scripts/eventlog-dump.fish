@@ -40,12 +40,11 @@ set filter_prefix ""
 if test (count $argv) -ge 3
   set filter_prefix $argv[3]
 end
-# Optional contains filter: only keep lines that contain any of the substrings (pipe-separated)
+
+# Optional contains filter: only keep lines that contain this substring (applied after prefix filter if both provided)
 set filter_contains ""
-set filter_contains_list
 if test (count $argv) -ge 4
   set filter_contains $argv[4]
-  set filter_contains_list (string split '|' -- $filter_contains)
 end
 
 function find_ghc_events --description "echo absolute path to ghc-events or empty"
@@ -81,23 +80,19 @@ if test -z "$ghc_events_bin"
 end
 
 echo "Dumping events from $evlog to $out..."
+set -l stream_cmd "$ghc_events_bin show $evlog"
+
 if test -n "$filter_prefix" -o -n "$filter_contains"
-  $ghc_events_bin show $evlog | while read -l line
-    set keep 1
+  # Stream through filters
+  eval $stream_cmd | while read -l line
+    set -l keep 1
     if test -n "$filter_prefix"
       if not string match -q -- "$filter_prefix*" -- $line
         set keep 0
       end
     end
-    if test $keep -eq 1 -a (count $filter_contains_list) -gt 0
-      set found 0
-      for substr in $filter_contains_list
-        if string match -q -- "*$substr*" -- $line
-          set found 1
-          break
-        end
-      end
-      if test $found -eq 0
+    if test $keep -eq 1 -a -n "$filter_contains"
+      if not string match -q -- "*$filter_contains*" -- $line
         set keep 0
       end
     end
@@ -106,7 +101,7 @@ if test -n "$filter_prefix" -o -n "$filter_contains"
     end
   end > $out
 else
-  $ghc_events_bin show $evlog > $out
+  eval $stream_cmd > $out
 end
 set exit_code $status
 

@@ -65,14 +65,11 @@ library
     Development.IDE.Graph.KeyMap
     Development.IDE.Graph.KeySet
     Development.IDE.Graph.Rule
-    Development.IDE.WorkerThread
     Paths_hls_graph
 
   autogen-modules:    Paths_hls_graph
   hs-source-dirs:     src
   build-depends:
-    , mtl ^>=2.3.1
-    , safe-exceptions ^>=0.1.7.4
     , aeson
     , async                 >=2.0
     , base                  >=4.12    && <5
@@ -132,7 +129,6 @@ test-suite tests
     -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
 
   build-depends:
-    , transformers ^>=0.6.1.2
     , base
     , extra
     , hls-graph
@@ -142,6 +138,5 @@ test-suite tests
     , tasty
     , tasty-hspec >= 1.2
     , tasty-rerun
-    , transformers
 
   build-tool-depends: hspec-discover:hspec-discover

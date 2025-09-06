@@ -9,8 +9,7 @@ module Development.IDE.Graph.Database(
     shakeGetDatabaseKeys,
     shakeGetDirtySet,
     shakeGetCleanKeys
-    ,shakeGetBuildEdges,
-    shakeShutDatabase) where
+    ,shakeGetBuildEdges) where
 import           Control.Concurrent.STM.Stats            (readTVarIO)
 import           Data.Dynamic
 import           Data.Maybe
@@ -22,20 +21,16 @@ import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Profile  (writeProfile)
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
-import           Development.IDE.WorkerThread            (TaskQueue)
 
 
 -- Placeholder to be the 'extra' if the user doesn't set it
 data NonExportedType = NonExportedType
 
-shakeShutDatabase :: ShakeDatabase -> IO ()
-shakeShutDatabase (ShakeDatabase _ _ db) = shutDatabase db
-
-shakeNewDatabase :: TaskQueue (IO ()) -> ShakeOptions -> Rules () -> IO ShakeDatabase
-shakeNewDatabase que opts rules = do
+shakeNewDatabase :: ShakeOptions -> Rules () -> IO ShakeDatabase
+shakeNewDatabase opts rules = do
     let extra = fromMaybe (toDyn NonExportedType) $ shakeExtra opts
     (theRules, actions) <- runRules extra rules
-    db <- newDatabase que extra theRules
+    db <- newDatabase extra theRules
     pure $ ShakeDatabase (length actions) actions db
 
 shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO [a]

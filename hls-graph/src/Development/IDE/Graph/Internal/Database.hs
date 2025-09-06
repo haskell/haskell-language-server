@@ -12,7 +12,9 @@ module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabas
 
 import           Prelude                              hiding (unzip)
 
-import           Control.Concurrent.STM.Stats         (STM, atomically,
+import           Control.Concurrent.Async
+import           Control.Concurrent.Extra
+import           Control.Concurrent.STM.Stats         (STM, TVar, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
                                                        readTVar, readTVarIO,
@@ -29,7 +31,7 @@ import           Data.IORef.Extra
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
-import           Debug.Trace                          (traceEvent)
+import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Rules
@@ -37,21 +39,20 @@ import           Development.IDE.Graph.Internal.Types
 import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
-import           System.Time.Extra                    (duration)
+import           System.Time.Extra                    (duration, sleep)
+import           UnliftIO                             (MonadUnliftIO (withRunInIO))
+import qualified UnliftIO.Exception                   as UE
 
 #if MIN_VERSION_base(4,19,0)
 import           Data.Functor                         (unzip)
 #else
 import           Data.List.NonEmpty                   (unzip)
 #endif
-import           Development.IDE.WorkerThread         (TaskQueue,
-                                                       awaitRunInThreadStmInNewThread)
 
 
-newDatabase :: TaskQueue (IO ()) -> Dynamic -> TheRules -> IO Database
-newDatabase databaseQueue databaseExtra databaseRules = do
+newDatabase :: Dynamic -> TheRules -> IO Database
+newDatabase databaseExtra databaseRules = do
     databaseStep <- newTVarIO $ Step 0
-    databaseThreads <- newTVarIO []
     databaseValues <- atomically SMap.new
     pure Database{..}
 
@@ -99,9 +100,8 @@ build db stack keys = do
             else throw $ AsyncParentKill i $ Step (-1)
     where
     go = do
-        -- step <- readTVarIO $ databaseStep db
-        -- built <- mapConcurrently (builderOne db stack) (fmap newKey keys)
-        built <- builder db stack (fmap newKey keys)
+        step <- readTVarIO $ databaseStep db
+        !built <- runAIO step $ builder db stack (fmap newKey keys)
         let (ids, vs) = unzip built
         pure (ids, fmap (asV . resultValue) vs)
         where
@@ -112,39 +112,38 @@ build db stack keys = do
 -- | Build a list of keys and return their results.
 --  If none of the keys are dirty, we can return the results immediately.
 --  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
-builder :: (Traversable f) => Database -> Stack -> f Key -> IO (f (Key, Result))
+builder :: (Traversable f) => Database -> Stack -> f Key -> AIO (f (Key, Result))
 -- builder _ st kk | traceShow ("builder", st,kk) False = undefined
-builder db stack keys = for keys $ \k -> builderOne db stack k
+builder db stack keys = do
+    keyWaits <- for keys $ \k -> builderOne db stack k
+    !res <- for keyWaits $ \(k, waitR) -> do
+        !v<- liftIO waitR
+        return (k, v)
+    return res
 
-builderOne :: Database -> Stack -> Key -> IO (Key, Result)
-builderOne db@Database {..} stack id = do
-  traceEvent ("builderOne: " ++ show id) return ()
-  res <- liftIO $ atomicallyNamed "builder" $ do
+builderOne :: Database -> Stack -> Key -> AIO (Key, IO Result)
+builderOne db@Database {..} stack id = UE.uninterruptibleMask $ \restore -> do
+  current <- liftIO $ readTVarIO databaseStep
+  (k, registerWaitResult) <- restore $ liftIO $ atomicallyNamed "builder" $ do
     -- Spawn the id if needed
     status <- SMap.lookup id databaseValues
-    current@(Step cs) <- readTVar databaseStep
-    let getStep = do
-            Step current <- readTVar databaseStep
-            return current
-
     val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
       Dirty s -> do
+        let act =
+              asyncWithCleanUp
+                ((restore $ refresh db stack id s)
+                    `UE.onException` UE.uninterruptibleMask_ (liftIO (atomicallyNamed "builder - onException" (SMap.focus updateDirty id databaseValues)))
+                )
         SMap.focus (updateStatus $ Running current s) id databaseValues
-        traceEvent ("Starting build of key: " ++ show id ++ ", step "++ show current)
-            $ awaitRunInThreadStmInNewThread getStep cs databaseQueue databaseThreads  (refresh db stack id s)
-            $ \e -> atomically $ SMap.focus (updateStatus $ Exception current e s) id databaseValues
-        return Nothing
-      Clean r -> return $ Just r
+        return act
+      Clean r -> pure . pure . pure $ r
       -- force here might contains async exceptions from previous runs
       Running _step _s
         | memberStack id stack -> throw $ StackException stack
         | otherwise -> retry
-      Exception _ e _s -> throw e
-    pure val
-  case res of
-    Just r  -> return (id, r)
-    Nothing -> builderOne db stack id
-
+    pure (id, val)
+  waitR <- registerWaitResult
+  return (k, waitR)
 -- | isDirty
 -- only dirty when it's build time is older than the changed time of one of its dependencies
 isDirty :: Foldable t => Result -> t (a, Result) -> Bool
@@ -157,27 +156,30 @@ isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 -- * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
 --   This assumes that the implementation will be a lookup
 -- * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
-refreshDeps :: KeySet -> Database -> Stack -> Key -> Result -> [KeySet] -> IO Result
+refreshDeps :: KeySet -> Database -> Stack -> Key -> Result -> [KeySet] -> AIO Result
 refreshDeps visited db stack key result = \case
     -- no more deps to refresh
-    [] -> compute db stack key RunDependenciesSame (Just result)
+    [] -> compute' db stack key RunDependenciesSame (Just result)
     (dep:deps) -> do
         let newVisited = dep <> visited
         res <- builder db stack (toListKeySet (dep `differenceKeySet` visited))
         if isDirty result res
                 -- restart the computation if any of the deps are dirty
-                then compute db stack key RunDependenciesChanged (Just result)
+                then compute' db stack key RunDependenciesChanged (Just result)
                 -- else kick the rest of the deps
                 else refreshDeps newVisited db stack key result deps
 
 
 -- refresh :: Database -> Stack -> Key -> Maybe Result -> IO Result
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
-refresh :: Database -> Stack -> Key -> Maybe Result -> IO Result
+refresh :: Database -> Stack -> Key -> Maybe Result -> AIO Result
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
     (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> refreshDeps mempty db stack key me (reverse deps)
-    (Right stack, _) -> compute db stack key RunDependenciesChanged result
+    (Right stack, _) -> compute' db stack key RunDependenciesChanged result
+
+compute' :: Database -> Stack -> Key -> RunMode -> Maybe Result -> AIO Result
+compute' db stack key mode result = liftIO $ compute db stack key mode result
 -- | Compute a key.
 compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> IO Result
 -- compute _ st k _ _ | traceShow ("compute", st, k) False = undefined
@@ -282,5 +284,68 @@ transitiveDirtySet database = flip State.execStateT mempty . traverse_ loop
             next <- lift $ atomically $ getReverseDependencies database x
             traverse_ loop (maybe mempty toListKeySet next)
 
+--------------------------------------------------------------------------------
+-- Asynchronous computations with cancellation
 
+-- | A simple monad to implement cancellation on top of 'Async',
+--   generalizing 'withAsync' to monadic scopes.
+newtype AIO a = AIO { unAIO :: ReaderT (TVar [Async ()]) IO a }
+  deriving newtype (Applicative, Functor, Monad, MonadIO)
 
+data AsyncParentKill = AsyncParentKill ThreadId Step
+    deriving (Show, Eq)
+
+instance Exception AsyncParentKill where
+  toException = asyncExceptionToException
+  fromException = asyncExceptionFromException
+
+-- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
+runAIO :: Step -> AIO a -> IO a
+runAIO s (AIO act) = do
+    asyncsRef <- newTVarIO []
+    -- Log the exact exception (including async exceptions) before cleanup,
+    -- then rethrow to preserve previous semantics.
+    runReaderT act asyncsRef `onException` do
+        asyncs <- atomically $ do
+            r <- readTVar asyncsRef
+            modifyTVar' asyncsRef $ const []
+            return r
+        tid <- myThreadId
+        cleanupAsync asyncs tid s
+
+-- | Like 'async' but with built-in cancellation.
+--   Returns an IO action to wait on the result.
+asyncWithCleanUp :: AIO a -> AIO (IO a)
+asyncWithCleanUp act = do
+    st <- AIO ask
+    io <- unliftAIO act
+    -- mask to make sure we keep track of the spawned async
+    liftIO $ uninterruptibleMask $ \restore -> do
+        a <- async $ restore io
+        atomically $ modifyTVar' st (void a :)
+        return $ wait a
+
+unliftAIO :: AIO a -> AIO (IO a)
+unliftAIO act = do
+    st <- AIO ask
+    return $ runReaderT (unAIO act) st
+
+instance MonadUnliftIO AIO where
+    withRunInIO k = do
+        st <- AIO ask
+        liftIO $ k (\aio -> runReaderT (unAIO aio) st)
+
+cleanupAsync :: [Async a] -> ThreadId -> Step -> IO ()
+-- mask to make sure we interrupt all the asyncs
+cleanupAsync asyncs tid step  = uninterruptibleMask $ \unmask -> do
+    -- interrupt all the asyncs without waiting
+    -- mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
+    mapM_ (\a -> throwTo (asyncThreadId a) $ AsyncParentKill tid step) asyncs
+    -- Wait until all the asyncs are done
+    -- But if it takes more than 10 seconds, log to stderr
+    unless (null asyncs) $ do
+        let warnIfTakingTooLong = unmask $ forever $ do
+                sleep 10
+                traceM "cleanupAsync: waiting for asyncs to finish"
+        withAsync warnIfTakingTooLong $ \_ ->
+            mapM_ waitCatch asyncs

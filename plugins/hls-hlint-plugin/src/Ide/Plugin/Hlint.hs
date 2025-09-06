@@ -210,7 +210,7 @@ rules recorder plugin = do
 
   action $ do
     files <- Map.keys <$> getFilesOfInterestUntracked
-    Shake.runWithSignal (cmapWithPrio LogShake recorder) (Proxy @"kick/start/hlint") (Proxy @"kick/done/hlint") files GetHlintDiagnostics
+    Shake.runWithSignal (Proxy @"kick/start/hlint") (Proxy @"kick/done/hlint") files GetHlintDiagnostics
 
   where
 
