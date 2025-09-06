@@ -5,7 +5,27 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+         ./vendor/cabal/Cabal
+         ./vendor/cabal/Cabal-syntax
+         ./vendor/cabal/cabal-install
+         ./vendor/cabal/cabal-install-solver
+         ./vendor/cabal/Cabal-described
+         ./vendor/cabal/Cabal-tree-diff
 
+source-repository-package
+   type:     git
+   location: https://github.com/fendor/cabal-add/
+   tag: 3ae65c28bfc6eff66a7a05bb9547665f62a35b63
+
+source-repository-package
+   type:     git
+   location: https://github.com/fendor/haskell-ci/
+   tag: e3e68f064f9610267bb47ea6404ccaa6924c2201
+   subdir: cabal-install-parsers
+
+package cabal-install
+  tests: False
+  benchmarks: False
 
 index-state: 2025-08-08T12:31:54Z
 
@@ -50,9 +70,16 @@ constraints:
 -- cabal-add depends on cabal-install-parsers.
 allow-newer:
   cabal-install-parsers:Cabal-syntax,
+  *:Cabal-syntax,
+  *:cabal-install,
+  *:Cabal,
+  rere:QuickCheck
 
 if impl(ghc >= 9.11)
   benchmarks: False
   allow-newer:
     cabal-install-parsers:base,
     cabal-install-parsers:time,
+
+-- Disable these plugins as they aren't compatible Cabal-3.17, yet.
+flags: -floskell -fourmolu -hlint -ormolu -stan -stylishhaskell
