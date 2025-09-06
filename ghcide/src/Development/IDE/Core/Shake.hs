@@ -178,6 +178,7 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
+import qualified UnliftIO.Exception                     as UE
 
 
 data Log
@@ -1477,7 +1478,8 @@ kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
 -- | Add kick start/done signal to rule
 runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [NormalizedFilePath] -> k -> Action ()
 runWithSignal msgStart msgEnd files rule = do
-  ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- getShakeExtras
-  kickSignal testing lspEnv files msgStart
-  void $ uses rule files
-  kickSignal testing lspEnv files msgEnd
+  ShakeExtras {ideTesting = Options.IdeTesting testing, lspEnv} <- getShakeExtras
+  UE.bracket_
+    (kickSignal testing lspEnv files msgStart)
+    (kickSignal testing lspEnv files msgEnd)
+    $ void $ uses rule files
