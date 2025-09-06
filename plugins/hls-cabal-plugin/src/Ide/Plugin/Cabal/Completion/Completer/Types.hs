@@ -2,12 +2,14 @@
 
 module Ide.Plugin.Cabal.Completion.Completer.Types where
 
+import           Data.Text                         (Text)
 import           Development.IDE                   as D
 import qualified Distribution.Fields               as Syntax
 import           Distribution.PackageDescription   (GenericPackageDescription)
 import qualified Distribution.Parsec.Position      as Syntax
 import           Ide.Plugin.Cabal.Completion.Types
 import           Language.LSP.Protocol.Types       (CompletionItem)
+import qualified Text.Fuzzy.Parallel               as Fuzzy
 
 -- | Takes information needed to build possible completion items
 -- and returns the list of possible completion items
@@ -24,5 +26,7 @@ data CompleterData = CompleterData
     -- | Prefix info to be used for constructing completion items
     cabalPrefixInfo        :: CabalPrefixInfo,
     -- | The name of the stanza in which the completer is applied
-    stanzaName             :: Maybe StanzaName
+    stanzaName             :: Maybe StanzaName,
+    -- | The matcher that'll be used to rank the texts against the pattern.
+    matcher                :: Fuzzy.Matcher Text
   }
