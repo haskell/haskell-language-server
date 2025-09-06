@@ -60,6 +60,7 @@ library
     , Diff                         ^>=0.5 || ^>=1.0.0
     , directory
     , dlist
+    , edit-distance
     , enummapset
     , exceptions
     , extra                        >=1.7.14
@@ -196,6 +197,7 @@ library
     Development.IDE.Types.Shake
     Generics.SYB.GHC
     Text.Fuzzy.Parallel
+    Text.Fuzzy.Levenshtein
 
   other-modules:
     Development.IDE.Core.FileExists
