@@ -66,9 +66,11 @@ jobs:
         run: |
           cabal --version
           ghc --version
-      - name: build
-        run: |
-          cabal build all
+      - name: Build
+        env:
+          PATTERN_FILE: 'scripts/flaky-test-patterns.txt'
+          RUN_MODE: 'build'
+        run: HLS_TEST_EXE="$(cabal exec which hls)" bash scripts/flaky-test-loop.sh
 
       - name: Run flakiness loop
         id: run-loop
@@ -81,6 +83,7 @@ jobs:
           TEST_PATTERNS: ${{ github.event.inputs.test_patterns }}
           PATTERN_FILE: 'scripts/flaky-test-patterns.txt'
           NO_BUILD_ONCE: '1'
+          RUN_MODE: 'run'
           # HLS_TEST_EXE: 'hls' # HLS_WRAPPER_TEST_EXE: 'hls-wrapper'
         run: |
           # Run with a sensible default of 500 iterations on PRs;

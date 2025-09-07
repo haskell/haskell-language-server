@@ -10,6 +10,7 @@
 #   SHOW_EVERY    : print progress/iteration header every N iterations (default: 100, 1 = every run, <=0 = disabled)
 #   LOG_STDERR    : set to 1 to enable verbose stderr logging (HLS_TEST_LOG_STDERR & HLS_TEST_HARNESS_STDERR) (default: 1)
 #   NO_BUILD_ONCE : set to non-empty to skip the initial cabal build step
+#   RUN_MODE      : choose 'build' (build once and exit), 'run' (skip upfront build and just run), or 'both' (default)
 #
 # Test selection:
 #   TEST_PATTERNS : comma-separated list of entries to run each iteration.
@@ -37,6 +38,7 @@ MAX_ITER="${MAX_ITER:-}"
 SLEEP_SECS="${SLEEP_SECS:-0}"
 SHOW_EVERY="${SHOW_EVERY:-1}"
 LOG_STDERR="${LOG_STDERR:-1}"
+RUN_MODE="${RUN_MODE:-both}"  # build | run | both
 
 # Allow providing a positional max iteration: ./open-close-loop.sh 50
 if [[ $# -ge 1 && -z "${MAX_ITER}" ]]; then
@@ -96,10 +98,11 @@ if [[ ${#items[@]} -eq 0 ]]; then
   exit 2
 fi
 
-# Build required test binaries once upfront (unless NO_BUILD_ONCE is set)
-if [[ -z "${NO_BUILD_ONCE:-}" ]]; then
-  # collect unique BIN names
+# Helper to build required test binaries once
+build_required_bins_once() {
+  # collect unique BIN names from global 'items'
   declare -a bins_to_build=()
+  local it bin seen b
   for it in "${items[@]}"; do
     bin="${it%%::*}"; seen=0
     if (( ${#bins_to_build[@]} > 0 )); then
@@ -110,11 +113,40 @@ if [[ -z "${NO_BUILD_ONCE:-}" ]]; then
   if (( ${#bins_to_build[@]} > 0 )); then
     echo "[loop] Building test targets once upfront: ${bins_to_build[*]}" >&2
     if ! cabal build "${bins_to_build[@]}" >&2; then
-      echo "[loop][error] Build failed. Cannot proceed with tests." >&2
-      exit 2
+      echo "[loop][error] Build failed." >&2
+      return 2
     fi
-    echo "[loop] Build succeeded. Proceeding with tests." >&2
+    echo "[loop] Build succeeded." >&2
   fi
+  return 0
+}
+
+# Honor RUN_MODE before any build/run
+case "${RUN_MODE}" in
+  build)
+    if ! build_required_bins_once; then exit 2; fi
+    echo "[loop] RUN_MODE=build completed. Exiting without running tests." >&2
+    exit 0
+    ;;
+  run)
+    echo "[loop] RUN_MODE=run: skipping upfront build, proceeding to run loop." >&2
+    ;;
+  both)
+    : # default behavior below
+    ;;
+  *)
+    echo "[loop][error] Invalid RUN_MODE='${RUN_MODE}'. Use one of: build | run | both." >&2
+    exit 2
+    ;;
+esac
+
+# Build required test binaries once upfront (unless NO_BUILD_ONCE is set or RUN_MODE=run)
+if [[ -z "${NO_BUILD_ONCE:-}" && "${RUN_MODE}" != "run" ]]; then
+  if ! build_required_bins_once; then
+    echo "[loop][error] Cannot proceed with tests due to build failure." >&2
+    exit 2
+  fi
+  echo "[loop] Proceeding with tests." >&2
 fi
 
 # Resolve binary path by name (cache results)
