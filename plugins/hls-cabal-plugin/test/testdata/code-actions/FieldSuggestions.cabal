@@ -21,9 +21,8 @@ source-repository head
   loc: fake
 
 library
-    default-lang: Haskell2010
-    -- Import isn't supported right now.
     impor: warnings
+    default-lang: Haskell2010
     build-dep: base
 
 executable my-exe
