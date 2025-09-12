@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
--- | Compat module for GHC 9.2 Logger infrastructure.
+-- | Compat module for logger infrastructure.
 module Development.IDE.GHC.Compat.Logger (
     putLogHook,
     Logger.pushLogHook,

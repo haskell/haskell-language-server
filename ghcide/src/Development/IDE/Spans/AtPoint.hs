@@ -25,7 +25,8 @@ module Development.IDE.Spans.AtPoint (
   ) where
 
 
-import           GHC.Data.FastString                  (lengthFS)
+import           GHC.Data.FastString                  (LexicalFastString (..),
+                                                       lengthFS)
 import qualified GHC.Utils.Outputable                 as O
 
 import           Development.IDE.GHC.Error
@@ -50,7 +51,6 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
-import           Data.Coerce                          (coerce)
 import qualified Data.HashMap.Strict                  as HM
 import qualified Data.Map.Strict                      as M
 import           Data.Maybe
@@ -580,18 +580,8 @@ defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
 pointCommand hf pos k =
-    M.elems $ flip M.mapMaybeWithKey (getAsts hf) $ \fs ast ->
-      -- Since GHC 9.2:
-      -- getAsts :: Map HiePath (HieAst a)
-      -- type HiePath = LexicalFastString
-      --
-      -- but before:
-      -- getAsts :: Map HiePath (HieAst a)
-      -- type HiePath = FastString
-      --
-      -- 'coerce' here to avoid an additional function for maintaining
-      -- backwards compatibility.
-      case selectSmallestContaining (sp $ coerce fs) ast of
+    M.elems $ flip M.mapMaybeWithKey (getAsts hf) $ \(LexicalFastString fs) ast ->
+      case selectSmallestContaining (sp fs) ast of
         Nothing   -> Nothing
         Just ast' -> Just $ k ast'
  where
