@@ -144,7 +144,7 @@ tests =
   , goldenWithEval "Test on last line insert results correctly" "TLastLine" "hs"
   , testGroup "with preprocessors"
     [ knownBrokenInEnv [HostOS Windows]
-        "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
+        "CPP eval on Windows fails for some reasons" $
         goldenWithEval "CPP support" "TCPP" "hs"
     , goldenWithEval "Literate Haskell Bird Style" "TLHS" "lhs"
     ]
