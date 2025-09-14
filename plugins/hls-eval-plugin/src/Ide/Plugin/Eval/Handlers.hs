@@ -7,11 +7,10 @@
 {-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-{- |
-A plugin inspired by the REPLoid feature of <https://github.com/jyp/dante Dante>, <https://www.haskell.org/haddock/doc/html/ch03s08.html#idm140354810775744 Haddock>'s Examples and Properties and <https://hackage.haskell.org/package/doctest Doctest>.
-
-For a full example see the "Ide.Plugin.Eval.Tutorial" module.
--}
+-- | -- A plugin inspired by the REPLoid feature of
+-- [Dante](https://github.com/jyp/dante),
+-- [Haddock examples and properties](https://haskell-haddock.readthedocs.io/latest/markup.html#examples),
+-- and [Doctest](https://hackage.haskell.org/package/doctest).
 module Ide.Plugin.Eval.Handlers (
     codeAction,
     codeLens,
@@ -397,7 +396,7 @@ The result of evaluating a test line can be:
 A value is returned for a correct expression.
 
 Either a pure value:
->>> 'h' :"askell"
+>>> 'h' : "askell"
 "haskell"
 
 Or an 'IO a' (output on stdout/stderr is ignored):
