@@ -479,6 +479,7 @@ library hls-eval-plugin
     , deepseq
     , Diff                  ^>=0.5 || ^>=1.0.0
     , dlist
+    , exceptions
     , extra
     , filepath
     , ghc

@@ -1,12 +1,15 @@
--- IO expressions are supported, stdout/stderr output is ignored
+-- 1. Support IO expressions
+--
+-- 2. Capture and show stdout
 module TIO where
 
-import Control.Concurrent (threadDelay)
+import           Control.Concurrent (threadDelay)
 
-{-
-Does not capture stdout, returns value.
+{- Capture stdout, returns value.
+
 Has a delay in order to show progress reporting.
 
 >>> threadDelay 2000000 >> print "ABC" >> return "XYZ"
+"ABC"
 "XYZ"
 -}

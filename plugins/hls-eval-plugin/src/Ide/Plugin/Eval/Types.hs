@@ -75,6 +75,7 @@ data Log
     | LogEvalStmtResult (Maybe [T.Text])
     | LogEvalImport String
     | LogEvalDeclaration String
+    | LogEvalFailedSettingInteractivePrintFunction
 
 instance Pretty Log where
     pretty = \case
@@ -103,6 +104,9 @@ instance Pretty Log where
         LogEvalStmtResult result -> "STMT}" <+> pretty result
         LogEvalImport stmt -> "{IMPORT" <+> pretty stmt
         LogEvalDeclaration stmt -> "{DECL" <+> pretty stmt
+        LogEvalFailedSettingInteractivePrintFunction -> pretty $
+               "Return value will not be captured: "
+            ++ "Failed setting the interactive print function."
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
