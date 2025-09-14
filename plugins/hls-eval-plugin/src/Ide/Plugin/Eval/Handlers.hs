@@ -7,7 +7,7 @@
 {-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
--- | -- A plugin inspired by the REPLoid feature of
+-- | A plugin inspired by the REPLoid feature of
 -- [Dante](https://github.com/jyp/dante),
 -- [Haddock examples and properties](https://haskell-haddock.readthedocs.io/latest/markup.html#examples),
 -- and [Doctest](https://hackage.haskell.org/package/doctest).
@@ -99,7 +99,7 @@ import           Ide.Plugin.Error                             (PluginError (Plug
                                                                handleMaybeM)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
-                                                               myExecStmt,
+                                                               execStmtCaptureResult,
                                                                propSetup,
                                                                resultRange,
                                                                testCheck,
@@ -361,8 +361,14 @@ type TEnv = String
 evalSetup :: Ghc ()
 evalSetup = do
     preludeAsP <- parseImportDecl "import qualified Prelude as P"
+    -- 'myExecStmt' redirects the interpreted @stdout@ and @stderr@ to a temporary
+    -- file in order to capture output produced as a side effect of evaluating a
+    -- statement. The setup and teardown statements it injects need these modules
+    -- in scope.
+    systemIO <- parseImportDecl "import qualified System.IO"
+    ghcIOHandle <- parseImportDecl "import qualified GHC.IO.Handle"
     context <- getContext
-    setContext (IIDecl preludeAsP : context)
+    setContext (IIDecl preludeAsP : IIDecl systemIO : IIDecl ghcIOHandle : context)
 
 runTests :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
 runTests recorder EvalConfig{..} e tests = do
@@ -420,9 +426,12 @@ Either a pure value:
 >>> 'h' : "askell"
 "haskell"
 
-Or an 'IO a' (output on stdout/stderr is ignored):
->>> print "OK" >> return "ABC"
-"ABC"
+Or an 'IO a' (output on stdout/stderr is captured):
+>>> putStrLn "Hello," >> pure "World!"
+Hello,
+"World!"
+
+Note the quotes around @World!@, which are a result of using 'show'.
 
 Nothing is returned for a correct directive:
 
@@ -446,11 +455,15 @@ A, possibly multi line, error is returned for a wrong declaration, directive or 
 Some flags have not been recognized: -XNonExistent
 
 >>> cls C
-Variable not in scope: cls :: t0 -> t
-Data constructor not in scope: C
+Illegal term-level use of the class `C'
+  defined at <interactive>:1:2
+In the first argument of `cls', namely `C'
+In the expression: cls C
+In an equation for `it_a1kSJ': it_a1kSJ = cls C
+Variable not in scope: cls :: t0_a1kU9[tau:1] -> t1_a1kUb[tau:1]
 
 >>> "A
-lexical error in string/character literal at end of input
+lexical error at end of input
 
 Exceptions are shown as if printed, but it can be configured to include prefix like
 in GHCi or doctest. This allows it to be used as a hack to simulate print until we
@@ -466,7 +479,8 @@ bad times
 Or for a value that does not have a Show instance and can therefore not be displayed:
 >>> data V = V
 >>> V
-No instance for (Show V) arising from a use of ‘evalPrint’
+No instance for `Show V' arising from a use of `evalPrint'
+In a stmt of an interactive GHCi command: evalPrint it_a1l4V
 -}
 evals :: Recorder (WithPriority Log) -> Bool -> TEnv -> DynFlags -> [Statement] -> Ghc [Text]
 evals recorder mark_exception fp df stmts = do
@@ -475,7 +489,7 @@ evals recorder mark_exception fp df stmts = do
         Left err -> errorLines err
         Right rs -> concat . catMaybes $ rs
   where
-    dbg = logWith recorder Debug
+    dbg  = logWith recorder Debug
     eval :: Statement -> Ghc (Maybe [Text])
     eval (Located l stmt)
         | -- GHCi flags
@@ -541,7 +555,7 @@ evals recorder mark_exception fp df stmts = do
     unhelpfulReason = UnhelpfulInteractive
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
-         in myExecStmt stmt opts
+         in execStmtCaptureResult recorder stmt opts
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
