@@ -1,10 +1,10 @@
 -- | Parallel versions of 'filter' and 'simpleFilter'
 
 module Text.Fuzzy.Parallel
-(   filter, filter',
+(   filter, filter', matchPar,
     simpleFilter, simpleFilter',
     match, defChunkSize, defMaxResults,
-    Scored(..)
+    Scored(..), Matcher (..)
 ) where
 
 import           Control.Parallel.Strategies (evalList, parList, rseq, using)
@@ -17,6 +17,8 @@ import           Prelude                     hiding (filter)
 
 data Scored a = Scored {score :: !Int, original:: !a}
   deriving (Functor, Show)
+
+newtype Matcher a = Matcher { runMatcher :: T.Text -> [T.Text] -> [Scored a] }
 
 -- | Returns the rendered output and the
 -- matching score for a pattern and a text.
@@ -103,15 +105,29 @@ filter' :: Int           -- ^ Chunk size. 1000 works well.
        -- ^ Custom scoring function to use for calculating how close words are
        -- When the function returns Nothing, this means the values are incomparable.
        -> [Scored t]    -- ^ The list of results, sorted, highest score first.
-filter' chunkSize maxRes pat ts extract match' = partialSortByAscScore maxRes perfectScore (concat vss)
+filter' chunkSize maxRes pat ts extract match' = partialSortByAscScore maxRes perfectScore $
+    matchPar chunkSize pat' ts extract match'
   where
-      -- Preserve case for the first character, make all others lowercase
-      pat' = case T.uncons pat of
+    perfectScore = fromMaybe (error $ T.unpack pat) $ match' pat pat
+    -- Preserve case for the first character, make all others lowercase
+    pat' = case T.uncons pat of
         Just (c, rest) -> T.cons c (T.toLower rest)
         _              -> pat
-      vss = map (mapMaybe (\t -> flip Scored t <$> match' pat' (extract t))) (chunkList chunkSize ts)
+
+matchPar
+    :: Int           -- ^ Chunk size. 1000 works well.
+    -> T.Text        -- ^ Pattern.
+    -> [t]           -- ^ The list of values containing the text to search in.
+    -> (t -> T.Text) -- ^ The function to extract the text from the container.
+    -> (T.Text -> T.Text -> Maybe Int)
+    -- ^ Custom scoring function to use for calculating how close words are
+    -- When the function returns Nothing, this means the values are incomparable.
+    -> [Scored t]    -- ^ The list of results, sorted, highest score first.
+{-# INLINABLE matchPar #-}
+matchPar chunkSize pat ts extract match' = concat vss
+  where
+    vss = map (mapMaybe (\t -> flip Scored t <$> match' pat (extract t))) (chunkList chunkSize ts)
         `using` parList (evalList rseq)
-      perfectScore = fromMaybe (error $ T.unpack pat) $ match' pat' pat'
 
 -- | The function to filter a list of values by fuzzy search on the text extracted from them,
 -- using a custom matching function which determines how close words are.
