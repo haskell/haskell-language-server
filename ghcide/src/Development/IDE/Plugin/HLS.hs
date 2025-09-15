@@ -49,7 +49,8 @@ import qualified Language.LSP.Server           as LSP
 import           Language.LSP.VFS
 import           Prettyprinter.Render.String   (renderString)
 import           Text.Regex.TDFA.Text          ()
-import           UnliftIO                      (MonadUnliftIO, liftIO)
+import           UnliftIO                      (MonadUnliftIO, liftIO,
+                                                readTVarIO)
 import           UnliftIO.Async                (forConcurrently)
 import           UnliftIO.Exception            (catchAny)
 
@@ -251,11 +252,12 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
+        vfs <- readTVarIO $ vfsVar $ shakeExtras ide
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are allowed to run on this request, save the
         -- list of disabled plugins incase that's all we have
-        let (fs, dfs) = List.partition (\(_, desc, _) -> handlesRequest m params desc config == HandlesRequest) fs'
-        let disabledPluginsReason = (\(x, desc, _) -> (x, handlesRequest m params desc config)) <$> dfs
+        let (fs, dfs) = List.partition (\(_, desc, _) -> handlesRequest vfs m params desc config == HandlesRequest) fs'
+        let disabledPluginsReason = (\(x, desc, _) -> (x, handlesRequest vfs m params desc config)) <$> dfs
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         -- However, some clients do display ResponseErrors! See for example the issues:
         -- https://github.com/haskell/haskell-language-server/issues/4467
@@ -370,7 +372,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
       pure $ notificationHandler m $ \ide vfs params -> do
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are enabled for this request
-        let fs = filter (\(_, desc, _) -> handlesRequest m params desc config == HandlesRequest) fs'
+        let fs = filter (\(_, desc, _) -> handlesRequest vfs m params desc config == HandlesRequest) fs'
         case nonEmpty fs of
           Nothing -> do
             logWith recorder Warning (LogNoPluginForMethod $ Some m)
