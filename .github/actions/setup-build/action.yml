@@ -23,6 +23,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Init submodules
+      run: git submodule update --init
+      shell: bash
+      
     - name: Workaround runner image issue
       if: runner.os == 'Linux'
       # https://github.com/actions/runner-images/issues/7061
