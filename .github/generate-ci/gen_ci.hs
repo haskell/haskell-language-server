@@ -32,10 +32,10 @@ osName Windows   = "windows"
 osName (Linux d) = "linux-" ++ distroName d
 
 data Distro
-  = Debian9
-  | Debian10
+  = Debian10
   | Debian11
   | Debian12
+  | Debian13
   | Ubuntu1804
   | Ubuntu2004
   | Ubuntu2204
@@ -64,14 +64,14 @@ artifactName arch opsys = archName arch ++ "-" ++ case opsys of
 data GHC
   = GHC967
   | GHC984
-  | GHC9102
+  | GHC9103
   | GHC9122
   deriving (Eq, Enum, Bounded)
 
 ghcVersion :: GHC -> String
 ghcVersion GHC967  = "9.6.7"
 ghcVersion GHC984  = "9.8.4"
-ghcVersion GHC9102 = "9.10.2"
+ghcVersion GHC9103 = "9.10.3"
 ghcVersion GHC9122 = "9.12.2"
 
 ghcVersionIdent :: GHC -> String
@@ -87,10 +87,10 @@ data Stage = Build GHC | Bindist | Test
 -------------------------------------------------------------------------------
 
 distroImage :: Distro -> String
-distroImage Debian9    = "debian:9"
 distroImage Debian10   = "debian:10"
 distroImage Debian11   = "debian:11"
 distroImage Debian12   = "debian:12"
+distroImage Debian13   = "debian:13"
 distroImage Ubuntu1804 = "ubuntu:18.04"
 distroImage Ubuntu2004 = "ubuntu:20.04"
 distroImage Ubuntu2204 = "ubuntu:22.04"
@@ -102,10 +102,10 @@ distroImage Fedora40   = "fedora:40"
 distroImage Rocky8     = "rockylinux:8"
 
 distroName :: Distro -> String
-distroName Debian9    = "deb9"
 distroName Debian10   = "deb10"
 distroName Debian11   = "deb11"
 distroName Debian12   = "deb12"
+distroName Debian13   = "deb13"
 distroName Ubuntu1804 = "ubuntu1804"
 distroName Ubuntu2004 = "ubuntu2004"
 distroName Ubuntu2204 = "ubuntu2204"
@@ -117,10 +117,10 @@ distroName Fedora40   = "fedora40"
 distroName Rocky8     = "unknown"
 
 distroInstall :: Distro -> String
-distroInstall Debian9    = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
-distroInstall Debian10   = "apt-get update && apt-get install -y"
+distroInstall Debian10 = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
 distroInstall Debian11   = "apt-get update && apt-get install -y"
 distroInstall Debian12   = "apt-get update && apt-get install -y"
+distroInstall Debian13   = "apt-get update && apt-get install -y"
 distroInstall Ubuntu1804 = "apt-get update && apt-get install -y"
 distroInstall Ubuntu2004 = "apt-get update && apt-get install -y"
 distroInstall Ubuntu2204 = "apt-get update && apt-get install -y"
@@ -132,10 +132,10 @@ distroInstall Fedora40   = "dnf install -y"
 distroInstall Rocky8     = "yum -y install epel-release && yum install -y --allowerasing"
 
 distroTools :: Distro -> String
-distroTools Debian9    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian10   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian11   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian12   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+distroTools Debian13   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev patchelf"
 distroTools Ubuntu1804 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu2004 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu2204 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
