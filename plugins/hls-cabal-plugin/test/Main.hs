@@ -12,7 +12,7 @@ import           CabalAdd                        (cabalAddDependencyTests,
                                                   cabalAddModuleTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
-import           Control.Lens                    ((^.))
+import           Control.Lens                    (_Just, preview, view, (^.))
 import           Control.Lens.Fold               ((^?))
 import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
@@ -48,6 +48,7 @@ main = do
             , gotoDefinitionTests
             , hoverTests
             , reloadOnCabalChangeTests
+            , codeLensTests
             ]
 
 -- ------------------------------------------------------------------------
@@ -234,7 +235,7 @@ hoverTests = testGroup "Hover"
 
 hoverOnDependencyTests :: TestTree
 hoverOnDependencyTests = testGroup "Hover Dependency"
-    [ hoverContainsTest "base with separated version" "hover-deps.cabal" (Position 6 25) "[Documentation](https://hackage.haskell.org/package/base)"
+    [ hoverContainsTest "base with separated version" "hover-deps.cabal" (Position 6 25) "[Documentation](https://hackage.haskell.org/package/base-4.19.2.0)"
     , hoverContainsTest "aeson with not separated version " "hover-deps.cabal" (Position 7 25) "[Documentation](https://hackage.haskell.org/package/aeson)"
     , hoverContainsTest "lens no version" "hover-deps.cabal" (Position 7 42) "[Documentation](https://hackage.haskell.org/package/lens)"
 
@@ -325,3 +326,27 @@ saveDoc docId t = do
 
     let params = DidSaveTextDocumentParams docId Nothing
     sendNotification L.SMethod_TextDocumentDidSave params
+
+-- ----------------------------------------------------------------------------
+-- Code Lens Tests
+-- ----------------------------------------------------------------------------
+
+codeLensTests :: TestTree
+codeLensTests = testGroup "Code Lens"
+    [ dependencyVersionLenses
+    , dependencyVersionInlayHints
+    ]
+    where
+        dependencyVersionLenses =
+            runCabalTestCaseSession "Code Lens Test" "dependencies" $ do
+                doc <- openDoc "deps-versions.cabal" "cabal"
+                lenses <- getCodeLenses doc
+                liftIO $ map (preview $ L.command . _Just . L.title) lenses @?= [Just "4.19.2.0", Just "text (2.1.1)", Just "transformers (0.6.1.0)"]
+                closeDoc doc
+        dependencyVersionInlayHints =
+            runCabalTestCaseSession "InlayHints tests" "dependencies" $ do
+                doc <- openDoc "deps-versions.cabal" "cabal"
+                let range = Range (Position 0 0) (Position 1000 1000)
+                hints <- getInlayHints doc range
+                liftIO $ map (view L.label) hints @?= [InL " (4.19.2.0)",InL " (2.1.1)",InL " (0.6.1.0)"]
+                closeDoc doc
