@@ -64,14 +64,14 @@ artifactName arch opsys = archName arch ++ "-" ++ case opsys of
 data GHC
   = GHC967
   | GHC984
-  | GHC9102
+  | GHC9103
   | GHC9122
   deriving (Eq, Enum, Bounded)
 
 ghcVersion :: GHC -> String
 ghcVersion GHC967  = "9.6.7"
 ghcVersion GHC984  = "9.8.4"
-ghcVersion GHC9102 = "9.10.2"
+ghcVersion GHC9103 = "9.10.3"
 ghcVersion GHC9122 = "9.12.2"
 
 ghcVersionIdent :: GHC -> String
@@ -118,7 +118,7 @@ distroName Rocky8     = "unknown"
 
 distroInstall :: Distro -> String
 distroInstall Debian9    = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
-distroInstall Debian10   = "apt-get update && apt-get install -y"
+distroInstall Debian10 = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
 distroInstall Debian11   = "apt-get update && apt-get install -y"
 distroInstall Debian12   = "apt-get update && apt-get install -y"
 distroInstall Ubuntu1804 = "apt-get update && apt-get install -y"
