@@ -53,39 +53,39 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
 toGADTCommand pId@(PluginId pId') state _ ToGADTParams{..} = withExceptT handleGhcidePluginError $ do
-    nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE uri
-    (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
+    let nuri = toNormalizedUri uri
+    (decls, exts) <- getInRangeH98DeclsAndExts state range nuri
     (L ann decl) <- case decls of
         [d] -> pure d
         _   -> throwError $ UnexpectedNumberOfDeclarations (Prelude.length decls)
     deps <- withExceptT GhcidePluginErrors
         $ runActionE (T.unpack pId' <> ".GhcSessionDeps") state
-        $ useE GhcSessionDeps nfp
+        $ useE GhcSessionDeps nuri
     (hsc_dflags . hscEnv -> df) <- pure deps
     txt <- withExceptT (PrettyGadtError . T.pack) $ liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
     range <- liftEither
         $ maybeToEither FailedToFindDataDeclRange
         $ srcSpanToRange $ locA ann
-    pragma <- withExceptT GhcidePluginErrors $ getFirstPragma pId state nfp
+    pragma <- withExceptT GhcidePluginErrors $ getFirstPragma pId state nuri
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ pluginSendRequest
             SMethod_WorkspaceApplyEdit
-            (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp (TextEdit range txt : insertEdit)))
+            (ApplyWorkspaceEditParams Nothing (workSpaceEdit nuri (TextEdit range txt : insertEdit)))
             (\_ -> pure ())
 
     pure $ InR Null
     where
-        workSpaceEdit nfp edits = WorkspaceEdit
+        workSpaceEdit nuri edits = WorkspaceEdit
             (pure $ Map.fromList
-                [(filePathToUri $ fromNormalizedFilePath nfp,
+                [(fromNormalizedUri nuri,
                 edits)])
                  Nothing Nothing
 
 codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT handleGhcidePluginError $ do
-    nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE (doc ^. L.uri)
-    (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
+    let nuri = toNormalizedUri (doc ^. L.uri)
+    (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nuri
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ InL actions
     where
@@ -108,12 +108,12 @@ codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT ha
 getInRangeH98DeclsAndExts :: (MonadIO m) =>
     IdeState
     -> Range
-    -> NormalizedFilePath
+    -> NormalizedUri
     -> ExceptT GadtPluginError m ([LTyClDecl GP], [Extension])
-getInRangeH98DeclsAndExts state range nfp = do
+getInRangeH98DeclsAndExts state range nuri = do
     pm <- withExceptT GhcidePluginErrors
         $ runActionE "GADT.GetParsedModuleWithComments" state
-        $ useE GetParsedModuleWithComments nfp
+        $ useE GetParsedModuleWithComments nuri
     let (L _ hsDecls) = hsmodDecls <$> pm_parsed_source pm
         decls = filter isH98DataDecl
             $ mapMaybe getDataDecl

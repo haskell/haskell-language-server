@@ -107,18 +107,16 @@ data Action = Replace
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
 action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (HandlerM c) [Action]
 action recorder state uri = do
-    nfp <- getNormalizedFilePathE  uri
-    fp <- uriToFilePathE uri
-
-    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents nfp
+    let nuri = toNormalizedUri uri
+    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents nuri
     let emptyModule = maybe True (T.null . T.strip . Rope.toText) contents
 
-    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
+    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nuri
     logWith recorder Debug (CorrectNames correctNames)
     let bestName = minimumBy (comparing T.length) <$> NE.nonEmpty correctNames
     logWith recorder Debug (BestName bestName)
 
-    statedNameMaybe <- liftIO $ codeModuleName state nfp
+    statedNameMaybe <- liftIO $ codeModuleName state nuri
     logWith recorder Debug (ModuleName $ snd <$> statedNameMaybe)
     case (bestName, statedNameMaybe) of
       (Just bestName, Just (nameRange, statedName))
@@ -133,11 +131,11 @@ action recorder state uri = do
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
-pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
-pathModuleNames recorder state normFilePath filePath
-  | firstLetter isLower $ takeFileName filePath = return ["Main"]
-  | otherwise = do
-      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
+pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedUri -> ExceptT PluginError IO [T.Text]
+pathModuleNames recorder state nuri
+  | Just filePath <- uriToFilePath $ fromNormalizedUri nuri
+  , firstLetter isUpper $ takeFileName filePath = do
+      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession nuri
       srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
@@ -155,6 +153,7 @@ pathModuleNames recorder state normFilePath filePath
 
       let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
       pure (map moduleNameFrom suffixes)
+  | otherwise = pure [T.pack "Main"]
   where
     firstLetter :: (Char -> Bool) -> FilePath -> Bool
     firstLetter _ []       = False
@@ -170,9 +169,9 @@ pathModuleNames recorder state normFilePath filePath
         . dropExtension
 
 -- | The module name, as stated in the module
-codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
-codeModuleName state nfp = runMaybeT $ do
-  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nfp
+codeModuleName :: IdeState -> NormalizedUri -> IO (Maybe (Range, T.Text))
+codeModuleName state nuri = runMaybeT $ do
+  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nuri
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   range <- MaybeT . pure $ toCurrentRange mp (realSrcSpanToRange l)
   pure (range, T.pack $ moduleNameString m)
