@@ -134,7 +134,6 @@
         },
         "semanticTokens": {
             "config": {
-                "charLitToken": "string",
                 "classMethodToken": "method",
                 "classToken": "class",
                 "commentToken": "comment",
