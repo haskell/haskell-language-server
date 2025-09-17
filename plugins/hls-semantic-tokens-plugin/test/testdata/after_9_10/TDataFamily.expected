@@ -1,13 +1,32 @@
-2:8-19 TModule "TDatafamily"
-5:13-18 TTypeFamily "XList"
-5:19-20 TTypeVariable "a"
-8:15-20 TTypeFamily "XList"
-8:21-25 TTypeConstructor "Char"
-8:28-33 TDataConstructor "XCons"
-8:35-39 TTypeConstructor "Char"
-8:42-47 TTypeFamily "XList"
-8:48-52 TTypeConstructor "Char"
-8:56-60 TDataConstructor "XNil"
-11:15-20 TTypeFamily "XList"
-11:26-35 TDataConstructor "XListUnit"
-11:37-40 TTypeConstructor "Int"
+[1:1-30 HsSyntacticTokenType TComment "{-# LANGUAGE TypeFamilies #-}"]
+[2:1-7 HsSyntacticTokenType TKeyword "module"]
+[2:8-19 HsSemanticTokenType TModule "TDatafamily"]
+[2:20-25 HsSyntacticTokenType TKeyword "where"]
+[4:1-35 HsSyntacticTokenType TComment "-- Declare a list-like data family"]
+[5:1-5 HsSyntacticTokenType TKeyword "data"]
+[5:6-12 HsSyntacticTokenType TKeyword "family"]
+[5:13-18 HsSemanticTokenType TTypeFamily "XList"]
+[5:19-20 HsSemanticTokenType TTypeVariable "a"]
+[7:1-41 HsSyntacticTokenType TComment "-- Declare a list-like instance for Char"]
+[8:1-5 HsSyntacticTokenType TKeyword "data"]
+[8:6-14 HsSyntacticTokenType TKeyword "instance"]
+[8:15-20 HsSemanticTokenType TTypeFamily "XList"]
+[8:21-25 HsSemanticTokenType TTypeConstructor "Char"]
+[8:26-27 HsSyntacticTokenType TKeyword "="]
+[8:28-33 HsSemanticTokenType TDataConstructor "XCons"]
+[8:35-39 HsSemanticTokenType TTypeConstructor "Char"]
+[8:41-42 HsSyntacticTokenType TKeyword "("]
+[8:42-47 HsSemanticTokenType TTypeFamily "XList"]
+[8:48-52 HsSemanticTokenType TTypeConstructor "Char"]
+[8:52-53 HsSyntacticTokenType TKeyword ")"]
+[8:54-55 HsSyntacticTokenType TKeyword "|"]
+[8:56-60 HsSemanticTokenType TDataConstructor "XNil"]
+[10:1-41 HsSyntacticTokenType TComment "-- Declare a number-like instance for ()"]
+[11:1-5 HsSyntacticTokenType TKeyword "data"]
+[11:6-14 HsSyntacticTokenType TKeyword "instance"]
+[11:15-20 HsSemanticTokenType TTypeFamily "XList"]
+[11:21-22 HsSyntacticTokenType TKeyword "("]
+[11:22-23 HsSyntacticTokenType TKeyword ")"]
+[11:24-25 HsSyntacticTokenType TKeyword "="]
+[11:26-35 HsSemanticTokenType TDataConstructor "XListUnit"]
+[11:37-40 HsSemanticTokenType TTypeConstructor "Int"]
