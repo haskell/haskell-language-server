@@ -59,7 +59,7 @@ data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
   | LogReactorMessageActionException !SomeException
-  | LogReactorThreadStopped Int
+  | LogReactorThreadStopped
   | LogCancelledRequest !SomeLspId
   | LogSession Session.Log
   | LogLspServer LspServerLog
@@ -96,8 +96,8 @@ instance Pretty Log where
       vcat
         [ "ReactorMessageActionException"
         , pretty $ displayException e ]
-    LogReactorThreadStopped i ->
-      "Reactor thread stopped" <+> pretty i
+    LogReactorThreadStopped ->
+      "Reactor thread stopped"
     LogCancelledRequest requestId ->
       "Cancelled request" <+> viaShow requestId
     LogSession msg -> pretty msg
@@ -338,6 +338,7 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
                     case msg of
                         ReactorNotification act -> handle exceptionInHandler act
                         ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+            logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
     registerIdeConfiguration (shakeExtras ide) initConfig
