@@ -23,30 +23,24 @@ import           Control.Concurrent.STM         (STM)
 import           Control.Concurrent.STM.Stats   (TVar, atomically,
                                                  atomicallyNamed, modifyTVar',
                                                  newTVarIO, readTVar, retry)
-import           Control.Concurrent.Strict      (modifyVar_, newBarrier, newVar,
-                                                 signalBarrier, threadDelay)
+import           Control.Concurrent.Strict      (modifyVar_, newVar,
+                                                 threadDelay)
 import           Control.Monad.Extra            hiding (loop)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
-import qualified Data.Aeson                     as J
 import           Data.Functor                   (($>))
 import qualified Data.Text                      as T
-import           Data.Unique                    (hashUnique, newUnique)
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
-import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types    as L
-import           Language.LSP.Server            (MonadLsp, ProgressAmount (..),
+import           Language.LSP.Server            (ProgressAmount (..),
                                                  ProgressCancellable (..),
-                                                 sendNotification, sendRequest,
                                                  withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
 import           UnliftIO                       (Async, async, bracket, cancel)
-import qualified UnliftIO.Exception             as UE
 
 data ProgressEvent
   = ProgressNewStarted
@@ -174,7 +168,7 @@ progressReportingNoTrace todo done (Just lspEnv) title optProgressStyle = do
   let _progressUpdate event = liftIO $ updateStateVar $ Event event
       _progressStop = updateStateVar StopProgress
       updateStateVar = modifyVar_ progressState . updateState (progressCounter lspEnv title optProgressStyle todo done)
-  return ProgressReporting {_progressUpdate, _progressStop}
+  return ProgressReporting {..}
 
 -- | `progressReporting` initiates a new progress reporting session.
 -- It necessitates the active tracking of progress using the `inProgress` function.
@@ -202,28 +196,6 @@ progressReporting (Just lspEnv) title optProgressStyle = do
 
         f = recordProgress inProgress file
 
-withProgressDummy ::
-  forall c m a.
-  MonadLsp c m =>
-  T.Text ->
-  Maybe ProgressToken ->
-  ProgressCancellable ->
-  ((ProgressAmount -> m ()) -> m a) ->
-  m a
-withProgressDummy title _ _ f = do
-        UE.bracket start end $ \_ ->
-            f (const $ return ())
-  where
-    sendProgressReport token report = sendNotification SMethod_Progress $ ProgressParams token $ J.toJSON report
-    start = UE.uninterruptibleMask_ $ do
-        t <- L.ProgressToken . L.InR . T.pack . show . hashUnique <$> liftIO newUnique
-        r <- liftIO newBarrier
-        _ <- sendRequest SMethod_WindowWorkDoneProgressCreate (WorkDoneProgressCreateParams t) $ \_ -> liftIO $ signalBarrier r ()
-        sendProgressReport t $ WorkDoneProgressBegin L.AString title Nothing Nothing Nothing
-        return t
-    end t = do
-        sendProgressReport t (WorkDoneProgressEnd L.AString Nothing)
-
 -- Kill this to complete the progress session
 progressCounter ::
   LSP.LanguageContextEnv c ->
@@ -233,12 +205,8 @@ progressCounter ::
   STM Int ->
   IO ()
 progressCounter lspEnv title optProgressStyle getTodo getDone =
-    LSP.runLspT lspEnv $ withProgressChoice title Nothing NotCancellable $ \update -> loop update 0
+  LSP.runLspT lspEnv $ withProgress title Nothing NotCancellable $ \update -> loop update 0
   where
-    withProgressChoice = case optProgressStyle of
-        TestReporting -> withProgressDummy
-        _             -> withProgress
-
     loop _ _ | optProgressStyle == NoProgress = forever $ liftIO $ threadDelay maxBound
     loop update prevPct = do
       (todo, done, nextPct) <- liftIO $ atomically $ do

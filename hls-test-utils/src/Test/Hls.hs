@@ -758,7 +758,6 @@ wrapClientLogger logger = do
     let lspLogRecorder = cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions. pretty) lspLogRecorder'
     return (lspLogRecorder <> logger, cb1)
 
-
 -- | Host a server, and run a test session on it.
 -- For setting custom timeout, set the environment variable 'LSP_TIMEOUT'
 -- * LSP_TIMEOUT=10 cabal test

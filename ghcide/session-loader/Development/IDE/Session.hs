@@ -1,6 +1,5 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -119,7 +118,6 @@ import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
 
-import qualified Control.Monad.Catch                 as MC
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
@@ -756,7 +754,6 @@ emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     -- We call setSessionDynFlags so that the loader is initialised
     -- We need to do this before we call initUnits.
-    -- we mask_ here because asynchronous exceptions might be swallowed
     env <- runGhc (Just libDir) $
       getSessionDynFlags >>= setSessionDynFlags >> getSession
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)

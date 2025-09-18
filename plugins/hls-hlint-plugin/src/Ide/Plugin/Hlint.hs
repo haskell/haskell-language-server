@@ -66,8 +66,7 @@ import           System.Environment                                 (setEnv,
 import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
-                                                                     topDir,
-                                                                     uninterruptibleMaskM_)
+                                                                     topDir)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
 #if MIN_GHC_API_VERSION(9,4,0)
@@ -206,7 +205,7 @@ rules recorder plugin = do
 
   defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
     (Config flags) <- getHlintConfig plugin
-    liftIO $ uninterruptibleMask_ $ argsSettings flags
+    liftIO $ argsSettings flags
 
   action $ do
     files <- Map.keys <$> getFilesOfInterestUntracked

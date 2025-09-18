@@ -24,7 +24,7 @@ import           Language.LSP.Test             hiding (resolveCompletion)
 import           Test.Hls                      (IdeState, SMethod (..), liftIO,
                                                 mkPluginTestDescriptor,
                                                 someMethodToMethodString,
-                                                waitForKickDone)
+                                                waitForAllProgressDone)
 import qualified Test.Hls.FileSystem           as FS
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -100,7 +100,7 @@ resolveRequests =
         , "data Foo = Foo { foo :: Int }"
         , "bar = Foo 4"
         ]
-      waitForKickDone
+      waitForAllProgressDone
       items <- getCompletions doc (Position 2 7)
       let resolveCompItems = filter (\i -> "test item" `T.isPrefixOf` (i ^. J.label)) items
       liftIO $ assertEqual "There must be exactly two results" 2 (length resolveCompItems)
@@ -113,7 +113,7 @@ resolveRequests =
         , "data Foo = Foo { foo :: Int }"
         , "bar = Foo 4"
         ]
-      waitForKickDone
+      waitForAllProgressDone
       -- Cant use 'getAllCodeActions', as this lsp-test function queries the diagnostic
       -- locations and we don't have diagnostics in these tests.
       cas <- Maybe.mapMaybe (preview _R) <$> getCodeActions doc (Range (Position 0 0) (Position 1 0))
@@ -128,7 +128,7 @@ resolveRequests =
         , "data Foo = Foo { foo :: Int }"
         , "bar = Foo 4"
         ]
-      waitForKickDone
+      waitForAllProgressDone
       cd <- getCodeLenses doc
       let resolveCodeLenses = filter (\i -> case i ^. J.command of
             Just cmd -> "test item" `T.isPrefixOf` (cmd ^. J.title)
