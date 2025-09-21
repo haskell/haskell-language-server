@@ -21,7 +21,8 @@ import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple   (importCompleter)
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..))
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..),
+                                                                 Matcher (..))
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo (..),
                                                                  StanzaName)
@@ -271,7 +272,7 @@ filePathExposedModulesTests =
     callFilePathsForExposedModules :: [FilePath] -> IO [T.Text]
     callFilePathsForExposedModules srcDirs = do
       let prefInfo = simpleCabalPrefixInfoFromFp "" exposedTestDir
-      filePathsForExposedModules mempty srcDirs prefInfo $ Fuzzy.Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
+      filePathsForExposedModules mempty srcDirs prefInfo $ Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
 
 exposedModuleCompleterTests :: TestTree
 exposedModuleCompleterTests =
@@ -368,7 +369,7 @@ simpleCompleterData sName dir pref = do
         pure $ parseGenericPackageDescriptionMaybe cabalContents,
       getCabalCommonSections = undefined,
       stanzaName = sName,
-      matcher = Fuzzy.Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
+      matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
     }
 
 mkCompleterData :: CabalPrefixInfo -> CompleterData
@@ -378,7 +379,7 @@ mkCompleterData prefInfo =
       getCabalCommonSections = undefined,
       cabalPrefixInfo = prefInfo,
       stanzaName = Nothing,
-      matcher = Fuzzy.Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
+      matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
     }
 
 exposedTestDir :: FilePath

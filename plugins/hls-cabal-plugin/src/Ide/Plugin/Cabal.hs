@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.Cabal (descriptor, haskellInteractionDescriptor, Log (..)) where
@@ -237,7 +236,7 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       lspPrefixInfo = Ghcide.getCompletionPrefixFromRope fakeLspCursorPosition fileContents
       cabalPrefixInfo = Completions.getCabalPrefixInfo fp lspPrefixInfo
     completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields $
-      Fuzzy.Matcher $
+      CompleterTypes.Matcher $
         Fuzzy.levenshteinScored Fuzzy.defChunkSize
     let completionTexts = fmap (^. JL.label) completions
     pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
@@ -370,7 +369,7 @@ completion recorder ide _ complParams = do
           let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
               cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
               res = computeCompletionsAt recorder ide cabalPrefInfo path fields $
-                Fuzzy.Matcher $
+                CompleterTypes.Matcher $
                   Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null
@@ -381,7 +380,7 @@ computeCompletionsAt
   -> Types.CabalPrefixInfo
   -> FilePath
   -> [Syntax.Field Syntax.Position]
-  -> Fuzzy.Matcher T.Text
+  -> CompleterTypes.Matcher T.Text
   -> IO [CompletionItem]
 computeCompletionsAt recorder ide prefInfo fp fields matcher = do
   runMaybeT (context fields) >>= \case

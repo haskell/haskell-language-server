@@ -41,7 +41,7 @@ errorNoopCompleter l recorder _ = do
 constantCompleter :: [T.Text] -> Completer
 constantCompleter completions _ cData = do
   let prefInfo = cabalPrefixInfo cData
-      scored = Fuzzy.runMatcher (matcher cData) (completionPrefix prefInfo) completions
+      scored = runMatcher (matcher cData) (completionPrefix prefInfo) completions
       range = completionRange prefInfo
   pure $ map (mkSimpleCompletionItem range . Fuzzy.original) scored
 
@@ -68,7 +68,7 @@ importCompleter l cData = do
 -- it is just forbidden on hackage.
 nameCompleter :: Completer
 nameCompleter _ cData = do
-  let scored = Fuzzy.runMatcher (matcher cData) (completionPrefix prefInfo) [completionFileName prefInfo]
+  let scored = runMatcher (matcher cData) (completionPrefix prefInfo) [completionFileName prefInfo]
       prefInfo = cabalPrefixInfo cData
       range = completionRange prefInfo
   pure $ map (mkSimpleCompletionItem range . Fuzzy.original) scored

@@ -4,7 +4,7 @@ module Text.Fuzzy.Parallel
 (   filter, filter', matchPar,
     simpleFilter, simpleFilter',
     match, defChunkSize, defMaxResults,
-    Scored(..), Matcher (..)
+    Scored(..)
 ) where
 
 import           Control.Parallel.Strategies (evalList, parList, rseq, using)
@@ -17,8 +17,6 @@ import           Prelude                     hiding (filter)
 
 data Scored a = Scored {score :: !Int, original:: !a}
   deriving (Functor, Show)
-
-newtype Matcher a = Matcher { runMatcher :: T.Text -> [T.Text] -> [Scored a] }
 
 -- | Returns the rendered output and the
 -- matching score for a pattern and a text.

@@ -48,7 +48,7 @@ filePathsForExposedModules
   :: Recorder (WithPriority Log)
   -> [FilePath]
   -> CabalPrefixInfo
-  -> Fuzzy.Matcher T.Text
+  -> Matcher T.Text
   -> IO [T.Text]
 filePathsForExposedModules recorder srcDirs prefInfo matcher = do
   concatForM
@@ -59,7 +59,7 @@ filePathsForExposedModules recorder srcDirs prefInfo matcher = do
         completions <- listFileCompletions recorder pathInfo
         validExposedCompletions <- filterM (isValidExposedModulePath pathInfo) completions
         let toMatch = pathSegment pathInfo
-            scored = Fuzzy.runMatcher
+            scored = runMatcher
               matcher
               toMatch
               (map T.pack validExposedCompletions)
