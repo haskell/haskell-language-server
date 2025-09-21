@@ -69,33 +69,6 @@ data LocateResult
   | LocateFoundReexport UnitId
   | LocateFoundFile UnitId NormalizedFilePath
 
-{-
--- | locate a module in the file system. Where we go from *daml to Haskell
-locateModuleFile :: MonadIO m
-             => [(UnitId, [FilePath], S.Set ModuleName)]
-             -> [String]
-             -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))
-             -> Bool
-             -> ModuleName
-             -> m LocateResult
-locateModuleFile import_dirss exts targetFor isSource modName = do
-  let candidates import_dirs =
-        [ toNormalizedFilePath' (prefix </> moduleNameSlashes modName <.> maybeBoot ext)
-           | prefix <- import_dirs , ext <- exts]
-  mf <- firstJustM go (concat [map (uid,) (candidates dirs) | (uid, dirs, _) <- import_dirss])
-  case mf of
-    Nothing ->
-      case find (\(_ , _, reexports) -> S.member modName reexports) import_dirss of
-        Just (uid,_,_) -> pure $ LocateFoundReexport uid
-        Nothing        -> pure LocateNotFound
-    Just (uid,file) -> pure $ LocateFoundFile uid file
-  where
-    go (uid, candidate) = fmap ((uid,) <$>) $ targetFor modName candidate
-    maybeBoot ext
-      | isSource = ext ++ "-boot"
-      | otherwise = ext
--}
-
 -- | This function is used to map a package name to a set of import paths.
 -- It only returns Just for unit-ids which are possible to import into the
 -- current module. In particular, it will return Nothing for 'main' components
@@ -143,6 +116,15 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
       --   - TODO: should we look for file existence now? If the file was
       --   removed from the disk, how will it behaves? How do we invalidate
       --   that?
+      --
+      -- [About The reexported module]
+      --
+      -- A package (or unit) A can reexport a module from another package/unit.
+      --
+      -- When it happen, it means two things:
+      --
+      -- - This module must appear in 'moduleMaps', using the correct package/unit
+      -- - What about "conflict". Right now the moduleMaps maps a module name to a unique package/unit.
       let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
                      Nothing -> LocateNotFound
                      Just (uid, file) -> LocateFoundFile uid file
