@@ -657,6 +657,7 @@ mkLevelEdges ms dep_node_keys = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl 
 #endif
 
 {-# NOINLINE cacheVar #-}
+-- TODO: this should not use unsaferPerformIO
 cacheVar = unsafePerformIO (newTVarIO mempty)
 
 getModulesPathsRule :: Recorder (WithPriority Log) -> Rules ()
@@ -682,7 +683,10 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 
           -- TODO: we are taking/droping extension, this could be factorized to save a few cpu cycles ;)
           -- TODO: do acceptedextensions needs to be a set ? or a vector?
-          modules <- fmap (\path -> (toModule path, toNormalizedFilePath' path)) . filter (\y -> takeExtension y `elem` acceptedExtensions) <$> liftIO (listFilesInside predicate dir)
+          -- If the directory is empty, we return an empty list of modules
+          -- using 'catch' instead of an exception which would kill the LSP
+          modules <- (fmap (\path -> (toModule path, toNormalizedFilePath' path)) . filter (\y -> takeExtension y `elem` acceptedExtensions) <$> liftIO (listFilesInside predicate dir))
+                 `catch` (\(_ :: IOException) -> pure [])
           let isSourceModule (_, path) = "-boot" `isSuffixOf` fromNormalizedFilePath path
           let (sourceModules, notSourceModules) = partition isSourceModule modules
           pure $ (Map.fromList notSourceModules, Map.fromList sourceModules)
