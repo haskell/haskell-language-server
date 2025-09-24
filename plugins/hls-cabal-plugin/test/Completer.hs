@@ -21,13 +21,15 @@ import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple   (importCompleter)
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..))
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..),
+                                                                 Matcher (..))
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo (..),
                                                                  StanzaName)
 import qualified Language.LSP.Protocol.Lens                     as L
 import           System.FilePath
 import           Test.Hls
+import qualified Text.Fuzzy.Parallel                            as Fuzzy
 import           Utils
 
 completerTests :: TestTree
@@ -270,7 +272,7 @@ filePathExposedModulesTests =
     callFilePathsForExposedModules :: [FilePath] -> IO [T.Text]
     callFilePathsForExposedModules srcDirs = do
       let prefInfo = simpleCabalPrefixInfoFromFp "" exposedTestDir
-      filePathsForExposedModules mempty srcDirs prefInfo
+      filePathsForExposedModules mempty srcDirs prefInfo $ Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
 
 exposedModuleCompleterTests :: TestTree
 exposedModuleCompleterTests =
@@ -366,11 +368,19 @@ simpleCompleterData sName dir pref = do
         cabalContents <- ByteString.readFile $ testDataDir </> "exposed.cabal"
         pure $ parseGenericPackageDescriptionMaybe cabalContents,
       getCabalCommonSections = undefined,
-      stanzaName = sName
+      stanzaName = sName,
+      matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
     }
 
 mkCompleterData :: CabalPrefixInfo -> CompleterData
-mkCompleterData prefInfo = CompleterData {getLatestGPD = undefined, getCabalCommonSections = undefined, cabalPrefixInfo = prefInfo, stanzaName = Nothing}
+mkCompleterData prefInfo =
+  CompleterData
+    { getLatestGPD = undefined,
+      getCabalCommonSections = undefined,
+      cabalPrefixInfo = prefInfo,
+      stanzaName = Nothing,
+      matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
+    }
 
 exposedTestDir :: FilePath
 exposedTestDir = addTrailingPathSeparator $ testDataDir </> "src-modules"

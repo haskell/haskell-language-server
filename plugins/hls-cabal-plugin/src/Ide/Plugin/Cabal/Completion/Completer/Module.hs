@@ -33,8 +33,7 @@ modulesCompleter extractionFunction recorder cData = do
   case mGPD of
     Just gpd -> do
       let sourceDirs = extractionFunction sName gpd
-      filePathCompletions <-
-        filePathsForExposedModules recorder sourceDirs prefInfo
+      filePathCompletions <- filePathsForExposedModules recorder sourceDirs prefInfo (matcher cData)
       pure $ map (\compl -> mkSimpleCompletionItem (completionRange prefInfo) compl) filePathCompletions
     Nothing -> do
       logWith recorder Debug LogUseWithStaleFastNoResult
@@ -45,8 +44,13 @@ modulesCompleter extractionFunction recorder cData = do
 
 -- | Takes a list of source directories and returns a list of path completions
 --  relative to any of the passed source directories which fit the passed prefix info.
-filePathsForExposedModules :: Recorder (WithPriority Log) -> [FilePath] -> CabalPrefixInfo -> IO [T.Text]
-filePathsForExposedModules recorder srcDirs prefInfo = do
+filePathsForExposedModules
+  :: Recorder (WithPriority Log)
+  -> [FilePath]
+  -> CabalPrefixInfo
+  -> Matcher T.Text
+  -> IO [T.Text]
+filePathsForExposedModules recorder srcDirs prefInfo matcher = do
   concatForM
     srcDirs
     ( \dir' -> do
@@ -55,9 +59,8 @@ filePathsForExposedModules recorder srcDirs prefInfo = do
         completions <- listFileCompletions recorder pathInfo
         validExposedCompletions <- filterM (isValidExposedModulePath pathInfo) completions
         let toMatch = pathSegment pathInfo
-            scored = Fuzzy.simpleFilter
-              Fuzzy.defChunkSize
-              Fuzzy.defMaxResults
+            scored = runMatcher
+              matcher
               toMatch
               (map T.pack validExposedCompletions)
         forM
