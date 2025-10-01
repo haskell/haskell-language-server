@@ -133,7 +133,13 @@ scheduleGarbageCollection state = do
     writeVar var True
 
 doKick :: Action ()
-doKick = useNoFile_ Kick
+doKick = do
+    ShakeExtras{ideTesting = IdeTesting testing} <- getShakeExtras
+    -- only kick always if testing, otherwise we rely on the kick rule
+    if testing
+      then kick
+      else void $ useNoFile Kick
+
 
 -- | Typecheck all the files of interest.
 --   Could be improved
