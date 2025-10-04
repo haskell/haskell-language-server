@@ -114,16 +114,17 @@ import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
 import qualified System.Directory.Extra                   as IO
-import           System.Exit                              (ExitCode (ExitFailure),
+import           System.Exit                              (ExitCode (ExitFailure, ExitSuccess),
                                                            exitWith)
 import           System.FilePath                          (takeExtension,
-                                                           takeFileName)
+                                                           takeFileName, (</>))
 import           System.IO                                (BufferMode (LineBuffering, NoBuffering),
                                                            Handle, hFlush,
                                                            hPutStrLn,
                                                            hSetBuffering,
                                                            hSetEncoding, stderr,
                                                            stdin, stdout, utf8)
+import           System.Process                           (readProcessWithExitCode)
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
@@ -446,15 +447,29 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             c ide
 
 expandFiles :: [FilePath] -> IO [FilePath]
-expandFiles = concatMapM $ \x -> do
+expandFiles paths = do
+  let haskellFind x =
+        let recurse "." = True
+            recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
+            recurse y = takeFileName y `notElem` ["dist", "dist-newstyle"] -- cabal directories
+        in filter (\y -> takeExtension y `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
+  (testGitExitCode, _, _) <- readProcessWithExitCode "git" ["status"] ""
+  let findFiles =
+        case testGitExitCode of
+          ExitSuccess -> \path -> do
+            let lookups = [path, path </> "*.hs", path </> "*.lhs"]
+            (trackedExitCode, trackedStdout, _) <- readProcessWithExitCode "git" ("ls-files":lookups) ""
+            (untrackedExitCode, untrackedStdout, _) <- readProcessWithExitCode "git" ("ls-files":"-o":lookups) ""
+            if trackedExitCode == ExitSuccess && untrackedExitCode == ExitSuccess
+              then pure $ lines trackedStdout <> lines untrackedStdout
+              else haskellFind path
+          _ -> haskellFind
+  flip concatMapM paths $ \x -> do
     b <- IO.doesFileExist x
     if b
         then return [x]
         else do
-            let recurse "." = True
-                recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
-                recurse y = takeFileName y `notElem` ["dist", "dist-newstyle"] -- cabal directories
-            files <- filter (\y -> takeExtension y `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
+            files <- findFiles x
             when (null files) $
                 fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
             return files
