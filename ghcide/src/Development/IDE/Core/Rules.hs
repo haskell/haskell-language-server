@@ -183,7 +183,6 @@ data Log
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogTypecheckedFOI !NormalizedFilePath
-  | LogDependencies !NormalizedFilePath [FilePath]
   deriving Show
 
 instance Pretty Log where
@@ -208,11 +207,6 @@ instance Pretty Log where
         <+> "the HLS version being used, the plugins enabled, and if possible the codebase and file which"
         <+> "triggered this warning."
       ]
-    LogDependencies nfp deps ->
-      vcat
-         [ "Add dependency" <+> pretty (fromNormalizedFilePath nfp)
-         , nest 2 $ pretty deps
-         ]
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -722,7 +716,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
                 itExists <- getFileExists nfp
                 when itExists $ void $ do
                   use_ GetPhysicalModificationTime nfp
-        logWith recorder Logger.Info $ LogDependencies file deps
+
         mapM_ addDependency deps
 
         let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))
