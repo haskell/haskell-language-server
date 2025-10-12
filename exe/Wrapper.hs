@@ -26,7 +26,7 @@ import           System.Info
 import           System.IO
 #ifndef mingw32_HOST_OS
 import qualified Data.Map.Strict                    as Map
-import           System.Posix.Process               (executeFile)
+import           System.Posix.Process               (executeFile, nice)
 #else
 import           System.Process
 #endif
@@ -177,7 +177,9 @@ launchHaskellLanguageServer recorder parsedArgs = do
 
           env <- Map.fromList <$> liftIO getEnvironment
           let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
-          liftIO $ executeFile e True args (Just (Map.toList newEnv))
+          liftIO $ do
+            nice 10
+            executeFile e True args (Just (Map.toList newEnv))
 #endif
 
 
