@@ -8,8 +8,8 @@ Our vision is that you should build an IDE by combining:
 
 * [`hie-bios`](https://github.com/mpickering/hie-bios) for determining where your files are, what are their dependencies, what extensions are enabled and so on;
 * `ghcide` (i.e. this library) for defining how to type check, when to type check, and producing diagnostic messages;
-* A bunch of plugins that haven't yet been written, e.g. [`hie-hlint`](https://github.com/ndmitchell/hlint) and [`hie-ormolu`](https://github.com/tweag/ormolu), to choose which features you want;
-* [`haskell-lsp`](https://github.com/alanz/haskell-lsp) for sending those messages to a [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) server;
+* A bunch of plugins that that implement optional features, such as formatting, eval, linter (via `hlint`), etc...
+* [`haskell-lsp`](https://github.com/haskell/lsp) for sending those messages to a [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) server;
 * An LSP client for your editor.
 
 There are more details about our approach [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
@@ -25,43 +25,26 @@ Until tools like cabal and stack provide the right interface to support multi-co
 projects, it is always advised to specify explicitly how your project partitions.
 2. Cross-component features only work if you have loaded at least one file
 from each component.
-3. There is a known issue where if you have three components, such that A depends on B which depends on C
-then if you load A and C into the session but not B then under certain situations you
-can get strange errors about a type coming from two different places. See [this repo](https://github.com/fendor/ghcide-bad-interface-files) for
-a simple reproduction of the bug.
 
 ## Using it
 
 `ghcide` is not an end-user tool, [don't use `ghcide`](https://neilmitchell.blogspot.com/2020/09/dont-use-ghcide-anymore-directly.html) directly (more about the rationale [here](https://github.com/haskell/ghcide/pull/939)).
 
- [`haskell-language-server`](http://github.com/haskell/haskell-language-server) is an LSP server built on top of `ghcide` with additional features and a user friendly deployment model. To get it, simply install the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) in VS Code, or download prebuilt binaries from the [haskell-language-server](https://github.com/haskell/haskell-language-server) project page.
+ [`haskell-language-server`](http://github.com/haskell/haskell-language-server) is an LSP server built on top of `ghcide` with additional features and a user friendly deployment model. To get it, simply install the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) in VS Code, or download prebuilt binaries from [GHCup](https://www.haskell.org/ghcup/).
 
 
 The instructions below are meant for developers interested in setting up ghcide as an LSP server for testing purposes.
 
 ### Install `ghcide`
 
-#### With Nix
-
-Note that you need to compile `ghcide` with the same `ghc` as the project you are working on.
-
-1. If the `ghc` you are using matches the version (or better is) from `nixpkgs` it‘s easiest to use the `ghcide` from `nixpkgs`. You can do so via
-   ```
-   nix-env -iA haskellPackages.ghcide
-   ```
-   or e.g. including `pkgs.haskellPackages.ghcide` in your projects `shell.nix`.
-   Depending on your `nixpkgs` channel that might not be the newest `ghcide`, though.
-
-2. If your `ghc` does not match nixpkgs you should try the [ghcide-nix repository](https://github.com/cachix/ghcide-nix)
-   which provides a `ghcide` via the `haskell.nix` infrastructure.
 
 #### With Cabal or Stack
 
 First install the `ghcide` binary using `stack` or `cabal`, e.g.
 
-1. `git clone https://github.com/haskell/ghcide.git`
-2. `cd ghcide`
-3. `cabal install` or `stack install` (and make sure `~/.local/bin` is on your `$PATH`)
+1. `git clone https://github.com/haskell/haskell-language-server.git`
+2. `cd haskell-language-server`
+3. `cabal install exe:ghcide` or `stack install ghcide` (and make sure `~/.local/bin` is on your `$PATH`)
 
 It's important that `ghcide` is compiled with the same compiler you use to build your projects.
 
@@ -82,7 +65,7 @@ Completed (152 worked, 6 failed)
 
 Of the 158 files in Shake, as of this moment, 152 can be loaded by the IDE, but 6 can't (error messages for the reasons they can't be loaded are given earlier). The failing files are all prototype work or test output, meaning I can confidently use Shake.
 
-The `ghcide` executable mostly relies on [`hie-bios`](https://github.com/mpickering/hie-bios) to do the difficult work of setting up your GHC environment. If it doesn't work, see [the `hie-bios` manual](https://github.com/mpickering/hie-bios#readme) to get it working. My default fallback is to figure it out by hand and create a `direct` style [`hie.yaml`](https://github.com/ndmitchell/shake/blob/master/hie.yaml) listing the command line arguments to load the project.
+The `ghcide` executable mostly relies on [`hie-bios`](https://github.com/haskell/hie-bios) to do the difficult work of setting up your GHC environment. If it doesn't work, see [the `hie-bios` manual](https://github.com/haskell/hie-bios#readme) to get it working. My default fallback is to figure it out by hand and create a `direct` style [`hie.yaml`](https://github.com/ndmitchell/shake/blob/master/hie.yaml) listing the command line arguments to load the project.
 
 If you can't get `ghcide` working outside the editor, see [this setup troubleshooting guide](https://github.com/haskell/haskell-language-server/tree/master/ghcide/docs/Setup.md). Once you have got `ghcide` working outside the editor, the next step is to pick which editor to integrate with.
 
@@ -93,10 +76,6 @@ If you can't get `ghcide` working outside the editor, see [this setup troublesho
 ### Using with VS Code
 
 The [Haskell](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) extension has a setting for ghcide.
-
-### Using with Atom
-
-You can follow the [instructions](https://github.com/moodmosaic/ide-haskell-ghcide#readme) to install with `apm`.
 
 ### Using with Sublime Text
 
