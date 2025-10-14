@@ -8,7 +8,7 @@ Our vision is that you should build an IDE by combining:
 
 * [`hie-bios`](https://github.com/mpickering/hie-bios) for determining where your files are, what are their dependencies, what extensions are enabled and so on;
 * `ghcide` (i.e. this library) for defining how to type check, when to type check, and producing diagnostic messages;
-* A bunch of plugins that that implement optional features, such as formatting, eval, linter (via `hlint`), etc...
+* A bunch of plugins that implement optional features, such as formatting, eval, linter (via `hlint`), etc...
 * [`haskell-lsp`](https://github.com/haskell/lsp) for sending those messages to a [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) server;
 * An LSP client for your editor.
 
