@@ -34,12 +34,12 @@ tests = testGroup "GADT"
     , runTest "ConstructorContext" "ConstructorContext" 2 0 2 38
     , runTest "Context" "Context" 2 0 4 41
     , runTest "Pragma" "Pragma" 2 0 3 29
-    , runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
-    , gadtPragmaTest "ghc-9.2 don't need to insert GADTs pragma" False
+    , runTest "SingleDeriving" "SingleDeriving" 2 0 3 14
+    , gadtPragmaTest "no need to insert GADTs pragma"
     ]
 
-gadtPragmaTest :: TestName -> Bool -> TestTree
-gadtPragmaTest title hasGADT = testCase title
+gadtPragmaTest :: TestName -> TestTree
+gadtPragmaTest title = testCase title
     $ withCanonicalTempDir
     $ \dir -> runSessionWithServer def gadtPlugin dir $ do
         doc <- createDoc "A.hs" "haskell" (T.unlines ["module A where", "data Foo = Bar"])
@@ -47,7 +47,6 @@ gadtPragmaTest title hasGADT = testCase title
         (act:_) <- findGADTAction <$> getCodeActions doc (Range (Position 1 0) (Position 1 1))
         executeCodeAction act
         let expected = T.unlines $
-                ["{-# LANGUAGE GADTs #-}" | hasGADT] ++
                 ["module A where", "data Foo where", "  Bar :: Foo"]
         contents <- skipManyTill anyMessage (getDocumentEdit doc)
         liftIO $ contents @?= expected
