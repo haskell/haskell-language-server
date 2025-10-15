@@ -1071,7 +1071,6 @@ library hls-alternate-number-format-plugin
     , lens
     , lsp                  ^>=2.7
     , mtl
-    , regex-tdfa
     , syb
     , text
 
@@ -1090,6 +1089,7 @@ test-suite hls-alternate-number-format-plugin-tests
   main-is:          Main.hs
   ghc-options:      -fno-ignore-asserts
   build-depends:
+    , containers
     , filepath
     , haskell-language-server:hls-alternate-number-format-plugin
     , hls-test-utils       == 2.12.0.0
