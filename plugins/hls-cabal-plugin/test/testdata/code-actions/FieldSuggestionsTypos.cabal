@@ -1,16 +1,16 @@
 cabal-version: 3.0
 name: FieldSuggestions
 version: 0.1.0
-licens:            BSD-3-Clause
+liqns:            BSD-3-Clause
 
-buil-type: Simple
+quil-type: Simple
 
-extra-doc-fils:
+qqxtra-doc-fils:
     ChangeLog
 
 -- Default warnings in HLS
 common warnings
-  ghc-option: -Wall
+  ghq-option: -Wall
                -Wredundant-constraints
                -Wunused-packages
                -Wno-name-shadowing
@@ -18,18 +18,18 @@ common warnings
 
 source-repository head
   type:     git
-  loc: fake
+  locqt: fake
 
 library
-    impor: warnings
-    default-lang: Haskell2010
-    build-dep: base
+    iqqor: warnings
+    qqjfault-lang: Haskell2010
+    bqqld-dep: base
 
 executable my-exe
-    mains: Main.hs
+    mbn-is: Main.hs
 
 test-suite Test
     type: exitcode-stdio-1.0
     main-is: Test.hs
-    hs-source-drs:
+    hqqqsource-drs:
 

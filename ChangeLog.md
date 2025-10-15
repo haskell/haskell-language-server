@@ -1,5 +1,119 @@
 # Changelog for haskell-language-server
 
+## 2.12.0.0
+
+- Bindists for GHC 9.12.2
+- Bindists for GHC 9.10.3
+- Bindists for GHC 9.8.4
+- Bindists for GHC 9.6.7
+- Dropped support for GHC 9.4
+- Dropped binaries for Debian 9
+- Added binaries for Debian 13
+
+### Pull Requests
+
+- Fix warning for `-Werror` build in Circle CI
+  ([#4727](https://github.com/haskell/haskell-language-server/pull/4727)) by @fendor
+- Replace neat-interpolation with string-interpolate
+  ([#4717](https://github.com/haskell/haskell-language-server/pull/4717)) by @jian-lin
+- Document how to set formattingProvider in emacs, modern syntax
+  ([#4713](https://github.com/haskell/haskell-language-server/pull/4713)) by @unhammer
+- Replace writeFile with atomicFileWrite in ghcide-tests
+  ([#4710](https://github.com/haskell/haskell-language-server/pull/4710)) by @soulomoon
+- #4705 Fix flaky test `bidirectional module dependency with hs-boot`
+  ([#4706](https://github.com/haskell/haskell-language-server/pull/4706)) by @soulomoon
+- Refactor CoreFile to use fat interface core type
+  ([#4700](https://github.com/haskell/haskell-language-server/pull/4700)) by @soulomoon
+- Support fourmolu 0.19.0.0
+  ([#4693](https://github.com/haskell/haskell-language-server/pull/4693)) by @brandonchinn178
+- Bump CI to GHC 9.10.2
+  ([#4687](https://github.com/haskell/haskell-language-server/pull/4687)) by @fendor
+- Upgrade to hie-bios 0.17.0
+  ([#4686](https://github.com/haskell/haskell-language-server/pull/4686)) by @fendor
+- Fix build with GHC 9.10.3-rc1
+  ([#4679](https://github.com/haskell/haskell-language-server/pull/4679)) by @andreasabel
+- Use plain comments instead of annotations for HLint ignores
+  ([#4669](https://github.com/haskell/haskell-language-server/pull/4669)) by @georgefst
+- Use structured diagnostics for type wildcard fill suggestions
+  ([#4664](https://github.com/haskell/haskell-language-server/pull/4664)) by @sgillespie
+- concurrency bug fixes/ improvements
+  ([#4663](https://github.com/haskell/haskell-language-server/pull/4663)) by @MangoIV
+- Show LaTeX math expressions in haddockToMarkdown
+  ([#4658](https://github.com/haskell/haskell-language-server/pull/4658)) by @webdevred
+- Mangoiv/improve key business
+  ([#4654](https://github.com/haskell/haskell-language-server/pull/4654)) by @MangoIV
+- hls-cabal-plugin: Fix cabal-add bound (#4642)
+  ([#4652](https://github.com/haskell/haskell-language-server/pull/4652)) by @wz1000
+- fix: add context code action with trailing comment
+  ([#4649](https://github.com/haskell/haskell-language-server/pull/4649)) by @guibou
+- Use hie-bios 0.16
+  ([#4647](https://github.com/haskell/haskell-language-server/pull/4647)) by @fendor
+- Fix build for GHC 9.10.2
+  ([#4644](https://github.com/haskell/haskell-language-server/pull/4644)) by @sgillespie
+- Add tests for references to record fields and update symbol retrieval to only include source nodes
+  ([#4641](https://github.com/haskell/haskell-language-server/pull/4641)) by @soulomoon
+- Bump up hiedb version #4639
+  ([#4640](https://github.com/haskell/haskell-language-server/pull/4640)) by @soulomoon
+- CI: Fix hls-eval-plugin tests for GHC-9.10
+  ([#4638](https://github.com/haskell/haskell-language-server/pull/4638)) by @sgillespie
+- Fix renaming data constructors with fields (resolves #2915, resolves #4083) 
+  ([#4635](https://github.com/haskell/haskell-language-server/pull/4635)) by @jhrcek
+- Migrate change-type-signature-plugin to use structured diagnostics
+  ([#4632](https://github.com/haskell/haskell-language-server/pull/4632)) by @sgillespie
+- Reload .cabal files when they are modified
+  ([#4630](https://github.com/haskell/haskell-language-server/pull/4630)) by @fendor
+- Set the diagnostic code description on GHC diagnostics
+  ([#4629](https://github.com/haskell/haskell-language-server/pull/4629)) by @michaelpj
+- Ensure usage of stan-0.2.1.0 to fix #4515
+  ([#4628](https://github.com/haskell/haskell-language-server/pull/4628)) by @0rphee
+- Implement signature help
+  ([#4626](https://github.com/haskell/haskell-language-server/pull/4626)) by @jian-lin
+- Start using structured diagnostics for missing signatures
+  ([#4625](https://github.com/haskell/haskell-language-server/pull/4625)) by @janvogt
+- hls-notes-plugin: Allow to see where a note is referenced from
+  ([#4624](https://github.com/haskell/haskell-language-server/pull/4624)) by @jvanbruegge
+- Revert "Switch ghcide tests to sequential execution (#4307)"
+  ([#4623](https://github.com/haskell/haskell-language-server/pull/4623)) by @fendor
+- Use structured diagnostics in pragmas plugin
+  ([#4620](https://github.com/haskell/haskell-language-server/pull/4620)) by @dyniec
+- Fix completion for record dot syntax when record isn't known
+  ([#4619](https://github.com/haskell/haskell-language-server/pull/4619)) by @samuel-williams-da
+- Add Code Action for adding a module to your project's cabal file
+  ([#4617](https://github.com/haskell/haskell-language-server/pull/4617)) by @VeryMilkyJoe
+- Support hlint on 9.10 apart from apply-refact
+  ([#4616](https://github.com/haskell/haskell-language-server/pull/4616)) by @michaelpj
+- Remove `hie-compat`
+  ([#4613](https://github.com/haskell/haskell-language-server/pull/4613)) by @dschrempf
+- allow Diff 1.x
+  ([#4608](https://github.com/haskell/haskell-language-server/pull/4608)) by @peterbecich
+- provide `curl` in dev shell
+  ([#4607](https://github.com/haskell/haskell-language-server/pull/4607)) by @peterbecich
+- Fix minor typo in Eval plugin descriptor
+  ([#4597](https://github.com/haskell/haskell-language-server/pull/4597)) by @joe-warren
+- Avoid unnecessary recompilation due to -haddock
+  ([#4596](https://github.com/haskell/haskell-language-server/pull/4596)) by @fendor
+- Compute Partial module graph fingerprints
+  ([#4594](https://github.com/haskell/haskell-language-server/pull/4594)) by @soulomoon
+- Strip prefixes added by DuplicateRecordFields 
+  ([#4593](https://github.com/haskell/haskell-language-server/pull/4593)) by @kozak
+- Use shorter test names in ghcide-tests
+  ([#4591](https://github.com/haskell/haskell-language-server/pull/4591)) by @fendor
+- Bump haskell-actions/setup from 2.7.11 to 2.8.0
+  ([#4589](https://github.com/haskell/haskell-language-server/pull/4589)) by @dependabot[bot]
+- Only expand positional records if the DataCon application is fully saturated
+  ([#4586](https://github.com/haskell/haskell-language-server/pull/4586)) by @ozkutuk
+- Prepare release 2.11.0.0
+  ([#4585](https://github.com/haskell/haskell-language-server/pull/4585)) by @wz1000
+- Plugin tutorial, more changes
+  ([#4570](https://github.com/haskell/haskell-language-server/pull/4570)) by @dschrempf
+- Cleanup CPPs, remove support for GHC 9.4
+  ([#4567](https://github.com/haskell/haskell-language-server/pull/4567)) by @dschrempf
+- Migrate `hls-class-plugin` to use structured diagnostics
+  ([#4472](https://github.com/haskell/haskell-language-server/pull/4472)) by @fendor
+- Generate custom parameters' documentation for plugins
+  ([#4414](https://github.com/haskell/haskell-language-server/pull/4414)) by @develop7
+- Switch ghcide tests to sequential execution
+  ([#4307](https://github.com/haskell/haskell-language-server/pull/4307)) by @dyniec
 
 ## 2.11.0.0
 

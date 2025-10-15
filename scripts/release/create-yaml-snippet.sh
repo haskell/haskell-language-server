@@ -19,12 +19,7 @@ cat <<EOF > /dev/stdout
         dlHash: $(sha256sum "haskell-language-server-$RELEASE-src.tar.gz" | awk '{ print $1 }')
       viArch:
         A_64:
-          Linux_Debian:
-            '< 10': &hls-${RELEASE//./}-64-deb9
-              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb9.tar.xz
-              dlSubdir: haskell-language-server-$RELEASE
-              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb9.tar.xz" | awk '{ print $1 }')
-            '(>= 10 && < 11)': &hls-${RELEASE//./}-64-deb10
+            '< 11': &hls-${RELEASE//./}-64-deb10
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb10.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb10.tar.xz" | awk '{ print $1 }')
@@ -36,6 +31,10 @@ cat <<EOF > /dev/stdout
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb12.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
               dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb12.tar.xz" | awk '{ print $1 }')
+            '>= 13': &hls-${RELEASE//./}-64-deb13
+              dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb13.tar.xz
+              dlSubdir: haskell-language-server-$RELEASE
+              dlHash: $(sha256sum "haskell-language-server-$RELEASE-x86_64-linux-deb13.tar.xz" | awk '{ print $1 }')
             unknown_versioning: &hls-${RELEASE//./}-64-deb11
               dlUri: https://downloads.haskell.org/~hls/haskell-language-server-$RELEASE/haskell-language-server-$RELEASE-x86_64-linux-deb11.tar.xz
               dlSubdir: haskell-language-server-$RELEASE
