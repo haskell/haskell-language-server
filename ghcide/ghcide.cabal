@@ -89,6 +89,7 @@ library
     , optparse-applicative
     , os-string
     , parallel
+    , process
     , prettyprinter                >=1.7
     , prettyprinter-ansi-terminal
     , random
