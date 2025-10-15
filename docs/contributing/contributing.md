@@ -159,12 +159,19 @@ When using VS Code you can set up each project to use a specific HLS executable:
 ```
 
 #### Configuring Emacs
-There are several ways to configure the HLS server path:
+There are several ways to configure the HLS server path, each of which depends on your choice of language server provider (e.g., emacs-lsp or eglot). If using emacs-lsp, you need to configure the variable `lsp-haskell-server-path`:
 - `M-x customize-group<RET>lsp-haskell<RET>Lsp Haskell Server Path`
 - Evaluate `(setq lsp-haskell-server-path "/path/to/your/hacked/haskell-language-server")`
 - Create a file `.dir-locals.el` with the following content:
 ```lisp
 ((haskell-mode . ((lsp-haskell-server-path . "/path/to/your/hacked/haskell-language-server"))))
+```
+
+If using eglot, you need to configure the variable `eglot-server-programs`, which is an alist associating major-modes to executables:
+- Evaluate `(setf (alist-get 'haskell-mode eglot-server-programs) ("/path/to/your/hacked/haskell-language-server" "--lsp"))`
+- Create a file `.dir-locals.el` with the following content:
+```lisp
+((haskell-mode . ((eglot-server-programs . (('haskell-mode . ("/path/to/your/hacked/haskell-language-server" "--lsp")))))))
 ```
 
 ### Rebuild HLS
