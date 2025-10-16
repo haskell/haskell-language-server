@@ -2337,11 +2337,16 @@ test-suite ghcide-bench-test
         RecordWildCards
         ViewPatterns
 
+flag plugin-tutorial
+  description: Build the plugin tutorial executable
+  default:     True
+  manual:      True
+
 executable plugin-tutorial
   import: defaults
   -- The plugin tutorial is only compatible with 9.6 and 9.8.
   -- No particular reason, just to avoid excessive CPP.
-  if (impl(ghc >= 9.6) && impl(ghc < 9.10))
+  if flag(plugin-tutorial) && (impl(ghc >= 9.6) && impl(ghc < 9.10))
     buildable: True
   else
     buildable: False
