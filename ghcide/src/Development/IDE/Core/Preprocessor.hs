@@ -30,6 +30,9 @@ import           Development.IDE.Types.Location
 import qualified GHC.LanguageExtensions            as LangExt
 import qualified GHC.Runtime.Loader                as Loader
 import           GHC.Utils.Logger                  (LogFlags (..))
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Driver.Config.Parser          (supportedLanguagePragmas)
+#endif
 import           System.FilePath
 import           System.IO.Extra
 
@@ -144,12 +147,21 @@ parsePragmasIntoHscEnv
     -> Util.StringBuffer
     -> IO (Either [FileDiagnostic] ([String], HscEnv))
 parsePragmasIntoHscEnv env fp contents = catchSrcErrors dflags0 "pragmas" $ do
+#if MIN_VERSION_ghc(9,13,0)
+    let supportedExts = supportedLanguagePragmas dflags0
+    let (_warns,opts) = getOptions (initParserOpts dflags0) supportedExts contents fp
+#else
     let (_warns,opts) = getOptions (initParserOpts dflags0) contents fp
+#endif
 
     -- Force bits that might keep the dflags and stringBuffer alive unnecessarily
     evaluate $ rnf opts
 
+#if MIN_VERSION_ghc(9,13,0)
+    (dflags, _, _) <- parseDynamicFilePragma (hsc_logger env) dflags0 opts
+#else
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
+#endif
     hsc_env' <- Loader.initializePlugins (hscSetFlags dflags env)
     return (map unLoc opts, hscSetFlags (disableWarningsAsErrors $ hsc_dflags hsc_env') hsc_env')
   where dflags0 = hsc_dflags env
