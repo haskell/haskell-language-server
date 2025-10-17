@@ -66,7 +66,8 @@ import           System.Environment                                 (setEnv,
 import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
-                                                                     topDir)
+                                                                     topDir,
+                                                                     uninterruptibleMaskM_)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
 #if MIN_GHC_API_VERSION(9,4,0)
@@ -205,7 +206,10 @@ rules recorder plugin = do
 
   defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
     (Config flags) <- getHlintConfig plugin
-    liftIO $ argsSettings flags
+    -- argsSettings might capture async exceptions and throw it everytime we call it.
+    -- So we must mask async exceptions here as an workaround.
+    -- See https://github.com/haskell/haskell-language-server/issues/4718
+    liftIO $ uninterruptibleMask_ $ argsSettings flags
 
   action $ do
     files <- Map.keys <$> getFilesOfInterestUntracked
