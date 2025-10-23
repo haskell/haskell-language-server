@@ -14,7 +14,11 @@ import qualified Data.Text                    as T
 
 import           Data.Aeson
 import           Data.Aeson.Types
+import           Data.Function                (on)
 import           Data.Hashable                (Hashable)
+import qualified Data.List                    as L
+import           Data.List.NonEmpty           (NonEmpty (..))
+import           Data.String                  (IsString (..))
 import           Data.Text                    (Text)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
@@ -81,9 +85,53 @@ data Provenance
     | Local SrcSpan
     deriving (Eq, Ord, Show)
 
+newtype Snippet = Snippet [SnippetAny]
+  deriving (Eq, Show)
+  deriving newtype (Semigroup, Monoid)
+
+instance IsString Snippet where
+  fromString = snippetText . T.pack
+
+data SnippetAny
+  = SText Text
+  | STabStop Int
+  | SPlaceholder Int SnippetAny
+  | SChoice Int (NonEmpty Text)
+  | SVariable Text (Maybe SnippetAny)
+  deriving (Eq, Show)
+
+snippetText :: Text -> Snippet
+snippetText = Snippet . L.singleton . SText
+
+snippetVariable :: Text -> Snippet
+snippetVariable n = Snippet . L.singleton $ SVariable n Nothing
+
+snippetVariableDefault :: Text -> SnippetAny -> Snippet
+snippetVariableDefault n d = Snippet . L.singleton . SVariable n $ Just d
+
+snippetToText :: Snippet -> Text
+snippetToText (Snippet l) = foldMap (snippetAnyToText False) l
+  where
+    snippetAnyToText isNested = \case
+      SText t -> sanitizeText isNested t
+      STabStop i -> "${" <> T.pack (show i) <> "}"
+      SPlaceholder i s -> "${" <> T.pack (show i) <> ":" <> snippetAnyToText True s <> "}"
+      SChoice i (c :| cs) -> "${" <> T.pack (show i) <> "|" <> c <> foldMap ("," <>) cs <> "}"
+      SVariable n md -> "${" <> n <> maybe mempty (\x -> ":" <> snippetAnyToText True x) md <> "}"
+    sanitizeText isNested = T.foldl' (sanitizeChar isNested) mempty
+    sanitizeChar isNested t = (t <>) . \case
+      '$' -> "\\$"
+      '\\' -> "\\\\"
+      ',' | isNested -> "\\,"
+      '|' | isNested -> "\\|"
+      c -> T.singleton c
+
+snippetLexOrd :: Snippet -> Snippet -> Ordering
+snippetLexOrd = compare `on` snippetToText
+
 data CompItem = CI
   { compKind            :: CompletionItemKind
-  , insertText          :: T.Text         -- ^ Snippet for the completion
+  , insertText          :: Snippet        -- ^ Snippet for the completion
   , provenance          :: Provenance     -- ^ From where this item is imported from.
   , label               :: T.Text         -- ^ Label to display to the user.
   , typeText            :: Maybe T.Text
