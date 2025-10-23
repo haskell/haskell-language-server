@@ -202,7 +202,7 @@ mkCompl
                   _preselect = Nothing,
                   _sortText = Nothing,
                   _filterText = Nothing,
-                  _insertText = Just insertText,
+                  _insertText = Just $ sanitize insertText,
                   _insertTextFormat = Just InsertTextFormat_Snippet,
                   _insertTextMode = Nothing,
                   _textEdit = Nothing,
@@ -227,6 +227,7 @@ mkCompl
         pprLineCol (UnhelpfulLoc fs) = T.pack $ unpackFS fs
         pprLineCol (RealSrcLoc loc _) =
             "line " <> printOutputable (srcLocLine loc) <> ", column " <> printOutputable (srcLocCol loc)
+        sanitize = T.replace "$" "\\$"
 
 
 mkAdditionalEditsCommand :: Maybe PluginId -> ExtendImport -> Maybe Command
