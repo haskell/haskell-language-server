@@ -23,7 +23,6 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Types.PkgQual
-import           GHC.Unit.State
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
