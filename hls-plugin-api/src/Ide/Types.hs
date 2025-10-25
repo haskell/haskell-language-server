@@ -178,6 +178,7 @@ data Config =
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
     , sessionLoading          :: !SessionLoadingPreferenceConfig
+    , linkToHackage           :: !Bool
     , plugins                 :: !(Map.Map PluginId PluginConfig)
     } deriving (Show,Eq)
 
@@ -189,6 +190,7 @@ instance ToJSON Config where
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
            , "sessionLoading"              .= sessionLoading
+           , "linkToHackage"               .= linkToHackage
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
 
@@ -203,6 +205,7 @@ instance Default Config where
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
     , sessionLoading              = PreferSingleComponentLoading
+    , linkToHackage               = False
     , plugins                     = mempty
     }
 

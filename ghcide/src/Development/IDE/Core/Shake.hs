@@ -448,7 +448,8 @@ getIdeOptions = do
         Just env -> do
             config <- liftIO $ LSP.runLspT env HLS.getClientConfig
             return x{optCheckProject = pure $ checkProject config,
-                     optCheckParents = pure $ checkParents config
+                     optCheckParents = pure $ checkParents config,
+                     optLinkToHackage = linkToHackage config
                 }
 
 getIdeOptionsIO :: ShakeExtras -> IO IdeOptions
