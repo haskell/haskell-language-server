@@ -584,8 +584,11 @@ getDocMapRule recorder =
       (tmrTypechecked -> tc, _) <- useWithStale_ TypeCheck file
       (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
       (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst file
-
-      dkMap <- liftIO $ mkDocMap hsc rf tc
+      cfg <- getClientConfigAction
+      dkMap <- liftIO $ mkDocMap hsc rf tc $ LinkTargets
+                { linkSource = linkSourceTo cfg
+                , linkDoc = linkDocTo cfg
+                }
       return ([],Just dkMap)
 
 -- | Persistent rule to ensure that hover doesn't block on startup
