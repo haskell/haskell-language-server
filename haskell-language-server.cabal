@@ -2198,6 +2198,8 @@ test-suite ghcide-tests
     , text-rope
     , unordered-containers
     , hls-test-utils == 2.12.0.0
+    , pretty-simple
+    , lsp-test
 
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
