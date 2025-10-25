@@ -16,7 +16,7 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Control.Concurrent.STM.Stats         (atomically)
 import           Control.DeepSeq                      (rwhnf)
-import           Control.Lens                         (to, (?~), (^?))
+import           Control.Lens                         ((?~), (^?))
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
@@ -51,8 +51,8 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error     (_TcRnMessage,
                                                        _TcRnMissingSignature,
-                                                       msgEnvelopeErrorL,
-                                                       stripTcRnMessageContext)
+                                                       msgEnvelopeErrorL)
+
 import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location       (Position (Position, _line),
@@ -91,7 +91,6 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
                                                        type (|?) (..))
-import           Text.Regex.TDFA                      ((=~))
 
 data Log = LogShake Shake.Log deriving Show
 

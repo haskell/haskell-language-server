@@ -26,9 +26,6 @@ import           GHC.Types.PkgQual
 import           GHC.Unit.State
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import qualified Data.HashMap.Strict as HM
-import qualified Data.HashSet as HashSet
-import qualified Development.IDE.Types.KnownTargets as Shake
 
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -101,12 +98,12 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
     ThisPkg uid
       -- TODO: there are MANY lookup on import_paths, which is a problem considering that it can be large.
       | Just (dirs, reexports) <- lookup uid import_paths
-          -> lookupLocal moduleMaps uid dirs reexports
+          -> lookupLocal moduleMaps reexports
       | otherwise -> return $ Left $ notFoundErr env modName $ LookupNotFound []
     -- if a package name is given we only go look for a package
     OtherPkg uid
       | Just (dirs, reexports) <- lookup uid import_paths
-          -> lookupLocal moduleMaps uid dirs reexports
+          -> lookupLocal moduleMaps reexports
       | otherwise -> lookupInPackageDB
     NoPkgQual -> do
 
@@ -139,6 +136,7 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
   where
     dflags = hsc_dflags env
     import_paths = mapMaybe (mkImportDirs env) comp_info
+    {-
     other_imports =
       -- Instead of bringing all the units into scope, only bring into scope the units
       -- this one depends on.
@@ -157,14 +155,14 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
     hpt_deps :: [UnitId]
     hpt_deps = homeUnitDepends units
+    -}
 
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
-    lookupLocal moduleMaps@(moduleMapSource, moduleMap) uid dirs reexports = do
-          -- mbFile <- locateModuleFile [(uid, dirs, reexports)] exts targetFor isSource $ unLoc modName
+    lookupLocal moduleMaps@(moduleMapSource, moduleMap) reexports = do
           let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
                          Nothing -> LocateNotFound
                          Just (uid, file) -> LocateFoundFile uid file
