@@ -26,6 +26,9 @@ import           GHC.Types.PkgQual
 import           GHC.Unit.State
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HashSet
+import qualified Development.IDE.Types.KnownTargets as Shake
 
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -85,7 +88,7 @@ mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModules fl
 locateModule
     :: MonadIO m
     => (Map ModuleName (UnitId, NormalizedFilePath),Map ModuleName (UnitId, NormalizedFilePath))
- -> HscEnv
+    -> HscEnv
     -> [(UnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
     -> Located ModuleName              -- ^ Module name
@@ -161,15 +164,15 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
     lookupLocal moduleMaps@(moduleMapSource, moduleMap) uid dirs reexports = do
-      -- mbFile <- locateModuleFile [(uid, dirs, reexports)] exts targetFor isSource $ unLoc modName
-      let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
-                     Nothing -> LocateNotFound
-                     Just (uid, file) -> LocateFoundFile uid file
-      case mbFile of
-        LocateNotFound -> return $ Left $ notFoundErr env modName $ LookupNotFound []
-        -- Lookup again with the perspective of the unit reexporting the file
-        LocateFoundReexport uid' -> locateModule moduleMaps (hscSetActiveUnitId uid' env) comp_info exts modName noPkgQual isSource
-        LocateFoundFile uid' file -> toModLocation uid' file
+          -- mbFile <- locateModuleFile [(uid, dirs, reexports)] exts targetFor isSource $ unLoc modName
+          let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
+                         Nothing -> LocateNotFound
+                         Just (uid, file) -> LocateFoundFile uid file
+          case mbFile of
+            LocateNotFound -> return $ Left $ notFoundErr env modName $ LookupNotFound []
+            -- Lookup again with the perspective of the unit reexporting the file
+            LocateFoundReexport uid' -> locateModule moduleMaps (hscSetActiveUnitId uid' env) comp_info exts modName noPkgQual isSource
+            LocateFoundFile uid' file -> toModLocation uid' file
 
     lookupInPackageDB = do
       case Compat.lookupModuleWithSuggestions env (unLoc modName) mbPkgName of

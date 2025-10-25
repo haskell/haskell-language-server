@@ -56,6 +56,7 @@ module Development.IDE.Core.Rules(
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),
+    extendModuleMapWithKnownTargets,
     ) where
 
 import           Control.Applicative
@@ -180,11 +181,10 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
-import Text.Pretty.Simple
 import qualified Data.Map.Strict as Map
 import System.FilePath (takeExtension, takeFileName, normalise, dropTrailingPathSeparator, dropExtension, splitDirectories)
 import Data.Char (isUpper)
-import System.Directory.Extra (listFilesRecursive, listFilesInside)
+import System.Directory.Extra (listFilesInside)
 import System.IO.Unsafe
 
 data Log
@@ -340,7 +340,10 @@ getLocatedImportsRule recorder =
         let dflags = hsc_dflags env
         opt <- getIdeOptions
 
-        moduleMaps <- use_ GetModulesPaths file
+        moduleMaps' <- use_ GetModulesPaths file
+
+        moduleMaps <- extendModuleMapWithKnownTargets file moduleMaps'
+
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
 #else
@@ -676,16 +679,64 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
       let res = (mconcat a, mconcat b)
       liftIO $ atomically $ modifyTVar' cacheVar (Map.insert (envUnique env_eq) res)
 
-      pure (mempty, ([], Just $ (mconcat a, mconcat b)))
+      pure (mempty, ([], Just res))
+
+-- | Extend the map from module name to filepath (exiting on the drive) with
+-- the list of known targets provided by HLS
+--
+-- These known targets are files which were recently created and not yet saved
+-- to the filesystem.
+--
+-- TODO: for now the implementation is O(number_of_known_files *
+-- number_of_include_path) which is inacceptable and should be addressed.
+extendModuleMapWithKnownTargets
+    :: NormalizedFilePath -> (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
+       -> Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
+extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
+  KnownTargets targetsMap <- useNoFile_ GetKnownTargets
+  env_eq <- use_ GhcSession file
+  let env = hscEnv env_eq
+  let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+  opt <- getIdeOptions
+  let exts = (optExtensions opt)
+  let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+
+  let notSourceModuleP = Map.fromList $ do
+        (u, dyn) <- import_dirs
+        -- TODO: avoid using so much `FilePath` logic AND please please,
+        -- normalize earlier.
+        --
+        -- The normalise here is in order to remove the trailing `.` which
+        -- could break the comparison later.
+        (normalise -> dir') <- importPaths dyn
+        let dirComponents = splitDirectories dir'
+        let dir_number_directories = length dirComponents
+        -- TODO: the _target may represents something different than the path
+        -- stored in paths. This need to be investigated.
+        (_target, paths) <- HM.toList targetsMap
+        -- TODO: I have no idea why there is multiple path here
+        guard $ length paths > 0
+        let path = head $ toList paths
+        let pathString = fromNormalizedFilePath path
+        let pathComponents = splitDirectories pathString
+
+        -- Ensure this file is in the directory
+        guard $ dirComponents `isPrefixOf` pathComponents
+
+        -- Ensure that this extension is accepted
+        guard $ takeExtension pathString `elem` acceptedExtensions
+        let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
+        pure (modName, (u, path))
+
+  let notSourceModules' = notSourceModules <> notSourceModuleP
+
+  pure $!! (notSourceModules', sourceModules)
+
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
-  -- liftIO $ print ("fs length", length fs)
   (rawDepInfo, bm) <- rawDependencyInformation fs
-  -- liftIO $ print ("ok with raw deps")
-  -- liftIO $ pPrint rawDepInfo
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
-  -- liftIO $ print ("all_fs length", length all_fs)
   msrs <- uses GetModSummaryWithoutTimestamps all_fs
   let mss = map (fmap msrModSummary) msrs
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
