@@ -340,9 +340,7 @@ getLocatedImportsRule recorder =
         let dflags = hsc_dflags env
         opt <- getIdeOptions
 
-        moduleMaps' <- use_ GetModulesPaths file
-
-        moduleMaps <- extendModuleMapWithKnownTargets file moduleMaps'
+        moduleMaps <- extendModuleMapWithKnownTargets file
 
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
@@ -690,10 +688,12 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 -- TODO: for now the implementation is O(number_of_known_files *
 -- number_of_include_path) which is inacceptable and should be addressed.
 extendModuleMapWithKnownTargets
-    :: NormalizedFilePath -> (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
+    :: NormalizedFilePath
        -> Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
-extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
+extendModuleMapWithKnownTargets file = do
+  (notSourceModules, sourceModules) <- use_ GetModulesPaths file
   KnownTargets targetsMap <- useNoFile_ GetKnownTargets
+
   env_eq <- use_ GhcSession file
   let env = hscEnv env_eq
   let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
@@ -714,30 +714,25 @@ extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
         -- TODO: the _target may represents something different than the path
         -- stored in paths. This need to be investigated.
         (_target, paths) <- HM.toList targetsMap
-        -- TODO: I have no idea why there is multiple path here
-        if length paths > 1
-        then error "the pathlength is incorrect"
-        else do
-          guard $ length paths > 0
-          let path = head $ toList paths
-          let pathString = fromNormalizedFilePath path
-          let pathComponents = splitDirectories pathString
+        path <- HashSet.toList paths
+        let pathString = fromNormalizedFilePath path
+        let pathComponents = splitDirectories pathString
 
-          -- Ensure this file is in the directory
-          guard $ dirComponents `isPrefixOf` pathComponents
+        -- Ensure this file is in the directory
+        guard $ dirComponents `isPrefixOf` pathComponents
 
-          -- Ensure that this extension is accepted
-          guard $ takeExtension pathString `elem` acceptedExtensions
-          let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
-          let isSourceModule = "-boot" `isSuffixOf` pathString
-          if isSourceModule
-          then
-             pure (Nothing, Just (modName, (u, path)))
-          else
-             pure (Just (modName, (u, path)), Nothing)
+        -- Ensure that this extension is accepted
+        guard $ takeExtension pathString `elem` acceptedExtensions
+        let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
+        let isSourceModule = "-boot" `isSuffixOf` pathString
+        if isSourceModule
+        then
+           pure (Nothing, Just (modName, (u, path)))
+        else
+           pure (Just (modName, (u, path)), Nothing)
 
 
-  pure (Map.fromList a <> notSourceModules, Map.fromList b <> sourceModules)
+  pure $ (Map.fromList a <> notSourceModules, Map.fromList b <> sourceModules)
 
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
