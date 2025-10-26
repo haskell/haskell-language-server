@@ -95,7 +95,7 @@ import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Time                                    (UTCTime (..), getCurrentTime, diffUTCTime)
+import           Data.Time                                    (UTCTime (..))
 import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
