@@ -665,7 +665,7 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
           let dir_number_directories = length (splitDirectories dir)
           let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
 
-          -- TODO: we are taking/droping extension, this could be factorized to save a few cpu cycles ;)
+          -- TODO: we are taking/dropping extension, this could be factorized to save a few cpu cycles ;)
           -- TODO: do acceptedextensions needs to be a set ? or a vector?
           -- If the directory is empty, we return an empty list of modules
           -- using 'catch' instead of an exception which would kill the LSP
@@ -701,7 +701,7 @@ extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
   let exts = (optExtensions opt)
   let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
 
-  let notSourceModuleP = Map.fromList $ do
+  let (unzip -> (catMaybes -> a, catMaybes -> b)) = do
         (u, dyn) <- import_dirs
         -- TODO: avoid using so much `FilePath` logic AND please please,
         -- normalize earlier.
@@ -715,22 +715,29 @@ extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
         -- stored in paths. This need to be investigated.
         (_target, paths) <- HM.toList targetsMap
         -- TODO: I have no idea why there is multiple path here
-        guard $ length paths > 0
-        let path = head $ toList paths
-        let pathString = fromNormalizedFilePath path
-        let pathComponents = splitDirectories pathString
+        if length paths > 1
+        then error "the pathlength is incorrect"
+        else do
+          guard $ length paths > 0
+          let path = head $ toList paths
+          let pathString = fromNormalizedFilePath path
+          let pathComponents = splitDirectories pathString
 
-        -- Ensure this file is in the directory
-        guard $ dirComponents `isPrefixOf` pathComponents
+          -- Ensure this file is in the directory
+          guard $ dirComponents `isPrefixOf` pathComponents
 
-        -- Ensure that this extension is accepted
-        guard $ takeExtension pathString `elem` acceptedExtensions
-        let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
-        pure (modName, (u, path))
+          -- Ensure that this extension is accepted
+          guard $ takeExtension pathString `elem` acceptedExtensions
+          let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
+          let isSourceModule = "-boot" `isSuffixOf` pathString
+          if isSourceModule
+          then
+             pure (Nothing, Just (modName, (u, path)))
+          else
+             pure (Just (modName, (u, path)), Nothing)
 
-  let notSourceModules' = notSourceModules <> notSourceModuleP
 
-  pure $!! (notSourceModules', sourceModules)
+  pure (Map.fromList a <> notSourceModules, Map.fromList b <> sourceModules)
 
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
