@@ -109,7 +109,6 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
       -- Reexports for current unit have to be empty because they only apply to other units depending on the
       -- current unit. If we set the reexports to be the actual reexports then we risk looping forever trying
       -- to find the module from the perspective of the current unit.
-      ---- locateModuleFile ((homeUnitId_ dflags, importPaths dflags, S.empty) : other_imports) exts targetFor isSource $ unLoc modName
       --
       -- TODO: handle the other imports, the unit id, ..., reexport.
       --   - TODO: should we look for file existence now? If the file was
