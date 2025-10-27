@@ -658,8 +658,8 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 
       (unzip -> (a, b)) <- flip mapM import_dirs $ \(u, dyn) -> do
         (unzip -> (a, b)) <- flip mapM (importPaths dyn) $ \dir' -> do
-          let dir = dropTrailingPathSeparator dir'
-          let predicate path = pure (path == dir || isUpper (head (takeFileName path)))
+          let dir = normalise dir'
+          let predicate path = pure (normalise path == dir || isUpper (head (takeFileName path)))
           let dir_number_directories = length (splitDirectories dir)
           let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
 
