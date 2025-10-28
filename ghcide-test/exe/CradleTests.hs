@@ -3,7 +3,7 @@
 
 module CradleTests (tests) where
 
-import           Config                          (checkDefs, mkL, runInDir,
+import           Config                          (checkDefs, mkL,
                                                   runWithExtraFiles,
                                                   testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
@@ -180,12 +180,9 @@ simpleMultiDefTest variant = ignoreForWindows $ testCase testName $
     runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
-    adoc <- liftIO $ runInDir dir $ do
-      aSource <- liftIO $ readFileUtf8 aPath
-      adoc <- createDoc aPath "haskell" aSource
-      skipManyTill anyMessage $ isReferenceReady aPath
-      closeDoc adoc
-      pure adoc
+    adoc <- openDoc aPath "haskell"
+    skipManyTill anyMessage $ isReferenceReady aPath
+    closeDoc adoc
     bSource <- liftIO $ readFileUtf8 bPath
     bdoc <- createDoc bPath "haskell" bSource
     locs <- getDefinitions bdoc (Position 2 7)

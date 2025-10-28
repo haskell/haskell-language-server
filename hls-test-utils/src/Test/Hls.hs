@@ -507,8 +507,28 @@ runSessionWithServerInTmpDir config plugin tree act =
     {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
     (const act)
 
-runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
-runWithLockInTempDir tree act = withLock lockForTempDirs $ do
+-- | Same as 'withTemporaryDataAndCacheDirectory', but materialises the given
+-- 'VirtualFileTree' in the temporary directory.
+withVfsTestDataDirectory :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
+withVfsTestDataDirectory tree act = do
+    withTemporaryDataAndCacheDirectory $ \tmpRoot -> do
+        fs <- FS.materialiseVFT tmpRoot tree
+        act fs
+
+-- | Run an action in a temporary directory.
+-- Sets the 'XDG_CACHE_HOME' environment variable to a temporary directory as well.
+--
+-- This sets up a temporary directory for HLS tests to run.
+-- Typically, HLS tests copy their test data into the directory and then launch
+-- the HLS session in that directory.
+-- This makes sure that the tests are run in isolation, which is good for correctness
+-- but also important to have fast tests.
+--
+-- For improved isolation, we also make sure the 'XDG_CACHE_HOME' environment
+-- variable points to a temporary directory. So, we never share interface files
+-- or the 'hiedb' across tests.
+withTemporaryDataAndCacheDirectory :: (FilePath -> IO a) -> IO a
+withTemporaryDataAndCacheDirectory act = withLock lockForTempDirs $ do
     testRoot <- setupTestEnvironment
     helperRecorder <- hlsHelperTestRecorder
     -- Do not clean up the temporary directory if this variable is set to anything but '0'.
@@ -516,23 +536,44 @@ runWithLockInTempDir tree act = withLock lockForTempDirs $ do
     cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
     let runTestInDir action = case cleanupTempDir of
             Just val | val /= "0" -> do
-                (tempDir, _) <- newTempDirWithin testRoot
-                a <- action tempDir
+                (tempDir, cacheHome, _) <- setupTemporaryTestDirectories testRoot
+                a <- withTempCacheHome cacheHome (action tempDir)
                 logWith helperRecorder Debug LogNoCleanup
                 pure a
 
             _ -> do
-                (tempDir, cleanup) <- newTempDirWithin testRoot
-                a <- action tempDir `finally` cleanup
+                (tempDir, cacheHome, cleanup) <- setupTemporaryTestDirectories testRoot
+                a <- withTempCacheHome cacheHome (action tempDir) `finally`  cleanup
                 logWith helperRecorder Debug LogCleanup
                 pure a
     runTestInDir $ \tmpDir' -> do
         -- we canonicalize the path, so that we do not need to do
-        -- cannibalization during the test when we compare two paths
+        -- canonicalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
         logWith helperRecorder Info $ LogTestDir tmpDir
-        fs <- FS.materialiseVFT tmpDir tree
-        act fs
+        act tmpDir
+    where
+        cache_home_var = "XDG_CACHE_HOME"
+        -- Set the dir for "XDG_CACHE_HOME".
+        -- When the operation finished, make sure the old value is restored.
+        withTempCacheHome tempCacheHomeDir act =
+            bracket
+              (do
+                old_cache_home <- lookupEnv cache_home_var
+                setEnv cache_home_var tempCacheHomeDir
+                pure old_cache_home)
+              (\old_cache_home ->
+                maybe (pure ()) (setEnv cache_home_var) old_cache_home
+                )
+              (\_ -> act)
+
+        -- Set up a temporary directory for the test files and one for the 'XDG_CACHE_HOME'.
+        -- The 'XDG_CACHE_HOME' is important for independent test runs, i.e. completely empty
+        -- caches.
+        setupTemporaryTestDirectories testRoot = do
+            (tempTestCaseDir, cleanup1) <- newTempDirWithin testRoot
+            (tempCacheHomeDir, cleanup2) <- newTempDirWithin testRoot
+            pure (tempTestCaseDir, tempCacheHomeDir, cleanup1 >> cleanup2)
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act =
@@ -565,18 +606,18 @@ instance Default (TestConfig b) where
 -- It returns the root to the testing directory that tests should use.
 -- This directory is not fully cleaned between reruns.
 -- However, it is totally safe to delete the directory between runs.
---
--- Additionally, this overwrites the 'XDG_CACHE_HOME' variable to isolate
--- the tests from existing caches. 'hie-bios' and 'ghcide' honour the
--- 'XDG_CACHE_HOME' environment variable and generate their caches there.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
-  tmpDirRoot <- getTemporaryDirectory
-  let testRoot = tmpDirRoot </> "hls-test-root"
-      testCacheDir = testRoot </> ".cache"
-  createDirectoryIfMissing True testCacheDir
-  setEnv "XDG_CACHE_HOME" testCacheDir
-  pure testRoot
+  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
+  case mRootDir of
+    Nothing -> do
+      tmpDirRoot <- getTemporaryDirectory
+      let testRoot = tmpDirRoot </> "hls-test-root"
+      createDirectoryIfMissing True testRoot
+      pure testRoot
+    Just rootDir -> do
+      createDirectoryIfMissing True rootDir
+      pure rootDir
 
 goldenWithHaskellDocFormatter
   :: Pretty b
@@ -692,7 +733,6 @@ lockForTempDirs = unsafePerformIO newLock
 data TestConfig b = TestConfig
   {
     testDirLocation          :: Either FilePath VirtualFileTree
-    -- ^ Client capabilities
     -- ^ The file tree to use for the test, either a directory or a virtual file tree
     -- if using a virtual file tree,
     -- Creates a temporary directory, and materializes the VirtualFileTree
@@ -747,8 +787,20 @@ wrapClientLogger logger = do
     return (lspLogRecorder <> logger, cb1)
 
 -- | Host a server, and run a test session on it.
--- For setting custom timeout, set the environment variable 'LSP_TIMEOUT'
--- * LSP_TIMEOUT=10 cabal test
+--
+-- Environment variables are used to influence logging verbosity, test cleanup and test execution:
+--
+-- * @LSP_TIMEOUT@: Set a specific test timeout in seconds.
+-- * @LSP_TEST_LOG_MESSAGES@: Log the LSP messages between the client and server.
+-- * @LSP_TEST_LOG_STDERR@: Log the stderr of the server to the stderr of this process.
+-- * @HLS_TEST_HARNESS_STDERR@: Log test setup messages.
+--
+-- Test specific environment variables:
+--
+-- * @HLS_TEST_PLUGIN_LOG_STDERR@: Log all messages of the hls plugin under test to stderr.
+-- * @HLS_TEST_LOG_STDERR@: Log all HLS messages to stderr.
+-- * @HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP@: Don't remove the test directories after test execution.
+--
 -- For more detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
@@ -792,8 +844,10 @@ runSessionWithTestConfig TestConfig{..} session =
                 else f
         runSessionInVFS (Left testConfigRoot) act = do
             root <- makeAbsolute testConfigRoot
-            act root
-        runSessionInVFS (Right vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
+            withTemporaryDataAndCacheDirectory (const $ act root)
+        runSessionInVFS (Right vfs) act =
+            withVfsTestDataDirectory vfs $ \fs -> do
+                act (fsRoot fs)
         testingArgs prjRoot recorderIde plugins =
             let
                 arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins

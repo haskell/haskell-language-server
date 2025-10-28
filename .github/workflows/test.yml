@@ -48,8 +48,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
-          paths_ignore: '[ "hls-test-utils/**"
-                         , "plugins/**"
+          paths_ignore: '[ "plugins/**"
                          , "src/**"
                          , "exe/**"
                          , "test/**"
