@@ -608,10 +608,16 @@ instance Default (TestConfig b) where
 -- However, it is totally safe to delete the directory between runs.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
-  tmpDirRoot <- getTemporaryDirectory
-  let testRoot = tmpDirRoot </> "hls-tests"
-  createDirectoryIfMissing True testRoot
-  pure testRoot
+  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
+  case mRootDir of
+    Nothing -> do
+      tmpDirRoot <- getTemporaryDirectory
+      let testRoot = tmpDirRoot </> "hls-test-root"
+      createDirectoryIfMissing True testRoot
+      pure testRoot
+    Just rootDir -> do
+      createDirectoryIfMissing True rootDir
+      pure rootDir
 
 goldenWithHaskellDocFormatter
   :: Pretty b

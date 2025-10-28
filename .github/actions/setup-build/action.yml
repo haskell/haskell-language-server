@@ -44,6 +44,13 @@ runs:
         echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
       shell: bash
 
+    - if: inputs.os == 'Windows'
+      name: (Windows) Platform config (root test directory)
+      run: |
+        mkdir C:\\hls-tests
+        echo "HLS_TEST_ROOTDIR=C:\\hls-tests" >> $GITHUB_ENV
+      shell: bash
+
     - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )
       name: (Linux,macOS) Platform config
       run: |
