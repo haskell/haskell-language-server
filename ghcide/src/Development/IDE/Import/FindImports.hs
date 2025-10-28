@@ -160,7 +160,7 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
-    lookupLocal moduleMaps@(moduleMapSource, moduleMap) reexports = do
+    lookupLocal moduleMaps@(moduleMap, moduleMapSource) reexports = do
           let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
                          Nothing -> LocateNotFound
                          Just (uid, file) -> LocateFoundFile uid file
