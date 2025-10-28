@@ -27,12 +27,12 @@ examples:
         - src/Distribution/Types/ComponentLocalBuildInfo.hs
     extra-args: [] # extra HLS command line args
   # Small-sized project with TH
-  - name: lsp-types
-    package: lsp-types
-    version: 2.1.1.0
-    modules:
-        - src/Language/LSP/Protocol/Types/SemanticTokens.hs
-        - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
+  # - name: lsp-types
+  #   package: lsp-types
+  #   version: 2.1.1.0
+  #   modules:
+  #       - src/Language/LSP/Protocol/Types/SemanticTokens.hs
+  #       - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
 
   - name: MultiLayerModules
     path: bench/MultiLayerModules.sh
@@ -126,6 +126,7 @@ versions:
 # - 1.8.0.0
 - upstream: origin/master
 # - HEAD~1
+- d323f40cf7a7b88fa6704f8a24e74836965652f7
 - HEAD
 
 # A list of plugin configurations to analyze
