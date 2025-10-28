@@ -446,6 +446,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
 
+-- | List the haskell files given some paths
+--
+-- It will rely on git if possible to filter-out ignored files.
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles paths = do
   let haskellFind x =
