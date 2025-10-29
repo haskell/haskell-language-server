@@ -23,7 +23,7 @@ import           Development.IDE.Spans.Pragmas    (NextPragmaInfo,
 import           GHC.Generics                     (Generic)
 import           Ide.Logger                       as Logger
 import           Ide.Plugin.Conversion            (AlternateFormat,
-                                                   ExtensionNeeded (NeedsExtension, NoExtension),
+                                                   ExtensionNeeded (..),
                                                    alternateFormat)
 import           Ide.Plugin.Error
 import           Ide.Plugin.Literals
@@ -93,7 +93,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
     pure $ InL actions
     where
         mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
-        mkCodeAction nfp lit enabled npi af@(alt, ext) = InR CodeAction {
+        mkCodeAction nfp lit enabled npi af@(alt, ExtensionNeeded exts) = InR CodeAction {
             _title = mkCodeActionTitle lit af enabled
             , _kind = Just $ CodeActionKind_Custom "quickfix.literals.style"
             , _diagnostics = Nothing
@@ -104,10 +104,10 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
             , _data_ = Nothing
             }
             where
-                edits =  [TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt] <> pragmaEdit
-                pragmaEdit = case ext of
-                    NeedsExtension ext' -> [insertNewPragma npi ext' | needsExtension ext' enabled]
-                    NoExtension         -> []
+                edits =  [TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt] <> pragmaEdit exts
+                pragmaEdit ext = case ext of
+                    ext': exts -> [insertNewPragma npi ext' | needsExtension enabled ext'] <> pragmaEdit exts
+                    []         -> []
 
         mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
         mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
@@ -115,17 +115,18 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
                 changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath nfp) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
-mkCodeActionTitle lit (alt, ext) ghcExts
-    | (NeedsExtension ext') <- ext
-    , needsExtension ext' ghcExts = title <> " (needs extension: " <> T.pack (show ext') <> ")"
-    | otherwise = title
+mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
+    | null necessaryExtensions = title
+    | otherwise = title <> " (needs extensions: " <> formattedExtensions <> ")"
     where
+        formattedExtensions = T.intercalate ", " $ map (T.pack . show) necessaryExtensions
+        necessaryExtensions = filter (needsExtension ghcExts) exts
         title = "Convert " <> getSrcText lit <> " into " <> alt
 
 
 -- | Checks whether the extension given is already enabled
-needsExtension :: Extension -> [GhcExtension] -> Bool
-needsExtension ext ghcExts = ext `notElem` map unExt ghcExts
+needsExtension :: [GhcExtension] -> Extension -> Bool
+needsExtension ghcExts ext = ext `notElem` map unExt ghcExts
 
 requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectLiteralsResult
 requestLiterals (PluginId pId) state =
