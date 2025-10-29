@@ -15,6 +15,7 @@ import           Control.Concurrent.Extra                 (withNumCapabilities)
 import           Control.Concurrent.MVar                  (MVar, newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
+import           Control.Exception.Safe                   as Safe
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
 import           Control.Monad.IO.Class                   (liftIO)
@@ -456,16 +457,26 @@ expandFiles paths = do
             recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
             recurse y = takeFileName y `notElem` ["dist", "dist-newstyle"] -- cabal directories
         in filter (\y -> takeExtension y `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
-  (testGitExitCode, _, _) <- readProcessWithExitCode "git" ["status"] ""
+      git args = do
+        mResult <- (Just <$> readProcessWithExitCode "git" args "") `Safe.catchAny`const (pure Nothing)
+        pure $
+            case mResult of
+              Just (ExitSuccess, gitStdout, _) -> Just gitStdout
+              _                                -> Nothing
+  mHasGit <- git ["status"]
   let findFiles =
-        case testGitExitCode of
-          ExitSuccess -> \path -> do
-            let lookups = [path, path </> "*.hs", path </> "*.lhs"]
-            (trackedExitCode, trackedStdout, _) <- readProcessWithExitCode "git" ("ls-files":lookups) ""
-            (untrackedExitCode, untrackedStdout, _) <- readProcessWithExitCode "git" ("ls-files":"-o":lookups) ""
-            if trackedExitCode == ExitSuccess && untrackedExitCode == ExitSuccess
-              then pure $ lines trackedStdout <> lines untrackedStdout
-              else haskellFind path
+        case mHasGit of
+          Just _ -> \path -> do
+            let lookups =
+                  if takeExtension path `elem` [".hs", ".lhs"]
+                      then [path]
+                      else [path </> "*.hs", path </> "*.lhs"]
+                gitLines args = fmap lines <$> git args
+            mTracked <- gitLines ("ls-files":lookups)
+            mUntracked <- gitLines ("ls-files":"-o":lookups)
+            case mTracked <> mUntracked of
+              Nothing    -> haskellFind path
+              Just files -> pure files
           _ -> haskellFind
   flip concatMapM paths $ \x -> do
     b <- IO.doesFileExist x
