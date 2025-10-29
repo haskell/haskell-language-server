@@ -27,55 +27,55 @@ examples:
         - src/Distribution/Types/ComponentLocalBuildInfo.hs
     extra-args: [] # extra HLS command line args
   # Small-sized project with TH
-  # - name: lsp-types
-  #   package: lsp-types
-  #   version: 2.1.1.0
+  - name: lsp-types
+    package: lsp-types
+    version: 2.3.0.1
+    modules:
+        - src/Language/LSP/Protocol/Types/SemanticTokens.hs
+        - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
+
+  # - name: MultiLayerModules
+  #   path: bench/MultiLayerModules.sh
+  #   script: True
+  #   script-args: ["--th"]
   #   modules:
-  #       - src/Language/LSP/Protocol/Types/SemanticTokens.hs
-  #       - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
+  #       - MultiLayerModules.hs
+  #       - DummyLevel0M01.hs
+  #       - DummyLevel1M01.hs
+  # - name: MultiLayerModulesNoTH
+  #   path: bench/MultiLayerModules.sh
+  #   script: True
+  #   script-args: []
+  #   modules:
+  #       - MultiLayerModules.hs
+  #       - DummyLevel0M01.hs
+  #       - DummyLevel1M01.hs
 
-  - name: MultiLayerModules
-    path: bench/MultiLayerModules.sh
-    script: True
-    script-args: ["--th"]
-    modules:
-        - MultiLayerModules.hs
-        - DummyLevel0M01.hs
-        - DummyLevel1M01.hs
-  - name: MultiLayerModulesNoTH
-    path: bench/MultiLayerModules.sh
-    script: True
-    script-args: []
-    modules:
-        - MultiLayerModules.hs
-        - DummyLevel0M01.hs
-        - DummyLevel1M01.hs
+  # - name: DummyLevel0M01
+  #   path: bench/MultiLayerModules.sh
+  #   script: True
+  #   script-args: ["--th"]
+  #   modules:
+  #       - DummyLevel0M01.hs
+  # - name: DummyLevel0M01NoTH
+  #   path: bench/MultiLayerModules.sh
+  #   script: True
+  #   script-args: []
+  #   modules:
+  #       - DummyLevel0M01.hs
 
-  - name: DummyLevel0M01
-    path: bench/MultiLayerModules.sh
-    script: True
-    script-args: ["--th"]
-    modules:
-        - DummyLevel0M01.hs
-  - name: DummyLevel0M01NoTH
-    path: bench/MultiLayerModules.sh
-    script: True
-    script-args: []
-    modules:
-        - DummyLevel0M01.hs
-
-  - name: DummyLevel1M01
-    path: bench/MultiLayerModules.sh
-    script: True
-    script-args: ["--th"]
-    modules:
-        - DummyLevel1M01.hs
-  - name: DummyLevel1M01NoTH
-    path: bench/MultiLayerModules.sh
-    script: True
-    script-args: []
-    modules:
-        - DummyLevel1M01.hs
+  # - name: DummyLevel1M01
+  #   path: bench/MultiLayerModules.sh
+  #   script: True
+  #   script-args: ["--th"]
+  #   modules:
+  #       - DummyLevel1M01.hs
+  # - name: DummyLevel1M01NoTH
+  #   path: bench/MultiLayerModules.sh
+  #   script: True
+  #   script-args: []
+  #   modules:
+  #       - DummyLevel1M01.hs
 
   # Small but heavily multi-component example
   # Disabled as it is far to slow. hie-bios >0.7.2 should help
@@ -126,7 +126,7 @@ versions:
 # - 1.8.0.0
 - upstream: origin/master
 # - HEAD~1
-- d323f40cf7a7b88fa6704f8a24e74836965652f7
+# - d323f40cf7a7b88fa6704f8a24e74836965652f7
 - HEAD
 
 # A list of plugin configurations to analyze
