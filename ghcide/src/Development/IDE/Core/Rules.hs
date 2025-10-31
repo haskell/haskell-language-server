@@ -744,18 +744,20 @@ ghcSessionDepsDefinition
     :: -- | full mod summary
         Bool ->
         GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
-ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
-    let hsc = hscEnv env
-
+ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file = do
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
             when fullModuleGraph $ void $ use_ ReportImportCycles file
-            ms <- msrModSummary <$> if fullModSummary
+            msr <- if fullModSummary
                 then use_ GetModSummary file
                 else use_ GetModSummaryWithoutTimestamps file
-
+            let
+                ms = msrModSummary msr
+                -- This `HscEnv` has its plugins initialized in `parsePragmasIntoHscEnv`
+                -- Fixes the bug in #4631
+                env = msrHscEnv msr
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
@@ -775,14 +777,14 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
-            session' <- liftIO $ mergeEnvs hsc mg de ms inLoadOrder depSessions
+            session' <- liftIO $ mergeEnvs env mg de ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
             -- ExportsMap when it is called. We only need to create the ExportsMap once per
             -- session, while `ghcSessionDepsDefinition` will be called for each file we need
             -- to compile. `updateHscEnvEq` will refresh the HscEnv (session') and also
             -- generate a new Unique.
-            Just <$> liftIO (updateHscEnvEq env session')
+            Just <$> liftIO (updateHscEnvEq hscEnvEq session')
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
