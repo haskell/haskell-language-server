@@ -141,7 +141,7 @@ import           Development.IDE.GHC.Compat             (NameCache,
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater,
                                                          initNameCache,
-                                                         knownKeyNames)
+                                                         knownKeyNames, ModuleName, UnitId)
 #endif
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
@@ -185,6 +185,7 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
+import Data.Map.Strict (Map)
 
 
 data Log
@@ -317,6 +318,10 @@ data ShakeExtras = ShakeExtras
     ,ideNc :: NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
+    ,moduleToPathCache :: TVar (Map
+     Unique
+     (Map ModuleName (UnitId, NormalizedFilePath),
+      Map ModuleName (UnitId, NormalizedFilePath)))
     -- | A mapping of exported identifiers for local modules. Updated on kick
     ,exportsMap :: TVar ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
@@ -715,6 +720,8 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
+
+        moduleToPathCache <- newTVarIO mempty
         pure ShakeExtras{shakeRecorder = recorder, ..}
     shakeDb  <-
         shakeNewDatabase
@@ -1492,3 +1499,5 @@ runWithSignal msgStart msgEnd files rule = do
   kickSignal testing lspEnv files msgStart
   void $ uses rule files
   kickSignal testing lspEnv files msgEnd
+
+

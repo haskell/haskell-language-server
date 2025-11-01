@@ -182,10 +182,9 @@ import           System.Info.Extra                            (isWindows)
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
 import qualified Data.Map.Strict as Map
-import System.FilePath (takeExtension, takeFileName, normalise, dropTrailingPathSeparator, dropExtension, splitDirectories)
+import System.FilePath (takeExtension, takeFileName, normalise, dropExtension, splitDirectories)
 import Data.Char (isUpper)
 import System.Directory.Extra (listFilesInside)
-import System.IO.Unsafe
 
 data Log
   = LogShake Shake.Log
@@ -638,15 +637,13 @@ getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake rec
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
-{-# NOINLINE cacheVar #-}
--- TODO: this should not use unsaferPerformIO
-cacheVar = unsafePerformIO (newTVarIO mempty)
-
 getModulesPathsRule :: Recorder (WithPriority Log) -> Rules ()
 getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModulesPaths file -> do
   env_eq <- use_ GhcSession file
 
-  cache <- liftIO (readTVarIO cacheVar)
+  ShakeExtras{moduleToPathCache} <- getShakeExtras
+
+  cache <- liftIO (readTVarIO moduleToPathCache)
   case Map.lookup (envUnique env_eq) cache of
     Just res -> pure (mempty, ([], Just res))
     Nothing -> do
@@ -659,7 +656,9 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
       (unzip -> (a, b)) <- flip mapM import_dirs $ \(u, dyn) -> do
         (unzip -> (a, b)) <- flip mapM (importPaths dyn) $ \dir' -> do
           let dir = normalise dir'
-          let predicate path = pure (normalise path == dir || isUpper (head (takeFileName path)))
+          let predicate path = pure (normalise path == dir || case takeFileName path of
+               [] -> False
+               (x:_) -> isUpper x)
           let dir_number_directories = length (splitDirectories dir)
           let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
 
@@ -675,7 +674,7 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
         pure (fmap (u,) $ mconcat a, fmap (u, ) $ mconcat b)
 
       let res = (mconcat a, mconcat b)
-      liftIO $ atomically $ modifyTVar' cacheVar (Map.insert (envUnique env_eq) res)
+      liftIO $ atomically $ modifyTVar' moduleToPathCache (Map.insert (envUnique env_eq) res)
 
       pure (mempty, ([], Just res))
 
