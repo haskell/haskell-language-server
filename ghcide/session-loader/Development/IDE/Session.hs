@@ -476,8 +476,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 -- If we don't generate a TargetFile for each potential location, we will only have
                 -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
                 -- and also not find 'TargetModule Foo'.
-                fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
+                pure $ do
+                  file <- nubOrd (f:targetLocations)
+                  pure $ (TargetFile file, Set.singleton file)
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return [(targetTarget, Set.fromList found)]
@@ -764,6 +765,7 @@ data TargetDetails = TargetDetails
       targetDepends   :: !DependencyInfo,
       targetLocations :: ![NormalizedFilePath]
   }
+  deriving (Show)
 
 fromTargetId :: [FilePath]          -- ^ import paths
              -> [String]            -- ^ extensions to consider
