@@ -85,6 +85,8 @@ data IdeOptions = IdeOptions
       -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
   , optVerifyCoreFile     :: Bool
     -- ^ Verify core files after serialization
+  , optLinkToHackage      :: Bool
+    -- ^ `Documentation` and `Source` link to Hackage, rather than local docs.
   }
 
 data OptHaddockParse = HaddockParse | NoHaddockParse
@@ -138,6 +140,7 @@ defaultIdeOptions session = IdeOptions
     ,optRunSubset = True
     ,optVerifyCoreFile = False
     ,optMaxDirtyAge = 100
+    ,optLinkToHackage = False
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool
