@@ -143,6 +143,7 @@ data Log
   | LogSession Session.Log
   | LogPluginHLS PluginHLS.Log
   | LogRules Rules.Log
+  | LogUsingGit
   deriving Show
 
 instance Pretty Log where
@@ -166,6 +167,7 @@ instance Pretty Log where
     LogSession msg -> pretty msg
     LogPluginHLS msg -> pretty msg
     LogRules msg -> pretty msg
+    LogUsingGit -> "Using git to list file, relying on .gitignore"
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
@@ -385,7 +387,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
 
             putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
-            files <- expandFiles (argFiles ++ ["." | null argFiles])
+            files <- expandFiles recorder (argFiles ++ ["." | null argFiles])
             -- LSP works with absolute file paths, so try and behave similarly
             absoluteFiles <- nubOrd <$> mapM IO.canonicalizePath files
             putStrLn $ "Found " ++ show (length absoluteFiles) ++ " files"
@@ -450,8 +452,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 -- | List the haskell files given some paths
 --
 -- It will rely on git if possible to filter-out ignored files.
-expandFiles :: [FilePath] -> IO [FilePath]
-expandFiles paths = do
+expandFiles :: Recorder (WithPriority Log) -> [FilePath] -> IO [FilePath]
+expandFiles recorder paths = do
   let haskellFind x =
         let recurse "." = True
             recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
@@ -464,6 +466,7 @@ expandFiles paths = do
               Just (ExitSuccess, gitStdout, _) -> Just gitStdout
               _                                -> Nothing
   mHasGit <- git ["status"]
+  when (isJust mHasGit) $ logWith recorder Info LogUsingGit
   let findFiles =
         case mHasGit of
           Just _ -> \path -> do
@@ -478,6 +481,7 @@ expandFiles paths = do
               Nothing    -> haskellFind path
               Just files -> pure files
           _ -> haskellFind
+
   flip concatMapM paths $ \x -> do
     b <- IO.doesFileExist x
     if b
