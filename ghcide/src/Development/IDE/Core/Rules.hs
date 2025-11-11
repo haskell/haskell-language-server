@@ -328,8 +328,7 @@ getLocatedImportsRule recorder =
                     return $ if itExists then Just nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let ttmap = HM.mapWithKey const (HashSet.toMap tt)
-                        nfp' = HM.lookupDefault nfp nfp ttmap
+                    let nfp' = nfp
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | otherwise = do

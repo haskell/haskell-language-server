@@ -21,7 +21,7 @@ import           GHC.Generics
 -- | A mapping of module name to known files
 data KnownTargets = KnownTargets
   { targetMap      :: !(HashMap Target (HashSet NormalizedFilePath))
-  -- | 'normalisingMap' is a cached copy of `HMap.mapKey const targetMap`
+  -- | 'normalisingMap' is a cached copy of `HMap.mapWithKey const targetMap`
   --
   -- At startup 'GetLocatedImports' is called on all known files. Say you have 10000
   -- modules in your project then this leads to 10000 calls to 'GetLocatedImports'
