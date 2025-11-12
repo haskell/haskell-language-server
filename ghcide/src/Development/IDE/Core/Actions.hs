@@ -17,13 +17,13 @@ import qualified Data.HashMap.Strict                  as HM
 import           Data.Maybe
 import qualified Data.Text                            as T
 import           Data.Tuple.Extra
+import           Development.IDE.Core.LookupMod       (lookupMod)
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat           hiding (writeHieFile)
 import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
@@ -34,19 +34,6 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..),
                                                        normalizedFilePathToUri,
                                                        uriToNormalizedFilePath)
-
-
--- | Eventually this will lookup/generate URIs for files in dependencies, but not in the
--- project. Right now, this is just a stub.
-lookupMod
-  :: HieDbWriter -- ^ access the database
-  -> FilePath -- ^ The `.hie` file we got from the database
-  -> ModuleName
-  -> Unit
-  -> Bool -- ^ Is this file a boot file?
-  -> MaybeT IdeAction Uri
-lookupMod _dbchan _hie_f _mod _uid _boot = MaybeT $ pure Nothing
-
 
 -- IMPORTANT NOTE : make sure all rules `useWithStaleFastMT`d by these have a "Persistent Stale" rule defined,
 -- so we can quickly answer as soon as the IDE is opened
@@ -62,11 +49,15 @@ getAtPoint file pos = runMaybeT $ do
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
+  shakeExtras <- lift askShake
+
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf dkMap env pos'
+
+  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
+    AtPoint.atPoint opts shakeExtras hf dkMap env pos'
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.

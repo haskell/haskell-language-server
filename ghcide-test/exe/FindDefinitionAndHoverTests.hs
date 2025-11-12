@@ -146,6 +146,9 @@ tests = let
   fffL14 = Position 18  7  ;
   aL20   = Position 19 15
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
+  kkkL30 = Position 30 2   ;  kkkType = [ExpectHoverTextRegex "Go to \\[MyClass\\]\\(.*GotoHover\\.hs#L26\\)"]
+  bbbL16 = Position 16 7   ;  bbbType = [ExpectHoverTextRegex "Go to \\[TypeConstructor\\]\\(.*GotoHover\\.hs#L8\\)"]
+  aaaL11 = Position 11 1   ;  aaaType = [ExpectHoverTextRegex "Go to \\[TypeConstructor\\]\\(.*GotoHover\\.hs#L8\\)"]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
   xtcL5  = Position  9 11  ;  xtc    = [ExpectHoverText ["Int", "Defined in ", "GHC.Types", "ghc-prim"]]
@@ -243,6 +246,9 @@ tests = let
         testM yes    yes    reexported reexportedSig "Imported symbol reexported"
   , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   , test yes yes import310 pkgTxt "show package name and its version"
+  , test  no             yes               kkkL30     kkkType       "hover shows 'Go to' link for class in constraint"
+  , test  no             yes               bbbL16     bbbType       "hover shows 'Go to' link for data constructor's type"
+  , test  no             yes               aaaL11     aaaType       "hover shows 'Go to' link for binding's underlying type"
   ]
   where yes :: (TestTree -> Maybe TestTree)
         yes = Just -- test should run and pass
