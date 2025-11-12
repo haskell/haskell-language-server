@@ -510,8 +510,8 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
   vfsRef <- asks vfsVar
   vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
-    Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
-    Just vf -> pure (virtualFileText vf, Just $ virtualFileVersion vf)
+    Just (Open vf) -> pure (virtualFileText vf, Just $ virtualFileVersion vf)
+    _ -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
   let refmap = generateReferencesMap . getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
