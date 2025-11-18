@@ -125,9 +125,10 @@ versions:
 
 # - 1.8.0.0
 - upstream: origin/master
-- improve-hls-runtime-keep-async-only-databse-keys-upsweep-tmp
+# - improve-hls-runtime-keep-async-only-databse-keys-upsweep-tmp
 # - HEAD~1
-- improve-hls-runtime-keep-async-only-databse-keys-downsweep-skip-non-dirties
+# - improve-hls-runtime-keep-async-only-databse-keys-downsweep-skip-non-dirties
+- HEAD
 
 # A list of plugin configurations to analyze
 # WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
