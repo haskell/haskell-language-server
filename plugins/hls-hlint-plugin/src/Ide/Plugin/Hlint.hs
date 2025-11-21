@@ -38,11 +38,11 @@ import           Data.Aeson.Types                                   (FromJSON (.
 import qualified Data.ByteString                                    as BS
 import           Data.Hashable
 import qualified Data.HashMap.Strict                                as Map
+import           Data.List                                          (find)
 import qualified Data.Map                                           as M
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
-import           Data.Text.Utf16.Rope.Mixed                         (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed                         as Rope
 import           Data.Typeable
 import           Development.IDE                                    hiding
@@ -65,8 +65,16 @@ import           System.Environment                                 (setEnv,
 
 import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      extensionFlags,
+                                                                     getLoc,
+                                                                     hsmodDecls,
                                                                      ms_hspp_opts,
-                                                                     topDir)
+                                                                     pattern RealSrcLoc,
+                                                                     pattern UnhelpfulLoc,
+                                                                     pm_parsed_source,
+                                                                     srcLocLine,
+                                                                     srcSpanStart,
+                                                                     topDir,
+                                                                     unLoc)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
 #if MIN_GHC_API_VERSION(9,4,0)
@@ -74,7 +82,12 @@ import qualified GHC.Data.Strict                                    as Strict
 #endif
 #if MIN_GHC_API_VERSION(9,0,0)
 import           GHC.Types.SrcLoc                                   hiding
-                                                                    (RealSrcSpan)
+                                                                    (RealSrcSpan,
+                                                                     SrcLoc (..),
+                                                                     getLoc,
+                                                                     srcLocLine,
+                                                                     srcSpanStart,
+                                                                     unLoc)
 import qualified GHC.Types.SrcLoc                                   as GHC
 #else
 import qualified SrcLoc                                             as GHC
@@ -111,6 +124,7 @@ import qualified Language.LSP.Protocol.Types                        as LSP
 
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import qualified Development.IDE.Core.Shake                         as Shake
+import           Development.IDE.LSP.Outline                        (documentSymbolForDecl)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
                                                                      getNextPragmaInfo,
@@ -413,8 +427,8 @@ resolveProvider recorder ideState _plId ca uri resolveValue = do
     (ApplyHint verTxtDocId oneHint) -> do
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (IgnoreHint verTxtDocId hintTitle ) -> do
-        edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
+    (IgnoreHint verTxtDocId hintTitle scope) -> do
+        edit <- ExceptT $ liftIO $ ignoreHint scope recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
 
 applyRefactAvailable :: Bool
@@ -431,7 +445,7 @@ diagnosticToCodeActions verTxtDocId diagnostic
   | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code && applyRefactAvailable
   , let hint = T.replace "refact:" "" code
-  , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
+  , let suppressHintTitle s = "Ignore hint \"" <> hint <> "\" in this " <> s
   , let suppressHintArguments = IgnoreHint verTxtDocId hint
   = catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
@@ -441,7 +455,8 @@ diagnosticToCodeActions verTxtDocId diagnostic
                  applyHintArguments = ApplyHint verTxtDocId (Just $ OneHint start hint) ->
                Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) True)
            | otherwise -> Nothing
-      , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON suppressHintArguments)) False)
+      , Just (mkCodeAction (suppressHintTitle "module") diagnostic (Just (toJSON $ suppressHintArguments IgnoreInModule)) False)
+      , Just (mkCodeAction (suppressHintTitle "definition") diagnostic (Just (toJSON $ suppressHintArguments $ IgnoreInDefinition start)) False)
       ]
   | otherwise = []
 
@@ -458,27 +473,45 @@ mkCodeAction title diagnostic data_  isPreferred =
     , _data_ = data_
     }
 
-mkSuppressHintTextEdits :: DynFlags -> Rope -> T.Text -> [LSP.TextEdit]
-mkSuppressHintTextEdits dynFlags fileContents hint =
+mkSuppressHintTextEdits :: Int -> T.Text -> Maybe LineSplitTextEdits -> Maybe T.Text -> [LSP.TextEdit]
+mkSuppressHintTextEdits line hint lineSplitTextEdits defName =
   let
-    NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
-    nextPragmaLinePosition = Position (fromIntegral nextPragmaLine) 0
-    nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
-    textEdit = LSP.TextEdit nextPragmaRange $ "{- HLINT ignore \"" <> hint <> "\" -}\n"
+    pos = Position (fromIntegral line) 0
+    range = Range pos pos
+    textEdit = LSP.TextEdit range $ "{- HLINT ignore " <> foldMap (<> " ") defName <> "\"" <> hint <> "\" -}\n"
     lineSplitTextEditList = maybe [] (\LineSplitTextEdits{..} -> [lineSplitInsertTextEdit, lineSplitDeleteTextEdit]) lineSplitTextEdits
   in
     textEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
-ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
+ignoreHint :: IgnoreHintScope -> Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
+ignoreHint scope _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
   (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
   (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
   case fileContents of
     Just contents -> do
         let dynFlags = ms_hspp_opts $ msrModSummary msr
-            textEdits = mkSuppressHintTextEdits dynFlags contents ignoreHintTitle
-            workspaceEdit =
+        textEdits <- case scope of
+          IgnoreInModule ->
+            let NextPragmaInfo{nextPragmaLine, lineSplitTextEdits} = getNextPragmaInfo dynFlags (Just contents)
+            in pure $ mkSuppressHintTextEdits nextPragmaLine ignoreHintTitle lineSplitTextEdits Nothing
+          IgnoreInDefinition pos -> do
+            (pm, _) <- runActionE "Hlint.GetParsedModule" ideState $ useWithStaleE GetParsedModule nfp
+            let defInfo = do
+                  containingDecl <- find (maybe False (positionInRange pos) . srcSpanToRange . getLoc)
+                    $ hsmodDecls $ unLoc $ pm_parsed_source pm
+                  defStartLine <- case srcSpanStart $ getLoc containingDecl of
+                    -- TODO `srcLocLine` can apparently raise an error, but it's not clear what the safe version is
+                    RealSrcLoc sl _ -> Just (srcLocLine sl - 1)
+                    UnhelpfulLoc _  -> Nothing
+                  -- TODO `documentSymbolForDecl` wasn't intended to be exported, and computes more than we need
+                  -- (although laziness should save us there)
+                  defName <- (^. LSP.name) <$> documentSymbolForDecl containingDecl
+                  pure (defStartLine, defName)
+            case defInfo of
+              Nothing -> throwError $ PluginInternalError "bad things happened" -- TODO better error handling
+              Just (defStartLine, defName) -> pure $ mkSuppressHintTextEdits defStartLine ignoreHintTitle Nothing (Just defName)
+        let workspaceEdit =
                 LSP.WorkspaceEdit
                   (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits))
                   Nothing
@@ -497,6 +530,7 @@ data HlintResolveCommands =
   | IgnoreHint
       { verTxtDocId     :: VersionedTextDocumentIdentifier
       , ignoreHintTitle :: HintTitle
+      , scope           :: IgnoreHintScope
       } deriving (Generic, ToJSON, FromJSON)
 
 type HintTitle = T.Text
@@ -506,6 +540,11 @@ data OneHint =
     { oneHintPos   :: Position
     , oneHintTitle :: HintTitle
     } deriving (Generic, Eq, Show, ToJSON, FromJSON)
+
+data IgnoreHintScope
+  = IgnoreInModule
+  | IgnoreInDefinition Position
+  deriving (Generic, ToJSON, FromJSON)
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
 #if !APPLY_REFACT
