@@ -8,6 +8,7 @@ import qualified Data.Text                                      as T
 import           Development.IDE.GHC.Compat.Core                (flagsForCompletion)
 import           Distribution.CabalSpecVersion                  (CabalSpecVersion (CabalSpecV2_2),
                                                                  showCabalSpecVersion)
+import           Distribution.Pretty                            (prettyShow)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
@@ -15,7 +16,7 @@ import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
 import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
-
+import           Language.Haskell.Extension
 -- | Ad-hoc data type for modelling the available top-level stanzas.
 -- Not intended right now for anything else but to avoid string
 -- comparisons in 'stanzaKeywordMap' and 'libExecTestBenchCommons'.
@@ -177,8 +178,8 @@ libExecTestBenchCommons st =
     [ ("import:", importCompleter),
       ("build-depends:", noopCompleter),
       ("hs-source-dirs:", directoryCompleter),
-      ("default-extensions:", noopCompleter),
-      ("other-extensions:", noopCompleter),
+      ("default-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
+      ("other-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
       ("default-language:", constantCompleter ["GHC2021", "Haskell2010", "Haskell98"]),
       ("other-languages:", noopCompleter),
       ("build-tool-depends:", noopCompleter),
@@ -234,6 +235,19 @@ libExecTestBenchCommons st =
         -- parses the '.cabal' file s.t. that we have access to the 'hs-source-dirs',
         -- but not have erased the "common" stanza.
         noopCompleter
+
+-- | Returns all possible language extensions including disabled ones.
+allExtensions :: [Extension]
+allExtensions =
+  concatMap
+    ( \e ->
+        -- These pragmas cannot be negated as they are not reversible
+        -- by prepending "No".
+        if e `notElem` [Unsafe, Trustworthy, Safe]
+          then [EnableExtension e, DisableExtension e]
+          else [EnableExtension e]
+    )
+    knownExtensions
 
 -- | Contains a map of the most commonly used licenses, weighted by their popularity.
 --
