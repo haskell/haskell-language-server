@@ -76,6 +76,11 @@ jobs:
         test:
           - true
           - false
+        include:
+          # 9.10.3 is broken on windows
+          - os: windows-latest
+            test: true
+            ghc: "9.10.2"
         exclude:
           # Exclude the test configuration on macos, it's sufficiently similar to other OSs
           # that it mostly just burns CI time. Buiding is still useful since it catches
@@ -87,6 +92,9 @@ jobs:
             test: false
           - os: ubuntu-latest
             test: false
+          # 9.10.3 is broken on windows
+          - os: windows-latest
+            ghc: "9.10"
 
     steps:
       - uses: actions/checkout@v3
