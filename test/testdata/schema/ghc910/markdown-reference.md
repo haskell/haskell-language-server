@@ -1,8 +1,3 @@
-## hlint
-| Property | Description | Default | Allowed values |
-| --- | --- | --- | --- |
-| `flags` | Flags used by hlint | `TODO: Array values` |  &nbsp;  |
-
 ## cabal-fmt
 | Property | Description | Default | Allowed values |
 | --- | --- | --- | --- |

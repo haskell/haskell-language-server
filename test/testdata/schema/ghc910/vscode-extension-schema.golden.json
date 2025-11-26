@@ -213,24 +213,6 @@
         "scope": "resource",
         "type": "boolean"
     },
-    "haskell.plugin.hlint.codeActionsOn": {
-        "default": true,
-        "description": "Enables hlint code actions",
-        "scope": "resource",
-        "type": "boolean"
-    },
-    "haskell.plugin.hlint.config.flags": {
-        "default": [],
-        "markdownDescription": "Flags used by hlint",
-        "scope": "resource",
-        "type": "array"
-    },
-    "haskell.plugin.hlint.diagnosticsOn": {
-        "default": true,
-        "description": "Enables hlint diagnostics",
-        "scope": "resource",
-        "type": "boolean"
-    },
     "haskell.plugin.importLens.codeActionsOn": {
         "default": true,
         "description": "Enables importLens code actions",
