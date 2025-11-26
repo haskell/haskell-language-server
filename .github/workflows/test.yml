@@ -146,7 +146,7 @@ jobs:
         run: cabal test hls-refactor-plugin-tests || cabal test hls-refactor-plugin-tests
 
       # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.10.2'
         name: Test hls-floskell-plugin
         run: cabal test hls-floskell-plugin-tests || cabal test hls-floskell-plugin-tests
 
@@ -163,7 +163,7 @@ jobs:
         run: cabal test hls-eval-plugin-tests || cabal test hls-eval-plugin-tests
 
       # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.10.2'
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin-tests || cabal test hls-splice-plugin-tests
 
@@ -196,7 +196,7 @@ jobs:
         run: cabal test hls-rename-plugin-tests || cabal test hls-rename-plugin-tests
 
       # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10'
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.10.2'
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin-tests || cabal test hls-hlint-plugin-tests
 
@@ -233,7 +233,7 @@ jobs:
         run: cabal test hls-explicit-record-fields-plugin-tests || cabal test hls-explicit-record-fields-plugin-tests
 
       # versions need to be limited since the tests depend on cabal-fmt which only builds with ghc <9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.10.2'
         name: Test hls-cabal-fmt-plugin test suite
         run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests
 
@@ -246,7 +246,7 @@ jobs:
         run: cabal test hls-cabal-plugin-tests || cabal test hls-cabal-plugin-tests
 
       # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.10.2'
         name: Test hls-retrie-plugin test suite
         run: cabal test hls-retrie-plugin-tests || cabal test hls-retrie-plugin-tests
 
@@ -264,7 +264,7 @@ jobs:
 
       # The plugin tutorial is only compatible with 9.6 and 9.8.
       # No particular reason, just to avoid excessive CPP.
-      - if: matrix.test && matrix.ghc != '9.4' && matrix.ghc != '9.10' && matrix.ghc != '9.12'
+      - if: matrix.test && matrix.ghc != '9.4' && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.10.2'
         name: Compile the plugin-tutorial
         run: cabal build plugin-tutorial
 
