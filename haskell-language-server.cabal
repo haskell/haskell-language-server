@@ -709,14 +709,19 @@ flag hlint
   manual:      True
 
 common hlint
-  if flag(hlint)
+  -- Hlint isn't compatible with GHC 9.10, and crashes in subtle ways.
+  -- See https://github.com/haskell/haskell-language-server/issues/4674
+  -- for its wake of destruction.
+  if flag(hlint) && !impl(ghc ==9.10.*)
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
   import:           defaults, pedantic, warnings
-  -- https://github.com/ndmitchell/hlint/pull/1594
-  if !flag(hlint)
+  -- Hlint isn't compatible with GHC 9.10, and crashes in subtle ways.
+  -- See https://github.com/haskell/haskell-language-server/issues/4674
+  -- for its wake of destruction.
+  if !flag(hlint) || impl(ghc ==9.10.*)
     buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
@@ -763,7 +768,10 @@ library hls-hlint-plugin
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(hlint)
+  -- Hlint isn't compatible with GHC 9.10, and crashes in subtle ways.
+  -- See https://github.com/haskell/haskell-language-server/issues/4674
+  -- for its wake of destruction.
+  if !flag(hlint) || impl(ghc ==9.10.*)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
