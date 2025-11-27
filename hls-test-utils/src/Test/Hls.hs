@@ -36,6 +36,7 @@ module Test.Hls
     runSessionWithTestConfig,
     -- * Running parameterised tests for a set of test configurations
     parameterisedCursorTest,
+    parameterisedCursorTestM,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -383,8 +384,15 @@ goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
 -- The quasi quoter '__i' is very helpful to define such tests, as it additionally
 -- allows to interpolate haskell values and functions. We reexport this quasi quoter
 -- for easier usage.
-parameterisedCursorTest :: (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
-parameterisedCursorTest title content expectations act
+parameterisedCursorTest :: forall a . (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
+parameterisedCursorTest title content expectations act = parameterisedCursorTestM title content assertions act
+  where
+    assertions = map testCaseAssertion expectations
+    testCaseAssertion :: a -> PosPrefixInfo -> a -> Assertion
+    testCaseAssertion expected info actual = assertEqual (mkParameterisedLabel info) expected actual
+
+parameterisedCursorTestM :: String -> T.Text -> [(PosPrefixInfo -> a -> Assertion)] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
+parameterisedCursorTestM title content expectations act
   | lenPrefs /= lenExpected = error $ "parameterisedCursorTest: Expected " <> show lenExpected <> " cursors but found: " <> show lenPrefs
   | otherwise = testGroup title $
       map singleTest testCaseSpec
@@ -395,9 +403,9 @@ parameterisedCursorTest title content expectations act
 
     testCaseSpec = zip [1 ::Int ..] (zip expectations prefInfos)
 
-    singleTest (n, (expected, info)) = testCase (title <> " " <> show n) $ do
+    singleTest (n, (assert, info)) = testCase (title <> " " <> show n) $ do
       actual <- act cleanText info
-      assertEqual (mkParameterisedLabel info) expected actual
+      assert info actual
 
 -- ------------------------------------------------------------
 -- Helper function for initialising plugins under test
