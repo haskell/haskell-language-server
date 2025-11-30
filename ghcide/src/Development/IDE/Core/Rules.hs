@@ -339,7 +339,7 @@ getLocatedImportsRule recorder =
         let dflags = hsc_dflags env
         opt <- getIdeOptions
 
-        moduleMaps <- extendModuleMapWithKnownTargets file
+        moduleMaps <- use_ GetModulesPaths file
 
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
@@ -674,9 +674,13 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
         pure (fmap (u,) $ mconcat a, fmap (u, ) $ mconcat b)
 
       let res = (mconcat a, mconcat b)
-      liftIO $ atomically $ modifyTVar' moduleToPathCache (Map.insert (envUnique env_eq) res)
+      -- Extend the current module map with all the known targets
+      resExtended <- extendModuleMapWithKnownTargets file res
 
-      pure (mempty, ([], Just res))
+      liftIO $ atomically $ modifyTVar' moduleToPathCache (Map.insert (envUnique env_eq) resExtended)
+
+      pure (mempty, ([], Just resExtended))
+
 
 -- | Extend the map from module name to filepath (exiting on the drive) with
 -- the list of known targets provided by HLS
@@ -684,13 +688,15 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 -- These known targets are files which were recently created and not yet saved
 -- to the filesystem.
 --
--- TODO: for now the implementation is O(number_of_known_files *
--- number_of_include_path) which is inacceptable and should be addressed.
+-- This code is not really efficient (O(import_dirs * known_targets)), which
+-- can quickly represents millions of tests. It could be improved, but
+-- everything only happen once everytime known_targets is updated (which only
+-- happen when the project start or when a file is added) and the code is not
+-- doing any IO.
 extendModuleMapWithKnownTargets
-    :: NormalizedFilePath
-       -> Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
-extendModuleMapWithKnownTargets file = do
-  (notSourceModules, sourceModules) <- use_ GetModulesPaths file
+    :: NormalizedFilePath -> (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath)) ->
+       Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
+extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
   KnownTargets targetsMap <- useNoFile_ GetKnownTargets
 
   env_eq <- use_ GhcSession file
@@ -729,7 +735,6 @@ extendModuleMapWithKnownTargets file = do
            pure (Nothing, Just (modName, (u, path)))
         else
            pure (Just (modName, (u, path)), Nothing)
-
 
   pure $ (Map.fromList a <> notSourceModules, Map.fromList b <> sourceModules)
 
