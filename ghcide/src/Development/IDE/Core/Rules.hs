@@ -182,7 +182,7 @@ import           System.Info.Extra                            (isWindows)
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
 import qualified Data.Map.Strict as Map
-import System.FilePath (takeExtension, takeFileName, normalise, dropExtension, splitDirectories)
+import System.FilePath (takeExtension, takeFileName, normalise, dropExtension, splitDirectories, equalFilePath)
 import Data.Char (isUpper)
 import System.Directory.Extra (listFilesInside)
 
@@ -656,7 +656,7 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
       (unzip -> (a, b)) <- flip mapM import_dirs $ \(u, dyn) -> do
         (unzip -> (a, b)) <- flip mapM (importPaths dyn) $ \dir' -> do
           let dir = normalise dir'
-          let predicate path = pure (normalise path == dir || case takeFileName path of
+          let predicate path = pure (equalFilePath path dir || case takeFileName path of
                [] -> False
                (x:_) -> isUpper x)
           let dir_number_directories = length (splitDirectories dir)
