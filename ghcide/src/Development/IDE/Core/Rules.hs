@@ -178,7 +178,7 @@ import           System.Info.Extra                            (isWindows)
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
 import qualified Data.Map.Strict as Map
-import System.FilePath (takeExtension, takeFileName, normalise, dropExtension, splitDirectories)
+import System.FilePath (takeExtension, takeFileName, normalise, dropExtension, splitDirectories, equalFilePath)
 import Data.Char (isUpper)
 import System.Directory.Extra (listFilesInside)
 
@@ -330,7 +330,7 @@ getLocatedImportsRule recorder =
         let dflags = hsc_dflags env
         opt <- getIdeOptions
 
-        moduleMaps <- extendModuleMapWithKnownTargets file
+        moduleMaps <- use_ GetModulesPaths file
 
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
 
@@ -643,7 +643,7 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
       (unzip -> (a, b)) <- flip mapM import_dirs $ \(u, dyn) -> do
         (unzip -> (a, b)) <- flip mapM (importPaths dyn) $ \dir' -> do
           let dir = normalise dir'
-          let predicate path = pure (normalise path == dir || case takeFileName path of
+          let predicate path = pure (equalFilePath path dir || case takeFileName path of
                [] -> False
                (x:_) -> isUpper x)
           let dir_number_directories = length (splitDirectories dir)
@@ -663,21 +663,21 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
       let res = (mconcat a, mconcat b)
       liftIO $ atomically $ modifyTVar' moduleToPathCache (Map.insert (envUnique env_eq) res)
 
-      pure (mempty, ([], Just res))
+      -- Extend the current module map with all the known targets
+      resExtended <- extendModuleMapWithKnownTargets file res
+
+      pure (mempty, ([], Just resExtended))
+
 
 -- | Extend the map from module name to filepath (exiting on the drive) with
 -- the list of known targets provided by HLS
 --
 -- These known targets are files which were recently created and not yet saved
 -- to the filesystem.
---
--- TODO: for now the implementation is O(number_of_known_files *
--- number_of_include_path) which is inacceptable and should be addressed.
 extendModuleMapWithKnownTargets
-    :: NormalizedFilePath
-       -> Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
-extendModuleMapWithKnownTargets file = do
-  (notSourceModules, sourceModules) <- use_ GetModulesPaths file
+    :: NormalizedFilePath -> (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath)) ->
+       Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
+extendModuleMapWithKnownTargets file (notSourceModules, sourceModules) = do
   KnownTargets targetsMap <- useNoFile_ GetKnownTargets
 
   env_eq <- use_ GhcSession file
@@ -716,7 +716,6 @@ extendModuleMapWithKnownTargets file = do
            pure (Nothing, Just (modName, (u, path)))
         else
            pure (Just (modName, (u, path)), Nothing)
-
 
   pure $ (Map.fromList a <> notSourceModules, Map.fromList b <> sourceModules)
 
