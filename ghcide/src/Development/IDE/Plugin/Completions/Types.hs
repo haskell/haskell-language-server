@@ -14,7 +14,11 @@ import qualified Data.Text                    as T
 
 import           Data.Aeson
 import           Data.Aeson.Types
+import           Data.Function                (on)
 import           Data.Hashable                (Hashable)
+import qualified Data.List                    as L
+import           Data.List.NonEmpty           (NonEmpty (..))
+import           Data.String                  (IsString (..))
 import           Data.Text                    (Text)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
@@ -81,9 +85,60 @@ data Provenance
     | Local SrcSpan
     deriving (Eq, Ord, Show)
 
+newtype Snippet = Snippet [SnippetAny]
+  deriving (Eq, Show)
+  deriving newtype (Semigroup, Monoid)
+
+instance IsString Snippet where
+  fromString = snippetText . T.pack
+
+-- | @SnippetAny@ can be used to construct sanitized snippets. See the LSP
+-- spec for more details.
+data SnippetAny
+  = SText Text
+  -- ^ Literal text
+  | STabStop Int (Maybe SnippetAny)
+  -- ^ Creates a tab stop, i.e. parts of the snippet that are meant to be
+  -- filled in by the user and that can be jumped between using the tab key.
+  -- The optional field can be used to provide a placeholder value.
+  | SChoice Int (NonEmpty Text)
+  -- ^ Presents a choice between the provided values to the user
+  | SVariable Text (Maybe SnippetAny)
+  -- ^ Snippet variable. See the spec for possible values. The optional field
+  -- can be used to provide a default value for when the variable is not set.
+  deriving (Eq, Show)
+
+snippetText :: Text -> Snippet
+snippetText = Snippet . L.singleton . SText
+
+snippetVariable :: Text -> Snippet
+snippetVariable n = Snippet . L.singleton $ SVariable n Nothing
+
+snippetVariableDefault :: Text -> SnippetAny -> Snippet
+snippetVariableDefault n d = Snippet . L.singleton . SVariable n $ Just d
+
+snippetToText :: Snippet -> Text
+snippetToText (Snippet l) = foldMap (snippetAnyToText False) l
+  where
+    snippetAnyToText isNested = \case
+      SText t -> sanitizeText isNested t
+      STabStop i ph -> "${" <> T.pack (show i) <> foldMap (\p -> ":" <> snippetAnyToText True p) ph <> "}"
+      SChoice i (c :| cs) -> "${" <> T.pack (show i) <> "|" <> c <> foldMap ("," <>) cs <> "}"
+      SVariable n md -> "${" <> n <> foldMap (\x -> ":" <> snippetAnyToText True x) md <> "}"
+    sanitizeText isNested = T.foldl' (sanitizeChar isNested) mempty
+    sanitizeChar isNested t = (t <>) . \case
+      '$' -> "\\$"
+      '\\' -> "\\\\"
+      ',' | isNested -> "\\,"
+      '|' | isNested -> "\\|"
+      c -> T.singleton c
+
+snippetLexOrd :: Snippet -> Snippet -> Ordering
+snippetLexOrd = compare `on` snippetToText
+
 data CompItem = CI
   { compKind            :: CompletionItemKind
-  , insertText          :: T.Text         -- ^ Snippet for the completion
+  , insertText          :: Snippet        -- ^ Snippet for the completion
   , provenance          :: Provenance     -- ^ From where this item is imported from.
   , label               :: T.Text         -- ^ Label to display to the user.
   , typeText            :: Maybe T.Text
