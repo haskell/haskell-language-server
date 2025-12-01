@@ -133,6 +133,7 @@ library
     Development.IDE.Core.FileStore
     Development.IDE.Core.FileUtils
     Development.IDE.Core.IdeConfiguration
+    Development.IDE.Core.LookupMod
     Development.IDE.Core.OfInterest
     Development.IDE.Core.PluginUtils
     Development.IDE.Core.PositionMapping
