@@ -92,12 +92,20 @@ newtype Snippet = Snippet [SnippetAny]
 instance IsString Snippet where
   fromString = snippetText . T.pack
 
+-- | @SnippetAny@ can be used to construct sanitized snippets. See the LSP
+-- spec for more details.
 data SnippetAny
   = SText Text
-  | STabStop Int
-  | SPlaceholder Int SnippetAny
+  -- ^ Literal text
+  | STabStop Int (Maybe SnippetAny)
+  -- ^ Creates a tab stop, i.e. parts of the snippet that are meant to be
+  -- filled in by the user and that can be jumped between using the tab key.
+  -- The optional field can be used to provide a placeholder value.
   | SChoice Int (NonEmpty Text)
+  -- ^ Presents a choice between the provided values to the user
   | SVariable Text (Maybe SnippetAny)
+  -- ^ Snippet variable. See the spec for possible values. The optional field
+  -- can be used to provide a default value for when the variable is not set.
   deriving (Eq, Show)
 
 snippetText :: Text -> Snippet
@@ -114,10 +122,9 @@ snippetToText (Snippet l) = foldMap (snippetAnyToText False) l
   where
     snippetAnyToText isNested = \case
       SText t -> sanitizeText isNested t
-      STabStop i -> "${" <> T.pack (show i) <> "}"
-      SPlaceholder i s -> "${" <> T.pack (show i) <> ":" <> snippetAnyToText True s <> "}"
+      STabStop i ph -> "${" <> T.pack (show i) <> foldMap (\p -> ":" <> snippetAnyToText True p) ph <> "}"
       SChoice i (c :| cs) -> "${" <> T.pack (show i) <> "|" <> c <> foldMap ("," <>) cs <> "}"
-      SVariable n md -> "${" <> n <> maybe mempty (\x -> ":" <> snippetAnyToText True x) md <> "}"
+      SVariable n md -> "${" <> n <> foldMap (\x -> ":" <> snippetAnyToText True x) md <> "}"
     sanitizeText isNested = T.foldl' (sanitizeChar isNested) mempty
     sanitizeChar isNested t = (t <>) . \case
       '$' -> "\\$"
