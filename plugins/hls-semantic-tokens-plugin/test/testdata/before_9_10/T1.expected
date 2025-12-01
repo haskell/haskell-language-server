@@ -1,81 +1,153 @@
-9:6-9 TTypeConstructor "Foo"
-9:12-15 TDataConstructor "Foo"
-9:18-21 TRecordField "foo"
-9:25-28 TTypeConstructor "Int"
-11:7-10 TClass "Boo"
-11:11-12 TTypeVariable "a"
-12:3-6 TClassMethod "boo"
-12:10-11 TTypeVariable "a"
-12:15-16 TTypeVariable "a"
-14:10-13 TClass "Boo"
-14:14-17 TTypeConstructor "Int"
-15:5-8 TClassMethod "boo"
-15:9-10 TVariable "x"
-15:13-14 TVariable "x"
-15:15-16 TOperator "+"
-17:6-8 TTypeConstructor "Dd"
-17:11-13 TDataConstructor "Dd"
-17:14-17 TTypeConstructor "Int"
-19:9-12 TPatternSynonym "One"
-19:15-18 TDataConstructor "Foo"
-21:1-4 TVariable "ggg"
-21:7-10 TPatternSynonym "One"
-23:6-9 TTypeConstructor "Doo"
-23:12-15 TDataConstructor "Doo"
-23:16-24 TModule "Prelude."
-23:24-27 TTypeConstructor "Int"
-24:6-10 TTypeSynonym "Bar1"
-24:13-16 TTypeConstructor "Int"
-25:6-10 TTypeSynonym "Bar2"
-25:13-16 TTypeConstructor "Doo"
-27:1-3 TFunction "bb"
-27:8-11 TClass "Boo"
-27:12-13 TTypeVariable "a"
-27:18-19 TTypeVariable "a"
-27:23-24 TTypeVariable "a"
-28:1-3 TFunction "bb"
-28:4-5 TVariable "x"
-28:9-12 TClassMethod "boo"
-28:13-14 TVariable "x"
-29:1-3 TFunction "aa"
-29:7-11 TTypeVariable "cool"
-29:15-18 TTypeConstructor "Int"
-29:22-26 TTypeVariable "cool"
-30:1-3 TFunction "aa"
-30:4-5 TVariable "x"
-30:9-10 TVariable "c"
-30:14-16 TFunction "aa"
-30:17-18 TVariable "x"
-30:19-20 TVariable "c"
-31:12-14 TVariable "xx"
-31:16-18 TVariable "yy"
-32:11-13 TVariable "dd"
-34:2-4 TVariable "zz"
-34:6-8 TVariable "kk"
-35:1-3 TFunction "cc"
-35:7-10 TTypeConstructor "Foo"
-35:15-18 TTypeConstructor "Int"
-35:20-23 TTypeConstructor "Int"
-35:28-31 TTypeConstructor "Int"
-36:1-3 TFunction "cc"
-36:4-5 TVariable "f"
-36:7-9 TVariable "gg"
-36:11-13 TVariable "vv"
-37:10-12 TVariable "gg"
-38:14-17 TRecordField "foo"
-38:18-19 TOperator "$"
-38:20-21 TVariable "f"
-38:24-27 TRecordField "foo"
-39:14-17 TRecordField "foo"
-39:18-19 TOperator "$"
-39:20-21 TVariable "f"
-39:24-27 TRecordField "foo"
-41:1-3 TFunction "go"
-41:6-9 TRecordField "foo"
-42:1-4 TFunction "add"
-42:8-16 TModule "Prelude."
-42:16-17 TOperator "+"
-47:1-5 TVariable "main"
-47:9-11 TTypeConstructor "IO"
-48:1-5 TVariable "main"
-48:8-16 TFunction "putStrLn"
+[1:1-14 HsSyntacticTokenType TComment "-- patter syn"]
+[2:1-33 HsSyntacticTokenType TComment "{-# LANGUAGE PatternSynonyms #-}"]
+[4:1-7 HsSyntacticTokenType TKeyword "module"]
+[4:13-18 HsSyntacticTokenType TKeyword "where"]
+[6:1-33 HsSyntacticTokenType TComment "-- import Data.Set (Set, insert)"]
+[9:1-5 HsSyntacticTokenType TKeyword "data"]
+[9:6-9 HsSemanticTokenType TTypeConstructor "Foo"]
+[9:10-11 HsSyntacticTokenType TKeyword "="]
+[9:12-15 HsSemanticTokenType TDataConstructor "Foo"]
+[9:16-17 HsSyntacticTokenType TKeyword "{"]
+[9:18-21 HsSyntacticTokenType TRecordSelector "foo",9:18-21 HsSemanticTokenType TRecordField "foo"]
+[9:22-24 HsSyntacticTokenType TKeyword "::"]
+[9:25-28 HsSemanticTokenType TTypeConstructor "Int"]
+[9:29-30 HsSyntacticTokenType TKeyword "}"]
+[11:1-6 HsSyntacticTokenType TKeyword "class"]
+[11:7-10 HsSemanticTokenType TClass "Boo"]
+[11:11-12 HsSemanticTokenType TTypeVariable "a"]
+[11:13-18 HsSyntacticTokenType TKeyword "where"]
+[12:3-6 HsSemanticTokenType TClassMethod "boo"]
+[12:7-9 HsSyntacticTokenType TKeyword "::"]
+[12:10-11 HsSemanticTokenType TTypeVariable "a"]
+[12:15-16 HsSemanticTokenType TTypeVariable "a"]
+[14:1-9 HsSyntacticTokenType TKeyword "instance"]
+[14:10-13 HsSemanticTokenType TClass "Boo"]
+[14:14-17 HsSemanticTokenType TTypeConstructor "Int"]
+[14:18-23 HsSyntacticTokenType TKeyword "where"]
+[15:5-8 HsSemanticTokenType TClassMethod "boo"]
+[15:9-10 HsSemanticTokenType TVariable "x"]
+[15:11-12 HsSyntacticTokenType TKeyword "="]
+[15:13-14 HsSemanticTokenType TVariable "x"]
+[15:15-16 HsSemanticTokenType TOperator "+"]
+[15:17-18 HsSyntacticTokenType TNumberLit "1"]
+[17:1-5 HsSyntacticTokenType TKeyword "data"]
+[17:6-8 HsSemanticTokenType TTypeConstructor "Dd"]
+[17:9-10 HsSyntacticTokenType TKeyword "="]
+[17:11-13 HsSemanticTokenType TDataConstructor "Dd"]
+[17:14-17 HsSemanticTokenType TTypeConstructor "Int"]
+[19:1-8 HsSyntacticTokenType TKeyword "pattern"]
+[19:9-12 HsSemanticTokenType TPatternSynonym "One"]
+[19:13-14 HsSyntacticTokenType TKeyword "="]
+[19:15-18 HsSemanticTokenType TDataConstructor "Foo"]
+[21:1-4 HsSemanticTokenType TVariable "ggg"]
+[21:5-6 HsSyntacticTokenType TKeyword "="]
+[21:7-10 HsSemanticTokenType TPatternSynonym "One"]
+[23:1-5 HsSyntacticTokenType TKeyword "data"]
+[23:6-9 HsSemanticTokenType TTypeConstructor "Doo"]
+[23:10-11 HsSyntacticTokenType TKeyword "="]
+[23:12-15 HsSemanticTokenType TDataConstructor "Doo"]
+[23:16-24 HsSemanticTokenType TModule "Prelude."]
+[23:24-27 HsSemanticTokenType TTypeConstructor "Int"]
+[24:1-5 HsSyntacticTokenType TKeyword "type"]
+[24:6-10 HsSemanticTokenType TTypeSynonym "Bar1"]
+[24:11-12 HsSyntacticTokenType TKeyword "="]
+[24:13-16 HsSemanticTokenType TTypeConstructor "Int"]
+[25:1-5 HsSyntacticTokenType TKeyword "type"]
+[25:6-10 HsSemanticTokenType TTypeSynonym "Bar2"]
+[25:11-12 HsSyntacticTokenType TKeyword "="]
+[25:13-16 HsSemanticTokenType TTypeConstructor "Doo"]
+[27:1-3 HsSemanticTokenType TFunction "bb"]
+[27:4-6 HsSyntacticTokenType TKeyword "::"]
+[27:8-11 HsSemanticTokenType TClass "Boo"]
+[27:12-13 HsSemanticTokenType TTypeVariable "a"]
+[27:18-19 HsSemanticTokenType TTypeVariable "a"]
+[27:23-24 HsSemanticTokenType TTypeVariable "a"]
+[28:1-3 HsSemanticTokenType TFunction "bb"]
+[28:4-5 HsSemanticTokenType TVariable "x"]
+[28:7-8 HsSyntacticTokenType TKeyword "="]
+[28:9-12 HsSemanticTokenType TClassMethod "boo"]
+[28:13-14 HsSemanticTokenType TVariable "x"]
+[29:1-3 HsSemanticTokenType TFunction "aa"]
+[29:4-6 HsSyntacticTokenType TKeyword "::"]
+[29:7-11 HsSemanticTokenType TTypeVariable "cool"]
+[29:15-18 HsSemanticTokenType TTypeConstructor "Int"]
+[29:22-26 HsSemanticTokenType TTypeVariable "cool"]
+[30:1-3 HsSemanticTokenType TFunction "aa"]
+[30:4-5 HsSemanticTokenType TVariable "x"]
+[30:6-7 HsSyntacticTokenType TKeyword "="]
+[30:8-9 HsSyntacticTokenType TKeyword "\\"]
+[30:9-10 HsSemanticTokenType TVariable "c"]
+[30:11-13 HsSyntacticTokenType TKeyword "->"]
+[30:14-16 HsSemanticTokenType TFunction "aa"]
+[30:17-18 HsSemanticTokenType TVariable "x"]
+[30:19-20 HsSemanticTokenType TVariable "c"]
+[31:5-10 HsSyntacticTokenType TKeyword "where"]
+[31:11-12 HsSyntacticTokenType TKeyword "("]
+[31:12-14 HsSemanticTokenType TVariable "xx"]
+[31:16-18 HsSemanticTokenType TVariable "yy"]
+[31:18-19 HsSyntacticTokenType TKeyword ")"]
+[31:20-21 HsSyntacticTokenType TKeyword "="]
+[31:22-23 HsSyntacticTokenType TKeyword "("]
+[31:23-24 HsSyntacticTokenType TNumberLit "1"]
+[31:26-27 HsSyntacticTokenType TNumberLit "2"]
+[31:27-28 HsSyntacticTokenType TKeyword ")"]
+[32:11-13 HsSemanticTokenType TVariable "dd"]
+[32:14-15 HsSyntacticTokenType TKeyword "="]
+[32:16-17 HsSyntacticTokenType TNumberLit "1"]
+[34:1-2 HsSyntacticTokenType TKeyword "("]
+[34:2-4 HsSemanticTokenType TVariable "zz"]
+[34:6-8 HsSemanticTokenType TVariable "kk"]
+[34:8-9 HsSyntacticTokenType TKeyword ")"]
+[34:10-11 HsSyntacticTokenType TKeyword "="]
+[34:12-13 HsSyntacticTokenType TKeyword "("]
+[34:13-14 HsSyntacticTokenType TNumberLit "1"]
+[34:16-17 HsSyntacticTokenType TNumberLit "2"]
+[34:17-18 HsSyntacticTokenType TKeyword ")"]
+[35:1-3 HsSemanticTokenType TFunction "cc"]
+[35:4-6 HsSyntacticTokenType TKeyword "::"]
+[35:7-10 HsSemanticTokenType TTypeConstructor "Foo"]
+[35:15-18 HsSemanticTokenType TTypeConstructor "Int"]
+[35:20-23 HsSemanticTokenType TTypeConstructor "Int"]
+[35:28-31 HsSemanticTokenType TTypeConstructor "Int"]
+[36:1-3 HsSemanticTokenType TFunction "cc"]
+[36:4-5 HsSemanticTokenType TVariable "f"]
+[36:6-7 HsSyntacticTokenType TKeyword "("]
+[36:7-9 HsSemanticTokenType TVariable "gg"]
+[36:11-13 HsSemanticTokenType TVariable "vv"]
+[36:13-14 HsSyntacticTokenType TKeyword ")"]
+[36:14-15 HsSyntacticTokenType TKeyword "="]
+[37:10-12 HsSemanticTokenType TVariable "gg"]
+[38:11-13 HsSyntacticTokenType TKeyword "->"]
+[38:14-17 HsSyntacticTokenType TRecordSelector "foo",38:14-17 HsSemanticTokenType TRecordField "foo"]
+[38:18-19 HsSemanticTokenType TOperator "$"]
+[38:20-21 HsSemanticTokenType TVariable "f"]
+[38:22-23 HsSyntacticTokenType TKeyword "{"]
+[38:24-27 HsSyntacticTokenType TRecordSelector "foo",38:24-27 HsSemanticTokenType TRecordField "foo"]
+[38:28-29 HsSyntacticTokenType TKeyword "="]
+[38:30-31 HsSyntacticTokenType TNumberLit "1"]
+[38:32-33 HsSyntacticTokenType TKeyword "}"]
+[39:11-13 HsSyntacticTokenType TKeyword "->"]
+[39:14-17 HsSyntacticTokenType TRecordSelector "foo",39:14-17 HsSemanticTokenType TRecordField "foo"]
+[39:18-19 HsSemanticTokenType TOperator "$"]
+[39:20-21 HsSemanticTokenType TVariable "f"]
+[39:22-23 HsSyntacticTokenType TKeyword "{"]
+[39:24-27 HsSyntacticTokenType TRecordSelector "foo",39:24-27 HsSemanticTokenType TRecordField "foo"]
+[39:28-29 HsSyntacticTokenType TKeyword "="]
+[39:30-31 HsSyntacticTokenType TNumberLit "1"]
+[39:32-33 HsSyntacticTokenType TKeyword "}"]
+[41:1-3 HsSemanticTokenType TFunction "go"]
+[41:4-5 HsSyntacticTokenType TKeyword "="]
+[41:6-9 HsSyntacticTokenType TRecordSelector "foo",41:6-9 HsSemanticTokenType TRecordField "foo"]
+[42:1-4 HsSemanticTokenType TFunction "add"]
+[42:5-6 HsSyntacticTokenType TKeyword "="]
+[42:8-16 HsSemanticTokenType TModule "Prelude."]
+[42:16-17 HsSemanticTokenType TOperator "+"]
+[44:1-28 HsSyntacticTokenType TComment "-- sub :: Int -> Int -> Int"]
+[45:1-21 HsSyntacticTokenType TComment "-- sub x y = add x y"]
+[47:1-5 HsSemanticTokenType TVariable "main"]
+[47:6-8 HsSyntacticTokenType TKeyword "::"]
+[47:9-11 HsSemanticTokenType TTypeConstructor "IO"]
+[48:1-5 HsSemanticTokenType TVariable "main"]
+[48:6-7 HsSyntacticTokenType TKeyword "="]
+[48:8-16 HsSemanticTokenType TFunction "putStrLn"]
+[48:17-34 HsSyntacticTokenType TStringLit "\"Hello, Haskell!\""]
