@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
 {-# OPTIONS_GHC -Wwarn #-}
@@ -15,6 +14,7 @@ import qualified Data.Text                   as T
 import           Development.IDE.GHC.Compat
 import           GHC                         (ExecOptions, ExecResult (..),
                                               execStmt)
+import           GHC.Driver.Monad            (reflectGhc, reifyGhc)
 import           Ide.Plugin.Eval.Types       (Language (Plain), Loc,
                                               Located (..),
                                               Section (sectionLanguage),
@@ -22,7 +22,9 @@ import           Ide.Plugin.Eval.Types       (Language (Plain), Loc,
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Position (Position),
                                               Range (Range))
+import           System.IO                   (stderr, stdout)
 import           System.IO.Extra             (newTempFile, readFile')
+import           System.IO.Silently          (hCapture)
 
 -- | Return the ranges of the expression and result parts of the given test
 testRanges :: Test -> (Range, Range)
@@ -79,20 +81,31 @@ asStmts (Example e _ _) = NE.toList e
 asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
-
-
 -- | A wrapper of 'InteractiveEval.execStmt', capturing the execution result
 myExecStmt :: String -> ExecOptions -> Ghc (Either String (Maybe String))
 myExecStmt stmt opts = do
     (temp, purge) <- liftIO newTempFile
     evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile " <> show temp <> " (P.show x)")
     modifySession $ \hsc -> hsc {hsc_IC = setInteractivePrintName (hsc_IC hsc) evalPrint}
-    result <- execStmt stmt opts >>= \case
-              ExecComplete (Left err) _ -> pure $ Left $ show err
-              ExecComplete (Right _) _ -> liftIO $ Right . (\x -> if null x then Nothing else Just x) <$> readFile' temp
-              ExecBreak{} -> pure $ Right $ Just "breakpoints are not supported"
+    -- NB: We capture output to @stdout@ and @stderr@ induced as a possible side
+    -- effect by the statement being evaluated. This is fragile because the
+    -- output may be scrambled in a concurrent setting when HLS is writing to
+    -- one of these file handles from a different thread.
+    (output, execResult) <- reifyGhc $ \session ->
+      hCapture [stdout, stderr] (reflectGhc (execStmt stmt opts) session)
+    evalResult <- case execResult of
+      ExecComplete (Left err) _ ->
+        pure $ Left $ show err
+      ExecComplete (Right _) _ ->
+        liftIO $ Right . fromList . (output <>) <$> readFile' temp
+      ExecBreak{} ->
+        pure $ Right $ Just "breakpoints are not supported"
     liftIO purge
-    pure result
+    pure evalResult
+  where
+    fromList :: String -> Maybe String
+    fromList x | null x    = Nothing
+               | otherwise = Just x
 
 {- |GHC declarations required to execute test properties
 
