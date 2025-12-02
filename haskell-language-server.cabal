@@ -323,6 +323,86 @@ test-suite hls-cabal-plugin-tests
     , text
 
 -----------------------------
+-- cabal project plugin
+-----------------------------
+
+flag cabalProject
+  description: Enable cabalProject plugin
+  default:     True
+  manual:      True
+
+common cabalProject
+  if flag(cabalProject)
+    build-depends: haskell-language-server:hls-cabal-project-plugin
+    cpp-options: -Dhls_cabal_project
+
+library hls-cabal-project-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(cabalProject)
+    buildable: False
+  exposed-modules:
+    Ide.Plugin.CabalProject
+    Ide.Plugin.CabalProject.Parse
+    Ide.Plugin.CabalProject.Diagnostics
+    Ide.Plugin.CabalProject.Types
+
+  build-depends:
+    , bytestring
+    , Cabal-syntax          >= 3.7
+    , containers
+    , deepseq
+    , directory
+    , filepath
+    , extra                 >=1.7.4
+    , ghcide                == 2.11.0.0
+    , hashable
+    , hls-plugin-api        == 2.11.0.0
+    , hls-graph             == 2.11.0.0
+    , lens
+    , lsp                   ^>=2.7
+    , lsp-types             ^>=2.3
+    , regex-tdfa            ^>=1.3.1
+    , text
+    , text-rope
+    , transformers
+    , unordered-containers  >=0.2.10.0
+    , containers
+    , process
+    , aeson
+    , Cabal
+    , pretty
+    , cabal-install
+    , cabal-install-solver
+    , haskell-language-server:hls-cabal-plugin
+    , base16-bytestring
+    , cryptohash-sha1
+
+  hs-source-dirs:   plugins/hls-cabal-project-plugin/src
+
+test-suite hls-cabal-project-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabalProject)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-cabal-project-plugin/test
+  main-is:          Main.hs
+  other-modules:
+    Utils
+  build-depends:
+    , bytestring
+    , Cabal-syntax          >= 3.7
+    , extra
+    , filepath
+    , ghcide
+    , haskell-language-server:hls-cabal-project-plugin
+    , hls-test-utils    == 2.11.0.0
+    , lens
+    , lsp-types
+    , text
+    , hls-plugin-api
+    , cabal-install
+
+-----------------------------
 -- class plugin
 -----------------------------
 
@@ -1908,6 +1988,7 @@ library
                   , pedantic
                   -- plugins
                   , cabal
+                  , cabalProject
                   , callHierarchy
                   , cabalfmt
                   , cabalgild
