@@ -1,8 +1,7 @@
 module Ide.Plugin.Notes (descriptor, Log) where
 
 import           Control.Lens                     ((^.))
-import           Control.Monad.Except             (ExceptT, MonadError,
-                                                   throwError)
+import           Control.Monad.Except             (ExceptT)
 import           Control.Monad.IO.Class           (liftIO)
 import qualified Data.Array                       as A
 import           Data.Foldable                    (foldl')
@@ -11,13 +10,13 @@ import qualified Data.HashMap.Strict              as HM
 import qualified Data.HashSet                     as HS
 import           Data.List                        (uncons)
 import           Data.Maybe                       (catMaybes, listToMaybe,
-                                                   mapMaybe)
+                                                   mapMaybe, fromMaybe)
 import           Data.Text                        (Text, intercalate)
 import qualified Data.Text                        as T
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Data.Traversable                 (for)
 import           Development.IDE                  hiding (line)
-import           Development.IDE.Core.PluginUtils (runActionE, useE)
+
 import           Development.IDE.Core.Shake       (toKnownFiles)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.Graph.Classes    (Hashable, NFData)
@@ -63,11 +62,12 @@ type instance RuleResult GetNoteReferences = HashMap Text [(NormalizedFilePath, 
 
 instance Pretty Log where
     pretty = \case
-            LogShake l -> pretty l
-            LogNoteReferencesFound file refs -> "Found note references in " <> prettyNotes file refs
-            LogNotesFound file notes -> "Found notes in " <> prettyNotes file notes
-        where prettyNotes file hm = pretty (show file) <> ": ["
-                <> pretty (intercalate ", " (fmap (\(s, p) -> "\"" <> s <> "\" at " <> intercalate ", " (map (T.pack . show) p)) hm)) <> "]"
+        LogShake l -> pretty l
+        LogNoteReferencesFound file refs -> "Found note references in " <> prettyNotes file refs
+        LogNotesFound file notes -> "Found notes in " <> prettyNotes file notes
+      where
+        prettyNotes file hm = pretty (show file) <> ": ["
+          <> pretty (intercalate ", " (fmap (\(s, p) -> "\"" <> s <> "\" at " <> intercalate ", " (map (T.pack . show) p)) hm)) <> "]"
 
 {-
 The first time the user requests a jump-to-definition on a note reference, the
@@ -100,25 +100,36 @@ findNotesRules recorder = do
             )
         pure $ Just $ foldl' (HM.unionWith (<>)) HM.empty definedReferences
 
-err :: MonadError PluginError m => Text -> Maybe a -> m a
-err s = maybe (throwError $ PluginInternalError s) pure
 
 getNote :: NormalizedFilePath -> IdeState -> Position -> ExceptT PluginError (HandlerM c) (Maybe Text)
 getNote nfp state (Position l c) = do
-    contents <-
-        err "Error getting file contents"
-        =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
-    line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
-        (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
-    pure $ listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
+    mContents <- liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
+    case mContents of
+        Nothing ->
+             
+            pure Nothing
+
+        Just contents -> do
+            
+            let ropeLine = snd $ Rope.splitAtLine (fromIntegral l) contents
+                mLine = listToMaybe $ Rope.lines $ fst (Rope.splitAtLine 1 ropeLine)
+
+            case mLine of
+                Nothing -> pure Nothing
+                Just ln ->
+                    
+                    pure $
+                        listToMaybe $
+                            mapMaybe (atPos (fromIntegral c)) $
+                                matchAllText noteRefRegex ln
   where
-    atPos c arr = case arr A.! 0 of
-        -- We check if the line we are currently at contains a note
-        -- reference. However, we need to know if the cursor is within the
-        -- match or somewhere else. The second entry of the array contains
-        -- the title of the note as extracted by the regex.
-        (_, (c', len)) -> if c' <= c && c <= c' + len
-            then Just (fst (arr A.! 1)) else Nothing
+    
+    atPos cur arr =
+        let (_, (start, len)) = arr A.! 0
+         in if start <= cur && cur <= start + len
+                then Just (fst (arr A.! 1))
+                else Nothing
+
 
 listReferences :: PluginMethodHandler IdeState Method_TextDocumentReferences
 listReferences state _ param
@@ -127,15 +138,36 @@ listReferences state _ param
         let pos@(Position l _) = param ^. L.position
         noteOpt <- getNote nfp state pos
         case noteOpt of
-            Nothing -> pure (InR Null)
+            Nothing ->
+                
+                pure (InR Null)
+
             Just note -> do
-                notes <- runActionE "notes.definedNoteReferencess" state $ useE MkGetNoteReferences nfp
-                poss <- err ("Note reference (a comment of the form `{- Note [" <> note <> "] -}`) not found") (HM.lookup note notes)
-                pure $ InL (mapMaybe (\(noteFp, pos@(Position l' _)) -> if l' == l then Nothing else Just (
-                        Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))) poss)
+                mNotes <- liftIO $ runAction "notes.definedNoteReferencess" state (use MkGetNoteReferences nfp)
+
+                let notes = fromMaybe HM.empty mNotes
+
+                case HM.lookup note notes of
+                    Nothing ->
+                        
+                        pure (InR Null)
+
+                    Just poss ->
+                        pure $ InL $
+                            mapMaybe
+                                (\(noteFp, pos@(Position l' _)) ->
+                                    if l' == l
+                                        then Nothing
+                                        else Just (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp)
+                                                  (Range pos pos)))
+                                poss
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
-listReferences _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
+
+listReferences _ _ _ =
+    
+    pure (InR Null)
+
 
 jumpToNote :: PluginMethodHandler IdeState Method_TextDocumentDefinition
 jumpToNote state _ param
@@ -143,16 +175,30 @@ jumpToNote state _ param
     = do
         noteOpt <- getNote nfp state (param ^. L.position)
         case noteOpt of
-            Nothing -> pure (InR (InR Null))
+            Nothing ->
+                
+                pure (InR (InR Null))
+
             Just note -> do
-                notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
-                (noteFp, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
-                pure $ InL (Definition (InL
-                        (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
-                    ))
+                mNotes <- liftIO $ runAction "notes.definedNotes" state (use MkGetNotes nfp)
+
+                let notes = fromMaybe HM.empty mNotes
+
+                case HM.lookup note notes of
+                    Nothing ->
+                        
+                        pure (InR (InR Null))
+
+                    Just (noteFp, pos) ->
+                        pure $ InL $ Definition $ InL
+                            (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
-jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
+
+jumpToNote _ _ _ =
+    
+    pure (InR (InR Null))
+
 
 findNotesInFile :: NormalizedFilePath -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position, HM.HashMap Text [Position]))
 findNotesInFile file recorder = do
