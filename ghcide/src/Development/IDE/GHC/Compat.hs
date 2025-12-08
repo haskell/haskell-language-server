@@ -66,6 +66,7 @@ module Development.IDE.GHC.Compat(
     simplifyExpr,
     tidyExpr,
     emptyTidyEnv,
+    tidyOpenType,
     corePrepExpr,
     corePrepPgm,
     lintInteractiveExpr,
@@ -138,6 +139,7 @@ import           Prelude                                 hiding (mod)
 
 import qualified GHC.Core.Opt.Pipeline                   as GHC
 import           GHC.Core.Tidy                           (tidyExpr)
+import           GHC.Core.TyCo.Tidy                      (tidyOpenType)
 import           GHC.CoreToStg.Prep                      (corePrepPgm)
 import qualified GHC.CoreToStg.Prep                      as GHC
 import           GHC.Driver.Hooks                        (hscCompileCoreExprHook)

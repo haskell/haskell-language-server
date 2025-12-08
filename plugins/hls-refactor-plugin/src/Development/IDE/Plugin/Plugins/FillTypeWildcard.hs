@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Development.IDE.Plugin.Plugins.FillTypeWildcard
   ( suggestFillTypeWildcard
   ) where
@@ -14,6 +15,10 @@ import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
 import           GHC.Tc.Errors.Types               (ErrInfo (..))
 import           Language.LSP.Protocol.Types       (Diagnostic (..),
                                                     TextEdit (TextEdit))
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Tc.Errors.Ppr                 (pprErrCtxtMsg)
+import           GHC.Utils.Outputable              (vcat)
+#endif
 
 suggestFillTypeWildcard :: FileDiagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard diag@FileDiagnostic{fdLspDiagnostic = Diagnostic {..}}
@@ -83,9 +88,13 @@ diagErrInfoContext diag = do
                 . _TcRnMessageWithCtx
                 . _TcRnMessageWithInfo
     let TcRnMessageDetailed err _ = detailedMsg
+#if MIN_VERSION_ghc(9,13,0)
+        ErrInfo errInfoCtx _ _ = err
+    Just (printOutputable (vcat $ map pprErrCtxtMsg errInfoCtx))
+#else
         ErrInfo errInfoCtx _ = err
-
     Just (printOutputable errInfoCtx)
+#endif
 
 -- | Detect whether user wrote something like @foo :: _@ or @foo :: Maybe _@.
 -- The former is considered toplevel case for which the function returns 'True',
