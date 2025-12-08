@@ -360,7 +360,10 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- Type info for the current node, it may contain several symbols
         -- for one range, like wildcard
         types :: [hietype]
-        types = nodeType info
+        types = take maxHoverTypes $ nodeType info
+
+        maxHoverTypes :: Int
+        maxHoverTypes = 10
 
         prettyTypes :: Maybe Name -> M.Map Name Location -> [T.Text]
         prettyTypes boundNameMay locationsMap =
