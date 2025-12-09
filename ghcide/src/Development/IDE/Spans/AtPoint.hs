@@ -45,7 +45,6 @@ import           Development.IDE.GHC.Util             (printOutputable)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
-import           Control.Applicative
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -61,17 +60,25 @@ import           Data.Either
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 
+import           Control.Lens                         ((^.))
 import           Data.Either.Extra                    (eitherToMaybe)
 import           Data.List                            (isSuffixOf, sortOn)
+import           Data.Set                             (Set)
+import qualified Data.Set                             as S
 import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
+import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
+import           Development.IDE.Core.Shake           (ShakeExtras (..),
+                                                       runIdeAction)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
                                                        HieAST (..),
                                                        HieASTs (..),
                                                        HieArgs (..),
-                                                       HieType (..), Identifier,
+                                                       HieType (..),
+                                                       HieTypeFix (..),
+                                                       Identifier,
                                                        IdentifierDetails (..),
                                                        NodeInfo (..), Scope,
                                                        Span)
@@ -86,11 +93,8 @@ import           GHC.Iface.Ext.Utils                  (EvidenceInfo (..),
                                                        selectSmallestContaining)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
+import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
-
--- | Gives a Uri for the module, given the .hie file location and the the module info
--- The Bool denotes if it is a boot module
-type LookupModule m = FilePath -> ModuleName -> Unit -> Bool -> MaybeT m Uri
 
 -- | HieFileResult for files of interest, along with the position mappings
 newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
@@ -251,30 +255,40 @@ gotoImplementation withHieDb getHieFile ideOpts srcSpans pos
 -- | Synopsis for the name at a given position.
 atPoint
   :: IdeOptions
+  -> ShakeExtras
   -> HieAstResult
   -> DocAndTyThingMap
   -> HscEnv
   -> Position
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
     hoverInfo :: HieAST hietype -> IO (Maybe Range, [T.Text])
     hoverInfo ast = do
-        prettyNames <- mapM prettyName names
-        pure (Just range, prettyNames ++ pTypes)
+        locationsWithIdentifier <- runIdeAction "TypeCheck" shakeExtras $ do
+          runMaybeT $ gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts har pos
+
+        let locationsMap = M.fromList $ mapMaybe (\(loc, identifier) -> case identifier of
+              Right typeName ->
+                -- Filter out type variables (polymorphic names like 'a', 'b', etc.)
+                if isTyVarName typeName
+                  then Nothing
+                  else Just (typeName, loc)
+              Left _moduleName -> Nothing) $ fromMaybe [] locationsWithIdentifier
+
+        prettyNames <- mapM (prettyName locationsMap) names
+        pure (Just range, prettyNames ++ pTypes locationsMap)
       where
-        pTypes :: [T.Text]
-        pTypes
-          | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
-          | otherwise = map wrapHaskell prettyTypes
+        pTypes :: M.Map Name Location -> [T.Text]
+        pTypes locationsMap =
+          case names of
+            [_singleName] -> dropEnd1 $ prettyTypes Nothing locationsMap
+            _             -> prettyTypes Nothing locationsMap
 
         range :: Range
         range = realSrcSpanToRange $ nodeSpan ast
-
-        wrapHaskell :: T.Text -> T.Text
-        wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
 
         info :: NodeInfo hietype
         info = nodeInfoH kind ast
@@ -284,8 +298,8 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         names :: [(Identifier, IdentifierDetails hietype)]
         names = sortOn (any isEvidenceUse . identInfo . snd) $ M.assocs $ nodeIdentifiers info
 
-        prettyName :: (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
-        prettyName (Right n, dets)
+        prettyName :: M.Map Name Location -> (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
+        prettyName locationsMap (Right n, dets)
           -- We want to print evidence variable using a readable tree structure.
           -- Evidence variables contain information why a particular instance or
           -- type equality was chosen, paired with location information.
@@ -299,20 +313,23 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
               pure $ evidenceTree <> "\n"
           -- Identifier details that are not evidence variables are used to display type information and
           -- documentation of that name.
-          | otherwise =
+          | otherwise = do
             let
-              typeSig = wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
+              typeSig = case identType dets of
+                Just t -> prettyType (Just n) locationsMap t
+                Nothing -> case safeTyThingType =<< lookupNameEnv km n of
+                  Just kind -> prettyTypeFromType (Just n) locationsMap kind
+                  Nothing   -> wrapHaskell (printOutputable n)
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
               docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
-            in
-              pure $ T.unlines $
-                [typeSig] ++ definitionLoc ++ docs
-          where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
+
+            pure $ T.unlines $ [typeSig] ++ definitionLoc ++ docs
+          where
                 pretty Nothing Nothing = Nothing
                 pretty (Just define) Nothing = Just $ define <> "\n"
                 pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
                 pretty (Just define) (Just pkgName) = Just $ define <> " " <> pkgName <> "\n"
-        prettyName (Left m,_) = packageNameForImportStatement m
+        prettyName _locationsMap (Left m,_) = packageNameForImportStatement m
 
         prettyPackageName :: Name -> Maybe T.Text
         prettyPackageName n = do
@@ -343,13 +360,68 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (D
         -- Type info for the current node, it may contain several symbols
         -- for one range, like wildcard
         types :: [hietype]
-        types = nodeType info
+        types = take maxHoverTypes $ nodeType info
 
-        prettyTypes :: [T.Text]
-        prettyTypes = map (("_ :: "<>) . prettyType) types
+        maxHoverTypes :: Int
+        maxHoverTypes = 10
 
-        prettyType :: hietype -> T.Text
-        prettyType = printOutputable . expandType
+        prettyTypes :: Maybe Name -> M.Map Name Location -> [T.Text]
+        prettyTypes boundNameMay locationsMap =
+          map (prettyType boundNameMay locationsMap) types
+
+        prettyTypeFromType :: Maybe Name -> M.Map Name Location -> Type -> T.Text
+        prettyTypeFromType boundNameMay locationsMap ty =
+          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printOutputable ty)
+
+        prettyType :: Maybe Name -> M.Map Name Location -> hietype -> T.Text
+        prettyType boundNameMay locationsMap t =
+          prettyTypeCommon boundNameMay locationsMap (typeNames t) (printOutputable . expandType $ t)
+
+        prettyTypeCommon :: Maybe Name -> M.Map Name Location -> Set Name -> T.Text -> T.Text
+        prettyTypeCommon boundNameMay locationsMap names expandedType =
+          let nameToUse = case boundNameMay of
+                Just n  -> printOutputable n
+                Nothing -> "_"
+              expandedWithName = nameToUse <> " :: " <> expandedType
+              codeBlock = wrapHaskell expandedWithName
+              links = case boundNameMay of
+                Just _  -> generateLinksList locationsMap names
+                -- This is so we don't get flooded with links, e.g:
+                -- foo :: forall a. MyType a -> a
+                -- Go to MyType
+                -- _ :: forall a. MyType a -> a
+                -- Go to MyType -- <- we don't want this as it's already present
+                Nothing -> ""
+          in codeBlock <> links
+
+        generateLinksList :: M.Map Name Location -> Set Name -> T.Text
+        generateLinksList locationsMap (S.toList -> names) =
+          if null generated
+            then ""
+            else "\n" <> "Go to " <> T.intercalate " | " generated <> "\n"
+          where
+            generated = mapMaybe generateLink names
+
+            generateLink name = do
+              case M.lookup name locationsMap of
+                Just (Location uri range) ->
+                  let nameText = printOutputable name
+                      link = "[" <> nameText <> "](" <> getUriText uri <> "#L" <>
+                             T.pack (show (range ^. L.start . L.line + 1)) <> ")"
+                  in Just link
+                Nothing -> Nothing
+
+        wrapHaskell :: T.Text -> T.Text
+        wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
+
+        getUriText :: Uri -> T.Text
+        getUriText (Uri t) = t
+
+        typeNames :: a -> Set Name
+        typeNames t = S.fromList $ case kind of
+          HieFresh -> namesInType t
+          HieFromDisk full_file -> do
+            namesInHieTypeFix $ recoverFullType t (hie_types full_file)
 
         expandType :: a -> SDoc
         expandType t = case kind of
@@ -468,8 +540,23 @@ namesInType (CastTy t _)     = namesInType t
 namesInType (LitTy _)        = []
 namesInType _                = []
 
+
 getTypes :: [Type] -> [Name]
 getTypes = concatMap namesInType
+
+namesInHieTypeFix :: HieTypeFix -> [Name]
+namesInHieTypeFix (Roll hieType) = namesInHieType hieType
+
+namesInHieType :: HieType HieTypeFix -> [Name]
+namesInHieType (HTyVarTy n)         = [n]
+namesInHieType (HAppTy a (HieArgs args)) = namesInHieTypeFix a ++ concatMap (namesInHieTypeFix . snd) args
+namesInHieType (HTyConApp tc (HieArgs args)) = ifaceTyConName tc : concatMap (namesInHieTypeFix . snd) args
+namesInHieType (HForAllTy ((binder, constraint), _) body) = binder : namesInHieTypeFix constraint ++ namesInHieTypeFix body
+namesInHieType (HFunTy mult arg res) = namesInHieTypeFix mult ++ namesInHieTypeFix arg ++ namesInHieTypeFix res
+namesInHieType (HQualTy constraint body) = namesInHieTypeFix constraint ++ namesInHieTypeFix body
+namesInHieType (HLitTy _)           = []
+namesInHieType (HCastTy a)          = namesInHieTypeFix a
+namesInHieType HCoercionTy          = []
 
 -- | Find 'Location's of definition at a specific point and return them along with their 'Identifier's.
 locationsAtPoint
