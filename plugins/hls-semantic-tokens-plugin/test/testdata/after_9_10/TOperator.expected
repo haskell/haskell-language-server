@@ -1,34 +1,62 @@
-1:8-17 TModule "TOperator"
-4:1-3 TFunction "go"
-4:4-5 TFunction "f"
-4:6-7 TVariable "x"
-4:10-11 TFunction "f"
-4:11-12 TOperator "$"
-4:12-13 TVariable "x"
-6:2-6 TOperator "$$$$"
-7:1-2 TVariable "x"
-7:7-11 TOperator "$$$$"
-8:6-7 TTypeVariable "a"
-8:8-11 TOperator ":+:"
-8:12-13 TTypeVariable "b"
-8:16-19 TDataConstructor "Add"
-8:20-21 TTypeVariable "a"
-8:22-23 TTypeVariable "b"
-9:7-10 TOperator ":-:"
-9:12-13 TTypeVariable "a"
-9:14-15 TTypeVariable "b"
-9:19-20 TTypeVariable "a"
-9:22-23 TTypeVariable "b"
-11:1-4 TFunction "add"
-11:8-11 TTypeConstructor "Int"
-11:12-15 TOperator ":+:"
-11:16-19 TTypeConstructor "Int"
-11:23-26 TTypeConstructor "Int"
-11:27-30 TOperator ":-:"
-11:31-34 TTypeConstructor "Int"
-13:1-4 TFunction "add"
-13:6-9 TDataConstructor "Add"
-13:10-11 TVariable "x"
-13:12-13 TVariable "y"
-13:18-19 TVariable "x"
-13:21-22 TVariable "y"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-17 HsSemanticTokenType TModule "TOperator"]
+[1:18-23 HsSyntacticTokenType TKeyword "where"]
+[3:1-21 HsSyntacticTokenType TComment "-- imported operator"]
+[4:1-3 HsSemanticTokenType TFunction "go"]
+[4:4-5 HsSemanticTokenType TFunction "f"]
+[4:6-7 HsSemanticTokenType TVariable "x"]
+[4:8-9 HsSyntacticTokenType TKeyword "="]
+[4:10-11 HsSemanticTokenType TFunction "f"]
+[4:11-12 HsSemanticTokenType TOperator "$"]
+[4:12-13 HsSemanticTokenType TVariable "x"]
+[5:1-36 HsSyntacticTokenType TComment "-- operator defined in local module"]
+[6:1-2 HsSyntacticTokenType TKeyword "("]
+[6:2-6 HsSemanticTokenType TOperator "$$$$"]
+[6:6-7 HsSyntacticTokenType TKeyword ")"]
+[6:8-9 HsSyntacticTokenType TKeyword "="]
+[7:1-2 HsSemanticTokenType TVariable "x"]
+[7:3-4 HsSyntacticTokenType TKeyword "="]
+[7:5-6 HsSyntacticTokenType TNumberLit "1"]
+[7:7-11 HsSemanticTokenType TOperator "$$$$"]
+[7:12-13 HsSyntacticTokenType TNumberLit "2"]
+[8:1-5 HsSyntacticTokenType TKeyword "data"]
+[8:6-7 HsSemanticTokenType TTypeVariable "a"]
+[8:8-11 HsSemanticTokenType TOperator ":+:"]
+[8:12-13 HsSemanticTokenType TTypeVariable "b"]
+[8:14-15 HsSyntacticTokenType TKeyword "="]
+[8:16-19 HsSemanticTokenType TDataConstructor "Add"]
+[8:20-21 HsSemanticTokenType TTypeVariable "a"]
+[8:22-23 HsSemanticTokenType TTypeVariable "b"]
+[9:1-5 HsSyntacticTokenType TKeyword "type"]
+[9:6-7 HsSyntacticTokenType TKeyword "("]
+[9:7-10 HsSemanticTokenType TOperator ":-:"]
+[9:10-11 HsSyntacticTokenType TKeyword ")"]
+[9:12-13 HsSemanticTokenType TTypeVariable "a"]
+[9:14-15 HsSemanticTokenType TTypeVariable "b"]
+[9:16-17 HsSyntacticTokenType TKeyword "="]
+[9:18-19 HsSyntacticTokenType TKeyword "("]
+[9:19-20 HsSemanticTokenType TTypeVariable "a"]
+[9:20-21 HsSyntacticTokenType TKeyword ","]
+[9:22-23 HsSemanticTokenType TTypeVariable "b"]
+[9:23-24 HsSyntacticTokenType TKeyword ")"]
+[10:1-38 HsSyntacticTokenType TComment "-- type take precedence over operator"]
+[11:1-4 HsSemanticTokenType TFunction "add"]
+[11:5-7 HsSyntacticTokenType TKeyword "::"]
+[11:8-11 HsSemanticTokenType TTypeConstructor "Int"]
+[11:12-15 HsSemanticTokenType TOperator ":+:"]
+[11:16-19 HsSemanticTokenType TTypeConstructor "Int"]
+[11:20-22 HsSyntacticTokenType TKeyword "->"]
+[11:23-26 HsSemanticTokenType TTypeConstructor "Int"]
+[11:27-30 HsSemanticTokenType TOperator ":-:"]
+[11:31-34 HsSemanticTokenType TTypeConstructor "Int"]
+[12:1-46 HsSyntacticTokenType TComment "-- class method take precedence over operator"]
+[13:1-4 HsSemanticTokenType TFunction "add"]
+[13:5-6 HsSyntacticTokenType TKeyword "("]
+[13:6-9 HsSemanticTokenType TDataConstructor "Add"]
+[13:10-11 HsSemanticTokenType TVariable "x"]
+[13:12-13 HsSemanticTokenType TVariable "y"]
+[13:13-14 HsSyntacticTokenType TKeyword ")"]
+[13:15-16 HsSyntacticTokenType TKeyword "="]
+[13:18-19 HsSemanticTokenType TVariable "x"]
+[13:19-20 HsSyntacticTokenType TKeyword ","]
+[13:21-22 HsSemanticTokenType TVariable "y"]
