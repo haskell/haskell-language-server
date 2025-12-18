@@ -104,8 +104,7 @@ import qualified Data.HashSet                        as Set
 import qualified Data.Set                            as OS
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing        (withTrace)
-import           Development.IDE.Core.WorkerThread   (awaitRunInThread,
-                                                      withWorkerQueue)
+import           Development.IDE.Core.WorkerThread
 import qualified Development.IDE.GHC.Compat.Util     as Compat
 import           Development.IDE.Session.Diagnostics (renderCradleError)
 import           Development.IDE.Types.Shake         (WithHieDb,
@@ -149,10 +148,12 @@ data Log
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogHieBios HieBios.Log
   | LogSessionLoadingChanged
+  | LogSessionWorkerThread LogWorkerThread
 deriving instance Show Log
 
 instance Pretty Log where
   pretty = \case
+    LogSessionWorkerThread msg -> pretty msg
     LogNoneCradleFound path ->
       "None cradle found for" <+> pretty path <+> ", ignoring the file"
     LogSettingInitialDynFlags ->
@@ -381,8 +382,8 @@ runWithDb recorder fp = ContT $ \k -> do
     _ <- withWriteDbRetryable deleteMissingRealFiles
     _ <- withWriteDbRetryable garbageCollectTypeNames
 
-    runContT (withWorkerQueue (writer withWriteDbRetryable)) $ \chan ->
-        withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
+    runContT (withWorkerQueue (cmapWithPrio LogSessionWorkerThread recorder) "hiedb thread" (writer withWriteDbRetryable))
+        $ \chan -> withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
   where
     writer withHieDbRetryable l = do
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
@@ -415,7 +416,7 @@ getHieDbLoc dir = do
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TaskQueue (IO ()) -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
   cradle_files <- newIORef []
