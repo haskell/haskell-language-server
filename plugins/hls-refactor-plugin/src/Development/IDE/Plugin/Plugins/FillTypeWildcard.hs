@@ -3,17 +3,18 @@ module Development.IDE.Plugin.Plugins.FillTypeWildcard
   ) where
 
 import           Control.Lens
-import           Data.Maybe                        (isJust)
-import qualified Data.Text                         as T
-import           Development.IDE                   (FileDiagnostic (..),
-                                                    fdStructuredMessageL,
-                                                    printOutputable)
-import           Development.IDE.GHC.Compat        hiding (vcat)
+import           Data.Maybe                                (isJust)
+import qualified Data.Text                                 as T
+import           Development.IDE                           (FileDiagnostic (..),
+                                                            fdStructuredMessageL,
+                                                            printOutputable)
+import           Development.IDE.GHC.Compat                hiding (vcat)
 import           Development.IDE.GHC.Compat.Error
-import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
-import           GHC.Tc.Errors.Types               (ErrInfo (..))
-import           Language.LSP.Protocol.Types       (Diagnostic (..),
-                                                    TextEdit (TextEdit))
+import           Development.IDE.Plugin.Plugins.Diagnostic (diagReportHoleError)
+import           Development.IDE.Types.Diagnostics         (_SomeStructuredMessage)
+import           GHC.Tc.Errors.Types                       (ErrInfo (..))
+import           Language.LSP.Protocol.Types               (Diagnostic (..),
+                                                            TextEdit (TextEdit))
 
 suggestFillTypeWildcard :: FileDiagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard diag@FileDiagnostic{fdLspDiagnostic = Diagnostic {..}}
@@ -27,21 +28,6 @@ suggestFillTypeWildcard diag@FileDiagnostic{fdLspDiagnostic = Diagnostic {..}}
 isWildcardDiagnostic :: FileDiagnostic -> Bool
 isWildcardDiagnostic =
     maybe False (isJust . (^? _TypeHole) . hole_sort) . diagReportHoleError
-
--- | Extract the 'Hole' out of a 'FileDiagnostic'
-diagReportHoleError :: FileDiagnostic -> Maybe Hole
-diagReportHoleError diag = do
-    solverReport <-
-        diag
-            ^? fdStructuredMessageL
-                . _SomeStructuredMessage
-                . msgEnvelopeErrorL
-                . _TcRnMessage
-                . _TcRnSolverReport
-                . _1
-    (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
-
-    Just hole
 
 -- | Extract the type and surround it in parentheses except in obviously safe cases.
 --
