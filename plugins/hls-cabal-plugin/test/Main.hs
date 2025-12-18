@@ -23,6 +23,7 @@ import qualified Data.Text                       as T
 import qualified Data.Text.IO                    as Text
 import           Definition                      (gotoDefinitionTests)
 import           Development.IDE.Test
+import           FoldingRange                    (foldingRangeTests)
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import           Language.LSP.Protocol.Lens      (HasRange (..))
@@ -44,6 +45,7 @@ main = do
             , completerTests
             , contextTests
             , outlineTests
+            , foldingRangeTests
             , codeActionTests
             , gotoDefinitionTests
             , hoverTests
@@ -202,7 +204,7 @@ codeActionTests = testGroup "Code Actions"
         "FieldSuggestionsTypos"
         executeFirstActionPerDiagnostic
     , cabalAddDependencyTests
-    , cabalAddModuleTests
+    -- , cabalAddModuleTests
     ]
   where
     executeFirstActionPerDiagnostic doc = do

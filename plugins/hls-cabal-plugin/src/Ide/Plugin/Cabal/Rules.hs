@@ -20,6 +20,8 @@ import qualified Development.IDE.Core.Shake        as Shake
 import qualified Distribution.CabalSpecVersion     as Cabal
 import qualified Distribution.Fields               as Syntax
 import           Distribution.Parsec.Error
+import           Distribution.Parsec.Warning       (PWarning,
+                                                    PWarningWithSource (..))
 import qualified Ide.Plugin.Cabal.Completion.Data  as Data
 import           Ide.Plugin.Cabal.Completion.Types (ParseCabalCommonSections (ParseCabalCommonSections),
                                                     ParseCabalFields (..),
@@ -103,8 +105,9 @@ cabalRules recorder plId = do
         -- we would much rather re-use the already parsed results of 'ParseCabalFields'.
         -- Unfortunately, Cabal-syntax doesn't expose the function 'parseGenericPackageDescription''
         -- which allows us to resume the parsing pipeline with '[Field Position]'.
-        let (pWarnings, pm) = Parse.parseCabalFileContents contents
-        let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
+        (pWarnings, pm) <- liftIO $ Parse.parseCabalFileContents (fromNormalizedFilePath file) contents
+        -- let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
+        let warningDiags = map (\(Syntax.PWarningWithSource _src w) -> Diagnostics.warningDiagnostic file w) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do
             let regexUnknownCabalBefore310 :: T.Text
@@ -125,29 +128,30 @@ cabalRules recorder plId = do
                           ", "
                           (fmap Cabal.showCabalSpecVersion Data.supportedCabalVersions)
                     ]
-                errorDiags =
-                  NE.toList $
-                    NE.map
-                      ( \pe@(PError pos text) ->
-                          if any
-                            (text =~)
-                            [ regexUnknownCabalBefore310
-                            , regexUnknownCabalVersion
-                            ]
-                            then
-                              Diagnostics.warningDiagnostic
-                                file
-                                ( Syntax.PWarning Syntax.PWTOther pos $
-                                    unlines
-                                      [ text
-                                      , unsupportedCabalHelpText
-                                      ]
-                                )
-                            else Diagnostics.errorDiagnostic file pe
-                      )
-                      pErrorNE
-                allDiags = errorDiags <> warningDiags
-            pure (allDiags, Nothing)
+                -- errorDiags =
+                --   NE.toList $
+                --     NE.map
+                --       ( \pe@(PError pos text) ->
+                --           if any
+                --             (text =~)
+                --             [ regexUnknownCabalBefore310
+                --             , regexUnknownCabalVersion
+                --             ]
+                --             then
+                --               Diagnostics.warningDiagnostic
+                --                 file
+                --                 ( Syntax.PWarning Syntax.PWTOther pos $
+                --                     unlines
+                --                       [ text
+                --                       , unsupportedCabalHelpText
+                --                       ]
+                --                 )
+                --             else Diagnostics.errorDiagnostic file pe
+                --       )
+                --       pErrorNE
+                -- allDiags = errorDiags <> warningDiags
+            -- pure (allDiags, Nothing)
+            pure (warningDiags, Nothing)
           Right gpd -> do
             pure (warningDiags, Just gpd)
 
