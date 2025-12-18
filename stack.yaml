@@ -27,6 +27,7 @@ extra-deps:
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
   - retrie-1.2.3
+  - unordered-containers-0.2.21
 
   # stan dependencies not found in the stackage snapshot
   - stan-0.2.1.0

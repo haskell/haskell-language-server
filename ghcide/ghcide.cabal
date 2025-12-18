@@ -106,7 +106,7 @@ library
     , transformers
     , unliftio                     >=0.2.6
     , unliftio-core
-    , unordered-containers         >=0.2.10.0
+    , unordered-containers         >=0.2.21
     , vector
 
   if os(windows)
