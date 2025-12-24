@@ -132,6 +132,7 @@ import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
 import qualified Language.LSP.VFS                       as VFS
 
+import           Data.Map.Strict                        (Map)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 #if MIN_VERSION_ghc(9,13,0)
@@ -139,10 +140,10 @@ import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater,
                                                          newNameCache)
 #else
-import           Development.IDE.GHC.Compat             (NameCache,
+import           Development.IDE.GHC.Compat             (ModuleName, NameCache,
                                                          NameCacheUpdater,
-                                                         initNameCache,
-                                                         knownKeyNames, ModuleName, UnitId)
+                                                         UnitId, initNameCache,
+                                                         knownKeyNames)
 #endif
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
@@ -186,7 +187,6 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
-import Data.Map.Strict (Map)
 
 
 data Log
