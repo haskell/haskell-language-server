@@ -15,6 +15,8 @@ module Development.IDE.Import.FindImports
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
 import           Data.List                         (isSuffixOf)
+import           Data.Map.Strict                   (Map)
+import qualified Data.Map.Strict                   as Map
 import           Data.Maybe
 import qualified Data.Set                          as S
 import           Development.IDE.GHC.Compat        as Compat
@@ -23,8 +25,6 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Types.PkgQual
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -124,7 +124,7 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
       -- - This module must appear in 'moduleMaps', using the correct package/unit
       -- - What about "conflict". Right now the moduleMaps maps a module name to a unique package/unit.
       let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
-                     Nothing -> LocateNotFound
+                     Nothing          -> LocateNotFound
                      Just (uid, file) -> LocateFoundFile uid file
       case mbFile of
         LocateNotFound -> lookupInPackageDB
@@ -162,7 +162,7 @@ locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName 
 
     lookupLocal moduleMaps@(moduleMap, moduleMapSource) reexports = do
           let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
-                         Nothing -> LocateNotFound
+                         Nothing          -> LocateNotFound
                          Just (uid, file) -> LocateFoundFile uid file
           case mbFile of
             LocateNotFound -> return $ Left $ notFoundErr env modName $ LookupNotFound []
