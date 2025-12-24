@@ -91,7 +91,8 @@ import           Control.Applicative                 (Alternative ((<|>)))
 import           Data.Void
 
 import           Control.Concurrent.STM.Stats        (atomically, modifyTVar',
-                                                      readTVar, writeTVar, readTVarIO)
+                                                      readTVar, readTVarIO,
+                                                      writeTVar)
 import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
 import           Control.Exception                   (evaluate)
@@ -119,12 +120,12 @@ import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
 
+import           Development.IDE                     (HscEnvEq (..))
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
                                                       singleMessage)
 import           GHC.Unit.State
-import Development.IDE (HscEnvEq(..))
 
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Driver.Make                     (checkHomeUnitsClosed)

@@ -131,12 +131,13 @@ import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
 
+import           Data.Map.Strict                        (Map)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
-import           Development.IDE.GHC.Compat             (NameCache,
+import           Development.IDE.GHC.Compat             (ModuleName, NameCache,
                                                          NameCacheUpdater,
-                                                         initNameCache,
-                                                         knownKeyNames, ModuleName, UnitId)
+                                                         UnitId, initNameCache,
+                                                         knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
                                                          action)
@@ -179,7 +180,6 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
-import Data.Map.Strict (Map)
 
 
 data Log
