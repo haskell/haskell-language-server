@@ -207,12 +207,12 @@ computeRangeHsSyntacticTokenTypeList ParsedModule {pm_parsed_source} =
            let mkFromTok :: (Foldable f, HasSrcSpan a) => f a -> [(Range,HsSyntacticTokenType)]
                mkFromTok = foldMap (\tok -> maybeToList $ mkFromLocatable TKeyword \k -> k tok)
            mconcat
-#if MIN_VERSION_ghc(9,11,0)
-             [ mkFromTok ac_darrow
+#if !MIN_VERSION_ghc(9,11,0)
+             [ mkFromTok ac_darrow,
 #else
-             [ foldMap (\(_, loc) -> maybeToList $ mkFromLocatable TKeyword \k -> k loc) ac_darrow
+             [
 #endif
-             , mkFromTok ac_open
+               mkFromTok ac_open
              , mkFromTok ac_close
              ],
 #endif

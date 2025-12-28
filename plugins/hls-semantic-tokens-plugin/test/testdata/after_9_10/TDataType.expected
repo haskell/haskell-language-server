@@ -8,7 +8,5 @@
 [3:16-19 HsSemanticTokenType TTypeConstructor "Int"]
 [3:20-28 HsSyntacticTokenType TKeyword "deriving"]
 [3:29-30 HsSyntacticTokenType TKeyword "("]
-[3:29-30 HsSyntacticTokenType TKeyword "("]
 [3:30-32 HsSemanticTokenType TClass "Eq"]
-[3:32-33 HsSyntacticTokenType TKeyword ")"]
 [3:32-33 HsSyntacticTokenType TKeyword ")"]

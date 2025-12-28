@@ -9,5 +9,6 @@
 [5:16-17 HsSyntacticTokenType TKeyword "{"]
 [5:18-21 HsSyntacticTokenType TRecordSelector "boo",5:18-21 HsSemanticTokenType TRecordField "boo"]
 [5:22-24 HsSyntacticTokenType TKeyword "::"]
+[5:25-26 HsSyntacticTokenType TKeyword "!"]
 [5:26-32 HsSemanticTokenType TTypeSynonym "String"]
 [5:33-34 HsSyntacticTokenType TKeyword "}"]
