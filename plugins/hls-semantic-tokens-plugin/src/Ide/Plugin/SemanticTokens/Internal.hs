@@ -33,8 +33,8 @@ import           Development.IDE                          (Action,
                                                            Recorder, Rules,
                                                            WithPriority,
                                                            cmapWithPrio, define,
-                                                           fromNormalizedFilePath,
-                                                           hieKind)
+                                                           hieKind,
+                                                           toNormalizedUri)
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
 import           Development.IDE.Core.Rules               (toIdeResult)
@@ -48,7 +48,6 @@ import           GHC.Iface.Ext.Types                      (HieASTs (getAsts),
                                                            pattern HiePath)
 import           Ide.Logger                               (logWith)
 import           Ide.Plugin.Error                         (PluginError (PluginInternalError),
-                                                           getNormalizedFilePathE,
                                                            handleMaybe,
                                                            handleMaybeM)
 import           Ide.Plugin.SemanticTokens.Mappings
@@ -60,8 +59,10 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message            (MessageResult,
                                                            Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
-import           Language.LSP.Protocol.Types              (NormalizedFilePath,
+import           Language.LSP.Protocol.Types              (NormalizedUri,
                                                            SemanticTokens,
+                                                           fromNormalizedUri,
+                                                           getUri,
                                                            type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
 import qualified StmContainers.Map                        as STM
@@ -73,12 +74,12 @@ $mkSemanticConfigFunctions
 ---- the api
 -----------------------
 
-computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
-computeSemanticTokens recorder pid _ nfp = do
+computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedUri -> ExceptT PluginError Action SemanticTokens
+computeSemanticTokens recorder pid _ nuri = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
   semanticId <- lift getAndIncreaseSemanticTokensId
-  (RangeHsSemanticTokenTypes {rangeSemanticList}, mapping) <- useWithStaleE GetSemanticTokens nfp
+  (RangeHsSemanticTokenTypes {rangeSemanticList}, mapping) <- useWithStaleE GetSemanticTokens nuri
   withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping rangeSemanticList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
@@ -86,23 +87,23 @@ semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanti
   where
     computeSemanticTokensFull :: ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFull)
     computeSemanticTokensFull = do
-      nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
-      items <- computeSemanticTokens recorder pid state nfp
-      lift $ setSemanticTokens nfp items
+      let nuri = toNormalizedUri (param ^. L.textDocument . L.uri)
+      items <- computeSemanticTokens recorder pid state nuri
+      lift $ setSemanticTokens nuri items
       return $ InL items
 
 
 semanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFullDelta
 semanticTokensFullDelta recorder state pid param = do
-  nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
+  let nuri = toNormalizedUri (param ^. L.textDocument . L.uri)
   let previousVersionFromParam = param ^. L.previousResultId
-  runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp
+  runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nuri
   where
-    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
-    computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp = do
-      semanticTokens <- computeSemanticTokens recorder pid state nfp
-      previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens nfp
-      lift $ setSemanticTokens nfp semanticTokens
+    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedUri -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
+    computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nuri = do
+      semanticTokens <- computeSemanticTokens recorder pid state nuri
+      previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens nuri
+      lift $ setSemanticTokens nuri semanticTokens
       case previousSemanticTokensMaybe of
           Nothing -> return $ InL semanticTokens
           Just previousSemanticTokens ->
@@ -128,7 +129,7 @@ getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
     (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
-    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
+    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . T.unpack . getUri . fromNormalizedUri) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
@@ -159,8 +160,8 @@ getAndIncreaseSemanticTokensId = do
     i <- stateTVar semanticTokensId (\val -> (val, val+1))
     return $ T.pack $ show i
 
-getPreviousSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
+getPreviousSemanticTokens :: NormalizedUri -> Action (Maybe SemanticTokens)
 getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
 
-setSemanticTokens :: NormalizedFilePath -> SemanticTokens -> Action ()
+setSemanticTokens :: NormalizedUri -> SemanticTokens -> Action ()
 setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache

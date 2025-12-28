@@ -25,7 +25,7 @@ import           Ide.Plugin.Cabal.Orphans          ()
 
 data Log
   = LogShake Shake.Log
-  | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
+  | LogFOI (HashMap NormalizedUri FileOfInterestStatus)
   deriving (Show)
 
 instance Pretty Log where
@@ -45,7 +45,7 @@ such as generating diagnostics, re-parsing, etc...
 We need to store the open files to parse them again if we restart the shake session.
 Restarting of the shake session happens whenever these files are modified.
 -}
-newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedUri FileOfInterestStatus))
 
 instance Shake.IsIdeGlobal OfInterestCabalVar
 
@@ -81,12 +81,12 @@ ofInterestRules recorder = do
   summarize (IsCabalFOI (Modified False)) = BS.singleton 2
   summarize (IsCabalFOI (Modified True))  = BS.singleton 3
 
-getCabalFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getCabalFilesOfInterestUntracked :: Action (HashMap NormalizedUri FileOfInterestStatus)
 getCabalFilesOfInterestUntracked = do
   OfInterestCabalVar var <- Shake.getIdeGlobalAction
   liftIO $ readVar var
 
-addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
+addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedUri -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest recorder state f v = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   (prev, files) <- modifyVar var $ \dict -> do
@@ -100,7 +100,7 @@ addFileOfInterest recorder state f v = do
  where
   log' = logWith recorder
 
-deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO [Key]
+deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedUri -> IO [Key]
 deleteFileOfInterest recorder state f = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   files <- modifyVar' var $ HashMap.delete f

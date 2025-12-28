@@ -28,12 +28,12 @@ import           Language.LSP.Protocol.Types
 -- lenses matched to a unique id
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLens state _plId clp = do
-    nfp <-  getNormalizedFilePathE $ clp ^. L.textDocument . L.uri
+    let nuri = toNormalizedUri $ clp ^. L.textDocument . L.uri
     (InstanceBindLensResult (InstanceBindLens{lensRange}), pm)
         <- runActionE "classplugin.GetInstanceBindLens" state
             -- Using stale results means that we can almost always return a
             -- value. In practice this means the lenses don't 'flicker'
-            $ useWithStaleE GetInstanceBindLens nfp
+            $ useWithStaleE GetInstanceBindLens nuri
     pure $ InL $ mapMaybe (toCodeLens pm) lensRange
     where toCodeLens pm (range, int) =
             let newRange = toCurrentRange pm range
@@ -42,12 +42,12 @@ codeLens state _plId clp = do
 -- The code lens resolve method matches a title to each unique id
 codeLensResolve:: ResolveFunction IdeState Int Method_CodeLensResolve
 codeLensResolve state plId cl uri uniqueID = do
-    nfp <-  getNormalizedFilePathE uri
+    let nuri = toNormalizedUri uri
     (InstanceBindLensResult (InstanceBindLens{lensDetails}), pm)
         <- runActionE "classplugin.GetInstanceBindLens" state
-            $ useWithStaleE GetInstanceBindLens nfp
-    (tmrTypechecked -> gblEnv, _) <- runActionE "classplugin.codeAction.TypeCheck" state $ useWithStaleE TypeCheck nfp
-    (hscEnv -> hsc, _) <- runActionE "classplugin.codeAction.GhcSession" state $ useWithStaleE GhcSession nfp
+            $ useWithStaleE GetInstanceBindLens nuri
+    (tmrTypechecked -> gblEnv, _) <- runActionE "classplugin.codeAction.TypeCheck" state $ useWithStaleE TypeCheck nuri
+    (hscEnv -> hsc, _) <- runActionE "classplugin.codeAction.GhcSession" state $ useWithStaleE GhcSession nuri
     (range, name, typ) <- handleMaybe PluginStaleResolve
                     $ IntMap.lookup uniqueID lensDetails
     let title = prettyBindingNameString (printOutputable name) <> " :: " <> T.pack (showDoc hsc gblEnv typ)
@@ -68,15 +68,15 @@ codeLensResolve state plId cl uri uniqueID = do
 -- specified unique id.
 codeLensCommandHandler :: PluginId -> CommandFunction IdeState InstanceBindLensCommand
 codeLensCommandHandler plId state _ InstanceBindLensCommand{commandUri, commandEdit} = do
-    nfp <-  getNormalizedFilePathE commandUri
+    let nuri = toNormalizedUri commandUri
     (InstanceBindLensResult (InstanceBindLens{lensEnabledExtensions}), _)
         <- runActionE "classplugin.GetInstanceBindLens" state
-            $ useWithStaleE GetInstanceBindLens nfp
+            $ useWithStaleE GetInstanceBindLens nuri
     -- We are only interested in the pragma information if the user does not
     -- have the InstanceSigs extension enabled
     mbPragma <- if InstanceSigs `elem` lensEnabledExtensions
                 then pure Nothing
-                else Just <$> getFirstPragma plId state nfp
+                else Just <$> getFirstPragma plId state nuri
     let -- By mapping over our Maybe NextPragmaInfo value, we only compute this
         -- edit if we actually need to.
         pragmaInsertion =

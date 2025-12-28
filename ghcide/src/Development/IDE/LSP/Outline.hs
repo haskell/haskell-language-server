@@ -27,16 +27,15 @@ import           Language.LSP.Protocol.Types    (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
                                                  SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
-                                                 type (|?) (InL, InR),
-                                                 uriToFilePath)
+                                                 type (|?) (InL, InR))
 
 
 moduleOutline
   :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
-  = liftIO $ case uriToFilePath uri of
-    Just (toNormalizedFilePath' -> fp) -> do
-      mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
+  = liftIO $ do
+      let nuri = toNormalizedUri uri
+      mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule nuri)
       pure $ case mb_decls of
         Nothing -> InL []
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
@@ -61,9 +60,6 @@ moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdent
                    ]
              in
                InR (InL allSymbols)
-
-
-    Nothing -> pure $ InL []
 
 documentSymbolForDecl :: LHsDecl GhcPs -> Maybe DocumentSymbol
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
@@ -187,7 +183,7 @@ documentSymbolForImportSummary importSymbols =
       mergeRanges xs = Range (minimum $ map _start xs) (maximum $ map _end xs)
       importRange = mergeRanges $ map (\DocumentSymbol{_range} -> _range) importSymbols
     in
-      Just (defDocumentSymbol (rangeToRealSrcSpan "" importRange))
+      Just (defDocumentSymbol (rangeToRealSrcSpan emptyPathUri importRange))
           { _name = "imports"
           , _kind = SymbolKind_Module
           , _children = Just importSymbols

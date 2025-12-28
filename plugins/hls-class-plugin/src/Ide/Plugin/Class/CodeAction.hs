@@ -53,15 +53,15 @@ import           Language.LSP.Protocol.Types
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
     caps <- lift pluginGetClientCapabilities
-    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    let nuri = toNormalizedUri (verTxtDocId ^. L.uri)
     pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
-        $ useE GetParsedModule nfp
+        $ useE GetParsedModule nuri
     (hsc_dflags . hscEnv -> df) <- runActionE "classplugin.addMethodPlaceholders.GhcSessionDeps" state
-        $ useE GhcSessionDeps nfp
+        $ useE GhcSessionDeps nuri
     (old, new) <- handleMaybeM (PluginInternalError "Unable to makeEditText")
         $ liftIO $ runMaybeT
         $ makeEditText pm df param
-    pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
+    pragmaInsertion <- insertPragmaIfNotPresent state nuri InstanceSigs
     let edit =
             if withSig
             then mergeEdit (workspaceEdit caps old new) pragmaInsertion
@@ -91,19 +91,19 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
-    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
-    activeDiagnosticsInRange (shakeExtras state) nfp caRange
+    let nuri = toNormalizedUri (verTxtDocId ^. L.uri)
+    activeDiagnosticsInRange (shakeExtras state) nuri caRange
         >>= \case
         Nothing -> pure $ InL []
         Just fileDiags -> do
-            actions <- join <$> mapM (mkActions nfp verTxtDocId) (methodDiags fileDiags)
+            actions <- join <$> mapM (mkActions nuri verTxtDocId) (methodDiags fileDiags)
             pure $ InL actions
     where
         methodDiags fileDiags =
             mapMaybe (\d -> (d,) <$> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
-            :: NormalizedFilePath
+            :: NormalizedUri
             -> VersionedTextDocumentIdentifier
             -> (FileDiagnostic, ClassMinimalDef)
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]

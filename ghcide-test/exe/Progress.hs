@@ -4,7 +4,7 @@ module Progress (tests) where
 import           Control.Concurrent.STM
 import           Data.Foldable                          (for_)
 import qualified Data.HashMap.Strict                    as Map
-import           Development.IDE                        (NormalizedFilePath)
+import           Development.IDE
 import           Development.IDE.Core.ProgressReporting
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
@@ -18,7 +18,7 @@ tests = testGroup "Progress"
 
 data InProgressModel = InProgressModel {
     done, todo :: Int,
-    current    :: Map.HashMap NormalizedFilePath Int
+    current    :: Map.HashMap NormalizedUri Int
 }
 
 reportProgressTests :: TestTree
@@ -30,10 +30,11 @@ reportProgressTests = testGroup "recordProgress"
     ]
     where
         p0 = pure $ InProgressModel 0 0 mempty
-        addNew = recordProgressModel "A" succ p0
-        increase = recordProgressModel "A" succ addNew
-        decrease = recordProgressModel "A" succ increase
-        done = recordProgressModel "A" pred decrease
+        aUri = filePathToUri' "A"
+        addNew = recordProgressModel aUri succ p0
+        increase = recordProgressModel aUri succ addNew
+        decrease = recordProgressModel aUri succ increase
+        done = recordProgressModel aUri pred decrease
         recordProgressModel key change state =
             model state $ \st -> recordProgress st key change
         model stateModelIO k = do

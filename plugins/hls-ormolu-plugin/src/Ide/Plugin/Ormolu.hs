@@ -64,17 +64,18 @@ properties =
 -- ---------------------------------------------------------------------
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
+provider recorder plId ideState token typ contents nuri _ = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
   fileOpts <-
       maybe [] (fromDyn . hsc_dflags . hscEnv)
-          <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)
+          <$> liftIO (runAction "Ormolu" ideState $ use GhcSession nuri)
   useCLI <- liftIO $ runAction "Ormolu" ideState $ usePropertyAction #external plId properties
-
-  if useCLI
+  case uriToFilePath uri of
+    Nothing -> throwError $ PluginInternalError $ "Ormolu can only be used to file Uris, but " <> getUri uri <> " was not a file Uri"
+    Just fp -> if useCLI
       then mapExceptT liftIO $ ExceptT
            $ handle @IOException
           (pure . Left . PluginInternalError . T.pack . show)
-           $ runExceptT $ cliHandler fileOpts
+           $ runExceptT $ cliHandler fileOpts fp
       else do
           logWith recorder Debug $ LogCompiledInVersion VERSION_ormolu
 
@@ -82,12 +83,12 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
             fmt :: T.Text -> Config RegionIndices -> IO (Either SomeException T.Text)
             fmt cont conf = flip catches handlers $ do
 #if MIN_VERSION_ormolu(0,5,3)
-              cabalInfo <- getCabalInfoForSourceFile fp' <&> \case
+              cabalInfo <- getCabalInfoForSourceFile fp <&> \case
                 CabalNotFound                -> Nothing
                 CabalDidNotMention cabalInfo -> Just cabalInfo
                 CabalFound cabalInfo         -> Just cabalInfo
 #if MIN_VERSION_ormolu(0,7,0)
-              (fixityOverrides, moduleReexports) <- getDotOrmoluForSourceFile fp'
+              (fixityOverrides, moduleReexports) <- getDotOrmoluForSourceFile fp
               let conf' = refineConfig ModuleSource cabalInfo (Just fixityOverrides) (Just moduleReexports) conf
 #else
               fixityOverrides <- traverse getFixityOverridesForSourceFile cabalInfo
@@ -98,7 +99,7 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
               let conf' = conf
                   cont' = T.unpack cont
 #endif
-              Right <$> ormolu conf' fp' cont'
+              Right <$> ormolu conf' fp cont'
             handlers =
               [ Handler $ pure . Left . SomeException @OrmoluException
               , Handler $ pure . Left . SomeException @IOException
@@ -107,7 +108,7 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
           res <- liftIO $ fmt contents defaultConfig { cfgDynOptions = map DynOption fileOpts, cfgRegion = region }
           ret res
  where
-   fp' = fromNormalizedFilePath fp
+   uri = fromNormalizedUri nuri
 
    region :: RegionIndices
    region = case typ of
@@ -116,7 +117,7 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
        FormatRange (Range (Position sl _) (Position el _)) ->
            RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
 
-   title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
+   title = "Formatting " <> getUri (fromNormalizedUri nuri)
 
    ret :: Either SomeException T.Text -> ExceptT PluginError (HandlerM Types.Config) ([TextEdit] |? Null)
    ret (Left err)  = throwError $ PluginInternalError . T.pack $ "ormoluCmd: " ++ show err
@@ -132,8 +133,8 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
        ex = showExtension <$> S.toList (D.extensionFlags df)
      in pp <> pm <> ex
 
-   cliHandler :: [String] -> ExceptT PluginError IO ([TextEdit] |? Null)
-   cliHandler fileOpts = do
+   cliHandler :: [String] -> FilePath -> ExceptT PluginError IO ([TextEdit] |? Null)
+   cliHandler fileOpts fp = do
        CLIVersionInfo{noCabal} <- do -- check Ormolu version so that we know which flags to use
            (exitCode, out, _err) <- liftIO $ readCreateProcessWithExitCode ( proc "ormolu" ["--version"] ) ""
            let version = do
@@ -156,12 +157,12 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
            let commandArgs = map ("-o" <>) fileOpts
                        -- "The --stdin-input-file option is necessary when using input from
                        -- stdin and accounting for .cabal files" as per Ormolu documentation
-                       <> (if noCabal then ["--no-cabal"] else ["--stdin-input-file", fp'])
+                       <> (if noCabal then ["--no-cabal"] else ["--stdin-input-file", fp])
                        <> catMaybes
                            [ ("--start-line=" <>) . show <$> regionStartLine region
                            , ("--end-line=" <>) . show <$> regionEndLine region
                            ]
-               cwd = takeDirectory fp'
+               cwd = takeDirectory fp
            logWith recorder Debug $ LogOrmoluCommand commandArgs cwd
            liftIO $ readCreateProcessWithExitCode (proc "ormolu" commandArgs) {cwd = Just cwd} contents
        case exitCode of

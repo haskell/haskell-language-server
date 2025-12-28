@@ -31,9 +31,7 @@ import           Development.IDE.Types.Location
 import           GHC.Iface.Ext.Types                  (Identifier)
 import qualified HieDb
 import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
-                                                       SymbolInformation (..),
-                                                       normalizedFilePathToUri,
-                                                       uriToNormalizedFilePath)
+                                                       SymbolInformation (..))
 
 -- IMPORTANT NOTE : make sure all rules `useWithStaleFastMT`d by these have a "Persistent Stale" rule defined,
 -- so we can quickly answer as soon as the IDE is opened
@@ -43,16 +41,16 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
 -- block waiting for the rule to be properly computed.
 
 -- | Try to get hover text for the name under point.
-getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
-getAtPoint file pos = runMaybeT $ do
+getAtPoint :: NormalizedUri -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
+getAtPoint uri pos = runMaybeT $ do
   ide <- ask
   opts <- liftIO $ getIdeOptionsIO ide
 
-  (hf, mapping) <- useWithStaleFastMT GetHieAst file
+  (hf, mapping) <- useWithStaleFastMT GetHieAst uri
   shakeExtras <- lift askShake
 
-  env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
-  dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+  env <- hscEnv . fst <$> useWithStaleFastMT GhcSession uri
+  dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap uri)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
@@ -63,79 +61,78 @@ getAtPoint file pos = runMaybeT $ do
 -- taking into account changes that may have occurred due to edits.
 toCurrentLocation
   :: PositionMapping
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> Location
   -> IdeAction (Maybe Location)
-toCurrentLocation mapping file (Location uri range) =
+toCurrentLocation mapping uri (Location locUri locRange) =
   -- The Location we are going to might be in a different
   -- file than the one we are calling gotoDefinition from.
   -- So we check that the location file matches the file
   -- we are in.
-  if nUri == normalizedFilePathToUri file
+  if nUri == uri
   -- The Location matches the file, so use the PositionMapping
   -- we have.
-  then pure $ Location uri <$> toCurrentRange mapping range
+  then pure $ Location locUri <$> toCurrentRange mapping locRange
   -- The Location does not match the file, so get the correct
   -- PositionMapping and use that instead.
   else do
     otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
-      otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
-      useWithStaleFastMT GetHieAst otherLocationFile
-    pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
+      useWithStaleFastMT GetHieAst nUri
+    pure $ Location locUri <$> (flip toCurrentRange locRange =<< otherLocationMapping)
   where
     nUri :: NormalizedUri
-    nUri = toNormalizedUri uri
+    nUri = toNormalizedUri locUri
 
 -- | Goto Definition.
-getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
-getDefinition file pos = runMaybeT $ do
+getDefinition :: NormalizedUri -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getDefinition uri pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (hf, mapping) <- useWithStaleFastMT GetHieAst file
-    (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
+    (hf, mapping) <- useWithStaleFastMT GetHieAst uri
+    (ImportMap imports, _) <- useWithStaleFastMT GetImportMap uri
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
     mapMaybeM (\(location, identifier) -> do
-      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      fixedLocation <- MaybeT $ toCurrentLocation mapping uri location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
 
-getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
-getTypeDefinition file pos = runMaybeT $ do
+getTypeDefinition :: NormalizedUri -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getTypeDefinition uri pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (hf, mapping) <- useWithStaleFastMT GetHieAst file
+    (hf, mapping) <- useWithStaleFastMT GetHieAst uri
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
     mapMaybeM (\(location, identifier) -> do
-      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      fixedLocation <- MaybeT $ toCurrentLocation mapping uri location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
-getImplementationDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
-getImplementationDefinition file pos = runMaybeT $ do
+getImplementationDefinition :: NormalizedUri -> Position -> IdeAction (Maybe [Location])
+getImplementationDefinition uri pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (hf, mapping) <- useWithStaleFastMT GetHieAst file
+    (hf, mapping) <- useWithStaleFastMT GetHieAst uri
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locs <- AtPoint.gotoImplementation withHieDb (lookupMod hiedbWriter) opts hf pos'
-    traverse (MaybeT . toCurrentLocation mapping file) locs
+    traverse (MaybeT . toCurrentLocation mapping uri) locs
 
-highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
-highlightAtPoint file pos = runMaybeT $ do
-    (HAR _ hf rf _ _,mapping) <- useWithStaleFastMT GetHieAst file
+highlightAtPoint :: NormalizedUri -> Position -> IdeAction (Maybe [DocumentHighlight])
+highlightAtPoint uri pos = runMaybeT $ do
+    (HAR _ hf rf _ _,mapping) <- useWithStaleFastMT GetHieAst uri
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     let toCurrentHighlight (DocumentHighlight range t) = flip DocumentHighlight t <$> toCurrentRange mapping range
     mapMaybe toCurrentHighlight <$>AtPoint.documentHighlight hf rf pos'
 
 -- Refs are not an IDE action, so it is OK to be slow and (more) accurate
-refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
-refsAtPoint file pos = do
+refsAtPoint :: NormalizedUri -> Position -> Action [Location]
+refsAtPoint uri pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
     fs <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
-    AtPoint.referencesAtPoint withHieDb file pos (AtPoint.FOIReferences asts)
+    AtPoint.referencesAtPoint withHieDb uri pos (AtPoint.BOIReferences asts)
 
 workspaceSymbols :: T.Text -> IdeAction (Maybe [SymbolInformation])
 workspaceSymbols query = runMaybeT $ do

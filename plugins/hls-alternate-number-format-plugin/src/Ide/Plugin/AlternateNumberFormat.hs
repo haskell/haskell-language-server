@@ -70,8 +70,8 @@ instance Show CollectLiteralsResult where
 instance NFData CollectLiteralsResult
 
 collectLiteralsRule :: Recorder (WithPriority Log) -> Rules ()
-collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nfp -> do
-    pm <- use GetParsedModule nfp
+collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nuri -> do
+    pm <- use GetParsedModule nuri
     -- get the current extensions active and transform them into FormatTypes
     let exts = map GhcExtension . getExtensions <$> pm
         -- collect all the literals for a file
@@ -81,25 +81,25 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
 
 codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
-    nfp <- getNormalizedFilePathE (docId ^. L.uri)
-    CLR{..} <- requestLiterals pId state nfp
-    pragma <- getFirstPragma pId state nfp
+    let nuri = toNormalizedUri (docId ^. L.uri)
+    CLR{..} <- requestLiterals pId state nuri
+    pragma <- getFirstPragma pId state nuri
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = RangeMap.filterByRange currRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
-        actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
+        actions = concatMap (\(lit, alts) -> map (mkCodeAction nuri lit enabledExtensions pragma) alts) literalPairs
     pure $ InL actions
     where
-        mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
-        mkCodeAction nfp lit enabled npi af@(alt, ExtensionNeeded exts) = InR CodeAction {
+        mkCodeAction :: NormalizedUri -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
+        mkCodeAction nuri lit enabled npi af@(alt, ExtensionNeeded exts) = InR CodeAction {
             _title = mkCodeActionTitle lit af enabled
             , _kind = Just $ CodeActionKind_Custom "quickfix.literals.style"
             , _diagnostics = Nothing
             , _isPreferred = Nothing
             , _disabled = Nothing
-            , _edit = Just $ mkWorkspaceEdit nfp edits
+            , _edit = Just $ mkWorkspaceEdit nuri edits
             , _command = Nothing
             , _data_ = Nothing
             }
@@ -109,10 +109,10 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
                     ext': exts -> [insertNewPragma npi ext' | needsExtension enabled ext'] <> pragmaEdit exts
                     []         -> []
 
-        mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
-        mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
+        mkWorkspaceEdit :: NormalizedUri -> [TextEdit] -> WorkspaceEdit
+        mkWorkspaceEdit nuri edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath nfp) edits
+                changes = Just $ Map.singleton (fromNormalizedUri  nuri) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
@@ -128,7 +128,7 @@ mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
 needsExtension :: [GhcExtension] -> Extension -> Bool
 needsExtension ghcExts ext = ext `notElem` map unExt ghcExts
 
-requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectLiteralsResult
+requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedUri -> ExceptT PluginError m CollectLiteralsResult
 requestLiterals (PluginId pId) state =
     runActionE (unpack pId <> ".CollectLiterals") state
     . useE CollectLiterals

@@ -29,10 +29,11 @@ import qualified Ide.Plugin.Cabal.OfInterest       as OfInterest
 import           Ide.Plugin.Cabal.Orphans          ()
 import qualified Ide.Plugin.Cabal.Parse            as Parse
 import           Ide.Types
+import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA
 
 data Log
-  = LogModificationTime NormalizedFilePath FileVersion
+  = LogModificationTime NormalizedUri FileVersion
   | LogShake Shake.Log
   | LogOfInterest OfInterest.Log
   | LogDocSaved Uri
@@ -42,8 +43,8 @@ instance Pretty Log where
   pretty = \case
     LogShake log' -> pretty log'
     LogOfInterest log' -> pretty log'
-    LogModificationTime nfp modTime ->
-      "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
+    LogModificationTime nuri modTime ->
+      "Modified:" <+> pretty (fromNormalizedUri nuri) <+> pretty (show modTime)
     LogDocSaved uri ->
       "Saved text document:" <+> pretty (getUri uri)
 
@@ -61,17 +62,13 @@ cabalRules recorder plId = do
         -- we rerun this rule because this rule *depends* on GetModificationTime.
         (t, mCabalSource) <- use_ GetFileContents file
         log' Debug $ LogModificationTime file t
-        contents <- case mCabalSource of
-          Just sources ->
-            pure $ Encoding.encodeUtf8 $ Rope.toText sources
-          Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
 
-        case Parse.readCabalFields file contents of
-          Left _ ->
-            pure ([], Nothing)
-          Right fields ->
+        let mcontents = Encoding.encodeUtf8 . Rope.toText <$> mCabalSource
+        case Parse.readCabalFields file <$> mcontents of
+          Just (Right fields) ->
             pure ([], Just fields)
+          _ ->
+            pure ([], Nothing)
 
   define (cmapWithPrio LogShake recorder) $ \ParseCabalCommonSections file -> do
     fields <- use_ ParseCabalFields file
@@ -93,63 +90,67 @@ cabalRules recorder plId = do
         -- we rerun this rule because this rule *depends* on GetModificationTime.
         (t, mCabalSource) <- use_ GetFileContents file
         log' Debug $ LogModificationTime file t
-        contents <- case mCabalSource of
-          Just sources ->
-            pure $ Encoding.encodeUtf8 $ Rope.toText sources
-          Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+        mcontents <- case mCabalSource of
+          Just sources -> pure $ Just $! Encoding.encodeUtf8 $ Rope.toText sources
+          Nothing | Just file <- uriToNormalizedFilePath file  -> do
+            res <- liftIO $ BS.readFile $ fromNormalizedFilePath file
+            pure $ Just $! res
+          _ -> pure Nothing
+        case mcontents of
+          Nothing -> pure ([], Nothing)
+          Just contents -> do
 
-        -- Instead of fully reparsing the sources to get a 'GenericPackageDescription',
-        -- we would much rather re-use the already parsed results of 'ParseCabalFields'.
-        -- Unfortunately, Cabal-syntax doesn't expose the function 'parseGenericPackageDescription''
-        -- which allows us to resume the parsing pipeline with '[Field Position]'.
-        let (pWarnings, pm) = Parse.parseCabalFileContents contents
-        let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
-        case pm of
-          Left (_cabalVersion, pErrorNE) -> do
-            let regexUnknownCabalBefore310 :: T.Text
-                -- We don't support the cabal version, this should not be an error, as the
-                -- user did not do anything wrong. Instead we cast it to a warning
-                regexUnknownCabalBefore310 = "Unsupported cabal-version [0-9]+.[0-9]*"
-                regexUnknownCabalVersion :: T.Text
-                regexUnknownCabalVersion = "Unsupported cabal format version in cabal-version field: [0-9]+.[0-9]+"
-                unsupportedCabalHelpText =
-                  unlines
-                    [ "The used `cabal-version` is not fully supported by this `HLS` binary."
-                    , "Either the `cabal-version` is unknown, or too new for this executable."
-                    , "This means that some functionality might not work as expected."
-                    , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if possible."
-                    , ""
-                    , "Supported versions are: "
-                        <> List.intercalate
-                          ", "
-                          (fmap Cabal.showCabalSpecVersion Data.supportedCabalVersions)
-                    ]
-                errorDiags =
-                  NE.toList $
-                    NE.map
-                      ( \pe@(PError pos text) ->
-                          if any
-                            (text =~)
-                            [ regexUnknownCabalBefore310
-                            , regexUnknownCabalVersion
-                            ]
-                            then
-                              Diagnostics.warningDiagnostic
-                                file
-                                ( Syntax.PWarning Syntax.PWTOther pos $
-                                    unlines
-                                      [ text
-                                      , unsupportedCabalHelpText
-                                      ]
-                                )
-                            else Diagnostics.errorDiagnostic file pe
-                      )
-                      pErrorNE
-                allDiags = errorDiags <> warningDiags
-            pure (allDiags, Nothing)
-          Right gpd -> do
-            pure (warningDiags, Just gpd)
+            -- Instead of fully reparsing the sources to get a 'GenericPackageDescription',
+            -- we would much rather re-use the already parsed results of 'ParseCabalFields'.
+            -- Unfortunately, Cabal-syntax doesn't expose the function 'parseGenericPackageDescription''
+            -- which allows us to resume the parsing pipeline with '[Field Position]'.
+            let (pWarnings, pm) = Parse.parseCabalFileContents contents
+            let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
+            case pm of
+              Left (_cabalVersion, pErrorNE) -> do
+                let regexUnknownCabalBefore310 :: T.Text
+                    -- We don't support the cabal version, this should not be an error, as the
+                    -- user did not do anything wrong. Instead we cast it to a warning
+                    regexUnknownCabalBefore310 = "Unsupported cabal-version [0-9]+.[0-9]*"
+                    regexUnknownCabalVersion :: T.Text
+                    regexUnknownCabalVersion = "Unsupported cabal format version in cabal-version field: [0-9]+.[0-9]+"
+                    unsupportedCabalHelpText =
+                      unlines
+                        [ "The used `cabal-version` is not fully supported by this `HLS` binary."
+                        , "Either the `cabal-version` is unknown, or too new for this executable."
+                        , "This means that some functionality might not work as expected."
+                        , "If you face any issues, try downgrading to a supported `cabal-version` or upgrading `HLS` if possible."
+                        , ""
+                        , "Supported versions are: "
+                            <> List.intercalate
+                              ", "
+                              (fmap Cabal.showCabalSpecVersion Data.supportedCabalVersions)
+                        ]
+                    errorDiags =
+                      NE.toList $
+                        NE.map
+                          ( \pe@(PError pos text) ->
+                              if any
+                                (text =~)
+                                [ regexUnknownCabalBefore310
+                                , regexUnknownCabalVersion
+                                ]
+                                then
+                                  Diagnostics.warningDiagnostic
+                                    file
+                                    ( Syntax.PWarning Syntax.PWTOther pos $
+                                        unlines
+                                          [ text
+                                          , unsupportedCabalHelpText
+                                          ]
+                                    )
+                                else Diagnostics.errorDiagnostic file pe
+                          )
+                          pErrorNE
+                    allDiags = errorDiags <> warningDiags
+                pure (allDiags, Nothing)
+              Right gpd -> do
+                pure (warningDiags, Just gpd)
 
   action $ do
     -- Run the cabal kick. This code always runs when 'shakeRestart' is run.

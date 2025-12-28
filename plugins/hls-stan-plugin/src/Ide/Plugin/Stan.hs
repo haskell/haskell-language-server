@@ -106,68 +106,71 @@ type instance RuleResult GetStanDiagnostics = ()
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
-    \GetStanDiagnostics file -> do
-      config <- getPluginConfigAction plId
-      if plcGlobalOn config && plcDiagnosticsOn config then do
-          maybeHie <- getHieFile file
-          case maybeHie of
-            Nothing -> return ([], Nothing)
-            Just hie -> do
-              let isLoud = False -- in Stan: notJson = not isLoud
-              let stanArgs =
-                      StanArgs
-                          { stanArgsHiedir               = "" -- :: !FilePath  -- ^ Directory with HIE files
-                          , stanArgsCabalFilePath        = [] -- :: ![FilePath]  -- ^ Path to @.cabal@ files.
-                          , stanArgsOutputSettings       = OutputSettings NonVerbose ShowSolution -- :: !OutputSettings  -- ^ Settings for output terminal report
-                                                                                                  -- doesnt matter, because it is silenced by isLoud
-                          , stanArgsReport               = Nothing -- :: !(Maybe ReportArgs)  -- ^ @HTML@ report settings
-                          , stanArgsUseDefaultConfigFile = fiasco "" -- :: !(TaggedTrial Text Bool)  -- ^ Use default @.stan.toml@ file
-                          , stanArgsConfigFile           = Nothing -- :: !(Maybe FilePath)  -- ^ Path to a custom configurations file.
-                          , stanArgsConfig               = ConfigP
-                                                            { configChecks  = fiasco "'hls-stan-plugin' doesn't receive CLI options for: checks"
-                                                            , configRemoved = fiasco "'hls-stan-plugin' doesn't receive CLI options for: remove"
-                                                            , configIgnored = fiasco "'hls-stan-plugin' doesn't receive CLI options for: ignore"
-                                                            }
-                                                            -- if they are not fiascos, .stan.toml's aren't taken into account
-                          ,stanArgsJsonOut              = not isLoud -- :: !Bool  -- ^ Output the machine-readable output in JSON format instead.
-                          }
+    \GetStanDiagnostics nuri -> do
+      case LSP.uriToNormalizedFilePath nuri of
+        Nothing -> pure ([], Nothing)
+        Just nfp -> do
+          config <- getPluginConfigAction plId
+          if plcGlobalOn config && plcDiagnosticsOn config then do
+              maybeHie <- getHieFile nfp
+              case maybeHie of
+                Nothing -> return ([], Nothing)
+                Just hie -> do
+                  let isLoud = False -- in Stan: notJson = not isLoud
+                  let stanArgs =
+                          StanArgs
+                              { stanArgsHiedir               = "" -- :: !FilePath  -- ^ Directory with HIE files
+                              , stanArgsCabalFilePath        = [] -- :: ![FilePath]  -- ^ Path to @.cabal@ files.
+                              , stanArgsOutputSettings       = OutputSettings NonVerbose ShowSolution -- :: !OutputSettings  -- ^ Settings for output terminal report
+                                                                                                      -- doesnt matter, because it is silenced by isLoud
+                              , stanArgsReport               = Nothing -- :: !(Maybe ReportArgs)  -- ^ @HTML@ report settings
+                              , stanArgsUseDefaultConfigFile = fiasco "" -- :: !(TaggedTrial Text Bool)  -- ^ Use default @.stan.toml@ file
+                              , stanArgsConfigFile           = Nothing -- :: !(Maybe FilePath)  -- ^ Path to a custom configurations file.
+                              , stanArgsConfig               = ConfigP
+                                                                { configChecks  = fiasco "'hls-stan-plugin' doesn't receive CLI options for: checks"
+                                                                , configRemoved = fiasco "'hls-stan-plugin' doesn't receive CLI options for: remove"
+                                                                , configIgnored = fiasco "'hls-stan-plugin' doesn't receive CLI options for: ignore"
+                                                                }
+                                                                -- if they are not fiascos, .stan.toml's aren't taken into account
+                              ,stanArgsJsonOut              = not isLoud -- :: !Bool  -- ^ Output the machine-readable output in JSON format instead.
+                              }
 
-              (configTrial, useDefConfig, env) <- liftIO $ getStanConfig stanArgs isLoud
-              tomlsUsedByStan <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
-              logWith recorder Debug (LogDebugStanConfigResult tomlsUsedByStan configTrial)
+                  (configTrial, useDefConfig, env) <- liftIO $ getStanConfig stanArgs isLoud
+                  tomlsUsedByStan <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
+                  logWith recorder Debug (LogDebugStanConfigResult tomlsUsedByStan configTrial)
 
-              -- If envVar is set to 'False', stan will ignore all local and global .stan.toml files
-              logWith recorder Debug (LogDebugStanEnvVars env)
+                  -- If envVar is set to 'False', stan will ignore all local and global .stan.toml files
+                  logWith recorder Debug (LogDebugStanEnvVars env)
 
-              -- Note that Stan works in terms of relative paths, but the HIE come in as absolute. Without
-              -- making its path relative, the file name(s) won't line up with the associated Map keys.
-              relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath file
-              let hieRelative = hie{hie_hs_file=relativeHsFilePath}
+                  -- Note that Stan works in terms of relative paths, but the HIE come in as absolute. Without
+                  -- making its path relative, the file name(s) won't line up with the associated Map keys.
+                  relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath nfp
+                  let hieRelative = hie{hie_hs_file=relativeHsFilePath}
 
-              (checksMap, ignoredObservations) <- case configTrial of
-                  FiascoL es -> do
-                      logWith recorder Development.IDE.Warning (LogWarnConf es)
-                      -- If we can't read the config file, default to using all inspections:
-                      let allInspections = HM.singleton relativeHsFilePath inspectionsIds
-                      pure (allInspections, [])
-                  ResultL _warnings stanConfig -> do
-                      -- HashMap of *relative* file paths to info about enabled checks for those file paths.
-                      let checksMap = applyConfig [relativeHsFilePath] stanConfig
-                      pure (checksMap, configIgnored stanConfig)
+                  (checksMap, ignoredObservations) <- case configTrial of
+                      FiascoL es -> do
+                          logWith recorder Development.IDE.Warning (LogWarnConf es)
+                          -- If we can't read the config file, default to using all inspections:
+                          let allInspections = HM.singleton relativeHsFilePath inspectionsIds
+                          pure (allInspections, [])
+                      ResultL _warnings stanConfig -> do
+                          -- HashMap of *relative* file paths to info about enabled checks for those file paths.
+                          let checksMap = applyConfig [relativeHsFilePath] stanConfig
+                          pure (checksMap, configIgnored stanConfig)
 
-              -- A Map from *relative* file paths (just one, in this case) to language extension info:
-              cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
-              let analysis = runAnalysis cabalExtensionsMap checksMap ignoredObservations [hieRelative]
-              return (analysisToDiagnostics file analysis, Just ())
-      else return ([], Nothing)
+                  -- A Map from *relative* file paths (just one, in this case) to language extension info:
+                  cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
+                  let analysis = runAnalysis cabalExtensionsMap checksMap ignoredObservations [hieRelative]
+                  return (analysisToDiagnostics nuri analysis, Just ())
+          else return ([], Nothing)
 
   action $ do
     files <- getFilesOfInterestUntracked
     void $ uses GetStanDiagnostics $ HM.keys files
   where
-    analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
+    analysisToDiagnostics :: NormalizedUri -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations
-    observationToDianostic :: NormalizedFilePath -> Observation -> Maybe FileDiagnostic
+    observationToDianostic :: NormalizedUri -> Observation -> Maybe FileDiagnostic
     observationToDianostic file Observation {observationSrcSpan, observationInspectionId} =
       do
         inspection <- HM.lookup observationInspectionId inspectionsMap
