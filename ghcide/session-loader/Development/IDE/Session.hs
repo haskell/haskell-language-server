@@ -91,7 +91,8 @@ import           Control.Applicative                 (Alternative ((<|>)))
 import           Data.Void
 
 import           Control.Concurrent.STM.Stats        (atomically, modifyTVar',
-                                                      readTVar, writeTVar)
+                                                      readTVar, readTVarIO,
+                                                      writeTVar)
 import           Control.Concurrent.STM.TQueue
 import           Control.DeepSeq
 import           Control.Exception                   (evaluate)
@@ -119,6 +120,7 @@ import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
 
+import           Development.IDE                     (HscEnvEq (..))
 import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                     (errMsgDiagnostic,
@@ -443,7 +445,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
   return $ do
     clientConfig <- getClientConfigAction
-    extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv
+    extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv, moduleToPathCache
                       } <- getShakeExtras
     let invalidateShakeCache = do
             void $ modifyVar' version succ
@@ -476,8 +478,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
                 -- If we don't generate a TargetFile for each potential location, we will only have
                 -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
                 -- and also not find 'TargetModule Foo'.
-                fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
+                pure $ do
+                  file <- nubOrd (f:targetLocations)
+                  pure $ (TargetFile file, Set.singleton file)
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return [(targetTarget, Set.fromList found)]
@@ -489,6 +492,22 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
             pure hasUpdate
           for_ hasUpdate $ \x ->
             logWith recorder Debug $ LogKnownFilesUpdated (targetMap x)
+
+
+          -- Clean the module map cache
+          -- TODO: the clean is total: it refresh the complete module to
+          -- filename cache. We can imagine something smarter in the future,
+          -- but anyway, the scan is actually really fast (It lists recursively
+          -- the content of all your include path, but once. It could only be
+          -- as slow as the number of files in your include paths, which is,
+          -- most of the time, the same as the number of module in your
+          -- project. If there are a lot of not required files inside your
+          -- include path, this will be an issue) and right now
+          -- what's expensive is the association of Known target to module,
+          -- which is still fast considering that it does not do any IO.
+          atomically $ do
+            writeTVar moduleToPathCache mempty
+
           return $ toNoFileKey GetKnownTargets
 
     -- Create a new HscEnv from a hieYaml root and a set of options
@@ -764,6 +783,7 @@ data TargetDetails = TargetDetails
       targetDepends   :: !DependencyInfo,
       targetLocations :: ![NormalizedFilePath]
   }
+  deriving (Show)
 
 fromTargetId :: [FilePath]          -- ^ import paths
              -> [String]            -- ^ extensions to consider
