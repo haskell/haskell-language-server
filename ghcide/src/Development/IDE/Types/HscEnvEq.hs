@@ -61,11 +61,19 @@ newHscEnvEq hscEnv' = do
     let hscEnv = hscEnv'
                { hsc_FC = FinderCache
                         { flushFinderCaches = \_ -> error "GHC should never call flushFinderCaches outside the driver"
+#if MIN_VERSION_ghc(9,13,0)
+                        , addToFinderCache  = \im val -> do
+#else
                         , addToFinderCache  = \(GWIB im _) val -> do
+#endif
                             if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
                             then error "tried to add home module to FC"
                             else atomicModifyIORef' mod_cache $ \c -> (extendInstalledModuleEnv c im val, ())
+#if MIN_VERSION_ghc(9,13,0)
+                        , lookupFinderCache = \im -> do
+#else
                         , lookupFinderCache = \(GWIB im _) -> do
+#endif
                             if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
                             then error ("tried to lookup home module from FC" ++ showSDocUnsafe (ppr (im, hsc_all_home_unit_ids hscEnv')))
                             else lookupInstalledModuleEnv <$> readIORef mod_cache <*> pure im

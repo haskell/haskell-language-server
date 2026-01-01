@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -225,14 +226,18 @@ signatureToName :: InstanceBindTypeSig -> T.Text
 signatureToName sig = T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
 
 -- Return [groupName text, [(methodName text, signature text)]]
-minDefToMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
+minDefToMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> ClassMinimalDef -> [MethodGroup]
 minDefToMethodGroups hsc gblEnv range sigs minDef = makeMethodGroup <$> go minDef
     where
         makeMethodGroup methodDefinitions =
             let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
             in  (name, methodDefinitions)
 
+#if __GLASGOW_HASKELL__ >= 913
+        go (Var lmn)  = pure $ makeMethodDefinitions hsc gblEnv range $ filter ((==) (printOutputable (unLoc lmn)) . signatureToName) sigs
+#else
         go (Var mn)   = pure $ makeMethodDefinitions hsc gblEnv range $ filter ((==) (printOutputable mn) . signatureToName) sigs
+#endif
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>) . go . unLoc) [[]] ms
         go (Parens m) = go (unLoc m)

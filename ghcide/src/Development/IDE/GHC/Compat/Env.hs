@@ -3,9 +3,10 @@
 -- | Compat module for the main Driver types, such as 'HscEnv',
 -- 'UnitEnv' and some DynFlags compat functions.
 module Development.IDE.GHC.Compat.Env (
-    Env.HscEnv(hsc_FC, hsc_NC, hsc_IC, hsc_mod_graph
+    Env.HscEnv(hsc_FC, hsc_NC, hsc_IC
               , hsc_type_env_vars
               ),
+    Env.hsc_mod_graph,
     Env.hsc_HPT,
     InteractiveContext(..),
     setInteractivePrintName,
