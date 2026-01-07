@@ -88,7 +88,8 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Types.Avail                              (DetOrdAvails (DefinitelyDeterministicAvails))
+import           GHC.Types.Avail                              (DetOrdAvails (DefinitelyDeterministicAvails),
+                                                               sortAvails)
 import           GHC.Tc.Types                                 (tcg_exports)
 import           GHC.Types.Name.Set                           (nameSetElemsStable)
 #endif
@@ -271,7 +272,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
           | iface <- hm_iface hmi
           , ms_mod ms == mi_module iface
 #if MIN_VERSION_ghc(9,13,0)
-          = hmi { hm_iface = set_mi_top_env (IfaceTopEnv (DefinitelyDeterministicAvails $ tcg_exports tm) (mkIfaceImports $ tcg_import_decls tm)) iface}
+          = hmi { hm_iface = set_mi_top_env (IfaceTopEnv (sortAvails $ gresToAvailInfo $ globalRdrEnvElts $ globalRdrEnvLocal rdr_env) (mkIfaceImports $ tcg_import_decls tm)) iface}
 #elif MIN_VERSION_ghc(9,11,0)
           = hmi { hm_iface = set_mi_top_env (Just $ IfaceTopEnv (forceGlobalRdrEnv (globalRdrEnvLocal rdr_env)) (mkIfaceImports $ tcg_import_decls tm)) iface}
 #else
