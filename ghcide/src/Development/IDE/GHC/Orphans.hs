@@ -27,7 +27,7 @@ import           GHC.Parser.Annotation
 import           GHC.Types.PkgQual
 import           GHC.Types.SrcLoc
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Types.Basic                       (ImportLevel)
+import           GHC.Types.Basic                   (ImportLevel)
 #endif
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
