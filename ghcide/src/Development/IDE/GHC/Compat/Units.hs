@@ -76,10 +76,10 @@ import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types
 
 #if MIN_VERSION_ghc(9,13,0)
+import qualified Data.Set                              as Set
 import           GHC.Unit.Home.Graph
 import           GHC.Unit.Home.PackageTable            (emptyHomePackageTable)
 import           GHC.Unit.Module.Graph                 (emptyMG)
-import qualified Data.Set                              as Set
 #endif
 
 
