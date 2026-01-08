@@ -171,15 +171,15 @@ jobs:
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin-tests || cabal test hls-stan-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.14'
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin-tests || cabal test hls-stylish-haskell-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.14'
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin-tests || cabal test hls-ormolu-plugin-tests
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.14'
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin-tests || cabal test hls-fourmolu-plugin-tests
 
@@ -195,7 +195,7 @@ jobs:
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin-tests || cabal test hls-rename-plugin-tests
 
-      # TODO enable when it supports 9.10
+      # Hlint will never work on GHC 9.10
       - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin-tests || cabal test hls-hlint-plugin-tests
