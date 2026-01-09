@@ -111,8 +111,11 @@ jobs:
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
         # to include 'new' in the filters, since many of our test suites are in the
         # same package.
+        #
+        # We choose a very short build directory, as we run into long path issues on windows.
+        # See cabal tracking issue https://github.com/haskell/cabal/issues/11395
         run: |
-          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new"
+          cabal configure --builddir b --test-options="--rerun-update --rerun-filter failures,exceptions,new"
 
       - if: matrix.test
         name: Test hls-graph
