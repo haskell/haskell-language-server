@@ -141,6 +141,10 @@ import qualified Development.IDE.Types.Shake                  as Shake
 import           GHC.Iface.Ext.Types                          (HieASTs (..))
 import           GHC.Iface.Ext.Utils                          (generateReferencesMap)
 import qualified GHC.LanguageExtensions                       as LangExt
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
+import           GHC.Types.Basic                              (ImportLevel (NormalLevel))
+#endif
 import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
 import           Ide.Logger                                   (Pretty (pretty),
@@ -315,7 +319,12 @@ getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
         (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
+#if MIN_VERSION_ghc(9,13,0)
+        let imports = [(False, lvl, mbPkgName, modName) | (lvl, mbPkgName, modName) <- ms_textual_imps ms]
+                   ++ [(True, NormalLevel, NoPkgQual, noLoc modName) | L _ modName <- ms_srcimps ms]
+#else
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
+#endif
         env_eq <- use_ GhcSession file
         let env = hscEnv env_eq
         let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
@@ -335,7 +344,11 @@ getLocatedImportsRule recorder =
                 | otherwise = do
                     itExists <- getFileExists nfp
                     return $ if itExists then Just nfp else Nothing
+#if MIN_VERSION_ghc(9,13,0)
+        (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
+#else
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
+#endif
             diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
@@ -635,10 +648,17 @@ dependencyInfoForFiles fs = do
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
       mns = catMaybes $ zipWith go mss deps
+#if MIN_VERSION_ghc(9,13,0)
+      go (Just ms) (Just (Right (ModuleImports xs))) = Just $ ModuleNode this_dep_edges (ModuleNodeCompile ms)
+        where this_dep_ids = mapMaybe snd xs
+              this_dep_edges = map mkNormalEdge $ mapMaybe (\fi -> IM.lookup (getFilePathId fi) nodeKeys) this_dep_ids
+      go (Just ms) _ = Just $ ModuleNode [] (ModuleNodeCompile ms)
+#else
       go (Just ms) (Just (Right (ModuleImports xs))) = Just $ ModuleNode this_dep_keys ms
         where this_dep_ids = mapMaybe snd xs
               this_dep_keys = mapMaybe (\fi -> IM.lookup (getFilePathId fi) nodeKeys) this_dep_ids
       go (Just ms) _ = Just $ ModuleNode [] ms
+#endif
       go _ _ = Nothing
       mg = mkModuleGraph mns
   let shallowFingers = IntMap.fromList $ foldr' (\(i, m) acc -> case m of
@@ -773,8 +793,13 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                 !final_deps <- do
                   dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
                   return $!! map (NodeKey_Module . msKey) dep_mss
+#if MIN_VERSION_ghc(9,13,0)
+                let module_graph_nodes =
+                      nubOrdOn mkNodeKey (ModuleNode (map mkNormalEdge final_deps) (ModuleNodeCompile ms) : concatMap mgModSummaries' mgs)
+#else
                 let module_graph_nodes =
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
+#endif
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
             session' <- liftIO $ mergeEnvs env mg de ms inLoadOrder depSessions

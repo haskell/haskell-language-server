@@ -75,8 +75,10 @@ instance Show FixityMap where
 instance NFData FixityMap where
   rnf (FixityMap xs) = rnf xs
 
+#if __GLASGOW_HASKELL__ < 913
 instance NFData Fixity where
   rnf = rwhnf
+#endif
 
 newtype Log = LogShake Shake.Log
 

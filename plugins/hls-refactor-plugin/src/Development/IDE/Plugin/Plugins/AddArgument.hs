@@ -49,6 +49,11 @@ import           Language.Haskell.GHC.ExactPrint           (d1, setEntryDP)
 import           GHC.Parser.Annotation                     (EpToken (..))
 #endif
 
+#if MIN_VERSION_ghc(9,13,0)
+-- HsArrow was renamed to HsMultAnn in GHC 9.13
+type HsArrow pass = HsMultAnn pass
+#endif
+
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
 --  - there is an unbound variable (GHC provides no type suggestion)
@@ -177,7 +182,15 @@ hsTypeFromFunTypeAsList (args, res) =
 addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> LHsSigType GhcPs
 addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
     let (args, res) = hsTypeToFunTypeAsList lsigTy
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,13,0)
+        wildCardAnn = noAnnSrcSpanDP1
+        newArg =
+          ( noAnn
+          , noExtField
+          , HsUnannotated (EpArrow (EpUniTok d1 NormalSyntax))
+          , L wildCardAnn $ HsWildCardTy NoEpTok
+          )
+#elif MIN_VERSION_ghc(9,9,0)
         wildCardAnn = noAnnSrcSpanDP1
         newArg =
           ( noAnn

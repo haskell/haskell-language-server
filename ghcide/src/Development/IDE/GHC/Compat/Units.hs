@@ -75,26 +75,40 @@ import           GHC.Unit.State                        (LookupResult, UnitInfo,
 import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types
 
+#if MIN_VERSION_ghc(9,13,0)
+import qualified Data.Set                              as Set
+import           GHC.Unit.Home.Graph
+import           GHC.Unit.Home.PackageTable            (emptyHomePackageTable)
+import           GHC.Unit.Module.Graph                 (emptyMG)
+#endif
+
 
 type PreloadUnitClosure = UniqSet UnitId
 
 unitState :: HscEnv -> UnitState
 unitState = ue_units . hsc_unit_env
 
-createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> HomeUnitGraph
-createUnitEnvFromFlags unitDflags =
-  let
-    newInternalUnitEnv dflags = mkHomeUnitEnv dflags emptyHomePackageTable Nothing
-    unitEnvList = NE.map (\dflags -> (homeUnitId_ dflags, newInternalUnitEnv dflags)) unitDflags
-  in
-    unitEnv_new (Map.fromList (NE.toList unitEnvList))
+createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> IO HomeUnitGraph
+createUnitEnvFromFlags unitDflags = do
+#if MIN_VERSION_ghc(9,13,0)
+  let mkEntry dflags = do
+        hpt <- emptyHomePackageTable
+        let us = State.emptyUnitState -- placeholder UnitState
+        pure (homeUnitId_ dflags, mkHomeUnitEnv us Nothing dflags hpt Nothing)
+  unitEnvList <- mapM mkEntry (NE.toList unitDflags)
+  pure $ unitEnv_new (Map.fromList unitEnvList)
+#else
+  let newInternalUnitEnv dflags = mkHomeUnitEnv dflags emptyHomePackageTable Nothing
+      unitEnvList = NE.map (\dflags -> (homeUnitId_ dflags, newInternalUnitEnv dflags)) unitDflags
+  pure $ unitEnv_new (Map.fromList (NE.toList unitEnvList))
+#endif
 
 initUnits :: [DynFlags] -> HscEnv -> IO HscEnv
 initUnits unitDflags env = do
   let dflags0         = hsc_dflags env
   -- additionally, set checked dflags so we don't lose fixes
-  let initial_home_graph = createUnitEnvFromFlags (dflags0 NE.:| unitDflags)
-      home_units = unitEnv_keys initial_home_graph
+  initial_home_graph <- createUnitEnvFromFlags (dflags0 NE.:| unitDflags)
+  let home_units = unitEnv_keys initial_home_graph
   home_unit_graph <- forM initial_home_graph $ \homeUnitEnv -> do
     let cached_unit_dbs = homeUnitEnv_unit_dbs homeUnitEnv
         dflags = homeUnitEnv_dflags homeUnitEnv
@@ -118,6 +132,9 @@ initUnits unitDflags env = do
         , ue_home_unit_graph = home_unit_graph
         , ue_current_unit    = homeUnitId_ dflags0
         , ue_eps             = ue_eps (hsc_unit_env env)
+#if MIN_VERSION_ghc(9,13,0)
+        , ue_module_graph    = emptyMG
+#endif
         }
   pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
 
