@@ -14,7 +14,7 @@ import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.FilePath
 import           Test.Hls
-import           Test.Hls.FileSystem               (VirtualFileTree)
+import qualified Test.Hls.FileSystem               as FS
 
 
 cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
@@ -52,22 +52,22 @@ runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
 runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
 
 runHaskellTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
-runHaskellTestCaseSession title subdir = testCase title . runHaskellAndCabalSession subdir
+runHaskellTestCaseSession title subdir = testCase title . runHaskellAndCabalSession (FS.mkVirtualFileTree testDataDir [FS.copyDir subdir])
 
 runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
-    failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
+    failIfSessionTimeout . runSessionWithServerInTmpDir def cabalPlugin (FS.mkVirtualFileTree testDataDir [FS.copyDir subdir])
 
-runCabalTestCaseSessionVft :: TestName -> VirtualFileTree -> Session () -> TestTree
+runCabalTestCaseSessionVft :: TestName -> FS.VirtualFileTree -> Session () -> TestTree
 runCabalTestCaseSessionVft title vft = testCase title . runCabalSessionVft vft
 
-runCabalSessionVft :: VirtualFileTree -> Session a -> IO a
+runCabalSessionVft :: FS.VirtualFileTree -> Session a -> IO a
 runCabalSessionVft vft =
     failIfSessionTimeout . runSessionWithServerInTmpDir def cabalPlugin vft
 
-runHaskellAndCabalSession :: FilePath -> Session a -> IO a
-runHaskellAndCabalSession subdir =
-    failIfSessionTimeout . runSessionWithServer def (cabalPlugin <> cabalHaskellPlugin) (testDataDir </> subdir)
+runHaskellAndCabalSession :: FS.VirtualFileTree -> Session a -> IO a
+runHaskellAndCabalSession vft =
+    failIfSessionTimeout . runSessionWithServerInTmpDir def (cabalPlugin <> cabalHaskellPlugin) vft
 
 runCabalGoldenSession :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 runCabalGoldenSession title subdir fp act = goldenWithCabalDoc def cabalPlugin title testDataDir (subdir </> fp) "golden" "cabal" act
