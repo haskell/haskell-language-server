@@ -1135,10 +1135,7 @@ jobs:
     environment: CI
     name: build-aarch64-linux-ubuntu2004-9103 (Build binaries)
     runs-on:
-    - self-hosted
-    - Linux
-    - ARM64
-    - maerwald
+    - ubuntu-24.04-arm
     steps:
     - name: clean and git config for aarch64-linux
       run: |
@@ -1180,10 +1177,7 @@ jobs:
     environment: CI
     name: build-aarch64-linux-ubuntu2004-9122 (Build binaries)
     runs-on:
-    - self-hosted
-    - Linux
-    - ARM64
-    - maerwald
+    - ubuntu-24.04-arm
     steps:
     - name: clean and git config for aarch64-linux
       run: |
@@ -1225,10 +1219,7 @@ jobs:
     environment: CI
     name: build-aarch64-linux-ubuntu2004-9141 (Build binaries)
     runs-on:
-    - self-hosted
-    - Linux
-    - ARM64
-    - maerwald
+    - ubuntu-24.04-arm
     steps:
     - name: clean and git config for aarch64-linux
       run: |
@@ -1270,10 +1261,7 @@ jobs:
     environment: CI
     name: build-aarch64-linux-ubuntu2004-967 (Build binaries)
     runs-on:
-    - self-hosted
-    - Linux
-    - ARM64
-    - maerwald
+    - ubuntu-24.04-arm
     steps:
     - name: clean and git config for aarch64-linux
       run: |
@@ -1315,10 +1303,7 @@ jobs:
     environment: CI
     name: build-aarch64-linux-ubuntu2004-984 (Build binaries)
     runs-on:
-    - self-hosted
-    - Linux
-    - ARM64
-    - maerwald
+    - ubuntu-24.04-arm
     steps:
     - name: clean and git config for aarch64-linux
       run: |
@@ -3961,10 +3946,7 @@ jobs:
     needs:
     - bindist-aarch64-linux-ubuntu2004
     runs-on:
-    - self-hosted
-    - Linux
-    - ARM64
-    - maerwald
+    - ubuntu-24.04-arm
     steps:
     - name: clean and git config for aarch64-linux
       run: |

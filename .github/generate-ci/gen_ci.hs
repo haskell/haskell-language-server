@@ -187,7 +187,7 @@ envVars arch os = object $
 -- | Runner selection
 runner :: Arch -> Opsys -> [Value]
 runner Amd64 (Linux _)   = ["ubuntu-latest"]
-runner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
+runner AArch64 (Linux _) = ["ubuntu-24.04-arm"]
 runner Amd64 Darwin      = ["macOS-13"]
 runner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows     = ["windows-latest"]
