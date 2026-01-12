@@ -66,6 +66,7 @@ data GHC
   | GHC984
   | GHC9103
   | GHC9122
+  | GHC9141
   deriving (Eq, Enum, Bounded)
 
 ghcVersion :: GHC -> String
@@ -73,6 +74,7 @@ ghcVersion GHC967  = "9.6.7"
 ghcVersion GHC984  = "9.8.4"
 ghcVersion GHC9103 = "9.10.3"
 ghcVersion GHC9122 = "9.12.2"
+ghcVersion GHC9141 = "9.14.1"
 
 ghcVersionIdent :: GHC -> String
 ghcVersionIdent = filter (/= '.') . ghcVersion
@@ -607,7 +609,7 @@ checkoutAction :: Value
 checkoutAction = ghAction "Checkout" "actions/checkout@v4" [] []
 
 uploadArtifacts :: String -> String -> Value
-uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v4"
+uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v5"
   [ "if-no-files-found" .= str "error"
   , "retention-days" .= (2 :: Int)
   , "name" .= name
@@ -615,4 +617,4 @@ uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@
   ] []
 
 downloadArtifacts :: String -> String -> Value
-downloadArtifacts name path = ghAction "Download artifacts" "actions/download-artifact@v4" [ "name" .= name, "path" .= path ] []
+downloadArtifacts name path = ghAction "Download artifacts" "actions/download-artifact@v6" [ "name" .= name, "path" .= path ] []
