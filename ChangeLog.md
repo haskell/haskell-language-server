@@ -1,5 +1,62 @@
 # Changelog for haskell-language-server
 
+## 2.13.0.0
+
+- Bindists for GHC 9.14.1
+- Bindists for GHC 9.12.2
+- Bindists for GHC 9.10.3
+- Bindists for GHC 9.8.4
+- Bindists for GHC 9.6.7
+- Last release supporting GHC 9.6
+
+Support for GHC 9.14.1 is preliminary, some plugins are not yet support but will
+be in the future.
+Plugins that are expected to be supported in a later release:
+
+- `hls-hlint-plugin`
+- `hls-ormolu-plugin`
+- `hls-fourmolu-plugin`
+- `hls-stylish-haskell-plugin`
+
+### Pull Requests
+
+- 9.14 support
+  ([#4780](https://github.com/haskell/haskell-language-server/pull/4780)) by @wz1000
+- Use 9.10.2 instead of 9.10.3 for CI on windows
+  ([#4768](https://github.com/haskell/haskell-language-server/pull/4768)) by @wz1000
+- Disable the hlint plugin for GHC 9.10, for good
+  ([#4767](https://github.com/haskell/haskell-language-server/pull/4767)) by @fendor
+- Add default-extension completions in .cabal files
+  ([#4766](https://github.com/haskell/haskell-language-server/pull/4766)) by @VeryMilkyJoe
+- Use the `HscEnv` after summarising the module
+  ([#4749](https://github.com/haskell/haskell-language-server/pull/4749)) by @fendor
+- Escape dollar signs in completion snippets
+  ([#4745](https://github.com/haskell/haskell-language-server/pull/4745)) by @Soupstraw
+- update contributing.md, adding instructions for configuring eglot to use a hacked HLS executable.
+  ([#4740](https://github.com/haskell/haskell-language-server/pull/4740)) by @morphismz
+- docs(ghcide): move most of the README in hls documentation (#3639)
+  ([#4739](https://github.com/haskell/haskell-language-server/pull/4739)) by @blackheaven
+- haskell-language-server: add plugin-tutorial cabal flag
+  ([#4738](https://github.com/haskell/haskell-language-server/pull/4738)) by @juhp
+- Remove overly chatty log message
+  ([#4737](https://github.com/haskell/haskell-language-server/pull/4737)) by @fendor
+- Rely on gitignore to exclude listed files in ghcide (#4665)
+  ([#4736](https://github.com/haskell/haskell-language-server/pull/4736)) by @blackheaven
+- Bump haskell-actions/setup from 2.8.1 to 2.8.2 in /.github/actions/setup-build
+  ([#4730](https://github.com/haskell/haskell-language-server/pull/4730)) by @dependabot[bot]
+- Bump haskell-actions/setup from 2.8.1 to 2.8.2
+  ([#4729](https://github.com/haskell/haskell-language-server/pull/4729)) by @dependabot[bot]
+- Prepare release 2.12.0.0
+  ([#4728](https://github.com/haskell/haskell-language-server/pull/4728)) by @wz1000
+- Use edit-distance to fix typos in cabal fields
+  ([#4722](https://github.com/haskell/haskell-language-server/pull/4722)) by @crtschin
+- Add code action to introduce `_` in numeric literals
+  ([#4716](https://github.com/haskell/haskell-language-server/pull/4716)) by @crtschin
+- Add "Go to type" hyperlinks in the hover popup (like Rust has)
+  ([#4691](https://github.com/haskell/haskell-language-server/pull/4691)) by @dnikolovv
+- Set the XDG_CACHE_HOME for tests
+  ([#4572](https://github.com/haskell/haskell-language-server/pull/4572)) by @fendor
+
 ## 2.12.0.0
 
 - Bindists for GHC 9.12.2
@@ -56,7 +113,7 @@
   ([#4640](https://github.com/haskell/haskell-language-server/pull/4640)) by @soulomoon
 - CI: Fix hls-eval-plugin tests for GHC-9.10
   ([#4638](https://github.com/haskell/haskell-language-server/pull/4638)) by @sgillespie
-- Fix renaming data constructors with fields (resolves #2915, resolves #4083) 
+- Fix renaming data constructors with fields (resolves #2915, resolves #4083)
   ([#4635](https://github.com/haskell/haskell-language-server/pull/4635)) by @jhrcek
 - Migrate change-type-signature-plugin to use structured diagnostics
   ([#4632](https://github.com/haskell/haskell-language-server/pull/4632)) by @sgillespie
@@ -94,7 +151,7 @@
   ([#4596](https://github.com/haskell/haskell-language-server/pull/4596)) by @fendor
 - Compute Partial module graph fingerprints
   ([#4594](https://github.com/haskell/haskell-language-server/pull/4594)) by @soulomoon
-- Strip prefixes added by DuplicateRecordFields 
+- Strip prefixes added by DuplicateRecordFields
   ([#4593](https://github.com/haskell/haskell-language-server/pull/4593)) by @kozak
 - Use shorter test names in ghcide-tests
   ([#4591](https://github.com/haskell/haskell-language-server/pull/4591)) by @fendor
