@@ -318,7 +318,6 @@ test-suite hls-cabal-plugin-tests
     , haskell-language-server:hls-cabal-plugin
     , hls-test-utils    == 2.12.0.0
     , lens
-    , lsp
     , lsp-types
     , text
 
@@ -353,7 +352,7 @@ library hls-class-plugin
     , deepseq
     , extra
     , ghc
-    , ghc-exactprint  >= 1.5 && < 1.13.0.0
+    , ghc-exactprint  >= 1.5 && < 1.15
     , ghcide          == 2.12.0.0
     , hls-graph
     , hls-plugin-api  == 2.12.0.0
@@ -712,7 +711,8 @@ common hlint
   -- Hlint isn't compatible with GHC 9.10, and crashes in subtle ways.
   -- See https://github.com/haskell/haskell-language-server/issues/4674
   -- for its wake of destruction.
-  if flag(hlint) && !impl(ghc ==9.10.*)
+  -- hlint depends on ghc-lib-parser which doesn't support GHC 9.14
+  if flag(hlint) && !impl(ghc ==9.10.*) && !impl(ghc >= 9.14)
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
@@ -721,7 +721,8 @@ library hls-hlint-plugin
   -- Hlint isn't compatible with GHC 9.10, and crashes in subtle ways.
   -- See https://github.com/haskell/haskell-language-server/issues/4674
   -- for its wake of destruction.
-  if !flag(hlint) || impl(ghc ==9.10.*)
+  -- hlint depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(hlint) || impl(ghc ==9.10.*) || impl(ghc >= 9.14)
     buildable: False
   exposed-modules:  Ide.Plugin.Hlint
   hs-source-dirs:   plugins/hls-hlint-plugin/src
@@ -771,7 +772,8 @@ test-suite hls-hlint-plugin-tests
   -- Hlint isn't compatible with GHC 9.10, and crashes in subtle ways.
   -- See https://github.com/haskell/haskell-language-server/issues/4674
   -- for its wake of destruction.
-  if !flag(hlint) || impl(ghc ==9.10.*)
+  -- hlint depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(hlint) || impl(ghc ==9.10.*) || impl(ghc >= 9.14)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
@@ -1519,13 +1521,15 @@ flag fourmolu
   manual:      True
 
 common fourmolu
-  if flag(fourmolu)
+  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
+  if flag(fourmolu) && !impl(ghc >= 9.14)
     build-depends: haskell-language-server:hls-fourmolu-plugin
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
-  if !flag(fourmolu)
+  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(fourmolu) || impl(ghc >= 9.14)
     buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
@@ -1545,7 +1549,8 @@ library hls-fourmolu-plugin
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(fourmolu)
+  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(fourmolu) || impl(ghc >= 9.14)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
@@ -1573,13 +1578,15 @@ flag ormolu
   manual:      True
 
 common ormolu
-  if flag(ormolu)
+  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
+  if flag(ormolu) && !impl(ghc >= 9.14)
     build-depends: haskell-language-server:hls-ormolu-plugin
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
-  if !flag(ormolu)
+  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(ormolu) || impl(ghc >= 9.14)
     buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
@@ -1599,7 +1606,8 @@ library hls-ormolu-plugin
 
 test-suite hls-ormolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(ormolu)
+  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(ormolu) || impl(ghc >= 9.14)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
@@ -1628,14 +1636,16 @@ flag stylishHaskell
   manual:      True
 
 common stylishHaskell
-  if flag(stylishHaskell)
+  -- stylish-haskell depends on ghc-lib-parser which doesn't support GHC 9.14
+  if flag(stylishHaskell) && !impl(ghc >= 9.14)
     build-depends: haskell-language-server:hls-stylish-haskell-plugin
     cpp-options: -Dhls_stylishHaskell
 
 library hls-stylish-haskell-plugin
   import:           defaults, pedantic, warnings
   -- https://github.com/haskell/stylish-haskell/issues/479
-  if !flag(stylishHaskell)
+  -- stylish-haskell depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(stylishHaskell) || impl(ghc >= 9.14)
     buildable: False
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
@@ -1653,7 +1663,8 @@ library hls-stylish-haskell-plugin
 
 test-suite hls-stylish-haskell-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !flag(stylishHaskell)
+  -- stylish-haskell depends on ghc-lib-parser which doesn't support GHC 9.14
+  if !flag(stylishHaskell) || impl(ghc >= 9.14)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
@@ -2088,9 +2099,9 @@ test-suite func-test
 -- formatters
   if flag(floskell) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dhls_floskell
-  if flag(fourmolu)
+  if flag(fourmolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dhls_fourmolu
-  if flag(ormolu)
+  if flag(ormolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test

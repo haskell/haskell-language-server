@@ -117,6 +117,9 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
 #endif
             -- Ignore all existential type variable since GADT not needed
             implicitTyVars
+#if MIN_VERSION_ghc(9,13,0)
+            []  -- con_inner_bndrs (new in 9.13)
+#endif
             (mergeContext ctxt con_mb_cxt)
             (renderDetails con_args)
             renderResultTy
@@ -125,19 +128,17 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
     where
         -- Parameters in the data constructor
         renderDetails :: HsConDeclH98Details GP -> HsConDeclGADTDetails GP
-#if MIN_VERSION_ghc(9,9,0)
-        renderDetails (PrefixCon _ args)   = PrefixConGADT noExtField args
-#else
-        renderDetails (PrefixCon _ args)   = PrefixConGADT args
-#endif
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,13,0)
+        renderDetails (PrefixCon args)     = PrefixConGADT noExtField args
         renderDetails (InfixCon arg1 arg2) = PrefixConGADT noExtField [arg1, arg2]
-#else
-        renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
-#endif
-#if MIN_VERSION_ghc(9,9,0)
+        renderDetails (RecCon recs)        = RecConGADT NoEpUniTok recs
+#elif MIN_VERSION_ghc(9,9,0)
+        renderDetails (PrefixCon _ args)   = PrefixConGADT noExtField args
+        renderDetails (InfixCon arg1 arg2) = PrefixConGADT noExtField [arg1, arg2]
         renderDetails (RecCon recs)        = RecConGADT NoEpUniTok recs
 #else
+        renderDetails (PrefixCon _ args)   = PrefixConGADT args
+        renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
         renderDetails (RecCon recs)        = RecConGADT recs noHsUniTok
 #endif
 
@@ -257,12 +258,10 @@ prettyGADTDecl df decl =
 #endif
 
 #if MIN_VERSION_ghc(9,11,0)
-        adjustDefnWhere annDataDefn
-          | andd_where annDataDefn == NoEpTok = annDataDefn
-          | otherwise = annDataDefn {andd_where = andd_where'}
-          where
-            (EpTok (EpaSpan aw)) = andd_where annDataDefn
-            andd_where' = EpTok (EpaDelta aw (SameLine 1) [])
+        adjustDefnWhere annDataDefn = case andd_where annDataDefn of
+            NoEpTok -> annDataDefn
+            EpTok (EpaSpan aw) -> annDataDefn {andd_where = EpTok (EpaDelta aw (SameLine 1) [])}
+            EpTok (EpaDelta {}) -> annDataDefn  -- already adjusted
 #endif
         -- Remove the first extra line if exist
         removeExtraEmptyLine s = case stripInfix "\n\n" s of

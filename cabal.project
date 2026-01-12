@@ -7,7 +7,12 @@ packages:
          ./hls-test-utils
 
 
-index-state: 2025-08-08T12:31:54Z
+index-state: 2026-01-01T00:00:00Z
+
+source-repository-package
+  type: git
+  location: https://github.com/snowleopard/alga
+  tag: d4e43fb42db05413459fb2df493361d5a666588a
 
 tests: True
 test-show-details: direct
@@ -56,3 +61,81 @@ if impl(ghc >= 9.11)
   allow-newer:
     cabal-install-parsers:base,
     cabal-install-parsers:time,
+
+if impl(ghc >= 9.14)
+  allow-newer:
+    scientific:containers,
+    lsp-types:containers,
+    lsp:containers,
+    indexed-traversable:containers,
+    foldl:containers,
+    deferred-folds:containers,
+    quickcheck-instances:containers,
+    hashable:containers,
+    dependent-map:containers,
+    aeson:containers,
+    semialign:containers,
+    lsp-test:containers,
+    haddock-library:base,
+    hiedb:ghc,
+    hie-bios:ghc,
+    integer-logarithms:ghc-bignum,
+    hashable:ghc-bignum,
+    string-interpolate:template-haskell,
+    haskell-src-meta:template-haskell,
+    th-orphans:template-haskell,
+    th-lift:template-haskell,
+    th-expand-syns:template-haskell,
+    tasty-hspec:base,
+    hsc2hs:base,
+    primitive:base,
+    tagged:template-haskell,
+    indexed-traversable:base,
+    text-short:base,
+    text-short:template-haskell,
+    bifunctors:template-haskell,
+    th-abstraction:template-haskell,
+    scientific:base,
+    integer-logarithms:base,
+    splitmix:base,
+    quickcheck-instances:base,
+    time-compat:base,
+    time-compat:time,
+    these:base,
+    assoc:base,
+    data-fix:base,
+    OneTuple:base,
+    some:base,
+    boring:base,
+    indexed-traversable-instances:base,
+    lsp-types:template-haskell,
+    uuid-types:template-haskell,
+    parallel:base,
+    lens:template-haskell,
+    free:template-haskell,
+    hiedb:base,
+    hie-compat:base,
+    hie-bios:time,
+    hie-bios:template-haskell,
+    hashable:base,
+    unordered-containers:template-haskell,
+    ghc-trace-events:base,
+    constraints-extras:template-haskell,
+    co-log-core:base,
+    async:base,
+    aeson:time,
+    text-iso8601:time,
+    semialign:base,
+    integer-conversion:base,
+    generically:base,
+    aeson:template-haskell,
+    scientific:template-haskell,
+    th-compat:template-haskell,
+    lsp-test:time,
+    ghc-lib-parser:base,
+    lukko:base,
+    binary-instances:base,
+    binary-orphans:base,
+    generic-deriving:template-haskell,
+    generic-deriving:containers,
+    cabal-install-parsers:containers,

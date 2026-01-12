@@ -66,17 +66,21 @@ getPattern :: LPat GhcPs -> Maybe Literal
 getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val
+#if __GLASGOW_HASKELL__ < 913
         HsRat _ val _ -> fromFractionalLit patSpan val
+#endif
         _             -> Nothing
     NPat _ (L (locA -> (RealSrcSpan sSpan _)) overLit) _ _ -> fromOverLit overLit sSpan
     NPlusKPat _ _ (L (locA -> (RealSrcSpan sSpan _)) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
     _ -> Nothing
 getPattern _ = Nothing
 
-fromLit :: HsLit p -> RealSrcSpan -> Maybe Literal
+fromLit :: HsLit GhcPs -> RealSrcSpan -> Maybe Literal
 fromLit lit sSpan = case lit of
         HsInt _ val   -> fromIntegralLit sSpan val
+#if __GLASGOW_HASKELL__ < 913
         HsRat _ val _ -> fromFractionalLit sSpan val
+#endif
         _             -> Nothing
 
 fromOverLit :: HsOverLit p -> RealSrcSpan -> Maybe Literal

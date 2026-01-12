@@ -1872,11 +1872,11 @@ extractQualifiedModuleName x
 --         ‘Data.Functor’ nor ‘Data.Text’ exports ‘putStrLn’.
 extractDoesNotExportModuleName :: T.Text -> Maybe T.Text
 extractDoesNotExportModuleName x
-  | Just [m] <- case ghcVersion of
-                  GHC912 -> matchRegexUnifySpaces x "The module ‘([^’]*)’ does not export"
-                            <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
-                  _ ->      matchRegexUnifySpaces x "the module ‘([^’]*)’ does not export"
-                            <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
+  | Just [m] <- if ghcVersion >= GHC912
+                  then matchRegexUnifySpaces x "The module ‘([^’]*)’ does not export"
+                       <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
+                  else matchRegexUnifySpaces x "the module ‘([^’]*)’ does not export"
+                       <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
   = Just m
   | otherwise
   = Nothing

@@ -133,6 +133,7 @@ tests =
   , knownBrokenInWindowsBeforeGHC912 "The output has path separators in it, which on Windows look different. Just skip it there" $
       goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" $
         case ghcVersion of
+          GHC914 -> "ghc914.expected"
           GHC912 -> "ghc912.expected"
           GHC910 -> "ghc910.expected"
           GHC98  -> "ghc98.expected"
