@@ -244,7 +244,7 @@ addDependencySuggestCodeAction ::
   GenericPackageDescription ->
   IO [J.CodeAction]
 addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath cabalFilePath gpd = do
-  buildTargets <- liftIO $ getBuildTargets gpd cabalFilePath haskellFilePath
+  buildTargets <- liftIO $ getBuildTargets (flattenPackageDescription gpd) cabalFilePath haskellFilePath
   case buildTargets of
     -- If there are no build targets found, run the `cabal-add` command with default behaviour
     [] -> pure $ mkCodeActionForDependency cabalFilePath Nothing <$> suggestions
@@ -262,17 +262,6 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
    It will be used as the input for `cabal-add`'s `executeConfig`.
   -}
   buildTargetToStringRepr target = render $ CabalPretty.pretty $ buildTargetComponentName target
-
-  {- | Finds the build targets that are used in `cabal-add`.
-   Note the unorthodox usage of `readBuildTargets`:
-   If the relative path to the haskell file is provided,
-   `readBuildTargets` will return the build targets, this
-   module is mentioned in (either exposed-modules or other-modules).
-  -}
-  getBuildTargets :: GenericPackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
-  getBuildTargets gpd cabalFilePath haskellFilePath = do
-    let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
-    readBuildTargets (verboseNoStderr silent) (flattenPackageDescription gpd) [haskellFileRelativePath]
 
   mkCodeActionForDependency :: FilePath -> Maybe String -> (T.Text, T.Text) -> J.CodeAction
   mkCodeActionForDependency cabalFilePath target (suggestedDep, suggestedVersion) =
@@ -295,6 +284,17 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
       command = mkLspCommand plId (CommandId cabalAddDependencyCommandId) "Add dependency" (Just [toJSON params])
      in
       J.CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing Nothing (Just command) Nothing
+
+{- | Finds the build targets that are used in `cabal-add`.
+  Note the unorthodox usage of `readBuildTargets`:
+  If the relative path to the haskell file is provided,
+  `readBuildTargets` will return the build targets, this
+  module is mentioned in (either exposed-modules or other-modules).
+-}
+getBuildTargets :: PackageDescription -> FilePath -> FilePath -> IO [BuildTarget]
+getBuildTargets pd cabalFilePath haskellFilePath = do
+  let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
+  readBuildTargets (verboseNoStderr silent) pd [haskellFileRelativePath]
 
 {- | Gives a mentioned number of @(dependency, version)@ pairs
 found in the "hidden package" diagnostic message.

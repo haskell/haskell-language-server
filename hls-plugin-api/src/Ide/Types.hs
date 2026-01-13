@@ -629,6 +629,14 @@ instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
   handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
 
+instance PluginMethod Notification Method_WorkspaceDidRenameFiles where
+  handlesRequest :: SMethod Method_WorkspaceDidRenameFiles
+    -> MessageParams Method_WorkspaceDidRenameFiles
+    -> PluginDescriptor c
+    -> Config
+    -> HandleRequestResult
+  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
+
 instance PluginMethod Notification Method_Initialized where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
   handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
@@ -908,6 +916,8 @@ instance PluginNotificationMethod Method_WorkspaceDidChangeWorkspaceFolders wher
 instance PluginNotificationMethod Method_WorkspaceDidChangeConfiguration where
 
 instance PluginNotificationMethod Method_Initialized where
+
+instance PluginNotificationMethod Method_WorkspaceDidRenameFiles where
 
 -- ---------------------------------------------------------------------
 
@@ -1239,6 +1249,7 @@ instance HasTracing CompletionItem
 instance HasTracing DocumentLink
 instance HasTracing InlayHint
 instance HasTracing WorkspaceSymbol
+instance HasTracing RenameFilesParams
 -- ---------------------------------------------------------------------
 --Experimental resolve refactoring
 {-# NOINLINE pROCESS_ID #-}

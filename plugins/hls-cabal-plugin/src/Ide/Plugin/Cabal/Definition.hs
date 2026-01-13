@@ -45,6 +45,9 @@ import           System.Directory                              (doesFileExist)
 import           System.FilePath                               (joinPath,
                                                                 takeDirectory,
                                                                 (<.>), (</>))
+import Distribution.Types.ComponentName (ComponentName)
+import Data.Foldable (asum)
+import Distribution.Types.ComponentName (ComponentName(..))
 
 -- | Handler for going to definitions.
 --
@@ -142,50 +145,48 @@ gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
     isModuleName (Just name) (_,  moduleName) = name == moduleName
     isModuleName _ _                          = False
 
--- | Gives all `buildInfo`s given a target name.
+-- | Gives all 'BuildInfo's given a target name.
 --
--- `Maybe buildTargetName` is provided, and if it's
--- Nothing we assume, that it's a main library.
--- Otherwise looks for the provided name.
-lookupBuildTargetPackageDescription :: PackageDescription -> Maybe T.Text -> [BuildInfo]
+-- Takes a @'Maybe' 'ComponentName'@ and looks for the coresponding Buildinfo if it is Just.
+-- If Nothing is passed we assume that we are looking for a main library.
+-- If no main library can be found, returns Nothing.
+lookupBuildTargetPackageDescription :: PackageDescription -> Maybe ComponentName -> Maybe BuildInfo
 lookupBuildTargetPackageDescription (PackageDescription {..}) Nothing =
   case library of
-    Nothing                       -> [] -- Target is a main library but no main library was found
-    Just (Library {libBuildInfo}) -> [libBuildInfo]
+    Nothing                       -> Nothing -- Target is a main library but no main library was found
+    Just (Library {libBuildInfo}) -> Just libBuildInfo
 lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetName) =
-  Maybe.catMaybes $
+    asum $
+    foldMap libraryNameLookup library :
     map executableNameLookup executables <>
-    map subLibraryNameLookup subLibraries <>
+    map libraryNameLookup subLibraries <>
     map foreignLibsNameLookup foreignLibs <>
     map testSuiteNameLookup testSuites <>
     map benchmarkNameLookup benchmarks
   where
     executableNameLookup :: Executable -> Maybe BuildInfo
     executableNameLookup (Executable {exeName, buildInfo}) =
-      if T.pack (unUnqualComponentName exeName) == buildTargetName
+      if CExeName exeName == buildTargetName
         then Just buildInfo
         else Nothing
-    subLibraryNameLookup :: Library -> Maybe BuildInfo
-    subLibraryNameLookup (Library {libName, libBuildInfo}) =
-      case libName of
-        (LSubLibName name) ->
-          if T.pack (unUnqualComponentName name) == buildTargetName
-            then Just libBuildInfo
-            else Nothing
-        LMainLibName -> Nothing
+    libraryNameLookup :: Library -> Maybe BuildInfo
+    libraryNameLookup (Library {libName, libBuildInfo}) =
+      if CLibName libName == buildTargetName
+        then Just libBuildInfo
+        else Nothing
     foreignLibsNameLookup :: ForeignLib -> Maybe BuildInfo
     foreignLibsNameLookup (ForeignLib {foreignLibName, foreignLibBuildInfo}) =
-        if T.pack (unUnqualComponentName foreignLibName) == buildTargetName
+      if CFLibName foreignLibName == buildTargetName
         then Just foreignLibBuildInfo
         else Nothing
     testSuiteNameLookup :: TestSuite -> Maybe BuildInfo
     testSuiteNameLookup (TestSuite {testName, testBuildInfo}) =
-      if T.pack (unUnqualComponentName testName) == buildTargetName
+      if CTestName testName == buildTargetName
         then Just testBuildInfo
         else Nothing
     benchmarkNameLookup :: Benchmark -> Maybe BuildInfo
     benchmarkNameLookup (Benchmark {benchmarkName, benchmarkBuildInfo}) =
-        if T.pack (unUnqualComponentName benchmarkName) == buildTargetName
+      if CBenchName benchmarkName == buildTargetName
         then Just benchmarkBuildInfo
         else Nothing
 

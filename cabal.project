@@ -5,6 +5,7 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+         ../lsp/lsp
 
 
 index-state: 2025-08-08T12:31:54Z
