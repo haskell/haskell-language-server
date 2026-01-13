@@ -1,4 +1,4 @@
-description: Container for ubuntu1804
+description: Container for mint222
 inputs:
   stage:
     description: which stage to build
@@ -6,7 +6,7 @@ inputs:
   version:
     description: which GHC version to build/test
     required: false
-name: action-ubuntu1804
+name: action-mint222
 runs:
   entrypoint: .github/scripts/entrypoint.sh
   env:
@@ -17,5 +17,5 @@ runs:
       git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc
       autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5
       libtinfo5 patchelf
-  image: ubuntu:18.04
+  image: linuxmintd/mint22.2-amd64
   using: docker
