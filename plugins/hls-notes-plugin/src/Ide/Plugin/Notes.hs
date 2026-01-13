@@ -11,7 +11,7 @@ import qualified Data.HashMap.Strict              as HM
 import qualified Data.HashSet                     as HS
 import           Data.List                        (uncons)
 import           Data.Maybe                       (catMaybes, listToMaybe,
-                                                   mapMaybe)
+                                                   mapMaybe, fromMaybe)
 import           Data.Text                        (Text, intercalate)
 import qualified Data.Text                        as T
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
@@ -25,8 +25,8 @@ import           GHC.Generics                     (Generic)
 import           Ide.Plugin.Error                 (PluginError (..))
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
-import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition, Method_TextDocumentReferences),
-                                                   SMethod (SMethod_TextDocumentDefinition, SMethod_TextDocumentReferences))
+import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition, Method_TextDocumentReferences, Method_TextDocumentHover),
+                                                   SMethod (SMethod_TextDocumentDefinition, SMethod_TextDocumentReferences, SMethod_TextDocumentHover))
 import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
@@ -80,6 +80,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides goto definiti
     , Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentDefinition jumpToNote
         <> mkPluginHandler SMethod_TextDocumentReferences listReferences
+        <> mkPluginHandler SMethod_TextDocumentHover hoverNote
     }
 
 findNotesRules :: Recorder (WithPriority Log) -> Rules ()
@@ -195,3 +196,113 @@ noteRefRegex, noteRegex :: Regex
     )
     where
         mkReg = makeRegexOpts (defaultCompOpt { caseSensitive = False }) defaultExecOpt
+
+-- | Find the precise range of `note [<title>]` on a line.
+findNoteRange
+  :: Text   -- ^ Full line text
+  -> Text   -- ^ Note title
+  -> UInt   -- ^ Line number
+  -> Maybe Range
+findNoteRange line note lineNo =
+  case T.breakOn needle line of
+    (_, "") -> Nothing
+    (before, _) ->
+      let startCol = fromIntegral (T.length before)
+          endCol   = startCol + fromIntegral (T.length needle)
+      in Just $
+           Range
+             (Position lineNo startCol)
+             (Position lineNo endCol)
+  where
+    needle = "note [" <> note <> "]"
+
+-- Given the path and position of a Note Declaration, finds Content in it. 
+-- ignores ~ as a seprator
+extractNoteContent
+  :: NormalizedFilePath
+  -> Position
+  -> IO (Maybe Text)
+extractNoteContent nfp (Position startLine _) = do
+  fileText <- readFileUtf8 $ fromNormalizedFilePath nfp
+
+  let allLines = T.lines fileText
+      afterDecl = drop (fromIntegral startLine) allLines
+      afterSeparator =
+        case dropWhile (not . isSeparatorLine) afterDecl of
+          []     -> []
+          (_:xs) -> xs
+      bodyLines = takeWhile (not . isEndMarker) afterSeparator
+
+  if null afterSeparator
+     then pure Nothing
+     else pure $ Just (T.unlines bodyLines)
+  where
+    isSeparatorLine t = T.isInfixOf "~~~" t
+    isEndMarker t     = T.isInfixOf "-}" t
+
+-- on hovering Note References, shows corresponding Declaration if it Exists
+-- ignores Note Declaration 
+hoverNote :: PluginMethodHandler IdeState Method_TextDocumentHover
+hoverNote state _ params
+  | Just nfp <- uriToNormalizedFilePath uriOrig
+  = do
+      let pos@(Position line _) = params ^. L.position
+      noteOpt <- getNote nfp state pos
+      case noteOpt of
+        Nothing ->
+          pure (InR Null)
+
+        Just note -> do
+          mbRope <-
+            liftIO $
+              runAction "notes.hoverLine" state (getFileContents nfp)
+
+          -- compute precise hover range for highlighting corresponding Note Reference on Hover
+          let lineText =
+                case mbRope of
+                  Nothing -> ""
+                  Just rope ->
+                    fromMaybe "" $
+                      listToMaybe $
+                        drop (fromIntegral line) $
+                          Rope.lines rope
+
+              mbRange = findNoteRange lineText note line
+
+          notes <- runActionE "notes.hover" state $ useE MkGetNotes nfp
+          case HM.lookup note notes of
+            Nothing ->
+              pure $
+                InL $
+                  Hover
+                    (InL $ MarkupContent MarkupKind_Markdown
+                      "_No declaration available_")
+                    mbRange
+
+            Just (defFile, defPos) ->
+              if nfp == defFile && pos ^. L.line == defPos ^. L.line
+                then pure (InR Null)
+                else do
+                  mbContent <- liftIO $ extractNoteContent defFile defPos
+
+                  let contents =
+                        case mbContent of
+                          Nothing ->
+                            "_No declaration available_"
+                          Just body ->
+                            T.unlines
+                              [ note
+                              , ""
+                              , body
+                              ]
+
+                  pure $
+                    InL $
+                      Hover
+                        (InL $ MarkupContent MarkupKind_Markdown contents)
+                        mbRange
+  where
+    uriOrig = toNormalizedUri $ params ^. (L.textDocument . L.uri)
+
+hoverNote _ _ _ =
+  pure (InR Null)
