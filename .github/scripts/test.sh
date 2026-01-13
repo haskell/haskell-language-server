@@ -49,6 +49,10 @@ test_all_hls() {
         bin_noexe=${bin/.exe/}
         if ! [[ "${bin_noexe}" =~ "haskell-language-server-wrapper" ]] && ! [[ "${bin_noexe}" =~ "~" ]] ; then
             if ghcup install ghc --set "${bin_noexe/haskell-language-server-/}" ; then
+                # To work around the cabal-3.16.1.0 bug report https://github.com/haskell/cabal/issues/11417
+                # We should be able to remove this hacky removal of the builddir, once we upgrade
+                # TODO: REMOVEME
+                rm -rf dist-newstyle/
                 "${hls}" --debug typecheck "${test_module}" || fail "failed to typecheck with HLS for GHC ${bin_noexe/haskell-language-server-/}"
 
                 # After running the test, free up disk space by deleting the unneeded GHC version.
@@ -61,6 +65,11 @@ test_all_hls() {
     done
     # install the recommended GHC version so the wrapper can launch HLS
     ghcup install ghc --set 9.10.3
+
+    # To work around the cabal-3.16.1.0 bug report https://github.com/haskell/cabal/issues/11417
+    # We should be able to remove this hacky removal of the builddir, once we upgrade
+    # TODO: REMOVEME
+    rm -rf dist-newstyle/
     "$bindir/haskell-language-server-wrapper${ext}" typecheck "${test_module}" || fail "failed to typecheck with HLS wrapper"
 }
 
