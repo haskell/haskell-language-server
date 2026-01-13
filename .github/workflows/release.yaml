@@ -5,61 +5,56 @@ env:
   CABAL_CACHE_DISABLE: ${{ vars.CABAL_CACHE_DISABLE }}
   CABAL_CACHE_NONFATAL: ${{ vars.CABAL_CACHE_NONFATAL }}
 jobs:
-  bindist-aarch64-linux-ubuntu2004:
+  bindist-aarch64-linux-ubuntu2204:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
       S3_HOST: ${{ secrets.S3_HOST }}
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
-    name: bindist-aarch64-linux-ubuntu2004 (Prepare bindist)
+    name: bindist-aarch64-linux-ubuntu2204 (Prepare bindist)
     needs:
-    - build-aarch64-linux-ubuntu2004-967
-    - build-aarch64-linux-ubuntu2004-984
-    - build-aarch64-linux-ubuntu2004-9103
-    - build-aarch64-linux-ubuntu2004-9122
-    - build-aarch64-linux-ubuntu2004-9141
+    - build-aarch64-linux-ubuntu2204-967
+    - build-aarch64-linux-ubuntu2204-984
+    - build-aarch64-linux-ubuntu2204-9103
+    - build-aarch64-linux-ubuntu2204-9122
+    - build-aarch64-linux-ubuntu2204-9141
     runs-on:
     - self-hosted
     - Linux
     - ARM64
     - maerwald
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: artifacts-build-aarch64-linux-ubuntu2004-967
+        name: artifacts-build-aarch64-linux-ubuntu2204-967
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: artifacts-build-aarch64-linux-ubuntu2004-984
+        name: artifacts-build-aarch64-linux-ubuntu2204-984
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: artifacts-build-aarch64-linux-ubuntu2004-9103
+        name: artifacts-build-aarch64-linux-ubuntu2204-9103
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: artifacts-build-aarch64-linux-ubuntu2004-9122
+        name: artifacts-build-aarch64-linux-ubuntu2204-9122
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: artifacts-build-aarch64-linux-ubuntu2004-9141
+        name: artifacts-build-aarch64-linux-ubuntu2204-9141
         path: ./
     - name: Unpack aarch64-linux binaries
       uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
@@ -73,7 +68,7 @@ jobs:
       uses: actions/upload-artifact@v5
       with:
         if-no-files-found: error
-        name: bindist-aarch64-linux-ubuntu2004
+        name: bindist-aarch64-linux-ubuntu2204
         path: |-
           ./out/*.tar.xz
           ./out/plan.json/*
@@ -1121,11 +1116,11 @@ jobs:
           ./out/plan.json/*
           ./out/*.zip
         retention-days: 2
-  build-aarch64-linux-ubuntu2004-9103:
+  build-aarch64-linux-ubuntu2204-9103:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
@@ -1133,15 +1128,10 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-linux-ubuntu2004-9103 (Build binaries)
+    name: build-aarch64-linux-ubuntu2204-9103 (Build binaries)
     runs-on:
-    - ubuntu-24.04-arm
+    - ubuntu-22.04-arm
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - env:
@@ -1160,14 +1150,14 @@ jobs:
       uses: actions/upload-artifact@v5
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-linux-ubuntu2004-9103
-        path: out-aarch64-linux-ubuntu2004-9.10.3.tar
+        name: artifacts-build-aarch64-linux-ubuntu2204-9103
+        path: out-aarch64-linux-ubuntu2204-9.10.3.tar
         retention-days: 2
-  build-aarch64-linux-ubuntu2004-9122:
+  build-aarch64-linux-ubuntu2204-9122:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
@@ -1175,15 +1165,10 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-linux-ubuntu2004-9122 (Build binaries)
+    name: build-aarch64-linux-ubuntu2204-9122 (Build binaries)
     runs-on:
-    - ubuntu-24.04-arm
+    - ubuntu-22.04-arm
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - env:
@@ -1202,14 +1187,14 @@ jobs:
       uses: actions/upload-artifact@v5
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-linux-ubuntu2004-9122
-        path: out-aarch64-linux-ubuntu2004-9.12.2.tar
+        name: artifacts-build-aarch64-linux-ubuntu2204-9122
+        path: out-aarch64-linux-ubuntu2204-9.12.2.tar
         retention-days: 2
-  build-aarch64-linux-ubuntu2004-9141:
+  build-aarch64-linux-ubuntu2204-9141:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
@@ -1217,15 +1202,10 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-linux-ubuntu2004-9141 (Build binaries)
+    name: build-aarch64-linux-ubuntu2204-9141 (Build binaries)
     runs-on:
-    - ubuntu-24.04-arm
+    - ubuntu-22.04-arm
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - env:
@@ -1244,14 +1224,14 @@ jobs:
       uses: actions/upload-artifact@v5
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-linux-ubuntu2004-9141
-        path: out-aarch64-linux-ubuntu2004-9.14.1.tar
+        name: artifacts-build-aarch64-linux-ubuntu2204-9141
+        path: out-aarch64-linux-ubuntu2204-9.14.1.tar
         retention-days: 2
-  build-aarch64-linux-ubuntu2004-967:
+  build-aarch64-linux-ubuntu2204-967:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
@@ -1259,15 +1239,10 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-linux-ubuntu2004-967 (Build binaries)
+    name: build-aarch64-linux-ubuntu2204-967 (Build binaries)
     runs-on:
-    - ubuntu-24.04-arm
+    - ubuntu-22.04-arm
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - env:
@@ -1286,14 +1261,14 @@ jobs:
       uses: actions/upload-artifact@v5
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-linux-ubuntu2004-967
-        path: out-aarch64-linux-ubuntu2004-9.6.7.tar
+        name: artifacts-build-aarch64-linux-ubuntu2204-967
+        path: out-aarch64-linux-ubuntu2204-9.6.7.tar
         retention-days: 2
-  build-aarch64-linux-ubuntu2004-984:
+  build-aarch64-linux-ubuntu2204-984:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
@@ -1301,15 +1276,10 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: build-aarch64-linux-ubuntu2004-984 (Build binaries)
+    name: build-aarch64-linux-ubuntu2204-984 (Build binaries)
     runs-on:
-    - ubuntu-24.04-arm
+    - ubuntu-22.04-arm
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - env:
@@ -1328,8 +1298,8 @@ jobs:
       uses: actions/upload-artifact@v5
       with:
         if-no-files-found: error
-        name: artifacts-build-aarch64-linux-ubuntu2004-984
-        path: out-aarch64-linux-ubuntu2004-9.8.4.tar
+        name: artifacts-build-aarch64-linux-ubuntu2204-984
+        path: out-aarch64-linux-ubuntu2204-9.8.4.tar
         retention-days: 2
   build-aarch64-mac-9103:
     env:
@@ -3808,7 +3778,7 @@ jobs:
     - test-x86_64-mac
     - test-aarch64-mac
     - test-x86_64-windows
-    - test-aarch64-linux-ubuntu2004
+    - test-aarch64-linux-ubuntu2204
     - test-x86_64-linux-deb10
     - test-x86_64-linux-deb11
     - test-x86_64-linux-deb12
@@ -3844,7 +3814,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: bindist-aarch64-linux-ubuntu2004
+        name: bindist-aarch64-linux-ubuntu2204
         path: ./out
     - name: Download artifacts
       uses: actions/download-artifact@v6
@@ -3930,11 +3900,11 @@ jobs:
           ./out/*.tar.xz
           ./out/*.tar.gz
           ./out/*.tar
-  test-aarch64-linux-ubuntu2004:
+  test-aarch64-linux-ubuntu2204:
     env:
       ADD_CABAL_ARGS: ''
       ARCH: ARM64
-      ARTIFACT: aarch64-linux-ubuntu2004
+      ARTIFACT: aarch64-linux-ubuntu2204
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DEBIAN_FRONTEND: noninteractive
@@ -3942,23 +3912,18 @@ jobs:
       TARBALL_EXT: tar.xz
       TZ: Asia/Singapore
     environment: CI
-    name: test-aarch64-linux-ubuntu2004 (Test binaries)
+    name: test-aarch64-linux-ubuntu2204 (Test binaries)
     needs:
-    - bindist-aarch64-linux-ubuntu2004
+    - bindist-aarch64-linux-ubuntu2204
     runs-on:
-    - ubuntu-24.04-arm
+    - ubuntu-22.04-arm
     steps:
-    - name: clean and git config for aarch64-linux
-      run: |
-        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-        git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
-      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - name: Download artifacts
       uses: actions/download-artifact@v6
       with:
-        name: bindist-aarch64-linux-ubuntu2004
+        name: bindist-aarch64-linux-ubuntu2204
         path: ./out
     - name: Run test
       uses: docker://hasufell/arm64v8-ubuntu-haskell:focal

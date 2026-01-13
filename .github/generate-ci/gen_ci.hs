@@ -24,7 +24,8 @@ import           System.FilePath
 data Opsys
   = Linux Distro
   | Darwin
-  | Windows deriving (Eq)
+  | Windows
+  deriving (Show, Eq)
 
 osName :: Opsys -> String
 osName Darwin    = "mac"
@@ -45,7 +46,7 @@ data Distro
   | Fedora33
   | Fedora40
   | Rocky8
-  deriving (Eq, Enum, Bounded)
+  deriving (Show, Eq, Enum, Bounded)
 
 allDistros :: [Distro]
 allDistros = [minBound .. maxBound]
@@ -67,7 +68,7 @@ data GHC
   | GHC9103
   | GHC9122
   | GHC9141
-  deriving (Eq, Enum, Bounded)
+  deriving (Show, Eq, Ord, Enum, Bounded)
 
 ghcVersion :: GHC -> String
 ghcVersion GHC967  = "9.6.7"
@@ -83,6 +84,7 @@ allGHCs :: [GHC]
 allGHCs = [minBound .. maxBound]
 
 data Stage = Build GHC | Bindist | Test
+    deriving (Show, Eq)
 
 -------------------------------------------------------------------------------
 -- Distro Configuration
@@ -187,7 +189,7 @@ envVars arch os = object $
 -- | Runner selection
 runner :: Arch -> Opsys -> [Value]
 runner Amd64 (Linux _)   = ["ubuntu-latest"]
-runner AArch64 (Linux _) = ["ubuntu-24.04-arm"]
+runner AArch64 (Linux _) = ["ubuntu-22.04-arm"]
 runner Amd64 Darwin      = ["macOS-13"]
 runner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows     = ["windows-latest"]
@@ -394,7 +396,7 @@ buildJob arch os v =
           | Windows <- os = "./out/*"
           | otherwise = ("out-"++art++"-"++ghcVersion v++".tar")
         buildStep Amd64 (Linux d) = [customAction d (Build v)]
-        buildStep AArch64 (Linux Ubuntu2004) =
+        buildStep AArch64 (Linux Ubuntu2204) =
           [ ghAction "Build aarch64-linux binaries" "docker://hasufell/arm64v8-ubuntu-haskell:focal"
               [ "args" .= str "bash .github/scripts/build.sh" ]
               [ "GHC_VERSION" .= ghcVersion v ]
@@ -402,7 +404,7 @@ buildJob arch os v =
               [ "args" .= str "bash .github/scripts/tar.sh" ]
               [ "GHC_VERSION" .= ghcVersion v ]
           ]
-        buildStep AArch64 (Linux _) = error "aarch64-linux non-ubuntu not supported"
+        buildStep AArch64 (Linux d) = error $ "aarch64-linux non-ubuntu " ++ show d ++ " not supported"
 
         buildStep Amd64 Darwin = [ghRun "Run build" "sh" ["GHC_VERSION" .= ghcVersion v] $ unlines $
           [ "brew install coreutils tree"
@@ -449,7 +451,7 @@ mkBindistJob arch os vs =
           | otherwise = "./"
 
         bindistStep Amd64 (Linux d) = [customAction d Bindist]
-        bindistStep AArch64 (Linux Ubuntu2004) =
+        bindistStep AArch64 (Linux Ubuntu2204) =
           [ ghAction "Unpack aarch64-linux binaries" "docker://hasufell/arm64v8-ubuntu-haskell:focal"
               [ "args" .= str "bash .github/scripts/untar.sh" ]
               [ ]
@@ -512,7 +514,7 @@ mkTestJob arch os =
   where thisEnv = envVars arch os
 
         testStep Amd64 (Linux d) = [customAction d Test]
-        testStep AArch64 (Linux Ubuntu2004) =
+        testStep AArch64 (Linux Ubuntu2204) =
           [ ghAction "Run test" "docker://hasufell/arm64v8-ubuntu-haskell:focal"
               [ "args" .= str "bash .github/scripts/test.sh" ]
               [ ]
@@ -557,7 +559,7 @@ ciConfigs =
   [ MkConfig Amd64 Darwin allGHCs
   , MkConfig AArch64 Darwin allGHCs
   , MkConfig Amd64 Windows allGHCs
-  , MkConfig AArch64 (Linux Ubuntu2004) allGHCs]
+  , MkConfig AArch64 (Linux Ubuntu2204) allGHCs]
   ++ [ MkConfig Amd64 (Linux distro) allGHCs | distro <- allDistros ]
 
 main :: IO ()
