@@ -16,10 +16,15 @@ import qualified Data.List                                     as List
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     ()
 import qualified Data.Text                                     as T
+import           Data.Text.Utf16.Rope.Mixed                    as Rope
+
+import           Control.Monad.Except                          (runExceptT)
 import           Development.IDE                               as D
-import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
+import           Development.IDE.Core.FileStore                (getVersionedTextDoc,
+                                                                getVersionedTextDocForNormalizedFilePath)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.Shake                    (restartShakeSession)
+import           Development.IDE.Core.Shake                    (getIdeGlobalState,
+                                                                restartShakeSession)
 import           Development.IDE.Graph                         (Key)
 import           Development.IDE.LSP.HoverDefinition           (foundHover)
 import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
@@ -33,6 +38,7 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import qualified Distribution.Parsec.Position                  as Syntax
 import qualified Ide.Plugin.Cabal.CabalAdd.CodeAction          as CabalAdd
 import qualified Ide.Plugin.Cabal.CabalAdd.Command             as CabalAdd
+import qualified Ide.Plugin.Cabal.CabalAdd.Rename              as Rename
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
@@ -53,10 +59,16 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
+import           Language.LSP.Server                           (LspM,
+                                                                getClientCapabilities,
+                                                                getConfig)
+import qualified Language.LSP.Server                           as LSP
 import qualified Language.LSP.VFS                              as VFS
 import qualified Text.Fuzzy.Levenshtein                        as Fuzzy
 import qualified Text.Fuzzy.Parallel                           as Fuzzy
 import           Text.Regex.TDFA
+import Data.Text.Encoding (encodeUtf8)
+import Debug.Trace (traceShowM)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -70,6 +82,7 @@ data Log
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
   | LogCabalAdd CabalAdd.Log
+  | LogDidRename Rename.Log
   deriving (Show)
 
 instance Pretty Log where
@@ -95,6 +108,7 @@ instance Pretty Log where
         <+> pretty position
     LogCompletions logs -> pretty logs
     LogCabalAdd logs -> pretty logs
+    LogDidRename logs -> pretty logs
 
 {- | Some actions in cabal files can be triggered from haskell files.
 This descriptor allows us to hook into the diagnostics of haskell source files and
@@ -155,6 +169,11 @@ descriptor recorder plId =
                   log' Debug $ LogDocClosed _uri
                   restartCabalShakeSession (shakeExtras ide) vfs file "(closed)" $
                     OfInterest.deleteFileOfInterest ofInterestRecorder ide file
+          , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidRenameFiles $
+            \ide vfs _ (RenameFilesParams (renames)) -> do
+              case renames of
+                (fileRename:_) -> renameModuleHandler recorder ide fileRename
+                _ -> error "cannot handle multiple file renames"
           ]
     , pluginConfigDescriptor =
         defaultConfigDescriptor
@@ -299,6 +318,36 @@ cabalAddModuleCodeAction recorder state plId (CodeActionParams _ _ (TextDocument
                 uri
             pure $ InL $ fmap InR actions
     Nothing -> pure $ InL []
+
+renameModuleHandler :: Recorder (WithPriority Log) -> IdeState -> FileRename -> LspM Config ()
+renameModuleHandler recorder ide (FileRename oldUri newUri) = do
+    caps <- getClientCapabilities
+    renameResult <- runExceptT $ do
+      oldHaskellFilePath <- uriToFilePathE $ Uri oldUri
+      newHaskellFilePath <- uriToFilePathE $ Uri newUri
+      mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile oldHaskellFilePath
+      case mbCabalFile of
+          Nothing -> pure undefined -- log this maybe
+          Just cabalFilePath -> do
+            mCabalInfo <- runActionE "cabal-plugin.getUriContents" ide $ do
+              let nuri = toNormalizedUri $ filePathToUri cabalFilePath
+                  nfp = toNormalizedFilePath cabalFilePath
+              mcontent <- lift $ getUriContents nuri
+              verTextDocId <- lift $ getVersionedTextDocForNormalizedFilePath nfp
+              (fields, _) <- useWithStaleE ParseCabalFields nfp
+              (gpd, _) <- useWithStaleE ParseCabalFile nfp
+              pure (mcontent, fields, gpd, verTextDocId)
+            case mCabalInfo of
+              (Just contents, fields, gpd, verTextDocId) ->
+                Rename.renameHandler (cmapWithPrio LogDidRename recorder) ide (caps, verTextDocId) oldHaskellFilePath newHaskellFilePath cabalFilePath (encodeUtf8 $ Rope.toText contents) fields gpd
+              _ -> undefined
+
+    case renameResult of
+      Left err -> do
+        traceShowM ("BANANA", pretty err) --todo better error handling pls
+      Right edit -> do
+        _ <- LSP.sendRequest LSP.SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        pure ()
 
 {- | Handler for hover messages.
 
