@@ -18,6 +18,7 @@ Support status (see the support policy below for more details):
 | GHC version  | Last supporting HLS version                                                          | Support status |
 | ------------ | ------------------------------------------------------------------------------------ | -------------- |
 | 9.12.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
+| 9.10.3       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
 | 9.10.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
 | 9.10.1       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
 | 9.8.4        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |

@@ -7,7 +7,7 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.14.2.0"
+    default: "3.16.1.0"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell-actions/setup@v2.8.1
+    - uses: haskell-actions/setup@v2.8.2
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -42,6 +42,13 @@ runs:
       name: (Windows) Platform config
       run: |
         echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
+      shell: bash
+
+    - if: inputs.os == 'Windows'
+      name: (Windows) Platform config (root test directory)
+      run: |
+        mkdir C:\\hls-tests
+        echo "HLS_TEST_ROOTDIR=C:\\hls-tests" >> $GITHUB_ENV
       shell: bash
 
     - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )

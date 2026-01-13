@@ -34,3 +34,4 @@ The official Haskell language server (LSP) implementation. Consult the [project 
 - [Configuration](https://haskell-language-server.readthedocs.io/en/latest/configuration.html)
 - [Troubleshooting](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html)
 - [Contributing](https://haskell-language-server.readthedocs.io/en/latest/contributing/index.html)
+- [Components](https://haskell-language-server.readthedocs.io/en/latest/components/index.html)

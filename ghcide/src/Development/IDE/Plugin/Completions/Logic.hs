@@ -69,6 +69,7 @@ import           Development.IDE                          hiding (line)
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 
+import qualified Development.IDE.Plugin.Completions.Types as C
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
@@ -202,7 +203,7 @@ mkCompl
                   _preselect = Nothing,
                   _sortText = Nothing,
                   _filterText = Nothing,
-                  _insertText = Just insertText,
+                  _insertText = Just $ snippetToText insertText,
                   _insertTextFormat = Just InsertTextFormat_Snippet,
                   _insertTextMode = Nothing,
                   _textEdit = Nothing,
@@ -242,10 +243,9 @@ mkNameCompItem doc thingParent origName provenance isInfix !imp mod = CI {..}
     isTypeCompl = isTcOcc origName
     typeText = Nothing
     label = stripOccNamePrefix $ printOutputable origName
-    insertText = case isInfix of
+    insertText = snippetText $ case isInfix of
             Nothing         -> label
             Just LeftSide   -> label <> "`"
-
             Just Surrounded -> label
     additionalTextEdits =
       imp <&> \x ->
@@ -294,7 +294,7 @@ defaultCompletionItemWithLabel label =
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc identInfo@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
-  , insertText=rend
+  , insertText= snippetText rend
   , provenance = DefinedIn mod
   , label=rend
   , typeText = Nothing
@@ -458,10 +458,11 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         ]
 
     mkLocalComp pos n ctyp ty =
-        CI ctyp pn (Local pos) pn ty Nothing (ctyp `elem` [CompletionItemKind_Struct, CompletionItemKind_Interface]) Nothing (Just $ NameDetails (ms_mod $ pm_mod_summary pm) occ) True
+        CI ctyp sn (Local pos) pn ty Nothing (ctyp `elem` [CompletionItemKind_Struct, CompletionItemKind_Interface]) Nothing (Just $ NameDetails (ms_mod $ pm_mod_summary pm) occ) True
       where
         occ = rdrNameOcc $ unLoc n
         pn = showForSnippet n
+        sn = snippetText pn
 
 findRecordCompl :: Uri -> Provenance -> TyClDecl GhcPs -> [CompItem]
 findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
@@ -489,10 +490,17 @@ findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
+#if MIN_VERSION_ghc(9,13,0)
+        extract HsConDeclRecField{..}
+            = map (foLabel . unLoc) cdrf_names
+        -- XConDeclRecField
+        extract _ = []
+#else
         extract ConDeclField{..}
             = map (foLabel . unLoc) cd_fld_names
         -- XConDeclField
         extract _ = []
+#endif
 findRecordCompl _ _ _ = []
 
 toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
@@ -638,7 +646,7 @@ getCompletions
               dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
               dotFieldSelectorToCompl recname label = (True, CI
                 { compKind = CompletionItemKind_Field
-                , insertText = label
+                , insertText = snippetText label
                 , provenance = DefinedIn recname
                 , label = label
                 , typeText = Nothing
@@ -667,7 +675,7 @@ getCompletions
           endLoc = upperRange oldPos
           localCompls = map (uncurry localBindsToCompItem) $ getFuzzyScope localBindings startLoc endLoc
           localBindsToCompItem :: Name -> Maybe Type -> CompItem
-          localBindsToCompItem name typ = CI ctyp pn thisModName pn ty Nothing (not $ isValOcc occ) Nothing dets True
+          localBindsToCompItem name typ = CI ctyp (snippetText pn) thisModName pn ty Nothing (not $ isValOcc occ) Nothing dets True
             where
               occ = nameOccName name
               ctyp = occNameToComKind occ
@@ -736,7 +744,8 @@ uniqueCompl candidate unique =
         -- filter global completions when we already have a local one
         || not(isLocalCompletion candidate) && isLocalCompletion unique
         then EQ
-        else compare (importedFrom candidate, insertText candidate) (importedFrom unique, insertText unique)
+        else compare (importedFrom candidate) (importedFrom unique) <>
+             snippetLexOrd (insertText candidate) (insertText unique)
     other -> other
   where
       importedFrom :: CompItem -> T.Text
@@ -805,9 +814,10 @@ mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r
           }
 
       placeholder_pairs = zip compl ([1..]::[Int])
-      snippet_parts = map (\(x, i) -> x <> "=${" <> T.pack (show i) <> ":_" <> x <> "}") placeholder_pairs
-      snippet = T.intercalate (T.pack ", ") snippet_parts
-      buildSnippet = ctxStr <> " {" <> snippet <> "}"
+      snippet_parts = placeholder_pairs <&> \(x, i) ->
+        snippetText x <> "=" <> snippetVariableDefault (T.pack $ show i) (C.SText $ "_" <> x)
+      snippet = mconcat $ intersperse ", " snippet_parts
+      buildSnippet = snippetText ctxStr <> " {" <> snippet <> "}"
 
 getImportQual :: LImportDecl GhcPs -> Maybe T.Text
 getImportQual (L _ imp)

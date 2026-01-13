@@ -1,0 +1,20 @@
+description: Container for deb13
+inputs:
+  stage:
+    description: which stage to build
+    required: true
+  version:
+    description: which GHC version to build/test
+    required: false
+name: action-deb13
+runs:
+  entrypoint: .github/scripts/entrypoint.sh
+  env:
+    GHC_VERSION: ${{ inputs.version }}
+    INSTALL: apt-get update && apt-get install -y
+    STAGE: ${{ inputs.stage }}
+    TOOLS: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev
+      git wget lsb-release gnupg2 apt-transport-https gcc autoconf automake build-essential
+      curl ghc gzip libffi-dev libncurses-dev patchelf
+  image: debian:13
+  using: docker

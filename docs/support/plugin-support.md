@@ -56,7 +56,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-explicit-record-fields-plugin`  | 2    |                          |
 | `hls-fourmolu-plugin`                | 2    |                          |
 | `hls-gadt-plugin`                    | 2    |                          |
-| `hls-hlint-plugin`                   | 2    |                          |
+| `hls-hlint-plugin`                   | 2    | 9.10 [1]                 |
 | `hls-module-name-plugin`             | 2    |                          |
 | `hls-notes-plugin`                   | 2    |                          |
 | `hls-qualify-imported-names-plugin`  | 2    |                          |
@@ -69,3 +69,5 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-stan-plugin`                    | 3    | 9.12.2                   |
 | `hls-retrie-plugin`                  | 3    | 9.10.1, 9.12.2           |
 | `hls-splice-plugin`                  | 3    | 9.10.1, 9.12.2           |
+
+[1]: HLint is incompatible with GHC 9.10 series. See the issue [#4674](https://github.com/haskell/haskell-language-server/issues/4674) for discussion and explanation.

@@ -57,6 +57,7 @@ import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location       (Position (Position, _line),
                                                        Range (Range, _end, _start))
+import           GHC.Core.TyCo.Tidy                   (tidyOpenType)
 import           GHC.Generics                         (Generic)
 import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,

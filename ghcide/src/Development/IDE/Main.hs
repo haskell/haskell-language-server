@@ -15,6 +15,7 @@ import           Control.Concurrent.Extra                 (withNumCapabilities)
 import           Control.Concurrent.MVar                  (MVar, newEmptyMVar,
                                                            putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
+import           Control.Exception.Safe                   as Safe
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
 import           Control.Monad.IO.Class                   (liftIO)
@@ -114,16 +115,17 @@ import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
 import qualified System.Directory.Extra                   as IO
-import           System.Exit                              (ExitCode (ExitFailure),
+import           System.Exit                              (ExitCode (ExitFailure, ExitSuccess),
                                                            exitWith)
 import           System.FilePath                          (takeExtension,
-                                                           takeFileName)
+                                                           takeFileName, (</>))
 import           System.IO                                (BufferMode (LineBuffering, NoBuffering),
                                                            Handle, hFlush,
                                                            hPutStrLn,
                                                            hSetBuffering,
                                                            hSetEncoding, stderr,
                                                            stdin, stdout, utf8)
+import           System.Process                           (readProcessWithExitCode)
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
@@ -141,6 +143,7 @@ data Log
   | LogSession Session.Log
   | LogPluginHLS PluginHLS.Log
   | LogRules Rules.Log
+  | LogUsingGit
   deriving Show
 
 instance Pretty Log where
@@ -164,6 +167,7 @@ instance Pretty Log where
     LogSession msg -> pretty msg
     LogPluginHLS msg -> pretty msg
     LogRules msg -> pretty msg
+    LogUsingGit -> "Using git to list file, relying on .gitignore"
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
@@ -383,7 +387,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
 
             putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
-            files <- expandFiles (argFiles ++ ["." | null argFiles])
+            files <- expandFiles recorder (argFiles ++ ["." | null argFiles])
             -- LSP works with absolute file paths, so try and behave similarly
             absoluteFiles <- nubOrd <$> mapM IO.canonicalizePath files
             putStrLn $ "Found " ++ show (length absoluteFiles) ++ " files"
@@ -445,16 +449,45 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
 
-expandFiles :: [FilePath] -> IO [FilePath]
-expandFiles = concatMapM $ \x -> do
+-- | List the haskell files given some paths
+--
+-- It will rely on git if possible to filter-out ignored files.
+expandFiles :: Recorder (WithPriority Log) -> [FilePath] -> IO [FilePath]
+expandFiles recorder paths = do
+  let haskellFind x =
+        let recurse "." = True
+            recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
+            recurse y = takeFileName y `notElem` ["dist", "dist-newstyle"] -- cabal directories
+        in filter (\y -> takeExtension y `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
+      git args = do
+        mResult <- (Just <$> readProcessWithExitCode "git" args "") `Safe.catchAny`const (pure Nothing)
+        pure $
+            case mResult of
+              Just (ExitSuccess, gitStdout, _) -> Just gitStdout
+              _                                -> Nothing
+  mHasGit <- git ["status"]
+  when (isJust mHasGit) $ logWith recorder Info LogUsingGit
+  let findFiles =
+        case mHasGit of
+          Just _ -> \path -> do
+            let lookups =
+                  if takeExtension path `elem` [".hs", ".lhs"]
+                      then [path]
+                      else [path </> "*.hs", path </> "*.lhs"]
+                gitLines args = fmap lines <$> git args
+            mTracked <- gitLines ("ls-files":lookups)
+            mUntracked <- gitLines ("ls-files":"-o":lookups)
+            case mTracked <> mUntracked of
+              Nothing    -> haskellFind path
+              Just files -> pure files
+          _ -> haskellFind
+
+  flip concatMapM paths $ \x -> do
     b <- IO.doesFileExist x
     if b
         then return [x]
         else do
-            let recurse "." = True
-                recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
-                recurse y = takeFileName y `notElem` ["dist", "dist-newstyle"] -- cabal directories
-            files <- filter (\y -> takeExtension y `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
+            files <- findFiles x
             when (null files) $
                 fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
             return files

@@ -5,7 +5,6 @@ import           Control.Arrow                            ((>>>))
 import           Control.Exception                        (throw)
 import           Control.Lens                             ((^.))
 import           Data.Maybe                               (fromJust)
-import           Data.String.Interpolate                  (__i)
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (PosPrefixInfo))

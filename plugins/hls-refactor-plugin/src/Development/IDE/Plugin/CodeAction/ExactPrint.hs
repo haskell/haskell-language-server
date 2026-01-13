@@ -43,7 +43,11 @@ import           GHC                                    (AnnContext (..),
                                                          IsUnicodeSyntax (NormalSyntax),
                                                          NameAdornment (NameParens),
                                                          TrailingAnn (AddCommaAnn),
-                                                         emptyComments, reAnnL)
+                                                         emptyComments
+#if !MIN_VERSION_ghc(9,13,0)
+                                                        , reAnnL
+#endif
+                                                        )
 
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -64,6 +68,13 @@ import           GHC                                    (addAnns, ann)
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC                                    (NoAnn (..))
 import           GHC                                    (EpAnnComments (..))
+#endif
+
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC                                    (spanAsAnchor)
+
+reAnnL :: ann -> EpAnnComments -> Located e -> GenLocated (EpAnn ann) e
+reAnnL anns cs (L l a) = L (EpAnn (spanAsAnchor l) anns cs) a
 #endif
 
 ------------------------------------------------------------------------------

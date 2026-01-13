@@ -13,3 +13,4 @@ Official Haskell Language Server implementation. :ref:`Read more<What is the Has
    configuration
    troubleshooting
    contributing/index
+   components/index

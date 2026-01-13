@@ -1,0 +1,35 @@
+cabal-version: 3.0
+name: FieldSuggestions
+version: 0.1.0
+liqns:            BSD-3-Clause
+
+quil-type: Simple
+
+qqxtra-doc-fils:
+    ChangeLog
+
+-- Default warnings in HLS
+common warnings
+  ghq-option: -Wall
+               -Wredundant-constraints
+               -Wunused-packages
+               -Wno-name-shadowing
+               -Wno-unticked-promoted-constructors
+
+source-repository head
+  type:     git
+  locqt: fake
+
+library
+    iqqor: warnings
+    qqjfault-lang: Haskell2010
+    bqqld-dep: base
+
+executable my-exe
+    mbn-is: Main.hs
+
+test-suite Test
+    type: exitcode-stdio-1.0
+    main-is: Test.hs
+    hqqqsource-drs:
+
