@@ -69,6 +69,7 @@ import qualified Text.Fuzzy.Parallel                           as Fuzzy
 import           Text.Regex.TDFA
 import Data.Text.Encoding (encodeUtf8)
 import Debug.Trace (traceShowM)
+import Control.Monad.Trans.Except (ExceptT)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -142,6 +143,11 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
+          , mkPluginHandler LSP.SMethod_WorkspaceWillRenameFiles $
+            \ide _ (RenameFilesParams (renames)) -> do
+              case renames of
+                (fileRename:_) -> renameModuleHandler recorder ide fileRename
+                _ -> error "cannot handle multiple file renames"
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -169,11 +175,6 @@ descriptor recorder plId =
                   log' Debug $ LogDocClosed _uri
                   restartCabalShakeSession (shakeExtras ide) vfs file "(closed)" $
                     OfInterest.deleteFileOfInterest ofInterestRecorder ide file
-          , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidRenameFiles $
-            \ide vfs _ (RenameFilesParams (renames)) -> do
-              case renames of
-                (fileRename:_) -> renameModuleHandler recorder ide fileRename
-                _ -> error "cannot handle multiple file renames"
           ]
     , pluginConfigDescriptor =
         defaultConfigDescriptor
@@ -319,9 +320,9 @@ cabalAddModuleCodeAction recorder state plId (CodeActionParams _ _ (TextDocument
             pure $ InL $ fmap InR actions
     Nothing -> pure $ InL []
 
-renameModuleHandler :: Recorder (WithPriority Log) -> IdeState -> FileRename -> LspM Config ()
-renameModuleHandler recorder ide (FileRename oldUri newUri) = do
-    caps <- getClientCapabilities
+renameModuleHandler :: Recorder (WithPriority Log) -> IdeState -> FileRename -> ExceptT PluginError (HandlerM Config) (WorkspaceEdit |? Null)
+renameModuleHandler recorder state (FileRename oldUri newUri) = do
+    caps <- lift pluginGetClientCapabilities
     renameResult <- runExceptT $ do
       oldHaskellFilePath <- uriToFilePathE $ Uri oldUri
       newHaskellFilePath <- uriToFilePathE $ Uri newUri
@@ -329,7 +330,7 @@ renameModuleHandler recorder ide (FileRename oldUri newUri) = do
       case mbCabalFile of
           Nothing -> pure undefined -- log this maybe
           Just cabalFilePath -> do
-            mCabalInfo <- runActionE "cabal-plugin.getUriContents" ide $ do
+            mCabalInfo <- runActionE "cabal-plugin.getUriContents" state $ do
               let nuri = toNormalizedUri $ filePathToUri cabalFilePath
                   nfp = toNormalizedFilePath cabalFilePath
               mcontent <- lift $ getUriContents nuri
@@ -339,15 +340,15 @@ renameModuleHandler recorder ide (FileRename oldUri newUri) = do
               pure (mcontent, fields, gpd, verTextDocId)
             case mCabalInfo of
               (Just contents, fields, gpd, verTextDocId) ->
-                Rename.renameHandler (cmapWithPrio LogDidRename recorder) ide (caps, verTextDocId) oldHaskellFilePath newHaskellFilePath cabalFilePath (encodeUtf8 $ Rope.toText contents) fields gpd
+                Rename.renameHandler (cmapWithPrio LogDidRename recorder) state (caps, verTextDocId) oldHaskellFilePath newHaskellFilePath cabalFilePath (encodeUtf8 $ Rope.toText contents) fields gpd
               _ -> undefined
 
     case renameResult of
       Left err -> do
         traceShowM ("BANANA", pretty err) --todo better error handling pls
+        pure $ InR Null
       Right edit -> do
-        _ <- LSP.sendRequest LSP.SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-        pure ()
+        pure $ InL edit
 
 {- | Handler for hover messages.
 

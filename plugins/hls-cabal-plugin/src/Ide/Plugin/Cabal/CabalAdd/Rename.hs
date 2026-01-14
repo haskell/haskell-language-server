@@ -97,16 +97,12 @@ renameHandler recorder ideState (caps, verTxtDocId) oldHaskellFilePath newHaskel
 
 renameModuleDeclaration :: MonadIO m => Recorder (WithPriority Log) -> IdeState -> FilePath -> FilePath -> T.Text -> ExceptT PluginError m WorkspaceEdit
 renameModuleDeclaration recorder ideState oldHaskellFilePath newHaskellFilePath newModulePath = do
-  traceShowM ("BANANA in rename decl")
-  verTextDocId <- runActionE "cabal-plugin.getUriContents" ideState $ lift $ getVersionedTextDocForNormalizedFilePath $ toNormalizedFilePath newHaskellFilePath
-  traceShowM ("BANANA textdocid", verTextDocId)
+  verTextDocId <- runActionE "cabal-plugin.getUriContents" ideState $ lift $ getVersionedTextDocForNormalizedFilePath $ toNormalizedFilePath oldHaskellFilePath
   rangeToRename <- maybeToExceptT PluginStaleResolve $
       MaybeT $ liftIO $ moduleNameRange ideState $ toNormalizedFilePath oldHaskellFilePath
-  traceShowM ("BANANA rangetorename", rangeToRename)
   let diff = TextEdit rangeToRename newModulePath
       renameEdit = TextDocumentEdit (verTextDocId  ^. re _versionedTextDocumentIdentifier) $ fmap InL [diff]
-  pure $ WorkspaceEdit Nothing (Just [InL renameEdit]) Nothing-- [Replace uri nameRange ("Set module name to " <> bestName) bestName]
-
+  pure $ WorkspaceEdit Nothing (Just [InL renameEdit]) Nothing
 
 applyModuleRenameToCabalFile ::
   forall m.
@@ -228,11 +224,8 @@ findFieldForModule modulePath compName pd buildInfo =
 moduleNameRange :: Shake.IdeState -> NormalizedFilePath -> IO (Maybe Range)
 moduleNameRange state nfp = runMaybeT $ do
   (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ Shake.useWithStale GetParsedModule nfp
-  traceShowM ("BANANA 1")
   L (locA -> (RealSrcSpan l _)) _ <- MaybeT . pure . hsmodName . unLoc $ GHC.pm_parsed_source pm
-  traceShowM ("BANANA 2")
   range <- MaybeT . pure $ toCurrentRange mp (realSrcSpanToRange l)
-  traceShowM ("BANANA 3")
   pure range
 
 
