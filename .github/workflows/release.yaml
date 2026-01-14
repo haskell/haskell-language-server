@@ -3455,7 +3455,7 @@ jobs:
     environment: CI
     name: build-x86_64-mac-9103 (Build binaries)
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -3488,7 +3488,7 @@ jobs:
     environment: CI
     name: build-x86_64-mac-9122 (Build binaries)
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -3521,7 +3521,7 @@ jobs:
     environment: CI
     name: build-x86_64-mac-9141 (Build binaries)
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -3554,7 +3554,7 @@ jobs:
     environment: CI
     name: build-x86_64-mac-967 (Build binaries)
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -3587,7 +3587,7 @@ jobs:
     environment: CI
     name: build-x86_64-mac-984 (Build binaries)
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -4361,7 +4361,7 @@ jobs:
     needs:
     - bindist-x86_64-mac
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4

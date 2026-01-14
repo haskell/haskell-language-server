@@ -190,7 +190,7 @@ envVars arch os = object $
 runner :: Arch -> Opsys -> [Value]
 runner Amd64 (Linux _)   = ["ubuntu-latest"]
 runner AArch64 (Linux _) = ["ubuntu-22.04-arm"]
-runner Amd64 Darwin      = ["macOS-13"]
+runner Amd64 Darwin      = ["macOS-15"]
 runner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows     = ["windows-latest"]
 runner AArch64 Windows   = error "aarch64 windows not supported"
