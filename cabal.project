@@ -144,3 +144,5 @@ if impl(ghc >= 9.14)
     generic-deriving:template-haskell,
     generic-deriving:containers,
     cabal-install-parsers:containers,
+    websockets:containers,
+    entropy:Cabal,
