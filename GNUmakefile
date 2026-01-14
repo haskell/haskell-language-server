@@ -111,7 +111,7 @@ bindist:
 		$(GHCUP) install ghc `echo $$ghc` && \
 		$(GHCUP_GC) -p -s -c -t && \
 		$(MAKE) GHC_VERSION=`echo $$ghc` bindist-ghc || exit 1 && \
-		$(GHCUP_RM) `echo $$ghc` ; \
+		$(GHCUP_RM) ghc `echo $$ghc` ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"
