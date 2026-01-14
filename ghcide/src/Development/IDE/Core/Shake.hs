@@ -25,7 +25,7 @@ module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
-    IdeRule, IdeResult,
+    IdeRule, IdeResult, RestartQueue,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
     shakeEnqueue,
@@ -261,12 +261,15 @@ data HieDbWriter
 -- | Actions to queue up on the index worker thread
 -- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
 -- with (currently) retry functionality
-type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
+type IndexQueue = TaskQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
+type RestartQueue = TaskQueue (IO ())
+type LoaderQueue = TaskQueue (IO ())
+
 
 data ThreadQueue = ThreadQueue {
     tIndexQueue     :: IndexQueue
-    , tRestartQueue :: TQueue (IO ())
-    , tLoaderQueue  :: TQueue (IO ())
+    , tRestartQueue :: RestartQueue
+    , tLoaderQueue  :: LoaderQueue
 }
 
 -- Note [Semantic Tokens Cache Location]
@@ -337,9 +340,9 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
-    , restartQueue :: TQueue (IO ())
+    , restartQueue :: RestartQueue
       -- ^ Queue of restart actions to be run.
-    , loaderQueue :: TQueue (IO ())
+    , loaderQueue :: LoaderQueue
       -- ^ Queue of loader actions to be run.
     }
 
@@ -397,11 +400,16 @@ addPersistentRule k getVal = do
 
 class Typeable a => IsIdeGlobal a where
 
+-- data VirtualFileEntry = Open VirtualFile | Closed ClosedVirtualFile
+getOpenFile :: VirtualFileEntry -> Maybe VirtualFile
+getOpenFile (Open vf) = Just vf
+getOpenFile _         = Nothing
 -- | Read a virtual file from the current snapshot
 getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
-  pure $! Map.lookup (filePathToUri' nf) vfs -- Don't leak a reference to the entire map
+  let file = getOpenFile =<< Map.lookup (filePathToUri' nf) vfs
+  pure $! file -- Don't leak a reference to the entire map
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
