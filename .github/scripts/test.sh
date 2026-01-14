@@ -8,7 +8,7 @@ set -eux
 . .github/scripts/env.sh
 . .github/scripts/common.sh
 
-test_package="text-2.1.2"
+test_package="text-2.1.3"
 test_module="src/Data/Text.hs"
 
 create_cradle() {
