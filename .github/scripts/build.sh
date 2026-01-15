@@ -24,6 +24,7 @@ download_cabal_cache "$HOME/.local/bin/cabal-cache"
 ghcup install ghc "${GHC_VERSION}" || fail_with_ghcup_logs "install ghc"
 ghcup set ghc "${GHC_VERSION}"
 sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
+ecabal --version
 ecabal update
 ecabal user-config diff
 ecabal user-config init -f

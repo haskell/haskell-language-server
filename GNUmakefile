@@ -138,7 +138,8 @@ bindist-ghc:
 	$(INSTALL_D) "$(BINDIST_OUT_DIR)/bin/"
 	$(INSTALL_X) "out/$(ARTIFACT)/$(GHC_VERSION)/haskell-language-server-wrapper" "$(BINDIST_OUT_DIR)/bin/haskell-language-server-wrapper"
 	$(INSTALL_D) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)"
-	$(FIND) $(wildcard $(STORE_DIR)/ghc-$(GHC_VERSION)-*) -type f -name "$(DLL)" -execdir $(INSTALL_X) "{}" "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{}" \;
+# with newer cabal, the store path contains a hash for the ghc ABI, so paths look like store/ghc-9.10.3-abcdef
+	$(FIND) $(wildcard $(STORE_DIR)/ghc-$(GHC_VERSION)*) -type f -name "$(DLL)" -execdir $(INSTALL_X) "{}" "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{}" \;
 	$(FIND) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)" -type f -name '$(DLL)' -execdir $(call set_rpath,,{}) \;
 
 version:
