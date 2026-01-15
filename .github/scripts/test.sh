@@ -58,6 +58,7 @@ test_all_hls() {
                 # After running the test, free up disk space by deleting the unneeded GHC version.
                 # Helps us staying beneath the 14GB SSD disk limit.
                 ghcup rm ghc "${bin_noexe/haskell-language-server-/}"
+                ghcup gc --ghc-old --profiling-libs --share-dir --cache --tmpdirs --unset
             else
                 fail "GHCup failed to install GHC ${bin_noexe/haskell-language-server-/}"
             fi
@@ -80,7 +81,9 @@ env
 
 # ensure ghcup
 install_ghcup
-ghcup install ghc --set 9.4.8
+ghcup install ghc --set 9.6.7
+# Remove everything that we don't need to stay beneath the 14GB SSD disk limit.
+ghcup gc --ghc-old --profiling-libs --share-dir --cache --tmpdirs --unset
 
 (cd .. && ecabal update) # run cabal update outside project dir
 
