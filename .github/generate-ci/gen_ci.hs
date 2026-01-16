@@ -199,7 +199,7 @@ runner AArch64 Windows   = error "aarch64 windows not supported"
 bindistRunner :: Arch -> Opsys -> [Value]
 bindistRunner Amd64 (Linux _)   = ["self-hosted", "linux-space", "maerwald"]
 bindistRunner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
-bindistRunner Amd64 Darwin      = ["macOS-13"]
+bindistRunner Amd64 Darwin      = ["macOS-15"]
 bindistRunner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 bindistRunner Amd64 Windows     = ["windows-latest"]
 bindistRunner AArch64 Windows   = error "aarch64 windows not supported"

@@ -1001,7 +1001,7 @@ jobs:
     - build-x86_64-mac-9122
     - build-x86_64-mac-9141
     runs-on:
-    - macOS-13
+    - macOS-15
     steps:
     - name: Checkout
       uses: actions/checkout@v4
