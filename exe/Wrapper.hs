@@ -132,7 +132,12 @@ launchHaskellLanguageServer recorder parsedArgs = do
   hPutStrLn stderr $ "Current directory: " ++ d
   hPutStrLn stderr $ "Operating system: " ++ os
   args <- getArgs
-  hPutStrLn stderr $ "Arguments: " ++ show args
+  let args' = case parsedArgs of
+        Ghcide GhcideArguments{..}
+           | isNothing argsCwd -> args ++ ["--cwd", argsInitialWorkingDirectory]
+        _ -> args
+
+  hPutStrLn stderr $ "Arguments: " ++ show args'
   hPutStrLn stderr $ "Cradle directory: " ++ cradleRootDir cradle
   hPutStrLn stderr $ "Cradle type: " ++ show (actionName (cradleOptsProg cradle))
   programsOfInterest <- findProgramVersions
@@ -162,7 +167,7 @@ launchHaskellLanguageServer recorder parsedArgs = do
           liftIO $ hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
 
 #ifdef mingw32_HOST_OS
-          liftIO $ callProcess e args
+          liftIO $ callProcess e args'
 #else
 
           let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
@@ -177,7 +182,7 @@ launchHaskellLanguageServer recorder parsedArgs = do
 
           env <- Map.fromList <$> liftIO getEnvironment
           let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
-          liftIO $ executeFile e True args (Just (Map.toList newEnv))
+          liftIO $ executeFile e True args' (Just (Map.toList newEnv))
 #endif
 
 

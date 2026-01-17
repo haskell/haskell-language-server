@@ -130,7 +130,13 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryRec
     dir <- IO.getCurrentDirectory
     log Info $ LogDirectory dir
 
-    when (isLSP argsCommand) $ do
+    -- Fix for https://github.com/haskell/haskell-language-server/issues/4788
+    -- Resolve relative paths AFTER changing the directory (so they are resolved relative to argsCwd)
+    argsCommand' <- case argsCommand of
+        IDEMain.Check files -> IDEMain.Check <$> mapM makeAbsolute files
+        c                   -> pure c
+
+    when (isLSP argsCommand') $ do
         log Info $ LogLspStart ghcideArgs (map pluginId $ ipMap idePlugins)
 
     let args = (if argsTesting then IDEMain.testing else IDEMain.defaultArguments)
@@ -139,7 +145,7 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryRec
     let telemetryRecorder = telemetryRecorder' & cmapWithPrio pretty
 
     IDEMain.defaultMain (cmapWithPrio LogIDEMain $ recorder <> telemetryRecorder) args
-      { IDEMain.argCommand = argsCommand
+      { IDEMain.argCommand = argsCommand'
       , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , IDEMain.argsIdeOptions = \config sessionLoader ->
         let defOptions = IDEMain.argsIdeOptions args config sessionLoader
