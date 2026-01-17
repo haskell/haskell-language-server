@@ -25,13 +25,16 @@ import           GHC.Generics                     (Generic)
 import           Ide.Plugin.Error                 (PluginError (..))
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
-import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition, Method_TextDocumentReferences, Method_TextDocumentHover),
-                                                   SMethod (SMethod_TextDocumentDefinition, SMethod_TextDocumentReferences, SMethod_TextDocumentHover))
+import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition, Method_TextDocumentReferences, Method_TextDocumentHover, Method_TextDocumentCompletion),
+                                                   SMethod (SMethod_TextDocumentDefinition, SMethod_TextDocumentReferences, SMethod_TextDocumentHover, SMethod_TextDocumentCompletion))
 import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
                                                    makeRegexOpts, matchAllText)
+import qualified Language.LSP.Protocol.Types as LSP
+import Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
+import Development.IDE.Plugin.Completions.Types (PosPrefixInfo(..))
 
 data Log
     = LogShake Shake.Log
@@ -81,6 +84,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides goto definiti
         mkPluginHandler SMethod_TextDocumentDefinition jumpToNote
         <> mkPluginHandler SMethod_TextDocumentReferences listReferences
         <> mkPluginHandler SMethod_TextDocumentHover hoverNote
+        <> mkPluginHandler SMethod_TextDocumentCompletion completeDeclaration 
     }
 
 findNotesRules :: Recorder (WithPriority Log) -> Rules ()
@@ -306,3 +310,44 @@ hoverNote state _ params
 
 hoverNote _ _ _ =
   pure (InR Null)
+
+-- Gives an autocomplete suggestion when 'note' prefix is detected
+completeDeclaration :: PluginMethodHandler IdeState Method_TextDocumentCompletion
+completeDeclaration state _ params = do
+  let uri = params ^. (L.textDocument . L.uri)
+      position = params ^. L.position
+
+  contents <-
+    liftIO $
+      runAction "Notes.GetUriContents" state $
+        getUriContents (toNormalizedUri uri)
+
+  fmap InL $
+    case contents of
+      Nothing -> pure []
+
+      Just rope ->
+        let pfix = getCompletionPrefixFromRope position rope
+            word = prefixText pfix
+
+        in
+          if "note" `T.isPrefixOf` T.toLower word
+            then pure [mkCompletionItem]
+            else pure []
+
+mkCompletionItem :: LSP.CompletionItem
+mkCompletionItem =
+  CompletionItem"Note" Nothing (Just CompletionItemKind_Keyword) Nothing
+    (Just "Note Declaration")Nothing Nothing Nothing Nothing
+    Nothing (Just noteSnippet) (Just InsertTextFormat_Snippet)Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
+
+noteSnippet :: Text
+noteSnippet =
+  T.unlines
+    [ "{- Note [${1:Declaration title}]"
+    , "~~~"
+    , "${2:Content}"
+    , "-}"
+    , "${3:}"
+    ]
