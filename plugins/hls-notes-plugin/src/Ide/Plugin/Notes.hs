@@ -32,9 +32,6 @@ import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
                                                    makeRegexOpts, matchAllText)
-import qualified Language.LSP.Protocol.Types as LSP
-import Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
-import Development.IDE.Plugin.Completions.Types (PosPrefixInfo(..))
 
 data Log
     = LogShake Shake.Log
@@ -84,7 +81,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides goto definiti
         mkPluginHandler SMethod_TextDocumentDefinition jumpToNote
         <> mkPluginHandler SMethod_TextDocumentReferences listReferences
         <> mkPluginHandler SMethod_TextDocumentHover hoverNote
-        <> mkPluginHandler SMethod_TextDocumentCompletion completeDeclaration 
+        <> mkPluginHandler SMethod_TextDocumentCompletion autocomplete 
     }
 
 findNotesRules :: Recorder (WithPriority Log) -> Rules ()
@@ -195,30 +192,31 @@ findNotesInFile file recorder = do
 
 noteRefRegex, noteRegex :: Regex
 (noteRefRegex, noteRegex) =
-    ( mkReg ("note \\[(.+)\\]" :: String)
-    , mkReg ("note \\[([[:print:]]+)\\][[:blank:]]*\r?\n[[:blank:]]*(--)?[[:blank:]]*~~~" :: String)
+    ( mkReg ("note[[:blank:]]*\\[(.+)\\]" :: String)
+    , mkReg ("note[[:blank:]]*\\[([[:print:]]+)\\][[:blank:]]*\r?\n[[:blank:]]*(--)?[[:blank:]]*~~~" :: String)
     )
     where
         mkReg = makeRegexOpts (defaultCompOpt { caseSensitive = False }) defaultExecOpt
 
--- | Find the precise range of `note [<title>]` on a line.
-findNoteRange
+-- | Find the precise range of `note[...]` or `note [...]` on a line.
+findNoteRange 
   :: Text   -- ^ Full line text
   -> Text   -- ^ Note title
   -> UInt   -- ^ Line number
   -> Maybe Range
-findNoteRange line note lineNo =
-  case T.breakOn needle line of
-    (_, "") -> Nothing
-    (before, _) ->
-      let startCol = fromIntegral (T.length before)
-          endCol   = startCol + fromIntegral (T.length needle)
-      in Just $
-           Range
-             (Position lineNo startCol)
-             (Position lineNo endCol)
-  where
-    needle = "note [" <> note <> "]"
+findNoteRange line _note lineNo =
+  case matchAllText noteRefRegex line of
+    [] -> Nothing
+    (arr:_) ->
+      case arr A.! 0 of
+        (_, (start, len)) ->
+          let startCol = fromIntegral start
+              endCol   = startCol + fromIntegral len
+          in Just $
+               Range
+                 (Position lineNo startCol)
+                 (Position lineNo endCol)
+
 
 -- Given the path and position of a Note Declaration, finds Content in it. 
 -- ignores ~ as a seprator
@@ -312,35 +310,68 @@ hoverNote _ _ _ =
   pure (InR Null)
 
 -- Gives an autocomplete suggestion when 'note' prefix is detected
-completeDeclaration :: PluginMethodHandler IdeState Method_TextDocumentCompletion
-completeDeclaration state _ params = do
+autocomplete :: PluginMethodHandler IdeState Method_TextDocumentCompletion
+autocomplete state _ params = do
   let uri = params ^. (L.textDocument . L.uri)
-      position = params ^. L.position
+      pos = params ^. L.position
+      nuri = toNormalizedUri uri
 
   contents <-
     liftIO $
       runAction "Notes.GetUriContents" state $
-        getUriContents (toNormalizedUri uri)
+        getUriContents nuri
 
   fmap InL $
     case contents of
       Nothing -> pure []
 
-      Just rope ->
-        let pfix = getCompletionPrefixFromRope position rope
-            word = prefixText pfix
+      Just rope -> do
+        let linePrefix =  T.toLower $  T.stripEnd $  getLinePrefix rope pos
+        
+        -- Suggest NOTE DECLARATION snippit if "note" prefix detected
+        if T.strip linePrefix == "note"
+        then
+          pure [  CompletionItem"Note" Nothing (Just CompletionItemKind_Keyword) Nothing
+              (Just "Note Declaration")Nothing Nothing Nothing Nothing
+              Nothing (Just noteSnippet) (Just InsertTextFormat_Snippet)Nothing
+              Nothing Nothing Nothing Nothing Nothing Nothing
+          ]
 
-        in
-          if "note" `T.isPrefixOf` T.toLower word
-            then pure [mkCompletionItem]
-            else pure []
+        -- Suggest list of all NOTE DECLARATION if "note [" infix detected
+        else if "note[" `T.isInfixOf` linePrefix || "note [" `T.isInfixOf` linePrefix
+        then
+          case uriToNormalizedFilePath nuri of
+            Nothing -> pure []
 
-mkCompletionItem :: LSP.CompletionItem
-mkCompletionItem =
-  CompletionItem"Note" Nothing (Just CompletionItemKind_Keyword) Nothing
-    (Just "Note Declaration")Nothing Nothing Nothing Nothing
-    Nothing (Just noteSnippet) (Just InsertTextFormat_Snippet)Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
+            Just nfp -> do
+              let typed =
+                   case T.breakOnEnd "[" linePrefix of 
+                    (_, "")  -> ""
+                    (_, rest)-> T.strip rest 
+
+              notesMap <-
+                runActionE "notes.completion.notes" state $
+                  useE MkGetNotes nfp
+
+              let allNotes = HM.keys notesMap
+                  matches =
+                    filter
+                      (\n -> T.toLower typed `T.isPrefixOf` T.toLower n)
+                      allNotes
+
+                  finalNotes =
+                    if null matches then allNotes else matches
+              pure $
+                map
+                  (\n ->
+                     CompletionItem n Nothing (Just CompletionItemKind_Reference) Nothing (Just "Note reference")
+                       Nothing Nothing (Just True) (Just "0") (Just n)             
+                       Nothing  Nothing  Nothing  Nothing  Nothing
+                       Nothing Nothing Nothing Nothing
+                  )
+                  finalNotes
+        else
+          pure []
 
 noteSnippet :: Text
 noteSnippet =
@@ -349,5 +380,10 @@ noteSnippet =
     , "~~~"
     , "${2:Content}"
     , "-}"
-    , "${3:}"
     ]
+
+getLinePrefix :: Rope.Rope -> Position -> Text
+getLinePrefix rope (Position line col) =
+  case drop (fromIntegral line) (Rope.lines rope) of
+    (l:_) -> T.take (fromIntegral col) l
+    _     -> ""
