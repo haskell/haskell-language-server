@@ -225,6 +225,18 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.notes.completionOn": {
+        "default": true,
+        "description": "Enables notes completions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.notes.hoverOn": {
+        "default": true,
+        "description": "Enables notes hover",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.overloaded-record-dot.globalOn": {
         "default": true,
         "description": "Enables overloaded-record-dot plugin",

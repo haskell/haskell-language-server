@@ -106,6 +106,10 @@
         "moduleName": {
             "globalOn": true
         },
+        "notes": {
+            "completionOn": true,
+            "hoverOn": true
+        },
         "ormolu": {
             "config": {
                 "external": false

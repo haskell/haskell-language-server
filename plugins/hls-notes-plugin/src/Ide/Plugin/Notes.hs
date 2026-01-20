@@ -10,8 +10,8 @@ import           Data.HashMap.Strict              (HashMap)
 import qualified Data.HashMap.Strict              as HM
 import qualified Data.HashSet                     as HS
 import           Data.List                        (uncons)
-import           Data.Maybe                       (catMaybes, listToMaybe,
-                                                   mapMaybe, fromMaybe)
+import           Data.Maybe                       (catMaybes, fromMaybe,
+                                                   listToMaybe, mapMaybe)
 import           Data.Text                        (Text, intercalate)
 import qualified Data.Text                        as T
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
@@ -25,8 +25,8 @@ import           GHC.Generics                     (Generic)
 import           Ide.Plugin.Error                 (PluginError (..))
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
-import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentDefinition, Method_TextDocumentReferences, Method_TextDocumentHover, Method_TextDocumentCompletion),
-                                                   SMethod (SMethod_TextDocumentDefinition, SMethod_TextDocumentReferences, SMethod_TextDocumentHover, SMethod_TextDocumentCompletion))
+import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCompletion, Method_TextDocumentDefinition, Method_TextDocumentHover, Method_TextDocumentReferences),
+                                                   SMethod (SMethod_TextDocumentCompletion, SMethod_TextDocumentDefinition, SMethod_TextDocumentHover, SMethod_TextDocumentReferences))
 import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
@@ -81,7 +81,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides goto definiti
         mkPluginHandler SMethod_TextDocumentDefinition jumpToNote
         <> mkPluginHandler SMethod_TextDocumentReferences listReferences
         <> mkPluginHandler SMethod_TextDocumentHover hoverNote
-        <> mkPluginHandler SMethod_TextDocumentCompletion autocomplete 
+        <> mkPluginHandler SMethod_TextDocumentCompletion autocomplete
     }
 
 findNotesRules :: Recorder (WithPriority Log) -> Rules ()
@@ -199,7 +199,7 @@ noteRefRegex, noteRegex :: Regex
         mkReg = makeRegexOpts (defaultCompOpt { caseSensitive = False }) defaultExecOpt
 
 -- | Find the precise range of `note[...]` or `note [...]` on a line.
-findNoteRange 
+findNoteRange
   :: Text   -- ^ Full line text
   -> Text   -- ^ Note title
   -> UInt   -- ^ Line number
@@ -218,7 +218,7 @@ findNoteRange line _note lineNo =
                  (Position lineNo endCol)
 
 
--- Given the path and position of a Note Declaration, finds Content in it. 
+-- Given the path and position of a Note Declaration, finds Content in it.
 -- ignores ~ as a seprator
 extractNoteContent
   :: NormalizedFilePath
@@ -243,7 +243,7 @@ extractNoteContent nfp (Position startLine _) = do
     isEndMarker t     = T.isInfixOf "-}" t
 
 -- on hovering Note References, shows corresponding Declaration if it Exists
--- ignores Note Declaration 
+-- ignores Note Declaration
 hoverNote :: PluginMethodHandler IdeState Method_TextDocumentHover
 hoverNote state _ params
   | Just nfp <- uriToNormalizedFilePath uriOrig
@@ -327,7 +327,7 @@ autocomplete state _ params = do
 
       Just rope -> do
         let linePrefix =  T.toLower $  T.stripEnd $  getLinePrefix rope pos
-        
+
         -- Suggest NOTE DECLARATION snippit if "note" prefix detected
         if T.strip linePrefix == "note"
         then
@@ -345,9 +345,9 @@ autocomplete state _ params = do
 
             Just nfp -> do
               let typed =
-                   case T.breakOnEnd "[" linePrefix of 
-                    (_, "")  -> ""
-                    (_, rest)-> T.strip rest 
+                   case T.breakOnEnd "[" linePrefix of
+                    (_, "")   -> ""
+                    (_, rest)-> T.strip rest
 
               notesMap <-
                 runActionE "notes.completion.notes" state $
@@ -365,7 +365,7 @@ autocomplete state _ params = do
                 map
                   (\n ->
                      CompletionItem n Nothing (Just CompletionItemKind_Reference) Nothing (Just "Note reference")
-                       Nothing Nothing (Just True) (Just "0") (Just n)             
+                       Nothing Nothing (Just True) (Just "0") (Just n)
                        Nothing  Nothing  Nothing  Nothing  Nothing
                        Nothing Nothing Nothing Nothing
                   )
