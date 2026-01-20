@@ -490,10 +490,17 @@ findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
+#if MIN_VERSION_ghc(9,13,0)
+        extract HsConDeclRecField{..}
+            = map (foLabel . unLoc) cdrf_names
+        -- XConDeclRecField
+        extract _ = []
+#else
         extract ConDeclField{..}
             = map (foLabel . unLoc) cd_fld_names
         -- XConDeclField
         extract _ = []
+#endif
 findRecordCompl _ _ _ = []
 
 toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem

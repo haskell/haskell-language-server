@@ -47,7 +47,11 @@ import           Development.IDE.GHC.Compat           (Extension (OverloadedReco
                                                        getLoc, hs_valds,
                                                        parenthesizeHsExpr,
                                                        pattern RealSrcSpan,
-                                                       unLoc)
+                                                       unLoc
+#if __GLASGOW_HASKELL__ >= 913
+                                                       , unLocWithUserRdr
+#endif
+                                                       )
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable)
 import           Development.IDE.Graph                (RuleResult)
@@ -300,14 +304,22 @@ getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
 -- Record selection where the field is being applied with the "$" operator:
 -- "selector $ record"
-#if __GLASGOW_HASKELL__ >= 911
+#if __GLASGOW_HASKELL__ >= 913
 getRecSels e@(unLoc -> OpApp _ se@(unLoc -> XExpr (HsRecSelRn _))
-#else
-getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
-#endif
+                        (unLoc -> HsVar _ (unLocWithUserRdr -> d)) re) | d == dollarName =
+    ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re
+      | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#elif __GLASGOW_HASKELL__ >= 911
+getRecSels e@(unLoc -> OpApp _ se@(unLoc -> XExpr (HsRecSelRn _))
                         (unLoc -> HsVar _ (unLoc -> d)) re) | d == dollarName =
     ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#else
+getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
+                        (unLoc -> HsVar _ (unLoc -> d)) re) | d == dollarName =
+    ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re
+      | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#endif
 getRecSels _ = ([], False)
 
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath

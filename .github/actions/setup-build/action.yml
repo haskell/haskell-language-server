@@ -7,7 +7,7 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.14.2.0"
+    default: "3.16.1.0"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell-actions/setup@v2.8.2
+    - uses: haskell-actions/setup@v2.10.3
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -83,7 +83,7 @@ runs:
     # We have to restore package sources before `cabal update`
     # because it overwrites the hackage index with the cached one
     - name: Hackage sources cache
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       env:
         cache-name: hackage-sources
       with:
@@ -108,7 +108,7 @@ runs:
 
     - name: Compiled deps cache
       id: compiled-deps
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       env:
         cache-name: compiled-deps
       with:

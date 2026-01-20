@@ -42,6 +42,10 @@ import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
 import           Generics.SYB                      (extQ, something)
 import           GHC.Tc.Errors.Types               (ErrInfo (..),
                                                     TcRnMessageDetailed (..))
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Tc.Errors.Ppr                 (pprErrCtxtMsg)
+import           GHC.Utils.Outputable              (vcat)
+#endif
 import qualified Ide.Logger                        as Logger
 import           Ide.Plugin.Error                  (PluginError,
                                                     getNormalizedFilePathE)
@@ -61,8 +65,13 @@ data Log
 
 instance Pretty Log where
     pretty = \case
+#if MIN_VERSION_ghc(9,13,0)
+        LogErrInfoCtxt (ErrInfo ctxt _ _) ->
+            fromSDoc (vcat $ map pprErrCtxtMsg ctxt)
+#else
         LogErrInfoCtxt (ErrInfo ctxt suppl) ->
             Logger.vcat [fromSDoc ctxt, fromSDoc suppl]
+#endif
         LogFindSigLocFailure name ->
             pretty ("Lookup signature location failure: " <> name)
         where
@@ -175,7 +184,11 @@ matchingDiagnostic ErrInfo{errInfoContext} =
         unwrapMatch (_, _, _, [name]) = Just name
         unwrapMatch _                 = Nothing
 
+#if MIN_VERSION_ghc(9,13,0)
+        errInfoTxt = printOutputable (vcat $ map pprErrCtxtMsg errInfoContext)
+#else
         errInfoTxt = printOutputable errInfoContext
+#endif
 
 -- | List of regexes that match various Error Messages
 errorMessageRegexes :: [Text]

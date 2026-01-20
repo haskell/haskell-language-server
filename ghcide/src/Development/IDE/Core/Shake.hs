@@ -133,10 +133,16 @@ import qualified Language.LSP.Server                    as LSP
 
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
+#if MIN_VERSION_ghc(9,13,0)
+import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater,
+                                                         newNameCache)
+#else
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater,
                                                          initNameCache,
                                                          knownKeyNames)
+#endif
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
                                                          action)
@@ -666,7 +672,11 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
+#if MIN_VERSION_ghc(9,13,0)
+    ideNc <- newNameCache
+#else
     ideNc <- initNameCache 'r' knownKeyNames
+#endif
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO
