@@ -34,7 +34,7 @@ Support status (see the support policy below for more details):
 | 9.6.3        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | deprecated     |
 | 9.6.2        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
 | 9.6.1        | [2.0.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.0.0.0)   | deprecated     |
-| 9.4.8        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)         | full support   |
+| 9.4.8        | [2.11.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.11.0.0) | full support   |
 | 9.4.7        | [2.5.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.5.0.0)   | deprecated     |
 | 9.4.6        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
 | 9.4.5        | [2.2.0.0](https://github.com/haskell/haskell-language-server/releases/tag/2.2.0.0)   | deprecated     |
