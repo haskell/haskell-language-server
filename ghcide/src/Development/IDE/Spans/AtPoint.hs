@@ -41,7 +41,8 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
-import           Development.IDE.GHC.Util             (printOutputable)
+import           Development.IDE.GHC.Util             (printOutputable,
+                                                       printOutputableOneLine)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
@@ -371,11 +372,11 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
 
         prettyTypeFromType :: Maybe Name -> M.Map Name Location -> Type -> T.Text
         prettyTypeFromType boundNameMay locationsMap ty =
-          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printOutputable ty)
+          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printOutputableOneLine ty)
 
         prettyType :: Maybe Name -> M.Map Name Location -> hietype -> T.Text
         prettyType boundNameMay locationsMap t =
-          prettyTypeCommon boundNameMay locationsMap (typeNames t) (printOutputable . expandType $ t)
+          prettyTypeCommon boundNameMay locationsMap (typeNames t) (printOutputableOneLine . expandType $ t)
 
         prettyTypeCommon :: Maybe Name -> M.Map Name Location -> Set Name -> T.Text -> T.Text
         prettyTypeCommon boundNameMay locationsMap names expandedType =
