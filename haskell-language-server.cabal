@@ -493,6 +493,7 @@ library hls-eval-plugin
     , megaparsec            >=9.0
     , mtl
     , parser-combinators    >=1.2
+    , silently
     , text
     , text-rope
     , transformers
