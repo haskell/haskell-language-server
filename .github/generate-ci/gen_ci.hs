@@ -190,7 +190,7 @@ envVars arch os = object $
 runner :: Arch -> Opsys -> [Value]
 runner Amd64 (Linux _)   = ["ubuntu-latest"]
 runner AArch64 (Linux _) = ["ubuntu-22.04-arm"]
-runner Amd64 Darwin      = ["macOS-15"]
+runner Amd64 Darwin      = ["macOS-15-intel"]
 runner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows     = ["windows-latest"]
 runner AArch64 Windows   = error "aarch64 windows not supported"
@@ -199,7 +199,7 @@ runner AArch64 Windows   = error "aarch64 windows not supported"
 bindistRunner :: Arch -> Opsys -> [Value]
 bindistRunner Amd64 (Linux _)   = ["self-hosted", "linux-space", "maerwald"]
 bindistRunner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
-bindistRunner Amd64 Darwin      = ["macOS-15"]
+bindistRunner Amd64 Darwin      = ["macOS-15-intel"]
 bindistRunner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 bindistRunner Amd64 Windows     = ["windows-latest"]
 bindistRunner AArch64 Windows   = error "aarch64 windows not supported"
