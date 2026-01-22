@@ -130,9 +130,13 @@ listReferences state _ param
             Nothing -> pure (InR Null)
             Just note -> do
                 notes <- runActionE "notes.definedNoteReferencess" state $ useE MkGetNoteReferences nfp
-                poss <- err ("Note reference (a comment of the form `{- Note [" <> note <> "] -}`) not found") (HM.lookup note notes)
-                pure $ InL (mapMaybe (\(noteFp, pos@(Position l' _)) -> if l' == l then Nothing else Just (
-                        Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))) poss)
+                case HM.lookup note notes of
+                    Nothing -> pure (InR Null)
+                    Just poss ->
+                        pure $ InL (mapMaybe (\(noteFp, pos@(Position l' _)) ->
+                            if l' == l then Nothing
+                            else Just (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
+                        ) poss)
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
 listReferences _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
@@ -146,10 +150,12 @@ jumpToNote state _ param
             Nothing -> pure (InR (InR Null))
             Just note -> do
                 notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
-                (noteFp, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
-                pure $ InL (Definition (InL
-                        (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
-                    ))
+                case HM.lookup note notes of
+                    Nothing -> pure (InR (InR Null))
+                    Just (noteFp, pos) ->
+                        pure $ InL (Definition (InL
+                            (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
+                        ))
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
 jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
