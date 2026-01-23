@@ -192,8 +192,8 @@ findNotesInFile file recorder = do
 
 noteRefRegex, noteRegex :: Regex
 (noteRefRegex, noteRegex) =
-    ( mkReg ("note[[:blank:]]*\\[(.+)\\]" :: String)
-    , mkReg ("note[[:blank:]]*\\[([[:print:]]+)\\][[:blank:]]*\r?\n[[:blank:]]*(--)?[[:blank:]]*~~~" :: String)
+    ( mkReg ("note[[:blank:]]?\\[(.+)\\]" :: String)
+    , mkReg ("note[[:blank:]]?\\[([[:print:]]+)\\][[:blank:]]*\r?\n[[:blank:]]*(--)?[[:blank:]]*~~~" :: String)
     )
     where
         mkReg = makeRegexOpts (defaultCompOpt { caseSensitive = False }) defaultExecOpt
@@ -217,7 +217,6 @@ findNoteRange line _note lineNo =
                  (Position lineNo startCol)
                  (Position lineNo endCol)
 
-
 -- Given the path and position of a Note Declaration, finds Content in it.
 -- ignores ~ as a seprator
 extractNoteContent
@@ -228,19 +227,42 @@ extractNoteContent nfp (Position startLine _) = do
   fileText <- readFileUtf8 $ fromNormalizedFilePath nfp
 
   let allLines = T.lines fileText
-      afterDecl = drop (fromIntegral startLine) allLines
+      afterDecl = drop (fromIntegral startLine + 1) allLines
       afterSeparator =
         case dropWhile (not . isSeparatorLine) afterDecl of
           []     -> []
           (_:xs) -> xs
-      bodyLines = takeWhile (not . isEndMarker) afterSeparator
+
+      bodyLines = takeWhile (not . isStopLine) afterSeparator
 
   if null afterSeparator
      then pure Nothing
-     else pure $ Just (T.unlines bodyLines)
+     else pure $ Just (T.unlines (map stripCommentPrefix bodyLines))
+
   where
-    isSeparatorLine t = T.isInfixOf "~~~" t
-    isEndMarker t     = T.isInfixOf "-}" t
+    isSeparatorLine :: Text -> Bool
+    isSeparatorLine t = "~~~" `T.isInfixOf` t
+
+    isNoteHeader :: Text -> Bool
+    isNoteHeader t =
+      let stripped = T.toLower (T.stripStart (stripCommentPrefix t))
+      in "note [" `T.isPrefixOf` stripped
+
+    isEndMarker :: Text -> Bool
+    isEndMarker t = "-}" `T.isInfixOf` t
+
+    isStopLine :: Text -> Bool
+    isStopLine t = isSeparatorLine t || isNoteHeader t || isEndMarker t
+
+    stripCommentPrefix :: Text -> Text
+    stripCommentPrefix t =
+      let s = T.stripStart t
+      in if "--" `T.isPrefixOf` s
+            then T.stripStart (T.drop 2 s)
+            else s
+
+normalizeNewlines :: Text -> Text
+normalizeNewlines = T.replace "\r\n" "\n"
 
 -- on hovering Note References, shows corresponding Declaration if it Exists
 -- ignores Note Declaration
@@ -251,35 +273,22 @@ hoverNote state _ params
       let pos@(Position line _) = params ^. L.position
       noteOpt <- getNote nfp state pos
       case noteOpt of
-        Nothing ->
-          pure (InR Null)
+        Nothing -> pure (InR Null)
 
         Just note -> do
-          mbRope <-
-            liftIO $
-              runAction "notes.hoverLine" state (getFileContents nfp)
+          mbRope <- liftIO $ runAction "notes.hoverLine" state (getFileContents nfp)
 
           -- compute precise hover range for highlighting corresponding Note Reference on Hover
           let lineText =
                 case mbRope of
-                  Nothing -> ""
-                  Just rope ->
-                    fromMaybe "" $
-                      listToMaybe $
-                        drop (fromIntegral line) $
-                          Rope.lines rope
+                  Nothing   -> ""
+                  Just rope -> fromMaybe "" $ listToMaybe $ drop (fromIntegral line) $ Rope.lines rope
 
               mbRange = findNoteRange lineText note line
 
           notes <- runActionE "notes.hover" state $ useE MkGetNotes nfp
           case HM.lookup note notes of
-            Nothing ->
-              pure $
-                InL $
-                  Hover
-                    (InL $ MarkupContent MarkupKind_Markdown
-                      "_No declaration available_")
-                    mbRange
+            Nothing -> pure $ InL $ Hover (InL $ MarkupContent MarkupKind_Markdown "_No declaration available_") mbRange
 
             Just (defFile, defPos) ->
               if nfp == defFile && pos ^. L.line == defPos ^. L.line
@@ -289,25 +298,15 @@ hoverNote state _ params
 
                   let contents =
                         case mbContent of
-                          Nothing ->
-                            "_No declaration available_"
-                          Just body ->
-                            T.unlines
-                              [ note
-                              , ""
-                              , body
-                              ]
+                          Nothing   -> "_No declaration available_"
+                          Just body -> T.unlines [note, "", body]
+                      normalizedContents = normalizeNewlines contents
 
-                  pure $
-                    InL $
-                      Hover
-                        (InL $ MarkupContent MarkupKind_Markdown contents)
-                        mbRange
+                  pure $ InL $ Hover (InL $ MarkupContent MarkupKind_Markdown normalizedContents) mbRange
   where
     uriOrig = toNormalizedUri $ params ^. (L.textDocument . L.uri)
 
-hoverNote _ _ _ =
-  pure (InR Null)
+hoverNote _ _ _ = pure (InR Null)
 
 -- Gives an autocomplete suggestion when 'note' prefix is detected
 autocomplete :: PluginMethodHandler IdeState Method_TextDocumentCompletion
@@ -331,9 +330,9 @@ autocomplete state _ params = do
         -- Suggest NOTE DECLARATION snippit if "note" prefix detected
         if T.strip linePrefix == "note"
         then
-          pure [  CompletionItem"Note" Nothing (Just CompletionItemKind_Keyword) Nothing
-              (Just "Note Declaration")Nothing Nothing Nothing Nothing
-              Nothing (Just noteSnippet) (Just InsertTextFormat_Snippet)Nothing
+          pure [CompletionItem "Note" Nothing (Just CompletionItemKind_Keyword) Nothing
+              (Just "Note Declaration") Nothing Nothing Nothing Nothing
+              Nothing (Just noteSnippet) (Just InsertTextFormat_Snippet) Nothing
               Nothing Nothing Nothing Nothing Nothing Nothing
           ]
 
@@ -366,7 +365,7 @@ autocomplete state _ params = do
                   (\n ->
                      CompletionItem n Nothing (Just CompletionItemKind_Reference) Nothing (Just "Note reference")
                        Nothing Nothing (Just True) (Just "0") (Just n)
-                       Nothing  Nothing  Nothing  Nothing  Nothing
+                       Nothing Nothing Nothing Nothing Nothing
                        Nothing Nothing Nothing Nothing
                   )
                   finalNotes
@@ -384,6 +383,8 @@ noteSnippet =
 
 getLinePrefix :: Rope.Rope -> Position -> Text
 getLinePrefix rope (Position line col) =
-  case drop (fromIntegral line) (Rope.lines rope) of
-    (l:_) -> T.take (fromIntegral col) l
-    _     -> ""
+  case Rope.splitAtLine (fromIntegral line) rope of
+    (_, rest) ->
+      case Rope.lines rest of
+        (l:_) -> T.take (fromIntegral col) l
+        _     -> ""
