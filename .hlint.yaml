@@ -237,6 +237,8 @@
 # Warning is not enough to prevent those consistently; you need a build failure.
 - error: {name: Avoid restricted function}
 
+- group: {name: extra, enabled: true}
+
 - arguments:
     - --ignore-glob=**/test/data/**
     - --ignore-glob=**/testdata/**
