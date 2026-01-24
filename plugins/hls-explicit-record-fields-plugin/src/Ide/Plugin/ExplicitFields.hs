@@ -22,10 +22,12 @@ import           Data.Aeson                           (ToJSON (toJSON))
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, extQ, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
-import           Data.List                            (find, intersperse)
+import           Data.List                            (find, intersperse,
+                                                       sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
+import           Data.Ord                             (Down (..))
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Data.Unique                          (hashUnique, newUnique)
@@ -155,27 +157,26 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let recordUids = [ uid
-                      | uid <- RangeMap.filterByRange range crCodeActions
-                      , Just record <- [IntMap.lookup uid crCodeActionResolve]
-                      -- Only fully saturated constructor applications can be
-                      -- converted to the record syntax through the code action
-                      , isConvertible record
-                      ]
-  let actions = map (mkCodeAction enabledExtensions) recordUids
+  let recordsWithUid = [ (uid, record) | uid <- RangeMap.filterByRange range crCodeActions
+          , Just record <- [IntMap.lookup uid crCodeActionResolve]
+          , isConvertible record
+        ]
+      sortedRecords = sortOn (Down . recordDepth recordsWithUid . snd) recordsWithUid
+      actions = map (mkCodeAction enabledExtensions) sortedRecords
   pure $ InL actions
   where
-    mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
-    mkCodeAction exts uid = InR CodeAction
-      { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
-      , _kind = Just CodeActionKind_RefactorRewrite
-      , _diagnostics = Nothing
-      , _isPreferred = Nothing
-      , _disabled = Nothing
-      , _edit = Nothing
-      , _command = Nothing
-      , _data_ = Just $ toJSON uid
-      }
+    mkCodeAction exts (uid, record) =
+      let suffix = wildcardLabel record
+      in InR CodeAction
+         { _title = mkTitle exts suffix
+         , _kind = Just CodeActionKind_RefactorRewrite
+         , _diagnostics = Nothing
+         , _isPreferred = Nothing
+         , _disabled = Nothing
+         , _edit = Nothing
+         , _command = Nothing
+         , _data_ = Just $ toJSON uid
+         }
 
     isConvertible :: RecordInfo -> Bool
     isConvertible = \case
@@ -227,6 +228,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
            textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
                     <> maybeToList (pragmaEdit enabledExtensions pragma)
            names = renderRecordInfoAsDotdotLabelName record
+           prefix = maybe "" (\n -> "(" <> n <> ")") (recordInfoName record)
        in do
          currentEnd <- range >>= toCurrentPosition pm . _end
          names' <- names
@@ -246,7 +248,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                           , _label = InR label
                           , _kind = Nothing -- neither a type nor a parameter
                           , _textEdits = Just textEdits -- same as CodeAction
-                          , _tooltip = Just $ InL (mkTitle enabledExtensions) -- same as CodeAction
+                          , _tooltip = Just $ InL (mkTitle enabledExtensions prefix) -- same as CodeAction
                           , _paddingLeft = Just True -- padding after dotdot
                           , _paddingRight = Nothing
                           , _data_ = Nothing
@@ -279,7 +281,7 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
          (Location _ recRange) <- loc
          currentStart <- toCurrentPosition pm (_start recRange)
          pure InlayHint { _position = currentStart
-                        , _label = InR $ pure (mkInlayHintLabelPart name fieldDefLoc)
+                        , _label =  InR [mkInlayHintLabelPart name fieldDefLoc]
                         , _kind = Nothing -- neither a type nor a parameter
                         , _textEdits = Just (maybeToList te) -- same as CodeAction
                         , _tooltip = Just $ InL "Expand positional record" -- same as CodeAction
@@ -288,14 +290,46 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _data_ = Nothing
                         }
 
+     mkInlayHintLabelPart :: Name -> Maybe Location -> InlayHintLabelPart
      mkInlayHintLabelPart name loc = InlayHintLabelPart (printFieldName (pprNameUnqualified name) <> "=") Nothing loc Nothing
 
-mkTitle :: [Extension] -> Text
-mkTitle exts = "Expand record wildcard"
-                <> if NamedFieldPuns `elem` exts
-                   then mempty
-                   else " (needs extension: NamedFieldPuns)"
+mkTitle :: [Extension] -> Text -> Text
+mkTitle exts prefix = prefix <> " Expand record wildcard"
+  <> if NamedFieldPuns `elem` exts
+       then mempty
+       else " (needs extension: NamedFieldPuns)"
 
+
+wildcardLabel :: RecordInfo -> Text
+wildcardLabel record =
+  case recordInfoName record of
+    Just name -> " (" <> name <> ")"
+    Nothing   -> ""
+
+recordInfoName :: RecordInfo -> Maybe Text
+recordInfoName = \case
+  RecordInfoPat _ pat ->
+    case pat of
+      ConPat _ con _ -> Just $ printFieldName (pprNameUnqualified (getName con))
+      _              -> Nothing
+
+  RecordInfoCon _ expr ->
+    case expr of
+      RecordCon _ con _ -> Just $ printFieldName (pprNameUnqualified (getName con))
+      _ -> Nothing
+
+  RecordInfoApp _ (RecordAppExpr _ constr _) ->
+    case unLoc constr of
+      HsVar _ lid -> Just $ printFieldName (pprNameUnqualified (getName lid))
+      _           -> Nothing
+
+containsRange :: Range -> Range -> Bool
+containsRange (Range s1 e1) (Range s2 e2) = s1 <= s2 && e2 <= e1 && (s1 /= s2 || e1 /= e2)
+
+recordDepth :: [(Int, RecordInfo)] -> RecordInfo -> Int
+recordDepth allRecords record =
+  let r = recordInfoToRange record
+  in length [ ()| (_, other) <- allRecords, let r' = recordInfoToRange other, containsRange r' r]
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts

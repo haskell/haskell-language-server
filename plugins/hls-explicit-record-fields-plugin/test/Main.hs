@@ -54,7 +54,7 @@ test = testGroup "explicit-fields"
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 16 5 15
                                             , mkPragmaTextEdit 2
                                             ]
-                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _tooltip = Just $ expandTooltip "MyRec" True
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "ConstructionDuplicateRecordFields" Nothing 16 $ \ih -> do
@@ -71,7 +71,7 @@ test = testGroup "explicit-fields"
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 16 5 15
                                             , mkPragmaTextEdit 3 -- Not 2 of the DuplicateRecordFields pragma
                                             ]
-                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _tooltip = Just $ expandTooltip "MyRec" True
                         , _paddingLeft = Just True
                         }]
 
@@ -132,7 +132,7 @@ test = testGroup "explicit-fields"
           [defInlayHint { _position = Position 17 19
                         , _label = InR [ foo ]
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo}" 17 10 20 ]
-                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _tooltip = Just $ expandTooltip "MyRec" False
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "HsExpanded1" (Just " (positional)") 13 $ \ih -> do
@@ -162,7 +162,7 @@ test = testGroup "explicit-fields"
           [defInlayHint { _position = Position 23 21
                         , _label = InR [ bar ]
                         , _textEdits = Just [ mkLineTextEdit "YourRec {bar}" 23 10 22 ]
-                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _tooltip = Just $ expandTooltip "YourRec" False
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "HsExpanded2" (Just " (positional)") 16 $ \ih -> do
@@ -185,7 +185,7 @@ test = testGroup "explicit-fields"
                                        , quux
                                        ]
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar = bar', baz}" 14 10 37 ]
-                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _tooltip = Just $ expandTooltip "MyRec" False
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "Unused" Nothing 12 $ \ih -> do
@@ -202,7 +202,7 @@ test = testGroup "explicit-fields"
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar}" 12 10 20
                                             , mkPragmaTextEdit 2
                                             ]
-                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _tooltip = Just $ expandTooltip "MyRec" True
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "Unused2" Nothing 12 $ \ih -> do
@@ -219,7 +219,7 @@ test = testGroup "explicit-fields"
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar}" 12 10 20
                                             , mkPragmaTextEdit 2
                                             ]
-                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _tooltip = Just $ expandTooltip "MyRec" True
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "WildcardOnly" Nothing 12 $ \ih -> do
@@ -236,7 +236,7 @@ test = testGroup "explicit-fields"
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 12 10 20
                                             , mkPragmaTextEdit 2
                                             ]
-                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _tooltip = Just $ expandTooltip "MyRec" True
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "WithExplicitBind" Nothing 12 $ \ih -> do
@@ -251,7 +251,7 @@ test = testGroup "explicit-fields"
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo = foo', bar, baz}" 12 10 32
                                             , mkPragmaTextEdit 2
                                             ]
-                        , _tooltip = Just $ InL "Expand record wildcard (needs extension: NamedFieldPuns)"
+                        , _tooltip = Just $ expandTooltip "MyRec" True
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "WithPun" Nothing 13 $ \ih -> do
@@ -264,7 +264,7 @@ test = testGroup "explicit-fields"
                                        , baz
                                        ]
                         , _textEdits = Just [ mkLineTextEdit "MyRec {foo, bar, baz}" 13 10 25 ]
-                        , _tooltip = Just $ InL "Expand record wildcard"
+                        , _tooltip = Just $ expandTooltip "MyRec" False
                         , _paddingLeft = Just True
                         }]
     , mkInlayHintsTest "PolymorphicRecordConstruction" Nothing 15 $ \ih -> do
@@ -337,7 +337,15 @@ findExplicitFieldsAction = filter isExplicitFieldsCodeAction . rights . map toEi
 
 isExplicitFieldsCodeAction :: CodeAction -> Bool
 isExplicitFieldsCodeAction CodeAction {_title} =
-  "Expand record wildcard" `T.isPrefixOf` _title
+  "Expand record wildcard" `T.isInfixOf` _title
+
+expandTooltip :: Text -> Bool -> (Text |? MarkupContent)
+expandTooltip rec needsExt =
+  InL $
+    "(" <> rec <> ") Expand record wildcard"
+    <> if needsExt
+         then " (needs extension: NamedFieldPuns)"
+         else ""
 
 defInlayHint :: InlayHint
 defInlayHint =
