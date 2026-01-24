@@ -238,5 +238,7 @@
 - error: {name: Avoid restricted function}
 
 - arguments:
-    - --ignore-glob=docs/contributing/plugin-tutorial.lhs
+    - --ignore-glob=**/test/data/**
+    - --ignore-glob=**/testdata/**
     - --ignore-glob=dist-*
+    - --ignore-glob=docs/contributing/plugin-tutorial.lhs
