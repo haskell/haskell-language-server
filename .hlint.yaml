@@ -236,3 +236,7 @@
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.
 - error: {name: Avoid restricted function}
+
+- arguments:
+    - --ignore-glob=docs/contributing/plugin-tutorial.lhs
+    - --ignore-glob=dist-*
