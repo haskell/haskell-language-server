@@ -93,6 +93,10 @@
         "moduleName": {
             "globalOn": true
         },
+        "notes": {
+            "completionOn": true,
+            "hoverOn": true
+        },
         "overloaded-record-dot": {
             "globalOn": true
         },
