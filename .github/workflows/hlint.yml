@@ -10,17 +10,11 @@ jobs:
     name: "Hlint check run"
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-
-    - name: 'Installing'
-      uses: rwe/actions-hlint-setup@v1
+    - uses: actions/checkout@v6
+    - uses: haskell-actions/hlint-setup@v2
       with:
-        version: '3.8'
-
-    - name: 'Checking code'
-      uses: rwe/actions-hlint-run@v2
+        version: "3.10"
+    - uses: haskell-actions/hlint-run@v2
       with:
-        hlint-bin: "hlint --with-group=extra --ignore-glob=**/testdata/** --ignore-glob=**/test/data/**"
+        path: "."
         fail-on: error
-        path: .
-

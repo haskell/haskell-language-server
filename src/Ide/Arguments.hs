@@ -22,6 +22,7 @@ import           Ide.Logger                    (Priority (..))
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
+import           System.Directory              (getCurrentDirectory)
 import           System.Environment
 
 -- ---------------------------------------------------------------------
@@ -38,18 +39,19 @@ data Arguments
   | PrintLibDir
 
 data GhcideArguments = GhcideArguments
-    { argsCommand           :: Command
-    , argsCwd               :: Maybe FilePath
-    , argsShakeProfiling    :: Maybe FilePath
-    , argsTesting           :: Bool
-    , argsExamplePlugin     :: Bool
-    , argsLogLevel          :: Priority
-    , argsLogFile           :: Maybe String
+    { argsCommand                 :: Command
+    , argsCwd                     :: Maybe FilePath
+    , argsShakeProfiling          :: Maybe FilePath
+    , argsTesting                 :: Bool
+    , argsExamplePlugin           :: Bool
+    , argsLogLevel                :: Priority
+    , argsLogFile                 :: Maybe String
     -- ^ the minimum log level to show
-    , argsLogStderr         :: Bool
-    , argsLogClient         :: Bool
-    , argsThreads           :: Int
-    , argsProjectGhcVersion :: Bool
+    , argsLogStderr               :: Bool
+    , argsLogClient               :: Bool
+    , argsThreads                 :: Int
+    , argsProjectGhcVersion       :: Bool
+    , argsInitialWorkingDirectory :: FilePath
     } deriving Show
 
 data PrintVersion
@@ -62,9 +64,11 @@ data BiosAction
   deriving (Show, Eq, Ord)
 
 getArguments :: String -> IdePlugins IdeState -> IO Arguments
-getArguments exeName plugins = execParser opts
+getArguments exeName plugins = do
+    cwd <- getCurrentDirectory
+    execParser (opts cwd)
   where
-    opts = info ((
+    opts cwd = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
       <|> hsubparser
@@ -74,7 +78,7 @@ getArguments exeName plugins = execParser opts
         )
       <|> listPluginsParser
       <|> BiosMode <$> biosParser
-      <|> Ghcide <$> arguments plugins
+      <|> Ghcide <$> arguments cwd plugins
       <|> flag' PrintLibDir (long "print-libdir" <> help "Print project GHCs libdir")
       )
       <**> helper)
@@ -115,8 +119,8 @@ listPluginsParser =
   flag' ListPluginsMode
     (long "list-plugins" <> help "List all available plugins")
 
-arguments :: IdePlugins IdeState -> Parser GhcideArguments
-arguments plugins = GhcideArguments
+arguments :: FilePath -> IdePlugins IdeState -> Parser GhcideArguments
+arguments cwd plugins = GhcideArguments
       <$> (commandP plugins <|> lspCommand <|> checkCommand)
       <*> optional (strOption $ long "cwd" <> metavar "DIR"
                   <> help "Change to this directory")
@@ -186,6 +190,7 @@ arguments plugins = GhcideArguments
            )
       <*> switch (long "project-ghc-version"
                   <> help "Work out the project GHC version and print it")
+      <*> pure cwd
     where
         lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP server")
         checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
