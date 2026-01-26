@@ -65,7 +65,7 @@ jobs:
       with:
         args: bash .github/scripts/bindist.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-aarch64-linux-ubuntu2204
@@ -141,7 +141,7 @@ jobs:
         bash .github/scripts/bindist.sh
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-aarch64-apple-darwin
@@ -205,7 +205,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb10
@@ -269,7 +269,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb11
@@ -333,7 +333,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb12
@@ -397,7 +397,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb13
@@ -461,7 +461,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-fedora33
@@ -525,7 +525,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-fedora40
@@ -589,7 +589,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint202
@@ -653,7 +653,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint213
@@ -717,7 +717,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint222
@@ -781,7 +781,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-ubuntu2004
@@ -845,7 +845,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-ubuntu2204
@@ -909,7 +909,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-ubuntu2404
@@ -973,7 +973,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-unknown
@@ -1040,7 +1040,7 @@ jobs:
         bash .github/scripts/bindist.sh
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-apple-darwin
@@ -1107,7 +1107,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/bindist.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: bindist-x86_64-mingw64
@@ -1147,7 +1147,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9103
@@ -1184,7 +1184,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9122
@@ -1221,7 +1221,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9141
@@ -1258,7 +1258,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-967
@@ -1295,7 +1295,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-984
@@ -1333,7 +1333,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9103
@@ -1371,7 +1371,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9122
@@ -1409,7 +1409,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9141
@@ -1447,7 +1447,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-967
@@ -1485,7 +1485,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-984
@@ -1515,7 +1515,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9103
@@ -1545,7 +1545,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9122
@@ -1575,7 +1575,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9141
@@ -1605,7 +1605,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-967
@@ -1635,7 +1635,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-984
@@ -1665,7 +1665,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9103
@@ -1695,7 +1695,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9122
@@ -1725,7 +1725,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9141
@@ -1755,7 +1755,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-967
@@ -1785,7 +1785,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-984
@@ -1815,7 +1815,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9103
@@ -1845,7 +1845,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9122
@@ -1875,7 +1875,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9141
@@ -1905,7 +1905,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-967
@@ -1935,7 +1935,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-984
@@ -1965,7 +1965,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9103
@@ -1995,7 +1995,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9122
@@ -2025,7 +2025,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9141
@@ -2055,7 +2055,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-967
@@ -2085,7 +2085,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-984
@@ -2115,7 +2115,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9103
@@ -2145,7 +2145,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9122
@@ -2175,7 +2175,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9141
@@ -2205,7 +2205,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-967
@@ -2235,7 +2235,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-984
@@ -2265,7 +2265,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9103
@@ -2295,7 +2295,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9122
@@ -2325,7 +2325,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9141
@@ -2355,7 +2355,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-967
@@ -2385,7 +2385,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-984
@@ -2415,7 +2415,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9103
@@ -2445,7 +2445,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9122
@@ -2475,7 +2475,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9141
@@ -2505,7 +2505,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-967
@@ -2535,7 +2535,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-984
@@ -2565,7 +2565,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9103
@@ -2595,7 +2595,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9122
@@ -2625,7 +2625,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9141
@@ -2655,7 +2655,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-967
@@ -2685,7 +2685,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-984
@@ -2715,7 +2715,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9103
@@ -2745,7 +2745,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9122
@@ -2775,7 +2775,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9141
@@ -2805,7 +2805,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-967
@@ -2835,7 +2835,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-984
@@ -2865,7 +2865,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9103
@@ -2895,7 +2895,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9122
@@ -2925,7 +2925,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9141
@@ -2955,7 +2955,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-967
@@ -2985,7 +2985,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-984
@@ -3015,7 +3015,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9103
@@ -3045,7 +3045,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9122
@@ -3075,7 +3075,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9141
@@ -3105,7 +3105,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-967
@@ -3135,7 +3135,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-984
@@ -3165,7 +3165,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9103
@@ -3195,7 +3195,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9122
@@ -3225,7 +3225,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9141
@@ -3255,7 +3255,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-967
@@ -3285,7 +3285,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-984
@@ -3315,7 +3315,7 @@ jobs:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9103
@@ -3345,7 +3345,7 @@ jobs:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9122
@@ -3375,7 +3375,7 @@ jobs:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9141
@@ -3405,7 +3405,7 @@ jobs:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-967
@@ -3435,7 +3435,7 @@ jobs:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-984
@@ -3468,7 +3468,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9103
@@ -3501,7 +3501,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9122
@@ -3534,7 +3534,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9141
@@ -3567,7 +3567,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-967
@@ -3600,7 +3600,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-984
@@ -3633,7 +3633,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9103
@@ -3666,7 +3666,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9122
@@ -3699,7 +3699,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9141
@@ -3732,7 +3732,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-967
@@ -3765,7 +3765,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-984

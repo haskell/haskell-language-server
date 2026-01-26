@@ -100,14 +100,14 @@ jobs:
         tar -czf cabal.tar.gz *
 
     - name: Upload workspace
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: workspace-${{ matrix.ghc }}-${{ matrix.os }}
         retention-days: 1
         path: workspace.tar.gz
 
     - name: Upload .cabal
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: cabal-home-${{ matrix.ghc }}-${{ matrix.os }}
         retention-days: 1
@@ -165,7 +165,7 @@ jobs:
       run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
 
     - name: Archive benchmarking artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: bench-results-${{ matrix.example }}-${{ runner.os }}-${{ matrix.ghc }}
         path: benchmark-artifacts.tar.gz
