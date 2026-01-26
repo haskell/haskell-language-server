@@ -1,3 +1,8 @@
-1:8-21 TModule "TPatternMatch"
-4:1-2 TFunction "g"
-4:4-11 TDataConstructor "Nothing"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-21 HsSemanticTokenType TModule "TPatternMatch"]
+[1:22-27 HsSyntacticTokenType TKeyword "where"]
+[4:1-2 HsSemanticTokenType TFunction "g"]
+[4:4-11 HsSemanticTokenType TDataConstructor "Nothing"]
+[4:11-12 HsSyntacticTokenType TKeyword ","]
+[4:16-17 HsSyntacticTokenType TKeyword "="]
+[4:18-19 HsSyntacticTokenType TNumberLit "1"]
