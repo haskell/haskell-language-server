@@ -22,10 +22,12 @@ import           Data.Aeson                           (ToJSON (toJSON))
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, extQ, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
-import           Data.List                            (find, intersperse)
+import           Data.List                            (find, intersperse,
+                                                       sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
+import           Data.Ord                             (Down (..))
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Data.Unique                          (hashUnique, newUnique)
@@ -111,7 +113,7 @@ import           Language.LSP.Protocol.Message        (Method (..),
 import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        CodeActionKind (CodeActionKind_RefactorRewrite),
                                                        CodeActionParams (CodeActionParams),
-                                                       Command, InlayHint (..),
+                                                       InlayHint (..),
                                                        InlayHintLabelPart (InlayHintLabelPart),
                                                        InlayHintParams (InlayHintParams, _range, _textDocument),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
@@ -155,18 +157,19 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let recordUids = [ uid
+  let recordsWithUid = [ (uid, record)
                       | uid <- RangeMap.filterByRange range crCodeActions
                       , Just record <- [IntMap.lookup uid crCodeActionResolve]
                       -- Only fully saturated constructor applications can be
                       -- converted to the record syntax through the code action
                       , isConvertible record
                       ]
-  let actions = map (mkCodeAction enabledExtensions) recordUids
-  pure $ InL actions
+      sortedRecords = sortOn (Down . recordDepth recordsWithUid . snd) recordsWithUid
+  pure $ InL $ case sortedRecords of
+    (top : _) -> [mkCodeAction enabledExtensions top]
+    []        -> []
   where
-    mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
-    mkCodeAction exts uid = InR CodeAction
+    mkCodeAction exts (uid, _record) = InR CodeAction
       { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
       , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
@@ -296,6 +299,13 @@ mkTitle exts = "Expand record wildcard"
                    then mempty
                    else " (needs extension: NamedFieldPuns)"
 
+containsRange :: Range -> Range -> Bool
+containsRange (Range s1 e1) (Range s2 e2) = s1 <= s2 && e2 <= e1 && (s1 /= s2 || e1 /= e2)
+
+recordDepth :: [(Int, RecordInfo)] -> RecordInfo -> Int
+recordDepth allRecords record =
+  let r = recordInfoToRange record
+  in length [ ()| (_, other) <- allRecords, let r' = recordInfoToRange other, containsRange r' r]
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts
