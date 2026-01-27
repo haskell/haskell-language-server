@@ -44,6 +44,8 @@ codeActionTests = testGroup
       , "Add placeholders for all missing methods"
       , "Add placeholders for all missing methods with signature(s)"
       ]
+  , goldenWithClass "Creates a placeholder for '<>'" "T8" "diamond" $
+      getActionByTitle "Add placeholders for '<>'"
   , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $
       getActionByTitle "Add placeholders for '=='"
   , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $

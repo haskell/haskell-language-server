@@ -24,9 +24,7 @@ makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -
 makeEditText pm df AddMinimalMethodsParams{..} = do
     mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let ps =
-#if !MIN_VERSION_ghc(9,9,0)
             makeDeltaAst $
-#endif
                 pm_parsed_source pm
 
         old = T.pack $ exactPrint ps
