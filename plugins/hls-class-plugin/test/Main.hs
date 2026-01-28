@@ -66,6 +66,12 @@ codeActionTests = testGroup
       getActionByTitle "Add placeholders for 'g','h'"
   , goldenWithClass "Creates a placeholder when all top-level decls are indented" "T7" "" $
       getActionByTitle "Add placeholders for 'g','h','i'"
+  , testGroup "with preprocessors"
+    [ knownBrokenInEnv [GhcVer GHC910]
+        "See issue https://github.com/haskell/haskell-language-server/issues/4731 for details." $
+        goldenWithClass "Creates a placeholder for '<>'" "T8" "diamond" $
+      getActionByTitle "Add placeholders for '<>'"
+      ]
   , goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
       getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $
