@@ -291,4 +291,4 @@ replaceModName name mbModName =
 properties :: Properties '[ 'PropertyKey "crossModule" 'TBoolean]
 properties = emptyProperties
   & defineBooleanProperty #crossModule
-    "Enable experimental cross-module renaming" False
+    "Enable experimental cross-module renaming" True
