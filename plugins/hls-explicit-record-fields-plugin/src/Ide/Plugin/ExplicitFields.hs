@@ -101,6 +101,7 @@ import           Ide.Plugin.Error                     (PluginError (PluginIntern
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
+import           Ide.PluginUtils                      (subRange)
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
@@ -269,9 +270,12 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
     pure $ InL (concatMap (mkInlayHints nameMap pm) records)
    where
      mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ _ fla)) =
-       let textEdits = renderRecordInfoAsTextEdit nameMap record
-       in mapMaybe (mkInlayHint textEdits pm) fla
+     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr sat _ fla)) =
+       -- Only create inlay hints for fully saturated constructors
+       case sat of
+         Saturated -> let textEdits = renderRecordInfoAsTextEdit nameMap record
+                      in mapMaybe (mkInlayHint textEdits pm) fla
+         Unsaturated -> []
      mkInlayHints _ _ _ = []
 
      mkInlayHint :: Maybe TextEdit -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
@@ -299,13 +303,10 @@ mkTitle exts = "Expand record wildcard"
                    then mempty
                    else " (needs extension: NamedFieldPuns)"
 
-containsRange :: Range -> Range -> Bool
-containsRange (Range s1 e1) (Range s2 e2) = s1 <= s2 && e2 <= e1 && (s1 /= s2 || e1 /= e2)
-
 recordDepth :: [(Int, RecordInfo)] -> RecordInfo -> Int
 recordDepth allRecords record =
   let r = recordInfoToRange record
-  in length [ ()| (_, other) <- allRecords, let r' = recordInfoToRange other, containsRange r' r]
+  in length [ ()| (_, other) <- allRecords, let r' = recordInfoToRange other, subRange r' r]
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts
@@ -612,7 +613,11 @@ getRecCons e@(unLoc -> RecordCon _ _ flds)
 getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
   let fieldss = maybeToList $ getFields app []
       recInfo = concatMap mkRecInfo fieldss
-  in (recInfo, not (null recInfo))
+  -- Search control for positional constructors.
+  -- True stops further (nested) searching; False allows recursive search.
+  -- Currently hardcoded to False to enable nested positional searches.
+  -- Use `in (recInfo, not (null recInfo))` to disable nested searching.
+  in (recInfo, False)
   where
     mkRecInfo :: RecordAppExpr -> [RecordInfo]
     mkRecInfo appExpr =
