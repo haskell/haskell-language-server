@@ -252,8 +252,8 @@ getVersionedTextDoc doc = do
     maybe (pure Nothing) getVirtualFile $
         uriToNormalizedFilePath $ toNormalizedUri uri
   let ver = case mvf of
-        Just (VirtualFile lspver _ _) -> lspver
-        Nothing                       -> 0
+        Just (VirtualFile lspver _ _ _) -> lspver
+        Nothing                         -> 0
   return (VersionedTextDocumentIdentifier uri ver)
 
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
