@@ -23,7 +23,11 @@ import           Control.Lens                            (_head, over)
 makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -> MaybeT m (T.Text, T.Text)
 makeEditText pm df AddMinimalMethodsParams{..} = do
     mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
-    let ps = makeDeltaAst $ pm_parsed_source pm
+    let ps =
+#if !MIN_VERSION_ghc(9,10,0) || MIN_VERSION_ghc(9,10,1)
+            makeDeltaAst $
+#endif
+                pm_parsed_source pm
 
         old = T.pack $ exactPrint ps
 #if MIN_VERSION_ghc_exactprint(1,10,0)
