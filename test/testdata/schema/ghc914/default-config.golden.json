@@ -114,7 +114,7 @@
         },
         "rename": {
             "config": {
-                "crossModule": false
+                "crossModule": true
             },
             "globalOn": true
         },

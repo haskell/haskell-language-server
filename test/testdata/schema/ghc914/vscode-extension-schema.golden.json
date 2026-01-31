@@ -268,7 +268,7 @@
         "type": "boolean"
     },
     "haskell.plugin.rename.config.crossModule": {
-        "default": false,
+        "default": true,
         "markdownDescription": "Enable experimental cross-module renaming",
         "scope": "resource",
         "type": "boolean"
