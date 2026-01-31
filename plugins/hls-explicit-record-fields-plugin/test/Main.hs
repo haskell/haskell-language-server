@@ -22,24 +22,24 @@ plugin = mkPluginTestDescriptor ExplicitFields.descriptor "explicit-fields"
 test :: TestTree
 test = testGroup "explicit-fields"
   [ testGroup "code actions"
-    [ mkTest "WildcardOnly" "WildcardOnly" 12 10 12 20
-    , mkTest "Unused" "Unused" 12 10 12 20
-    , mkTest "Unused2" "Unused2" 12 10 12 20
-    , mkTest "WithPun" "WithPun" 13 10 13 25
-    , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
-    , mkTest "Mixed" "Mixed" 14 10 14 37
-    , mkTest "Construction" "Construction" 16 5 16 15
-    , mkTest "PositionalConstruction" "PositionalConstruction" 15 5 15 15
-    , mkTest "HsExpanded1" "HsExpanded1" 17 10 17 20
-    , mkTest "HsExpanded2" "HsExpanded2" 23 10 23 22
+    [ mkExpansionTest "WildcardOnly" "WildcardOnly" 12 10 12 20
+    , mkExpansionTest "Unused" "Unused" 12 10 12 20
+    , mkExpansionTest "Unused2" "Unused2" 12 10 12 20
+    , mkExpansionTest "WithPun" "WithPun" 13 10 13 25
+    , mkExpansionTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
+    , mkExpansionTest "Mixed" "Mixed" 14 10 14 37
+    , mkExpansionTest "Construction" "Construction" 16 5 16 15
+    , mkConversionTest "PositionalConstruction" "PositionalConstruction" 15 5 15 15
+    , mkExpansionTest "HsExpanded1" "HsExpanded1" 17 10 17 20
+    , mkExpansionTest "HsExpanded2" "HsExpanded2" 23 10 23 22
     , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
     , mkTestNoAction "Puns" "Puns" 12 10 12 31
     , mkTestNoAction "Infix" "Infix" 11 11 11 31
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
     , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
-    , mkTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
-    , mkTest "CursorAwarePositional" "CursorPositional" 15 26 15 34
-    , mkTest "CursorAwareRecords" "CursorRecords" 9 40 9 40
+    , mkConversionTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
+    , mkConversionTest "CursorAwarePositional" "CursorPositional" 15 26 15 34
+    , mkExpansionTest "CursorAwareRecords" "CursorRecords" 9 40 9 40
     ]
   , testGroup "inlay hints"
     [ mkInlayHintsTest "Construction" Nothing 16 $ \ih -> do
@@ -86,19 +86,19 @@ test = testGroup "explicit-fields"
           [ defInlayHint { _position = Position 15 11
                          , _label = InR [ foo ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           , defInlayHint { _position = Position 15 13
                          , _label = InR [ bar ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           , defInlayHint { _position = Position 15 15
                          , _label = InR [ baz ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           ]
@@ -111,19 +111,19 @@ test = testGroup "explicit-fields"
           [ defInlayHint { _position = Position 15 11
                          , _label = InR [ foo ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           , defInlayHint { _position = Position 15 13
                          , _label = InR [ bar ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           , defInlayHint { _position = Position 15 15
                          , _label = InR [ baz ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           ]
@@ -144,7 +144,7 @@ test = testGroup "explicit-fields"
           [defInlayHint { _position = Position 13 21
                         , _label = InR [ foo ]
                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = 5 }" 13 15 22 ]
-                        , _tooltip = Just $ InL "Expand positional record"
+                        , _tooltip = Just $ InL "Convert to traditional record syntax"
                         , _paddingLeft = Nothing
                         }]
     , mkInlayHintsTest "HsExpanded1DuplicateRecordFields" (Just " (positional)") 13 $ \ih -> do
@@ -154,7 +154,7 @@ test = testGroup "explicit-fields"
           [defInlayHint { _position = Position 13 21
                         , _label = InR [ foo ]
                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = 5 }" 13 15 22 ]
-                        , _tooltip = Just $ InL "Expand positional record"
+                        , _tooltip = Just $ InL "Convert to traditional record syntax"
                         , _paddingLeft = Nothing
                         }]
     , mkInlayHintsTest "HsExpanded2" Nothing 23 $ \ih -> do
@@ -174,7 +174,7 @@ test = testGroup "explicit-fields"
           [defInlayHint { _position = Position 16 21
                         , _label = InR [ foo ]
                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = 5 }" 16 15 22 ]
-                        , _tooltip = Just $ InL "Expand positional record"
+                        , _tooltip = Just $ InL "Convert to traditional record syntax"
                         , _paddingLeft = Nothing
                         }]
     , mkInlayHintsTest "Mixed" Nothing 14 $ \ih -> do
@@ -278,19 +278,19 @@ test = testGroup "explicit-fields"
           [ defInlayHint { _position = Position 15 11
                          , _label = InR [ foo ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           , defInlayHint { _position = Position 15 13
                          , _label = InR [ bar ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           , defInlayHint { _position = Position 15 15
                          , _label = InR [ baz ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
-                         , _tooltip = Just $ InL "Expand positional record"
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
           ]
@@ -350,14 +350,14 @@ test = testGroup "explicit-fields"
               { _position = Position 15 14
               , _label = InR [ middle ]
               , _textEdits = Just [ mkLineTextEdit "RecOuter { middle = (RecMiddle (RecInner 'c' 42)) }" 15 5 43 ]
-              , _tooltip = Just $ InL "Expand positional record"
+              , _tooltip = Just $ InL "Convert to traditional record syntax"
               , _paddingLeft = Nothing
               }
           , defInlayHint
               { _position = Position 15 25
               , _label = InR [ inner ]
               , _textEdits = Just [ mkLineTextEdit "RecMiddle { inner = (RecInner 'c' 42) }" 15 15 42 ]
-              , _tooltip = Just $ InL "Expand positional record"
+              , _tooltip = Just $ InL "Convert to traditional record syntax"
               , _paddingLeft = Nothing
               }
           , defInlayHint
@@ -365,7 +365,7 @@ test = testGroup "explicit-fields"
               , _label = InR [ foo ]
               , _textEdits =
                   Just [ mkLineTextEdit "RecInner { foo = 'c', bar = 42 }" 15 26 41 ]
-              , _tooltip = Just $ InL "Expand positional record"
+              , _tooltip = Just $ InL "Convert to traditional record syntax"
               , _paddingLeft = Nothing
               }
           , defInlayHint
@@ -373,7 +373,7 @@ test = testGroup "explicit-fields"
               , _label = InR [ bar ]
               , _textEdits =
                   Just [ mkLineTextEdit "RecInner { foo = 'c', bar = 42 }" 15 26 41 ]
-              , _tooltip = Just $ InL "Expand positional record"
+              , _tooltip = Just $ InL "Convert to traditional record syntax"
               , _paddingLeft = Nothing
               }
           ]
@@ -395,34 +395,46 @@ mkTestNoAction title fp x1 y1 x2 y2 =
   testCase title $
     runSessionWithServer def plugin (testDataDir </> "noop") $ do
       doc <- openDoc (fp <.> "hs") "haskell"
-      actions <- getExplicitFieldsActions doc x1 y1 x2 y2
+      actions <- getActions isExplicitFieldsCodeAction doc x1 y1 x2 y2
       liftIO $ actions @?= []
 
-mkTestWithCount :: Int -> TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
-mkTestWithCount cnt title fp x1 y1 x2 y2 =
+mkTestWithCountAndMessage :: (CodeAction -> Bool) -> Int -> TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTestWithCountAndMessage msgPredicate cnt title fp x1 y1 x2 y2 =
   goldenWithHaskellAndCaps def codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
-    acts@(act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
+    acts@(act:_) <- getActions msgPredicate doc x1 y1 x2 y2
     liftIO $ length acts @?= cnt
     executeCodeAction act
 
-mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
-mkTest = mkTestWithCount 1
+mkExpansionTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkExpansionTest = mkTestWithCountAndMessage isRecWildcardExpansionCodeAction 1
 
-getExplicitFieldsActions
-  :: TextDocumentIdentifier
+mkConversionTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkConversionTest = mkTestWithCountAndMessage isRecLiteralConversionCodeAction 1
+
+getActions
+  :: (CodeAction -> Bool) -> TextDocumentIdentifier
   -> UInt -> UInt -> UInt -> UInt
   -> Session [CodeAction]
-getExplicitFieldsActions doc x1 y1 x2 y2 =
-  findExplicitFieldsAction <$> getAndResolveCodeActions doc range
+getActions p doc x1 y1 x2 y2 =
+  findAction p <$> getAndResolveCodeActions doc range
   where
     range = Range (Position x1 y1) (Position x2 y2)
 
-findExplicitFieldsAction :: [a |? CodeAction] -> [CodeAction]
-findExplicitFieldsAction = filter isExplicitFieldsCodeAction . rights . map toEither
+findAction :: (CodeAction -> Bool) -> [a |? CodeAction] -> [CodeAction]
+findAction p = filter p . rights . map toEither
 
 isExplicitFieldsCodeAction :: CodeAction -> Bool
-isExplicitFieldsCodeAction CodeAction {_title} =
+isExplicitFieldsCodeAction act =
+  isRecWildcardExpansionCodeAction act
+    || isRecLiteralConversionCodeAction act
+
+isRecWildcardExpansionCodeAction :: CodeAction -> Bool
+isRecWildcardExpansionCodeAction CodeAction {_title} =
   "Expand record wildcard" `T.isPrefixOf` _title
+
+isRecLiteralConversionCodeAction :: CodeAction -> Bool
+isRecLiteralConversionCodeAction CodeAction {_title} =
+  "Convert to traditional record syntax" `T.isPrefixOf` _title
 
 defInlayHint :: InlayHint
 defInlayHint =
