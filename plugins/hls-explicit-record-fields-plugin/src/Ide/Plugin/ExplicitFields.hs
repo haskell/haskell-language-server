@@ -19,6 +19,7 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (ToJSON (toJSON))
+import           Data.Function                        (on)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, extQ, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
@@ -27,7 +28,6 @@ import           Data.List                            (find, intersperse,
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
-import           Data.Ord                             (Down (..))
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Data.Unique                          (hashUnique, newUnique)
@@ -165,12 +165,13 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
                       -- converted to the record syntax through the code action
                       , isConvertible record
                       ]
-      sortedRecords = sortOn (Down . recordDepth recordsWithUid . snd) recordsWithUid
+      recordsOnly = map snd recordsWithUid
+      sortedRecords = sortOn (recordDepth recordsOnly . snd) recordsWithUid
   pure $ InL $ case sortedRecords of
-    (top : _) -> [mkCodeAction enabledExtensions top]
+    (top : _) -> [mkCodeAction enabledExtensions (fst top)]
     []        -> []
   where
-    mkCodeAction exts (uid, _record) = InR CodeAction
+    mkCodeAction exts uid = InR CodeAction
       { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
       , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
@@ -303,10 +304,12 @@ mkTitle exts = "Expand record wildcard"
                    then mempty
                    else " (needs extension: NamedFieldPuns)"
 
-recordDepth :: [(Int, RecordInfo)] -> RecordInfo -> Int
+-- Calculate the nesting depth of a record by counting how many other records
+-- contain it. Used to prioritize more deeply nested records in code actions.
+recordDepth :: [RecordInfo] -> RecordInfo -> Int
 recordDepth allRecords record =
-  let r = recordInfoToRange record
-  in length [ ()| (_, other) <- allRecords, let r' = recordInfoToRange other, subRange r' r]
+  let isSubrangeOf = subRange `on` recordInfoToRange
+  in length $ filter (`isSubrangeOf` record) allRecords
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts

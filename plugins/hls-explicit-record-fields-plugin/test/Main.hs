@@ -38,6 +38,8 @@ test = testGroup "explicit-fields"
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
     , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
     , mkTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
+    , mkTest "CursorAwarePositional" "CursorPositional" 15 26 15 34
+    , mkTest "CursorAwareRecords" "CursorRecords" 9 40 9 40
     ]
   , testGroup "inlay hints"
     [ mkInlayHintsTest "Construction" Nothing 16 $ \ih -> do
