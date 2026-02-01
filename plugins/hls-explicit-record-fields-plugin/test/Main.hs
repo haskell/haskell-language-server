@@ -38,6 +38,8 @@ test = testGroup "explicit-fields"
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
     , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
     , mkTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
+    , mkTest "CursorAwarePositional" "CursorPositional" 15 26 15 34
+    , mkTest "CursorAwareRecords" "CursorRecords" 9 40 9 40
     ]
   , testGroup "inlay hints"
     [ mkInlayHintsTest "Construction" Nothing 16 $ \ih -> do
@@ -291,6 +293,89 @@ test = testGroup "explicit-fields"
                          , _tooltip = Just $ InL "Expand positional record"
                          , _paddingLeft = Nothing
                          }
+          ]
+    , mkInlayHintsTest "CursorRecords" Nothing 9 $ \ih -> do
+        let mkLabelPart' = mkLabelPartOffsetLength "CursorRecords"
+        a0  <- mkLabelPart' 3 14 "a0"
+        a1  <- mkLabelPart' 4 14 "a1"
+        a11 <- mkLabelPart' 4 25 "a11"
+        a2  <- mkLabelPart' 5 14 "a2"
+        a3  <- mkLabelPart' 6 14 "a3"
+        (@?=) ih
+          [ defInlayHint
+              { _position = Position 9 52
+              , _label = InR [ a3 ]
+              , _textEdits = Just [ mkLineTextEdit "L1 {l2 = L2 {l3 = L3 {l4 = L4 {..}, ..}, ..}, a3}" 9 5 53 ]
+              , _tooltip = Just $ InL "Expand record wildcard"
+              , _paddingLeft = Just True
+              , _paddingRight = Nothing
+              , _data_ = Nothing
+              }
+          , defInlayHint
+              { _position = Position 9 47
+              , _label = InR [ a2 ]
+              , _textEdits = Just [ mkLineTextEdit "L2 {l3 = L3 {l4 = L4 {..}, ..}, a2}" 9 14 48 ]
+              , _tooltip = Just $ InL "Expand record wildcard"
+              , _paddingLeft = Just True
+              , _paddingRight = Nothing
+              , _data_ = Nothing
+              }
+          , defInlayHint
+              { _position = Position 9 42
+              , _label = InR [ a1 , InlayHintLabelPart ", " Nothing Nothing Nothing , a11 ]
+              , _textEdits = Just [ mkLineTextEdit "L3 {l4 = L4 {..}, a1, a11}" 9 23 43 ]
+              , _tooltip = Just $ InL "Expand record wildcard"
+              , _paddingLeft = Just True
+              , _paddingRight = Nothing
+              , _data_ = Nothing
+              }
+          , defInlayHint
+              { _position = Position 9 37
+              , _label = InR [ a0 ]
+              , _textEdits = Just [ mkLineTextEdit "L4 {a0}" 9 31 38 ]
+              , _tooltip = Just $ InL "Expand record wildcard"
+              , _paddingLeft = Just True
+              , _paddingRight = Nothing
+              , _data_ = Nothing
+              }
+          ]
+    , mkInlayHintsTest "CursorPositional" Nothing 15 $ \ih -> do
+        let mkLabelPart' = mkLabelPartOffsetLengthSub1 "CursorPositional"
+        middle <- mkLabelPart' 2 2 "middle="
+        inner  <- mkLabelPart' 6 2 "inner="
+        foo    <- mkLabelPart' 10 2 "foo="
+        bar    <- mkLabelPart' 11 4 "bar="
+        (@?=) ih
+          [ defInlayHint
+              { _position = Position 15 14
+              , _label = InR [ middle ]
+              , _textEdits = Just [ mkLineTextEdit "RecOuter { middle = (RecMiddle (RecInner 'c' 42)) }" 15 5 43 ]
+              , _tooltip = Just $ InL "Expand positional record"
+              , _paddingLeft = Nothing
+              }
+          , defInlayHint
+              { _position = Position 15 25
+              , _label = InR [ inner ]
+              , _textEdits = Just [ mkLineTextEdit "RecMiddle { inner = (RecInner 'c' 42) }" 15 15 42 ]
+              , _tooltip = Just $ InL "Expand positional record"
+              , _paddingLeft = Nothing
+              }
+          , defInlayHint
+              { _position = Position 15 35
+              , _label = InR [ foo ]
+              , _textEdits =
+                  Just [ mkLineTextEdit "RecInner { foo = 'c', bar = 42 }" 15 26 41 ]
+              , _tooltip = Just $ InL "Expand positional record"
+              , _paddingLeft = Nothing
+              }
+          , defInlayHint
+              { _position = Position 15 39
+              , _label = InR [ bar ]
+              , _textEdits =
+                  Just [ mkLineTextEdit "RecInner { foo = 'c', bar = 42 }" 15 26 41 ]
+              , _tooltip = Just $ InL "Expand positional record"
+              , _paddingLeft = Nothing
+              }
           ]
     ]
   ]

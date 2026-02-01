@@ -19,10 +19,12 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (ToJSON (toJSON))
+import           Data.Function                        (on)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, extQ, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
-import           Data.List                            (find, intersperse)
+import           Data.List                            (find, intersperse,
+                                                       sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
@@ -99,6 +101,7 @@ import           Ide.Plugin.Error                     (PluginError (PluginIntern
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
+import           Ide.PluginUtils                      (subRange)
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
@@ -111,7 +114,7 @@ import           Language.LSP.Protocol.Message        (Method (..),
 import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        CodeActionKind (CodeActionKind_RefactorRewrite),
                                                        CodeActionParams (CodeActionParams),
-                                                       Command, InlayHint (..),
+                                                       InlayHint (..),
                                                        InlayHintLabelPart (InlayHintLabelPart),
                                                        InlayHintParams (InlayHintParams, _range, _textDocument),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
@@ -155,17 +158,19 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let recordUids = [ uid
+  let recordsWithUid = [ (uid, record)
                       | uid <- RangeMap.filterByRange range crCodeActions
                       , Just record <- [IntMap.lookup uid crCodeActionResolve]
                       -- Only fully saturated constructor applications can be
                       -- converted to the record syntax through the code action
                       , isConvertible record
                       ]
-  let actions = map (mkCodeAction enabledExtensions) recordUids
-  pure $ InL actions
+      recordsOnly = map snd recordsWithUid
+      sortedRecords = sortOn (recordDepth recordsOnly . snd) recordsWithUid
+  pure $ InL $ case sortedRecords of
+    (top : _) -> [mkCodeAction enabledExtensions (fst top)]
+    []        -> []
   where
-    mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
     mkCodeAction exts uid = InR CodeAction
       { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
       , _kind = Just CodeActionKind_RefactorRewrite
@@ -266,9 +271,12 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
     pure $ InL (concatMap (mkInlayHints nameMap pm) records)
    where
      mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ _ fla)) =
-       let textEdits = renderRecordInfoAsTextEdit nameMap record
-       in mapMaybe (mkInlayHint textEdits pm) fla
+     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr sat _ fla)) =
+       -- Only create inlay hints for fully saturated constructors
+       case sat of
+         Saturated -> let textEdits = renderRecordInfoAsTextEdit nameMap record
+                      in mapMaybe (mkInlayHint textEdits pm) fla
+         Unsaturated -> []
      mkInlayHints _ _ _ = []
 
      mkInlayHint :: Maybe TextEdit -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
@@ -296,6 +304,12 @@ mkTitle exts = "Expand record wildcard"
                    then mempty
                    else " (needs extension: NamedFieldPuns)"
 
+-- Calculate the nesting depth of a record by counting how many other records
+-- contain it. Used to prioritize more deeply nested records in code actions.
+recordDepth :: [RecordInfo] -> RecordInfo -> Int
+recordDepth allRecords record =
+  let isSubrangeOf = subRange `on` recordInfoToRange
+  in length $ filter (`isSubrangeOf` record) allRecords
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts
@@ -602,7 +616,11 @@ getRecCons e@(unLoc -> RecordCon _ _ flds)
 getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
   let fieldss = maybeToList $ getFields app []
       recInfo = concatMap mkRecInfo fieldss
-  in (recInfo, not (null recInfo))
+  -- Search control for positional constructors.
+  -- True stops further (nested) searching; False allows recursive search.
+  -- Currently hardcoded to False to enable nested positional searches.
+  -- Use `in (recInfo, not (null recInfo))` to disable nested searching.
+  in (recInfo, False)
   where
     mkRecInfo :: RecordAppExpr -> [RecordInfo]
     mkRecInfo appExpr =
