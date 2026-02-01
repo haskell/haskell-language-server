@@ -27,7 +27,6 @@ import           Data.List                            (find, intersperse,
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
-import           Data.Ord                             (Down (..))
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Data.Unique                          (hashUnique, newUnique)
@@ -165,12 +164,12 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
                       -- converted to the record syntax through the code action
                       , isConvertible record
                       ]
-      sortedRecords = sortOn (Down . recordDepth recordsWithUid . snd) recordsWithUid
+      sortedRecords = sortOn (recordDepth recordsWithUid . snd) recordsWithUid
   pure $ InL $ case sortedRecords of
-    (top : _) -> [mkCodeAction enabledExtensions top]
+    (top : _) -> [mkCodeAction enabledExtensions (fst top)]
     []        -> []
   where
-    mkCodeAction exts (uid, _record) = InR CodeAction
+    mkCodeAction exts uid = InR CodeAction
       { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
       , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
@@ -303,6 +302,8 @@ mkTitle exts = "Expand record wildcard"
                    then mempty
                    else " (needs extension: NamedFieldPuns)"
 
+-- Calculate the nesting depth of a record by counting how many other records
+-- contain it. Used to prioritize more deeply nested records in code actions.
 recordDepth :: [(Int, RecordInfo)] -> RecordInfo -> Int
 recordDepth allRecords record =
   let r = recordInfoToRange record
