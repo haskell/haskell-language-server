@@ -412,7 +412,7 @@ library hls-call-hierarchy-plugin
     , extra
     , ghc
     , ghcide                == 2.13.0.0
-    , hiedb                 ^>= 0.7.0.0
+    , hiedb                 ^>= 0.8.0.0
     , hls-plugin-api        == 2.13.0.0
     , lens
     , lsp                    >=2.7
@@ -600,7 +600,7 @@ library hls-rename-plugin
     , ghc
     , ghcide                == 2.13.0.0
     , hashable
-    , hiedb                 ^>= 0.7.0.0
+    , hiedb                 ^>= 0.8.0.0
     , hls-plugin-api        == 2.13.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
