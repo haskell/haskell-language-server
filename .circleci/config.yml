@@ -60,7 +60,7 @@ version: 2
 jobs:
   stackage-lts22:
     docker:
-      - image: haskell:9.6.6-slim-bullseye
+      - image: haskell:9.6.7-slim-bullseye
     environment:
       - STACK_FILE: "stack-lts22.yaml"
     <<: *defaults
