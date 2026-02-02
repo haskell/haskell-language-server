@@ -68,6 +68,7 @@ if impl(ghc >= 9.14)
     semialign:containers,
     lsp-test:containers,
     hie-bios:ghc,
+    string-interpolate:template-haskell,
     tasty-hspec:base,
     tagged:template-haskell,
     indexed-traversable:base,
