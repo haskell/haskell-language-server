@@ -96,9 +96,9 @@ if impl(ghc >= 9.14)
     binary-orphans:base,
     cabal-install-parsers:containers,
 
-  -- For some reason cabal is picking too recent transformers-compat==0.8 (but only on windows with ghc 9.6.7)
-  -- which leads to "rejecting: monad-control-1.0.3.1 (conflict: transformers-compat==0.8, monad-control => transformers-compat>=0.3 && <0.8)"
-  -- So hardcoding the previous working version to work around that
-  if os(windows) && impl(ghc <9.7)
-    constraints:
-      transformers-compat ==0.7.2
+-- For some reason cabal is picking too recent transformers-compat==0.8 (but only on windows with ghc 9.6.7)
+-- which leads to "rejecting: monad-control-1.0.3.1 (conflict: transformers-compat==0.8, monad-control => transformers-compat>=0.3 && <0.8)"
+-- So hardcoding the previous working version to work around that
+if os(windows) && impl(ghc <9.7)
+  allow-newer:
+    monad-control:transformers-compat
