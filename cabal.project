@@ -101,4 +101,5 @@ if impl(ghc >= 9.14)
 -- So hardcoding the previous working version to work around that
 if os(windows) && impl(ghc <9.7)
   allow-newer:
-    monad-control:transformers-compat
+    monad-control:transformers-compat,
+    mmorph:transformers-compat
