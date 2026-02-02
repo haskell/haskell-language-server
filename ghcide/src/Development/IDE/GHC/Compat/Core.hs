@@ -185,6 +185,7 @@ module Development.IDE.GHC.Compat.Core (
     unLocA,
     LocatedAn,
     GHC.LocatedA,
+    GHC.SrcSpanAnnA,
     GHC.AnnListItem(..),
     GHC.NameAnn(..),
     SrcLoc.RealLocated,

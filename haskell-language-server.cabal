@@ -598,6 +598,7 @@ library hls-rename-plugin
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
+    , text-rope ^>=0.3
     , containers
     , ghc
     , ghcide                == 2.12.0.0

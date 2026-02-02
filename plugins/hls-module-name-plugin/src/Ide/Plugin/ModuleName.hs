@@ -12,6 +12,7 @@ Provide CodeLenses to:
 -}
 module Ide.Plugin.ModuleName (
     descriptor,
+    pathModuleNames,
     Log,
 ) where
 

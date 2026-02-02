@@ -33,10 +33,12 @@ import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
+import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.Types.Location
 import           Ide.Logger
 import           Ide.Types
 import           Numeric.Natural
+import Development.IDE.Core.RuleTypes (GhcSessionIO(..))
 
 data Log
   = LogShake Shake.Log
@@ -46,6 +48,7 @@ data Log
   | LogSavedTextDocument !Uri
   | LogClosedTextDocument !Uri
   | LogWatchedFileEvents !Text.Text
+  | LogSessionRestart
   | LogWarnNoWatchedFilesSupport
   deriving Show
 
@@ -59,6 +62,7 @@ instance Pretty Log where
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
     LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
     LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
+    LogSessionRestart ->  "Restarting shake session globally"
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
@@ -147,6 +151,12 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
       success <- registerFileWatches globs
       unless success $
         liftIO $ logWith recorder Warning LogWarnNoWatchedFilesSupport
+  , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidRenameFiles $
+              \ide vfs _ _ -> liftIO $ do
+                logWith recorder Debug LogSessionRestart
+                Shake.shakeRestart (cmapWithPrio LogShake recorder) ide (VFSModified vfs) "" [] $ do
+                  return [Shake.toNoFileKey GhcSessionIO]
+                pure ()
   ],
 
     -- The ghcide descriptors should come last'ish so that the notification handlers

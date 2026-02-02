@@ -24,7 +24,7 @@ data KnownTargets = KnownTargets
   -- | 'normalisingMap' is a cached copy of `HMap.mapKey const targetMap`
   --
   -- At startup 'GetLocatedImports' is called on all known files. Say you have 10000
-  -- modules in your project then this leads to 10000 calls to 'GetLocatedImports'
+  -- modules in your projecknownTargetsVart then this leads to 10000 calls to 'GetLocatedImports'
   -- running concurrently.
   --
   -- In `GetLocatedImports` the known targets are consulted and the targetsMap

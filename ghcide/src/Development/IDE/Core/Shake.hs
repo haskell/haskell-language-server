@@ -29,6 +29,7 @@ module Development.IDE.Core.Shake(
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
     shakeEnqueue,
+    shakeRestart,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     useWithSeparateFingerprintRule,

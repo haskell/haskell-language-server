@@ -129,6 +129,7 @@ import           System.Process                           (readProcessWithExitCo
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
+import qualified Language.LSP.Protocol.Types as LSP
 
 data Log
   = LogHeapStats !HeapStats.Log
@@ -300,7 +301,61 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
     let hlsPlugin = asGhcIdePlugin (cmapWithPrio LogPluginHLS recorder) argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
-        options = argsLspOptions { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands }
+        options = argsLspOptions {
+          LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands,
+          LSP.optWorkspaceWillRenameFileOperationRegistrationOptions = Just $
+            LSP.FileOperationRegistrationOptions
+              [LSP.FileOperationFilter
+              {_scheme= Just "file", _pattern = LSP.FileOperationPattern
+                  { {-|
+                  The glob pattern to match. Glob patterns can have the following syntax:
+                  - `*` to match one or more characters in a path segment
+                  - `?` to match on one character in a path segment
+                  - `**` to match any number of path segments, including none
+                  - `{}` to group sub patterns into an OR expression. (e.g. `**​/*.{ts,js}` matches all TypeScript and JavaScript files)
+                  - `[]` to declare a range of characters to match in a path segment (e.g., `example.[0-9]` to match on `example.0`, `example.1`, …)
+                  - `[!...]` to negate a range of characters to match in a path segment (e.g., `example.[!0-9]` to match on `example.a`, `example.b`, but not `example.0`)
+                  -}
+                  _glob = "**/*.hs"
+                  , {-|
+                  Whether to match files or folders with this pattern.
+
+                  Matches both if undefined.
+                  -}
+                  _matches = Nothing
+                  , {-|
+                  Additional options used during matching.
+                  -}
+                  _options = Nothing
+                }
+              }],
+          LSP.optWorkspaceDidRenameFileOperationRegistrationOptions = Just $
+           LSP.FileOperationRegistrationOptions
+              [LSP.FileOperationFilter
+              {_scheme= Just "file", _pattern = LSP.FileOperationPattern
+                  { {-|
+                  The glob pattern to match. Glob patterns can have the following syntax:
+                  - `*` to match one or more characters in a path segment
+                  - `?` to match on one character in a path segment
+                  - `**` to match any number of path segments, including none
+                  - `{}` to group sub patterns into an OR expression. (e.g. `**​/*.{ts,js}` matches all TypeScript and JavaScript files)
+                  - `[]` to declare a range of characters to match in a path segment (e.g., `example.[0-9]` to match on `example.0`, `example.1`, …)
+                  - `[!...]` to negate a range of characters to match in a path segment (e.g., `example.[!0-9]` to match on `example.a`, `example.b`, but not `example.0`)
+                  -}
+                  _glob = "**/*.hs"
+                  , {-|
+                  Whether to match files or folders with this pattern.
+
+                  Matches both if undefined.
+                  -}
+                  _matches = Nothing
+                  , {-|
+                  Additional options used during matching.
+                  -}
+                  _options = Nothing
+                }
+              }]
+          }
         argsParseConfig = getConfigFromNotification argsHlsPlugins
         rules = do
             argsRules
