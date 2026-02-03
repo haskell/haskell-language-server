@@ -99,7 +99,7 @@ runs:
     - name: Form the package list ('cabal.project.freeze')
       run: |
         rm cabal.project.freeze || \
-        cabal v2-freeze && \
+        cabal v2-freeze --max-backjumps 10000 && \
         echo "" && \
         echo 'Output:' && \
         echo "" && \
