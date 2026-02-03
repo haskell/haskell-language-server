@@ -111,7 +111,7 @@ jobs:
           os: ${{ runner.os }}
 
       - name: Build
-        run: cabal build ${CABAL_ARGS} all
+        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} all
 
       - name: Set test options
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
