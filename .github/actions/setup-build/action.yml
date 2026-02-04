@@ -96,6 +96,10 @@ runs:
     - run: cabal update
       shell: bash
 
+    # We bump --max-backjumps 10000 because cabal
+    # had trouble to find build plan with the default (4000).
+    # This only happens with GHC 9.6 on Windows, other platforms should work without it.
+    # Remove it from here and other places when we stop supporting GHC 9.6
     - name: Form the package list ('cabal.project.freeze')
       run: |
         rm cabal.project.freeze || \
