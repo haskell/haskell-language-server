@@ -31,7 +31,6 @@ If you are building **Haskell Language Server** inside WSL, it is strongly recom
 
 Building from Windows-mounted directories can cause permission issues, degraded performance, or unexpected build failures—including builds being terminated—especially on low-memory systems.
 
-##### Recommended setup
 ```bash
 cd ~
 mkdir -p dev
