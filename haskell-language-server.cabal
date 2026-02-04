@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == {9.12.2, 9.10.2, 9.8.4, 9.6.7}
+tested-with:        GHC == {9.14.1, 9.12.2, 9.10.3, 9.8.4, 9.6.7}
 extra-source-files:
   README.md
   ChangeLog.md
@@ -412,7 +412,7 @@ library hls-call-hierarchy-plugin
     , extra
     , ghc
     , ghcide                == 2.13.0.0
-    , hiedb                 ^>= 0.7.0.0
+    , hiedb                 ^>= 0.8.0.0
     , hls-plugin-api        == 2.13.0.0
     , lens
     , lsp                    >=2.7
@@ -600,7 +600,7 @@ library hls-rename-plugin
     , ghc
     , ghcide                == 2.13.0.0
     , hashable
-    , hiedb                 ^>= 0.7.0.0
+    , hiedb                 ^>= 0.8.0.0
     , hls-plugin-api        == 2.13.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
@@ -896,7 +896,7 @@ test-suite hls-signature-help-plugin-tests
     , hls-test-utils             == 2.13.0.0
     , lens
     , lsp-types
-    , string-interpolate
+    , string-interpolate         >= 0.3.1
     , text
   default-extensions:
     DerivingStrategies

@@ -111,14 +111,14 @@ jobs:
           os: ${{ runner.os }}
 
       - name: Build
-        run: cabal build ${CABAL_ARGS} all
+        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} all
 
       - name: Set test options
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
         # to include 'new' in the filters, since many of our test suites are in the
         # same package.
         run: |
-          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new"
+          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --max-backjumps 10000
 
       - if: matrix.test
         name: Test hls-graph
