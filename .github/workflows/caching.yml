@@ -52,7 +52,7 @@ on:
 # We can't set the `--builddir` via `v2-configure` as cabal doesn't support this.
 # https://github.com/haskell/cabal/issues/5271
 env:
-  cabalBuild: "v2-build --keep-going --builddir b"
+  cabalBuild: "v2-build --keep-going --builddir b --max-backjumps 10000"
 
 jobs:
   pre_job:
