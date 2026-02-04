@@ -40,7 +40,7 @@ cd haskell-language-server
 ```
 If you encounter memory-related build failures, try reducing peak memory usage by running:
 ```
-cabal clean && cabal build --disable-tests -j1
+cabal build -j1
 ```
 
 ### Building with Stack
