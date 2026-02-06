@@ -144,4 +144,18 @@ hoverNoteTests = testGroup "Hover Notes"
               (Just (Range (Position 27 3) (Position 27 36)))
 
         liftIO $ hover @?= expected
+
+  , testCase "hover single-comment leak" $ runSessionWithServer' testDataDir $ \_dir -> do
+        let file = "NoteDef.hs"
+            pos  = Position 5 69
+        doc <- openDoc file "haskell"
+        waitForKickDone
+        hover <- getHover doc pos
+
+        let expected =
+              Just $ Hover (InL $ MarkupContent MarkupKind_Markdown
+              "Single line comments\n\nGHC's notes script only allows multiline comments to define notes, but in the\nHLS codebase this single line style can be found as well.\n\n")
+              (Just (Range (Position 5 61) (Position 5 88)))
+
+        liftIO $ hover @?= expected
   ]
