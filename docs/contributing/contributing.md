@@ -15,6 +15,18 @@ Clone the repository:
 $ git clone https://github.com/haskell/haskell-language-server
 ```
 
+#### Note for contributors using WSL (Windows Subsystem for Linux)
+
+When building HLS in WSL, clone and build the repository from the Linux filesystem (e.g. `~/dev`), not from Windows-mounted paths like `/mnt/c`, as this can cause permission or build issues.
+
+```bash
+cd ~
+mkdir -p dev
+cd dev
+git clone https://github.com/haskell/haskell-language-server
+cd haskell-language-server
+```
+
 The project can then be built with both `cabal build` and `stack build`.
 
 ### Building with Cabal
@@ -24,6 +36,11 @@ The project can then be built with both `cabal build` and `stack build`.
 $ cabal update
 # Then
 $ cabal build
+```
+
+If you encounter memory-related build failures, try reducing peak memory usage by running:
+```
+cabal build -j1
 ```
 
 ### Building with Stack
