@@ -149,6 +149,7 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import Test.Hls.TestEnv
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -180,9 +181,12 @@ data ExpectBroken (k :: BrokenBehavior) a where
 unCurrent :: ExpectBroken 'Current a -> a
 unCurrent (BrokenCurrent a) = a
 
--- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
+-- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapOptions . adjustOption (const $ mkTimeout 600000000)
+  where
+    ingredients = includingOptions hlsTestOptions : defaultIngredients
+    ingredientsWithRerun = [(rerunningTests ingredients)]
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
