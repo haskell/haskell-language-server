@@ -237,24 +237,6 @@ Code action kind: `quickfix`
 
 Adds placeholders for missing class methods in a class instance definition.
 
-### Unfold definition
-
-Provided by: `hls-retrie-plugin`
-
-Code action kind: `refactor.extract`
-
-Extracts a definition from the code.
-
-### Fold definition
-
-Provided by: `hls-retrie-plugin`
-
-Code action kind: `refactor.inline`
-
-Inlines a definition from the code.
-
-![Retrie Demo](https://i.imgur.com/Ev7B87k.gif)
-
 ### Insert contents of Template Haskell splice
 
 Provided by: `hls-splice-plugin`
