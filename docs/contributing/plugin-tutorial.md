@@ -75,7 +75,7 @@ import GHC.Generics (Generic)
 
 The HLS codebase includes several plugins (found in `./plugins`). For example:
 
-- The `ormolu`, `fourmolu`, `floskell` and `stylish-haskell` plugins used to format code
+- The `ormolu`, `fourmolu`, and `stylish-haskell` plugins used to format code
 - The `eval` plugin, a code lens provider to evaluate code in comments
 - The `retrie` plugin, a code action provider to execute retrie commands
 
@@ -95,7 +95,6 @@ I recommend looking at the existing plugins for inspiration and reference. A few
       allPlugins =
         [ GhcIde.descriptor "ghcide"
         , Pragmas.descriptor "pragmas"
-        , Floskell.descriptor "floskell"
         , Fourmolu.descriptor "fourmolu"
         , Ormolu.descriptor "ormolu"
         , StylishHaskell.descriptor "stylish-haskell"

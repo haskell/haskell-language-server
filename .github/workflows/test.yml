@@ -151,11 +151,6 @@ jobs:
         name: Test hls-refactor-plugin
         run: cabal test ${CABAL_ARGS} hls-refactor-plugin-tests || cabal test ${CABAL_ARGS} hls-refactor-plugin-tests
 
-      # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
-        name: Test hls-floskell-plugin
-        run: cabal test ${CABAL_ARGS} hls-floskell-plugin-tests || cabal test ${CABAL_ARGS} hls-floskell-plugin-tests
-
       - if: matrix.test
         name: Test hls-class-plugin
         run: cabal test ${CABAL_ARGS} hls-class-plugin-tests || cabal test ${CABAL_ARGS} hls-class-plugin-tests

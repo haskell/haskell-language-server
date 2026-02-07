@@ -132,7 +132,6 @@ The default Haskell code formatter is `ormolu`, and the Haskell formatter can be
 
 | Formatter       | Provided by                  |
 | --------------- | ---------------------------- |
-| Floskell        | `hls-floskell-plugin`        |
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |

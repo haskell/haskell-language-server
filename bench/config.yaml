@@ -180,7 +180,6 @@ configurations:
   - codeRange
   - eval
   - explicitFixity
-  - floskell
   - fourmolu
   - gadt
   - ghcide-code-actions-bindings
@@ -205,7 +204,6 @@ configurations:
 # - codeRange
 # - eval
 # - explicitFixity
-# # - floskell
 # # - fourmolu
 # - gadt
 # - ghcide-code-actions-bindings
