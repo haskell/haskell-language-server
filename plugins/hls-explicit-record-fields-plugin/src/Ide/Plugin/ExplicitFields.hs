@@ -56,19 +56,22 @@ import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        GenLocated (L), GhcPass,
                                                        GhcTc,
                                                        HasSrcSpan (getLoc),
+                                                       HsBindLR (..),
                                                        HsConDetails (RecCon),
                                                        HsExpr (HsApp, HsVar, XExpr),
                                                        HsFieldBind (hfbLHS),
                                                        HsRecFields (..),
-                                                       HsWrap (HsWrap), LPat,
-                                                       Located,
+                                                       HsWrap (HsWrap), LHsBind,
+                                                       LPat, Located,
+                                                       MatchGroup (..),
+                                                       MatchGroupTc (..),
                                                        NamedThing (getName),
                                                        Outputable,
                                                        TcGblEnv (tcg_binds),
                                                        Var (varName),
                                                        XXExprGhcTc (..),
                                                        conLikeFieldLabels,
-                                                       nameSrcSpan,
+                                                       isGenerated, nameSrcSpan,
                                                        pprNameUnqualified,
                                                        recDotDot, unLoc)
 import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns),
@@ -596,7 +599,15 @@ showRecordApp (RecordAppExpr _ recConstr fla)
   where showFieldWithArg (field, arg) = printFieldName field <> " = " <> printOutputable arg
 
 collectRecords :: GenericQ [RecordInfo]
-collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` getRecCons)
+collectRecords = everythingBut (<>) (([], False) `mkQ` ignoreGenerated `extQ` getRecPatterns `extQ` getRecCons)
+
+-- | Prevent the SYB traversal to descend further if the matching group
+-- in question is compiler-generated (e.g. TH, deriving). Doing so is necessary
+-- in order to not create inlay hints for TH-generated records.
+ignoreGenerated :: LHsBind GhcTc -> ([RecordInfo], Bool)
+ignoreGenerated (unLoc -> FunBind _ _ (MG (MatchGroupTc _ _ origin) _))
+  | isGenerated origin = ([], True)
+ignoreGenerated _ = ([], False)
 
 -- | Collect 'Name's into a map, indexed by the names' unique identifiers.
 -- The 'Eq' instance of 'Name's makes use of their unique identifiers, hence
