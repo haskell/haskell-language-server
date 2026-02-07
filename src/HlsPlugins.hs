@@ -41,10 +41,6 @@ import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 import qualified Ide.Plugin.Rename                 as Rename
 #endif
 
-#if hls_retrie
-import qualified Ide.Plugin.Retrie                 as Retrie
-#endif
-
 #if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
@@ -187,9 +183,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
-#endif
-#if hls_retrie
-      let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :

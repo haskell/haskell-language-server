@@ -27,7 +27,6 @@ extra-deps:
   - lsp-test-0.17.1.0
   - lsp-types-2.3.0.0
   - monad-dijkstra-0.1.1.4 # 5
-  - retrie-1.2.3
   - unordered-containers-0.2.21
 
   # stan and friends
@@ -55,8 +54,6 @@ flags:
     pedantic: true
   stylish-haskell:
     ghc-lib: true
-  retrie:
-    BuildExecutable: false
   # stan dependencies
   directory-ospath-streaming:
       os-string: false

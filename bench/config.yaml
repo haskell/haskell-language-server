@@ -223,7 +223,6 @@ configurations:
 # - pragmas
 # - qualifyImportedNames
 # - rename
-# - retrie
 # - splice
 # - stan
 # # - stylish-haskell

@@ -14,7 +14,6 @@ allow-newer: true
 allow-newer-deps:
   - extensions
   - hw-fingertree
-  - retrie
   # stan dependencies
   - directory-ospath-streaming
 
@@ -26,7 +25,6 @@ extra-deps:
   - hie-bios-0.17.0
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
-  - retrie-1.2.3
   - unordered-containers-0.2.21
 
   # stan dependencies not found in the stackage snapshot
@@ -49,8 +47,6 @@ flags:
     pedantic: true
   stylish-haskell:
     ghc-lib: true
-  retrie:
-    BuildExecutable: false
   # stan dependencies
   directory-ospath-streaming:
       os-string: false
