@@ -27,8 +27,9 @@ source-repository head
 library
   exposed-modules:
     Test.Hls
-    Test.Hls.Util
     Test.Hls.FileSystem
+    Test.Hls.TestEnv
+    Test.Hls.Util
     Development.IDE.Test
     Development.IDE.Test.Diagnostic
 
