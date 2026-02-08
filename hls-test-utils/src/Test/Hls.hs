@@ -143,13 +143,13 @@ import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
+import           Test.Hls.TestEnv                         (hlsTestOptions, wrapCliTestOptions)
 import           Test.Hls.Util
 import           Test.Tasty                               hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
-import Test.Hls.TestEnv
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -183,10 +183,10 @@ unCurrent (BrokenCurrent a) = a
 
 -- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapOptions . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapCliTestOptions . adjustOption (const $ mkTimeout 600000000)
   where
     ingredients = includingOptions hlsTestOptions : defaultIngredients
-    ingredientsWithRerun = [(rerunningTests ingredients)]
+    ingredientsWithRerun = [rerunningTests ingredients]
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

@@ -6,15 +6,21 @@ module Test.Hls.TestEnv
   , HlsTestRootDir(..)
   , LspTimeout(..)
   , hlsTestOptions
-  , wrapOptions
+  , wrapCliTestOptions
   ) where
 
-import Test.Tasty.Options
-import System.Environment (lookupEnv, setEnv, unsetEnv)
-import Data.Data (Proxy(..))
-import Test.Tasty (askOption, TestTree, withResource)
-import Data.Maybe (catMaybes)
-import Control.Monad (guard)
+import           Test.Tasty.Options         ( IsOption(defaultValue, optionCLParser, optionHelp, optionName,
+                                                    parseValue),
+                                            OptionDescription(..),
+                                            safeReadBool,
+                                            flagCLParser,
+                                            safeRead )
+import           System.Environment         (lookupEnv, setEnv, unsetEnv)
+import           Data.Data                  (Proxy(..))
+import           Test.Tasty                 (askOption, TestTree, withResource)
+import           Data.Maybe                 (catMaybes)
+import           Control.Monad              (guard)
+import Data.Foldable (traverse_)
 
 newtype HlsLogStderr = HlsLogStderr Bool
 instance IsOption HlsLogStderr where
@@ -62,15 +68,6 @@ instance IsOption LspTimeout where
   optionName = pure "lsp-timeout"
   optionHelp = pure "Set a specific test timeout in seconds"
 
-setOverrides :: [(String, String)] -> IO [(String, Maybe String)]
-setOverrides = traverse $ \(k, v) -> do
-  old <- lookupEnv k
-  setEnv k v
-  pure (k, old)
-
-restoreEnvs :: [(String, Maybe String)] -> IO ()
-restoreEnvs = mapM_ $ \(k, mv) -> maybe (unsetEnv k) (setEnv k) mv
-
 hlsTestOptions :: [OptionDescription]
 hlsTestOptions =
   [ Option (Proxy @HlsLogStderr)
@@ -81,8 +78,9 @@ hlsTestOptions =
   , Option (Proxy @LspTimeout)
   ]
 
-wrapOptions :: TestTree -> TestTree
-wrapOptions tree =
+-- | Use tasty cli options to set legacy environment variables
+wrapCliTestOptions :: TestTree -> TestTree
+wrapCliTestOptions tree =
     askOption $ \(HlsLogStderr logStderr) ->
     askOption $ \(HlsPluginLogStderr pluginStderr) ->
     askOption $ \(HlsTestRootDir rootDir) ->
@@ -98,3 +96,12 @@ wrapOptions tree =
             , ("LSP_TIMEOUT",) . show                      <$> timeout
             ]
     in withResource (setOverrides overrides) restoreEnvs (const tree)
+
+setOverrides :: [(String, String)] -> IO [(String, Maybe String)]
+setOverrides = traverse $ \(k, v) -> do
+  old <- lookupEnv k
+  setEnv k v
+  pure (k, old)
+
+restoreEnvs :: [(String, Maybe String)] -> IO ()
+restoreEnvs = traverse_ $ \(k, mv) -> maybe (unsetEnv k) (setEnv k) mv
