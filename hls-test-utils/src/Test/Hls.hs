@@ -143,7 +143,8 @@ import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
-import           Test.Hls.TestEnv                         (hlsTestOptions, wrapCliTestOptions)
+import           Test.Hls.TestEnv                         (hlsTestOptions,
+                                                           wrapCliTestOptions)
 import           Test.Hls.Util
 import           Test.Tasty                               hiding (Timeout)
 import           Test.Tasty.ExpectedFailure

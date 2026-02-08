@@ -9,18 +9,15 @@ module Test.Hls.TestEnv
   , wrapCliTestOptions
   ) where
 
-import           Test.Tasty.Options         ( IsOption(defaultValue, optionCLParser, optionHelp, optionName,
-                                                    parseValue),
-                                            OptionDescription(..),
-                                            safeReadBool,
-                                            flagCLParser,
-                                            safeRead )
-import           System.Environment         (lookupEnv, setEnv, unsetEnv)
-import           Data.Data                  (Proxy(..))
-import           Test.Tasty                 (askOption, TestTree, withResource)
-import           Data.Maybe                 (catMaybes)
-import           Control.Monad              (guard)
-import Data.Foldable (traverse_)
+import           Control.Monad      (guard)
+import           Data.Data          (Proxy (..))
+import           Data.Foldable      (traverse_)
+import           Data.Maybe         (catMaybes)
+import           System.Environment (lookupEnv, setEnv, unsetEnv)
+import           Test.Tasty         (TestTree, askOption, withResource)
+import           Test.Tasty.Options (IsOption (defaultValue, optionCLParser, optionHelp, optionName, parseValue),
+                                     OptionDescription (..), flagCLParser,
+                                     safeRead, safeReadBool)
 
 newtype HlsLogStderr = HlsLogStderr Bool
 instance IsOption HlsLogStderr where
