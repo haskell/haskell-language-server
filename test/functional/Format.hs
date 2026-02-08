@@ -46,7 +46,7 @@ providerTests = testGroup "lsp formatting provider"
         documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
         setHlsConfig (formatLspConfig "fourmolu")
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
         setHlsConfig (formatLspConfig "ormolu")
