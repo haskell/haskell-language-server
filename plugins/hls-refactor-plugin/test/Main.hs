@@ -3288,7 +3288,7 @@ removeRedundantConstraintsTests = let
     ]
 
   typeSignatureLined3 = T.unlines $ header <>
-    [ "foo :: ( Eq a"
+    [ "foo :: (Eq a"
     , "       , Show a"
     , "       )"
     , "    => a -> Bool"
@@ -3296,7 +3296,7 @@ removeRedundantConstraintsTests = let
     ]
 
   typeSignatureLined3' = T.unlines $ header <>
-    [ "foo :: ( Eq a"
+    [ "foo :: (Eq a"
     , "       )"
     , "    => a -> Bool"
     , "foo x = x == x"

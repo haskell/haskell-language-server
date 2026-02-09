@@ -141,6 +141,13 @@ dropHsParTy :: LHsType (GhcPass pass) -> LHsType (GhcPass pass)
 dropHsParTy (L _ (HsParTy _ ty)) = ty
 dropHsParTy other                = other
 
+normalizeConstraintDP :: [LocatedAn AnnListItem (HsType GhcPs)] -> [LocatedAn AnnListItem (HsType GhcPs)]
+normalizeConstraintDP [] = []
+normalizeConstraintDP xs = normalizeFirst xs
+  where
+    normalizeFirst (x:rest) = setEntryDP x (SameLine 0) : rest
+    normalizeFirst [] = []
+
 removeConstraint ::
   -- | Predicate: Which context to drop.
   (LHsType GhcPs -> Bool) ->
@@ -154,15 +161,13 @@ removeConstraint toRemove = go . traceAst "REMOVE_CONSTRAINT_input"
 #else
     go (L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite (locA l) $ \_ -> do
 #endif
-      let ctxt' = filter (not . toRemove) ctxt
-          removeStuff = (toRemove <$> headMaybe ctxt) == Just True
-      let hst_body' = if removeStuff then resetEntryDP hst_body else hst_body
+      let ctxt' = normalizeConstraintDP $ filter (not . toRemove) ctxt
       return $ case ctxt' of
-          [] -> hst_body'
+          [] -> hst_body
           _ -> do
             let ctxt'' = over _last (first removeComma) ctxt'
             L l $ it{ hst_ctxt = L l' ctxt''
-                    , hst_body = hst_body'
+                    , hst_body = hst_body
                     }
     go (L _ (HsParTy _ ty)) = go ty
     go (L _ HsForAllTy{hst_body}) = go hst_body
@@ -243,11 +248,6 @@ liftParseAST
 liftParseAST df s = case parseAST df "" s of
   Right x ->  pure (makeDeltaAst x)
   Left _          -> TransformT $ lift $ Left $ "No parse: " <> s
-
-
-headMaybe :: [a] -> Maybe a
-headMaybe []      = Nothing
-headMaybe (a : _) = Just a
 
 lastMaybe :: [a] -> Maybe a
 lastMaybe []    = Nothing
