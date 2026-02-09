@@ -103,10 +103,6 @@ import qualified Ide.Plugin.Notes                  as Notes
 
 -- formatters
 
-#if hls_floskell
-import qualified Ide.Plugin.Floskell               as Floskell
-#endif
-
 #if hls_fourmolu
 import qualified Ide.Plugin.Fourmolu               as Fourmolu
 #endif
@@ -162,9 +158,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       Pragmas.suggestPragmaDescriptor  "pragmas-suggest" :
       Pragmas.completionDescriptor  "pragmas-completion" :
       Pragmas.suggestDisableWarningDescriptor  "pragmas-disable" :
-#endif
-#if hls_floskell
-      Floskell.descriptor "floskell" :
 #endif
 #if hls_fourmolu
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:

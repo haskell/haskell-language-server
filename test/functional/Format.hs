@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Format (tests) where
 
@@ -13,7 +12,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           Test.Hls
 import           Test.Hls.Command
-import           Test.Hls.Flags              (requiresFloskellPlugin,
+import           Test.Hls.Flags              (requiresFourmoluPlugin,
                                               requiresOrmoluPlugin)
 
 tests :: TestTree
@@ -34,11 +33,11 @@ providerTests = testGroup "lsp formatting provider"
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
-    , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
+    , requiresOrmoluPlugin . requiresFourmoluPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
         void configurationRequest
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
-        formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
-        formattedOrmoluPostFloskell <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_floskell.formatted.hs"
+        formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
+        formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
 
         doc <- openDoc "Format.hs" "haskell"
 
@@ -46,13 +45,13 @@ providerTests = testGroup "lsp formatting provider"
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
-        setHlsConfig (formatLspConfig "floskell")
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        documentContents doc >>= liftIO . (@?= formattedFloskell)
+        setHlsConfig (formatLspConfig "fourmolu")
+        formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+        documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
         setHlsConfig (formatLspConfig "ormolu")
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        documentContents doc >>= liftIO . (@?= formattedOrmoluPostFloskell)
+        documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
     ]
 
 formatLspConfig :: T.Text -> Config
