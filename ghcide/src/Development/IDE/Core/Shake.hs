@@ -135,8 +135,9 @@ import           Data.Map.Strict                        (Map)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 #if MIN_VERSION_ghc(9,13,0)
-import           Development.IDE.GHC.Compat             (NameCache,
+import           Development.IDE.GHC.Compat             (ModuleName, NameCache,
                                                          NameCacheUpdater,
+                                                         UnitId,
                                                          newNameCache)
 #else
 import           Development.IDE.GHC.Compat             (ModuleName, NameCache,
