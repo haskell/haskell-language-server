@@ -1536,15 +1536,13 @@ flag ormolu
   manual:      True
 
 common ormolu
-  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if flag(ormolu) && !impl(ghc >= 9.14)
+  if flag(ormolu)
     build-depends: haskell-language-server:hls-ormolu-plugin
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
-  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(ormolu) || impl(ghc >= 9.14)
+  if !flag(ormolu)
     buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
