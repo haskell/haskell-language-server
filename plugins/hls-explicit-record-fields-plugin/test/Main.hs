@@ -377,8 +377,12 @@ test = testGroup "explicit-fields"
               , _paddingLeft = Nothing
               }
           ]
+    , mkInlayHintsTest "InlayHintTH" Nothing 6 $ assertNoInlayHints
     ]
   ]
+
+assertNoInlayHints :: [InlayHint] -> Assertion
+assertNoInlayHints = assertBool "There exists an inlay hint whereas there should have been none" . null
 
 mkInlayHintsTest :: FilePath -> Maybe TestName -> UInt -> ([InlayHint] -> Assertion) -> TestTree
 mkInlayHintsTest fp postfix line assert =
