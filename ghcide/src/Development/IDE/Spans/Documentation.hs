@@ -30,8 +30,10 @@ import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Spans.Common
+import           Development.IDE.Types.Options   (LinkTargets (..))
 import           GHC.Iface.Ext.Utils             (RefMap)
 import           GHC.Plugins                     (GenericUnitInfo (unitPackageName))
+import           Ide.Types                       (OptLinkTo (..))
 import           Language.LSP.Protocol.Types     (Uri (..), filePathToUri,
                                                   getUri)
 import           Prelude                         hiding (mod)
@@ -43,9 +45,9 @@ mkDocMap
   :: HscEnv
   -> RefMap a
   -> TcGblEnv
-  -> Bool
+  -> LinkTargets
   -> IO DocAndTyThingMap
-mkDocMap env rm this_mod linkToHackage =
+mkDocMap env rm this_mod linkTgts =
   do
      (Just Docs{docs_decls = UniqMap this_docs, docs_args = UniqMap this_arg_docs}) <- extractDocs (hsc_dflags env) this_mod
      d <- foldrM getDocs (fmap (\(_, x) -> (map hsDocString x) `SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
@@ -56,7 +58,7 @@ mkDocMap env rm this_mod linkToHackage =
     getDocs n nameMap
       | maybe True (mod ==) $ nameModule_maybe n = pure nameMap -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
-      (doc, _argDoc) <- getDocumentationTryGhc env linkToHackage n
+      (doc, _argDoc) <- getDocumentationTryGhc env linkTgts n
       pure $ extendNameEnv nameMap n doc
     getType n nameMap
       | Nothing <- lookupNameEnv nameMap n
@@ -66,7 +68,7 @@ mkDocMap env rm this_mod linkToHackage =
     getArgDocs n nameMap
       | maybe True (mod ==) $ nameModule_maybe n = pure nameMap
       | otherwise = do
-      (_doc, argDoc) <- getDocumentationTryGhc env linkToHackage n
+      (_doc, argDoc) <- getDocumentationTryGhc env linkTgts n
       pure $ extendNameEnv nameMap n argDoc
     names = rights $ S.toList idents
     idents = M.keysSet rm
@@ -76,13 +78,13 @@ lookupKind :: HscEnv -> Name -> IO (Maybe TyThing)
 lookupKind env =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
-getDocumentationTryGhc :: HscEnv -> Bool -> Name -> IO (SpanDoc, IntMap SpanDoc)
+getDocumentationTryGhc :: HscEnv -> LinkTargets -> Name -> IO (SpanDoc, IntMap SpanDoc)
 getDocumentationTryGhc env l2h n =
   (fromMaybe (emptySpanDoc, mempty) . listToMaybe <$> getDocumentationsTryGhc env l2h [n])
     `catch` (\(_ :: IOEnvFailure) -> pure (emptySpanDoc, mempty))
 
-getDocumentationsTryGhc :: HscEnv -> Bool -> [Name] -> IO [(SpanDoc, IntMap SpanDoc)]
-getDocumentationsTryGhc env linkToHackage names = do
+getDocumentationsTryGhc :: HscEnv -> LinkTargets -> [Name] -> IO [(SpanDoc, IntMap SpanDoc)]
+getDocumentationsTryGhc env linkTgts names = do
   resOr <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env names
   case resOr of
       Left _    -> return []
@@ -102,10 +104,19 @@ getDocumentationsTryGhc env linkToHackage names = do
             doc <- lookupDocHtmlForModule env mod
             src <- lookupSrcHtmlForModule env mod
             -- If found, the local files are used as hints for the hackage links, this helps with symbols defined in an internal module but re-exported by another.
-            if linkToHackage
-              then return ( toHackageDocUriText env mod (takeFileName <$> doc)
-                          , toHackageSrcUriText env mod (takeFileName <$> src))
-              else pure (toFileUriText doc, toFileUriText src)
+            let
+              LinkTargets{linkDoc,linkSource} = linkTgts
+              doc_link = case linkDoc of
+                LinkToHackage ->
+                  toHackageDocUriText env mod (takeFileName <$> doc)
+                LinkToLocal ->
+                  toFileUriText doc
+              src_link = case linkSource of
+                LinkToHackage ->
+                  toHackageSrcUriText env mod (takeFileName <$> src)
+                LinkToLocal ->
+                  toFileUriText src
+            pure (doc_link, src_link)
           Nothing -> pure (Nothing, Nothing)
 
       let docUri = (<> "#" <> selector <> printOutputable name) <$> docFu

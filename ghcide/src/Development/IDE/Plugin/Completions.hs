@@ -56,7 +56,8 @@ import           Development.IDE.Core.Rules               (usePropertyAction)
 
 import qualified Ide.Plugin.Config                        as Config
 
-import           Development.IDE.Types.Options            (IdeOptions (optLinkToHackage))
+import           Development.IDE.Types.Options            (LinkTargets (..),
+                                                           linkTargets)
 import qualified GHC.LanguageExtensions                   as LangExt
 
 data Log = LogShake Shake.Log deriving Show
@@ -138,8 +139,8 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
     doc <- case lookupNameEnv dm name of
       Just doc -> pure $ spanDocToMarkdown doc
       Nothing -> liftIO $ do
-        lc <- optLinkToHackage <$> getIdeOptionsIO (shakeExtras ide)
-        spanDocToMarkdown . fst <$> getDocumentationTryGhc (hscEnv sess) lc name
+        ltgts <- linkTargets <$> getIdeOptionsIO (shakeExtras ide)
+        spanDocToMarkdown . fst <$> getDocumentationTryGhc (hscEnv sess) ltgts name
     typ <- case lookupNameEnv km name of
       _ | not needType -> pure Nothing
       Just ty -> pure (safeTyThingType ty)
