@@ -23,6 +23,7 @@ module Ide.Types
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
 , Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
+, OptLinkTo(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
@@ -179,7 +180,8 @@ data Config =
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
     , sessionLoading          :: !SessionLoadingPreferenceConfig
-    , linkToHackage           :: !Bool
+    , linkSourceTo            :: !OptLinkTo
+    , linkDocTo               :: !OptLinkTo
     , plugins                 :: !(Map.Map PluginId PluginConfig)
     } deriving (Show,Eq)
 
@@ -191,7 +193,8 @@ instance ToJSON Config where
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
            , "sessionLoading"              .= sessionLoading
-           , "linkToHackage"               .= linkToHackage
+           , "linkSourceTo"                .= linkSourceTo
+           , "linkDocTo"                   .= linkDocTo
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
 
@@ -206,7 +209,8 @@ instance Default Config where
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
     , sessionLoading              = PreferSingleComponentLoading
-    , linkToHackage               = False
+    , linkSourceTo                = LinkToLocal
+    , linkDocTo                   = LinkToLocal
     , plugins                     = mempty
     }
 
@@ -217,6 +221,11 @@ data CheckParents
     | CheckOnSave
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+
+data OptLinkTo = LinkToHackage | LinkToLocal
+  deriving stock (Eq, Ord, Show, Enum, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 
