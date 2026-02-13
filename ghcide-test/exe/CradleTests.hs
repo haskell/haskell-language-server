@@ -1,17 +1,22 @@
 
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs     #-}
 
 module CradleTests (tests) where
 
-import           Config                          (checkDefs, mkL,
+import           Config                          (checkDefs, dummyPlugin,
+                                                  lspTestCaps, mkIdeTestFs, mkL,
                                                   runWithExtraFiles,
                                                   testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
+import qualified Data.Aeson                      as A
+import           Data.Proxy                      (Proxy (..))
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
-import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
+import           Development.IDE.Plugin.Test     (TestRequest (..),
+                                                  WaitForIdeRuleResult (..))
 import           Development.IDE.Test            (expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
@@ -19,6 +24,8 @@ import           Development.IDE.Test            (expectDiagnostics,
                                                   waitForAction)
 import           Development.IDE.Types.Location
 import           GHC.TypeLits                    (symbolVal)
+import           Ide.Types                       (Config (..),
+                                                  SessionLoadingPreferenceConfig (..))
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
@@ -28,7 +35,9 @@ import           Language.LSP.Protocol.Types     hiding
                                                   mkRange)
 import           Language.LSP.Test
 import           System.FilePath
-import           System.IO.Extra                 hiding (withTempDir)
+import           Test.Hls                        (TestConfig (..), def,
+                                                  runSessionWithTestConfig,
+                                                  waitForBuildQueue)
 import           Test.Hls.FileSystem
 import           Test.Hls.Util                   (EnvSpec (..), OS (..),
                                                   ignoreInEnv)
@@ -41,6 +50,7 @@ tests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
+    ,testGroup "regression.batch" batchLoadRegressionTests
     ,testGroup "multi"   (multiTests "multi")
     ,testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
@@ -173,6 +183,218 @@ simpleMultiTest3 variant =
     let fooL = mkL auri 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
+
+runRegressionMultiOpenAThenB :: FilePath -> Session ()
+runRegressionMultiOpenAThenB dir = do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+    adoc <- openDoc aPath "haskell"
+    bdoc <- openDoc bPath "haskell"
+    _ <- waitForBuildQueue
+    [aRes, bRes] <- waitForTypeChecksBatched [adoc, bdoc]
+    liftIO $ assertBool "A should typecheck" (ideResultSuccess aRes)
+    liftIO $ assertBool "B should typecheck" (ideResultSuccess bRes)
+    locs <- getDefinitions bdoc (Position 2 7)
+    let fooL = mkL (adoc ^. L.uri) 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+runRegressionMultiOpenBThenA :: FilePath -> Session ()
+runRegressionMultiOpenBThenA dir = do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+    bdoc <- openDoc bPath "haskell"
+    adoc <- openDoc aPath "haskell"
+    _ <- waitForBuildQueue
+    [bRes, aRes] <- waitForTypeChecksBatched [bdoc, adoc]
+    liftIO $ assertBool "B should typecheck" (ideResultSuccess bRes)
+    liftIO $ assertBool "A should typecheck" (ideResultSuccess aRes)
+    locs <- getDefinitions bdoc (Position 2 7)
+    let TextDocumentIdentifier auri = adoc
+    let fooL = mkL auri 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+runRegressionMultiOpenBThenAThenC :: FilePath -> Session ()
+runRegressionMultiOpenBThenAThenC dir = do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+        cPath = dir </> "c/C.hs"
+    bdoc <- openDoc bPath "haskell"
+    adoc <- openDoc aPath "haskell"
+    cdoc <- openDoc cPath "haskell"
+    _ <- waitForBuildQueue
+    [bRes, aRes, cRes] <- waitForTypeChecksBatched [bdoc, adoc, cdoc]
+    liftIO $ assertBool "B should typecheck" (ideResultSuccess bRes)
+    liftIO $ assertBool "A should typecheck" (ideResultSuccess aRes)
+    liftIO $ assertBool "C should typecheck" (ideResultSuccess cRes)
+    locs <- getDefinitions cdoc (Position 2 7)
+    let TextDocumentIdentifier auri = adoc
+    let fooL = mkL auri 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+sendTestRequest :: TestRequest -> Session A.Value
+sendTestRequest req = do
+  let method = SMethod_CustomMethod (Proxy @"test")
+  reqId <- sendRequest method (A.toJSON req)
+  TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId method reqId
+  case _result of
+    Left err -> liftIO (assertFailure $ "test plugin request failed: " <> show err) >> pure A.Null
+    Right val -> pure val
+
+waitForTypeChecksBatched :: [TextDocumentIdentifier] -> Session [WaitForIdeRuleResult]
+waitForTypeChecksBatched docs = do
+  let uris = map (\TextDocumentIdentifier{_uri} -> _uri) docs
+  val <- sendTestRequest (WaitForIdeRules "TypeCheck" uris)
+  case A.fromJSON val of
+    A.Success res -> pure res
+    A.Error parseErr -> liftIO (assertFailure $ "batched typecheck parse failed: " <> parseErr) >> pure []
+
+batchLoadRegressionTests :: [TestTree]
+batchLoadRegressionTests =
+  -- Note [Batch regression scheduling semantics]
+  -- `didOpen` alone does not enqueue session-loader pending files.
+  -- Pending entries come from GhcSession demand. For these tests, the `test`
+  -- plugin uses `WaitForIdeRules` plus a pending-size barrier in session-loader
+  -- to force all requested files into pending before load begins.
+  [ testCase "m1-open-a-then-b-batch-pending-and-success" $
+      runWithExtraFilesMultiComponent "multi" runRegressionMultiOpenAThenB
+  , testCase "m2-open-b-then-a-batch-pending-and-success" $
+      runWithExtraFilesMultiComponent "multi" runRegressionMultiOpenBThenA
+  , testCase "m3-open-b-then-a-then-c-batch-pending-and-success" $
+      runWithExtraFilesMultiComponent "multi" runRegressionMultiOpenBThenAThenC
+  , testCase "f1-batch-pending-failure-isolates-broken-file" $
+      runWithExtraFilesMultiComponent "multi" regressionBatchFailureIsolatesBrokenFile
+  , testCase "f2-failed-file-keeps-failing-until-cradle-fix" $
+      runWithExtraFilesMultiComponent "multi" regressionFailedFileKeepsFailingUntilFix
+  , testCase "r1-failed-file-recovers-after-cradle-fix" $
+      runWithExtraFilesMultiComponent "multi" regressionFailedFileRecoversAfterFix
+  , testCase "s1-no-stale-outcomes-across-restart-paths" $
+      runWithExtraFilesMultiComponent "multi" regressionNoStaleOutcomesOnRestart
+  ]
+
+runWithExtraFilesMultiComponent :: String -> (FilePath -> Session a) -> IO a
+runWithExtraFilesMultiComponent dirName action = do
+  let vfs = mkIdeTestFs [copyDir dirName]
+      lspConfig :: Config
+      lspConfig = def { sessionLoading = PreferMultiComponentLoading }
+      conf :: TestConfig ()
+      conf = def
+        { testPluginDescriptor = dummyPlugin
+        , testDirLocation = Right vfs
+        , testConfigCaps = lspTestCaps
+        , testShiftRoot = True
+        , testDisableKick = True
+        , testLspConfig = lspConfig
+        }
+  runSessionWithTestConfig conf action
+
+brokenMultiHieYaml :: T.Text
+brokenMultiHieYaml = T.unlines
+  [ "cradle:"
+  , "  cabal:"
+  , "    - path: \"./a\""
+  , "      component: \"lib:a\""
+  , "    - path: \"./b\""
+  , "      component: \"lib:does-not-exist\""
+  , "    - path: \"./c\""
+  , "      component: \"lib:c\""
+  ]
+
+writeBrokenMultiHieYaml :: FilePath -> Session ()
+writeBrokenMultiHieYaml dir =
+  liftIO $ atomicFileWriteStringUTF8 (dir </> "hie.yaml") (T.unpack brokenMultiHieYaml)
+
+notifyHieYamlChanged :: FilePath -> Session ()
+notifyHieYamlChanged dir =
+  sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+    [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed]
+
+assertTypeCheckSuccess :: TextDocumentIdentifier -> String -> Session ()
+assertTypeCheckSuccess doc msg = do
+  WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  liftIO $ assertBool msg ideResultSuccess
+
+assertTypeCheckFailure :: TextDocumentIdentifier -> String -> Session ()
+assertTypeCheckFailure doc msg = do
+  WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  liftIO $ assertBool msg (not ideResultSuccess)
+
+regressionBatchFailureIsolatesBrokenFile :: FilePath -> Session ()
+regressionBatchFailureIsolatesBrokenFile dir = do
+  writeBrokenMultiHieYaml dir
+  let aPath = dir </> "a/A.hs"
+      bPath = dir </> "b/B.hs"
+  adoc <- openDoc aPath "haskell"
+  bdoc <- openDoc bPath "haskell"
+  _ <- waitForBuildQueue
+  [aRes, bRes] <- waitForTypeChecksBatched [adoc, bdoc]
+  liftIO $ assertBool "A should typecheck when B cradle mapping is broken" (ideResultSuccess aRes)
+  liftIO $ assertBool "B should fail with a broken cradle mapping" (not $ ideResultSuccess bRes)
+
+regressionFailedFileKeepsFailingUntilFix :: FilePath -> Session ()
+regressionFailedFileKeepsFailingUntilFix dir = do
+  writeBrokenMultiHieYaml dir
+  let aPath = dir </> "a/A.hs"
+      bPath = dir </> "b/B.hs"
+      cPath = dir </> "c/C.hs"
+  bdoc <- openDoc bPath "haskell"
+  assertTypeCheckFailure bdoc "B should fail with broken cradle mapping"
+
+  bSource <- liftIO $ readFileUtf8 bPath
+  changeDoc bdoc
+    [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ bSource <> "\n"]
+  assertTypeCheckFailure bdoc "B should keep failing until the cradle is fixed"
+
+  adoc <- openDoc aPath "haskell"
+  cdoc <- openDoc cPath "haskell"
+  assertTypeCheckSuccess adoc "A should still typecheck while B remains broken"
+  assertTypeCheckSuccess cdoc "C should still typecheck while B remains broken"
+
+regressionFailedFileRecoversAfterFix :: FilePath -> Session ()
+regressionFailedFileRecoversAfterFix dir = do
+  let hiePath = dir </> "hie.yaml"
+      bPath = dir </> "b/B.hs"
+  validHie <- liftIO $ readFileUtf8 hiePath
+  writeBrokenMultiHieYaml dir
+
+  bdoc <- openDoc bPath "haskell"
+  assertTypeCheckFailure bdoc "B should fail before fixing the cradle"
+
+  liftIO $ atomicFileWriteStringUTF8 hiePath (T.unpack validHie)
+  notifyHieYamlChanged dir
+
+  bSource <- liftIO $ readFileUtf8 bPath
+  changeDoc bdoc
+    [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ bSource <> "\n"]
+  assertTypeCheckSuccess bdoc "B should recover after restoring the cradle"
+
+regressionNoStaleOutcomesOnRestart :: FilePath -> Session ()
+regressionNoStaleOutcomesOnRestart dir = do
+  let hiePath = dir </> "hie.yaml"
+      aPath = dir </> "a/A.hs"
+      bPath = dir </> "b/B.hs"
+      cPath = dir </> "c/C.hs"
+  validHie <- liftIO $ readFileUtf8 hiePath
+  writeBrokenMultiHieYaml dir
+
+  bdoc <- openDoc bPath "haskell"
+  assertTypeCheckFailure bdoc "B should fail before cradle fix"
+
+  adoc <- openDoc aPath "haskell"
+  assertTypeCheckSuccess adoc "A should remain healthy while B is broken"
+
+  liftIO $ atomicFileWriteStringUTF8 hiePath (T.unpack validHie)
+  notifyHieYamlChanged dir
+
+  cdoc <- openDoc cPath "haskell"
+  assertTypeCheckSuccess cdoc "C should typecheck after cradle restart"
+
+  bSource <- liftIO $ readFileUtf8 bPath
+  changeDoc bdoc
+    [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ bSource <> "\n"]
+  assertTypeCheckSuccess bdoc "B should not keep stale failure after cradle restart"
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
 simpleMultiDefTest :: FilePath -> TestTree

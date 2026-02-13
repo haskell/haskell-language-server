@@ -17,10 +17,13 @@ module Development.IDE.Core.Service(
     ) where
 
 import           Control.Applicative              ((<|>))
+import           Control.Concurrent.STM           (newTVarIO)
+import           Control.Monad.IO.Class           (liftIO)
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists  (fileExistsRules)
 import           Development.IDE.Core.OfInterest  hiding (Log, LogShake)
 import           Development.IDE.Graph
+import           Development.IDE.Session          (SessionLoaderPendingBarrierVar (..))
 import           Development.IDE.Types.Options    (IdeOptions (..))
 import           Ide.Logger                       as Logger (Pretty (pretty),
                                                              Priority (Debug),
@@ -89,6 +92,8 @@ initialise recorder defaultConfig plugins mainRule lspEnv debouncer options with
         (optShakeOptions options)
         metrics
         (do
+            pendingBarrier <- liftIO $ newTVarIO Nothing
+            addIdeGlobal $ SessionLoaderPendingBarrierVar pendingBarrier
             addIdeGlobal $ GlobalIdeOptions options
             ofInterestRules (cmapWithPrio LogOfInterest recorder)
             fileExistsRules (cmapWithPrio LogFileExists recorder) lspEnv
