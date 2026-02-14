@@ -5,9 +5,7 @@ module Ide.Plugin.Cabal.Completion.Completer.Module where
 import           Control.Monad                                  (filterM)
 import           Control.Monad.Extra                            (concatForM,
                                                                  forM)
-import           Data.Char                                      (isUpper)
-import           Data.List                                      (find,
-                                                                 stripPrefix)
+import           Data.List                                      (stripPrefix)
 import           Data.Maybe                                     (fromMaybe)
 import qualified Data.Text                                      as T
 import           Distribution.PackageDescription                (GenericPackageDescription)
@@ -15,16 +13,15 @@ import           Ide.Logger                                     (Priority (..),
                                                                  Recorder,
                                                                  WithPriority,
                                                                  logWith)
-import           Ide.Plugin.Cabal.Completion.Completer.FilePath (isCaseSensitiveSubsequence,
-                                                                 listFileCompletions,
-                                                                 mkCompletionDirectory)
+import           Ide.Plugin.Cabal.Completion.Completer.FilePath (listFileCompletions,
+                                                                 mkCompletionDirectory,
+                                                                 smartCaseFuzzy)
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.Directory                               (doesFileExist)
 import qualified System.FilePath                                as FP
-import qualified Text.Fuzzy.Parallel                            as Fuzzy
 
 -- | Completer to be used when module paths can be completed for the field.
 --
@@ -53,7 +50,7 @@ filePathsForExposedModules
   -> CabalPrefixInfo
   -> Matcher T.Text
   -> IO [T.Text]
-filePathsForExposedModules recorder srcDirs prefInfo matcher = do
+filePathsForExposedModules recorder srcDirs prefInfo _matcher = do
   concatForM
     srcDirs
     ( \dir' -> do
@@ -67,7 +64,7 @@ filePathsForExposedModules recorder srcDirs prefInfo matcher = do
             candidates = map T.pack validExposedCompletions
 
             matched :: [T.Text]
-            matched = smartCaseRunMatcher matcher query candidates
+            matched = smartCaseFuzzy query candidates
 
         forM matched $ \compl -> do
           fullFilePath <- mkExposedModulePathCompletion pathInfo (T.unpack compl)
@@ -127,27 +124,3 @@ fpToExposedModulePath sourceDir modPath =
 -- | Takes a path in the exposed module syntax and translates it to a platform-compatible file path.
 exposedModulePathToFp :: T.Text -> FilePath
 exposedModulePathToFp fp = T.unpack $ T.replace "." (T.singleton FP.pathSeparator) fp
-
-smartCaseRunMatcher :: Matcher T.Text -> T.Text -> [T.Text] -> [T.Text]
-smartCaseRunMatcher matcher query originals =
-  let
-    caseSensitive :: Bool
-    caseSensitive = T.any isUpper query
-    candidates
-      | caseSensitive = filter (isCaseSensitiveSubsequence query) originals
-      | otherwise = originals
-    pairs = [ (o, T.toLower o) | o <- candidates ]
-    (matchQuery, matchSpace) =
-      if caseSensitive
-        then (query, map fst pairs)
-        else (T.toLower query, map snd pairs)
-
-    scored = runMatcher matcher matchQuery matchSpace
-
-    restore :: T.Text -> T.Text
-    restore matched =
-      case find (\(o,l) -> o == matched || l == matched) pairs of
-        Just (o, _) -> o
-        Nothing     -> matched
-  in
-    map (restore . Fuzzy.original) scored

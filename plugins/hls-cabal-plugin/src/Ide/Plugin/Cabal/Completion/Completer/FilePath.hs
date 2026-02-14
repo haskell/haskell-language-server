@@ -41,10 +41,6 @@ mainIsCompleter extractionFunction recorder cData = do
   mGPD <- getLatestGPD cData
   case mGPD of
     Just gpd -> do
-      let srcDirs = extractionFunction sName gpd
-          sName    = stanzaName cData
-          prefInfo = cabalPrefixInfo cData
-
       concatForM srcDirs $ \dir' -> do
         let dir = FP.normalise dir'
             pathInfo = pathCompletionInfoFromCabalPrefixInfo dir prefInfo
@@ -58,6 +54,10 @@ mainIsCompleter extractionFunction recorder cData = do
         forM matched $ \compl -> do
           fullFilePath <- mkFilePathCompletion pathInfo compl
           pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
+      where
+          sName = stanzaName cData
+          srcDirs = extractionFunction sName gpd
+          prefInfo = cabalPrefixInfo cData
     Nothing -> do
       logWith recorder Debug LogUseWithStaleFastNoResult
       pure []
@@ -179,6 +179,8 @@ smartCaseFuzzy :: T.Text -> [T.Text] -> [T.Text]
 smartCaseFuzzy query originals =
   let smartSensitive :: Bool
       smartSensitive = T.any isUpper query
+
+      filtered :: [T.Text]
       filtered
         | smartSensitive = filter (isCaseSensitiveSubsequence query) originals
         | otherwise =originals
@@ -186,11 +188,14 @@ smartCaseFuzzy query originals =
       pairs :: [(T.Text, T.Text)]
       pairs = [ (o, T.toLower o) | o <- filtered ]
 
+      matchQuery :: T.Text
+      matchSpace :: [T.Text]
       (matchQuery, matchSpace) =
         if smartSensitive
           then (query, map fst pairs)
           else (T.toLower query, map snd pairs)
 
+      scored :: [Fuzzy.Scored T.Text]
       scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults matchQuery matchSpace
 
       restore :: T.Text -> T.Text
