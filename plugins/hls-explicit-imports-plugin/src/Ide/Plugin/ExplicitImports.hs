@@ -17,6 +17,7 @@ module Ide.Plugin.ExplicitImports
 
 import           Control.DeepSeq
 import           Control.Lens                         (_Just, (&), (?~), (^?))
+import           Control.Monad                        (guard)
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
@@ -25,13 +26,15 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
 import           Data.Char                            (isSpace)
+import           Data.Either                          (lefts)
+import           Data.Functor                         ((<&>))
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
 import           Data.List                            (singleton)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (isJust, isNothing,
-                                                       mapMaybe)
+                                                       listToMaybe, mapMaybe)
 import qualified Data.Set                             as S
 import           Data.String                          (fromString)
 import qualified Data.Text                            as T
@@ -45,6 +48,7 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           hiding ((<+>))
+import           Development.IDE.GHC.Compat.Util      (mkFastString)
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
@@ -108,6 +112,7 @@ descriptorForModules recorder modFilter plId =
         <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
         -- This plugin provides inlay hints
         <> mkPluginHandler SMethod_TextDocumentInlayHint (inlayHintProvider recorder)
+        <> mkPluginHandler SMethod_TextDocumentInlayHint (importPackageInlayHintProvider recorder)
         -- This plugin provides code actions
         <> codeActionHandlers
     }
@@ -234,6 +239,73 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
       let title ExplicitImport = Just $ abbreviateImportTitleWithoutModule ieText
           title RefineImport   = Nothing -- does not provide imports statements that can be refined via inlay hints
       in title ieResType
+
+-- | Provide inlay hints that show which package a module is imported from.
+importPackageInlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
+importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} =
+    if isInlayHintsSupported state
+    then do
+        nfp <- getNormalizedFilePathE _uri
+        (hscEnvEq, _) <- runActionE "ImportPackageInlayHint.GhcSessionDeps" state $ useWithStaleE GhcSessionDeps nfp
+        (HAR {hieAst, hieModule}, pmap) <- runActionE "ImportPackageInlayHint.GetHieAst" state $ useWithStaleE GetHieAst nfp
+        ast <- handleMaybe
+                  (PluginRuleFailed "GetHieAst")
+                  (getAsts hieAst Map.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp)
+        hintsInfo <- liftIO $ getAllImportedPackagesHints (hscEnv hscEnvEq) (moduleName hieModule) ast
+        -- Filter out empty package names
+        let selectedHintsInfo = hintsInfo & filter (\(_, mbPkg) -> (not . T.null) mbPkg)
+        let inlayHints = [ generateInlayHint newRange txt
+                         | (range, txt) <- selectedHintsInfo
+                         , Just newRange <- [toCurrentRange pmap range]
+                         , isSubrangeOf newRange visibleRange]
+        pure $ InL inlayHints
+    -- When the client does not support inlay hints, do not display anything
+    else pure $ InL []
+  where
+    generateInlayHint :: Range -> T.Text -> InlayHint
+    generateInlayHint (Range start _) txt =
+      InlayHint { _position = start
+                , _label = InL txt
+                , _kind = Nothing
+                , _textEdits = Nothing
+                , _tooltip = Nothing
+                , _paddingLeft = Nothing
+                , _paddingRight = Just True
+                , _data_ = Nothing
+                }
+
+    -- | Get inlay hints information for all imported packages
+    getAllImportedPackagesHints :: HscEnv -> ModuleName -> HieAST a -> IO [(Range, T.Text)]
+    getAllImportedPackagesHints env currentModuleName = go
+      where
+        go :: HieAST a -> IO [(Range, T.Text)]
+        go ast = do
+          let range = realSrcSpanToRange $ nodeSpan ast
+          childrenResults <- traverse go (nodeChildren ast)
+          mbPackage <- getImportedPackage ast
+          return $ case mbPackage of
+            Nothing      -> mconcat childrenResults
+            Just package -> (range, package) : mconcat childrenResults
+
+        getImportedPackage :: HieAST a -> IO (Maybe T.Text)
+        getImportedPackage ast = runMaybeT $ do
+          nodeInfo <- MaybeT $ return $ sourceNodeInfo ast
+          moduleName <- MaybeT $ return $
+                            nodeIdentifiers nodeInfo
+                                & Map.keys
+                                & lefts
+                                & listToMaybe
+          filteredModuleName <- MaybeT $ return $
+                                  guard (moduleName /= currentModuleName) >> Just moduleName
+          txt <- MaybeT $ packageNameForModuleName filteredModuleName
+          return $ "\"" <> txt <> "\""
+
+        packageNameForModuleName :: ModuleName -> IO (Maybe T.Text)
+        packageNameForModuleName modName = runMaybeT $ do
+            mod <- MaybeT $ findImportedModule env modName
+            let pid = moduleUnit mod
+            conf <- MaybeT $ return $ lookupUnit env pid
+            return $ T.pack $ unitPackageNameString conf
 
 
 -- |For explicit imports: If there are any implicit imports, provide both one
