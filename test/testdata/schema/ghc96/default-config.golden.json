@@ -3,7 +3,8 @@
     "checkParents": "CheckOnSave",
     "checkProject": true,
     "formattingProvider": "ormolu",
-    "linkToHackage": false,
+    "linkDocTo": "LinkToLocal",
+    "linkSourceTo": "LinkToLocal",
     "maxCompletions": 40,
     "plugin": {
         "alternateNumberFormat": {
