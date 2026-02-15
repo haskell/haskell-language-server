@@ -5,7 +5,6 @@
 
 module Development.IDE.Import.FindImports
   ( locateModule
-  , locateModuleFile
   , Import(..)
   , ArtifactsLocation(..)
   , modSummaryToArtifactsLocation
@@ -14,9 +13,10 @@ module Development.IDE.Import.FindImports
   ) where
 
 import           Control.DeepSeq
-import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Data.List                         (find, isSuffixOf)
+import           Data.List                         (isSuffixOf)
+import           Data.Map.Strict                   (Map)
+import qualified Data.Map.Strict                   as Map
 import           Data.Maybe
 import qualified Data.Set                          as S
 import           Development.IDE.GHC.Compat        as Compat
@@ -25,8 +25,6 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Types.PkgQual
-import           GHC.Unit.State
-import           System.FilePath
 
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -70,31 +68,6 @@ data LocateResult
   | LocateFoundReexport UnitId
   | LocateFoundFile UnitId NormalizedFilePath
 
--- | locate a module in the file system. Where we go from *daml to Haskell
-locateModuleFile :: MonadIO m
-             => [(UnitId, [FilePath], S.Set ModuleName)]
-             -> [String]
-             -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))
-             -> Bool
-             -> ModuleName
-             -> m LocateResult
-locateModuleFile import_dirss exts targetFor isSource modName = do
-  let candidates import_dirs =
-        [ toNormalizedFilePath' (prefix </> moduleNameSlashes modName <.> maybeBoot ext)
-           | prefix <- import_dirs , ext <- exts]
-  mf <- firstJustM go (concat [map (uid,) (candidates dirs) | (uid, dirs, _) <- import_dirss])
-  case mf of
-    Nothing ->
-      case find (\(_ , _, reexports) -> S.member modName reexports) import_dirss of
-        Just (uid,_,_) -> pure $ LocateFoundReexport uid
-        Nothing        -> pure LocateNotFound
-    Just (uid,file) -> pure $ LocateFoundFile uid file
-  where
-    go (uid, candidate) = fmap ((uid,) <$>) $ targetFor modName candidate
-    maybeBoot ext
-      | isSource = ext ++ "-boot"
-      | otherwise = ext
-
 -- | This function is used to map a package name to a set of import paths.
 -- It only returns Just for unit-ids which are possible to import into the
 -- current module. In particular, it will return Nothing for 'main' components
@@ -110,40 +83,58 @@ mkImportDirs _env (i, flags) = Just (i, (importPaths flags, reexportedModules fl
 -- Haskell
 locateModule
     :: MonadIO m
-    => HscEnv
+    => (Map ModuleName (UnitId, NormalizedFilePath),Map ModuleName (UnitId, NormalizedFilePath))
+    -> HscEnv
     -> [(UnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
-    -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))  -- ^ does file exist predicate
     -> Located ModuleName              -- ^ Module name
     -> PkgQual                -- ^ Package name
     -> Bool                            -- ^ Is boot module
     -> m (Either [FileDiagnostic] Import)
-locateModule env comp_info exts targetFor modName mbPkgName isSource = do
+locateModule moduleMaps@(moduleMap, moduleMapSource) env comp_info exts modName mbPkgName isSource = do
   case mbPkgName of
     -- 'ThisPkg' just means some home module, not the current unit
     ThisPkg uid
+      -- TODO: there are MANY lookup on import_paths, which is a problem considering that it can be large.
       | Just (dirs, reexports) <- lookup uid import_paths
-          -> lookupLocal uid dirs reexports
+          -> lookupLocal moduleMaps reexports
       | otherwise -> return $ Left $ notFoundErr env modName $ LookupNotFound []
     -- if a package name is given we only go look for a package
     OtherPkg uid
       | Just (dirs, reexports) <- lookup uid import_paths
-          -> lookupLocal uid dirs reexports
+          -> lookupLocal moduleMaps reexports
       | otherwise -> lookupInPackageDB
     NoPkgQual -> do
 
       -- Reexports for current unit have to be empty because they only apply to other units depending on the
       -- current unit. If we set the reexports to be the actual reexports then we risk looping forever trying
       -- to find the module from the perspective of the current unit.
-      mbFile <- locateModuleFile ((homeUnitId_ dflags, importPaths dflags, S.empty) : other_imports) exts targetFor isSource $ unLoc modName
+      --
+      -- TODO: handle the other imports, the unit id, ..., reexport.
+      --   - TODO: should we look for file existence now? If the file was
+      --   removed from the disk, how will it behaves? How do we invalidate
+      --   that?
+      --
+      -- [About The reexported module]
+      --
+      -- A package (or unit) A can reexport a module from another package/unit.
+      --
+      -- When it happen, it means two things:
+      --
+      -- - This module must appear in 'moduleMaps', using the correct package/unit
+      -- - What about "conflict". Right now the moduleMaps maps a module name to a unique package/unit.
+      let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
+                     Nothing          -> LocateNotFound
+                     Just (uid, file) -> LocateFoundFile uid file
       case mbFile of
         LocateNotFound -> lookupInPackageDB
         -- Lookup again with the perspective of the unit reexporting the file
-        LocateFoundReexport uid -> locateModule (hscSetActiveUnitId uid env) comp_info exts targetFor modName noPkgQual isSource
+        LocateFoundReexport uid -> locateModule moduleMaps (hscSetActiveUnitId uid env) comp_info exts modName noPkgQual isSource
         LocateFoundFile uid file -> toModLocation uid file
   where
     dflags = hsc_dflags env
     import_paths = mapMaybe (mkImportDirs env) comp_info
+    {-
     other_imports =
       -- Instead of bringing all the units into scope, only bring into scope the units
       -- this one depends on.
@@ -162,19 +153,22 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
     hpt_deps :: [UnitId]
     hpt_deps = homeUnitDepends units
+    -}
 
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
-    lookupLocal uid dirs reexports = do
-      mbFile <- locateModuleFile [(uid, dirs, reexports)] exts targetFor isSource $ unLoc modName
-      case mbFile of
-        LocateNotFound -> return $ Left $ notFoundErr env modName $ LookupNotFound []
-        -- Lookup again with the perspective of the unit reexporting the file
-        LocateFoundReexport uid' -> locateModule (hscSetActiveUnitId uid' env) comp_info exts targetFor modName noPkgQual isSource
-        LocateFoundFile uid' file -> toModLocation uid' file
+    lookupLocal moduleMaps@(moduleMap, moduleMapSource) reexports = do
+          let mbFile = case Map.lookup (unLoc modName) (if isSource then moduleMapSource else moduleMap) of
+                         Nothing          -> LocateNotFound
+                         Just (uid, file) -> LocateFoundFile uid file
+          case mbFile of
+            LocateNotFound -> return $ Left $ notFoundErr env modName $ LookupNotFound []
+            -- Lookup again with the perspective of the unit reexporting the file
+            LocateFoundReexport uid' -> locateModule moduleMaps (hscSetActiveUnitId uid' env) comp_info exts modName noPkgQual isSource
+            LocateFoundFile uid' file -> toModLocation uid' file
 
     lookupInPackageDB = do
       case Compat.lookupModuleWithSuggestions env (unLoc modName) mbPkgName of
