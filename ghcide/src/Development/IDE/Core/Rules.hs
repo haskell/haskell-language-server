@@ -143,7 +143,8 @@ import           GHC.Iface.Ext.Utils                          (generateReference
 import qualified GHC.LanguageExtensions                       as LangExt
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
-import           GHC.Types.Basic                              (ImportLevel (..), GenWithIsBoot(..))
+import           GHC.Types.Basic                              (ImportLevel (..))
+import           GHC.Unit.Types                               (GenWithIsBoot(..))
 import           GHC.Unit.Module.Graph                        (mkModuleEdge)
 import           GHC.Unit.Module.ModNodeKey                   (mnkModuleName)
 #endif
