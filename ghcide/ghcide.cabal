@@ -74,7 +74,7 @@ library
     , Glob
     , haddock-library              >=1.8      && <1.12
     , hashable
-    , hie-bios                     ^>=0.17.0
+    , hie-bios                     ^>=0.18.0
     , hiedb                        ^>= 0.8.0.0
     , hls-graph                    == 2.13.0.0
     , hls-plugin-api               == 2.13.0.0
@@ -182,7 +182,9 @@ library
     Development.IDE.Plugin.Test
     Development.IDE.Plugin.TypeLenses
     Development.IDE.Session
+    Development.IDE.Session.Dependency
     Development.IDE.Session.Diagnostics
+    Development.IDE.Session.Ghc
     Development.IDE.Session.Implicit
     Development.IDE.Spans.AtPoint
     Development.IDE.Spans.Common
@@ -206,6 +208,7 @@ library
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
     Development.IDE.Types.Action
+    Development.IDE.Session.OrderedSet
 
   if flag(pedantic)
     ghc-options:
