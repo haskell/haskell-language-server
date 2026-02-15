@@ -156,6 +156,7 @@ import           GHC.Unit.Home.PackageTable                   (hptInternalTableR
 import           GHC.Unit.Module.ModIface                     (IfaceTopEnv(..))
 import           GHC.Types.Avail                              (emptyDetOrdAvails)
 import           GHC.Types.Basic                              (ImportLevel(..))
+import           Language.Haskell.Syntax.ImpExp               (ImportDeclLevelStyle(..), ImportDeclLevel(..))
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)
@@ -1215,7 +1216,27 @@ getModSummaryFromImports env fp _modTime mContents = do
 #if MIN_VERSION_ghc(9,13,0)
         -- In GHC 9.13+, ms_srcimps is just [Located ModuleName] and ms_textual_imps includes ImportLevel
         srcImports = map snd $ rn_imps $ map convImport src_idecls
-        textualImports = map (\(pk, lmn) -> (NormalLevel, pk, lmn)) $ rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
+
+        -- Convert ImportDeclLevelStyle to ImportLevel
+        importLevelFromDecl :: ImportDeclLevelStyle -> ImportLevel
+        importLevelFromDecl NotLevelled               = NormalLevel
+        importLevelFromDecl (LevelStylePre ImportDeclSplice) = SpliceLevel
+        importLevelFromDecl (LevelStylePre ImportDeclQuote)  = QuoteLevel
+        importLevelFromDecl (LevelStylePost ImportDeclSplice) = SpliceLevel
+        importLevelFromDecl (LevelStylePost ImportDeclQuote)  = QuoteLevel
+
+        -- Extract import level along with pkg qualifier and module name
+        convImportWithLevel (L _ i) = (importLevelFromDecl (ideclLevelSpec i)
+                                      , ideclPkgQual i
+                                      , reLoc $ ideclName i)
+
+        -- Rename package qualifiers while preserving import levels
+        rn_imps_with_level = fmap (\(lvl, pk, lmn@(L _ mn)) -> (lvl, rn_pkg_qual mn pk, lmn))
+
+        -- Implicit imports (prelude) are always NormalLevel;
+        -- explicit user imports preserve their declared level
+        textualImports = map (\(pk, lmn) -> (NormalLevel, pk, lmn)) (rn_imps $ map convImport implicit_imports)
+                      ++ rn_imps_with_level (map convImportWithLevel ordinary_imps)
 #else
         srcImports = rn_imps $ map convImport src_idecls
         textualImports = rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
