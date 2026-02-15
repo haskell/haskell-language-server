@@ -1,8 +1,16 @@
-4:13-16 TTypeFamily "Foo"
-4:17-18 TTypeVariable "a"
-5:3-6 TTypeFamily "Foo"
-5:7-10 TTypeConstructor "Int"
-5:13-16 TTypeConstructor "Int"
-6:3-6 TTypeFamily "Foo"
-6:7-8 TTypeVariable "a"
-6:11-17 TTypeSynonym "String"
+[1:1-30 HsSyntacticTokenType TComment "{-# LANGUAGE TypeFamilies #-}"]
+[2:1-7 HsSyntacticTokenType TKeyword "module"]
+[2:20-25 HsSyntacticTokenType TKeyword "where"]
+[4:1-5 HsSyntacticTokenType TKeyword "type"]
+[4:6-12 HsSyntacticTokenType TKeyword "family"]
+[4:13-16 HsSemanticTokenType TTypeFamily "Foo"]
+[4:17-18 HsSemanticTokenType TTypeVariable "a"]
+[4:19-24 HsSyntacticTokenType TKeyword "where"]
+[5:3-6 HsSemanticTokenType TTypeFamily "Foo"]
+[5:7-10 HsSemanticTokenType TTypeConstructor "Int"]
+[5:11-12 HsSyntacticTokenType TKeyword "="]
+[5:13-16 HsSemanticTokenType TTypeConstructor "Int"]
+[6:3-6 HsSemanticTokenType TTypeFamily "Foo"]
+[6:7-8 HsSemanticTokenType TTypeVariable "a"]
+[6:9-10 HsSyntacticTokenType TKeyword "="]
+[6:11-17 HsSemanticTokenType TTypeSynonym "String"]
