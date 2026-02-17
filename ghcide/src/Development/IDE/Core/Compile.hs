@@ -155,8 +155,7 @@ import           GHC.Unit.Home.Graph                          (UnitEnvGraph(..),
 import           GHC.Unit.Home.PackageTable                   (hptInternalTableRef, hptInternalTableFromRef)
 import           GHC.Unit.Module.ModIface                     (IfaceTopEnv(..))
 import           GHC.Types.Avail                              (emptyDetOrdAvails)
-import           GHC.Types.Basic                              (ImportLevel(..))
-import           Language.Haskell.Syntax.ImpExp               (ImportDeclLevelStyle(..), ImportDeclLevel(..))
+import           GHC.Types.Basic                              (ImportLevel(..), convImportLevel)
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)
@@ -1217,16 +1216,8 @@ getModSummaryFromImports env fp _modTime mContents = do
         -- In GHC 9.13+, ms_srcimps is just [Located ModuleName] and ms_textual_imps includes ImportLevel
         srcImports = map snd $ rn_imps $ map convImport src_idecls
 
-        -- Convert ImportDeclLevelStyle to ImportLevel
-        importLevelFromDecl :: ImportDeclLevelStyle -> ImportLevel
-        importLevelFromDecl NotLevelled               = NormalLevel
-        importLevelFromDecl (LevelStylePre ImportDeclSplice) = SpliceLevel
-        importLevelFromDecl (LevelStylePre ImportDeclQuote)  = QuoteLevel
-        importLevelFromDecl (LevelStylePost ImportDeclSplice) = SpliceLevel
-        importLevelFromDecl (LevelStylePost ImportDeclQuote)  = QuoteLevel
-
         -- Extract import level along with pkg qualifier and module name
-        convImportWithLevel (L _ i) = (importLevelFromDecl (ideclLevelSpec i)
+        convImportWithLevel (L _ i) = (convImportLevel (ideclLevelSpec i)
                                       , ideclPkgQual i
                                       , reLoc $ ideclName i)
 

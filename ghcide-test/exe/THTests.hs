@@ -4,6 +4,7 @@ module THTests (tests) where
 import           Config
 import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.Text                   as T
+import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Test        (expectCurrentDiagnostics,
                                               expectDiagnostics,
@@ -18,8 +19,7 @@ import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests =
-  testGroup
-    "TemplateHaskell"
+  testGroup "TemplateHaskell" $
     [ -- Test for https://github.com/haskell/ghcide/pull/212
       testWithDummyPluginEmpty "load" $ do
         let sourceA =
@@ -104,6 +104,108 @@ tests =
     _ <- openDoc cPath "haskell"
     expectDiagnostics [ ( cPath, [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding with no type signature: a :: A", Just "GHC-38417")] ) ]
     ]
+    -- Regression test for GHC 9.14 ExplicitLevelImports.
+    -- Without level-aware module graph edges, HLS crashes with
+    -- `expectJust` in mgQueryZero when `import splice` is used.
+    ++ if ghcVersion >= GHC914
+       then
+        [ testWithDummyPluginEmpty "ExplicitLevelImports-splice-import" $ do
+            let sourceA =
+                  T.unlines
+                    [ "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module A (a) where"
+                    , "import Language.Haskell.TH"
+                    , "a :: ExpQ"
+                    , "a = [| 42 :: Int |]"
+                    ]
+                sourceB =
+                  T.unlines
+                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    , "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module B where"
+                    , "import splice A (a)"
+                    , "b :: Int"
+                    , "b = $a"
+                    ]
+            _ <- createDoc "A.hs" "haskell" sourceA
+            _ <- createDoc "B.hs" "haskell" sourceB
+            expectNoMoreDiagnostics 5
+        , testWithDummyPluginEmpty "ExplicitLevelImports-dual-import" $ do
+            let sourceM =
+                  T.unlines
+                    [ "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module M (m) where"
+                    , "import Language.Haskell.TH"
+                    , "m :: ExpQ"
+                    , "m = [| 100 :: Int |]"
+                    ]
+                sourceC =
+                  T.unlines
+                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    , "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module C where"
+                    , "import splice M (m)"
+                    , "import M (m)" -- Normal import alongside splice import
+                    , "c :: Int"
+                    , "c = $m"
+                    ]
+            _ <- createDoc "M.hs" "haskell" sourceM
+            _ <- createDoc "C.hs" "haskell" sourceC
+            expectNoMoreDiagnostics 5
+        , testWithDummyPluginEmpty "ExplicitLevelImports-redundant-mix" $ do
+            let sourceM =
+                  T.unlines
+                    [ "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module M (m) where"
+                    , "import Language.Haskell.TH"
+                    , "m :: ExpQ"
+                    , "m = [| 1 :: Int |]"
+                    ]
+                sourceD =
+                  T.unlines
+                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    , "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module D where"
+                    , "import splice M"
+                    , "import M"
+                    , "import splice M" -- Redundant splice import
+                    , "d :: Int"
+                    , "d = $m"
+                    ]
+            _ <- createDoc "M.hs" "haskell" sourceM
+            _ <- createDoc "D.hs" "haskell" sourceD
+            expectNoMoreDiagnostics 5
+        , testWithDummyPluginEmpty "ExplicitLevelImports-transitive" $ do
+            let sourceBase =
+                  T.unlines
+                    [ "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module BaseTH (baseMacro) where"
+                    , "import Language.Haskell.TH"
+                    , "baseMacro :: ExpQ"
+                    , "baseMacro = [| 50 :: Int |]"
+                    ]
+                sourceInter =
+                  T.unlines
+                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    , "{-# LANGUAGE TemplateHaskell #-}"
+                    , "module Intermediate where"
+                    , "import splice BaseTH" -- Splice import here
+                    , "interVal :: Int"
+                    , "interVal = $baseMacro"
+                    ]
+                sourceConsumer =
+                  T.unlines
+                    [ "module Consumer where"
+                    , "import Intermediate" -- Normal import here
+                    , "cons :: Int"
+                    , "cons = interVal"
+                    ]
+            _ <- createDoc "BaseTH.hs" "haskell" sourceBase
+            _ <- createDoc "Intermediate.hs" "haskell" sourceInter
+            _ <- createDoc "Consumer.hs" "haskell" sourceConsumer
+            expectNoMoreDiagnostics 5
+        ]
+       else []
 
 
 -- | Test that all modules have linkables
@@ -147,7 +249,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics
         [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'", Just "GHC-83865")])
         ,("THC.hs", [(DiagnosticSeverity_Warning, (6,0), "Top-level binding", Just "GHC-38417")])
-        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level bindin", Just "GHC-38417")])
+        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")])
         ]
 
     closeDoc adoc

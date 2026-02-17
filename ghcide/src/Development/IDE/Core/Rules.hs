@@ -642,6 +642,22 @@ getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake rec
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
+#if MIN_VERSION_ghc(9,13,0)
+-- | Build level-aware module graph edges from a ModSummary and a list of dependency NodeKeys.
+-- A module can be imported at multiple levels (e.g. @import splice M@ + @import M@),
+-- so we collect ALL levels per module and produce one edge per (module, level) pair.
+-- This is required for GHC 9.14's level-aware module graph (@mg_zero_graph@).
+mkLevelEdges :: ModSummary -> [NodeKey] -> [ModuleNodeEdge]
+mkLevelEdges ms dep_node_keys = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl nk) (lookupLevels nk)) dep_node_keys
+  where
+    importLevelsMap = M.map nubOrd $ M.fromListWith (++)
+      [(unLoc mn, [lvl]) | (lvl, _pkg, mn) <- ms_textual_imps ms]
+    lookupLevels nk = case nk of
+      NodeKey_Module mnk ->
+        M.findWithDefault [NormalLevel] (gwib_mod $ mnkModuleName mnk) importLevelsMap
+      _ -> [NormalLevel]
+#endif
+
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
   (rawDepInfo, bm) <- rawDependencyInformation fs
@@ -654,18 +670,8 @@ dependencyInfoForFiles fs = do
 #if MIN_VERSION_ghc(9,13,0)
       go (Just ms) (Just (Right (ModuleImports xs))) = Just $ ModuleNode this_dep_edges (ModuleNodeCompile ms)
         where this_dep_ids = mapMaybe snd xs
-              -- Build a multimap from ModuleName to [ImportLevel] using the ModSummary's textual imports.
-              -- A module can be imported at multiple levels (e.g. `import splice M` + `import M`),
-              -- so we collect ALL levels and produce one edge per (module, level) pair.
-              -- This is required for GHC 9.14's level-aware module graph (mg_zero_graph).
-              importLevelsMap = M.map nubOrd $ M.fromListWith (++)
-                [(unLoc mn, [lvl]) | (lvl, _pkg, mn) <- ms_textual_imps ms]
-              lookupLevels nk = case nk of
-                NodeKey_Module mnk ->
-                  M.findWithDefault [NormalLevel] (gwib_mod $ mnkModuleName mnk) importLevelsMap
-                _ -> [NormalLevel]
               this_dep_node_keys = mapMaybe (\fi -> IM.lookup (getFilePathId fi) nodeKeys) this_dep_ids
-              this_dep_edges = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl nk) (lookupLevels nk)) this_dep_node_keys
+              this_dep_edges = mkLevelEdges ms this_dep_node_keys
       go (Just ms) _ = Just $ ModuleNode [] (ModuleNodeCompile ms)
 #else
       go (Just ms) (Just (Right (ModuleImports xs))) = Just $ ModuleNode this_dep_keys ms
@@ -808,16 +814,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                   dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
                   return $!! map (NodeKey_Module . msKey) dep_mss
 #if MIN_VERSION_ghc(9,13,0)
-                -- Build level-aware edges: a module can be imported at multiple levels
-                -- (e.g. `import splice M` + `import M`), so collect ALL levels per module
-                -- and produce one edge per (module, level) pair.
-                let importLevelsMap = M.map nubOrd $ M.fromListWith (++)
-                      [(unLoc mn, [lvl]) | (lvl, _pkg, mn) <- ms_textual_imps ms]
-                    lookupLevels nk = case nk of
-                      NodeKey_Module mnk ->
-                        M.findWithDefault [NormalLevel] (gwib_mod $ mnkModuleName mnk) importLevelsMap
-                      _ -> [NormalLevel]
-                    final_dep_edges = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl nk) (lookupLevels nk)) final_deps
+                let final_dep_edges = mkLevelEdges ms final_deps
                 let module_graph_nodes =
                       nubOrdOn mkNodeKey (ModuleNode final_dep_edges (ModuleNodeCompile ms) : concatMap mgModSummaries' mgs)
 #else
