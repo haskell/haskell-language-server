@@ -111,13 +111,17 @@ jobs:
           os: ${{ runner.os }}
 
       - name: Build
-        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} all
+        run: |
+          set -euo pipefail
+          echo "Building with GHC ${{ matrix.ghc }} on ${{ matrix.os }}"
+          cabal build --max-backjumps 10000 ${CABAL_ARGS} all
 
       - name: Set test options
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
         # to include 'new' in the filters, since many of our test suites are in the
         # same package.
         run: |
+          set -euo pipefail
           cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --max-backjumps 10000
 
       - if: matrix.test
@@ -278,9 +282,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre_job, test]
     steps:
-      - run: |
+      - name: Report job results
+        run: |
           echo "jobs info: ${{ toJSON(needs) }}"
       - if: contains(needs.*.result, 'failure')
-        run: exit 1
+        name: Fail due to test failure
+        run: |
+          echo "::error::One or more test jobs failed. See the 'test' matrix job results above for details."
+          echo "Pre-job skip decision: should_skip=${{ needs.pre_job.outputs.should_skip }}"
+          echo "Test job result: ${{ needs.test.result }}"
+          exit 1
       - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
-        run: exit 1
+        name: Fail due to unexpected cancellation
+        run: |
+          echo "::error::One or more test jobs were cancelled unexpectedly (not due to skip logic)."
+          echo "Pre-job skip decision: should_skip=${{ needs.pre_job.outputs.should_skip }}"
+          echo "Test job result: ${{ needs.test.result }}"
+          exit 1

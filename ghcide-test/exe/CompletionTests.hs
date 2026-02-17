@@ -480,7 +480,9 @@ projectCompletionTests =
               "import ALocal"
             ]
         compls <- getCompletions doc (Position 1 13)
-        let item = head $ filter ((== "ALocalModule") . (^. L.label)) compls
+        let filtered = filter ((== "ALocalModule") . (^. L.label)) compls
+        liftIO $ assertBool "Expected ALocalModule completion" (not (null filtered))
+        let item = head filtered
         liftIO $ do
           item ^. L.label @?= "ALocalModule",
       testSessionEmptyWithCradle "auto complete functions from qualified imports without alias" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
@@ -495,6 +497,7 @@ projectCompletionTests =
               "A."
             ]
         compls <- getCompletions doc (Position 2 2)
+        liftIO $ assertBool "Expected at least one completion" (not (null compls))
         let item = head compls
         liftIO $ do
           item ^. L.label @?= "anidentifier",
@@ -511,6 +514,7 @@ projectCompletionTests =
               "foo = Alias."
             ]
         compls <- getCompletions doc (Position 2 12)
+        liftIO $ assertBool "Expected at least one completion" (not (null compls))
         let item = head compls
         liftIO $ do
           item ^. L.label @?= "anidentifier"
