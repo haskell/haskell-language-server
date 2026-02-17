@@ -26,7 +26,6 @@
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
 /plugins/hls-hlint-plugin @eddiemundo
-/plugins/hls-module-name-plugin
 /plugins/hls-notes-plugin @jvanbruegge
 /plugins/hls-ormolu-plugin @georgefst
 /plugins/hls-overloaded-record-dot-plugin @joyfulmantis

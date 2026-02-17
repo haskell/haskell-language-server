@@ -377,14 +377,6 @@ Provided by: `hls-explicit-imports-plugin`
 
 Shows refined imports and applies them with a click (same as the code action).
 
-### Fix module names
-
-Provided by: `hls-module-name-plugin`
-
-Shows module name matching file path, and applies it with a click.
-
-![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
-
 ## Selection range
 
 Provided by: `hls-code-range-plugin`
@@ -427,6 +419,14 @@ To eagerly load all components, you need to
       component: all
   ```
 - and enable tests and benchmarks in `cabal.project` with `tests: True` and `benchmarks: True`.
+
+### Fix module names
+
+Provided by: `hls-rename-plugin`
+
+Shows module name matching file path, and applies it with a click.
+
+![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
 
 ## Semantic tokens
 
