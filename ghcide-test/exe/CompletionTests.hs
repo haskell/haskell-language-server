@@ -32,6 +32,7 @@ import           Test.Hls.FileSystem            (file, text)
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import Debug.Pretty.Simple
 
 tests :: TestTree
 tests

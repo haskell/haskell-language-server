@@ -131,16 +131,18 @@ import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
 
+import           Data.Map.Strict                        (Map)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
 #if MIN_VERSION_ghc(9,13,0)
-import           Development.IDE.GHC.Compat             (NameCache,
+import           Development.IDE.GHC.Compat             (ModuleName, NameCache,
                                                          NameCacheUpdater,
+                                                         UnitId,
                                                          newNameCache)
 #else
-import           Development.IDE.GHC.Compat             (NameCache,
+import           Development.IDE.GHC.Compat             (ModuleName, NameCache,
                                                          NameCacheUpdater,
-                                                         initNameCache,
+                                                         UnitId, initNameCache,
                                                          knownKeyNames)
 #endif
 import           Development.IDE.GHC.Orphans            ()
@@ -317,6 +319,10 @@ data ShakeExtras = ShakeExtras
     ,ideNc :: NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
+    ,moduleToPathCache :: TVar (Map
+     Unique
+     (Map ModuleName (UnitId, NormalizedFilePath),
+      Map ModuleName (UnitId, NormalizedFilePath)))
     -- | A mapping of exported identifiers for local modules. Updated on kick
     ,exportsMap :: TVar ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
@@ -715,6 +721,8 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
+
+        moduleToPathCache <- newTVarIO mempty
         pure ShakeExtras{shakeRecorder = recorder, ..}
     shakeDb  <-
         shakeNewDatabase
@@ -1492,3 +1500,5 @@ runWithSignal msgStart msgEnd files rule = do
   kickSignal testing lspEnv files msgStart
   void $ uses rule files
   kickSignal testing lspEnv files msgEnd
+
+
