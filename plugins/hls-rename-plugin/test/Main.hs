@@ -111,12 +111,78 @@ tests = testGroup "Rename"
 
         -- Make sure renaming succeeds
         rename doc (Position 3 0) "foo'"
+    , goldenWithCrossModuleRename True "Cross Module (Declaration)" "CrossMaster" "CrossFunctionClient" (Position 2 2) "fooRenamed"
+    , goldenWithCrossModuleRename True "Cross Module (Referenced)" "CrossFunctionClient" "CrossMaster" (Position 4 11) "crossfooRenamed"
+    , goldenWithCrossModuleRename True "Cross Module Qualified (Declaration)" "CrossMaster" "CrossQualifiedClient" (Position 2 2) "newFoo"
+    , goldenWithCrossModuleRename True "Cross Module Qualified (Referenced)" "CrossQualifiedClient" "CrossMaster" (Position 4 22) "crossfooRenamed"
+    , goldenWithCrossModuleSession True "Cross Error : No export list" "CrossMasterTwo" "CrossFunctionClientTwo" $ \masterDoc _clientDoc -> do
+        let expectedError = TResponseError
+                (InR ErrorCodes_InvalidParams)
+                "rename: Invalid Params: Cannot rename symbol: module has no explicit export list and the symbol is referenced from other modules."
+                Nothing
+
+        renameExpectError expectedError masterDoc (Position 2 0) "ImpossibleRename"
+    , goldenWithCrossModuleSession False "Cross Error : Cross Moduel disabled" "CrossMaster" "CrossFunctionError" $ \masterDoc _clientDoc -> do
+        let expectedError = TResponseError
+                (InR ErrorCodes_InternalError)
+                "rename: Internal Error: Cross-module rename is disabled."
+                Nothing
+
+        renameExpectError expectedError masterDoc (Position 2 0) "ImpossibleRename"
     ]
 
 goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
-       renamePlugin title testDataDir path "expected" "hs" act
+        renamePlugin title testDataDir path "expected" "hs"
+        $ \_ -> do
+            doc <- openDoc (path <.> "hs") "haskell"
+            _ <- getDocumentSymbols doc
+            _ <- waitForBuildQueue
+            act doc
+
+goldenWithCrossModuleRename :: Bool -> TestName -> FilePath -> FilePath -> Position -> String -> TestTree
+goldenWithCrossModuleRename crossModuleEnabled title primaryFile secondaryFile pos newName =
+    goldenWithHaskellDoc
+        (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= crossModuleEnabled })] })
+        renamePlugin
+        title
+        testDataDir
+        secondaryFile
+        "expected"
+        "hs"
+        $ \_ -> do
+
+            primaryDoc <- openDoc (primaryFile <.> "hs") "haskell"
+            secondaryDoc <- openDoc (secondaryFile <.> "hs") "haskell"
+
+            _ <- getDocumentSymbols primaryDoc
+            _ <- getDocumentSymbols secondaryDoc
+            _ <- waitForBuildQueue
+
+
+            rename primaryDoc pos newName
+
+goldenWithCrossModuleSession :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> TextDocumentIdentifier -> Session ()) -> TestTree
+goldenWithCrossModuleSession crossModuleEnabled title primaryFile secondaryFile action =
+    goldenWithHaskellDoc
+        (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= crossModuleEnabled })] })
+        renamePlugin
+        title
+        testDataDir
+        secondaryFile
+        "expected"
+        "hs"
+        $ \_ -> do
+
+            primaryDoc   <- openDoc (primaryFile   <.> "hs") "haskell"
+            secondaryDoc <- openDoc (secondaryFile <.> "hs") "haskell"
+
+            _ <- getDocumentSymbols primaryDoc
+            _ <- getDocumentSymbols secondaryDoc
+            _ <- waitForBuildQueue
+
+            action primaryDoc secondaryDoc
 
 renameExpectError :: TResponseError Method_TextDocumentRename -> TextDocumentIdentifier -> Position -> Text -> Session ()
 renameExpectError expectedError doc pos newName = do
