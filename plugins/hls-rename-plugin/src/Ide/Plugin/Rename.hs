@@ -41,6 +41,7 @@ import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
+import           GHC                                   (isGoodSrcSpan)
 import           GHC.Iface.Ext.Types                   (HieAST (..),
                                                         HieASTs (..),
                                                         NodeOrigin (..),
@@ -54,7 +55,9 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-
+#if MIN_VERSION_ghc(9,8,0)
+import qualified GHC.Types.Name.Occurrence             as OccName
+#endif
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
@@ -142,9 +145,21 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
             -- Perform rename
             let newName = mkTcOcc $ T.unpack newNameText
                 filesRefs = collectWith locToUri refs
+#if MIN_VERSION_ghc(9,8,0)
+            -- GHC 9.8+ stores field labels and their selectors in different OccName
+            -- namespaces, breaking equality checks. Expand to cover both variants.
+                oldOccNames = HS.fromList $ concatMap (expandOcc . nameOccName) oldNames
+                  where
+                    expandOcc occ
+                        | occNameSpace occ == OccName.varName       = [occ, mkOccNameFS (fieldName (occNameFS occ)) (occNameFS occ)]
+                        | isFieldNameSpace (occNameSpace occ)       = [occ, mkOccNameFS OccName.varName (occNameFS occ)]
+                        | otherwise                                 = [occ]
+#else
+                oldOccNames = HS.fromList $ map nameOccName oldNames
+#endif
                 getFileEdit (uri, locations) = do
                     verTxtDocId <- liftIO $ runAction "rename: getVersionedTextDoc" state $ getVersionedTextDoc (TextDocumentIdentifier uri)
-                    getSrcEdit state verTxtDocId (replaceRefs newName locations)
+                    getSrcEdit state verTxtDocId (replaceRefs newName locations oldOccNames)
             fileEdits <- mapM getFileEdit filesRefs
             pure $ InL $ fold fileEdits
 
@@ -214,10 +229,10 @@ getSrcEdit state verTxtDocId updatePs = do
 replaceRefs ::
     OccName ->
     HashSet Location ->
+    HashSet OccName ->
     ParsedSource ->
     ParsedSource
-replaceRefs newName refs = everywhere $
-    -- there has to be a better way...
+replaceRefs newName refs oldOccNames = everywhere $
     mkT (replaceLoc @AnnListItem) `extT`
     -- replaceLoc @AnnList `extT` -- not needed
     -- replaceLoc @AnnParen `extT` -- not needed
@@ -228,8 +243,11 @@ replaceRefs newName refs = everywhere $
     where
         replaceLoc :: forall an. LocatedAn an RdrName -> LocatedAn an RdrName
         replaceLoc (L srcSpan oldRdrName)
-            | isRef (locA srcSpan) = L srcSpan $ replace oldRdrName
+            | isRef (locA srcSpan)
+            , isTarget oldRdrName
+            = L srcSpan $ replace oldRdrName
         replaceLoc lOldRdrName = lOldRdrName
+
         replace :: RdrName -> RdrName
         replace (Qual modName _) = Qual modName newName
         replace _                = Unqual newName
@@ -239,6 +257,10 @@ replaceRefs newName refs = everywhere $
             Just loc -> loc `HS.member` refs
             Nothing  -> False
 
+        -- Only replace RdrNames whose OccName matches a rename target, preventing
+        -- co-located field selectors from being incorrectly renamed.
+        isTarget :: RdrName -> Bool
+        isTarget rdrName = rdrNameOcc rdrName `HS.member` oldOccNames
 ---------------------------------------------------------------------------------------------------
 -- Reference finding
 
@@ -250,38 +272,28 @@ refsAtName ::
     Name ->
     ExceptT PluginError m [Location]
 refsAtName state nfp targetName = do
-    -- Get local references from current file's HieAST
-    ast <- handleGetHieAst state nfp
-    let localRefs = nameLocs targetName ast
+    HAR{refMap} <- handleGetHieAst state nfp
 
-    -- Query HieDb for global matches (by OccName)
-    ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
-    dbCandidates <- liftIO $ withHieDb $ \hieDb ->
-        fmap (mapMaybe rowToLoc) $
-          case nameModule_maybe targetName of
-            Just mod -> findReferences hieDb True (nameOccName targetName) (Just $ moduleName mod) (Just $ moduleUnit mod) []
-            Nothing  -> findReferences hieDb True (nameOccName targetName) Nothing Nothing []
+    let localRefs =
+            case M.lookup (Right targetName) refMap of
+            Nothing    -> []
+            Just spans -> [ realSrcSpanToLocation sp | (sp, _) <- spans]
 
-    -- Filter candidates by exact Name identity
-    filteredDbRefs <- filterM (matchesExactName state targetName) dbCandidates
-    pure $ localRefs ++ filteredDbRefs
+    let defLoc = nameSrcSpan targetName
+        defLocations = case srcSpanToLocation defLoc of
+            Just loc | isGoodSrcSpan defLoc -> [loc]
+            _                               -> []
 
-matchesExactName ::
-    MonadIO m =>
-    IdeState ->
-    Name ->
-    Location ->
-    ExceptT PluginError m Bool
-matchesExactName state targetName loc = do
-    (file, pos) <- locToFilePos loc
-    namesAtPos <- getNamesAtPos state file pos
-    pure $ targetName `elem` namesAtPos
+    -- Only query HieDb if it's a global name
+    globalRefs <-
+        case nameModule_maybe targetName of
+            Nothing -> pure []
+            Just mod -> do
+                ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
+                liftIO $ withHieDb $ \hieDb ->
+                    fmap (mapMaybe rowToLoc) $ findReferences hieDb True (nameOccName targetName) (Just $ moduleName mod) (Just $ moduleUnit mod) []
 
-nameLocs :: Name -> HieAstResult -> [Location]
-nameLocs name (HAR _ _ rm _ _) =
-    concatMap (map (realSrcSpanToLocation . fst))
-              (M.lookup (Right name) rm)
-
+    pure (defLocations ++ localRefs ++ globalRefs)
 ---------------------------------------------------------------------------------------------------
 -- Util
 
