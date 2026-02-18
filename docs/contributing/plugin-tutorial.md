@@ -16,8 +16,6 @@ In the last couple of months, I have written various HLS plugins, including:
 1. Suggest imports for variables not in scope,
 2. Remove redundant imports,
 3. Evaluate code in comments (à la [doctest](https://docs.python.org/3/library/doctest.html)),
-4. Integrate the [retrie](https://github.com/facebookincubator/retrie) refactoring library.
-
 These plugins are small but meaningful steps towards a more polished IDE experience.
 While writing them, I didn't have to worry about performance, UI, or distribution; another tool (usually GHC) always did the heavy lifting.
 
@@ -77,7 +75,6 @@ The HLS codebase includes several plugins (found in `./plugins`). For example:
 
 - The `ormolu`, `fourmolu`, and `stylish-haskell` plugins used to format code
 - The `eval` plugin, a code lens provider to evaluate code in comments
-- The `retrie` plugin, a code action provider to execute retrie commands
 
 I recommend looking at the existing plugins for inspiration and reference. A few conventions shared by all plugins are:
 
@@ -98,7 +95,6 @@ I recommend looking at the existing plugins for inspiration and reference. A few
         , Fourmolu.descriptor "fourmolu"
         , Ormolu.descriptor "ormolu"
         , StylishHaskell.descriptor "stylish-haskell"
-        , Retrie.descriptor "retrie"
         , Eval.descriptor "eval"
         , NewPlugin.descriptor "new-plugin" -- Add new plugins here.
         ]
