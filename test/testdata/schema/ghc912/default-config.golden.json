@@ -103,9 +103,6 @@
             "codeLensOn": true,
             "inlayHintsOn": true
         },
-        "moduleName": {
-            "globalOn": true
-        },
         "notes": {
             "completionOn": true,
             "hoverOn": true
@@ -131,10 +128,11 @@
             "globalOn": true
         },
         "rename": {
+            "codeLensOn": true,
             "config": {
                 "crossModule": true
             },
-            "globalOn": true
+            "renameOn": true
         },
         "semanticTokens": {
             "config": {

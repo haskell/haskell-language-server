@@ -10,9 +10,11 @@ Provide CodeLenses to:
 * Add a module header ("module /moduleName/ where") to empty Haskell files
 * Fix the module name if incorrect
 -}
-module Ide.Plugin.ModuleName (
-    descriptor,
+module Ide.Plugin.Rename.ModuleName (
     Log,
+    codeLens,
+    updateModuleNameCommand,
+    command,
 ) where
 
 import           Control.Monad                        (forM_, void)
@@ -60,14 +62,6 @@ import           System.FilePath                      (dropExtension, normalise,
                                                        pathSeparator,
                                                        splitDirectories,
                                                        takeFileName)
-
--- |Plugin descriptor
-descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId =
-    (defaultPluginDescriptor plId "Provides a code action to alter the module name if it is wrong")
-        { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens (codeLens recorder)
-        , pluginCommands = [PluginCommand updateModuleNameCommand "set name of module to match with file path" (command recorder)]
-        }
 
 updateModuleNameCommand :: IsString p => p
 updateModuleNameCommand = "updateModuleName"
