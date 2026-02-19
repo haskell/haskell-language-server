@@ -6,6 +6,7 @@ module Main (main) where
 
 import           Control.Lens               ((^.))
 import           Data.Aeson
+import           Data.Functor               (void)
 import qualified Data.Map                   as M
 import           Data.Text                  (Text, pack)
 import           Ide.Plugin.Config
@@ -22,6 +23,12 @@ renamePlugin = mkPluginTestDescriptor Rename.descriptor "rename"
 
 tests :: TestTree
 tests = testGroup "Rename"
+    [ renameTests
+    , moduleNameTests
+    ]
+
+renameTests :: TestTree
+renameTests = testGroup "Identifier"
     [ goldenWithRename "Data constructor" "DataConstructor" $ \doc ->
         rename doc (Position 0 15) "Op"
     , goldenWithRename "Data constructor with fields" "DataConstructorWithFields" $ \doc ->
@@ -112,6 +119,56 @@ tests = testGroup "Rename"
         -- Make sure renaming succeeds
         rename doc (Position 3 0) "foo'"
     ]
+
+moduleNameTests :: TestTree
+moduleNameTests =
+  testGroup "ModuleName"
+  [ goldenWithModuleName "Add module header to empty module" "TEmptyModule" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
+
+  , goldenWithModuleName "Fix wrong module name" "TWrongModuleName" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
+
+  , goldenWithModuleName "Must infer module name as Main, if the file name starts with a lowercase" "mainlike" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
+
+  , goldenWithModuleName "Fix wrong module name in nested directory" "subdir/TWrongModuleName" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
+  , testCase "Should not show code lens if the module name is correct" $
+      runSessionWithServer def renamePlugin modNameTestDataDir $ do
+        doc <- openDoc "CorrectName.hs" "haskell"
+        lenses <- getCodeLenses doc
+        liftIO $ lenses @?= []
+        closeDoc doc
+  -- https://github.com/haskell/haskell-language-server/issues/3047
+  , goldenWithModuleName "Fix#3047" "canonicalize/Lib/A" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
+  , testCase "Keep stale lens even if parse failed" $ do
+      runSessionWithServer def renamePlugin modNameTestDataDir $ do
+        doc <- openDoc "Stale.hs" "haskell"
+        oldLens <- getCodeLenses doc
+        let edit = TextEdit (mkRange 1 0 1 0) "f ="
+        _ <- applyEdit doc edit
+        newLens <- getCodeLenses doc
+        liftIO $ newLens @?= oldLens
+        closeDoc doc
+  ]
+
+goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+goldenWithModuleName title path = goldenWithHaskellDoc def renamePlugin title modNameTestDataDir path "expected" "hs"
+
+modNameTestDataDir :: FilePath
+modNameTestDataDir = testDataDir </> "mod_name"
 
 goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRename title path act =

@@ -206,10 +206,6 @@ jobs:
         run: cabal test ${CABAL_ARGS} hls-hlint-plugin-tests || cabal test ${CABAL_ARGS} hls-hlint-plugin-tests
 
       - if: matrix.test
-        name: Test hls-module-name-plugin test suite
-        run: cabal test ${CABAL_ARGS} hls-module-name-plugin-tests || cabal test ${CABAL_ARGS} hls-module-name-plugin-tests
-
-      - if: matrix.test
         name: Test hls-alternate-number-format-plugin test suite
         run: cabal test ${CABAL_ARGS} hls-alternate-number-format-plugin-tests || cabal test ${CABAL_ARGS} hls-alternate-number-format-plugin-tests
 
