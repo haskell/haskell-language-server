@@ -143,7 +143,7 @@ tests =
                     ]
                 sourceC =
                   T.unlines
-                    [ "{-# OPTIONS_GHC -Wall #-}"
+                    [ "{-# OPTIONS_GHC -Wmissing-signatures #-}"
                     , "{-# LANGUAGE ExplicitLevelImports #-}"
                     , "{-# LANGUAGE TemplateHaskell #-}"
                     , "module C where"
@@ -167,7 +167,7 @@ tests =
                     ]
                 sourceD =
                   T.unlines
-                    [ "{-# OPTIONS_GHC -Wall #-}"
+                    [ "{-# OPTIONS_GHC -Wmissing-signatures #-}"
                     , "{-# LANGUAGE ExplicitLevelImports #-}"
                     , "{-# LANGUAGE TemplateHaskell #-}"
                     , "module D where"
