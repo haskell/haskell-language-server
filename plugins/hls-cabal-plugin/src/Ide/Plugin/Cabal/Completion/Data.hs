@@ -88,7 +88,8 @@ stanzaKeywordMap =
       ("common", libExecTestBenchCommons Library),
       ("common", libExecTestBenchCommons Common),
       ("flag", flagFields),
-      ("source-repository", sourceRepositoryFields)
+      ("source-repository", sourceRepositoryFields),
+      ("custom-setup", customSetupFields)
     ]
 
 libraryFields :: Map KeyWordName Completer
@@ -235,6 +236,15 @@ libExecTestBenchCommons st =
         -- parses the '.cabal' file s.t. that we have access to the 'hs-source-dirs',
         -- but not have erased the "common" stanza.
         noopCompleter
+
+customSetupFields :: Map KeyWordName Completer
+customSetupFields =
+  Map.fromList
+    [ ("setup-depends:", noopCompleter)
+    , ("build-depends:", noopCompleter)
+    , ("build-tools:", noopCompleter)
+    , ("default-language:", constantCompleter ["GHC2021", "Haskell2010", "Haskell98"])
+    ]
 
 -- | Returns all possible language extensions including disabled ones.
 allExtensions :: [Extension]
