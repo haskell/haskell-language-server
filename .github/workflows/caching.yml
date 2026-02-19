@@ -46,8 +46,13 @@ on:
 
 # Not using a explicit target to build the top level haskell-language-server package
 # which make build the rest of subpackages *libs* (but shake-bench)
+#
+# We choose a very short build directory, as we run into long path issues on windows.
+# See cabal tracking issue https://github.com/haskell/cabal/issues/11395
+# We can't set the `--builddir` via `v2-configure` as cabal doesn't support this.
+# https://github.com/haskell/cabal/issues/5271
 env:
-  cabalBuild: "v2-build --keep-going"
+  cabalBuild: "v2-build --keep-going --builddir b --max-backjumps 10000"
 
 jobs:
   pre_job:

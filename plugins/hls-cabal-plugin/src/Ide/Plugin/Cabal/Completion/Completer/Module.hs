@@ -14,14 +14,14 @@ import           Ide.Logger                                     (Priority (..),
                                                                  WithPriority,
                                                                  logWith)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath (listFileCompletions,
-                                                                 mkCompletionDirectory)
+                                                                 mkCompletionDirectory,
+                                                                 smartCaseFuzzy)
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.Directory                               (doesFileExist)
 import qualified System.FilePath                                as FP
-import qualified Text.Fuzzy.Parallel                            as Fuzzy
 
 -- | Completer to be used when module paths can be completed for the field.
 --
@@ -50,7 +50,7 @@ filePathsForExposedModules
   -> CabalPrefixInfo
   -> Matcher T.Text
   -> IO [T.Text]
-filePathsForExposedModules recorder srcDirs prefInfo matcher = do
+filePathsForExposedModules recorder srcDirs prefInfo _matcher = do
   concatForM
     srcDirs
     ( \dir' -> do
@@ -58,18 +58,17 @@ filePathsForExposedModules recorder srcDirs prefInfo matcher = do
             pathInfo = pathCompletionInfoFromCabalPrefixInfo dir modPrefInfo
         completions <- listFileCompletions recorder pathInfo
         validExposedCompletions <- filterM (isValidExposedModulePath pathInfo) completions
-        let toMatch = pathSegment pathInfo
-            scored = runMatcher
-              matcher
-              toMatch
-              (map T.pack validExposedCompletions)
-        forM
-          scored
-          ( \compl' -> do
-              let compl = Fuzzy.original compl'
-              fullFilePath <- mkExposedModulePathCompletion pathInfo $ T.unpack compl
-              pure fullFilePath
-          )
+
+        let query = pathSegment pathInfo
+            candidates :: [T.Text]
+            candidates = map T.pack validExposedCompletions
+
+            matched :: [T.Text]
+            matched = smartCaseFuzzy query candidates
+
+        forM matched $ \compl -> do
+          fullFilePath <- mkExposedModulePathCompletion pathInfo (T.unpack compl)
+          pure fullFilePath
     )
   where
     prefix =

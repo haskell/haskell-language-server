@@ -5,8 +5,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE LambdaCase        #-}
 
-module Ide.Plugin.Rename (descriptor, E.Log) where
+module Ide.Plugin.Rename (descriptor, Log) where
 
 import           Control.Lens                          ((^.))
 import           Control.Monad
@@ -30,12 +31,12 @@ import           Development.IDE                       (Recorder, WithPriority,
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Service          hiding (Log)
+import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.ExactPrint        hiding (Log)
 import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
@@ -48,8 +49,11 @@ import           GHC.Iface.Ext.Utils                   (generateReferencesMap)
 import           HieDb                                 ((:.) (..))
 import           HieDb.Query
 import           HieDb.Types                           (RefRow (refIsGenerated))
+import           Ide.Logger                            (Pretty (..),
+                                                        cmapWithPrio)
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
+import qualified Ide.Plugin.Rename.ModuleName          as ModuleName
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
@@ -58,16 +62,30 @@ import           Language.LSP.Protocol.Types
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
-descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
-    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
+data Log
+    = LogExactPrint E.Log
+    | LogModuleName ModuleName.Log
+
+instance Pretty Log where
+    pretty = \ case
+        LogExactPrint msg -> pretty msg
+        LogModuleName msg -> pretty msg
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
+    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers and module names")
         { pluginHandlers = mconcat
               [ mkPluginHandler SMethod_TextDocumentRename renameProvider
               , mkPluginHandler SMethod_TextDocumentPrepareRename prepareRenameProvider
+              , mkPluginHandler SMethod_TextDocumentCodeLens (ModuleName.codeLens moduleNameRecorder)
               ]
+        , pluginCommands = [PluginCommand ModuleName.updateModuleNameCommand "Set name of module to match with file path" (ModuleName.command moduleNameRecorder)]
         , pluginConfigDescriptor = defaultConfigDescriptor
             { configCustomConfig = mkCustomConfig properties }
         }
+    where
+        exactPrintRecorder = cmapWithPrio LogExactPrint recorder
+        moduleNameRecorder = cmapWithPrio LogModuleName recorder
 
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
@@ -291,4 +309,4 @@ replaceModName name mbModName =
 properties :: Properties '[ 'PropertyKey "crossModule" 'TBoolean]
 properties = emptyProperties
   & defineBooleanProperty #crossModule
-    "Enable experimental cross-module renaming" False
+    "Enable experimental cross-module renaming" True

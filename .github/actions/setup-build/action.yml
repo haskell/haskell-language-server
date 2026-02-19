@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell-actions/setup@v2.8.2
+    - uses: haskell-actions/setup@v2.10.3
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -83,7 +83,7 @@ runs:
     # We have to restore package sources before `cabal update`
     # because it overwrites the hackage index with the cached one
     - name: Hackage sources cache
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       env:
         cache-name: hackage-sources
       with:
@@ -96,10 +96,14 @@ runs:
     - run: cabal update
       shell: bash
 
+    # We bump --max-backjumps 10000 because cabal
+    # had trouble to find build plan with the default (4000).
+    # This only happens with GHC 9.6 on Windows, other platforms should work without it.
+    # Remove it from here and other places when we stop supporting GHC 9.6
     - name: Form the package list ('cabal.project.freeze')
       run: |
         rm cabal.project.freeze || \
-        cabal v2-freeze && \
+        cabal v2-freeze --max-backjumps 10000 && \
         echo "" && \
         echo 'Output:' && \
         echo "" && \
@@ -108,7 +112,7 @@ runs:
 
     - name: Compiled deps cache
       id: compiled-deps
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       env:
         cache-name: compiled-deps
       with:

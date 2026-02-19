@@ -1,4 +1,4 @@
-resolver: lts-22.43 # ghc-9.6.6
+resolver: lts-22.44 # ghc-9.6.7
 
 packages:
   - .
@@ -18,8 +18,7 @@ allow-newer-deps:
 
 extra-deps:
   - Diff-0.5
-  - floskell-0.11.1
-  - hiedb-0.7.0.0
+  - hiedb-0.8.0.0
   - hie-bios-0.17.0
   - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
@@ -28,6 +27,7 @@ extra-deps:
   - lsp-types-2.3.0.0
   - monad-dijkstra-0.1.1.4 # 5
   - retrie-1.2.3
+  - unordered-containers-0.2.21
 
   # stan and friends
   - stan-0.2.1.0

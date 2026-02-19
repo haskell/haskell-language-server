@@ -101,16 +101,19 @@ fileCompleterTests =
     "File Completer Tests"
     [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeFilePath "" filePathComplTestDir
-        completions @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
+        completions @?== [".hidden", "Content.hs", "Dir4/", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeFilePath "./" filePathComplTestDir
-        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
+        completions @?== ["./.hidden", "./Content.hs", "./Dir4/", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
       testCase "Current Directory - hidden file start" $ do
         completions <- completeFilePath "." filePathComplTestDir
         completions @?== ["Content.hs", ".hidden", "textfile.txt", "main-is.cabal"],
       testCase "Current Directory - incomplete directory path written" $ do
         completions <- completeFilePath "di" filePathComplTestDir
-        completions @?== ["dir1/", "dir2/"],
+        completions @?== ["dir1/", "dir2/","Dir4/"],
+      testCase "Current Directory - fuzzy Smart casing" $ do
+        completions <- completeFilePath "Dr" filePathComplTestDir
+        completions @?== ["Dir4/"],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeFilePath "te" filePathComplTestDir
         completions @?== ["Content.hs", "textfile.txt"],
@@ -120,6 +123,12 @@ fileCompleterTests =
       testCase "Subdirectory - incomplete filepath written" $ do
         completions <- completeFilePath "dir2/dir3/MA" filePathComplTestDir
         completions @?== ["dir2/dir3/MARKDOWN.md"],
+      testCase "Subdirectory - lowerCase" $ do
+        completions <- completeFilePath "dir2/dir3/md" filePathComplTestDir
+        completions @?== ["dir2/dir3/MARKDOWN.md"],
+      testCase "Subdirectory - smart casing mismatch" $ do
+        completions <- completeFilePath "dir2/dir3/Ma" filePathComplTestDir
+        completions @?== [],
       testCase "Nonexistent directory" $ do
         completions <- completeFilePath "dir2/dir4/" filePathComplTestDir
         completions @?== []
@@ -171,7 +180,7 @@ filePathCompletionContextTests =
                 queryDirectory = "",
                 workingDirectory = filePathComplTestDir
               }
-        compls @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
+        compls @?== [".hidden", "Content.hs", "Dir4/", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
       testCase "In directory" $ do
         compls <-
           listFileCompletions
@@ -200,13 +209,19 @@ directoryCompleterTests =
     "Directory Completer Tests"
     [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeDirectory "" filePathComplTestDir
-        completions @?== ["dir1/", "dir2/"],
+        completions @?== ["Dir4/", "dir1/", "dir2/"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeDirectory "./" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["./Dir4/", "./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete directory path written" $ do
-        completions <- completeDirectory "di" filePathComplTestDir
-        completions @?== ["dir1/", "dir2/"],
+        completions <- completeDirectory "dr" filePathComplTestDir
+        completions @?== ["Dir4/", "dir1/", "dir2/"],
+      testCase "Current Directory - correct smart casing" $ do
+        completions <- completeDirectory "Dr" filePathComplTestDir
+        completions @?== ["Dir4/"],
+      testCase "Current Directory - incorrect smart casing" $ do
+        completions <- completeDirectory "DI" filePathComplTestDir
+        completions @?== [],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeDirectory "te" filePathComplTestDir
         completions @?== [],
@@ -315,7 +330,16 @@ exposedModuleCompleterTests =
         completions @?== ["File3"],
       testCase "Name nothing but not library" $ do
         completions <- callModulesCompleter Nothing sourceDirsExtractionTestSuite "3"
-        completions @?== []
+        completions @?== [],
+      testCase "Exposed modules - smart casing rejects mixed-case mismatch" $ do
+        completions <- callModulesCompleter (Just "benchie") sourceDirsExtractionBenchmark "FL"
+        completions @?== [],
+      testCase "Exposed modules - smart casing preserves fuzzy matching" $ do
+        completions <- callModulesCompleter (Just "benchie") sourceDirsExtractionBenchmark "Fl1"
+        completions @?== ["File1"],
+      testCase "Exposed modules - lowercase remains case-insensitive" $ do
+        completions <- callModulesCompleter (Just "benchie") sourceDirsExtractionBenchmark "fl"
+        completions @?== ["File1"]
     ]
   where
     callModulesCompleter :: Maybe StanzaName -> (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> T.Text -> IO [T.Text]

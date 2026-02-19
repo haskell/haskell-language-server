@@ -90,8 +90,9 @@
             "codeLensOn": true,
             "inlayHintsOn": true
         },
-        "moduleName": {
-            "globalOn": true
+        "notes": {
+            "completionOn": true,
+            "hoverOn": true
         },
         "overloaded-record-dot": {
             "globalOn": true
@@ -109,10 +110,11 @@
             "globalOn": true
         },
         "rename": {
+            "codeLensOn": true,
             "config": {
-                "crossModule": false
+                "crossModule": true
             },
-            "globalOn": true
+            "renameOn": true
         },
         "semanticTokens": {
             "config": {

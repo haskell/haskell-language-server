@@ -1,4 +1,4 @@
-resolver: lts-23.18 # ghc-9.8.4
+resolver: lts-23.28 # ghc-9.8.4
 
 packages:
   - .
@@ -19,14 +19,14 @@ allow-newer-deps:
   - directory-ospath-streaming
 
 extra-deps:
-  - floskell-0.11.1
-  - hiedb-0.7.0.0
+  - hiedb-0.8.0.0
   - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
   - hie-bios-0.17.0
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
   - retrie-1.2.3
+  - unordered-containers-0.2.21
 
   # stan dependencies not found in the stackage snapshot
   - stan-0.2.1.0

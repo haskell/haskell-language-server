@@ -111,14 +111,14 @@ jobs:
           os: ${{ runner.os }}
 
       - name: Build
-        run: cabal build ${CABAL_ARGS} all
+        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} all
 
       - name: Set test options
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
         # to include 'new' in the filters, since many of our test suites are in the
         # same package.
         run: |
-          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new"
+          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --max-backjumps 10000
 
       - if: matrix.test
         name: Test hls-graph
@@ -150,11 +150,6 @@ jobs:
       - if: matrix.test
         name: Test hls-refactor-plugin
         run: cabal test ${CABAL_ARGS} hls-refactor-plugin-tests || cabal test ${CABAL_ARGS} hls-refactor-plugin-tests
-
-      # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
-        name: Test hls-floskell-plugin
-        run: cabal test ${CABAL_ARGS} hls-floskell-plugin-tests || cabal test ${CABAL_ARGS} hls-floskell-plugin-tests
 
       - if: matrix.test
         name: Test hls-class-plugin
@@ -205,10 +200,6 @@ jobs:
       - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
         name: Test hls-hlint-plugin test suite
         run: cabal test ${CABAL_ARGS} hls-hlint-plugin-tests || cabal test ${CABAL_ARGS} hls-hlint-plugin-tests
-
-      - if: matrix.test
-        name: Test hls-module-name-plugin test suite
-        run: cabal test ${CABAL_ARGS} hls-module-name-plugin-tests || cabal test ${CABAL_ARGS} hls-module-name-plugin-tests
 
       - if: matrix.test
         name: Test hls-alternate-number-format-plugin test suite

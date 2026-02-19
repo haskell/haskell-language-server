@@ -24,7 +24,8 @@ import           System.FilePath
 data Opsys
   = Linux Distro
   | Darwin
-  | Windows deriving (Eq)
+  | Windows
+  deriving (Show, Eq)
 
 osName :: Opsys -> String
 osName Darwin    = "mac"
@@ -36,16 +37,16 @@ data Distro
   | Debian11
   | Debian12
   | Debian13
-  | Ubuntu1804
   | Ubuntu2004
   | Ubuntu2204
-  | Mint193
+  | Ubuntu2404
   | Mint202
   | Mint213
+  | Mint222
   | Fedora33
   | Fedora40
   | Rocky8
-  deriving (Eq, Enum, Bounded)
+  deriving (Show, Eq, Enum, Bounded)
 
 allDistros :: [Distro]
 allDistros = [minBound .. maxBound]
@@ -66,13 +67,15 @@ data GHC
   | GHC984
   | GHC9103
   | GHC9122
-  deriving (Eq, Enum, Bounded)
+  | GHC9141
+  deriving (Show, Eq, Ord, Enum, Bounded)
 
 ghcVersion :: GHC -> String
 ghcVersion GHC967  = "9.6.7"
 ghcVersion GHC984  = "9.8.4"
 ghcVersion GHC9103 = "9.10.3"
 ghcVersion GHC9122 = "9.12.2"
+ghcVersion GHC9141 = "9.14.1"
 
 ghcVersionIdent :: GHC -> String
 ghcVersionIdent = filter (/= '.') . ghcVersion
@@ -81,6 +84,7 @@ allGHCs :: [GHC]
 allGHCs = [minBound .. maxBound]
 
 data Stage = Build GHC | Bindist | Test
+    deriving (Show, Eq)
 
 -------------------------------------------------------------------------------
 -- Distro Configuration
@@ -91,12 +95,12 @@ distroImage Debian10   = "debian:10"
 distroImage Debian11   = "debian:11"
 distroImage Debian12   = "debian:12"
 distroImage Debian13   = "debian:13"
-distroImage Ubuntu1804 = "ubuntu:18.04"
 distroImage Ubuntu2004 = "ubuntu:20.04"
 distroImage Ubuntu2204 = "ubuntu:22.04"
-distroImage Mint193    = "linuxmintd/mint19.3-amd64"
+distroImage Ubuntu2404 = "ubuntu:24.04"
 distroImage Mint202    = "linuxmintd/mint20.2-amd64"
 distroImage Mint213    = "linuxmintd/mint21.3-amd64"
+distroImage Mint222    = "linuxmintd/mint22.2-amd64"
 distroImage Fedora33   = "fedora:33"
 distroImage Fedora40   = "fedora:40"
 distroImage Rocky8     = "rockylinux:8"
@@ -106,12 +110,12 @@ distroName Debian10   = "deb10"
 distroName Debian11   = "deb11"
 distroName Debian12   = "deb12"
 distroName Debian13   = "deb13"
-distroName Ubuntu1804 = "ubuntu1804"
 distroName Ubuntu2004 = "ubuntu2004"
 distroName Ubuntu2204 = "ubuntu2204"
-distroName Mint193    = "mint193"
+distroName Ubuntu2404 = "ubuntu2404"
 distroName Mint202    = "mint202"
 distroName Mint213    = "mint213"
+distroName Mint222    = "mint222"
 distroName Fedora33   = "fedora33"
 distroName Fedora40   = "fedora40"
 distroName Rocky8     = "unknown"
@@ -121,12 +125,12 @@ distroInstall Debian10 = "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/
 distroInstall Debian11   = "apt-get update && apt-get install -y"
 distroInstall Debian12   = "apt-get update && apt-get install -y"
 distroInstall Debian13   = "apt-get update && apt-get install -y"
-distroInstall Ubuntu1804 = "apt-get update && apt-get install -y"
 distroInstall Ubuntu2004 = "apt-get update && apt-get install -y"
 distroInstall Ubuntu2204 = "apt-get update && apt-get install -y"
-distroInstall Mint193    = "apt-get update && apt-get install -y"
+distroInstall Ubuntu2404 = "apt-get update && apt-get install -y"
 distroInstall Mint202    = "apt-get update && apt-get install -y"
 distroInstall Mint213    = "apt-get update && apt-get install -y"
+distroInstall Mint222    = "apt-get update && apt-get install -y"
 distroInstall Fedora33   = "dnf install -y"
 distroInstall Fedora40   = "dnf install -y"
 distroInstall Rocky8     = "yum -y install epel-release && yum install -y --allowerasing"
@@ -136,12 +140,12 @@ distroTools Debian10   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev 
 distroTools Debian11   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian12   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Debian13   = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev patchelf"
-distroTools Ubuntu1804 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu2004 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Ubuntu2204 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
-distroTools Mint193    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+distroTools Ubuntu2404 = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev patchelf curl"
 distroTools Mint202    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
 distroTools Mint213    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+distroTools Mint222    = "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev patchelf curl"
 distroTools Fedora33   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 distroTools Fedora40   = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
 distroTools Rocky8     = "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
@@ -185,8 +189,8 @@ envVars arch os = object $
 -- | Runner selection
 runner :: Arch -> Opsys -> [Value]
 runner Amd64 (Linux _)   = ["ubuntu-latest"]
-runner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
-runner Amd64 Darwin      = ["macOS-13"]
+runner AArch64 (Linux _) = ["ubuntu-22.04-arm"]
+runner Amd64 Darwin      = ["macOS-15-intel"]
 runner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 runner Amd64 Windows     = ["windows-latest"]
 runner AArch64 Windows   = error "aarch64 windows not supported"
@@ -195,7 +199,7 @@ runner AArch64 Windows   = error "aarch64 windows not supported"
 bindistRunner :: Arch -> Opsys -> [Value]
 bindistRunner Amd64 (Linux _)   = ["self-hosted", "linux-space", "maerwald"]
 bindistRunner AArch64 (Linux _) = ["self-hosted", "Linux", "ARM64", "maerwald"]
-bindistRunner Amd64 Darwin      = ["macOS-13"]
+bindistRunner Amd64 Darwin      = ["macOS-15-intel"]
 bindistRunner AArch64 Darwin    = ["self-hosted", "macOS", "ARM64"]
 bindistRunner Amd64 Windows     = ["windows-latest"]
 bindistRunner AArch64 Windows   = error "aarch64 windows not supported"
@@ -392,7 +396,7 @@ buildJob arch os v =
           | Windows <- os = "./out/*"
           | otherwise = ("out-"++art++"-"++ghcVersion v++".tar")
         buildStep Amd64 (Linux d) = [customAction d (Build v)]
-        buildStep AArch64 (Linux Ubuntu2004) =
+        buildStep AArch64 (Linux Ubuntu2204) =
           [ ghAction "Build aarch64-linux binaries" "docker://hasufell/arm64v8-ubuntu-haskell:focal"
               [ "args" .= str "bash .github/scripts/build.sh" ]
               [ "GHC_VERSION" .= ghcVersion v ]
@@ -400,7 +404,7 @@ buildJob arch os v =
               [ "args" .= str "bash .github/scripts/tar.sh" ]
               [ "GHC_VERSION" .= ghcVersion v ]
           ]
-        buildStep AArch64 (Linux _) = error "aarch64-linux non-ubuntu not supported"
+        buildStep AArch64 (Linux d) = error $ "aarch64-linux non-ubuntu " ++ show d ++ " not supported"
 
         buildStep Amd64 Darwin = [ghRun "Run build" "sh" ["GHC_VERSION" .= ghcVersion v] $ unlines $
           [ "brew install coreutils tree"
@@ -447,7 +451,7 @@ mkBindistJob arch os vs =
           | otherwise = "./"
 
         bindistStep Amd64 (Linux d) = [customAction d Bindist]
-        bindistStep AArch64 (Linux Ubuntu2004) =
+        bindistStep AArch64 (Linux Ubuntu2204) =
           [ ghAction "Unpack aarch64-linux binaries" "docker://hasufell/arm64v8-ubuntu-haskell:focal"
               [ "args" .= str "bash .github/scripts/untar.sh" ]
               [ ]
@@ -510,7 +514,7 @@ mkTestJob arch os =
   where thisEnv = envVars arch os
 
         testStep Amd64 (Linux d) = [customAction d Test]
-        testStep AArch64 (Linux Ubuntu2004) =
+        testStep AArch64 (Linux Ubuntu2204) =
           [ ghAction "Run test" "docker://hasufell/arm64v8-ubuntu-haskell:focal"
               [ "args" .= str "bash .github/scripts/test.sh" ]
               [ ]
@@ -555,7 +559,7 @@ ciConfigs =
   [ MkConfig Amd64 Darwin allGHCs
   , MkConfig AArch64 Darwin allGHCs
   , MkConfig Amd64 Windows allGHCs
-  , MkConfig AArch64 (Linux Ubuntu2004) allGHCs]
+  , MkConfig AArch64 (Linux Ubuntu2204) allGHCs]
   ++ [ MkConfig Amd64 (Linux distro) allGHCs | distro <- allDistros ]
 
 main :: IO ()
@@ -607,7 +611,7 @@ checkoutAction :: Value
 checkoutAction = ghAction "Checkout" "actions/checkout@v4" [] []
 
 uploadArtifacts :: String -> String -> Value
-uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v4"
+uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v6"
   [ "if-no-files-found" .= str "error"
   , "retention-days" .= (2 :: Int)
   , "name" .= name
@@ -615,4 +619,4 @@ uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@
   ] []
 
 downloadArtifacts :: String -> String -> Value
-downloadArtifacts name path = ghAction "Download artifacts" "actions/download-artifact@v4" [ "name" .= name, "path" .= path ] []
+downloadArtifacts name path = ghAction "Download artifacts" "actions/download-artifact@v7" [ "name" .= name, "path" .= path ] []

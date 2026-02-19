@@ -197,7 +197,6 @@ instance Default Config where
     { checkParents                = CheckOnSave
     , checkProject                = True
     , formattingProvider          = "ormolu"
-    -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
     , cabalFormattingProvider     = "cabal-gild"
     -- , cabalFormattingProvider     = "cabal-fmt"

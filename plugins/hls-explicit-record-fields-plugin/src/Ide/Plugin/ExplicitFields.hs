@@ -19,10 +19,12 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (ToJSON (toJSON))
+import           Data.Function                        (on)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, extQ, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
-import           Data.List                            (find, intersperse)
+import           Data.List                            (find, intersperse,
+                                                       sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
@@ -54,19 +56,22 @@ import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        GenLocated (L), GhcPass,
                                                        GhcTc,
                                                        HasSrcSpan (getLoc),
+                                                       HsBindLR (..),
                                                        HsConDetails (RecCon),
                                                        HsExpr (HsApp, HsVar, XExpr),
                                                        HsFieldBind (hfbLHS),
                                                        HsRecFields (..),
-                                                       HsWrap (HsWrap), LPat,
-                                                       Located,
+                                                       HsWrap (HsWrap), LHsBind,
+                                                       LPat, Located,
+                                                       MatchGroup (..),
+                                                       MatchGroupTc (..),
                                                        NamedThing (getName),
                                                        Outputable,
                                                        TcGblEnv (tcg_binds),
                                                        Var (varName),
                                                        XXExprGhcTc (..),
                                                        conLikeFieldLabels,
-                                                       nameSrcSpan,
+                                                       isGenerated, nameSrcSpan,
                                                        pprNameUnqualified,
                                                        recDotDot, unLoc)
 import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns),
@@ -99,6 +104,7 @@ import           Ide.Plugin.Error                     (PluginError (PluginIntern
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
+import           Ide.PluginUtils                      (subRange)
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
@@ -149,25 +155,45 @@ descriptor recorder plId =
   , pluginRules = collectRecordsRule recorder *> collectNamesRule
   }
 
+data RecordConversionType
+  = RecordWildcardExpansion
+  | RecordTraditionalSyntaxConversion
+
+data RecordConversion =
+  RecordConversion
+    Int -- ^ uid
+    RecordConversionType
+
+-- | Given a record, determine whether it is a case of wildcard expansion
+-- or a conversion to the traditional record syntax.
+getConversionType :: RecordInfo -> Maybe RecordConversionType
+getConversionType = \case
+  -- Only fully saturated constructor applications can be converted to
+  -- the record syntax through the code action
+  RecordInfoApp _ (RecordAppExpr Unsaturated _ _) -> Nothing
+  RecordInfoApp {} -> Just RecordTraditionalSyntaxConversion
+  _ -> Just RecordWildcardExpansion
+
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
   CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let recordUids = [ uid
+  let recordsWithUid = [ (RecordConversion uid conversionType, record)
                       | uid <- RangeMap.filterByRange range crCodeActions
                       , Just record <- [IntMap.lookup uid crCodeActionResolve]
-                      -- Only fully saturated constructor applications can be
-                      -- converted to the record syntax through the code action
-                      , isConvertible record
+                      , Just conversionType <- [getConversionType record]
                       ]
-  let actions = map (mkCodeAction enabledExtensions) recordUids
-  pure $ InL actions
+      recordsOnly = map snd recordsWithUid
+      sortedRecords = sortOn (recordDepth recordsOnly . snd) recordsWithUid
+  pure $ InL $ case sortedRecords of
+    (top : _) -> [mkCodeAction enabledExtensions (fst top)]
+    []        -> []
   where
-    mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
-    mkCodeAction exts uid = InR CodeAction
-      { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
+    mkCodeAction :: [Extension] -> RecordConversion -> Command |? CodeAction
+    mkCodeAction exts (RecordConversion uid conversionType) = InR CodeAction
+      { _title = mkTitle exts conversionType
       , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
       , _isPreferred = Nothing
@@ -176,11 +202,6 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
       , _command = Nothing
       , _data_ = Just $ toJSON uid
       }
-
-    isConvertible :: RecordInfo -> Bool
-    isConvertible = \case
-      RecordInfoApp _ (RecordAppExpr Unsaturated _ _) -> False
-      _ -> True
 
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
@@ -246,7 +267,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                           , _label = InR label
                           , _kind = Nothing -- neither a type nor a parameter
                           , _textEdits = Just textEdits -- same as CodeAction
-                          , _tooltip = Just $ InL (mkTitle enabledExtensions) -- same as CodeAction
+                          , _tooltip = Just $ InL (mkTitle enabledExtensions RecordWildcardExpansion) -- same as CodeAction
                           , _paddingLeft = Just True -- padding after dotdot
                           , _paddingRight = Nothing
                           , _data_ = Nothing
@@ -266,9 +287,12 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
     pure $ InL (concatMap (mkInlayHints nameMap pm) records)
    where
      mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ _ fla)) =
-       let textEdits = renderRecordInfoAsTextEdit nameMap record
-       in mapMaybe (mkInlayHint textEdits pm) fla
+     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr sat _ fla)) =
+       -- Only create inlay hints for fully saturated constructors
+       case sat of
+         Saturated -> let textEdits = renderRecordInfoAsTextEdit nameMap record
+                      in mapMaybe (mkInlayHint textEdits pm) fla
+         Unsaturated -> []
      mkInlayHints _ _ _ = []
 
      mkInlayHint :: Maybe TextEdit -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
@@ -282,7 +306,7 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _label = InR $ pure (mkInlayHintLabelPart name fieldDefLoc)
                         , _kind = Nothing -- neither a type nor a parameter
                         , _textEdits = Just (maybeToList te) -- same as CodeAction
-                        , _tooltip = Just $ InL "Expand positional record" -- same as CodeAction
+                        , _tooltip = Just $ InL (mkTitle [] RecordTraditionalSyntaxConversion) -- same as CodeAction
                         , _paddingLeft = Nothing
                         , _paddingRight = Nothing
                         , _data_ = Nothing
@@ -290,12 +314,22 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
 
      mkInlayHintLabelPart name loc = InlayHintLabelPart (printFieldName (pprNameUnqualified name) <> "=") Nothing loc Nothing
 
-mkTitle :: [Extension] -> Text
-mkTitle exts = "Expand record wildcard"
-                <> if NamedFieldPuns `elem` exts
-                   then mempty
-                   else " (needs extension: NamedFieldPuns)"
+mkTitle :: [Extension] -> RecordConversionType -> Text
+mkTitle exts = \case
+  RecordWildcardExpansion ->
+    "Expand record wildcard"
+      <> if NamedFieldPuns `elem` exts
+         then mempty
+         else " (needs extension: NamedFieldPuns)"
+  RecordTraditionalSyntaxConversion ->
+    "Convert to traditional record syntax"
 
+-- Calculate the nesting depth of a record by counting how many other records
+-- contain it. Used to prioritize more deeply nested records in code actions.
+recordDepth :: [RecordInfo] -> RecordInfo -> Int
+recordDepth allRecords record =
+  let isSubrangeOf = subRange `on` recordInfoToRange
+  in length $ filter (`isSubrangeOf` record) allRecords
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts
@@ -565,7 +599,15 @@ showRecordApp (RecordAppExpr _ recConstr fla)
   where showFieldWithArg (field, arg) = printFieldName field <> " = " <> printOutputable arg
 
 collectRecords :: GenericQ [RecordInfo]
-collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` getRecCons)
+collectRecords = everythingBut (<>) (([], False) `mkQ` ignoreGenerated `extQ` getRecPatterns `extQ` getRecCons)
+
+-- | Prevent the SYB traversal to descend further if the matching group
+-- in question is compiler-generated (e.g. TH, deriving). Doing so is necessary
+-- in order to not create inlay hints for TH-generated records.
+ignoreGenerated :: LHsBind GhcTc -> ([RecordInfo], Bool)
+ignoreGenerated (unLoc -> FunBind _ _ (MG (MatchGroupTc _ _ origin) _))
+  | isGenerated origin = ([], True)
+ignoreGenerated _ = ([], False)
 
 -- | Collect 'Name's into a map, indexed by the names' unique identifiers.
 -- The 'Eq' instance of 'Name's makes use of their unique identifiers, hence
@@ -602,7 +644,11 @@ getRecCons e@(unLoc -> RecordCon _ _ flds)
 getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
   let fieldss = maybeToList $ getFields app []
       recInfo = concatMap mkRecInfo fieldss
-  in (recInfo, not (null recInfo))
+  -- Search control for positional constructors.
+  -- True stops further (nested) searching; False allows recursive search.
+  -- Currently hardcoded to False to enable nested positional searches.
+  -- Use `in (recInfo, not (null recInfo))` to disable nested searching.
+  in (recInfo, False)
   where
     mkRecInfo :: RecordAppExpr -> [RecordInfo]
     mkRecInfo appExpr =

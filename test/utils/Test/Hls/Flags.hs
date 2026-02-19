@@ -17,14 +17,6 @@ requiresEvalPlugin            = ignoreTestBecause "Eval plugin disabled"
 #endif
 
 -- * Formatters
--- | Disable test unless the floskell flag is set
-requiresFloskellPlugin        :: TestTree -> TestTree
-#if hls_floskell
-requiresFloskellPlugin        = id
-#else
-requiresFloskellPlugin        = ignoreTestBecause "Floskell plugin disabled"
-#endif
-
 -- | Disable test unless the fourmolu flag is set
 requiresFourmoluPlugin        :: TestTree -> TestTree
 #if hls_fourmolu
