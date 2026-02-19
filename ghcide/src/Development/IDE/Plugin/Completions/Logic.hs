@@ -299,7 +299,7 @@ fromIdentInfo doc identInfo@IdentInfo{..} q = CI
   , label=rend
   , typeText = Nothing
   , isInfix=Nothing
-  , isTypeCompl= not (isDatacon identInfo) && (case T.uncons rend of Just (c, _) -> isUpper c; Nothing -> False)
+  , isTypeCompl= not (isDatacon identInfo) && isUpper (T.head rend)
   , additionalTextEdits= Just $
         ExtendImport
           { doc,

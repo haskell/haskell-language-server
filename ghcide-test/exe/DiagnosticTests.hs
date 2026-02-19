@@ -394,7 +394,6 @@ tests = testGroup "diagnostics"
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
           liftIO $ fileUri @?= uriB
-          liftIO $ assertBool "Expected at least one diagnostic" (not (null diags))
           let msg :: T.Text = head diags ^. L.message
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)

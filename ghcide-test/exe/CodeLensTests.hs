@@ -79,9 +79,7 @@ addSigLensesTests =
         if isJust $ expected spec
           then do
             liftIO $ length codeLenses == 1 @? "Expected 1 code lens, but got: " <> show codeLenses
-            case codeLenses of
-              (cl:_) -> executeCommand $ fromJust $ cl ^. L.command
-              []     -> liftIO $ assertFailure "No code lenses found"
+            executeCommand $ fromJust $ head codeLenses ^. L.command
             modifiedCode <- skipManyTill anyMessage (getDocumentEdit doc)
             liftIO $ expectedCode @=? modifiedCode
           else liftIO $ null codeLenses @? "Expected no code lens, but got: " <> show codeLenses

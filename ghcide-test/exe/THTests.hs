@@ -120,16 +120,18 @@ tests =
                     ]
                 sourceB =
                   T.unlines
-                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    [ "{-# OPTIONS_GHC -Wall #-}"
+                    , "{-# LANGUAGE ExplicitLevelImports #-}"
                     , "{-# LANGUAGE TemplateHaskell #-}"
                     , "module B where"
                     , "import splice A (a)"
                     , "b :: Int"
                     , "b = $a"
+                    , "dummy = 5 :: Int"
                     ]
             _ <- createDoc "A.hs" "haskell" sourceA
             _ <- createDoc "B.hs" "haskell" sourceB
-            expectNoMoreDiagnostics 5
+            expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Warning, (7, 0), "Top-level binding with no type signature: dummy :: Int", Just "GHC-38417")] ) ]
         , testWithDummyPluginEmpty "ExplicitLevelImports-dual-import" $ do
             let sourceM =
                   T.unlines
@@ -141,17 +143,19 @@ tests =
                     ]
                 sourceC =
                   T.unlines
-                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    [ "{-# OPTIONS_GHC -Wall #-}"
+                    , "{-# LANGUAGE ExplicitLevelImports #-}"
                     , "{-# LANGUAGE TemplateHaskell #-}"
                     , "module C where"
                     , "import splice M (m)"
                     , "import M (m)" -- Normal import alongside splice import
                     , "c :: Int"
                     , "c = $m"
+                    , "dummy = 5 :: Int"
                     ]
             _ <- createDoc "M.hs" "haskell" sourceM
             _ <- createDoc "C.hs" "haskell" sourceC
-            expectNoMoreDiagnostics 5
+            expectDiagnostics [ ( "C.hs", [(DiagnosticSeverity_Warning, (8, 0), "Top-level binding with no type signature: dummy :: Int", Just "GHC-38417")] ) ]
         , testWithDummyPluginEmpty "ExplicitLevelImports-redundant-mix" $ do
             let sourceM =
                   T.unlines
@@ -163,7 +167,8 @@ tests =
                     ]
                 sourceD =
                   T.unlines
-                    [ "{-# LANGUAGE ExplicitLevelImports #-}"
+                    [ "{-# OPTIONS_GHC -Wall #-}"
+                    , "{-# LANGUAGE ExplicitLevelImports #-}"
                     , "{-# LANGUAGE TemplateHaskell #-}"
                     , "module D where"
                     , "import splice M"
@@ -171,10 +176,11 @@ tests =
                     , "import splice M" -- Redundant splice import
                     , "d :: Int"
                     , "d = $m"
+                    , "dummy = 5 :: Int"
                     ]
             _ <- createDoc "M.hs" "haskell" sourceM
             _ <- createDoc "D.hs" "haskell" sourceD
-            expectNoMoreDiagnostics 5
+            expectDiagnostics [ ( "D.hs", [(DiagnosticSeverity_Warning, (9, 0), "Top-level binding with no type signature: dummy :: Int", Just "GHC-38417")] ) ]
         , testWithDummyPluginEmpty "ExplicitLevelImports-transitive" $ do
             let sourceBase =
                   T.unlines
@@ -195,15 +201,17 @@ tests =
                     ]
                 sourceConsumer =
                   T.unlines
-                    [ "module Consumer where"
+                    [ "{-# OPTIONS_GHC -Wall #-}"
+                    , "module Consumer where"
                     , "import Intermediate" -- Normal import here
                     , "cons :: Int"
                     , "cons = interVal"
+                    , "dummy = 5 :: Int"
                     ]
             _ <- createDoc "BaseTH.hs" "haskell" sourceBase
             _ <- createDoc "Intermediate.hs" "haskell" sourceInter
             _ <- createDoc "Consumer.hs" "haskell" sourceConsumer
-            expectNoMoreDiagnostics 5
+            expectDiagnostics [ ( "Consumer.hs", [(DiagnosticSeverity_Warning, (5, 0), "Top-level binding with no type signature: dummy :: Int", Just "GHC-38417")] ) ]
         ]
        else []
 
