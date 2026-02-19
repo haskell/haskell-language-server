@@ -964,7 +964,7 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
+suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
@@ -992,6 +992,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             Just ident <- lookupExportMap binding mod
           = [ ( "Add " <> renderImportStyle importStyle <> " to the import list of " <> mod
               , quickFixImportKind' "extend" importStyle
+              , True
               , uncurry extendImport (unImportStyle importStyle) decl
               )
             | importStyle <- NE.toList $ importStyles ident
@@ -1434,7 +1435,7 @@ removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagno
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1454,6 +1455,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
           Just decl ->
             [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleText,
                 quickFixImportKind' "extend" style,
+                True,
                 [Right $ uncurry extendImport (unImportStyle style) decl]
               )
               | style <- importStyle
@@ -1462,7 +1464,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
           _
             | Just (range, indent) <- newImportInsertRange ps fileContents
             ->
-             (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
+             (\(kind, unNewImport -> x) -> (x, kind, True, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
             [ (quickFixImportKind' "new" style, newUnqualImport moduleText rendered False)
               | style <- importStyle,
                 let rendered = renderImportStyle style
@@ -1471,7 +1473,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             | otherwise -> []
         where moduleText = moduleNameText identInfo
 
-suggestNewImport :: DynFlags -> ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestNewImport :: DynFlags -> ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, TextEdit)]
 suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
@@ -1491,7 +1493,7 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   = let qis = qualifiedImportStyle df
         suggestions = nubSortBy simpleCompareImportSuggestion
           (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
-    map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
+    map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, True, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     L _ HsModule {..} = ps
 suggestNewImport _ _ _ _ _ = []
