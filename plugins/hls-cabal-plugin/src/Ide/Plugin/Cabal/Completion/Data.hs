@@ -181,7 +181,7 @@ libExecTestBenchCommons st =
       ("hs-source-dirs:", directoryCompleter),
       ("default-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
       ("other-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
-      ("default-language:", constantCompleter ["GHC2021", "Haskell2010", "Haskell98"]),
+      ("default-language:", defaultLanguageCompleter),
       ("other-languages:", noopCompleter),
       ("build-tool-depends:", noopCompleter),
       ("buildable:", constantCompleter ["True", "False"]),
@@ -243,7 +243,7 @@ customSetupFields =
     [ ("setup-depends:", noopCompleter)
     , ("build-depends:", noopCompleter)
     , ("build-tools:", noopCompleter)
-    , ("default-language:", constantCompleter ["GHC2021", "Haskell2010", "Haskell98"])
+    , ("default-language:", defaultLanguageCompleter)
     ]
 
 -- | Returns all possible language extensions including disabled ones.
@@ -258,6 +258,10 @@ allExtensions =
           else [EnableExtension e]
     )
     knownExtensions
+
+-- | Returns all possible default languages
+defaultLanguageCompleter :: Completer
+defaultLanguageCompleter = constantCompleter $ map (T.pack . prettyShow) knownLanguages
 
 -- | Contains a map of the most commonly used licenses, weighted by their popularity.
 --
@@ -319,3 +323,4 @@ weightedLicenseNames =
 
 ghcOptions :: [T.Text]
 ghcOptions = map T.pack $ flagsForCompletion False
+
