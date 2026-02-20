@@ -593,10 +593,14 @@ library hls-rename-plugin
   import:           defaults, pedantic, warnings
   if !flag(rename)
     buildable: False
-  exposed-modules:  Ide.Plugin.Rename
+  exposed-modules:
+    Ide.Plugin.Rename
+    Ide.Plugin.Rename.ModuleName
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
+    , aeson
     , containers
+    , filepath
     , ghc
     , ghcide                == 2.13.0.0
     , hashable
@@ -609,6 +613,7 @@ library hls-rename-plugin
     , mod
     , syb
     , text
+    , text-rope
     , transformers
     , unordered-containers
 
@@ -901,50 +906,6 @@ test-suite hls-signature-help-plugin-tests
   default-extensions:
     DerivingStrategies
     OverloadedStrings
-
------------------------------
--- module name plugin
------------------------------
-
-flag moduleName
-  description: Enable moduleName plugin
-  default:     True
-  manual:      True
-
-common moduleName
-  if flag(moduleName)
-    build-depends: haskell-language-server:hls-module-name-plugin
-    cpp-options: -Dhls_moduleName
-
-library hls-module-name-plugin
-  import:           defaults, pedantic, warnings
-  if !flag(modulename)
-    buildable: False
-  exposed-modules:  Ide.Plugin.ModuleName
-  hs-source-dirs:   plugins/hls-module-name-plugin/src
-  build-depends:
-    , aeson
-    , containers
-    , filepath
-    , ghcide                == 2.13.0.0
-    , hls-plugin-api        == 2.13.0.0
-    , lsp
-    , text
-    , text-rope
-    , transformers
-
-
-test-suite hls-module-name-plugin-tests
-  import:           defaults, pedantic, test-defaults, warnings
-  if !flag(modulename)
-    buildable: False
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   plugins/hls-module-name-plugin/test
-  main-is:          Main.hs
-  build-depends:
-    , filepath
-    , haskell-language-server:hls-module-name-plugin
-    , hls-test-utils          == 2.13.0.0
 
 -----------------------------
 -- pragmas plugin
@@ -1889,7 +1850,6 @@ library
                   , hlint
                   , stan
                   , signatureHelp
-                  , moduleName
                   , pragmas
                   , splice
                   , alternateNumberFormat
