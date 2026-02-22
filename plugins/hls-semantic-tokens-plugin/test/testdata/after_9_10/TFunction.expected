@@ -1,12 +1,21 @@
-1:8-17 TModule "TFunction"
-3:1-2 TFunction "f"
-3:13-14 TTypeVariable "a"
-3:16-17 TTypeVariable "a"
-3:21-22 TTypeVariable "a"
-4:1-2 TFunction "f"
-4:3-4 TVariable "x"
-4:7-8 TVariable "x"
-6:1-2 TVariable "x"
-6:6-7 TTypeVariable "a"
-7:1-2 TVariable "x"
-7:5-14 TVariable "undefined"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-17 HsSemanticTokenType TModule "TFunction"]
+[1:18-23 HsSyntacticTokenType TKeyword "where"]
+[3:1-2 HsSemanticTokenType TFunction "f"]
+[3:3-5 HsSyntacticTokenType TKeyword "::"]
+[3:6-12 HsSyntacticTokenType TKeyword "forall"]
+[3:13-14 HsSemanticTokenType TTypeVariable "a"]
+[3:14-15 HsSyntacticTokenType TKeyword "."]
+[3:16-17 HsSemanticTokenType TTypeVariable "a"]
+[3:18-20 HsSyntacticTokenType TKeyword "->"]
+[3:21-22 HsSemanticTokenType TTypeVariable "a"]
+[4:1-2 HsSemanticTokenType TFunction "f"]
+[4:3-4 HsSemanticTokenType TVariable "x"]
+[4:5-6 HsSyntacticTokenType TKeyword "="]
+[4:7-8 HsSemanticTokenType TVariable "x"]
+[6:1-2 HsSemanticTokenType TVariable "x"]
+[6:3-5 HsSyntacticTokenType TKeyword "::"]
+[6:6-7 HsSemanticTokenType TTypeVariable "a"]
+[7:1-2 HsSemanticTokenType TVariable "x"]
+[7:3-4 HsSyntacticTokenType TKeyword "="]
+[7:5-14 HsSemanticTokenType TVariable "undefined"]

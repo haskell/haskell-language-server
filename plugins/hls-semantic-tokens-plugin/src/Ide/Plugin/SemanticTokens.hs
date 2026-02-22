@@ -15,10 +15,10 @@ descriptor recorder plId =
     { Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentSemanticTokensFull (Internal.semanticTokensFull recorder)
         <> mkPluginHandler SMethod_TextDocumentSemanticTokensFullDelta (Internal.semanticTokensFullDelta recorder),
-      Ide.Types.pluginRules = Internal.getSemanticTokensRule recorder,
+      Ide.Types.pluginRules = Internal.getSemanticTokensRule recorder <> Internal.getSyntacticTokensRule recorder,
       pluginConfigDescriptor =
         defaultConfigDescriptor
-          { configInitialGenericConfig = (configInitialGenericConfig defaultConfigDescriptor) {plcGlobalOn = False}
+          { configInitialGenericConfig = (configInitialGenericConfig defaultConfigDescriptor) {plcGlobalOn = True}
           , configCustomConfig = mkCustomConfig Internal.semanticConfigProperties
           }
     }

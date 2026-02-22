@@ -1,6 +1,15 @@
-1:8-20 TModule "TFunctionLet"
-3:1-2 TVariable "y"
-3:6-9 TTypeConstructor "Int"
-4:1-2 TVariable "y"
-4:9-10 TFunction "f"
-4:11-12 TVariable "x"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-20 HsSemanticTokenType TModule "TFunctionLet"]
+[1:21-26 HsSyntacticTokenType TKeyword "where"]
+[3:1-2 HsSemanticTokenType TVariable "y"]
+[3:3-5 HsSyntacticTokenType TKeyword "::"]
+[3:6-9 HsSemanticTokenType TTypeConstructor "Int"]
+[4:1-2 HsSemanticTokenType TVariable "y"]
+[4:3-4 HsSyntacticTokenType TKeyword "="]
+[4:5-8 HsSyntacticTokenType TKeyword "let"]
+[4:9-10 HsSemanticTokenType TFunction "f"]
+[4:11-12 HsSemanticTokenType TVariable "x"]
+[4:13-14 HsSyntacticTokenType TKeyword "="]
+[4:15-16 HsSyntacticTokenType TNumberLit "1"]
+[4:17-19 HsSyntacticTokenType TKeyword "in"]
+[4:20-21 HsSyntacticTokenType TNumberLit "1"]

@@ -1,4 +1,9 @@
-3:6-9 TTypeConstructor "Foo"
-3:12-15 TDataConstructor "Foo"
-3:16-19 TTypeConstructor "Int"
-3:30-32 TClass "Eq"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:18-23 HsSyntacticTokenType TKeyword "where"]
+[3:1-5 HsSyntacticTokenType TKeyword "data"]
+[3:6-9 HsSemanticTokenType TTypeConstructor "Foo"]
+[3:10-11 HsSyntacticTokenType TKeyword "="]
+[3:12-15 HsSemanticTokenType TDataConstructor "Foo"]
+[3:16-19 HsSemanticTokenType TTypeConstructor "Int"]
+[3:20-28 HsSyntacticTokenType TKeyword "deriving"]
+[3:30-32 HsSemanticTokenType TClass "Eq"]

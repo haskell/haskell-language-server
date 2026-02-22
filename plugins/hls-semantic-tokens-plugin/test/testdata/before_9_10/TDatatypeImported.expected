@@ -1,5 +1,11 @@
-3:8-17 TModule "System.IO"
-5:1-3 TVariable "go"
-5:7-9 TTypeConstructor "IO"
-6:1-3 TVariable "go"
-6:6-11 TFunction "print"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:26-31 HsSyntacticTokenType TKeyword "where"]
+[3:1-7 HsSyntacticTokenType TKeyword "import"]
+[3:8-17 HsSemanticTokenType TModule "System.IO"]
+[5:1-3 HsSemanticTokenType TVariable "go"]
+[5:4-6 HsSyntacticTokenType TKeyword "::"]
+[5:7-9 HsSemanticTokenType TTypeConstructor "IO"]
+[6:1-3 HsSemanticTokenType TVariable "go"]
+[6:4-5 HsSyntacticTokenType TKeyword "="]
+[6:6-11 HsSemanticTokenType TFunction "print"]
+[6:12-13 HsSyntacticTokenType TNumberLit "1"]

@@ -1,13 +1,37 @@
-1:8-22 TModule "TQualifiedName"
-3:18-27 TModule "Data.List"
-6:1-2 TVariable "a"
-6:5-13 TModule "Prelude."
-6:13-22 TVariable "undefined"
-7:1-2 TVariable "b"
-7:8-18 TModule "Data.List."
-7:18-22 TClassMethod "elem"
-8:1-2 TVariable "c"
-8:6-14 TModule "Prelude."
-8:14-15 TOperator "+"
-9:1-2 TVariable "d"
-9:6-7 TOperator "+"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-22 HsSemanticTokenType TModule "TQualifiedName"]
+[1:23-28 HsSyntacticTokenType TKeyword "where"]
+[3:1-7 HsSyntacticTokenType TKeyword "import"]
+[3:8-17 HsSyntacticTokenType TKeyword "qualified"]
+[3:18-27 HsSemanticTokenType TModule "Data.List"]
+[6:1-2 HsSemanticTokenType TVariable "a"]
+[6:3-4 HsSyntacticTokenType TKeyword "="]
+[6:5-13 HsSemanticTokenType TModule "Prelude."]
+[6:13-22 HsSemanticTokenType TVariable "undefined"]
+[7:1-2 HsSemanticTokenType TVariable "b"]
+[7:3-4 HsSyntacticTokenType TKeyword "="]
+[7:5-6 HsSyntacticTokenType TNumberLit "1"]
+[7:7-8 HsSyntacticTokenType TKeyword "`"]
+[7:8-18 HsSemanticTokenType TModule "Data.List."]
+[7:18-22 HsSemanticTokenType TClassMethod "elem"]
+[7:22-23 HsSyntacticTokenType TKeyword "`"]
+[7:24-25 HsSyntacticTokenType TKeyword "["]
+[7:25-26 HsSyntacticTokenType TNumberLit "1"]
+[7:26-27 HsSyntacticTokenType TKeyword ","]
+[7:28-29 HsSyntacticTokenType TNumberLit "2"]
+[7:29-30 HsSyntacticTokenType TKeyword "]"]
+[8:1-2 HsSemanticTokenType TVariable "c"]
+[8:3-4 HsSyntacticTokenType TKeyword "="]
+[8:5-6 HsSyntacticTokenType TKeyword "("]
+[8:6-14 HsSemanticTokenType TModule "Prelude."]
+[8:14-15 HsSemanticTokenType TOperator "+"]
+[8:15-16 HsSyntacticTokenType TKeyword ")"]
+[8:17-18 HsSyntacticTokenType TNumberLit "1"]
+[8:19-20 HsSyntacticTokenType TNumberLit "1"]
+[9:1-2 HsSemanticTokenType TVariable "d"]
+[9:3-4 HsSyntacticTokenType TKeyword "="]
+[9:5-6 HsSyntacticTokenType TKeyword "("]
+[9:6-7 HsSemanticTokenType TOperator "+"]
+[9:7-8 HsSyntacticTokenType TKeyword ")"]
+[9:9-10 HsSyntacticTokenType TNumberLit "1"]
+[9:11-12 HsSyntacticTokenType TNumberLit "1"]

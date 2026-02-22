@@ -1,6 +1,10 @@
-3:1-2 TVariable "x"
-3:7-9 TClass "Eq"
-3:10-11 TTypeVariable "a"
-3:16-17 TTypeVariable "a"
-4:1-2 TVariable "x"
-4:5-14 TVariable "undefined"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:36-41 HsSyntacticTokenType TKeyword "where"]
+[3:1-2 HsSemanticTokenType TVariable "x"]
+[3:3-5 HsSyntacticTokenType TKeyword "::"]
+[3:7-9 HsSemanticTokenType TClass "Eq"]
+[3:10-11 HsSemanticTokenType TTypeVariable "a"]
+[3:16-17 HsSemanticTokenType TTypeVariable "a"]
+[4:1-2 HsSemanticTokenType TVariable "x"]
+[4:3-4 HsSyntacticTokenType TKeyword "="]
+[4:5-14 HsSemanticTokenType TVariable "undefined"]
