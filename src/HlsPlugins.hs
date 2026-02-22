@@ -31,11 +31,13 @@ import qualified Ide.Plugin.Class                  as Class
 import qualified Ide.Plugin.Eval                   as Eval
 #endif
 
+#if hls_render
+import qualified Ide.Plugin.Render                 as Render
+#endif
+
 #if hls_importLens
 import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
-
-
 
 #if hls_rename
 import qualified Ide.Plugin.Rename                 as Rename
@@ -195,6 +197,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_render
+      let pId = "render" in Render.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_importLens
       let pId = "importLens" in ExplicitImports.descriptor (pluginRecorder pId) pId:
