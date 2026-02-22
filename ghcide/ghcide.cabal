@@ -82,8 +82,8 @@ library
     , lens
     , lens-aeson
     , list-t
-    , lsp                          ^>=2.7
-    , lsp-types                    ^>=2.3
+    , lsp                          ^>=2.8.0.0
+    , lsp-types                    ^>=2.4.0.0
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative

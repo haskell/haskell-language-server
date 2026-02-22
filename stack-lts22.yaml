@@ -22,9 +22,9 @@ extra-deps:
   - hie-bios-0.17.0
   - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
-  - lsp-2.7.0.0
-  - lsp-test-0.17.1.0
-  - lsp-types-2.3.0.0
+  - lsp-2.8.0.0
+  - lsp-test-0.18.0.0
+  - lsp-types-2.4.0.0
   - monad-dijkstra-0.1.1.4 # 5
   - retrie-1.2.3
   - unordered-containers-0.2.21

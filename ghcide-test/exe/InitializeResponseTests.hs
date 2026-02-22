@@ -55,7 +55,14 @@ tests = withResource acquire release tests where
                                                                            { _supported = Just True
                                                                            , _changeNotifications = Just (InR True)
                                                                            }
-                                                                      , _fileOperations = Nothing
+                                                                      , _fileOperations = Just FileOperationOptions
+                                                                          { _didCreate = Nothing
+                                                                          , _willCreate = Nothing
+                                                                          , _didRename = Nothing
+                                                                          , _willRename = Nothing
+                                                                          , _didDelete = Nothing
+                                                                          , _willDelete = Nothing
+                                                                          }
                                                                       })
     , chk "NO experimental"             (^. L.experimental) Nothing
     ] where
@@ -89,4 +96,3 @@ tests = withResource acquire release tests where
 
   release :: TResponseMessage Method_Initialize -> IO ()
   release = mempty
-
