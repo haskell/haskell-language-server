@@ -71,7 +71,7 @@ suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId "Provides a
 -- | Title and pragma
 type PragmaEdit = (T.Text, Pragma)
 
-data Pragma = LangExt T.Text | OptGHC T.Text
+data Pragma = LangExt T.Text |LangExtLower T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
 suggestPragmaProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
@@ -122,8 +122,9 @@ pragmaEditToAction :: Uri -> Pragmas.NextPragmaInfo -> PragmaEdit -> (LSP.Comman
 pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } (title, p) =
   LSP.InR $ LSP.CodeAction title (Just LSP.CodeActionKind_QuickFix) (Just []) Nothing Nothing (Just edit) Nothing Nothing
   where
-    render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
-    render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
+    render (OptGHC x)       = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
+    render (LangExt x)      = "{-# LANGUAGE " <> x <> " #-}\n"
+    render (LangExtLower x) = "{-# language " <> x <> " #-}\n"
     pragmaInsertPosition = Position (fromIntegral nextPragmaLine) 0
     pragmaInsertRange = Range pragmaInsertPosition pragmaInsertPosition
     -- workaround the fact that for some reason lsp-test applies text
@@ -164,7 +165,7 @@ warningBlacklist =
 
 -- | Offer to add a missing Language Pragma to the top of a file.
 suggestAddPragma :: Maybe DynFlags -> FileDiagnostic -> [PragmaEdit]
-suggestAddPragma mDynflags fd= [("Add \"" <> r <> "\"", LangExt r) | r <- map (T.pack . show) $ suggestsExtension fd, r `notElem` disabled]
+suggestAddPragma mDynflags fd= concat [[("Add \"" <> r <> "\"", LangExt r) , ("Add \"" <> r <> "\" (lowercase)", LangExtLower r)]| r <- map (T.pack . show) $ suggestsExtension fd, r `notElem` disabled]
   where
     disabled
       | Just dynFlags <- mDynflags =
@@ -183,7 +184,7 @@ suggestAddPragma96 mDynflags Diagnostic {_message, _source}
     | _source == Just sourceTypecheck || _source == Just sourceParser = genPragma _message
   where
     genPragma target =
-      [("Add \"" <> r <> "\"", LangExt r) | r <- findPragma target, r `notElem` disabled]
+      concat [[("Add \"" <> r <> "\"", LangExt r) , ("Add \"" <> r <> "\"", LangExtLower r)] | r <- findPragma target, r `notElem` disabled]
     disabled
       | Just dynFlags <- mDynflags =
         -- GHC does not export 'OnOff', so we have to view it as string
