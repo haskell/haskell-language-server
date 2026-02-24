@@ -68,7 +68,10 @@ type HsArrow pass = HsMultAnn pass
 --      In this case a new argument would have to add its type between b and c in the signature.
 plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
 plugin parsedModule Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
+  -- Qualified names (e.g. NE.toList) can never be valid function argument patterns,
+  -- so we must not offer the "Add argument" code action for them.
+  | Just (name, typ) <- matchVariableNotInScope message
+  , not (T.any (== '.') name) = addArgumentAction parsedModule _range name typ
   | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
   | otherwise = pure []
   where
