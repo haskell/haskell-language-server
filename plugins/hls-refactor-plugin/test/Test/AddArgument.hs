@@ -9,6 +9,7 @@
 module Test.AddArgument (tests) where
 
 import           Data.List                         (find)
+import           Data.Maybe                        (isJust)
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types       hiding
@@ -76,20 +77,27 @@ mkGoldenAddArgTest' testFileName range varName = do
       action
 
 -- | Verify that the "Add argument" code action is NOT offered for qualified names (e.g. NE.toList).
--- We also check that a diagnostic exists on the relevant line, to confirm we're testing the right spot.
+-- We also verify that an import suggestion IS offered, to confirm we're testing the right spot.
 mkNoAddArgForQualifiedNameTest :: TestTree
 mkNoAddArgForQualifiedNameTest =
     testCase "No add argument for qualified names" $ runSessionWithServerInTmpDir def
-      (mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings")
+      (  mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
+      <> mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings"
+      )
       (FS.mkVirtualFileTree "plugins/hls-refactor-plugin/test/data/add-arg" (FS.directProject "QualifiedName.hs"))
       $ do
         doc <- openDoc "QualifiedName.hs" "haskell"
-        diags <- waitForDiagnostics
-        -- Verify we got a diagnostic about NE.toList not being in scope
-        let hasNotInScopeDiag = any (\(Diagnostic {_message = msg}) -> "NE.toList" `T.isInfixOf` msg) diags
-        liftIO $ assertBool "Expected a 'not in scope' diagnostic for NE.toList" hasNotInScopeDiag
-        -- Verify that the "Add argument" code action is NOT offered
+        _ <- waitForDiagnostics
         actions <- getCodeActions doc (Range (Position 5 0) (Position 5 50))
+        -- Verify that an import suggestion for the qualified module exists,
+        -- so we know we're testing the right diagnostic.
+        let importAction = find (\case
+              InR CodeAction {_title = t} -> "import qualified Data.List.NonEmpty as NE" `T.isInfixOf` t
+              _                           -> False) actions
+        liftIO $ assertBool
+          "Expected an 'import qualified Data.List.NonEmpty as NE' code action"
+          (isJust importAction)
+        -- Verify that the "Add argument" code action is NOT offered
         let addArgAction = find (\case
               InR CodeAction {_title = t} -> "Add argument" `T.isPrefixOf` t
               _                           -> False) actions
