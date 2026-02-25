@@ -68,14 +68,20 @@ type HsArrow pass = HsMultAnn pass
 --      In this case a new argument would have to add its type between b and c in the signature.
 plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
 plugin parsedModule Diagnostic {_message, _range}
-  -- Qualified names (e.g. NE.toList) can never be valid function argument patterns,
-  -- so we must not offer the "Add argument" code action for them.
   | Just (name, typ) <- matchVariableNotInScope message
-  , not (T.any (== '.') name) = addArgumentAction parsedModule _range name typ
+  , not (isQualifiedName name) = addArgumentAction parsedModule _range name typ
   | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
   | otherwise = pure []
   where
     message = unifySpaces _message
+    -- Qualified names (e.g. NE.toList) contain a module qualifier separated by
+    -- a dot. They can never be valid function argument patterns, so we skip them.
+    -- We check for dots rather than capitalisation because:
+    --   1. Operators can also be qualified (e.g. NE.:|), where the part after the
+    --      dot is not capitalised.
+    --   2. The module qualifier dot is the defining characteristic of a qualified
+    --      reference — no unqualified variable name contains a dot.
+    isQualifiedName = T.any (== '.')
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
