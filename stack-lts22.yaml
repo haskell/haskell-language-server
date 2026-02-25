@@ -25,6 +25,7 @@ extra-deps:
   - lsp-2.8.0.0
   - lsp-test-0.18.0.0
   - lsp-types-2.4.0.0
+  - websockets-0.13.0.0
   - monad-dijkstra-0.1.1.4 # 5
   - retrie-1.2.3
   - unordered-containers-0.2.21
