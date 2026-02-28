@@ -1486,7 +1486,9 @@ test-suite hls-fourmolu-plugin-tests
     , haskell-language-server:hls-fourmolu-plugin
     , hls-plugin-api
     , hls-test-utils       == 2.13.0.0
+    , lens
     , lsp-test
+    , lsp-types
     , text
 
 -----------------------------
@@ -1545,6 +1547,7 @@ test-suite hls-ormolu-plugin-tests
     , haskell-language-server:hls-ormolu-plugin
     , hls-plugin-api
     , hls-test-utils     == 2.13.0.0
+    , lens
     , lsp-types
     , ormolu
     , text
