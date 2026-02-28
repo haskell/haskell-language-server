@@ -145,7 +145,11 @@ provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithI
                 pure $ InL $ makeDiffTextEdit contents out
             ExitFailure n -> do
                 logWith recorder Info $ StdErr err
-                throwError $ PluginInternalError $ "Fourmolu failed with exit code " <> T.pack (show n)
+                let cliError = if T.null (T.strip err)
+                               then ""
+                               else "\n" <> T.stripEnd err
+                throwError $ PluginInternalError $
+                    "Fourmolu failed with exit code " <> T.pack (show n) <> cliError
 
 loadConfig ::
     Recorder (WithPriority LogEvent) ->
