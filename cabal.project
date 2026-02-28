@@ -6,13 +6,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-
-index-state: 2026-02-19T02:46:05Z
-
-source-repository-package
-  type: git
-  location: https://github.com/snowleopard/alga
-  tag: d4e43fb42db05413459fb2df493361d5a666588a
+index-state: 2026-02-24T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -46,6 +40,7 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
+  monad-control >=1.0.3,  
 
 
 -- Some of the formatters need the latest Cabal-syntax version,
@@ -69,7 +64,6 @@ if impl(ghc >= 9.14)
     dependent-map:containers,
     aeson:containers,
     semialign:containers,
-    hie-bios:ghc,
     string-interpolate:template-haskell,
     tasty-hspec:base,
     tagged:template-haskell,
@@ -81,8 +75,6 @@ if impl(ghc >= 9.14)
     indexed-traversable-instances:base,
     uuid-types:template-haskell,
     hie-compat:base,
-    hie-bios:time,
-    hie-bios:template-haskell,
     ghc-trace-events:base,
     constraints-extras:template-haskell,
     aeson:time,
@@ -93,4 +85,8 @@ if impl(ghc >= 9.14)
     binary-instances:base,
     binary-orphans:base,
     cabal-install-parsers:containers,
-    websockets:containers
+    haddock-library:base,
+    websockets:containers,
+    monad-control:transformers,
+    mmorph:transformers-compat,
+    binary-instances:tagged,

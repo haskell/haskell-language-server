@@ -2104,7 +2104,7 @@ test-suite ghcide-tests
     , lens
     , list-t
     , lsp
-    , lsp-test                ^>=0.18.0.0
+    , lsp-test                ^>=0.18.0
     , lsp-types
     , mtl
     , network-uri
@@ -2261,7 +2261,7 @@ test-suite ghcide-bench-test
     build-depends:
         extra,
         haskell-language-server:ghcide-bench-lib,
-        lsp-test ^>= 0.18.0.0,
+        lsp-test ^>= 0.18,
         tasty,
         tasty-hunit >= 0.10,
         tasty-rerun
