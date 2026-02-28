@@ -46,12 +46,15 @@ tests = testGroup "ormolu" $
               resp <- request SMethod_TextDocumentFormatting $
                   DocumentFormattingParams Nothing doc (FormattingOptions 4 True Nothing Nothing Nothing)
               liftIO $ case resp ^. L.result of
-                  Left err ->
-                      -- The error message must contain more than just the exit code;
-                      -- it should include the stderr output with parse error details.
-                      assertBool
-                          ("Error message should contain stderr output, got: " <> T.unpack (err ^. L.message))
-                          (T.length (err ^. L.message) > T.length "Ormolu failed with exit code 1")
+                  Left err -> do
+                      let msg = err ^. L.message
+                      -- Verify the error message structure:
+                      -- 1. Contains the exit code prefix (base message intact)
+                      assertBool ("Expected exit code prefix, got: " <> T.unpack msg)
+                          ("failed with exit code" `T.isInfixOf` msg)
+                      -- 2. Contains stderr parse error details
+                      assertBool ("Expected parse error details from stderr, got: " <> T.unpack msg)
+                          ("parse error" `T.isInfixOf` msg)
                   Right _ ->
                       assertFailure "Expected formatting to fail on invalid syntax file"
       ]
