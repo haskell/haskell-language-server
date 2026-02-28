@@ -1481,11 +1481,13 @@ test-suite hls-fourmolu-plugin-tests
     fourmolu:fourmolu
   build-depends:
     , aeson
+    , containers
     , filepath
     , haskell-language-server:hls-fourmolu-plugin
     , hls-plugin-api
     , hls-test-utils       == 2.13.0.0
     , lsp-test
+    , text
 
 -----------------------------
 -- ormolu plugin
@@ -1538,12 +1540,14 @@ test-suite hls-ormolu-plugin-tests
     ormolu:ormolu
   build-depends:
     , aeson
+    , containers
     , filepath
     , haskell-language-server:hls-ormolu-plugin
     , hls-plugin-api
     , hls-test-utils     == 2.13.0.0
     , lsp-types
     , ormolu
+    , text
 
 -----------------------------
 -- stylish-haskell plugin
