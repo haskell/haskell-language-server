@@ -3,6 +3,7 @@ module Main
   ( main
   ) where
 
+import           Control.Lens                ((^.))
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap           as KM
 import           Data.Functor
@@ -10,6 +11,7 @@ import qualified Data.Map                    as M
 import qualified Data.Text                   as T
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Fourmolu         as Fourmolu
+import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           System.FilePath
@@ -43,14 +45,14 @@ tests =
                 void waitForBuildQueue
                 resp <- request SMethod_TextDocumentFormatting $
                     DocumentFormattingParams Nothing doc (FormattingOptions 4 True Nothing Nothing Nothing)
-                liftIO $ case resp of
-                    TResponseMessage {_result = Left (TResponseError {_message = msg})} ->
+                liftIO $ case resp ^. L.result of
+                    Left err ->
                         -- The error message must contain more than just the exit code;
                         -- it should include the stderr output with parse error details.
                         assertBool
-                            ("Error message should contain stderr output, got: " <> T.unpack msg)
-                            (T.length msg > T.length "Fourmolu failed with exit code 1")
-                    TResponseMessage {_result = Right _} ->
+                            ("Error message should contain stderr output, got: " <> T.unpack (err ^. L.message))
+                            (T.length (err ^. L.message) > T.length "Fourmolu failed with exit code 1")
+                    Right _ ->
                         assertFailure "Expected formatting to fail on invalid syntax file"
         ]
 
