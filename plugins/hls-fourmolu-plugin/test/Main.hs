@@ -3,11 +3,15 @@ module Main
   ( main
   ) where
 
+import           Control.Lens                ((^.))
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap           as KM
 import           Data.Functor
+import qualified Data.Map                    as M
+import qualified Data.Text                   as T
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Fourmolu         as Fourmolu
+import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           System.FilePath
@@ -31,6 +35,34 @@ tests =
             formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         , goldenWithFourmolu cli "uses correct operator fixities" "Fourmolu3" "formatted" $ \doc -> do
             formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+        , testCase "error message contains stderr output" $
+            runSessionWithServer
+              def { formattingProvider = "fourmolu"
+                  , plugins = M.fromList [("fourmolu", def { plcConfig = KM.fromList ["external" .= cli] })]
+                  }
+              fourmoluPlugin
+              testDataDir
+              $ do
+                doc <- openDoc "FormatError.hs" "haskell"
+                void waitForBuildQueue
+                resp <- request SMethod_TextDocumentFormatting $
+                    DocumentFormattingParams Nothing doc (FormattingOptions 4 True Nothing Nothing Nothing)
+                liftIO $ case resp ^. L.result of
+                    Left (TResponseError {_code = InR ErrorCodes_InternalError, _message}) -> do
+                        -- The error message must contain more than just the exit code;
+                        -- it should include the stderr output with parse error details.
+                        assertBool
+                            ("Error message should contain stderr output, got: " <> T.unpack _message)
+                            (T.length _message > T.length "Fourmolu failed with exit code 1")
+                        -- The error message should NOT end with just "exit code N"
+                        assertBool
+                            ("Error message should not end at 'exit code', got: " <> T.unpack _message)
+                            (not $ "exit code" `T.isInfixOf` (last $ T.lines $ T.strip _message)
+                                && T.length (T.strip _message) < 50)
+                    Left other ->
+                        assertFailure $ "Unexpected error code: " <> show other
+                    Right _ ->
+                        assertFailure "Expected formatting to fail on invalid syntax file"
         ]
 
 goldenWithFourmolu :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
