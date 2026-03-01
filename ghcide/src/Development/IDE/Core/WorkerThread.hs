@@ -10,13 +10,11 @@ module Development.IDE.Core.WorkerThread
     (withWorkerQueue, awaitRunInThread)
  where
 
-import           Control.Concurrent.Async  (AsyncCancelled (AsyncCancelled),
-                                            withAsync)
+import           Control.Concurrent.Async  (withAsync)
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
-import           Control.Exception.Safe    (Exception (fromException),
-                                            SomeException, throwIO, try)
+import           Control.Exception.Safe    (SomeException, throwIO, try)
 import           Control.Monad             (forever)
 import           Control.Monad.Cont        (ContT (ContT))
 
