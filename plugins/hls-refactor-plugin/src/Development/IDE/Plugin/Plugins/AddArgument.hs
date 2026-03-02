@@ -80,7 +80,9 @@ plugin parsedModule Diagnostic {_message, _range}
     -- operators, an unqualified name will never start with an uppercase letter.
     -- Therefore, checking for an uppercase first character reliably identifies
     -- qualified names, which can never be valid function argument patterns.
-    isQualifiedName name = not (T.null name) && isUpper (T.head name)
+    isQualifiedName name = case T.uncons name of
+      Just (c, _) -> isUpper c
+      Nothing     -> False
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
