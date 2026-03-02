@@ -279,8 +279,8 @@ library hls-cabal-plugin
     , hls-plugin-api        == 2.13.0.0
     , hls-graph             == 2.13.0.0
     , lens
-    , lsp                   ^>=2.7
-    , lsp-types             ^>=2.3
+    , lsp                   ^>=2.8
+    , lsp-types             ^>=2.4
     , mtl
     , regex-tdfa            ^>=1.3.1
     , text
@@ -415,7 +415,7 @@ library hls-call-hierarchy-plugin
     , hiedb                 ^>= 0.8.0.0
     , hls-plugin-api        == 2.13.0.0
     , lens
-    , lsp                    >=2.7
+    , lsp                    >=2.8
     , sqlite-simple
     , text
 
@@ -1040,7 +1040,7 @@ library hls-alternate-number-format-plugin
     , hls-graph
     , hls-plugin-api       == 2.13.0.0
     , lens
-    , lsp                  ^>=2.7
+    , lsp                  ^>=2.8
     , mtl
     , syb
     , text
@@ -1268,7 +1268,7 @@ library hls-gadt-plugin
     , hls-plugin-api         == 2.13.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
-    , lsp                    >=2.7
+    , lsp                    >=2.8
     , mtl
     , text
     , transformers
@@ -1315,7 +1315,7 @@ library hls-explicit-fixity-plugin
     , ghcide                == 2.13.0.0
     , hashable
     , hls-plugin-api        == 2.13.0.0
-    , lsp                   >=2.7
+    , lsp                   >=2.8
     , text
 
   default-extensions: DataKinds
@@ -1799,7 +1799,7 @@ library hls-notes-plugin
     , hls-graph == 2.13.0.0
     , hls-plugin-api == 2.13.0.0
     , lens
-    , lsp >=2.7
+    , lsp >=2.8
     , mtl >= 2.2
     , regex-tdfa >= 1.3.1
     , text
@@ -2104,7 +2104,7 @@ test-suite ghcide-tests
     , lens
     , list-t
     , lsp
-    , lsp-test                ^>=0.17.1
+    , lsp-test                ^>=0.18.0
     , lsp-types
     , mtl
     , network-uri
@@ -2261,7 +2261,7 @@ test-suite ghcide-bench-test
     build-depends:
         extra,
         haskell-language-server:ghcide-bench-lib,
-        lsp-test ^>= 0.17,
+        lsp-test ^>= 0.18,
         tasty,
         tasty-hunit >= 0.10,
         tasty-rerun

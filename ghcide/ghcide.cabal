@@ -74,7 +74,7 @@ library
     , Glob
     , haddock-library              >=1.8      && <1.12
     , hashable
-    , hie-bios                     ^>=0.17.0
+    , hie-bios                     ^>= 0.18.0
     , hiedb                        ^>= 0.8.0.0
     , hls-graph                    == 2.13.0.0
     , hls-plugin-api               == 2.13.0.0
@@ -82,8 +82,8 @@ library
     , lens
     , lens-aeson
     , list-t
-    , lsp                          ^>=2.7
-    , lsp-types                    ^>=2.3
+    , lsp                          ^>=2.8
+    , lsp-types                    ^>=2.4
     , mtl
     , opentelemetry                >=0.6.1
     , optparse-applicative

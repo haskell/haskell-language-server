@@ -48,8 +48,8 @@ library
     , hls-plugin-api          == 2.13.0.0
     , lens
     , lsp
-    , lsp-test                ^>=0.17
-    , lsp-types               ^>=2.3
+    , lsp-test                ^>=0.18
+    , lsp-types               ^>=2.4
     , safe-exceptions
     , string-interpolate      >= 0.3.1
     , tasty
