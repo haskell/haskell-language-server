@@ -11,6 +11,7 @@ module Development.IDE.Core.WorkerThread
     withWorkerQueue,
     awaitRunInThread,
     TaskQueue,
+    isEmptyTaskQueue,
     writeTaskQueue,
     withWorkerQueueSimple
   )
@@ -22,7 +23,6 @@ import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
 import           Control.Exception.Safe    (SomeException, finally, throwIO,
                                             try)
-import           Control.Monad             (forever)
 import           Control.Monad.Cont        (ContT (ContT))
 import qualified Data.Text                 as T
 import           Ide.Logger
@@ -116,6 +116,9 @@ awaitRunInThread (TaskQueue q) act = do
 
 writeTaskQueue :: TaskQueue a -> a -> STM ()
 writeTaskQueue (TaskQueue q) = writeTQueue q
+
+isEmptyTaskQueue :: TaskQueue a -> STM Bool
+isEmptyTaskQueue (TaskQueue q) = isEmptyTQueue q
 
 tryReadTaskQueue :: TaskQueue a -> STM (Maybe a)
 tryReadTaskQueue (TaskQueue q) = tryReadTQueue q

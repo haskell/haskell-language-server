@@ -84,7 +84,6 @@ import           Data.Void
 
 import           Control.Concurrent.STM.Stats        (atomically, modifyTVar',
                                                       readTVar, writeTVar)
-import           Control.Concurrent.STM.TQueue
 import           Control.Monad.Trans.Cont            (ContT (ContT, runContT))
 import           Data.Foldable                       (for_)
 import           Data.HashMap.Strict                 (HashMap)
@@ -92,7 +91,7 @@ import           Data.HashSet                        (HashSet)
 import qualified Data.HashSet                        as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing        (withTrace)
-import           Development.IDE.Core.WorkerThread   (withWorkerQueue)
+import           Development.IDE.Core.WorkerThread
 import           Development.IDE.Session.Dependency
 import           Development.IDE.Session.Diagnostics (renderCradleError)
 import           Development.IDE.Session.Ghc         hiding (Log)
@@ -664,7 +663,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     -- see Note [Serializing runs in separate thread]
     -- Start the 'getOptionsLoop' if the queue is empty
     liftIO $ atomically $
-      Extra.whenM (isEmptyTQueue que) $ do
+      Extra.whenM (isEmptyTaskQueue que) $ do
         let newSessionLoadingOptions = SessionLoadingOptions
               { findCradle = cradleLoc
               , ..
@@ -684,7 +683,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionLoadingOptions = newSessionLoadingOptions
               }
 
-        writeTQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
+        writeTaskQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
 
     -- Each one of deps will be registered as a FileSystemWatcher in the GhcSession action
     -- so that we can get a workspace/didChangeWatchedFiles notification when a dep changes.
