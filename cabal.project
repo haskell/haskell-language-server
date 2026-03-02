@@ -40,7 +40,7 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
-  monad-control >=1.0.3,  
+  monad-control >=1.0.3,
 
 
 -- Some of the formatters need the latest Cabal-syntax version,
@@ -69,8 +69,10 @@ if impl(ghc >= 9.14)
     tagged:template-haskell,
     indexed-traversable:base,
     quickcheck-instances:base,
+    time-compat:base,
     time-compat:time,
     these:base,
+    some:base,
     boring:base,
     indexed-traversable-instances:base,
     uuid-types:template-haskell,
