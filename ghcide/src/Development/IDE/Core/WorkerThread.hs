@@ -22,6 +22,7 @@ import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
 import           Control.Exception.Safe    (SomeException, finally, throwIO,
                                             try)
+import           Control.Monad             (forever)
 import           Control.Monad.Cont        (ContT (ContT))
 import qualified Data.Text                 as T
 import           Ide.Logger

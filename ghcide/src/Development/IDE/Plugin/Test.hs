@@ -12,6 +12,7 @@ module Development.IDE.Plugin.Test
   ) where
 
 import           Control.Concurrent                   (threadDelay)
+import qualified Control.Exception                    as E
 import           Control.Monad
 import           Control.Monad.Except                 (ExceptT (..), throwError)
 import           Control.Monad.IO.Class
@@ -23,6 +24,7 @@ import qualified Data.Aeson.Types                     as A
 import           Data.Bifunctor
 import           Data.CaseInsensitive                 (CI, original)
 import qualified Data.HashMap.Strict                  as HM
+import qualified Data.HashSet                         as Set
 import           Data.Maybe                           (isJust)
 import           Data.Proxy
 import           Data.String
@@ -41,6 +43,8 @@ import           Development.IDE.Graph.Database       (ShakeDatabase,
 import           Development.IDE.Graph.Internal.Types (Result (resultBuilt, resultChanged, resultVisited),
                                                        Step (Step))
 import qualified Development.IDE.Graph.Internal.Types as Graph
+import           Development.IDE.Session              (clearSessionLoaderPendingBarrier,
+                                                       setSessionLoaderPendingBarrier)
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location       (fromUri)
@@ -60,6 +64,7 @@ data TestRequest
     | GetShakeSessionQueueCount      -- ^ :: Number
     | WaitForShakeQueue -- ^ Block until the Shake queue is empty. Returns Null
     | WaitForIdeRule String Uri      -- ^ :: WaitForIdeRuleResult
+    | WaitForIdeRules String [Uri]   -- ^ :: [WaitForIdeRuleResult]
     | GetBuildKeysVisited        -- ^ :: [(String]
     | GetBuildKeysBuilt          -- ^ :: [(String]
     | GetBuildKeysChanged        -- ^ :: [(String]
@@ -114,6 +119,17 @@ testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
     let res = WaitForIdeRuleResult <$> success
     return $ bimap PluginInvalidParams toJSON res
+testRequestHandler s (WaitForIdeRules k files) = liftIO $ do
+    let nfps = fmap (fromUri . toNormalizedUri) files
+        uniqueCount = Set.size (Set.fromList nfps)
+        act = runAction ("WaitForIdeRules " <> k <> " " <> show files) s $ parseActions (fromString k) nfps
+    success <-
+      if uniqueCount > 0
+        then (setSessionLoaderPendingBarrier s uniqueCount >> act)
+              `E.finally` clearSessionLoaderPendingBarrier s
+        else act
+    let res = fmap (fmap WaitForIdeRuleResult) success
+    return $ bimap PluginInvalidParams toJSON res
 testRequestHandler s GetBuildKeysBuilt = liftIO $ do
     keys <- getDatabaseKeys resultBuilt $ shakeDb s
     return $ Right $ toJSON $ map show keys
@@ -158,6 +174,18 @@ parseAction "ghcsessiondeps" fp = Right . isJust <$> use GhcSessionDeps fp
 parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
 parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
+
+parseActions :: CI String -> [NormalizedFilePath] -> Action (Either Text [Bool])
+parseActions "typecheck" fps = Right . fmap isJust <$> uses TypeCheck fps
+parseActions "getLocatedImports" fps = Right . fmap isJust <$> uses GetLocatedImports fps
+parseActions "getmodsummary" fps = Right . fmap isJust <$> uses GetModSummary fps
+parseActions "getmodsummarywithouttimestamps" fps = Right . fmap isJust <$> uses GetModSummaryWithoutTimestamps fps
+parseActions "getparsedmodule" fps = Right . fmap isJust <$> uses GetParsedModule fps
+parseActions "ghcsession" fps = Right . fmap isJust <$> uses GhcSession fps
+parseActions "ghcsessiondeps" fps = Right . fmap isJust <$> uses GhcSessionDeps fps
+parseActions "gethieast" fps = Right . fmap isJust <$> uses GetHieAst fps
+parseActions "getFileContents" fps = Right . fmap isJust <$> uses GetFileContents fps
+parseActions other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
 -- | a command that blocks forever. Used for testing
 blockCommandId :: Text
