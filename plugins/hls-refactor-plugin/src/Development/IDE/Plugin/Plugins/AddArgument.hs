@@ -4,6 +4,7 @@ module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 import           Control.Monad                             (join)
 import           Control.Monad.Trans.Class                 (lift)
 import           Data.Bifunctor                            (Bifunctor (..))
+import           Data.Char                                 (isUpper)
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
@@ -74,14 +75,12 @@ plugin parsedModule Diagnostic {_message, _range}
   | otherwise = pure []
   where
     message = unifySpaces _message
-    -- Qualified names (e.g. NE.toList) contain a module qualifier separated by
-    -- a dot. They can never be valid function argument patterns, so we skip them.
-    -- We check for dots rather than capitalisation because:
-    --   1. Operators can also be qualified (e.g. NE.:|), where the part after the
-    --      dot is not capitalised.
-    --   2. The module qualifier dot is the defining characteristic of a qualified
-    --      reference — no unqualified variable name contains a dot.
-    isQualifiedName = T.any (== '.')
+    -- Qualified names (e.g. NE.toList) always start with an uppercase module
+    -- qualifier. Since "Variable not in scope" only reports variables and
+    -- operators, an unqualified name will never start with an uppercase letter.
+    -- Therefore, checking for an uppercase first character reliably identifies
+    -- qualified names, which can never be valid function argument patterns.
+    isQualifiedName name = not (T.null name) && isUpper (T.head name)
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
