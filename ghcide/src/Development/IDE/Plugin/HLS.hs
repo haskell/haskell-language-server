@@ -254,13 +254,7 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params' -> do
         vfs <- readTVarIO $ vfsVar $ shakeExtras ide
-        -- issue https://github.com/haskell/haskell-language-server/issues/4056
-        -- established that HLS should rely on server-side diagnostics to compute codeaction
-        -- To ensure consistency, we intercept codeAction requests and explicitly inject
-        -- server-side diagnostics before delegating to the plugin handler.
-        params <- case m of
-          SMethod_TextDocumentCodeAction -> liftIO $ injectServerDiagnostics ide params'
-          _                              -> pure params'
+        params <- liftIO $ preprocessMessageParams ide m params'
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are allowed to run on this request, save the
         -- list of disabled plugins incase that's all we have
@@ -296,6 +290,18 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
                   Just xs -> pure $ Left $ combineErrors xs
               Just xs -> do
                 pure $ Right $ combineResponses m config caps params xs
+
+
+-- | Preprocess 'MessageParams' and insert custom data.
+--
+-- In issue https://github.com/haskell/haskell-language-server/issues/4056, we
+-- established that HLS should rely on server-side 'Diagnostic's to compute 'CodeAction's
+-- To ensure consistency, we intercept 'CodeAction's requests and explicitly inject
+-- server-side 'Diagnostic's before delegating to the 'PluginHandler'.
+preprocessMessageParams :: IdeState -> SMethod m -> MessageParams m -> IO (MessageParams m)
+preprocessMessageParams ide m params = case m of
+    SMethod_TextDocumentCodeAction -> injectServerDiagnostics ide params
+    _                              -> pure params
 
 -- | Fallback Handler for resolve requests.
 -- For all kinds of `*/resolve` requests, if they don't have a 'data_' value,
