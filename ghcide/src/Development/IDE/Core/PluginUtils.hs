@@ -225,16 +225,14 @@ activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath
 activeDiagnosticsInRange ide nfp range = runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
 
 -- Prefer server-side diagnostics if available; they are authoritative.
--- Fall back to client-supplied diagnostics when none are found.
 injectServerDiagnostics :: IdeState -> CodeActionParams -> IO CodeActionParams
-injectServerDiagnostics ide params@LSP.CodeActionParams{_textDocument=LSP.TextDocumentIdentifier{_uri}, _range, _context=context} = do
-  let clientDiags = context ^. LSP.diagnostics
+injectServerDiagnostics ide params@LSP.CodeActionParams{_textDocument=LSP.TextDocumentIdentifier{_uri}, _range} = do
   serverDiags <- case LSP.uriToNormalizedFilePath (LSP.toNormalizedUri _uri) of
-    Nothing  -> pure clientDiags
+    Nothing  -> pure []
     Just nfp -> do
       mDiags <- activeDiagnosticsInRange (shakeExtras ide) nfp _range
       case mDiags of
-        Nothing    -> pure clientDiags
+        Nothing    -> pure []
         Just diags -> pure $ diags ^.. traverse . fdLspDiagnosticL
   pure $ params & LSP.context . LSP.diagnostics .~ serverDiags
 

@@ -48,12 +48,12 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server              as LSP
 import           Language.LSP.VFS
-import           Prettyprinter.Render.String   (renderString)
-import           Text.Regex.TDFA.Text          ()
-import           UnliftIO                      (MonadUnliftIO, liftIO,
-                                                readTVarIO)
-import           UnliftIO.Async                (forConcurrently)
-import           UnliftIO.Exception            (catchAny)
+import           Prettyprinter.Render.String      (renderString)
+import           Text.Regex.TDFA.Text             ()
+import           UnliftIO                         (MonadUnliftIO, liftIO,
+                                                   readTVarIO)
+import           UnliftIO.Async                   (forConcurrently)
+import           UnliftIO.Exception               (catchAny)
 
 -- ---------------------------------------------------------------------
 --
