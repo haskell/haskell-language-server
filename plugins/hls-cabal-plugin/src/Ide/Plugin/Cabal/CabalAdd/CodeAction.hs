@@ -152,14 +152,13 @@ isUnknownModuleDiagnostic :: J.Diagnostic -> Bool
 isUnknownModuleDiagnostic diag =
   case diag ^. JL.data_ of
     Nothing -> False
-    Just v  ->
+    Just v ->
       case Aeson.fromJSON v of
-        Aeson.Error _ -> False
-        Aeson.Success (details :: CradleErrorDetails) ->
-          case structuredError details of
-            Just (StructuredErrors { unknownModule = Just _ }) -> True
-            _                                                  -> False
-
+        Aeson.Success details ->
+          case structuredCradleError details of
+            Just (UnknownModuleError _) -> True
+            _                           -> False
+        _ -> False
 --------------------------
 -- Below are several utility functions which create a StanzaItem for each of the possible Stanzas,
 -- these all have specific constructors we need to match, so we can't generalise this process well.

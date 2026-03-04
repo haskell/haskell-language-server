@@ -18,23 +18,22 @@ import           System.FilePath
 
 data CradleErrorDetails =
   CradleErrorDetails
-    { cabalProjectFiles :: [FilePath]
+    { cradleDependencies    :: [FilePath]
     -- ^ files related to the cradle error
     -- i.e. .cabal, cabal.project, etc.
-    , structuredError   :: Maybe StructuredErrors
-    -- ^ errors related to cradle error
+    , structuredCradleError :: Maybe StructuredCradleError
+    -- ^ structured information about the cradle error
     -- i.e. unknownModules error
     } deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
 
-data StructuredErrors =
-  StructuredErrors
-    { unknownModule :: Maybe UnknownModuleDetails
-    } deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
+data StructuredCradleError
+  = UnknownModuleError UnknownModuleDetails
+  deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
 
 data UnknownModuleDetails =
   UnknownModuleDetails
-    { moduleFilePath   :: FilePath
-    , suggestedModName :: String
+    { moduleFilePath      :: FilePath
+    , suggestedModuleName :: String
     } deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
 
 {- | Takes a cradle error, the corresponding cradle and the file path where
@@ -49,11 +48,8 @@ renderCradleError cradleError cradle nfp =
   if HieBios.isCabalCradle cradle
      then noDetails & fdLspDiagnosticL %~ \diag -> diag
             { _data_ = Just $ Aeson.toJSON CradleErrorDetails
-                { cabalProjectFiles = absDeps
-                , structuredError   =
-                    case mkUnknownModuleDetails of
-                      Nothing -> Nothing
-                      Just u  -> Just (StructuredErrors (Just u))
+                { cradleDependencies = absDeps
+                , structuredCradleError = fmap UnknownModuleError mkUnknownModuleDetails
                 }
             }
      else noDetails
@@ -66,14 +62,14 @@ renderCradleError cradleError cradle nfp =
       | HieBios.isCabalCradle cradle = fromMaybe ms $ fileMissingMessage <|> (unknownModuleMessage (fromNormalizedFilePath nfp) <$ mkUnknownModuleDetails)
       | otherwise = ms
 
-    -- Produce structured details when unknown module error detected;
+    -- Produce structured details when unknown module error is detected
     mkUnknownModuleDetails :: Maybe UnknownModuleDetails
     mkUnknownModuleDetails
       | any (isInfixOf "Failed extracting script block:") ms =
           let fp = fromNormalizedFilePath nfp
           in Just UnknownModuleDetails
                { moduleFilePath   = fp
-               , suggestedModName = dropExtension (takeFileName fp)
+               , suggestedModuleName = dropExtension (takeFileName fp)
                }
       | otherwise = Nothing
 
