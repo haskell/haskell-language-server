@@ -17,6 +17,7 @@ import           Control.Category           ((>>>))
 import           Control.Lens               ((^.))
 import           Development.IDE.Test       (expectDiagnostics,
                                              standardizeQuotes)
+import           Hover
 import           Test.Hls
 import           Test.Hls.FileSystem        (copyDir)
 import           Text.Regex.TDFA            ((=~))
@@ -90,16 +91,6 @@ tests = let
       _     -> liftIO $ assertFailure $
         "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
         "\n but got: " <> show (msg, rangeInHover)
-
-  assertFoundIn :: T.Text -> T.Text -> Assertion
-  assertFoundIn part whole = assertBool
-    (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
-    (part `T.isInfixOf` whole)
-
-  assertNotFoundIn :: T.Text -> T.Text -> Assertion
-  assertNotFoundIn part whole = assertBool
-    (T.unpack $ "found unexpected: `" <> part <> "` in hover message:\n" <> whole)
-    (not . T.isInfixOf part $ whole)
 
   sourceFilePath = T.unpack sourceFileName
   sourceFileName = "GotoHover.hs"
