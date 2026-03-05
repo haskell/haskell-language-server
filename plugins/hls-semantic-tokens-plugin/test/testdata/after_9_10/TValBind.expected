@@ -1,5 +1,10 @@
-1:8-16 TModule "TValBind"
-4:1-6 TVariable "hello"
-4:10-13 TTypeConstructor "Int"
-5:1-6 TVariable "hello"
-5:9-15 TClassMethod "length"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:8-16 HsSemanticTokenType TModule "TValBind"]
+[1:17-22 HsSyntacticTokenType TKeyword "where"]
+[4:1-6 HsSemanticTokenType TVariable "hello"]
+[4:7-9 HsSyntacticTokenType TKeyword "::"]
+[4:10-13 HsSemanticTokenType TTypeConstructor "Int"]
+[5:1-6 HsSemanticTokenType TVariable "hello"]
+[5:7-8 HsSyntacticTokenType TKeyword "="]
+[5:9-15 HsSemanticTokenType TClassMethod "length"]
+[5:16-33 HsSyntacticTokenType TStringLit "\"Hello, Haskell!\""]
