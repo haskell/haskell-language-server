@@ -41,7 +41,9 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
-import           Development.IDE.GHC.Util             (printOutputable,
+import           Development.IDE.GHC.Util             (getExtensions,
+                                                       getExtensionsSet,
+                                                       printOutputable,
                                                        printOutputableOneLine)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
@@ -69,9 +71,12 @@ import qualified Data.Set                             as S
 import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
+import           Debug.Trace                          (traceShow, traceShowId)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
+import           Development.IDE.Core.PluginUtils     (runActionE)
 import           Development.IDE.Core.Shake           (ShakeExtras (..),
-                                                       runIdeAction)
+                                                       runIdeAction, use,
+                                                       useWithStaleFast)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
                                                        HieAST (..),
@@ -261,8 +266,9 @@ atPoint
   -> DocAndTyThingMap
   -> HscEnv
   -> Position
+  -> ParsedModule
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos parsedModule =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -282,6 +288,9 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         prettyNames <- mapM (prettyName locationsMap) names
         pure (Just range, prettyNames ++ pTypes locationsMap)
       where
+        enabledExtensions :: Util.EnumSet Extension
+        enabledExtensions = getExtensionsSet $ parsedModule
+
         pTypes :: M.Map Name Location -> [T.Text]
         pTypes locationsMap =
           case names of
@@ -318,7 +327,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
             let
               typeSig = case identType dets of
                 Just t -> prettyType (Just n) locationsMap t
-                Nothing -> case safeTyThingType =<< lookupNameEnv km n of
+                Nothing -> case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
                   Just kind -> prettyTypeFromType (Just n) locationsMap kind
                   Nothing   -> wrapHaskell (printOutputable n)
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))

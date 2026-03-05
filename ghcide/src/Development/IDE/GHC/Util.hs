@@ -29,6 +29,7 @@ module Development.IDE.GHC.Util(
     printOutputable,
     printOutputableOneLine,
     getExtensions,
+    getExtensionsSet,
     stripOccNamePrefix,
     ) where
 
@@ -279,7 +280,10 @@ printOutputable' print =
 {-# INLINE printOutputable #-}
 
 getExtensions :: ParsedModule -> [Extension]
-getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary
+getExtensions = toList . getExtensionsSet
+
+getExtensionsSet :: ParsedModule -> EnumSet Extension
+getExtensionsSet = extensionFlags . ms_hspp_opts . pm_mod_summary
 
 -- | When e.g. DuplicateRecordFields is enabled, compiler generates
 -- names like "$sel:accessor:One" and "$sel:accessor:Two" to
@@ -331,4 +335,3 @@ occNamePrefixes =
   , "$c"
   , "$m"
   ]
-
