@@ -29,6 +29,7 @@ module Development.IDE.GHC.Compat.Error (
   _GhcDriverMessage,
   _ReportHoleError,
   _TcRnIllegalWildcardInType,
+  _TcRnNotInScope,
   _TcRnPartialTypeSignatures,
   _TcRnMissingSignature,
   _TcRnSolverReport,

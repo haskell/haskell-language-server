@@ -12,6 +12,7 @@ import           Development.IDE.GHC.ExactPrint            (modifyMgMatchesT',
                                                             modifySigWithM,
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
+import           Development.IDE.Types.Diagnostics         (FileDiagnostic (fdLspDiagnostic))
 import           GHC.Parser.Annotation                     (SrcSpanAnnA,
                                                             SrcSpanAnnN, noAnn)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
@@ -66,13 +67,13 @@ type HsArrow pass = HsMultAnn pass
 --         foo :: a -> b -> c -> d
 --         foo a b = \c -> ...
 --      In this case a new argument would have to add its type between b and c in the signature.
-plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
-plugin parsedModule Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
-  | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
+plugin :: ParsedModule -> FileDiagnostic -> Either PluginError [(T.Text, [TextEdit])]
+plugin parsedModule fd
+  | Just (name, typ) <- matchVariableNotInScope fd = addArgumentAction parsedModule _range name typ
+  | Just (name, typ) <- matchFoundHoleIncludeUnderscore fd = addArgumentAction parsedModule _range name (Just typ)
   | otherwise = pure []
   where
-    message = unifySpaces _message
+    Diagnostic{_message, _range} = fdLspDiagnostic fd :: Diagnostic
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
@@ -155,11 +156,14 @@ addArgumentAction (ParsedModule _ moduleSrc _) range name _typ = do
           Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
           Nothing -> pure moduleSrc'
     let diff = makeDiffTextEdit (T.pack $ exactPrint moduleSrc) (T.pack $ exactPrint newSource)
-    pure [("Add argument ‘" <> name <> "’ to function", diff)]
+    pure [("Add argument ‘" <> definedName <> "’ to function", diff)]
   where
     addNameAsLastArgOfMatchingDecl = modifySmallestDeclWithM spanContainsRangeOrErr addNameAsLastArg
-    addNameAsLastArg = fmap (first (:[])) . appendFinalPatToMatches name
-
+    addNameAsLastArg = fmap (first (:[])) . appendFinalPatToMatches definedName
+    definedName =
+      case T.stripPrefix "_" name of
+        Just n  -> n
+        Nothing -> name
     spanContainsRangeOrErr = maybeToEither (PluginInternalError "SrcSpan was not valid range") . (`spanContainsRange` range)
 
 -- Transform an LHsType into a list of arguments and return type, to make transformations easier.

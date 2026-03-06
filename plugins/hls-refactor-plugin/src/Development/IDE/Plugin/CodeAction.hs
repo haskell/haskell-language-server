@@ -22,6 +22,7 @@ import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
+import           Control.Lens                                      ((^?))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
@@ -49,6 +50,10 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
+import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
+                                                                    _TcRnMessage,
+                                                                    msgEnvelopeErrorL)
+import           GHC.Tc.Errors.Types                               (ShadowedNameProvenance (..))
 #if !MIN_VERSION_ghc(9,11,0)
 import           Development.IDE.GHC.Compat.Util
 #endif
@@ -128,7 +133,11 @@ import           GHC                                               (AnnsModule (
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
 #endif
-
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Tc.Errors.Types                               (UnusedImportName (..),
+                                                                    UnusedImportReason (..),
+                                                                    UnusedNameProv (..))
+#endif
 
 -------------------------------------------------------------------------------------------------
 
@@ -138,7 +147,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
+    allDiags <- atomically $ filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       textContents = fmap Rope.toText contents
@@ -376,37 +385,50 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
-suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
-  | Just [identifier, modName, s] <-
-      matchRegexUnifySpaces
-        _message
-        "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)" =
-    suggests identifier modName s
-  | Just [identifier] <-
-      matchRegexUnifySpaces
-        _message
-        "This binding for ‘([^`]+)’ shadows the existing bindings",
-    Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
-    mods <- [(modName, s) | [_, modName, s] <- matched],
-    result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
-    hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result) =
-    result <> [hideAll]
-  | otherwise = []
-  where
-    L _ HsModule {hsmodImports} = ps
+suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> FileDiagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow ps fileContents mTcM mHar fd =
+    case fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
+        Just (TcRnShadowedName occName prov) ->
+            let identifier = T.pack $ occNameString occName
+                L _ HsModule{hsmodImports} = ps
 
-    suggests identifier modName s
-      | Just tcM <- mTcM,
-        Just har <- mHar,
-        [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
-        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s' Nothing),
-        mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
-        title <- "Hide " <> identifier <> " from " <> modName =
-        if modName == "Prelude" && null mDecl
-          then maybeToList $ (\(_, te) -> (title, [Left te])) <$> newImportToEdit (hideImplicitPreludeSymbol identifier) ps fileContents
-          else maybeToList $ (title,) . pure . pure . hideSymbol (T.unpack identifier) <$> mDecl
-      | otherwise = []
+                greModsAndSpans :: GlobalRdrElt -> [(T.Text, RealSrcSpan)]
+                greModsAndSpans gre =
+                    [ (T.pack $ moduleNameString modName, sp)
+                    | imp <- gre_imp gre
+                    , let modName =
+#if MIN_VERSION_ghc(9,7,0)
+                            moduleName $ is_mod (is_decl imp)
+#else
+                            is_mod (is_decl imp)
+#endif
+                    , RealSrcSpan sp _ <- [is_dloc (is_decl imp)]
+                    ]
+
+                suggests :: T.Text -> RealSrcSpan -> [(T.Text, [Either TextEdit Rewrite])]
+                suggests modName s'
+                  | Just tcM <- mTcM,
+                    Just har <- mHar,
+                    isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s' Nothing),
+                    mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
+                    title <- "Hide " <> identifier <> " from " <> modName =
+                    if modName == "Prelude" && null mDecl
+                      then maybeToList $ (\(_, te) -> (title, [Left te])) <$> newImportToEdit (hideImplicitPreludeSymbol identifier) ps fileContents
+                      else maybeToList $ (title,) . pure . pure . hideSymbol (T.unpack identifier) <$> mDecl
+                  | otherwise = []
+
+            in case prov of
+                ShadowedNameProvenanceLocal _ -> []
+                ShadowedNameProvenanceGlobal gres ->
+                    let mods = nubOrdBy (compare `on` fst)
+                                 [ (modName, sp)
+                                 | gre <- gres
+                                 , (modName, sp) <- greModsAndSpans gre
+                                 ]
+                        result = mods >>= uncurry suggests
+                        hideAll = ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result)
+                    in result <> [hideAll | length result > 1]
+        _ -> []
 
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
@@ -447,8 +469,17 @@ isUnusedImportedId
       maybe True (not . any (\(_, IdentifierDetails {..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
-suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
+suggestRemoveRedundantImportBinding :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveRedundantImportBinding pm contents fd =
+#if MIN_VERSION_ghc(9,7,0)
+    suggestRemoveRedundantImportStructured pm contents fd
+#else
+    suggestRemoveRedundantImportRegex pm contents (fdLspDiagnostic fd)
+#endif
+
+#if !MIN_VERSION_ghc(9,7,0)
+suggestRemoveRedundantImportRegex :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveRedundantImportRegex ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
@@ -474,6 +505,50 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         case matchRegexUnifySpaces binding "([^ ]+)\\(([^)]+)\\)" of
           Just [_, fields] -> [binding, fields]
           _                -> [binding]
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+suggestRemoveRedundantImportStructured  :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveRedundantImportStructured  ParsedModule{pm_parsed_source = L _ HsModule{hsmodImports}} contents fd =
+    case fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
+        Just (TcRnUnusedImport impDecl reason) ->
+            let wantedModule = moduleNameString $ unLoc $ ideclName impDecl
+                mMatchedDecl = find (\(L _ d) -> moduleNameString (unLoc (ideclName d)) == wantedModule) hsmodImports
+            in case reason of
+                UnusedImportNone ->
+                    case mMatchedDecl of
+                        Just (L (locA -> l) _)
+                            | Just r <- srcSpanToRange l
+                            -> [("Remove import", [TextEdit (extendToWholeLineIfPossible contents r) ""])]
+                        _ -> []
+                UnusedImportSome unusedNames ->
+                    case mMatchedDecl of
+                        Just (L _ matchedDecl) ->
+                            let titleBindings = map unusedImportNameText unusedNames
+                                rangeBindings = map fieldOnlyName unusedNames
+                                bindings = T.intercalate ", " titleBindings
+                                ranges = concatMap (rangesForBindingImport matchedDecl . T.unpack) rangeBindings
+
+                            in case contents of
+                                Just c ->
+                                    let ranges' = extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) ranges
+                                    in ([("Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges']) | not (null ranges')])
+                                Nothing -> []
+                        _ -> []
+        _ -> []
+
+fieldOnlyName :: UnusedImportName -> T.Text
+fieldOnlyName (UnusedImportNameRegular name) = T.pack (getOccString name)
+fieldOnlyName (UnusedImportNameRecField _ occName) = T.pack (occNameString occName)
+
+-- | Extract the text name from an UnusedImportName
+unusedImportNameText :: UnusedImportName -> T.Text
+unusedImportNameText (UnusedImportNameRegular name) = T.pack (getOccString name)
+unusedImportNameText (UnusedImportNameRecField parent occName) =
+    case parent of
+        ParentIs name -> T.pack (getOccString name) <> "(" <> T.pack (occNameString occName) <> ")"
+        NoParent -> T.pack (occNameString occName)  -- Fallback safety (unlikely)
+#endif
 
 diagInRange :: Diagnostic -> Range -> Bool
 diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
@@ -488,10 +563,10 @@ diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
 -- is likely to be removed and less likely the warning will be disabled.
 -- Therefore actions to remove a single or all redundant imports should be
 -- preferred, so that the client can prioritize them higher.
-caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caRemoveRedundantImports m contents allDiags contextRange uri
   | Just pm <- m,
-    r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) allDiags,
+    r <- join $ map (\fd -> let d = fdLspDiagnostic fd in repeat d `zip` suggestRemoveRedundantImportBinding pm contents fd) allDiags,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
     ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
@@ -518,7 +593,7 @@ caRemoveRedundantImports m contents allDiags contextRange uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caRemoveInvalidExports m contents allDiags contextRange uri
   | Just pm <- m,
     Just txt <- contents,
@@ -536,9 +611,9 @@ caRemoveInvalidExports m contents allDiags contextRange uri
   where
     extend txt ranges = extendAllToIncludeCommaIfPossible True txt ranges
 
-    groupDiag pm dig
-      | Just (title, ranges) <- suggestRemoveRedundantExport pm dig
-      = Just (title, dig, ranges)
+    groupDiag pm fd
+      | Just (title, ranges) <- suggestRemoveRedundantExport pm (fdLspDiagnostic fd)
+      = Just (title, fdLspDiagnostic fd, ranges)
       | otherwise = Nothing
 
     removeSingle (_, _, []) = Nothing
@@ -591,14 +666,38 @@ suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} D
       ranges -> (txt, ranges)
 suggestRemoveRedundantExport _ _ = Nothing
 
-suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestDeleteUnusedBinding
-  ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}}
-  contents
-  Diagnostic{_range=_range,..}
--- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
+suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestDeleteUnusedBinding pm contents fd =
+#if MIN_VERSION_ghc(9,7,0)
+    suggestDeleteUnusedBindingStructured pm contents fd
+#else
+    suggestDeleteUnusedBindingRegex pm contents (fdLspDiagnostic fd)
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+suggestDeleteUnusedBindingStructured :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestDeleteUnusedBindingStructured pm contents fd
+    | Just (TcRnUnusedName occName prov) <- fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+    , isLocalUnusedName prov
+    = suggestDeleteUnusedBindingByName pm contents (T.pack $ occNameString occName) (fdLspDiagnostic fd)
+    | otherwise = []
+
+isLocalUnusedName :: UnusedNameProv -> Bool
+isLocalUnusedName UnusedNameTopDecl   = True
+isLocalUnusedName UnusedNameLocalBind = True
+isLocalUnusedName UnusedNameMatch     = True
+isLocalUnusedName _                   = False
+#else
+suggestDeleteUnusedBindingRegex :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestDeleteUnusedBindingRegex pm contents diag@Diagnostic{_message}
     | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
-    , Just indexedContent <- indexedByPosition . T.unpack <$> contents
+    = suggestDeleteUnusedBindingByName pm contents name diag
+    | otherwise = []
+#endif
+
+suggestDeleteUnusedBindingByName :: ParsedModule -> Maybe T.Text -> T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestDeleteUnusedBindingByName ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} contents name Diagnostic{_range=_range}
+    | Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
     | otherwise = []
@@ -716,16 +815,31 @@ data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
 getLocatedRange :: HasSrcSpan a => a -> Maybe Range
 getLocatedRange = srcSpanToRange . getLoc
 
-suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> Maybe (T.Text, TextEdit)
-suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
--- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
--- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
--- Foo.hs:6:1: warning: [-Wunused-top-binds] Defined but not used: data constructor ‘Bar’
+suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> FileDiagnostic -> Maybe (T.Text, TextEdit)
+suggestExportUnusedTopBinding srcOpt pm fd =
+#if MIN_VERSION_ghc(9,7,0)
+    suggestExportUnusedTopBindingStructured srcOpt pm fd
+#else
+    suggestExportUnusedTopBindingRegex srcOpt pm (fdLspDiagnostic fd)
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+suggestExportUnusedTopBindingStructured :: Maybe T.Text -> ParsedModule -> FileDiagnostic -> Maybe (T.Text, TextEdit)
+suggestExportUnusedTopBindingStructured srcOpt pm fd
+    | Just (TcRnUnusedName occName UnusedNameTopDecl) <- fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+    = suggestExportUnusedTopBindingByName srcOpt pm (T.pack $ occNameString occName) (fdLspDiagnostic fd)
+    | otherwise = Nothing
+#else
+suggestExportUnusedTopBindingRegex :: Maybe T.Text -> ParsedModule -> Diagnostic -> Maybe (T.Text, TextEdit)
+suggestExportUnusedTopBindingRegex srcOpt pm diag@Diagnostic{_message}
+    | Just [_, name] <- matchRegexUnifySpaces _message  ".*Defined but not used: (type constructor or class |data constructor )?‘([^ ]+)’"
+    = suggestExportUnusedTopBindingByName srcOpt pm name diag
+    | otherwise = Nothing
+#endif
+
+suggestExportUnusedTopBindingByName :: Maybe T.Text -> ParsedModule -> T.Text -> Diagnostic -> Maybe (T.Text, TextEdit)
+suggestExportUnusedTopBindingByName srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} name Diagnostic{..}
   | Just source <- srcOpt
-  , Just [_, name] <-
-      matchRegexUnifySpaces
-        _message
-        ".*Defined but not used: (type constructor or class |data constructor )?‘([^ ]+)’"
   , Just (exportType, _) <-
       find (matchWithDiagnostic _range . snd)
       . mapMaybe (\(L l b) -> if isTopLevel (locA l) then exportsAs b else Nothing)
@@ -909,16 +1023,22 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
     | otherwise = []
 
-suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestNewDefinition ideOptions parsedModule contents Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message =
+suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestNewDefinition ideOptions parsedModule contents fd
+  | Just (name, typ) <- matchVariableNotInScope fd =
       newDefinitionAction ideOptions parsedModule _range name typ
-  | Just (name, typ) <- matchFoundHole message,
-    [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name (Just typ) =
-      [(label, mkRenameEdit contents _range name : newDefinitionEdits)]
+  | Just (name, typ) <- matchFoundHole fd
+    , let definedName = fromMaybe name (T.stripPrefix "_" name)
+    , let typ' = case T.stripPrefix "_" name of
+                   Nothing | isPlainTyVar typ -> Nothing
+                   _                          -> Just typ
+    , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name typ' =
+      [(label, mkRenameEdit contents _range definedName : newDefinitionEdits)]
   | otherwise = []
   where
-    message = unifySpaces _message
+    Diagnostic{_message, _range} = fdLspDiagnostic fd :: Diagnostic
+    -- A "plain type variable" is a single lowercase word like p, a etc
+    isPlainTyVar t = T.all (\c -> isAlphaNum c || c == '_') t && not (T.null t) && isLower (T.head t)
 
 newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> Maybe T.Text -> [(T.Text, [TextEdit])]
 newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
@@ -929,13 +1049,17 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
       ],
     nextLineP <- Position {_line = _line lastLineP + 1, _character = 0} =
       [ ( "Define " <> sig,
-          [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = _"])]
+          [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, definedName <> " = _"])]
         )
       ]
   | otherwise = []
   where
     colon = if optNewColonConvention then " : " else " :: "
-    sig = name <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
+    definedName =
+      case T.stripPrefix "_" name of
+        Just n  -> n
+        Nothing -> name
+    sig = definedName <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
 {- Handles two variants with different formatting
@@ -1365,74 +1489,45 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         <> "` to the context of the type signature for `" <> typeSignatureName <> "`"
 
 -- | Suggests the removal of a redundant constraint for a type signature.
-removeRedundantConstraints :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+removeRedundantConstraints :: DynFlags -> ParsedSource -> FileDiagnostic -> [(T.Text, Rewrite)]
+removeRedundantConstraints df ps fd =
+    case fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
+        Just (TcRnRedundantConstraints ids _) -> removeRedundantConstraintsStructured df ps ids (fdLspDiagnostic fd)
+        _ -> []
+
+removeRedundantConstraintsStructured :: DynFlags -> ParsedSource -> [Id] -> Diagnostic -> [(T.Text, Rewrite)]
+removeRedundantConstraintsStructured df ps ids _diag@Diagnostic{..} =
+  let
 #if MIN_VERSION_ghc(9,9,0)
-removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
+    L _ HsModule {hsmodDecls} = ps
 #else
-removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagnostic{..}
+    L _ HsModule {hsmodDecls} = makeDeltaAst ps
 #endif
--- • Redundant constraint: Eq a
--- • In the type signature for:
---      foo :: forall a. Eq a => a -> a
--- • Redundant constraints: (Monoid a, Show a)
--- • In the type signature for:
---      foo :: forall a. (Num a, Monoid a, Eq a, Show a) => a -> Bool
-  -- Account for both "Redundant constraint" and "Redundant constraints".
-  | "Redundant constraint" `T.isInfixOf` _message
-  , Just typeSignatureName <- findTypeSignatureName _message
-  , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
-    <- fmap(traceAst "redundantConstraint") $ findSigOfDeclRanged _range hsmodDecls
-  , Just redundantConstraintList <- findRedundantConstraints _message
-  , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
-      = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
-  | otherwise = []
-    where
-      toRemove df list a = T.pack (showSDoc df (ppr a)) `elem` list
+  in
+  case () of
+    _ | not (null ids)
+      , Just typeSignatureName <- findTypeSignatureName _message
+      , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
+          <- fmap (traceAst "redundantConstraint") $ findSigOfDeclRanged _range hsmodDecls
+      , redundantConstraintList <- map (T.pack . showSDoc df . ppr . varType) ids
+      , rewrite <- removeConstraint (toRemove redundantConstraintList) sig
+          -> [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
+      | otherwise -> []
+  where
+    toRemove list a = T.pack (showSDoc df (ppr a)) `elem` list
 
-      parseConstraints :: T.Text -> [T.Text]
-      parseConstraints t = t
-        & (T.strip >>> stripConstraintsParens >>> T.splitOn ",")
-        <&> T.strip
+    formatConstraints :: [T.Text] -> T.Text
+    formatConstraints []             = ""
+    formatConstraints [constraint]   = constraint
+    formatConstraints constraintList = constraintList
+      & T.intercalate ", "
+      & \cs -> "(" <> cs <> ")"
 
-      stripConstraintsParens :: T.Text -> T.Text
-      stripConstraintsParens constraints =
-        if "(" `T.isPrefixOf` constraints
-           then constraints & T.drop 1 & T.dropEnd 1 & T.strip
-           else constraints
-
-{-
-9.2: "message": "/private/var/folders/4m/d38fhm3936x_gy_9883zbq8h0000gn/T/extra-dir-53173393699/Testing.hs:4:1: warning:
-    â¢ Redundant constraints: (Eq a, Show a)
-    â¢ In the type signature for:
-               foo :: forall a. (Eq a, Show a) => a -> Bool",
-
-9.0: "message": "â¢ Redundant constraints: (Eq a, Show a)
-    â¢ In the type signature for:
-           foo :: forall a. (Eq a, Show a) => a -> Bool",
--}
-      findRedundantConstraints :: T.Text -> Maybe [T.Text]
-      findRedundantConstraints t = t
-        & T.lines
-        -- In <9.2 it's the first line, in 9.2 it' the second line
-        & take 2
-        & mapMaybe ((`matchRegexUnifySpaces` "Redundant constraints?: (.+)") . T.strip)
-        & listToMaybe
-        >>= listToMaybe
-        <&> parseConstraints
-
-      formatConstraints :: [T.Text] -> T.Text
-      formatConstraints [] = ""
-      formatConstraints [constraint] = constraint
-      formatConstraints constraintList = constraintList
-        & T.intercalate ", "
-        & \cs -> "(" <> cs <> ")"
-
-      actionTitle :: [T.Text] -> T.Text -> T.Text
-      actionTitle constraintList typeSignatureName =
-        "Remove redundant constraint" <> (if length constraintList == 1 then "" else "s") <> " `"
-        <> formatConstraints constraintList
-        <> "` from the context of the type signature for `" <> typeSignatureName <> "`"
-
+    actionTitle :: [T.Text] -> T.Text -> T.Text
+    actionTitle constraintList typeSignatureName =
+      "Remove redundant constraint" <> (if length constraintList == 1 then "" else "s") <> " `"
+      <> formatConstraints constraintList
+      <> "` from the context of the type signature for `" <> typeSignatureName <> "`"
 -------------------------------------------------------------------------------------------------
 
 suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, [Either TextEdit Rewrite])]
