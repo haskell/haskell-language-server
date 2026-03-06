@@ -637,66 +637,6 @@ test-suite hls-rename-plugin-tests
     , text
 
 -----------------------------
--- retrie plugin
------------------------------
-
-flag retrie
-  description: Enable retrie plugin
-  default:     True
-  manual:      True
-
-common retrie
-  if flag(retrie) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds))
-    build-depends: haskell-language-server:hls-retrie-plugin
-    cpp-options: -Dhls_retrie
-
-library hls-retrie-plugin
-  import:           defaults, pedantic, warnings
-  if !(flag(retrie) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds)))
-    buildable: False
-  exposed-modules:  Ide.Plugin.Retrie
-  hs-source-dirs:   plugins/hls-retrie-plugin/src
-  build-depends:
-    , aeson
-    , bytestring
-    , containers
-    , extra
-    , ghc
-    , ghcide                == 2.13.0.0
-    , hashable
-    , hls-plugin-api        == 2.13.0.0
-    , haskell-language-server:hls-refactor-plugin
-    , lens
-    , lsp
-    , lsp-types
-    , mtl
-    , retrie                >=0.1.1.0
-    , safe-exceptions
-    , stm
-    , text
-    , text-rope
-    , transformers
-    , unordered-containers
-
-  default-extensions:
-    DataKinds
-
-test-suite hls-retrie-plugin-tests
-  import:           defaults, pedantic, test-defaults, warnings
-  if !(flag(retrie) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds)))
-    buildable: False
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   plugins/hls-retrie-plugin/test
-  main-is:          Main.hs
-  build-depends:
-    , containers
-    , filepath
-    , hls-plugin-api
-    , haskell-language-server:{hls-refactor-plugin, hls-retrie-plugin}
-    , hls-test-utils             == 2.13.0.0
-    , text
-
------------------------------
 -- hlint plugin
 -----------------------------
 
@@ -1846,7 +1786,6 @@ library
                   , eval
                   , importLens
                   , rename
-                  , retrie
                   , hlint
                   , stan
                   , signatureHelp
