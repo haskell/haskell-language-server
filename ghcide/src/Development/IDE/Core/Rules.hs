@@ -321,7 +321,7 @@ getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
-        (KnownTargets targets targetsMap) <- useNoFile_ GetKnownTargets
+        (KnownTargets targets) <- useNoFile_ GetKnownTargets
 #if MIN_VERSION_ghc(9,13,0)
         let imports = [(False, lvl, mbPkgName, modName) | (lvl, mbPkgName, modName) <- ms_textual_imps ms]
                    ++ [(True, NormalLevel, NoPkgQual, noLoc modName) | L _ modName <- ms_srcimps ms]
@@ -334,14 +334,13 @@ getLocatedImportsRule recorder =
         let dflags = hsc_dflags env
         opt <- getIdeOptions
         let getTargetFor modName nfp
-                | Just (TargetFile nfp') <- HM.lookup (TargetFile nfp) targetsMap = do
+                | Just (TargetFile nfp') <- HM.lookupKey (TargetFile nfp) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let ttmap = HM.mapWithKey const (HashSet.toMap tt)
-                        nfp' = HM.lookupDefault nfp nfp ttmap
+                    let nfp' = fromMaybe nfp $ HashSet.lookupElement nfp tt
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | otherwise = do
