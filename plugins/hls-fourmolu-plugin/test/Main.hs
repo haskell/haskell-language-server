@@ -56,7 +56,7 @@ tests =
                         assertBool ("Expected parse error details from stderr, got: " <> T.unpack msg)
                             ("parse error" `T.isInfixOf` msg)
                     Right _ ->
-                        assertFailure "Expected formatting to fail on invalid syntax file"
+                        assertFailure "Expected formatting to fail on unparsable file"
         ]
 
 goldenWithFourmolu :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
