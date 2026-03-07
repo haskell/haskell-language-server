@@ -327,20 +327,19 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
                     exceptionInHandler e
                     k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerExceptionOrShutDown $ do
-            runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' ->
-                do
-                ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
-                putMVar ideMVar ide
-                -- Keep this after putMVar ideMVar ide; otherwise shutdown during
-                -- initialization could leave handleInit blocked indefinitely on readMVar.
-                untilReactorStopSignal $ forever $ do
-                    msg <- readChan $ ctxClientMsgChan lifecycleCtx
-                    -- We dispatch notifications synchronously and requests asynchronously
-                    -- This is to ensure that all file edits and config changes are applied before a request is handled
-                    case msg of
-                        ReactorNotification act -> handle exceptionInHandler act
-                        ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-            logWith recorder Info LogReactorThreadStopped
+      runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
+        ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
+        putMVar ideMVar ide
+        -- Keep this after putMVar ideMVar ide; otherwise shutdown during
+        -- initialization could leave handleInit blocked indefinitely on readMVar.
+        untilReactorStopSignal $ forever $ do
+          msg <- readChan $ ctxClientMsgChan lifecycleCtx
+          -- We dispatch notifications synchronously and requests asynchronously
+          -- This is to ensure that all file edits and config changes are applied before a request is handled
+          case msg of
+            ReactorNotification act  -> handle exceptionInHandler act
+            ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+      logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
     registerIdeConfiguration (shakeExtras ide) initConfig
