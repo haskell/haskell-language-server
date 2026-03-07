@@ -80,8 +80,8 @@ withWorkerQueue recorder title workerAction = ContT $ \mainAction -> do
     -- if we want to debug the exact location the worker swallows an async exception, we can
     -- temporarily comment out the `finally` clause.
         `finally` atomically (putTMVar b ())
-    logWith log Debug (LogThreadEnding title)
-  logWith log Debug (LogThreadEnded title)
+    logWith recorder Debug (LogThreadEnding title)
+  logWith recorder Debug (LogThreadEnded title)
   where
     writerThread q b =
       -- See above: check stop flag before dequeuing, exit if set, otherwise run next job.
@@ -96,9 +96,9 @@ withWorkerQueue recorder title workerAction = ContT $ \mainAction -> do
         case task of
           Exit -> return ()
           Task t -> do
-                logWith log Debug $ LogSingleWorkStarting title
+                logWith recorder Debug $ LogSingleWorkStarting title
                 workerAction t
-                logWith log Debug $ LogSingleWorkEnded title
+                logWith recorder Debug $ LogSingleWorkEnded title
                 writerThread q b
 
 
