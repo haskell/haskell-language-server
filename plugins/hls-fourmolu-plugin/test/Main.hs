@@ -52,9 +52,9 @@ tests =
                         -- 1. Contains the exit code prefix (base message intact)
                         assertBool ("Expected exit code prefix, got: " <> T.unpack msg)
                             ("failed with exit code" `T.isInfixOf` msg)
-                        -- 2. Contains stderr parse error details
+                        -- 2. Contains a stable parse-error phrase from formatter stderr
                         assertBool ("Expected parse error details from stderr, got: " <> T.unpack msg)
-                            ("parse error" `T.isInfixOf` msg)
+                            ("parse error on input" `T.isInfixOf` msg)
                     Right _ ->
                         assertFailure "Expected formatting to fail on unparsable file"
         ]
