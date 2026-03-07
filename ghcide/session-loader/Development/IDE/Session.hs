@@ -224,7 +224,7 @@ data SessionLoadingOptions = SessionLoadingOptions
   -- | Given the project name and a set of command line flags,
   --   return the path for storing generated GHC artifacts,
   --   or 'Nothing' to respect the cradle setting
-  , getCacheDirs           :: String -> [String] -> IO CacheDirs
+  , getCacheDirs           :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir    :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
   }
