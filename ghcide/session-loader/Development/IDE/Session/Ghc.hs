@@ -101,7 +101,7 @@ data RawComponentInfo = RawComponentInfo
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
   -- to last modification time. See Note [Multi Cradle Dependency Info].
   , rawComponentDependencyInfo :: DependencyInfo
-  -- | the 
+  -- | The raw ByteString for the hash generated in setoptions for the uid "main"
   , rawComponentHash           :: Maybe B.ByteString
   }
 
@@ -307,7 +307,7 @@ addComponentInfo recorder getCacheDirs dep_info newDynFlags (hieYaml, cfp, opts)
       -- We will modify the unitId and DynFlags used for
       -- compilation but these are the true source of
       -- information.
-      new_deps = fmap (\(HomeUnitConfig df targets mHash) -> RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info mHash) newDynFlags 
+      new_deps = fmap (\(HomeUnitConfig df targets mHash) -> RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info mHash) newDynFlags
       all_deps = new_deps `NE.appendList` fromMaybe [] oldDeps
       -- Get all the unit-ids for things in this component
 
@@ -440,7 +440,7 @@ getCacheDirsDefault prefix mFirstHash opts = do
         -- GHC options will create incompatible interface files.
         prefix' = if isJust mFirstHash then "main" else prefix
         basectx = case mFirstHash of
-          Just h -> H.updates H.init [h]
+          Just h  -> H.updates H.init [h]
           Nothing -> H.init
         opts_hash = B.unpack $ B16.encode $ H.finalize $ H.updates basectx (map B.pack opts)
 
