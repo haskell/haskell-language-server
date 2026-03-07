@@ -13,7 +13,6 @@ module Development.IDE.LSP.LanguageServer
     , runWithWorkerThreads
     , Setup (..)
     , InitializationContext (..)
-    , untilMVar'
     ) where
 
 import           Control.Concurrent.STM
@@ -74,15 +73,15 @@ instance Pretty Log where
     LogReactorShutdownRequested b ->
       "Requested reactor shutdown; stop signal posted: " <+> pretty b
     LogReactorShutdownConfirmed msg ->
-        "Reactor shutdown confirmed: " <+> pretty msg
+      "Reactor shutdown confirmed: " <+> pretty msg
     LogServerExitWith (Right 0) ->
       "Server exited successfully"
     LogServerExitWith (Right code) ->
       "Server exited with failure code" <+> pretty code
-    LogServerExitWith (Left _) ->
+    LogServerExitWith (Left ()) ->
       "Server forcefully exited due to exception in reactor thread"
     LogShutDownTimeout seconds ->
-        "Shutdown timeout, the server will exit now after waiting for" <+> pretty seconds  <+> "seconds"
+      "Shutdown timeout, the server will exit now after waiting for" <+> pretty seconds  <+> "seconds"
     LogRegisteringIdeConfig ideConfig ->
       -- This log is also used to identify if HLS starts successfully in vscode-haskell,
       -- don't forget to update the corresponding test in vscode-haskell if the text in
@@ -103,7 +102,7 @@ instance Pretty Log where
     LogSession msg -> pretty msg
     LogLspServer msg -> pretty msg
 
--- | Context for initializing the LSP language server.
+-- | Context of the LSP language server.
 -- This record encapsulates all the configuration and callback functions
 -- needed to set up and run the language server initialization process.
 data InitializationContext config = InitializationContext
@@ -117,7 +116,7 @@ data InitializationContext config = InitializationContext
     -- ^ Function to create and initialize the IDE state with the given environment
   , ctxUntilReactorStopSignal :: IO () -> IO ()
     -- ^ Lifetime control: MVar to signal reactor shutdown
-  , ctxconfirmReactorShutdown :: T.Text -> IO ()
+  , ctxConfirmReactorShutdown :: T.Text -> IO ()
     -- ^ Callback to log/confirm reactor shutdown with a reason
   , ctxForceShutdown :: IO ()
     -- ^ Action to forcefully exit the server when exception occurs
@@ -291,17 +290,18 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
     logWith recorder Info $ LogRegisteringIdeConfig initConfig
     ideMVar <- newEmptyMVar
 
-    let handleServerExceptionOrShutDown me = do
-            -- shutdown shake
-            tryReadMVar ideMVar >>= mapM_ shutdown
-            case me of
-                Left e -> do
-                    lifetimeConfirm "due to exception in reactor thread"
-                    logWith recorder Error $ LogReactorThreadException e
-                    ctxForceShutdown initParams
-                _ -> do
-                    lifetimeConfirm "due to shutdown message"
-                    return ()
+    let 
+      handleServerExceptionOrShutDown me = do
+        -- shutdown shake
+        tryReadMVar ideMVar >>= mapM_ shutdown
+          case me of
+            Left e -> do
+              lifetimeConfirm "due to exception in reactor thread"
+              logWith recorder Error $ LogReactorThreadException e
+              ctxForceShutdown initParams
+            _ -> do
+              lifetimeConfirm "due to shutdown message"
+              return ()
 
         exceptionInHandler e = do
             logWith recorder Error $ LogReactorMessageActionException e
@@ -329,7 +329,7 @@ handleInit initParams env (TRequestMessage _ _ m params) = otTracedHandler "Init
                 do
                 ide <- ctxGetIdeState initParams env root withHieDb' threadQueue'
                 putMVar ideMVar ide
-                -- We might be blocked indefinitly at initialization if reactorStop is signaled
+                -- We might indefinitly at initialization if reactorStop is signaled
                 -- before we putMVar.
                 untilReactorStopSignal $ forever $ do
                     msg <- readChan $ ctxClientMsgChan initParams

@@ -52,17 +52,20 @@ Originally we used various ways to implement this, but it was hard to maintain a
 Moreover, we can not stop these threads uniformly when we are shutting down the server.
 -}
 data TaskQueue a = TaskQueue (TQueue a)
+
+data ExitOrTask t = Exit | Task t
+
 newTaskQueueIO :: IO (TaskQueue a)
 newTaskQueueIO = TaskQueue <$> newTQueueIO
-data ExitOrTask t = Exit | Task t
 
 -- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
 -- thread which polls the queue for requests and runs the given worker
 -- function on them.
 withWorkerQueueSimple :: Recorder (WithPriority LogWorkerThread) -> T.Text -> ContT () IO (TaskQueue (IO ()))
-withWorkerQueueSimple log title = withWorkerQueue log title id
+withWorkerQueueSimple recorder title = withWorkerQueue recorder title id
+
 withWorkerQueue :: Recorder (WithPriority LogWorkerThread) -> T.Text -> (t -> IO ()) -> ContT () IO (TaskQueue t)
-withWorkerQueue log title workerAction = ContT $ \mainAction -> do
+withWorkerQueue recorder title workerAction = ContT $ \mainAction -> do
   q <- newTaskQueueIO
   -- Use a TMVar as a stop flag to coordinate graceful shutdown.
   -- The worker thread checks this flag before dequeuing each job; if set, it exits immediately,
@@ -80,7 +83,6 @@ withWorkerQueue log title workerAction = ContT $ \mainAction -> do
     logWith log Debug (LogThreadEnding title)
   logWith log Debug (LogThreadEnded title)
   where
-    -- writerThread :: TaskQueue t -> TMVar () -> (forall a. IO a -> IO a) -> IO ()
     writerThread q b =
       -- See above: check stop flag before dequeuing, exit if set, otherwise run next job.
       do
