@@ -58,12 +58,14 @@ data ExitOrTask t = Exit | Task t
 newTaskQueueIO :: IO (TaskQueue a)
 newTaskQueueIO = TaskQueue <$> newTQueueIO
 
--- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
--- thread which polls the queue for requests and runs the given worker
--- function on them.
+-- | 'withWorkerQueueSimple' is a simplified version of 'withWorkerQueue'
+-- for the common case where the worker function is just 'id'.
 withWorkerQueueSimple :: Recorder (WithPriority LogWorkerThread) -> T.Text -> ContT () IO (TaskQueue (IO ()))
 withWorkerQueueSimple recorder title = withWorkerQueue recorder title id
 
+-- | 'withWorkerQueue' creates a new 'TQueue', and launches a worker
+-- thread which polls the queue for requests and runs the given worker
+-- function on them.
 withWorkerQueue :: Recorder (WithPriority LogWorkerThread) -> T.Text -> (t -> IO ()) -> ContT () IO (TaskQueue t)
 withWorkerQueue recorder title workerAction = ContT $ \mainAction -> do
   q <- newTaskQueueIO
