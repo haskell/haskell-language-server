@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Ide.Plugin.Notes (descriptor, Log) where
 
 import           Control.Lens                     ((^.))
@@ -5,7 +7,6 @@ import           Control.Monad.Except             (ExceptT, MonadError,
                                                    throwError)
 import           Control.Monad.IO.Class           (liftIO)
 import qualified Data.Array                       as A
-import           Data.Foldable                    (foldl')
 import           Data.HashMap.Strict              (HashMap)
 import qualified Data.HashMap.Strict              as HM
 import qualified Data.HashSet                     as HS
@@ -32,6 +33,10 @@ import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
                                                    makeRegexOpts, matchAllText)
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.Foldable                    (foldl')
+#endif
 
 data Log
     = LogShake Shake.Log
