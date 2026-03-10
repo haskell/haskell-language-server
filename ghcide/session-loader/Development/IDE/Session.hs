@@ -84,7 +84,6 @@ import           Data.Void
 
 import           Control.Concurrent.STM.Stats        (atomically, modifyTVar',
                                                       readTVar, writeTVar)
-import           Control.Concurrent.STM.TQueue
 import           Control.Monad.Trans.Cont            (ContT (ContT, runContT))
 import           Data.Foldable                       (for_)
 import           Data.HashMap.Strict                 (HashMap)
@@ -92,7 +91,7 @@ import           Data.HashSet                        (HashSet)
 import qualified Data.HashSet                        as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing        (withTrace)
-import           Development.IDE.Core.WorkerThread   (withWorkerQueue)
+import           Development.IDE.Core.WorkerThread
 import           Development.IDE.Session.Dependency
 import           Development.IDE.Session.Diagnostics (renderCradleError)
 import           Development.IDE.Session.Ghc         hiding (Log)
@@ -130,6 +129,7 @@ data Log
   | LogNoneCradleFound FilePath
   | LogHieBios HieBios.Log
   | LogSessionLoadingChanged
+  | LogSessionWorkerThread LogWorkerThread
   | LogSessionNewLoadedFiles ![FilePath]
   | LogSessionReloadOnError FilePath ![FilePath]
   | LogGetOptionsLoop !FilePath
@@ -140,6 +140,7 @@ deriving instance Show Log
 
 instance Pretty Log where
   pretty = \case
+    LogSessionWorkerThread msg -> pretty msg
     LogTime s -> "Time:" <+> pretty s
     LogLookupSessionCache path -> "Looking up session cache for" <+> pretty path
     LogGetOptionsLoop fp -> "Loop: getOptions for" <+> pretty fp
@@ -365,8 +366,8 @@ runWithDb recorder fp = ContT $ \k -> do
     _ <- withWriteDbRetryable deleteMissingRealFiles
     _ <- withWriteDbRetryable garbageCollectTypeNames
 
-    runContT (withWorkerQueue (writer withWriteDbRetryable)) $ \chan ->
-        withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
+    runContT (withWorkerQueue (cmapWithPrio LogSessionWorkerThread recorder) "hiedb thread" (writer withWriteDbRetryable))
+        $ \chan -> withHieDb fp (\readDb -> k (WithHieDbShield $ makeWithHieDbRetryable recorder rng readDb, chan))
   where
     writer withHieDbRetryable l = do
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
@@ -632,7 +633,7 @@ newSessionState = do
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TaskQueue (IO ()) -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
 
@@ -662,7 +663,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     -- see Note [Serializing runs in separate thread]
     -- Start the 'getOptionsLoop' if the queue is empty
     liftIO $ atomically $
-      Extra.whenM (isEmptyTQueue que) $ do
+      Extra.whenM (isEmptyTaskQueue que) $ do
         let newSessionLoadingOptions = SessionLoadingOptions
               { findCradle = cradleLoc
               , ..
@@ -682,7 +683,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionLoadingOptions = newSessionLoadingOptions
               }
 
-        writeTQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
+        writeTaskQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
 
     -- Each one of deps will be registered as a FileSystemWatcher in the GhcSession action
     -- so that we can get a workspace/didChangeWatchedFiles notification when a dep changes.
@@ -701,11 +702,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
 lookupOrWaitCache recorder sessionState absFile = do
   let ncfp = toNormalizedFilePath' absFile
-  cacheResult <- maybe (return Nothing) (guardedA (checkDependencyInfo . snd)) =<< (atomically $ do
-    -- wait until target file is not in pendingFiles
-    Extra.whenM (S.lookup absFile (pendingFiles sessionState)) STM.retry
-    -- check if in the cache
-    checkInCache sessionState ncfp)
+  cacheResult <- maybeM
+    (return Nothing)
+    (guardedA (checkDependencyInfo . snd))
+    (atomically $ do
+      -- wait until target file is not in pendingFiles
+      Extra.whenM (S.lookup absFile (pendingFiles sessionState)) STM.retry
+      -- check if in the cache
+      checkInCache sessionState ncfp)
+
 
   logWith recorder Debug $ LogLookupSessionCache absFile
 

@@ -29,6 +29,7 @@ module Test.Hls
     goldenWithCabalDocFormatter,
     goldenWithCabalDocFormatterInTmpDir,
     goldenWithTestConfig,
+    hlsHelperTestRecorder,
     def,
     -- * Running HLS for integration tests
     runSessionWithServer,
@@ -155,6 +156,17 @@ import           Test.Tasty.Ingredients.Rerun
 data Log
   = LogIDEMain IDEMain.Log
   | LogTestHarness LogTestHarness
+
+data TestRunLog
+  = TestRunFinished
+  | TestServerExitTimeoutSeconds Int
+  | TestServerCancelFinished String
+
+instance Pretty TestRunLog where
+    pretty :: TestRunLog -> Logger.Doc ann
+    pretty TestRunFinished = "Test run finished"
+    pretty (TestServerExitTimeoutSeconds secs) = "Server does not exit in " <> pretty secs <> "s, canceling the async task..."
+    pretty (TestServerCancelFinished took) = "Finishing canceling (took " <> pretty took <> "s)"
 
 instance Pretty Log where
   pretty = \case
@@ -825,6 +837,7 @@ runSessionWithTestConfig TestConfig{..} session =
 
     (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
     (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
+    testRecorder <- hlsHelperTestRecorder
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
     let lspRecorderPlugin = pluginDescToIdePlugins [(defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
@@ -845,9 +858,10 @@ runSessionWithTestConfig TestConfig{..} session =
     timeout 3 (wait server) >>= \case
         Just () -> pure ()
         Nothing -> do
-            putStrLn "Server does not exit in 3s, canceling the async task..."
+            logWith testRecorder Info (TestServerExitTimeoutSeconds 3)
             (t, _) <- duration $ cancel server
-            putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
+            logWith testRecorder Info (TestServerCancelFinished (showDuration t))
+    logWith testRecorder Info TestRunFinished
     pure result
 
     where

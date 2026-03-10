@@ -40,7 +40,7 @@ constraints:
   -- We want to be able to benefit from the performance optimisations
   -- in the future, thus: TODO: remove this flag.
   bitvec -simd,
-  monad-control >=1.0.3,  
+  monad-control >=1.0.3,
 
 
 -- Some of the formatters need the latest Cabal-syntax version,

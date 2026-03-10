@@ -96,4 +96,3 @@ tests = withResource acquire release tests where
 
   release :: TResponseMessage Method_Initialize -> IO ()
   release = mempty
-

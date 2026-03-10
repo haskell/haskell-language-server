@@ -1733,7 +1733,7 @@ library hls-semantic-tokens-plugin
     , ghcide                == 2.13.0.0
     , hls-plugin-api        == 2.13.0.0
     , lens
-    , lsp                    >=2.6
+    , lsp                    >=2.8
     , text
     , transformers
     , bytestring
