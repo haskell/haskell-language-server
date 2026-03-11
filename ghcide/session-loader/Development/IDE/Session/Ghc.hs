@@ -80,10 +80,16 @@ instance Pretty Log where
       "New component cache HscEnvEq:" <+> viaShow componentCache
     LogDLLLoadError errorString ->
       "Error dynamically loading libm.so.6:" <+> pretty errorString
-
+-- | Configuration info for a particular home unit.
 data HomeUnitConfig = HomeUnitConfig
-  { homeUnitDynFlags :: DynFlags
+  {
+  -- | The dynamic flags to compile this specific unit.
+    homeUnitDynFlags :: DynFlags
+  -- | All the targets for this unit.
   , homeUnitTargets  :: [GHC.Target]
+  -- | Optional hash seed to differentiate home units
+  -- with same `-this-unit-id`. Used when `-this-unit-id` is "main"
+  -- , common when loading a single target.
   , homeUnitHash     :: Maybe B.ByteString
   }
 -- This is pristine information about a component
@@ -101,7 +107,7 @@ data RawComponentInfo = RawComponentInfo
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
   -- to last modification time. See Note [Multi Cradle Dependency Info].
   , rawComponentDependencyInfo :: DependencyInfo
-  -- | The raw ByteString for the hash generated in setoptions for the uid "main"
+  -- | An optional hash seed generated in 'setOptions' for the unit id "main".
   , rawComponentHash           :: Maybe B.ByteString
   }
 
@@ -431,13 +437,23 @@ setCacheDirs recorder CacheDirs{..} dflags = do
           & maybe id setHieDir hieCacheDir
           & maybe id setODir oCacheDir
 
+-- | Append the hash to the unit id to create unique cache folders.
+--
+-- This function generates a single, unified hash.
+-- If an optional base hash (@mFirstHash@) is provided—which
+-- is common for a single target with `-this-unit-id` as "main"-
+-- we set the prefix to "main", extract the context generated
+-- from the @mFirstHash@, and update the @opts@ into the same hash.
+--
+-- This guarantees a unique cache folder for different GHC
+-- options(avoiding incompatible interface files) while
+-- keeping the path short and clean.
 getCacheDirsDefault :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
 getCacheDirsDefault prefix mFirstHash opts = do
     dir <- Just <$> getXdgDirectory XdgCache (cacheDir </> prefix' ++ "-" ++ opts_hash)
     return $ CacheDirs dir dir dir
     where
-        -- Create a unique folder per set of different GHC options, assuming that each different set of
-        -- GHC options will create incompatible interface files.
+        -- Create a unique folder per set of different GHC options.
         prefix' = if isJust mFirstHash then "main" else prefix
         basectx = case mFirstHash of
           Just h  -> H.updates H.init [h]

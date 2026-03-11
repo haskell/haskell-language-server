@@ -40,7 +40,6 @@ import           Data.List.Extra                     as L
 import qualified Data.Map.Strict                     as Map
 import           Data.Maybe
 import           Data.Proxy
-
 import qualified Data.Text                           as T
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
@@ -1078,10 +1077,8 @@ toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, Depend
 toFlagsMap TargetDetails{..} =
     [ (l, (targetEnv, targetDepends)) | l <-  targetLocations]
 
-
 -- | Mapping from @hie.yaml@ to all components that have been loaded
 -- from this @hie.yaml@ location.
-
 --
 -- See Note [Multi Cradle Dependency Info]
 type HieMap = Map.Map (Maybe FilePath) [RawComponentInfo]
@@ -1109,7 +1106,6 @@ memoIO op = do
                 res <- onceFork $ op k
                 return (Map.insert k res mp, res)
             Just res -> return (mp, res)
-
 
 ----------------------------------------------------------------------------------------------------
 
