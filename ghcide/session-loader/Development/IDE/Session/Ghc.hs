@@ -88,8 +88,8 @@ data HomeUnitConfig = HomeUnitConfig
   -- | All the targets for this unit.
   , homeUnitTargets  :: [GHC.Target]
   -- | Optional hash seed to differentiate home units
-  -- with same `-this-unit-id`. Used when `-this-unit-id` is "main"
-  -- , common when loading a single target.
+  -- with same `-this-unit-id`. Used when `-this-unit-id` is "main",
+  -- which is common when loading a single target.
   , homeUnitHash     :: Maybe B.ByteString
   }
 -- This is pristine information about a component
