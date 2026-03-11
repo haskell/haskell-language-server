@@ -65,7 +65,6 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-overloaded-record-dot-plugin`   | 2    |                          |
 | `hls-semantic-tokens-plugin`         | 2    |                          |
 | `hls-stan-plugin`                    | 3    | 9.12.2, 9.14.1           |
-| `hls-retrie-plugin`                  | 3    | 9.10.1, 9.12.2, 9.14.1   |
 | `hls-splice-plugin`                  | 3    | 9.10.1, 9.12.2, 9.14.1   |
 
 [1]: HLint is incompatible with GHC 9.10 series. See the issue [#4674](https://github.com/haskell/haskell-language-server/issues/4674) for discussion and explanation.
