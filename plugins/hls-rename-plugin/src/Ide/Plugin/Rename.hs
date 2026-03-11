@@ -183,6 +183,38 @@ getParsedModuleStale state nfp =                                                
         runAction "rename.getParsedModuleStale" state                                             -- [x] AI
             (useWithStale GetParsedModule nfp)                                                    -- [x] AI
 
+-- Step 2: find the import declaration whose alias span contains the cursor.                      -- [x] AI
+--                                                                                                -- [x] AI
+-- We traverse `hsmodImports` looking for an @import M as Alias@ declaration                      -- [x] AI
+-- where the cursor position falls inside the @Alias@ token. If found, we                         -- [x] AI
+-- return the alias name and its source span for use in steps 4 and 5.                            -- [x] AI
+
+-- | Given a cursor position that falls on the @Alias@ token in an                                -- [x] AI
+-- @import M as Alias@ declaration (not on a use site such as @Alias.foo@),                       -- [x] AI
+-- return the alias 'ModuleName' and the 'RealSrcSpan' of that token.                             -- [x] AI
+-- Returns 'Nothing' if no import alias covers the cursor position.                               -- [x] AI
+-- Multiple imports of the same module with different aliases are handled                         -- [x] AI
+-- correctly because we match on the cursor position, not the module name.                        -- [x] AI
+findImportAliasAtPos                                                                              -- [x] AI
+    :: Position                                                                                   -- [x] AI
+    -> [LImportDecl GhcPs]                                                                        -- [x] AI
+    -> Maybe (ModuleName, RealSrcSpan)                                                            -- [x] AI
+findImportAliasAtPos pos imports = listToMaybe                                                    -- [x] AI
+    [ (aliasName, rsp)                                                                            -- [x] AI
+    | _locatedImport@(L _ decl) <- imports                                                        -- [x] AI
+    , Just locatedAlias         <- [ideclAs decl]                                                 -- [x] AI
+    , let aliasName = unLoc locatedAlias                                                          -- [x] AI
+    , RealSrcSpan rsp _         <- [locA locatedAlias]                                            -- [x] AI
+    , rangeContainsPosition (realSrcSpanToRange rsp) pos                                          -- [x] AI
+    ]                                                                                             -- [x] AI
+
+-- | Check whether a 'Range' contains a 'Position'                                                -- [x] AI
+-- (inclusive start, exclusive end).                                                              -- [x] AI
+rangeContainsPosition :: Range -> Position -> Bool                                                -- [x] AI
+rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)                    -- [x] AI
+    =  (l > sl || (l == sl && c >= sc))                                                           -- [x] AI
+    && (l < el || (l == el && c <  ec))                                                           -- [x] AI
+
 ---------------------------------------------------------------------------------------------------
 -- Source renaming
 

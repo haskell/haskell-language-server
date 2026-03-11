@@ -56,4 +56,6 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 >
 > —Claude Sonnet 4.6
 
-Using the parsed AST instead of the full HIE AST allows us to inspect `RdrName` identifiers, which contain unresolved import module aliases. It also turns out that this is already implemented as a rule in HLS.
+1. Using the parsed AST instead of the full HIE AST allows us to inspect `RdrName` identifiers, which contain unresolved import module aliases. It also turns out that this is already implemented as a rule in HLS.
+
+2. The cursor should be inside an import statement (such as on `L` in `import Data.List as L`), not inside a use site (like `L.take`).
