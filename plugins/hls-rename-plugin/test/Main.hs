@@ -56,7 +56,11 @@ renameTests = testGroup "Identifier"
         rename doc (Position 4 23) "blah"
     , goldenWithRename "Let expression" "LetExpression" $ \doc ->
         rename doc (Position 5 11) "foobar"
-    , goldenWithRename "Qualified as" "QualifiedAs" $ \doc ->
+    , goldenWithRename "Qualified-as alias in import" "QualifiedAsAlias" $ \doc ->
+        rename doc (Position 1 24) "G"
+    , goldenWithRename "Qualified-as alias in use" "QualifiedAsAlias" $ \doc ->
+        rename doc (Position 4 6) "G"
+    , goldenWithRename "Qualified-as function" "QualifiedAsFunction" $ \doc ->
         rename doc (Position 3 10) "baz"
     , goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc ->
         rename doc (Position 3 12) "foobar"
