@@ -158,6 +158,32 @@ failWhenImportOrExport state nfp refLocs names = do
         _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------
+-- Qualified alias renaming                                                                       -- [x] AI
+--                                                                                                -- [x] AI
+-- Step 1: fetch the parsed AST via GetParsedModule.                                              -- [x] AI
+--                                                                                                -- [x] AI
+-- Import aliases (e.g. `import Data.List as L`) survive only in the parsed (`GhcPs`) AST.        -- [x] AI
+-- They are erased during resolving, so the HIE AST cannot be used to locate or replace them.     -- [x] AI
+-- The helper below fetches the parsed module using `useWithStale` so it never blocks             -- [x] AI
+-- the UI while GHC is still loading.                                                             -- [x] AI
+--                                                                                                -- [x] AI
+-- Steps 2-5 (finding the alias, collecting use sites, building edits) will be                    -- [x] AI
+-- added in subsequent iterations.                                                                -- [x] AI
+
+-- | Fetch the parsed module for a file, accepting a possibly stale result.                       -- [x] AI
+-- Returns @Nothing@ if the file has not yet been indexed at all.                                 -- [x] AI
+-- TODO: Handle the @Nothing@ case.
+getParsedModuleStale ::                                                                           -- [x] AI
+    MonadIO m =>                                                                                  -- [x] AI
+    IdeState ->                                                                                   -- [x] AI
+    NormalizedFilePath ->                                                                         -- [x] AI
+    m (Maybe ParsedModule)                                                                        -- [x] AI
+getParsedModuleStale state nfp =                                                                  -- [x] AI
+    liftIO $ fmap fst <$>                                                                         -- [x] AI
+        runAction "rename.getParsedModuleStale" state                                             -- [x] AI
+            (useWithStale GetParsedModule nfp)                                                    -- [x] AI
+
+---------------------------------------------------------------------------------------------------
 -- Source renaming
 
 -- | Apply a function to a `ParsedSource` for a given `Uri` to compute a `WorkspaceEdit`.
