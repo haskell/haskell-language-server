@@ -225,16 +225,53 @@ rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)  
 -- | Collect the 'RealSrcSpan' of every qualified use of @oldAlias@ in the                        -- [x] AI
 -- given declarations, e.g. every occurrence of @L.foo@, @L.bar@, etc.                            -- [x] AI
 -- Uses SYB 'listify' to traverse the full 'GhcPs' AST.                                           -- [x] AI
-aliasUseSiteSpans                                                                                 -- [x] AI
+importAliasUseSiteSpans                                                                           -- [x] AI
     :: ModuleName                                                                                 -- [x] AI
     -> [LHsDecl GhcPs]                                                                            -- [x] AI
     -> [RealSrcSpan]                                                                              -- [x] AI
-aliasUseSiteSpans oldAlias decls =                                                                -- [x] AI
+importAliasUseSiteSpans oldAlias decls =                                                          -- [x] AI
     [ rsp                                                                                         -- [x] AI
     | L (ann :: Anno RdrName) (Qual moduleAlias _) <- listify (const True) decls                  -- [x] AI
     , moduleAlias == oldAlias                                                                     -- [x] AI
     , RealSrcSpan rsp _ <- [locA ann]                                                             -- [x] AI
     ]                                                                                             -- [x] AI
+
+-- Step 4: build TextEdits — one for the import alias declaration and one                         -- [x] AI
+-- for each qualifier at a use site.                                                              -- [x] AI
+
+-- The two helpers below are kept separate                                                        -- [x] AI
+-- because the span arithmetic differs: use-site spans cover the full                             -- [x] AI
+-- qualified name (e.g. @L.foo@) so we must truncate to the qualifier width,                      -- [x] AI
+-- whereas import spans already cover exactly the alias token.                                    -- [x] AI
+
+-- | Build a 'TextEdit' that replaces the qualifier portion of a use site.                        -- [x] AI
+-- The span covers only the alias (e.g. the @L@ in @L.foo@), not the dot                          -- [x] AI
+-- or the following name. Column arithmetic uses GHC's 1-based source                             -- [x] AI
+-- locations and converts to the 0-based LSP 'Position' convention.                               -- [x] AI
+importAliasUseSiteEdit                                                                            -- [x] AI
+    :: ModuleName    -- ^ old alias, used to compute the qualifier width                          -- [x] AI
+    -> T.Text        -- ^ new alias text                                                          -- [x] AI
+    -> RealSrcSpan   -- ^ span of the full qualified name, e.g. @L.foo@                           -- [x] AI
+    -> TextEdit                                                                                   -- [x] AI
+importAliasUseSiteEdit oldAlias newAlias rsp = TextEdit range newAlias                            -- [x] AI
+  where                                                                                           -- [x] AI
+    start    = realSrcSpanStart rsp                                                               -- [x] AI
+    line     = fromIntegral (srcLocLine start) - 1                                                -- [x] AI
+    startCol = fromIntegral (srcLocCol  start) - 1                                                -- [x] AI
+    -- The qualifier occupies exactly as many characters as the alias string.                     -- [x] AI
+    -- The dot is at startCol + width and is not included in the edit.                            -- [x] AI
+    endCol   = startCol + fromIntegral (length (moduleNameString oldAlias))                       -- [x] AI
+    range    = Range (Position line startCol) (Position line endCol)                              -- [x] AI
+
+-- | Build a 'TextEdit' that replaces the alias token in an                                       -- [x] AI
+-- @import M as Alias@ declaration.                                                               -- [x] AI
+-- The span is taken directly from 'ideclAs' and already covers exactly                           -- [x] AI
+-- the alias token, so no column arithmetic is needed.                                            -- [x] AI
+importAliasDeclEdit                                                                               -- [x] AI
+    :: T.Text        -- ^ new alias text                                                          -- [x] AI
+    -> RealSrcSpan   -- ^ span of @Alias@ in @import M as Alias@                                  -- [x] AI
+    -> TextEdit                                                                                   -- [x] AI
+importAliasDeclEdit newAlias rsp = TextEdit (realSrcSpanToRange rsp) newAlias                     -- [x] AI
 
 ---------------------------------------------------------------------------------------------------
 -- Source renaming

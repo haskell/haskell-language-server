@@ -61,3 +61,5 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 2. The cursor should be inside an import statement (such as on `L` in `import Data.List as L`), not inside a use site (like `L.take`).
 
 3. Traversing the AST is done using `listify` from `syb`. `listify` needs to be monomorphic. To apply the correct type, use the `Anno` type family.
+
+4. GHC uses 1-based positioning; LSP uses 0-based positioning.
