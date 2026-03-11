@@ -59,6 +59,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import GHC.Parser.Annotation (SrcSpanAnnA, LocatedN)
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -214,6 +215,26 @@ rangeContainsPosition :: Range -> Position -> Bool                              
 rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)                    -- [x] AI
     =  (l > sl || (l == sl && c >= sc))                                                           -- [x] AI
     && (l < el || (l == el && c <  ec))                                                           -- [x] AI
+
+-- Step 3: collect use-site spans for every `Qual oldAlias _` RdrName.                            -- [x] AI
+--                                                                                                -- [x] AI
+-- We use SYB's `listify` to collect all located RdrName nodes anywhere in                        -- [x] AI
+-- the declaration list, then filter to those whose qualifier matches the                         -- [x] AI
+-- target alias. Each matching node contributes its RealSrcSpan.                                  -- [x] AI
+
+-- | Collect the 'RealSrcSpan' of every qualified use of @oldAlias@ in the                        -- [x] AI
+-- given declarations, e.g. every occurrence of @L.foo@, @L.bar@, etc.                            -- [x] AI
+-- Uses SYB 'listify' to traverse the full 'GhcPs' AST.                                           -- [x] AI
+aliasUseSiteSpans                                                                                 -- [x] AI
+    :: ModuleName                                                                                 -- [x] AI
+    -> [LHsDecl GhcPs]                                                                            -- [x] AI
+    -> [RealSrcSpan]                                                                              -- [x] AI
+aliasUseSiteSpans oldAlias decls =                                                                -- [x] AI
+    [ rsp                                                                                         -- [x] AI
+    | L (ann :: Anno RdrName) (Qual moduleAlias _) <- listify (const True) decls                  -- [x] AI
+    , moduleAlias == oldAlias                                                                     -- [x] AI
+    , RealSrcSpan rsp _ <- [locA ann]                                                             -- [x] AI
+    ]                                                                                             -- [x] AI
 
 ---------------------------------------------------------------------------------------------------
 -- Source renaming
