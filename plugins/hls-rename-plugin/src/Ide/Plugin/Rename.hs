@@ -91,20 +91,94 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
     nfp <- getNormalizedFilePathE uri
-    namesUnderCursor <- getNamesAtPos state nfp pos
-    -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
-    -- and doesn't even allow you to create full rename request.
-    -- This handler deliberately approximates "things that definitely can't be renamed"
-    -- to mean "there is no Name at given position".
-    --
-    -- In particular it allows some cases through (e.g. cross-module renames),
-    -- so that the full rename handler can give more informative error about them.
-    let renameValid = not $ null namesUnderCursor
-    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
+    -- Step 5 (design decision 1): try alias rename first; fall through to                          -- [x] AI
+    -- name-based rename if the cursor is not on an alias token.                                    -- [x] AI
+    maybeParsed <- getParsedModuleStale state nfp                                                   -- [x] AI
+    case maybeParsed of                                                                             -- [x] AI
+        Nothing -> throwError $ PluginInternalError                                                 -- [x] AI
+            "Cannot rename: HLS has not yet parsed this module. Please wait for indexing to complete and try again."  -- [x] AI
+        Just parsed -> do                                                                           -- [x] AI
+            let hsModule = unLoc $ pm_parsed_source parsed                                          -- [x] AI
+                imports  = hsmodImports hsModule                                                    -- [x] AI
+            case findImportAliasDeclAtPos pos imports of                                            -- [x] AI
+                Just _ ->                                                                           -- [x] AI
+                    -- Step 5 (design decision 2): return defaultBehavior.                          -- [x] AI
+                    -- TODO: return an explicit range and placeholder text                          -- [x] AI
+                    -- (the InL and InR (InL ...) variants of                                       -- [x] AI
+                    -- PrepareRenameResult) so the client highlights exactly                        -- [x] AI
+                    -- the alias token and pre-fills the current alias text                         -- [x] AI
+                    -- in the rename box, rather than relying on                                    -- [x] AI
+                    -- defaultBehavior.                                                             -- [x] AI
+                    pure $ InL $ PrepareRenameResult $ InR $ InR $                                  -- [x] AI
+                        PrepareRenameDefaultBehavior True                                           -- [x] AI
+                Nothing -> do                                                                       -- [x] AI
+                    -- Fall through to name-based rename.                                           -- [x] AI
+                    --
+                    -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
+                    -- and doesn't even allow you to create full rename request.
+                    -- This handler deliberately approximates "things that definitely can't be renamed"
+                    -- to mean "there is no Name at given position".
+                    --
+                    -- In particular it allows some cases through (e.g. cross-module renames),
+                    -- so that the full rename handler can give more informative error about them.
+                    namesUnderCursor <- getNamesAtPos state nfp pos
+                    let renameValid = not $ null namesUnderCursor
+                    pure $ InL $ PrepareRenameResult $ InR $ InR $
+                        PrepareRenameDefaultBehavior renameValid
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
     nfp <- getNormalizedFilePathE uri
+    -- Step 5 (design decision 1): try alias rename first; fall through to                          -- [x] AI
+    -- name-based rename if the cursor is not on an alias token.                                    -- [x] AI
+    maybeParsed <- getParsedModuleStale state nfp                                                   -- [x] AI
+    case maybeParsed of                                                                             -- [x] AI
+        Nothing -> throwError $ PluginInternalError                                                 -- [x] AI
+            "Cannot rename: HLS has not yet parsed this module. Please wait for indexing to complete and try again."  -- [x] AI
+        Just parsed -> do                                                                           -- [x] AI
+            let hsModule = unLoc $ pm_parsed_source parsed                                          -- [x] AI
+                imports  = hsmodImports hsModule                                                    -- [x] AI
+                decls    = hsmodDecls hsModule                                                      -- [x] AI
+            case findImportAliasDeclAtPos pos imports of                                            -- [x] AI
+                Just (oldAlias, aliasSpan) ->                                                       -- [x] AI
+                    aliasBasedRename state uri oldAlias aliasSpan decls newNameText                 -- [x] AI
+                Nothing ->                                                                          -- [x] AI
+                    -- Fall through to name-based rename.                                           -- [x] AI
+                    nameBasedRename state pluginId nfp pos newNameText                              -- [x] AI
+
+-- | Alias-based rename: build 'TextEdit's for the import alias declaration                         -- [x] AI
+-- and all use sites, then wrap in a 'WorkspaceEdit'.                                               -- [x] AI
+aliasBasedRename ::                                                                                 -- [x] AI
+    MonadIO m =>                                                                                    -- [x] AI
+    IdeState ->                                                                                     -- [x] AI
+    Uri ->                                                                                          -- [x] AI
+    ModuleName ->                                                                                   -- [x] AI
+    RealSrcSpan ->                                                                                  -- [x] AI
+    [LHsDecl GhcPs] ->                                                                              -- [x] AI
+    T.Text ->                                                                                       -- [x] AI
+    ExceptT PluginError m (MessageResult Method_TextDocumentRename)                                 -- [x] AI
+aliasBasedRename state uri oldAlias aliasSpan decls newNameText = do                                -- [x] AI
+    let useSiteSpans  = importAliasUseSiteSpans oldAlias decls                                      -- [x] AI
+        declEdit      = importAliasDeclEdit newNameText aliasSpan                                   -- [x] AI
+        useEdits      = map (importAliasUseSiteEdit oldAlias newNameText) useSiteSpans              -- [x] AI
+        allEdits      = declEdit : useEdits                                                         -- [x] AI
+    verTxtDocId <- liftIO $ runAction "rename: getVersionedTextDoc" state $                         -- [x] AI
+        getVersionedTextDoc (TextDocumentIdentifier uri)                                            -- [x] AI
+    let fileChanges   = Just $ M.singleton (verTxtDocId ^. L.uri) allEdits                          -- [x] AI
+        -- TODO: Replace 'Nothing' with meaningful details for the workspace edit.
+        workspaceEdit = WorkspaceEdit fileChanges Nothing Nothing                                   -- [x] AI
+    pure $ InL workspaceEdit                                                                        -- [x] AI
+
+-- | Name-based rename: the original renameProvider logic, extracted so the                         -- [x] AI
+-- alias branch can fall through to it cleanly.                                                     -- [x] AI
+nameBasedRename ::                                                                                  -- [x] AI
+    IdeState ->                                                                                     -- [x] AI
+    PluginId ->                                                                                     -- [x] AI
+    NormalizedFilePath ->                                                                           -- [x] AI
+    Position ->                                                                                     -- [x] AI
+    T.Text ->                                                                                       -- [x] AI
+    ExceptT PluginError (HandlerM config) (MessageResult Method_TextDocumentRename)                 -- [x] AI
+nameBasedRename state pluginId nfp pos newNameText = do                                             -- [x] AI
     directOldNames <- getNamesAtPos state nfp pos
     directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
@@ -272,6 +346,44 @@ importAliasDeclEdit                                                             
     -> RealSrcSpan   -- ^ span of @Alias@ in @import M as Alias@                                  -- [x] AI
     -> TextEdit                                                                                   -- [x] AI
 importAliasDeclEdit newAlias rsp = TextEdit (realSrcSpanToRange rsp) newAlias                     -- [x] AI
+
+-- Step 5: assemble WorkspaceEdit and wire into prepareRenameProvider and                         -- [x] AI
+-- renameProvider.                                                                                -- [x] AI
+--                                                                                                -- [x] AI
+-- Both handlers share the same structure: fetch the parsed module, check                         -- [x] AI
+-- whether the cursor is on an alias token, and either take the alias path                        -- [x] AI
+-- or fall through to name-based rename.                                                          -- [x] AI
+--                                                                                                -- [x] AI
+-- In renameProvider, the alias path delegates to aliasBasedRename, which                         -- [x] AI
+-- collects use-site spans via importAliasUseSiteSpans, builds a TextEdit for the                 -- [x] AI
+-- import declaration via importAliasDeclEdit and one per use site via                            -- [x] AI
+-- importAliasUseSiteEdit, and wraps them all in a WorkspaceEdit. The name-based                  -- [x] AI
+-- fallthrough delegates to nameBasedRename.                                                      -- [x] AI
+--                                                                                                -- [x] AI
+-- In prepareRenameProvider, the alias path returns                                               -- [x] AI
+-- PrepareRenameDefaultBehavior True if an alias is found. If not, the name-based fallthrough     -- [x] AI
+-- returns PrepareRenameDefaultBehavior True or False depending on whether                        -- [x] AI
+-- getNamesAtPos finds any Names at the cursor.                                                   -- [x] AI
+--                                                                                                -- [x] AI
+-- Design decision 1 — entry point: a branch inside the existing handlers                         -- [x] AI
+-- rather than a separate handler. HLS only registers one rename handler                          -- [x] AI
+-- per plugin, so a separate handler is not viable. The alias branch is                           -- [x] AI
+-- checked first in both handlers; if the cursor is not on an alias token,                        -- [x] AI
+-- we fall through to name-based rename.                                                          -- [x] AI
+--                                                                                                -- [x] AI
+-- Design decision 2 — prepareRenameProvider return value: the alias branch                       -- [x] AI
+-- returns PrepareRenameDefaultBehavior True, consistent with the existing                        -- [x] AI
+-- handler. PrepareRenameResult also supports returning an explicit range                         -- [x] AI
+-- and placeholder text (the InL and InR (InL ...) variants), which would                         -- [x] AI
+-- let the client highlight exactly the alias token and pre-fill the current                      -- [x] AI
+-- alias text in the rename box.                                                                  -- [x] AI
+-- TODO: use those variants for a better UX.                                                      -- [x] AI
+--                                                                                                -- [x] AI
+-- Design decision 3 — getParsedModuleStale returns Nothing: fail early                           -- [x] AI
+-- with an informative error. Falling through to name-based rename is not a                       -- [x] AI
+-- real fallback since that path also requires a typechecked module and will                      -- [x] AI
+-- fail anyway. Nothing only occurs if the file has never been successfully                       -- [x] AI
+-- parsed.                                                                                        -- [x] AI
 
 ---------------------------------------------------------------------------------------------------
 -- Source renaming
