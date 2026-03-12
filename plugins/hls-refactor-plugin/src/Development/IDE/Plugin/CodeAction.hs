@@ -1025,23 +1025,23 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
 
 suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
 suggestNewDefinition ideOptions parsedModule contents fd
-  | Just (name, typ) <- matchVariableNotInScope fd =
-      newDefinitionAction ideOptions parsedModule _range name typ
-  | Just (name, typ) <- matchFoundHole fd
-    , let definedName = fromMaybe name (T.stripPrefix "_" name)
-    , let typ' = case T.stripPrefix "_" name of
-                   Nothing | isPlainTyVar typ -> Nothing
-                   _                          -> Just typ
-    , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name typ' =
+  | Just (rdrName, typ) <- matchVariableNotInScope fd =
+      newDefinitionAction ideOptions parsedModule _range rdrName typ
+  | Just (rdrName, typ) <- matchFoundHole fd
+    , let occName = rdrNameOcc rdrName
+    , let isHole = "_" `isPrefixOf` occNameString occName
+    , let definedName = printOutputable (if isHole then mkOccName (occNameSpace occName) (drop 1 (occNameString occName)) else occName)
+    , let typ' = if isHole || not (isPlainTyVar typ) then Just typ else Nothing
+    , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range rdrName typ' =
       [(label, mkRenameEdit contents _range definedName : newDefinitionEdits)]
   | otherwise = []
   where
     Diagnostic{_message, _range} = fdLspDiagnostic fd :: Diagnostic
     -- A "plain type variable" is a single lowercase word like p, a etc
-    isPlainTyVar t = T.all (\c -> isAlphaNum c || c == '_') t && not (T.null t) && isLower (T.head t)
+    isPlainTyVar = isJust . getTyVar_maybe
 
-newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> Maybe T.Text -> [(T.Text, [TextEdit])]
-newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
+newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> RdrName -> Maybe Type -> [(T.Text, [TextEdit])]
+newDefinitionAction IdeOptions {..} parsedModule Range {_start} rdrName typ
   | Range _ lastLineP : _ <-
       [ realSrcSpanToRange sp
         | (L (locA -> l@(RealSrcSpan sp _)) _) <- hsmodDecls,
@@ -1055,11 +1055,11 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
   | otherwise = []
   where
     colon = if optNewColonConvention then " : " else " :: "
+    occName = rdrNameOcc rdrName
     definedName =
-      case T.stripPrefix "_" name of
-        Just n  -> n
-        Nothing -> name
-    sig = definedName <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
+      let name = occNameString occName
+      in T.pack $ if "_" `isPrefixOf` name then drop 1 name else name
+    sig = definedName <> colon <> T.dropWhileEnd isSpace (maybe "_" printOutputable typ)
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
 {- Handles two variants with different formatting

@@ -5,16 +5,13 @@ module Development.IDE.Plugin.Plugins.Diagnostic (
   matchRegexUnifySpaces,
   unifySpaces,
   matchFoundHole,
-  matchFoundHoleIncludeUnderscore,
   diagReportHoleError
   )
   where
 
 import           Control.Lens
-import           Data.Bifunctor                    (Bifunctor (..))
 import qualified Data.Text                         as T
-import           Development.IDE                   (printOutputable)
-import           Development.IDE.GHC.Compat        (RdrName)
+import           Development.IDE.GHC.Compat        (RdrName, Type)
 import           Development.IDE.GHC.Compat.Error  (Hole, _ReportHoleError,
                                                     _TcRnMessage,
                                                     _TcRnNotInScope,
@@ -43,20 +40,18 @@ matchRegex message regex = case message =~~ regex of
 matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegexUnifySpaces message = matchRegex (unifySpaces message)
 
-matchFoundHole :: FileDiagnostic -> Maybe (T.Text, T.Text)
+matchFoundHole :: FileDiagnostic -> Maybe (RdrName, Type)
 matchFoundHole fd = do
     hole <- diagReportHoleError fd
-    Just (printOutputable (hole_occ hole), printOutputable (hole_ty hole))
+    Just (hole_occ hole, hole_ty hole)
 
-matchFoundHoleIncludeUnderscore :: FileDiagnostic -> Maybe (T.Text, T.Text)
-matchFoundHoleIncludeUnderscore fd = first ("_" <>) <$> matchFoundHole fd
-
-matchVariableNotInScope :: FileDiagnostic -> Maybe (T.Text, Maybe T.Text)
+matchVariableNotInScope :: FileDiagnostic -> Maybe (RdrName, Maybe Type)
 matchVariableNotInScope fd = do
     (rdrName, _) <- diagReportNotInScope fd
-    Just (printOutputable rdrName, Nothing)
+    Just (rdrName, Nothing)
 
--- | Extract the 'Hole' out of a 'FileDiagnostic'
+-- | Extract the typed hole information from a diagnostic, if the diagnostic
+-- originates from a hole. Returns 'Nothing' for any other kind of diagnostic.
 diagReportHoleError :: FileDiagnostic -> Maybe Hole
 diagReportHoleError diag = do
     solverReport <-
@@ -68,7 +63,6 @@ diagReportHoleError diag = do
                 . _TcRnSolverReport
                 . _1
     (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
-
     Just hole
 
 -- | Extract the 'NotInScopeError' and the corresponding 'RdrName' from a 'FileDiagnostic'

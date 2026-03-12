@@ -9,7 +9,6 @@ import           Data.Char
 import qualified Data.HashSet                              as Set
 import qualified Data.Text                                 as T
 import           Development.IDE                           (FileDiagnostic,
-                                                            _message,
                                                             fdLspDiagnosticL,
                                                             printOutputable)
 import           Development.IDE.GHC.Compat                (ParsedModule,
@@ -33,7 +32,8 @@ import           Development.IDE.Types.Exports             (ExportsMap (..),
                                                             moduleNameText)
 import           GHC.Tc.Errors.Types                       (ErrInfo (ErrInfo))
 import           Language.Haskell.Syntax.ImpExp            (ImportDeclQualifiedStyle (..))
-import           Language.LSP.Protocol.Lens                (HasRange (..))
+import           Language.LSP.Protocol.Lens                (HasRange (..),
+                                                            message)
 import           Language.LSP.Protocol.Types               (TextEdit (TextEdit))
 import           Text.Regex.TDFA                           (MatchResult (..),
                                                             (=~))
@@ -43,12 +43,12 @@ suggestFillHole exportsMap pm diag
     | Just holeName <- extractHoleName diag
 #if MIN_VERSION_ghc(9,13,0)
     , Just _errInfo <- extractErrInfo diag
-    , let supplText = _message (diag ^. fdLspDiagnosticL)
+    , let supplText =  diag ^. fdLspDiagnosticL . message
     , let ctxText = supplText
 #else
     , Just (ErrInfo ctx suppl) <- extractErrInfo diag
-    , let ctxText = printOutputable ctx
     , let supplText = printOutputable suppl
+    , let ctxText = printOutputable ctx
 #endif
     , let (holeFits, refFits) = processHoleSuggestions (T.lines supplText)
     , let isInfixHole = ctxText =~ addBackticks holeName :: Bool =
@@ -57,8 +57,6 @@ suggestFillHole exportsMap pm diag
         map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
     where
-      qualify = qualifyFit exportsMap pm
-
       extractHoleName :: FileDiagnostic -> Maybe T.Text
       extractHoleName d = do
           hole <- diagReportHoleError d
@@ -85,7 +83,7 @@ suggestFillHole exportsMap pm diag
         case T.uncons name of
           Nothing -> error "impossible: empty name provided by ghc"
           Just (firstChr, _) ->
-            let cleanName = qualify (stripUnique name)
+            let cleanName = (qualifyFit exportsMap pm) (stripUnique name)
                 isInfixOperator = firstChr == '('
                 name' = getOperatorNotation isInfixHole isInfixOperator cleanName
                 replacement = if parenthise then addParens name' else name'
@@ -114,49 +112,47 @@ suggestFillHole exportsMap pm diag
 qualifyFit :: ExportsMap -> ParsedModule -> T.Text -> T.Text
 qualifyFit exportsMap pm fitName =
     case findQualifier of
-        Nothing        -> fitName
-        Just qualifier -> qualifier <> "." <> fitName
-  where
-    -- All modules that export this name
-    exportingModules :: [T.Text]
-    exportingModules =
+      Nothing        -> fitName
+      Just qualifier -> qualifier <> "." <> fitName
+    where
+      -- All modules that export this name
+      exportingModules :: [T.Text]
+      exportingModules =
         let occ      = mkVarOrDataOcc fitName
             identSet = lookupOccEnv (getExportsMap exportsMap) occ
             idents   = maybe [] Set.toList identSet
-        in map moduleNameText idents
+        in  map moduleNameText idents
 
-    -- All qualified imports from this file: (moduleName, qualifier)
-    qualifiedImports :: [(T.Text, T.Text)]
-    qualifiedImports =
+      -- All qualified imports from this file: (moduleName, qualifier)
+      importQualifiers :: [(T.Text, T.Text)]
+      importQualifiers =
         let imports = hsmodImports . unLoc . pm_parsed_source $ pm
-        in [ (modName decl, qualifier decl)
+        in [ (modName decl, extractQualifier decl)
            | i <- imports
            , let decl = unLoc i
-           , isQualified decl
+           , ideclQualified decl `elem` [QualifiedPre, QualifiedPost]
            ]
 
-    isQualified decl = ideclQualified decl `elem` [QualifiedPre, QualifiedPost]
+      -- extract the module name from declaration
+      modName decl = T.pack . moduleNameString . unLoc . ideclName $ decl
 
-    modName decl =
-        T.pack . moduleNameString . unLoc . ideclName $ decl
-
-    qualifier decl =
+      -- extract the qualifier alias of import declaration (if present)
+      extractQualifier decl =
         case ideclAs decl of
-            Just alias -> T.pack . moduleNameString . unLoc $ alias
-            Nothing    -> modName decl
+          Just alias -> T.pack . moduleNameString . unLoc $ alias
+          Nothing    -> modName decl
 
-    -- Find first qualified import whose module is in the exporting modules list
-    findQualifier :: Maybe T.Text
-    findQualifier =
+      -- Find first qualified import whose module is in the exporting modules list
+      findQualifier :: Maybe T.Text
+      findQualifier =
         let exportingSet = exportingModules
         in fmap snd
-         . safeHead
-         . filter (\(modN, _) -> modN `elem` exportingSet)
-         $ qualifiedImports
+          . safeHead
+          . filter (\(modN, _) -> modN `elem` exportingSet)
+          $ importQualifiers
 
-    safeHead []    = Nothing
-    safeHead (x:_) = Just x
-
+      safeHead []    = Nothing
+      safeHead (x:_) = Just x
 
 processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
 processHoleSuggestions mm = (holeSuggestions, refSuggestions)
