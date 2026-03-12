@@ -59,7 +59,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import GHC.Parser.Annotation (SrcSpanAnnA, LocatedN)
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -238,16 +237,12 @@ failWhenImportOrExport state nfp refLocs names = do
 -- Step 1: fetch the parsed AST via GetParsedModule.                                              -- [x] AI
 --                                                                                                -- [x] AI
 -- Import aliases (e.g. `import Data.List as L`) survive only in the parsed (`GhcPs`) AST.        -- [x] AI
--- They are erased during resolving, so the HIE AST cannot be used to locate or replace them.     -- [x] AI
+-- They are erased during resolving (called the "renaming pass" within GHC), so the HIE AST cannot be used to locate or replace them.     -- [x] AI
 -- The helper below fetches the parsed module using `useWithStale` so it never blocks             -- [x] AI
 -- the UI while GHC is still loading.                                                             -- [x] AI
---                                                                                                -- [x] AI
--- Steps 2-5 (finding the alias, collecting use sites, building edits) will be                    -- [x] AI
--- added in subsequent iterations.                                                                -- [x] AI
 
 -- | Fetch the parsed module for a file, accepting a possibly stale result.                       -- [x] AI
 -- Returns @Nothing@ if the file has not yet been indexed at all.                                 -- [x] AI
--- TODO: Handle the @Nothing@ case.
 getParsedModuleStale ::                                                                           -- [x] AI
     MonadIO m =>                                                                                  -- [x] AI
     IdeState ->                                                                                   -- [x] AI
@@ -270,17 +265,17 @@ getParsedModuleStale state nfp =                                                
 -- Returns 'Nothing' if no import alias covers the cursor position.                               -- [x] AI
 -- Multiple imports of the same module with different aliases are handled                         -- [x] AI
 -- correctly because we match on the cursor position, not the module name.                        -- [x] AI
-findImportAliasAtPos                                                                              -- [x] AI
+findImportAliasDeclAtPos                                                                          -- [x] AI
     :: Position                                                                                   -- [x] AI
     -> [LImportDecl GhcPs]                                                                        -- [x] AI
     -> Maybe (ModuleName, RealSrcSpan)                                                            -- [x] AI
-findImportAliasAtPos pos imports = listToMaybe                                                    -- [x] AI
-    [ (aliasName, rsp)                                                                            -- [x] AI
-    | _locatedImport@(L _ decl) <- imports                                                        -- [x] AI
-    , Just locatedAlias         <- [ideclAs decl]                                                 -- [x] AI
+findImportAliasDeclAtPos pos imports = listToMaybe                                                -- [x] AI
+    [ (aliasName, aliasDeclSpan)                                                                  -- [x] AI
+    | _locatedImport@(L _ decl)   <- imports                                                      -- [x] AI
+    , Just locatedAlias           <- [ideclAs decl]                                               -- [x] AI
     , let aliasName = unLoc locatedAlias                                                          -- [x] AI
-    , RealSrcSpan rsp _         <- [locA locatedAlias]                                            -- [x] AI
-    , rangeContainsPosition (realSrcSpanToRange rsp) pos                                          -- [x] AI
+    , RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]                                          -- [x] AI
+    , rangeContainsPosition (realSrcSpanToRange aliasDeclSpan) pos                                -- [x] AI
     ]                                                                                             -- [x] AI
 
 -- | Check whether a 'Range' contains a 'Position'                                                -- [x] AI
@@ -448,6 +443,7 @@ refsAtName state nfp name = do
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
             -- See Note [Generated references]
+            -- REVIEW: Is this filter supposed to keep or remove generated references?
             filter (\(refRow HieDb.:. _) -> refIsGenerated refRow) <$>
             findReferences
                 hieDb
