@@ -6,7 +6,6 @@ module Ide.Plugin.Class.ExactPrint where
 
 import           Control.Monad.Trans.Maybe
 import           Data.Either.Extra                       (eitherToMaybe)
-import           Data.Functor.Identity                   (Identity)
 import qualified Data.Text                               as T
 import           Development.IDE.GHC.Compat
 import           GHC.Parser.Annotation
@@ -18,6 +17,10 @@ import           Language.LSP.Protocol.Types             (Range)
 
 #if MIN_VERSION_ghc(9,9,0)
 import           Control.Lens                            (_head, over)
+#endif
+
+#if !MIN_VERSION_ghc_exactprint(1,10,0)
+import           Data.Functor.Identity                   (Identity)
 #endif
 
 makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -> MaybeT m (T.Text, T.Text)
