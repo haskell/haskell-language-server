@@ -9,7 +9,7 @@
 
 module Ide.Plugin.Rename (descriptor, Log) where
 
-import           Control.Lens                          ((^.))
+import           Control.Lens                          (_Just, (^.), (^?))
 import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
@@ -90,7 +90,8 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
     nfp <- getNormalizedFilePathE uri
-    namesUnderCursor <- getNamesAtPos state nfp pos
+    HAR{hieAst} <- handleGetHieAst state nfp
+    let namesUnderCursor = getNamesAtPoint' hieAst pos
     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
     -- and doesn't even allow you to create full rename request.
     -- This handler deliberately approximates "things that definitely can't be renamed"
@@ -98,8 +99,11 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     --
     -- In particular it allows some cases through (e.g. cross-module renames),
     -- so that the full rename handler can give more informative error about them.
-    let renameValid = not $ null namesUnderCursor
-    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
+    pure $ case namesUnderCursor of
+        [] -> InR Null
+        _ -> case pointCommand hieAst pos nodeSpan of
+            (srcSpan : _) -> InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)
+            [] -> InR Null
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
