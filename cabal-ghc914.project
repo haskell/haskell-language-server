@@ -1,0 +1,9 @@
+import: cabal.project
+
+-- Use fourmolu from the merge-ormolu-head branch, which supports
+-- ghc-lib-parser 9.14 (and therefore GHC 9.14 syntax).
+source-repository-package
+  type: git
+  location: https://github.com/fourmolu/fourmolu.git
+  tag: 34dc872445f993f80780f8b37f3a69f8278fe540
+  -- branch: merge-ormolu-head

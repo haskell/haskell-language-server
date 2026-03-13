@@ -1440,15 +1440,13 @@ flag fourmolu
   manual:      True
 
 common fourmolu
-  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if flag(fourmolu) && !impl(ghc >= 9.14)
+  if flag(fourmolu)
     build-depends: haskell-language-server:hls-fourmolu-plugin
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
-  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(fourmolu) || impl(ghc >= 9.14)
+  if !flag(fourmolu)
     buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
@@ -1468,8 +1466,7 @@ library hls-fourmolu-plugin
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(fourmolu) || impl(ghc >= 9.14)
+  if !flag(fourmolu)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
@@ -2014,7 +2011,7 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Dhls_eval
 -- formatters
-  if flag(fourmolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
   if flag(ormolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dhls_ormolu
