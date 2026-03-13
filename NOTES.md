@@ -22,4 +22,4 @@ All notes generated through Claude are marked as such.
 
 1. Replace `PrepareRenameDefaultBehavior False` with `Null` for invalid requests.
 2. Ask the client whether it supports `defaultBehavior` in the first place.
-3. Return an explicit `Range` if the client does not support `defaultBehavior`.
+3. Return an explicit `Range` if the client does not support `defaultBehavior`, or `Null` if the cursor is somehow on an `UnhelpfulSpan`.

@@ -9,7 +9,7 @@
 
 module Ide.Plugin.Rename (descriptor, Log) where
 
-import           Control.Lens                          ((^.))
+import           Control.Lens                          (_Just, (^.), (^?))
 import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
@@ -100,9 +100,17 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     -- so that the full rename handler can give more informative error about them.
     case namesUnderCursor of                                                                        -- [x] AI
         [] -> pure $ InR Null                                                                       -- [x] AI
-        (name : _) -> pure $ InL $ PrepareRenameResult $ case nameSrcSpan name of                   -- [x] AI
-            RealSrcSpan srcSpan _ -> InL (realSrcSpanToRange srcSpan)                               -- [x] AI
-            UnhelpfulSpan _       -> InR $ InR $ PrepareRenameDefaultBehavior True                  -- [x] AI
+        (name : _) -> case nameSrcSpan name of                                                      -- [x] AI
+            RealSrcSpan srcSpan _ ->                                                                -- [x] AI
+                pure $ InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)                 -- [x] AI
+            UnhelpfulSpan _ -> do                                                                   -- [x] AI
+                ccs <- lift pluginGetClientCapabilities                                             -- [x] AI
+                let defaultBehaviorSupported =                                                      -- [x] AI
+                        isJust (ccs ^? L.textDocument . _Just . L.rename . _Just                    -- [x] AI
+                                    . L.prepareSupportDefaultBehavior . _Just)                      -- [x] AI
+                pure $ if defaultBehaviorSupported                                                  -- [x] AI
+                    then InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True  -- [x] AI
+                    else InR Null                                                                   -- [x] AI
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
