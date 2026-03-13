@@ -98,8 +98,11 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     --
     -- In particular it allows some cases through (e.g. cross-module renames),
     -- so that the full rename handler can give more informative error about them.
-    let renameValid = not $ null namesUnderCursor
-    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
+    case namesUnderCursor of                                                                        -- [x] AI
+        [] -> pure $ InR Null                                                                       -- [x] AI
+        (name : _) -> pure $ InL $ PrepareRenameResult $ case nameSrcSpan name of                   -- [x] AI
+            RealSrcSpan srcSpan _ -> InL (realSrcSpanToRange srcSpan)                               -- [x] AI
+            UnhelpfulSpan _       -> InR $ InR $ PrepareRenameDefaultBehavior True                  -- [x] AI
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
