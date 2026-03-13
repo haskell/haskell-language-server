@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 module Ide.Plugin.Notes (descriptor, Log) where
 
 import           Control.Lens                     ((^.))
@@ -10,10 +8,10 @@ import qualified Data.Array                       as A
 import           Data.HashMap.Strict              (HashMap)
 import qualified Data.HashMap.Strict              as HM
 import qualified Data.HashSet                     as HS
-import           Data.List                        (uncons)
+import           Data.List                        as List
 import           Data.Maybe                       (catMaybes, fromMaybe,
                                                    listToMaybe, mapMaybe)
-import           Data.Text                        (Text, intercalate)
+import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Data.Traversable                 (for)
@@ -33,10 +31,6 @@ import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
                                                    makeRegexOpts, matchAllText)
-
-#if !MIN_VERSION_base(4,20,0)
-import           Data.Foldable                    (foldl')
-#endif
 
 data Log
     = LogShake Shake.Log
@@ -72,7 +66,7 @@ instance Pretty Log where
             LogNoteReferencesFound file refs -> "Found note references in " <> prettyNotes file refs
             LogNotesFound file notes -> "Found notes in " <> prettyNotes file notes
         where prettyNotes file hm = pretty (show file) <> ": ["
-                <> pretty (intercalate ", " (fmap (\(s, p) -> "\"" <> s <> "\" at " <> intercalate ", " (map (T.pack . show) p)) hm)) <> "]"
+                <> pretty (T.intercalate ", " (fmap (\(s, p) -> "\"" <> s <> "\" at " <> T.intercalate ", " (map (T.pack . show) p)) hm)) <> "]"
 
 {-
 The first time the user requests a jump-to-definition on a note reference, the
@@ -105,7 +99,7 @@ findNotesRules recorder = do
                 references <- fmap snd <$> use MkGetNotesInFile nfp
                 pure $ fmap (HM.map (fmap (nfp,))) references
             )
-        pure $ Just $ foldl' (HM.unionWith (<>)) HM.empty definedReferences
+        pure $ Just $ List.foldl' (HM.unionWith (<>)) HM.empty definedReferences
 
 err :: MonadError PluginError m => Text -> Maybe a -> m a
 err s = maybe (throwError $ PluginInternalError s) pure
@@ -180,7 +174,7 @@ findNotesInFile file recorder = do
     let refMatches = (A.! 1) <$> matchAllText noteRefRegex content
         refs = toPositions refMatches content
     logWith recorder Debug $ LogNoteReferencesFound file (HM.toList refs)
-    pure $ Just (HM.mapMaybe (fmap fst . uncons) notes, refs)
+    pure $ Just (HM.mapMaybe (fmap fst . List.uncons) notes, refs)
     where
         uint = fromIntegral . toInteger
         -- the regex library returns the character index of the match. However
