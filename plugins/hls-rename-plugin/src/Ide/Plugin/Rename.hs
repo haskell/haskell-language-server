@@ -9,6 +9,7 @@
 
 module Ide.Plugin.Rename (descriptor, Log) where
 
+import           Control.Applicative                   (Alternative ((<|>)))
 import           Control.Lens                          ((^.))
 import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
@@ -99,7 +100,9 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
         Just parsed -> do                                                                           -- [x] AI
             let hsModule = unLoc $ pm_parsed_source parsed                                          -- [x] AI
                 imports  = hsmodImports hsModule                                                    -- [x] AI
-            case findImportAliasDeclAtPos pos imports of                                            -- [x] AI
+                decls    = hsmodDecls hsModule                                                      -- [x] AI
+            case (findImportAliasDeclAtPos pos imports                                              -- [x] AI
+                  <|> findImportAliasUseAtPos pos decls imports) of                                 -- [x] AI
                 Just _ ->                                                                           -- [x] AI
                     -- Step 5 (design decision 2): return defaultBehavior.                          -- [x] AI
                     -- TODO: return an explicit range and placeholder text                          -- [x] AI
@@ -138,7 +141,8 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
             let hsModule = unLoc $ pm_parsed_source parsed                                          -- [x] AI
                 imports  = hsmodImports hsModule                                                    -- [x] AI
                 decls    = hsmodDecls hsModule                                                      -- [x] AI
-            case findImportAliasDeclAtPos pos imports of                                            -- [x] AI
+            case (findImportAliasDeclAtPos pos imports                                              -- [ ] AI
+                  <|> findImportAliasUseAtPos pos decls imports) of                                 -- [ ] AI
                 Just (oldAlias, aliasSpan) ->                                                       -- [x] AI
                     aliasBasedRename state uri oldAlias aliasSpan decls newNameText                 -- [x] AI
                 Nothing ->                                                                          -- [x] AI
@@ -255,9 +259,14 @@ getParsedModuleStale state nfp =                                                
 
 -- Step 2: find the import declaration whose alias span contains the cursor.                      -- [x] AI
 --                                                                                                -- [x] AI
--- We traverse `hsmodImports` looking for an @import M as Alias@ declaration                      -- [x] AI
--- where the cursor position falls inside the @Alias@ token. If found, we                         -- [x] AI
--- return the alias name and its source span for use in steps 4 and 5.                            -- [x] AI
+-- We support two types of cursor positions:                                                      -- [x] AI
+--   2a. The cursor is on the alias token in an import declaration,                               -- [x] AI
+--       e.g. on `Ls` in `import Data.List as Ls`.                                                -- [x] AI
+--   2b. The cursor is on the qualifier of a use site,                                            -- [x] AI
+--       e.g. on `Ls` in `Ls.sort`.                                                               -- [x] AI
+-- Both return the same (ModuleName, RealSrcSpan): the alias name and its                         -- [x] AI
+-- span in the import declaration, for use in steps 3-5.                                          -- [x] AI
+-- The callers try 2a first via (<|>), then 2b.                                                   -- [x] AI
 
 -- | Given a cursor position that falls on the @Alias@ token in an                                -- [x] AI
 -- @import M as Alias@ declaration (not on a use site such as @Alias.foo@),                       -- [x] AI
@@ -277,6 +286,41 @@ findImportAliasDeclAtPos pos imports = listToMaybe                              
     , RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]                                          -- [x] AI
     , rangeContainsPosition (realSrcSpanToRange aliasDeclSpan) pos                                -- [x] AI
     ]                                                                                             -- [x] AI
+
+-- | Given a cursor position that falls on the qualifier of a use site                            -- [x] AI
+-- (e.g. on @Ls@ in @Ls.sort@), find the import declaration that introduced                       -- [x] AI
+-- that alias and return the alias 'ModuleName' and the 'RealSrcSpan' of the                      -- [x] AI
+-- alias token in that declaration (e.g. @Ls@ in @import Data.List as Ls@).                       -- [x] AI
+-- Returns 'Nothing' if the cursor is not on a qualifier that corresponds to                      -- [x] AI
+-- any import alias.                                                                              -- [x] AI
+findImportAliasUseAtPos                                                                           -- [x] AI
+    :: Position                                                                                   -- [x] AI
+    -> [LHsDecl GhcPs]                                                                            -- [x] AI
+    -> [LImportDecl GhcPs]                                                                        -- [x] AI
+    -> Maybe (ModuleName, RealSrcSpan)                                                            -- [x] AI
+findImportAliasUseAtPos pos decls imports = do                                                    -- [x] AI
+    aliasAtPos <- listToMaybe                                                                     -- [x] AI
+        [ moduleAlias                                                                             -- [x] AI
+        | L (ann :: Anno RdrName) (Qual moduleAlias _) <- listify (const True) decls              -- [x] AI
+        , RealSrcSpan useSiteSpan _ <- [locA ann]                                                 -- [x] AI
+        , rangeContainsPosition (realSrcSpanToRange useSiteSpan) pos                              -- [x] AI
+        , let aliasLength = fromIntegral (length (moduleNameString moduleAlias))                  -- [x] AI
+              start       = realSrcSpanStart useSiteSpan                                          -- [x] AI
+              line        = fromIntegral (srcLocLine start)                                       -- [x] AI
+              startColumn = fromIntegral (srcLocCol start)                                        -- [x] AI
+              aliasRange  = Range                                                                 -- [x] AI
+                  (Position (line - 1) (startColumn - 1))                                         -- [x] AI
+                  (Position (line - 1) (startColumn - 1 + aliasLength))                           -- [x] AI
+        , rangeContainsPosition aliasRange pos                                                    -- [x] AI
+        ]                                                                                         -- [x] AI
+    listToMaybe                                                                                   -- [x] AI
+        [ (aliasName, aliasDeclSpan)                                                              -- [x] AI
+        | _locatedImport@(L _ decl) <- imports                                                    -- [x] AI
+        , Just locatedAlias         <- [ideclAs decl]                                             -- [x] AI
+        , let aliasName = unLoc locatedAlias                                                      -- [x] AI
+        , aliasName == aliasAtPos                                                                 -- [x] AI
+        , RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]                                      -- [x] AI
+        ]                                                                                         -- [x] AI
 
 -- | Check whether a 'Range' contains a 'Position'                                                -- [x] AI
 -- (inclusive start, exclusive end).                                                              -- [x] AI

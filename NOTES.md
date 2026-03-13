@@ -46,11 +46,13 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 
 ## Revised approach
 
-> From the session summary:
->
 > 1. Get the parsed AST (`HsModule GhcPs`) via `GetParsedModule`.
-> 2. Traverse `hsmodImports` to find the `ImportDecl` whose `ideclAs` span contains the cursor position.
-> 3. Traverse all `HsVar` nodes in `hsmodDecls`, collect those with `Qual alias _` RdrNames matching the target alias — extract their `SrcSpan`s directly from the AST.
+> 2. Determine the alias being renamed by checking two cursor positions, in order:
+>    - **2a.** The cursor is on the alias token in an import declaration — traverse `hsmodImports` to find the `ImportDecl` whose `ideclAs` span contains the cursor.
+>    - **2b.** The cursor is on a qualifier at a use site — traverse `hsmodDecls` to find a `Qual moduleAlias _` `RdrName` whose qualifier span contains the cursor, then look up the matching `ideclAs` in `hsmodImports`.
+>
+>    Both yield `(ModuleName, RealSrcSpan)`: the alias name and its span in the import declaration.
+> 3. Traverse all `LocatedN RdrName` nodes in `hsmodDecls` via SYB `listify`, collect those with `Qual alias _` matching the target alias — extract their `RealSrcSpan`s from the annotation.
 > 4. Replace the alias text in the `ideclAs` span in the import, and each collected use-site span.
 > 5. Produce a `WorkspaceEdit` with all replacements.
 >
@@ -58,9 +60,7 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 
 1. Using the parsed AST instead of the full HIE AST allows us to inspect `RdrName` identifiers, which contain unresolved import module aliases. It also turns out that this is already implemented as a rule in HLS.
 
-2. The cursor should be inside an import statement (such as on `L` in `import Data.List as L`), not inside a use site (like `L.take`).
-
-    TODO: Support renaming when the cursor is on the alias at a use site (such as on `L` in `L.take`).
+2. The cursor can be on either an import alias declaration (such as `Ls` in `import Data.List as Ls`) or a use site (such as `Ls` in `Ls.take`).
 
 3. Traversing the AST is done using `listify` from `syb`. `listify` needs to be monomorphic. To apply the correct type, use the `Anno` type family.
 
@@ -79,11 +79,11 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
     > —Claude
 
     The following design decisions are taken by the author:
-    
+
     1. Add a branch inside the existing `Provider` handlers, because registering multiple `renameProvider` handlers would be difficult and impractical. The new alias-renaming branch takes place first in both handlers, ahead of the existing renaming logic.
-    
+
     2. `prepareRenameProvider` returns `PrepareRenameDefaultBehavior True` if the cursor is on a renameable alias.
-    
+
         TODO: In general, `PrepareRenameResult` feels underutilized.
 
     3. Fail early if HLS can’t get the parsed module, instead of falling through. The existing renaming logic also needs the module to be parsed (and then typechecked) anyway.
