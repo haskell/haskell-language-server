@@ -14,6 +14,7 @@ import           Text.Regex.TDFA      ((=~))
 
 import           Config
 import           Development.IDE.Test (standardizeQuotes)
+import           Hover
 import           Test.Hls
 import           Test.Hls.FileSystem  (copyDir)
 
@@ -46,16 +47,6 @@ tests = let
             ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
             _ -> pure () -- all other expectations not relevant to hover
         _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
-
-  assertFoundIn :: T.Text -> T.Text -> Assertion
-  assertFoundIn part whole = assertBool
-    (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
-    (part `T.isInfixOf` whole)
-
-  assertNotFoundIn :: T.Text -> T.Text -> Assertion
-  assertNotFoundIn part whole = assertBool
-    (T.unpack $ "found unexpected: `" <> part <> "` in hover message:\n" <> whole)
-    (not . T.isInfixOf part $ whole)
 
   sourceFilePath = T.unpack sourceFileName
   sourceFileName = "GotoImplementation.hs"

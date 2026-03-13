@@ -139,9 +139,9 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
       Nothing -> liftIO $ spanDocToMarkdown . fst <$> getDocumentationTryGhc (hscEnv sess) name
     typ <- case lookupNameEnv km name of
       _ | not needType -> pure Nothing
-      Just ty -> pure (safeTyThingType ty)
+      Just ty -> pure (safeTyThingType True ty)
       Nothing -> do
-        (safeTyThingType =<<) <$> liftIO (lookupName (hscEnv sess) name)
+        (safeTyThingType True =<<) <$> liftIO (lookupName (hscEnv sess) name)
     let det1 = case typ of
           Just ty -> Just (":: " <> printOutputable (stripForall ty) <> "\n")
           Nothing -> Nothing
