@@ -523,6 +523,60 @@ test-suite hls-eval-plugin-tests
     , text
 
 -----------------------------
+-- render plugin
+-----------------------------
+
+flag render
+  description: Enable render plugin
+  default:     True
+  manual:      True
+
+common render
+  if flag(render)
+    build-depends: haskell-language-server:hls-render-plugin
+    cpp-options: -Dhls_render
+
+library hls-render-plugin
+  import: defaults, pedantic, warnings
+  if !flag(render)
+    buildable: False
+  exposed-modules:
+    Ide.Plugin.Render
+  other-modules:
+    Ide.Plugin.Render.Config
+  hs-source-dirs:     plugins/hls-render-plugin/src
+
+  build-depends:
+    , aeson
+    , bytestring
+    , containers
+    , deepseq
+    , Diff                  ^>=0.5
+    , dlist
+    , extra
+    , filepath
+    , ghc
+    , ghc-boot-th
+    , ghcide                == 2.10.0.0
+    , hls-graph
+    , hls-plugin-api        == 2.10.0.0
+    , lens
+    , lsp
+    , lsp-types
+    , megaparsec            >=9.0
+    , mtl
+    , parser-combinators    >=1.2
+    , text
+    , text-rope
+    , transformers
+    , unliftio
+    , safe-exceptions
+    , unordered-containers
+
+  default-extensions:
+    DataKinds
+
+-----------------------------
 -- import lens plugin
 -----------------------------
 
@@ -1844,6 +1898,7 @@ library
                   , changeTypeSignature
                   , class
                   , eval
+                  , render
                   , importLens
                   , rename
                   , retrie
