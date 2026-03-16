@@ -6,7 +6,7 @@ Currently, `prepareRenameProvider` returns `PrepareRenameDefaultBehavior True` i
 
 There are two problems with this:
 
-1. In classic TypeScript fashion, `{defaultBehavior: false}` is not specified in the LSP specification; invalid requests are supposed to result in `null` instead.
+1. `{defaultBehavior: false}` is not specified in the LSP specification; invalid requests are supposed to result in `null` instead.
 
 2. Not all clients support `defaultBehavior`. The most high-profile such client is the Zed editor (see [this issue](https://github.com/zed-industries/zed/issues/24184)).
 
@@ -14,21 +14,19 @@ There are two problems with this:
 
 The author uses generative AI (specifically, Claude Sonnet 4.6) to understand key concepts and draft code.
 
-*The author has reviewed and understood all AI-generated content introduced in this branch, and can personally vouch for and explain it if needed.*
-
-All notes generated through Claude are marked as such.
+*The author has reviewed and understood every line of AI-generated content in this branch, personally vouches for it, and can explain any part of it if needed.*
 
 ## Possible approach
 
-1. Replace `PrepareRenameDefaultBehavior False` with `Null` for invalid requests.
+1. Get the HIE AST and look for a `Name` identifier at the cursor position to see if the request is valid (as before).
 
-2. Ask the client whether it supports `defaultBehavior` in the first place.
+2. If no `Name` is found, deem the request invalid and return `Null` (instead of `PrepareRenameDefaultBehavior False`).
 
-3. Return an explicit `Range` if the client does not support `defaultBehavior`, or `Null` if the cursor is somehow on an `UnhelpfulSpan`:
+3. If a `Name` is found, return an explicit `Range` for the occurrence of this `Name` at the cursor position:
 
-    1. Get the HIE AST for the current position with the `"Rename.GetHieAst"` action.
+    1. Reuse the HIE AST obtained above.
 
-        The resulting `HieAstResult` record contains an `HieASTs a` value, which is a map. It turns out that this map contains either one AST (for the current file path) or none (if the AST is generated).
+        The `HieAstResult` record contains an `HieASTs a` value, which is a map. It turns out that this map contains either one AST (for the current file path) or none (if the AST is generated).
 
     2. Use `pointCommand` to get the smallest span inside the AST that contains the current position.
 
@@ -50,6 +48,10 @@ New test cases and a new test data file have been added. The new tests, named `p
       Probable cause: out-of-date interface files
     ```
 
+    There’s a [closed GHC issue from 2018](https://gitlab.haskell.org/ghc/ghc/-/issues/15234) related to this. It might be OK to ignore these warnings for now.
+
 2. FIXME: Some tests are flaky and occasionally fail with `Exception: Language server unexpectedly terminated`.
+
+    Michael Peyton Jones [suggested ignoring them](https://github.com/haskell/haskell-language-server/issues/3695#issuecomment-1629261497).
 
 3. IDEA: Module names can’t be renamed yet. This might be a good feature to add. (Ideally, module renaming should also rename (and relocate) the `.hs` file itself, and amend Cabal files that include it.)
