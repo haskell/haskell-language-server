@@ -37,39 +37,41 @@ prepareRenameTests = testGroup "PrepareRename"
         -- REVIEW: The wait is for consistency with 'goldenWithDoc'. Is it necessary?
         void waitForBuildQueue
         result <- prepareRename doc (Position 0 9)
-        {- TODO: Support module renaming.
-        liftIO $ result @?=
-            InL (PrepareRenameResult (InL (Range (Position 0 7) (Position 0 20))))
-        -}
         liftIO $ result @?= InR Null
 
     , testCase "Function name" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
-        result <- prepareRename doc (Position 6 1)
+        result <- prepareRename doc (Position 8 1)
         liftIO $ result @?=
-            InL (PrepareRenameResult (InL (Range (Position 7 0) (Position 7 3))))
+            InL (PrepareRenameResult (InL (Range (Position 8 0) (Position 8 3))))
+
+    , testCase "Imported function name" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 10 16)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 19))))
 
     , testCase "Non-renameable position" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
-        result <- prepareRename doc (Position 4 23)
+        result <- prepareRename doc (Position 6 23)
         liftIO $ result @?= InR Null
 
-    , testCase "Symbol with unclear source (delegating to default behavior)"
-        $ runRenameSession "" $ do
-            doc <- openDoc "PrepareRename.hs" "haskell"
-            void waitForBuildQueue
-            result <- prepareRename doc (Position 8 7)
-            liftIO $ result @?=
-                InL (PrepareRenameResult (InR (InR (PrepareRenameDefaultBehavior True))))
+    , testCase "Operator" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 10 7)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 10 6) (Position 10 9))))
 
-    , testCase "Symbol with unclear source (without default behavior)"
-        $ runRenameSessionWithoutPrepareDefaultBehavior "" $ do
-            doc <- openDoc "PrepareRename.hs" "haskell"
-            void waitForBuildQueue
-            result <- prepareRename doc (Position 8 7)
-            liftIO $ result @?= InR Null
+    , testCase "Built-in operator" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 13 7)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 13 7) (Position 13 8))))
     ]
 
 renameTests :: TestTree
@@ -260,15 +262,3 @@ runRenameSession subdir = failIfSessionTimeout
   , testPluginDescriptor = renamePlugin
   , testConfigCaps = codeActionNoResolveCaps }
   . const
-
-runRenameSessionWithoutPrepareDefaultBehavior :: FilePath -> Session a -> IO a
-runRenameSessionWithoutPrepareDefaultBehavior subdir = failIfSessionTimeout
-  . runSessionWithTestConfig def
-  { testDirLocation = Left $ testDataDir </> subdir
-  , testPluginDescriptor = renamePlugin
-  , testConfigCaps = caps }
-  . const
-  where
-    caps = codeActionNoResolveCaps
-      & (L.textDocument . _Just . L.rename . _Just . L.prepareSupportDefaultBehavior)
-      .~ Nothing

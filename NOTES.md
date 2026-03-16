@@ -21,8 +21,18 @@ All notes generated through Claude are marked as such.
 ## Possible approach
 
 1. Replace `PrepareRenameDefaultBehavior False` with `Null` for invalid requests.
+
 2. Ask the client whether it supports `defaultBehavior` in the first place.
-3. Return an explicit `Range` if the client does not support `defaultBehavior`, or `Null` if the cursor is somehow on an `UnhelpfulSpan`.
+
+3. Return an explicit `Range` if the client does not support `defaultBehavior`, or `Null` if the cursor is somehow on an `UnhelpfulSpan`:
+
+    1. Get the HIE AST for the current position with the `"Rename.GetHieAst"` action.
+
+        The resulting `HieAstResult` record contains an `HieASTs a` value, which is a map. It turns out that this map contains either one AST (for the current file path) or none (if the AST is generated).
+
+    2. Use `pointCommand` to get the smallest span inside the AST that contains the current position.
+
+    3. Return this span as a `Range`, or return `Null` if there’s no AST.
 
 ## Testing
 
