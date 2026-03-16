@@ -109,7 +109,8 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
                         isJust (ccs ^? L.textDocument . _Just . L.rename . _Just
                                 . L.prepareSupportDefaultBehavior . _Just)
                 pure $ if defaultBehaviorSupported
-                    then InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True
+                    then InL $ PrepareRenameResult $ InR $ InR $
+                            PrepareRenameDefaultBehavior True
                     else InR Null
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
