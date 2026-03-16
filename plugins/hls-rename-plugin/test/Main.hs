@@ -32,34 +32,35 @@ tests = testGroup "Rename"
 
 prepareRenameTests :: TestTree
 prepareRenameTests = testGroup "PrepareRename"
-  [ testCase "Module name (not yet renameable)" $ runRenameSession "" $ do                          -- [x] AI
-      doc <- openDoc "PrepareRename.hs" "haskell"                                                   -- [x] AI
-      void waitForBuildQueue  -- REVIEW: This is for consistency with 'goldenWithDoc'. Is it necessary?  -- [ ] AI
-      result <- prepareRename doc (Position 0 9)                                                    -- [x] AI
+  [ testCase "Module name (not yet renameable)" $ runRenameSession "" $ do
+      doc <- openDoc "PrepareRename.hs" "haskell"
+      -- REVIEW: The wait is for consistency with 'goldenWithDoc'. Is it necessary?
+      void waitForBuildQueue
+      result <- prepareRename doc (Position 0 9)
       -- TODO: Support module renaming
-      -- liftIO $ result @?= InL (PrepareRenameResult (InL (Range (Position 0 7) (Position 0 20)))) -- [x] AI
+      -- liftIO $ result @?= InL (PrepareRenameResult (InL (Range (Position 0 7) (Position 0 20))))
       liftIO $ result @?= InR LSP.Null
-  , testCase "Function name" $ runRenameSession "" $ do                                             -- [x] AI
-        doc <- openDoc "PrepareRename.hs" "haskell"                                                 -- [x] AI
-        void waitForBuildQueue                                                                      -- [x] AI
-        result <- prepareRename doc (Position 6 1)                                                  -- [x] AI
+  , testCase "Function name" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 6 1)
         liftIO $ result @?= InL (PrepareRenameResult (InL (Range (Position 7 0) (Position 7 3))))
-    , testCase "Non-renameable position" $ runRenameSession "" $ do                                 -- [x] AI
-        doc <- openDoc "PrepareRename.hs" "haskell"                                                 -- [x] AI
-        void waitForBuildQueue                                                                      -- [x] AI
-        result <- prepareRename doc (Position 4 23)                                                 -- [x] AI
+    , testCase "Non-renameable position" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 4 23)
         liftIO $ result @?= InR LSP.Null
     , testCase "Symbol with unclear source (delegating to default behavior)"
       $ runRenameSession "" $ do
-        doc <- openDoc "PrepareRename.hs" "haskell"                                                 -- [x] AI
-        void waitForBuildQueue                                                                      -- [x] AI
-        result <- prepareRename doc (Position 8 7)                                                  -- [x] AI
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 8 7)
         liftIO $ result @?= InL (PrepareRenameResult (InR (InR (PrepareRenameDefaultBehavior True))))
     , testCase "Symbol with unclear source (without default behavior)"
       $ runRenameSessionWithoutPrepareDefaultBehavior "" $ do
-        doc <- openDoc "PrepareRename.hs" "haskell"                                                 -- [x] AI
-        void waitForBuildQueue                                                                      -- [x] AI
-        result <- prepareRename doc (Position 8 7)                                                  -- [x] AI
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 8 7)
         liftIO $ result @?= InR LSP.Null
     ]
 
@@ -213,11 +214,11 @@ goldenWithRename title path act =
 
 prepareRename :: TextDocumentIdentifier -> Position -> Session (PrepareRenameResult |? LSP.Null)
 prepareRename doc pos = do
-  let params = PrepareRenameParams doc pos Nothing
-  rsp <- request SMethod_TextDocumentPrepareRename params
-  case rsp ^. L.result of
-    Left rspError -> liftIO $ assertFailure $ "prepareRename failed: " <> show rspError
-    Right rspResult -> pure rspResult
+    let params = PrepareRenameParams doc pos Nothing
+    rsp <- request SMethod_TextDocumentPrepareRename params
+    case rsp ^. L.result of
+        Left rspError -> liftIO $ assertFailure $ "prepareRename failed: " <> show rspError
+        Right rspResult -> pure rspResult
 
 renameExpectError :: TResponseError Method_TextDocumentRename -> TextDocumentIdentifier -> Position -> Text -> Session ()
 renameExpectError expectedError doc pos newName = do
@@ -260,5 +261,5 @@ runRenameSessionWithoutPrepareDefaultBehavior subdir = failIfSessionTimeout
   , testConfigCaps = caps }
   . const
   where
-    caps = codeActionNoResolveCaps                                                                  -- [x] AI
-      & (L.textDocument . _Just . L.rename . _Just . L.prepareSupportDefaultBehavior) .~ Nothing    -- [x] AI
+    caps = codeActionNoResolveCaps
+      & (L.textDocument . _Just . L.rename . _Just . L.prepareSupportDefaultBehavior) .~ Nothing

@@ -98,19 +98,19 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     --
     -- In particular it allows some cases through (e.g. cross-module renames),
     -- so that the full rename handler can give more informative error about them.
-    case namesUnderCursor of                                                                        -- [x] AI
-        [] -> pure $ InR Null                                                                       -- [x] AI
-        (name : _) -> case nameSrcSpan name of                                                      -- [x] AI
-            RealSrcSpan srcSpan _ ->                                                                -- [x] AI
-                pure $ InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)                 -- [x] AI
-            UnhelpfulSpan _ -> do                                                                   -- [x] AI
-                ccs <- lift pluginGetClientCapabilities                                             -- [x] AI
-                let defaultBehaviorSupported =                                                      -- [x] AI
-                        isJust (ccs ^? L.textDocument . _Just . L.rename . _Just                    -- [x] AI
-                                    . L.prepareSupportDefaultBehavior . _Just)                      -- [x] AI
-                pure $ if defaultBehaviorSupported                                                  -- [x] AI
-                    then InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True  -- [x] AI
-                    else InR Null                                                                   -- [x] AI
+    case namesUnderCursor of
+        [] -> pure $ InR Null
+        (name : _) -> case nameSrcSpan name of
+            RealSrcSpan srcSpan _ ->
+                pure $ InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)
+            UnhelpfulSpan _ -> do
+                ccs <- lift pluginGetClientCapabilities
+                let defaultBehaviorSupported =
+                        isJust (ccs ^? L.textDocument . _Just . L.rename . _Just
+                                . L.prepareSupportDefaultBehavior . _Just)
+                pure $ if defaultBehaviorSupported
+                    then InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True
+                    else InR Null
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
