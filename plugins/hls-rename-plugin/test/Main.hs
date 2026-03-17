@@ -4,9 +4,8 @@
 
 module Main (main) where
 
-import           Control.Lens                (_Just, (.~), (^.))
+import           Control.Lens                ((^.))
 import           Data.Aeson                  (KeyValue ((.=)))
-import           Data.Function               ((&))
 import           Data.Functor                (void)
 import qualified Data.Map                    as M
 import           Data.Text                   (Text, pack)
