@@ -9,6 +9,8 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
       - name: Cleanup caches for closed PR
         # remove all cache entries for this PR
@@ -16,7 +18,7 @@ jobs:
         # other PRs / master cannot reuse them
         # so clear them when the PR is closed or merged
         run: |
-          gh cache list --ref ${{ github.ref }} --json id \
+          gh cache list --ref refs/pull/${{ github.event.pull_request.number }}/merge --json id \
             | jq -r '.[].id' \
             | xargs -I{} gh cache delete {}
         env:
