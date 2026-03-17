@@ -78,7 +78,7 @@ jobs:
       - name: Build
         # builds tests but does not run them
         run: |
-          stack -j2 \
+          stack \
             --stack-yaml=${{ matrix.stack-yaml }} \
             --system-ghc \
             --no-terminal \
