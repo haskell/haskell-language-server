@@ -9,7 +9,7 @@
 
 module Ide.Plugin.Rename (descriptor, Log) where
 
-import           Control.Lens                          (_Just, (^.), (^?))
+import           Control.Lens                          ((^.))
 import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
