@@ -1,0 +1,24 @@
+name: Clear PR caches
+
+on:
+  pull_request:
+    # triggers on close / merge of a PR
+    types:
+      - closed
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup caches for closed PR
+        # remove all cache entries for this PR
+        # caches usability hierarchy : master → PR
+        # other PRs / master cannot reuse them
+        # so clear them when the PR is closed or merged
+        run: |
+          gh cache list --ref ${{ github.ref }} --json id \
+            | jq -r '.[].id' \
+            | xargs -I{} gh cache delete {}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
