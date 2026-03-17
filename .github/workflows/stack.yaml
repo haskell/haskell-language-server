@@ -34,7 +34,6 @@ jobs:
                          , "flake.lock"
                          , "**/README.md"
                          , "FUNDING.yml"
-                         , ".circleci/**"
                          , ".gitlab-ci.yaml"
                          , ".gitlab/**"
                          ]'
