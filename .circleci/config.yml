@@ -58,11 +58,11 @@ defaults: &defaults
 
 version: 2
 jobs:
-  stackage-lts22:
+  stackage-lts24:
     docker:
-      - image: haskell:9.6.7-slim-bullseye
+      - image: haskell:9.10.3-slim-bullseye
     environment:
-      - STACK_FILE: "stack-lts22.yaml"
+      - STACK_FILE: "stack-lts24.yaml"
     <<: *defaults
 
   stackage-lts23:
@@ -76,5 +76,5 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - stackage-lts22
+      - stackage-lts24
       - stackage-lts23

@@ -19,6 +19,7 @@ allow-newer-deps:
   - directory-ospath-streaming
 
 extra-deps:
+  - extra-1.8.1
   - hiedb-0.8.0.0
   - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
