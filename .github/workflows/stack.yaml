@@ -49,10 +49,12 @@ jobs:
         include:
           - stack-yaml: stack.yaml
             ghc: "9.8.4"
+            lts: "lts23"
           - stack-yaml: stack-lts24.yaml
             ghc: "9.10.3"
+            lts: "lts24"
 
-    name: stack / ghc-${{ matrix.ghc }}
+    name: stackage-${{ matrix.lts }}
 
     steps:
       - uses: actions/checkout@v3
@@ -74,6 +76,7 @@ jobs:
             stack-${{ runner.os }}-${{ matrix.stack-yaml }}-
 
       - name: Build
+        # builds tests but does not run them
         run: |
           stack -j2 \
             --stack-yaml=${{ matrix.stack-yaml }} \
@@ -82,6 +85,7 @@ jobs:
             build --test --no-run-tests
 
       - name: Save ~/.stack cache
+        # save cache when pushed to master
         if: github.ref == 'refs/heads/master'
         uses: actions/cache/save@v5
         with:
