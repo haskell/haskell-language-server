@@ -449,17 +449,14 @@ replaceRefs ::
     HashSet Location ->
     ParsedSource ->
     ParsedSource
-replaceRefs newName refs = everywhere $
-    -- there has to be a better way...
-    mkT (replaceLoc @AnnListItem) `extT`
-    -- replaceLoc @AnnList `extT` -- not needed
-    -- replaceLoc @AnnParen `extT` -- not needed
-    -- replaceLoc @AnnPragma `extT` -- not needed
-    -- replaceLoc @AnnContext `extT` -- not needed
-    -- replaceLoc @NoEpAnns `extT` -- not needed
-    replaceLoc @NameAnn
+replaceRefs newName refs = everywhere (mkT replaceLoc)
     where
-        replaceLoc :: forall an. LocatedAn an RdrName -> LocatedAn an RdrName
+        -- See Note [XRec and SrcSpans in the AST] in Language.Haskell.Syntax.Extension
+        -- See Note [XRec and Anno in the AST] in GHC.Parser.Annotation
+        -- GHC recommends using 'XRec' (available since 9.4.8 or earlier) to
+        -- get the right annotation type for a given target type.
+        -- XRec (GhcPass 'Parsed) RdrName = GenLocated (Anno RdrName) RdrName
+        replaceLoc :: XRec (GhcPass 'Parsed) RdrName -> XRec (GhcPass 'Parsed) RdrName
         replaceLoc (L srcSpan oldRdrName)
             | isRef (locA srcSpan) = L srcSpan $ replace oldRdrName
         replaceLoc lOldRdrName = lOldRdrName
