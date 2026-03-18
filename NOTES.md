@@ -49,7 +49,7 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 > 1. Get the parsed AST (`HsModule GhcPs`) via `GetParsedModule`.
 > 2. Determine the alias being renamed by checking two cursor positions, in order:
 >    - **2a.** The cursor is on the alias token in an import declaration — traverse `hsmodImports` to find the `ImportDecl` whose `ideclAs` span contains the cursor.
->    - **2b.** The cursor is on a qualifier at a use site — traverse `hsmodDecls` to find a `Qual moduleAlias _` `RdrName` whose qualifier span contains the cursor, then look up the matching `ideclAs` in `hsmodImports`.
+>    - **2b.** The cursor is on a qualifier at a use site — traverse `hsmodDecls` to find a `Qual moduleAlias _` `RdrName` whose qualifier span contains the cursor, then look up the matching `ideclAs` in `hsmodImports`. If multiple imports share the same alias, fall back to the renamed AST via a fresh `TypeCheck` to disambiguate.
 >
 >    Both yield `(ModuleName, RealSrcSpan)`: the alias name and its span in the import declaration.
 > 3. Traverse all `LocatedN RdrName` nodes in `hsmodDecls` via SYB `listify`, collect those with `Qual alias _` matching the target alias — extract their `RealSrcSpan`s from the annotation.
@@ -61,6 +61,17 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 1. Using the parsed AST instead of the full HIE AST allows us to inspect `RdrName` identifiers, which contain unresolved import module aliases. It also turns out that this is already implemented as a rule in HLS.
 
 2. The cursor can be on either an import alias declaration (such as `Ls` in `import Data.List as Ls`) or a use site (such as `Ls` in `Ls.take`).
+
+    - FIXME: Targeting `L` in `L.take` in this example causes the wrong alias to be renamed:
+
+        ``` haskell
+        import Control.Lens as L
+        import Data.List as L
+
+        f = L.take
+        ```
+
+        Relevant link: [GHC wiki page](https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/compiler/renamer?version_id=9dccaa3e023565a2ef5091b4a08da847872714ff)
 
 3. Traversing the AST is done using `listify` from `syb`. `listify` needs to be monomorphic. To apply the correct type, use the `Anno` type family.
 
