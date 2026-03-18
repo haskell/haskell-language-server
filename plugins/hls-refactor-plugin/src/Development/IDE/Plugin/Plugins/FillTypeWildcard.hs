@@ -4,20 +4,21 @@ module Development.IDE.Plugin.Plugins.FillTypeWildcard
   ) where
 
 import           Control.Lens
-import           Data.Maybe                        (isJust)
-import qualified Data.Text                         as T
-import           Development.IDE                   (FileDiagnostic (..),
-                                                    fdStructuredMessageL,
-                                                    printOutputable)
-import           Development.IDE.GHC.Compat        hiding (vcat)
+import           Data.Maybe                                (isJust)
+import qualified Data.Text                                 as T
+import           Development.IDE                           (FileDiagnostic (..),
+                                                            fdStructuredMessageL,
+                                                            printOutputable)
+import           Development.IDE.GHC.Compat                hiding (vcat)
 import           Development.IDE.GHC.Compat.Error
-import           Development.IDE.Types.Diagnostics (_SomeStructuredMessage)
-import           GHC.Tc.Errors.Types               (ErrInfo (..))
-import           Language.LSP.Protocol.Types       (Diagnostic (..),
-                                                    TextEdit (TextEdit))
+import           Development.IDE.Plugin.Plugins.Diagnostic (diagReportHoleError)
+import           Development.IDE.Types.Diagnostics         (_SomeStructuredMessage)
+import           GHC.Tc.Errors.Types                       (ErrInfo (..))
+import           Language.LSP.Protocol.Types               (Diagnostic (..),
+                                                            TextEdit (TextEdit))
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Tc.Errors.Ppr                 (pprErrCtxtMsg)
-import           GHC.Utils.Outputable              (vcat)
+import           GHC.Tc.Errors.Ppr                         (pprErrCtxtMsg)
+import           GHC.Utils.Outputable                      (vcat)
 #endif
 
 suggestFillTypeWildcard :: FileDiagnostic -> [(T.Text, TextEdit)]
@@ -32,21 +33,6 @@ suggestFillTypeWildcard diag@FileDiagnostic{fdLspDiagnostic = Diagnostic {..}}
 isWildcardDiagnostic :: FileDiagnostic -> Bool
 isWildcardDiagnostic =
     maybe False (isJust . (^? _TypeHole) . hole_sort) . diagReportHoleError
-
--- | Extract the 'Hole' out of a 'FileDiagnostic'
-diagReportHoleError :: FileDiagnostic -> Maybe Hole
-diagReportHoleError diag = do
-    solverReport <-
-        diag
-            ^? fdStructuredMessageL
-                . _SomeStructuredMessage
-                . msgEnvelopeErrorL
-                . _TcRnMessage
-                . _TcRnSolverReport
-                . _1
-    (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
-
-    Just hole
 
 -- | Extract the type and surround it in parentheses except in obviously safe cases.
 --
@@ -89,10 +75,10 @@ diagErrInfoContext diag = do
                 . _TcRnMessageWithInfo
     let TcRnMessageDetailed err _ = detailedMsg
 #if MIN_VERSION_ghc(9,13,0)
-        ErrInfo errInfoCtx _ _ = err
+    let ErrInfo errInfoCtx _ _ = err
     Just (printOutputable (vcat $ map pprErrCtxtMsg errInfoCtx))
 #else
-        ErrInfo errInfoCtx _ = err
+    let ErrInfo errInfoCtx _ = err
     Just (printOutputable errInfoCtx)
 #endif
 

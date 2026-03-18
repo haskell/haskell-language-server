@@ -12,6 +12,7 @@ import           Development.IDE.GHC.ExactPrint            (modifyMgMatchesT',
                                                             modifySigWithM,
                                                             modifySmallestDeclWithM)
 import           Development.IDE.Plugin.Plugins.Diagnostic
+import           Development.IDE.Types.Diagnostics         (FileDiagnostic (fdLspDiagnostic))
 import           GHC.Parser.Annotation                     (SrcSpanAnnA,
                                                             SrcSpanAnnN, noAnn)
 import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
@@ -66,44 +67,41 @@ type HsArrow pass = HsMultAnn pass
 --         foo :: a -> b -> c -> d
 --         foo a b = \c -> ...
 --      In this case a new argument would have to add its type between b and c in the signature.
-plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
-plugin parsedModule Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
-  | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
+plugin :: ParsedModule -> FileDiagnostic -> Either PluginError [(T.Text, [TextEdit])]
+plugin parsedModule fd
+  | Just (rdrName, typ) <- matchVariableNotInScope fd = addArgumentAction parsedModule _range rdrName typ
+  | Just (rdrName, typ) <- matchFoundHole fd = addArgumentAction parsedModule _range rdrName (Just typ)
   | otherwise = pure []
   where
-    message = unifySpaces _message
+    Diagnostic{_message, _range} = fdLspDiagnostic fd
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
 --      addArgToMatch "foo" `bar arg1 arg2 = ...`
 --   => (`bar arg1 arg2 foo = ...`, 2)
-addArgToMatch :: T.Text -> GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))) -> (GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))), Int)
+addArgToMatch :: RdrName -> GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))) -> (GenLocated l (Match GhcPs (LocatedA (HsExpr GhcPs))), Int)
 
 -- NOTE: The code duplication within CPP clauses avoids a parse error with
 -- `stylish-haskell`.
 #if MIN_VERSION_ghc(9,11,0)
-addArgToMatch name (L locMatch (Match xMatch ctxMatch (L l pats) rhs)) =
-  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
-      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
+addArgToMatch unqualName (L locMatch (Match xMatch ctxMatch (L l pats) rhs)) =
+  let newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
       -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
       -- the newly added pattern and the rest
       indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
       indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
    in (L locMatch (Match xMatch ctxMatch (L l (pats <> [newPat])) (indentRhs rhs)), Prelude.length pats)
 #elif MIN_VERSION_ghc(9,9,0)
-addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
-  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
-      newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
+addArgToMatch unqualName (L locMatch (Match xMatch ctxMatch pats rhs)) =
+  let newPat = L noAnnSrcSpanDP1 $ VarPat NoExtField $ L noAnn unqualName
       -- The intention is to move `= ...` (right-hand side with equals) to the right so there's 1 space between
       -- the newly added pattern and the rest
       indentRhs :: GRHSs GhcPs (LocatedA (HsExpr GhcPs)) -> GRHSs GhcPs (LocatedA (HsExpr GhcPs))
       indentRhs rhs@GRHSs{grhssGRHSs} = rhs {grhssGRHSs = fmap (`setEntryDP` (SameLine 1)) grhssGRHSs }
    in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
 #else
-addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
-  let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
-      newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
+addArgToMatch unqualName (L locMatch (Match xMatch ctxMatch pats rhs)) =
+  let newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
       indentRhs = id
    in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) (indentRhs rhs)), Prelude.length pats)
 #endif
@@ -116,10 +114,10 @@ addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
 -- For example:
 --    insertArg "new_pat" `foo bar baz = 1`
 -- => (`foo bar baz new_pat = 1`, Just ("foo", 2))
-appendFinalPatToMatches :: T.Text -> LHsDecl GhcPs -> TransformT (Either PluginError) (LHsDecl GhcPs, Maybe (GenLocated SrcSpanAnnN RdrName, Int))
-appendFinalPatToMatches name = \case
+appendFinalPatToMatches :: RdrName -> LHsDecl GhcPs -> TransformT (Either PluginError) (LHsDecl GhcPs, Maybe (GenLocated SrcSpanAnnN RdrName, Int))
+appendFinalPatToMatches rdrName = \case
   (L locDecl (ValD xVal fun@FunBind{fun_matches=mg,fun_id = idFunBind})) -> do
-    (mg', numPatsMay) <- modifyMgMatchesT' mg (pure . second Just . addArgToMatch name) Nothing combineMatchNumPats
+    (mg', numPatsMay) <- modifyMgMatchesT' mg (pure . second Just . addArgToMatch rdrName) Nothing combineMatchNumPats
     numPats <- TransformT $ lift $ maybeToEither (PluginInternalError "Unexpected empty match group in HsDecl") numPatsMay
     let decl' = L locDecl (ValD xVal fun{fun_matches=mg'})
     pure (decl', Just (idFunBind, numPats))
@@ -142,8 +140,8 @@ appendFinalPatToMatches name = \case
 --   foo () = new_def
 --
 -- TODO instead of inserting a typed hole; use GHC's suggested type from the error
-addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either PluginError [(T.Text, [TextEdit])]
-addArgumentAction (ParsedModule _ moduleSrc _) range name _typ = do
+addArgumentAction :: ParsedModule -> Range -> RdrName -> Maybe Type -> Either PluginError [(T.Text, [TextEdit])]
+addArgumentAction (ParsedModule _ moduleSrc _) range rdrName _typ = do
     (newSource, _, _) <- runTransformT $ do
       (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl
 #if MIN_VERSION_ghc(9,9,0)
@@ -152,14 +150,15 @@ addArgumentAction (ParsedModule _ moduleSrc _) range name _typ = do
         (makeDeltaAst moduleSrc)
 #endif
       case matchedDeclNameMay of
-          Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
-          Nothing -> pure moduleSrc'
+        Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
+        Nothing -> pure moduleSrc'
     let diff = makeDiffTextEdit (T.pack $ exactPrint moduleSrc) (T.pack $ exactPrint newSource)
-    pure [("Add argument ‘" <> name <> "’ to function", diff)]
+    pure [("Add argument ‘" <> labelName <> "’ to function", diff)]
   where
     addNameAsLastArgOfMatchingDecl = modifySmallestDeclWithM spanContainsRangeOrErr addNameAsLastArg
-    addNameAsLastArg = fmap (first (:[])) . appendFinalPatToMatches name
-
+    addNameAsLastArg = fmap (first (:[])) . appendFinalPatToMatches rdrName
+    occName = rdrNameOcc rdrName
+    labelName = T.pack $ occNameString occName
     spanContainsRangeOrErr = maybeToEither (PluginInternalError "SrcSpan was not valid range") . (`spanContainsRange` range)
 
 -- Transform an LHsType into a list of arguments and return type, to make transformations easier.

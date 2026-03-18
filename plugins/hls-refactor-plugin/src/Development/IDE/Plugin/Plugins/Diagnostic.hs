@@ -1,15 +1,28 @@
+{-# LANGUAGE CPP #-}
+
 module Development.IDE.Plugin.Plugins.Diagnostic (
   matchVariableNotInScope,
   matchRegexUnifySpaces,
   unifySpaces,
   matchFoundHole,
-  matchFoundHoleIncludeUnderscore,
+  diagReportHoleError
   )
   where
 
-import           Data.Bifunctor  (Bifunctor (..))
-import qualified Data.Text       as T
-import           Text.Regex.TDFA ((=~~))
+import           Control.Lens
+import qualified Data.Text                         as T
+import           Development.IDE.GHC.Compat        (RdrName, Type)
+import           Development.IDE.GHC.Compat.Error  (Hole, _ReportHoleError,
+                                                    _TcRnMessage,
+                                                    _TcRnNotInScope,
+                                                    _TcRnSolverReport, hole_occ,
+                                                    hole_ty, msgEnvelopeErrorL,
+                                                    reportContentL)
+import           Development.IDE.Types.Diagnostics (FileDiagnostic,
+                                                    _SomeStructuredMessage,
+                                                    fdStructuredMessageL)
+import           GHC.Tc.Errors.Types               (NotInScopeError)
+import           Text.Regex.TDFA                   ((=~~))
 
 unifySpaces :: T.Text -> T.Text
 unifySpaces    = T.unwords . T.words
@@ -27,33 +40,50 @@ matchRegex message regex = case message =~~ regex of
 matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegexUnifySpaces message = matchRegex (unifySpaces message)
 
-matchFoundHole :: T.Text -> Maybe (T.Text, T.Text)
-matchFoundHole message
-  | Just [name, typ] <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps" =
-      Just (name, typ)
-  | otherwise = Nothing
+matchFoundHole :: FileDiagnostic -> Maybe (RdrName, Type)
+matchFoundHole fd = do
+    hole <- diagReportHoleError fd
+    Just (hole_occ hole, hole_ty hole)
 
-matchFoundHoleIncludeUnderscore :: T.Text -> Maybe (T.Text, T.Text)
-matchFoundHoleIncludeUnderscore message = first ("_" <>) <$> matchFoundHole message
+matchVariableNotInScope :: FileDiagnostic -> Maybe (RdrName, Maybe Type)
+matchVariableNotInScope fd = do
+    (rdrName, _) <- diagReportNotInScope fd
+    Just (rdrName, Nothing)
 
-matchVariableNotInScope :: T.Text -> Maybe (T.Text, Maybe T.Text)
-matchVariableNotInScope message
-  --     * Variable not in scope:
-  --         suggestAcion :: Maybe T.Text -> Range -> Range
-  --     * Variable not in scope:
-  --         suggestAcion
-  | Just (name, typ) <- matchVariableNotInScopeTyped message = Just (name, Just typ)
-  | Just name <- matchVariableNotInScopeUntyped message = Just (name, Nothing)
-  | otherwise = Nothing
-  where
-    matchVariableNotInScopeTyped message
-      | Just [name, typ0] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
-      , -- When some name in scope is similar to not-in-scope variable, the type is followed by
-        -- "Suggested fix: Perhaps use ..."
-        typ:_ <- T.splitOn " Suggested fix:" typ0 =
-          Just (name, typ)
-      | otherwise = Nothing
-    matchVariableNotInScopeUntyped message
-      | Just [name] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+)" =
-          Just name
-      | otherwise = Nothing
+-- | Extract the typed hole information from a diagnostic, if the diagnostic
+-- originates from a hole. Returns 'Nothing' for any other kind of diagnostic.
+diagReportHoleError :: FileDiagnostic -> Maybe Hole
+diagReportHoleError diag = do
+    solverReport <-
+        diag
+            ^? fdStructuredMessageL
+                . _SomeStructuredMessage
+                . msgEnvelopeErrorL
+                . _TcRnMessage
+                . _TcRnSolverReport
+                . _1
+    (hole, _) <- solverReport ^? reportContentL . _ReportHoleError
+    Just hole
+
+-- | Extract the 'NotInScopeError' and the corresponding 'RdrName' from a 'FileDiagnostic'
+-- if it represents a not-in-scope error.
+diagReportNotInScope :: FileDiagnostic -> Maybe (RdrName, NotInScopeError)
+diagReportNotInScope diag = do
+#if MIN_VERSION_ghc(9,13,0)
+    (err, rdrName) <-
+        diag
+            ^? fdStructuredMessageL
+                . _SomeStructuredMessage
+                . msgEnvelopeErrorL
+                . _TcRnMessage
+                . _TcRnNotInScope
+#else
+    (err, rdrName, _, _) <-
+        diag
+            ^? fdStructuredMessageL
+                . _SomeStructuredMessage
+                . msgEnvelopeErrorL
+                . _TcRnMessage
+                . _TcRnNotInScope
+#endif
+    Just (rdrName, err)
