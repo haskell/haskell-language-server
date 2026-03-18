@@ -595,6 +595,7 @@ library hls-rename-plugin
     buildable: False
   exposed-modules:
     Ide.Plugin.Rename
+    Ide.Plugin.Rename.ImportAlias
     Ide.Plugin.Rename.ModuleName
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
