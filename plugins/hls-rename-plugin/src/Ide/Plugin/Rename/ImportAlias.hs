@@ -134,21 +134,26 @@ findImportAliasUseAtPos pos decls imports =                                     
 -- on a qualifier at a use site. If multiple imports share the same alias, falls
 -- back to the typechecked module's 'GlobalRdrEnv' to disambiguate.
 -- Returns @Nothing@ if the cursor is not on any alias declaration or qualifier.
+-- HACK: The first argument is `Rename.getNamesAtPos`, parameterized to avoid a
+-- circular dependency.
 resolveAliasAtPos                                                                                   -- [ ] AI
     :: MonadIO m                                                                                    -- [ ] AI
-    => IdeState                                                                                     -- [ ] AI
+    => (IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name])                 -- [ ] AI
+    -> IdeState                                                                                     -- [ ] AI
     -> NormalizedFilePath                                                                           -- [ ] AI
     -> Position                                                                                     -- [ ] AI
     -> [LHsDecl GhcPs]                                                                              -- [ ] AI
     -> [LImportDecl GhcPs]                                                                          -- [ ] AI
     -> ExceptT PluginError m (Maybe ImportAlias)                                                    -- [ ] AI
-resolveAliasAtPos state nfp pos decls imports =                                                     -- [ ] AI
+resolveAliasAtPos getNamesAtPosFn state nfp pos decls imports =                                     -- [ ] AI
     case findImportAliasDeclAtPos pos imports of                                                    -- [ ] AI
         Just result -> pure (Just result)                                                           -- [ ] AI
         Nothing     -> case findImportAliasUseAtPos pos decls imports of                            -- [ ] AI
             []       -> pure Nothing                                                                -- [ ] AI
             [result] -> pure (Just result)                                                          -- [ ] AI
-            _many    -> disambiguateAliasAtPos state nfp pos imports                                -- [ ] AI
+            _many    -> do
+                namesAtPos <- getNamesAtPosFn state nfp pos
+                disambiguateAliasAtPos state nfp namesAtPos imports                                 -- [ ] AI
 
 -- | Build a 'WorkspaceEdit' renaming an import alias and all its use sites.
 aliasBasedRename                                                                                    -- [ ] AI
@@ -239,15 +244,14 @@ disambiguateAliasAtPos                                                          
     :: MonadIO m                                                                                    -- [ ] AI
     => IdeState                                                                                     -- [ ] AI
     -> NormalizedFilePath                                                                           -- [ ] AI
-    -> Position                                                                                     -- [ ] AI
+    -> [Name]                                                                                       -- [ ] AI
     -> [LImportDecl GhcPs]                                                                          -- [ ] AI
     -> ExceptT PluginError m (Maybe ImportAlias)                                                    -- [ ] AI
-disambiguateAliasAtPos state nfp pos imports = do                                                   -- [ ] AI
-    namesAtCursor <- getNamesAtPos state nfp pos                                                    -- [ ] AI
+disambiguateAliasAtPos state nfp namesAtPos imports = do                                            -- [ ] AI
     tcModule <- runActionE "rename.disambiguateAlias" state (useE TypeCheck nfp)                    -- [ ] AI
     let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)                                              -- [ ] AI
     pure $ listToMaybe $ do                                                                         -- [ ] AI
-        name <- namesAtCursor                                                                       -- [ ] AI
+        name <- namesAtPos                                                                          -- [ ] AI
         gre <- maybeToList (lookupGRE_Name rdrEnv name)                                             -- [ ] AI
         impSpec <- gre_imp gre                                                                      -- [ ] AI
         let declSpec = is_decl impSpec                                                              -- [ ] AI
