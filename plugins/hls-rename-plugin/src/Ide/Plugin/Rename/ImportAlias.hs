@@ -24,18 +24,18 @@ The basic approach is this:
 The common case, with each alias corresponding to one module, should be very
 fast, even if the user renames multiple aliases in quick succession.
 -}
-module Ide.Plugin.Rename.ImportAlias                                                                -- [ ] AI
-    ( getParsedModuleStale                                                                          -- [ ] AI
-    , ImportAlias (..)                                                                              -- [ ] AI
-    , findImportAliasDeclAtPos                                                                      -- [ ] AI
-    , findImportAliasUseAtPos                                                                       -- [ ] AI
-    , resolveAliasAtPos                                                                             -- [ ] AI
-    , aliasBasedRename                                                                              -- [ ] AI
-    , importAliasUseSiteSpans                                                                       -- [ ] AI
-    , importAliasUseSiteEdit                                                                        -- [ ] AI
-    , importAliasDeclEdit                                                                           -- [ ] AI
-    , rangeContainsPosition                                                                         -- [ ] AI
-    ) where                                                                                         -- [ ] AI
+module Ide.Plugin.Rename.ImportAlias
+    ( getParsedModuleStale
+    , ImportAlias (..)
+    , findImportAliasDeclAtPos
+    , findImportAliasUseAtPos
+    , resolveAliasAtPos
+    , aliasBasedRename
+    , importAliasUseSiteSpans
+    , importAliasUseSiteEdit
+    , importAliasDeclEdit
+    , rangeContainsPosition
+    ) where
 
 import           Control.Lens                     ((^.))
 import           Control.Monad                    (guard)
@@ -69,65 +69,65 @@ data ImportAlias = ImportAlias
 
 -- | Fetch the parsed module for a file, accepting a stale result.
 -- Returns @Nothing@ if the file has never been indexed.
-getParsedModuleStale                                                                                -- [ ] AI
-    :: MonadIO m                                                                                    -- [ ] AI
-    => IdeState                                                                                     -- [ ] AI
-    -> NormalizedFilePath                                                                           -- [ ] AI
-    -> m (Maybe ParsedModule)                                                                       -- [ ] AI
-getParsedModuleStale state nfp =                                                                    -- [ ] AI
-    liftIO $ fmap fst <$>                                                                           -- [ ] AI
-        runAction "rename.getParsedModuleStale" state                                               -- [ ] AI
-            (useWithStale GetParsedModule nfp)                                                      -- [ ] AI
+getParsedModuleStale
+    :: MonadIO m
+    => IdeState
+    -> NormalizedFilePath
+    -> m (Maybe ParsedModule)
+getParsedModuleStale state nfp =
+    liftIO $ fmap fst <$>
+        runAction "rename.getParsedModuleStale" state
+            (useWithStale GetParsedModule nfp)
 
 -- | Find the 'ImportAlias' for the alias declaration at the cursor, such as
 -- @Alias@ in @import Module as Alias@.
-findImportAliasDeclAtPos                                                                            -- [ ] AI
-    :: Position                                                                                     -- [ ] AI
-    -> [LImportDecl GhcPs]                                                                          -- [ ] AI
-    -> Maybe ImportAlias                                                                            -- [ ] AI
-findImportAliasDeclAtPos pos imports = listToMaybe                                                  -- [ ] AI
-    [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}                                       -- [ ] AI
-    | _locatedImport@(L _ decl)      <- imports                                                     -- [ ] AI
-    , Just locatedAlias              <- [ideclAs decl]                                              -- [ ] AI
-    , let aliasName = unLoc locatedAlias                                                            -- [ ] AI
-    , RealSrcSpan aliasDeclSpan _    <- [locA locatedAlias]                                         -- [ ] AI
-    , rangeContainsPosition (realSrcSpanToRange aliasDeclSpan) pos                                  -- [ ] AI
-    , let aliasModuleName = unLoc (ideclName decl)                                                  -- [ ] AI
-    ]                                                                                               -- [ ] AI
+findImportAliasDeclAtPos
+    :: Position
+    -> [LImportDecl GhcPs]
+    -> Maybe ImportAlias
+findImportAliasDeclAtPos pos imports = listToMaybe
+    [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
+    | _locatedImport@(L _ decl)      <- imports
+    , Just locatedAlias              <- [ideclAs decl]
+    , let aliasName = unLoc locatedAlias
+    , RealSrcSpan aliasDeclSpan _    <- [locA locatedAlias]
+    , rangeContainsPosition (realSrcSpanToRange aliasDeclSpan) pos
+    , let aliasModuleName = unLoc (ideclName decl)
+    ]
 
 -- | Find the 'ImportAlias' matching the name qualifier at the cursor, such as
 -- @Alias@ in @Alias.name@.
 -- Returns multiple values if multiple modules share the same alias.
-findImportAliasUseAtPos                                                                             -- [ ] AI
-    :: Position                                                                                     -- [ ] AI
-    -> [LHsDecl GhcPs]                                                                              -- [ ] AI
-    -> [LImportDecl GhcPs]                                                                          -- [ ] AI
-    -> [ImportAlias]                                                                                -- [ ] AI
-findImportAliasUseAtPos pos decls imports =                                                         -- [ ] AI
-    case listToMaybe                                                                                -- [ ] AI
-        [ qualifier                                                                                 -- [ ] AI
-        | L (ann :: Anno RdrName) (Qual qualifier _) <- listify (const True) decls                  -- [ ] AI
-        , RealSrcSpan useSiteSpan _  <- [locA ann]                                                  -- [ ] AI
-        , rangeContainsPosition (realSrcSpanToRange useSiteSpan) pos                                -- [ ] AI
-        , let qualifierLength = fromIntegral (length (moduleNameString qualifier))                  -- [ ] AI
-              start           = realSrcSpanStart useSiteSpan                                        -- [ ] AI
-              line            = fromIntegral (srcLocLine start)                                     -- [ ] AI
-              startColumn     = fromIntegral (srcLocCol start)                                      -- [ ] AI
-              qualifierRange  = Range                                                               -- [ ] AI
-                  (Position (line - 1) (startColumn - 1))                                           -- [ ] AI
-                  (Position (line - 1) (startColumn - 1 + qualifierLength))                         -- [ ] AI
-        , rangeContainsPosition qualifierRange pos                                                  -- [ ] AI
-        ] of                                                                                        -- [ ] AI
-    Nothing -> []                                                                                   -- [ ] AI
-    Just qualifierAtPos ->                                                                          -- [ ] AI
-        [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}                                   -- [ ] AI
-        | _locatedImport@(L _ decl)   <- imports                                                    -- [ ] AI
-        , Just locatedAlias           <- [ideclAs decl]                                             -- [ ] AI
-        , let aliasName = unLoc locatedAlias                                                        -- [ ] AI
-        , aliasName == qualifierAtPos                                                               -- [ ] AI
-        , RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]                                        -- [ ] AI
+findImportAliasUseAtPos
+    :: Position
+    -> [LHsDecl GhcPs]
+    -> [LImportDecl GhcPs]
+    -> [ImportAlias]
+findImportAliasUseAtPos pos decls imports =
+    case listToMaybe
+        [ qualifier
+        | L (ann :: Anno RdrName) (Qual qualifier _) <- listify (const True) decls
+        , RealSrcSpan useSiteSpan _  <- [locA ann]
+        , rangeContainsPosition (realSrcSpanToRange useSiteSpan) pos
+        , let qualifierLength = fromIntegral (length (moduleNameString qualifier))
+              start           = realSrcSpanStart useSiteSpan
+              line            = fromIntegral (srcLocLine start)
+              startColumn     = fromIntegral (srcLocCol start)
+              qualifierRange  = Range
+                  (Position (line - 1) (startColumn - 1))
+                  (Position (line - 1) (startColumn - 1 + qualifierLength))
+        , rangeContainsPosition qualifierRange pos
+        ] of
+    Nothing -> []
+    Just qualifierAtPos ->
+        [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
+        | _locatedImport@(L _ decl)   <- imports
+        , Just locatedAlias           <- [ideclAs decl]
+        , let aliasName = unLoc locatedAlias
+        , aliasName == qualifierAtPos
+        , RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]
         , let aliasModuleName = unLoc (ideclName decl)
-        ]                                                                                           -- [ ] AI
+        ]
 
 -- | Return the module name and declaration span for the alias being renamed at
 -- the cursor. The cursor may be on the alias token in an import declaration or
@@ -136,166 +136,166 @@ findImportAliasUseAtPos pos decls imports =                                     
 -- Returns @Nothing@ if the cursor is not on any alias declaration or qualifier.
 -- HACK: The first argument is `Rename.getNamesAtPos`, parameterized to avoid a
 -- circular dependency.
-resolveAliasAtPos                                                                                   -- [ ] AI
-    :: MonadIO m                                                                                    -- [ ] AI
-    => (IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name])                 -- [ ] AI
-    -> IdeState                                                                                     -- [ ] AI
-    -> NormalizedFilePath                                                                           -- [ ] AI
-    -> Position                                                                                     -- [ ] AI
-    -> [LHsDecl GhcPs]                                                                              -- [ ] AI
-    -> [LImportDecl GhcPs]                                                                          -- [ ] AI
-    -> ExceptT PluginError m (Maybe ImportAlias)                                                    -- [ ] AI
-resolveAliasAtPos getNamesAtPosFn state nfp pos decls imports =                                     -- [ ] AI
-    case findImportAliasDeclAtPos pos imports of                                                    -- [ ] AI
-        Just result -> pure (Just result)                                                           -- [ ] AI
-        Nothing     -> case findImportAliasUseAtPos pos decls imports of                            -- [ ] AI
-            []       -> pure Nothing                                                                -- [ ] AI
-            [result] -> pure (Just result)                                                          -- [ ] AI
+resolveAliasAtPos
+    :: MonadIO m
+    => (IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name])
+    -> IdeState
+    -> NormalizedFilePath
+    -> Position
+    -> [LHsDecl GhcPs]
+    -> [LImportDecl GhcPs]
+    -> ExceptT PluginError m (Maybe ImportAlias)
+resolveAliasAtPos getNamesAtPosFn state nfp pos decls imports =
+    case findImportAliasDeclAtPos pos imports of
+        Just result -> pure (Just result)
+        Nothing     -> case findImportAliasUseAtPos pos decls imports of
+            []       -> pure Nothing
+            [result] -> pure (Just result)
             _many    -> do
                 namesAtPos <- getNamesAtPosFn state nfp pos
-                disambiguateAliasAtPos state nfp namesAtPos imports                                 -- [ ] AI
+                disambiguateAliasAtPos state nfp namesAtPos imports
 
 -- | Build a 'WorkspaceEdit' renaming an import alias and all its use sites.
-aliasBasedRename                                                                                    -- [ ] AI
-    :: MonadIO m                                                                                    -- [ ] AI
-    => IdeState                                                                                     -- [ ] AI
-    -> NormalizedFilePath                                                                           -- [ ] AI
-    -> Uri                                                                                          -- [ ] AI
-    -> ImportAlias                                                                                  -- [ ] AI
-    -> [LImportDecl GhcPs]                                                                          -- [ ] AI
-    -> [LHsDecl GhcPs]                                                                              -- [ ] AI
-    -> T.Text                                                                                       -- [ ] AI
-    -> ExceptT PluginError m (MessageResult Method_TextDocumentRename)                              -- [ ] AI
-aliasBasedRename state nfp uri importAlias imports decls newNameText = do                           -- [ ] AI
-    let oldAlias = aliasName importAlias                                                            -- [ ] AI
-        declSpan = aliasDeclSpan importAlias                                                        -- [ ] AI
-        duplicateAlias =                                                                            -- [ ] AI
-            length [ ()                                                                             -- [ ] AI
-                   | L _ decl <- imports                                                            -- [ ] AI
-                   , Just locAlias <- [ideclAs decl]                                                -- [ ] AI
-                   , unLoc locAlias == oldAlias                                                     -- [ ] AI
-                   ] > 1                                                                            -- [ ] AI
-    useSiteSpans <-                                                                                 -- [ ] AI
-        if duplicateAlias                                                                           -- [ ] AI
-        then importAliasUseSiteSpansDisambiguated state nfp importAlias decls                       -- [ ] AI
-        else pure $ importAliasUseSiteSpans importAlias decls                                       -- [ ] AI
-    let declEdit = importAliasDeclEdit newNameText declSpan                                         -- [ ] AI
-        useEdits = map (importAliasUseSiteEdit oldAlias newNameText) useSiteSpans                   -- [ ] AI
-        allEdits = declEdit : useEdits                                                              -- [ ] AI
-    verTxtDocId <- liftIO $ runAction "rename.getVersionedTextDoc" state $                          -- [ ] AI
-        getVersionedTextDoc (TextDocumentIdentifier uri)                                            -- [ ] AI
-    let fileChanges = Just $ M.singleton (verTxtDocId ^. L.uri) allEdits                            -- [ ] AI
+aliasBasedRename
+    :: MonadIO m
+    => IdeState
+    -> NormalizedFilePath
+    -> Uri
+    -> ImportAlias
+    -> [LImportDecl GhcPs]
+    -> [LHsDecl GhcPs]
+    -> T.Text
+    -> ExceptT PluginError m (MessageResult Method_TextDocumentRename)
+aliasBasedRename state nfp uri importAlias imports decls newNameText = do
+    let oldAlias = aliasName importAlias
+        declSpan = aliasDeclSpan importAlias
+        duplicateAlias =
+            length [ ()
+                   | L _ decl <- imports
+                   , Just locAlias <- [ideclAs decl]
+                   , unLoc locAlias == oldAlias
+                   ] > 1
+    useSiteSpans <-
+        if duplicateAlias
+        then importAliasUseSiteSpansDisambiguated state nfp importAlias decls
+        else pure $ importAliasUseSiteSpans importAlias decls
+    let declEdit = importAliasDeclEdit newNameText declSpan
+        useEdits = map (importAliasUseSiteEdit oldAlias newNameText) useSiteSpans
+        allEdits = declEdit : useEdits
+    verTxtDocId <- liftIO $ runAction "rename.getVersionedTextDoc" state $
+        getVersionedTextDoc (TextDocumentIdentifier uri)
+    let fileChanges = Just $ M.singleton (verTxtDocId ^. L.uri) allEdits
         -- TODO: Replace 'Nothing' with meaningful details for the workspace edit.
-        workspaceEdit = WorkspaceEdit fileChanges Nothing Nothing                                   -- [ ] AI
-    pure $ InL workspaceEdit                                                                        -- [ ] AI
+        workspaceEdit = WorkspaceEdit fileChanges Nothing Nothing
+    pure $ InL workspaceEdit
 
 -- | Collect the 'RealSrcSpan' of every qualified use of @oldAlias@, such as in
 -- @oldAlias.foo@, @oldAlias.bar@, and so on.
 -- Does not disambiguate if multiple imports share the alias.
-importAliasUseSiteSpans                                                                             -- [ ] AI
-    :: ImportAlias                                                                                  -- [ ] AI
-    -> [LHsDecl GhcPs]                                                                              -- [ ] AI
-    -> [RealSrcSpan]                                                                                -- [ ] AI
-importAliasUseSiteSpans importAlias decls =                                                         -- [ ] AI
-    [ fullNameSpan                                                                                  -- [ ] AI
-    | L (ann :: Anno RdrName) (Qual moduleAlias _) <- listify (const True) decls                    -- [ ] AI
-    , moduleAlias == aliasName importAlias                                                          -- [ ] AI
-    , RealSrcSpan fullNameSpan _ <- [locA ann]                                                      -- [ ] AI
-    ]                                                                                               -- [ ] AI
+importAliasUseSiteSpans
+    :: ImportAlias
+    -> [LHsDecl GhcPs]
+    -> [RealSrcSpan]
+importAliasUseSiteSpans importAlias decls =
+    [ fullNameSpan
+    | L (ann :: Anno RdrName) (Qual moduleAlias _) <- listify (const True) decls
+    , moduleAlias == aliasName importAlias
+    , RealSrcSpan fullNameSpan _ <- [locA ann]
+    ]
 
 -- | Build a 'TextEdit' replacing the qualifier part in a qualified name (like
 -- from @Alias.name@ to @NewAlias.name@).
 -- (NOTE: GHC uses 1-based positioning; LSP uses 0-based.)
-importAliasUseSiteEdit                                                                              -- [ ] AI
-    :: ModuleName   -- ^ old alias, used to compute the qualifier width                             -- [ ] AI
-    -> T.Text       -- ^ new alias text                                                             -- [ ] AI
-    -> RealSrcSpan  -- ^ span of the full qualified name, such as @Alias.name@                      -- [ ] AI
-    -> TextEdit                                                                                     -- [ ] AI
-importAliasUseSiteEdit oldAlias newAlias fullNameSpan = TextEdit range newAlias                     -- [ ] AI
-    where                                                                                           -- [ ] AI
-        start    = realSrcSpanStart fullNameSpan                                                    -- [ ] AI
-        line     = fromIntegral (srcLocLine start) - 1                                              -- [ ] AI
-        startCol = fromIntegral (srcLocCol  start) - 1                                              -- [ ] AI
-        endCol   = startCol + fromIntegral (length (moduleNameString oldAlias))                     -- [ ] AI
-        range    = Range (Position line startCol) (Position line endCol)                            -- [ ] AI
+importAliasUseSiteEdit
+    :: ModuleName   -- ^ old alias, used to compute the qualifier width
+    -> T.Text       -- ^ new alias text
+    -> RealSrcSpan  -- ^ span of the full qualified name, such as @Alias.name@
+    -> TextEdit
+importAliasUseSiteEdit oldAlias newAlias fullNameSpan = TextEdit range newAlias
+    where
+        start    = realSrcSpanStart fullNameSpan
+        line     = fromIntegral (srcLocLine start) - 1
+        startCol = fromIntegral (srcLocCol  start) - 1
+        endCol   = startCol + fromIntegral (length (moduleNameString oldAlias))
+        range    = Range (Position line startCol) (Position line endCol)
 
 -- | Build a 'TextEdit' replacing the alias token in an import declaration (like
 -- from @import Module as Alias@ to @import Module as NewAlias@).
-importAliasDeclEdit                                                                                 -- [ ] AI
-    :: T.Text       -- ^ new alias text                                                             -- [ ] AI
-    -> RealSrcSpan  -- ^ span of @Alias@ in @import Module as Alias@                                -- [ ] AI
-    -> TextEdit                                                                                     -- [ ] AI
-importAliasDeclEdit newAlias rsp = TextEdit (realSrcSpanToRange rsp) newAlias                       -- [ ] AI
+importAliasDeclEdit
+    :: T.Text       -- ^ new alias text
+    -> RealSrcSpan  -- ^ span of @Alias@ in @import Module as Alias@
+    -> TextEdit
+importAliasDeclEdit newAlias rsp = TextEdit (realSrcSpanToRange rsp) newAlias
 
 -- | Check whether a range contains a position (inclusive start, exclusive end).
-rangeContainsPosition :: Range -> Position -> Bool                                                  -- [ ] AI
-rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)                      -- [ ] AI
-    =  (l > sl || (l == sl && c >= sc))                                                             -- [ ] AI
-    && (l < el || (l == el && c <  ec))                                                             -- [ ] AI
+rangeContainsPosition :: Range -> Position -> Bool
+rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)
+    =  (l > sl || (l == sl && c >= sc))
+    && (l < el || (l == el && c <  ec))
 
 ---------------------------------------------------------------------------------------------------
 -- Internal helpers
 
--- | Resolve an ambiguous alias use site by consulting the typechecked                              -- [ ] AI
--- module's 'GlobalRdrEnv'. Used when multiple imports share the same alias.                        -- [ ] AI
--- The caller is responsible for providing the names under the cursor.                              -- [ ] AI
+-- | Resolve an ambiguous alias use site by consulting the typechecked
+-- module's 'GlobalRdrEnv'. Used when multiple imports share the same alias.
+-- The caller is responsible for providing the names under the cursor.
 -- TODO: Rename it to @disambiguateAliasUseAtPos@.
-disambiguateAliasAtPos                                                                              -- [ ] AI
-    :: MonadIO m                                                                                    -- [ ] AI
-    => IdeState                                                                                     -- [ ] AI
-    -> NormalizedFilePath                                                                           -- [ ] AI
-    -> [Name]                                                                                       -- [ ] AI
-    -> [LImportDecl GhcPs]                                                                          -- [ ] AI
-    -> ExceptT PluginError m (Maybe ImportAlias)                                                    -- [ ] AI
-disambiguateAliasAtPos state nfp namesAtPos imports = do                                            -- [ ] AI
-    tcModule <- runActionE "rename.disambiguateAlias" state (useE TypeCheck nfp)                    -- [ ] AI
-    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)                                              -- [ ] AI
-    pure $ listToMaybe $ do                                                                         -- [ ] AI
-        name <- namesAtPos                                                                          -- [ ] AI
-        gre <- maybeToList (lookupGRE_Name rdrEnv name)                                             -- [ ] AI
-        impSpec <- gre_imp gre                                                                      -- [ ] AI
-        let declSpec = is_decl impSpec                                                              -- [ ] AI
-            specModuleName = moduleName (is_mod declSpec)                                           -- [ ] AI
-            specAlias = is_as declSpec                                                              -- [ ] AI
-        L _ decl <- imports                                                                         -- [ ] AI
-        guard (unLoc (ideclName decl) == specModuleName)                                            -- [ ] AI
-        Just locatedAlias <- [ideclAs decl]                                                         -- [ ] AI
-        RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]                                          -- [ ] AI
-        pure (ImportAlias specModuleName specAlias aliasDeclSpan)                                   -- [ ] AI
+disambiguateAliasAtPos
+    :: MonadIO m
+    => IdeState
+    -> NormalizedFilePath
+    -> [Name]
+    -> [LImportDecl GhcPs]
+    -> ExceptT PluginError m (Maybe ImportAlias)
+disambiguateAliasAtPos state nfp namesAtPos imports = do
+    tcModule <- runActionE "rename.disambiguateAlias" state (useE TypeCheck nfp)
+    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
+    pure $ listToMaybe $ do
+        name <- namesAtPos
+        gre <- maybeToList (lookupGRE_Name rdrEnv name)
+        impSpec <- gre_imp gre
+        let declSpec = is_decl impSpec
+            specModuleName = moduleName (is_mod declSpec)
+            specAlias = is_as declSpec
+        L _ decl <- imports
+        guard (unLoc (ideclName decl) == specModuleName)
+        Just locatedAlias <- [ideclAs decl]
+        RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]
+        pure (ImportAlias specModuleName specAlias aliasDeclSpan)
 
--- | Like 'importAliasUseSiteSpans' but filters to use sites that resolve                           -- [ ] AI
--- to names from @actualMod@, using the typechecked module's 'GlobalRdrEnv'.                        -- [ ] AI
--- Used when multiple imports share the same alias.                                                 -- [ ] AI
-importAliasUseSiteSpansDisambiguated                                                                -- [ ] AI
-    :: MonadIO m                                                                                    -- [ ] AI
-    => IdeState                                                                                     -- [ ] AI
-    -> NormalizedFilePath                                                                           -- [ ] AI
-    -> ImportAlias                                                                                  -- [ ] AI
-    -> [LHsDecl GhcPs]                                                                              -- [ ] AI
-    -> ExceptT PluginError m [RealSrcSpan]                                                          -- [ ] AI
-importAliasUseSiteSpansDisambiguated state nfp importAlias decls = do                               -- [ ] AI
-    tcModule <- runActionE "rename.useSiteSpans" state (useE TypeCheck nfp)                         -- [ ] AI
-    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)                                              -- [ ] AI
-        allSpans = importAliasUseSiteSpansWithOcc (aliasName importAlias) decls                     -- [ ] AI
-        ImportAlias actualMod _ _ = importAlias                                                     -- [ ] AI
-    pure                                                                                            -- [ ] AI
-        [ rsp                                                                                       -- [ ] AI
-        | (occName, rsp) <- allSpans                                                                -- [ ] AI
-        , gre <- lookupGRE rdrEnv $                                                                 -- [ ] AI
-            LookupRdrName (Qual (aliasName importAlias) occName) AllRelevantGREs                    -- [ ] AI
-        , impSpec <- gre_imp gre                                                                    -- [ ] AI
-        , moduleName (is_mod (is_decl impSpec)) == actualMod                                        -- [ ] AI
-        ]                                                                                           -- [ ] AI
+-- | Like 'importAliasUseSiteSpans' but filters to use sites that resolve
+-- to names from @actualMod@, using the typechecked module's 'GlobalRdrEnv'.
+-- Used when multiple imports share the same alias.
+importAliasUseSiteSpansDisambiguated
+    :: MonadIO m
+    => IdeState
+    -> NormalizedFilePath
+    -> ImportAlias
+    -> [LHsDecl GhcPs]
+    -> ExceptT PluginError m [RealSrcSpan]
+importAliasUseSiteSpansDisambiguated state nfp importAlias decls = do
+    tcModule <- runActionE "rename.useSiteSpans" state (useE TypeCheck nfp)
+    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
+        allSpans = importAliasUseSiteSpansWithOcc (aliasName importAlias) decls
+        ImportAlias actualMod _ _ = importAlias
+    pure
+        [ rsp
+        | (occName, rsp) <- allSpans
+        , gre <- lookupGRE rdrEnv $
+            LookupRdrName (Qual (aliasName importAlias) occName) AllRelevantGREs
+        , impSpec <- gre_imp gre
+        , moduleName (is_mod (is_decl impSpec)) == actualMod
+        ]
 
--- | Like 'importAliasUseSiteSpans' but also returns the 'OccName' of each                          -- [ ] AI
--- use, needed for 'GlobalRdrEnv' lookup in the disambiguated path.                                 -- [ ] AI
-importAliasUseSiteSpansWithOcc                                                                      -- [ ] AI
-    :: ModuleName                                                                                   -- [ ] AI
-    -> [LHsDecl GhcPs]                                                                              -- [ ] AI
-    -> [(OccName, RealSrcSpan)]                                                                     -- [ ] AI
-importAliasUseSiteSpansWithOcc oldAlias decls =                                                     -- [ ] AI
-    [ (occName, rsp)                                                                                -- [ ] AI
-    | L (ann :: Anno RdrName) (Qual moduleAlias occName) <- listify (const True) decls              -- [ ] AI
-    , moduleAlias == oldAlias                                                                       -- [ ] AI
-    , RealSrcSpan rsp _ <- [locA ann]                                                               -- [ ] AI
-    ]                                                                                               -- [ ] AI
+-- | Like 'importAliasUseSiteSpans' but also returns the 'OccName' of each
+-- use, needed for 'GlobalRdrEnv' lookup in the disambiguated path.
+importAliasUseSiteSpansWithOcc
+    :: ModuleName
+    -> [LHsDecl GhcPs]
+    -> [(OccName, RealSrcSpan)]
+importAliasUseSiteSpansWithOcc oldAlias decls =
+    [ (occName, rsp)
+    | L (ann :: Anno RdrName) (Qual moduleAlias occName) <- listify (const True) decls
+    , moduleAlias == oldAlias
+    , RealSrcSpan rsp _ <- [locA ann]
+    ]
