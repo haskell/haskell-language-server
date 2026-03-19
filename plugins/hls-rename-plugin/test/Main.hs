@@ -48,6 +48,14 @@ renameTests = testGroup "Identifier"
         rename doc (Position 6 37) "Expr"
     , goldenWithRename "Hidden function" "HiddenFunction" $ \doc ->
         rename doc (Position 0 32) "quux"
+    , goldenWithRename "Import alias in declaration" "ImportAlias" $ \doc ->
+        rename doc (Position 1 24) "G"
+    , goldenWithRename "Import alias in use" "ImportAlias" $ \doc ->
+        rename doc (Position 4 6) "G"
+    , goldenWithRename "Import alias (shared) in declaration" "ImportAliasShared" $ \doc ->
+        rename doc (Position 1 31) "Maybe"
+    , goldenWithRename "Import alias (shared) in use" "ImportAliasShared" $ \doc ->
+        rename doc (Position 4 6) "Maybe"
     , goldenWithRename "Imported function" "ImportedFunction" $ \doc ->
         rename doc (Position 3 8) "baz"
     , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->
@@ -56,10 +64,6 @@ renameTests = testGroup "Identifier"
         rename doc (Position 4 23) "blah"
     , goldenWithRename "Let expression" "LetExpression" $ \doc ->
         rename doc (Position 5 11) "foobar"
-    , goldenWithRename "Qualified-as alias in import" "QualifiedAsAlias" $ \doc ->
-        rename doc (Position 1 24) "G"
-    , goldenWithRename "Qualified-as alias in use" "QualifiedAsAlias" $ \doc ->
-        rename doc (Position 4 6) "G"
     , goldenWithRename "Qualified-as function" "QualifiedAsFunction" $ \doc ->
         rename doc (Position 3 10) "baz"
     , goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc ->
