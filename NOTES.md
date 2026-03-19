@@ -49,7 +49,9 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 > 1. Get the parsed AST (`HsModule GhcPs`) via `GetParsedModule`.
 > 2. Determine the alias being renamed by checking two cursor positions, in order:
 >    - **2a.** The cursor is on the alias token in an import declaration — traverse `hsmodImports` to find the `ImportDecl` whose `ideclAs` span contains the cursor.
->    - **2b.** The cursor is on a qualifier at a use site — traverse `hsmodDecls` to find a `Qual moduleAlias _` `RdrName` whose qualifier span contains the cursor, then look up the matching `ideclAs` in `hsmodImports`. If multiple imports share the same alias, fall back to the renamed AST via a fresh `TypeCheck` to disambiguate.
+>    - **2b.** The cursor is on a qualifier at a use site — traverse `hsmodDecls` to find a `Qual moduleAlias _` `RdrName` whose qualifier span contains the cursor, then look up the matching `ideclAs` in `hsmodImports`.
+>
+>    If multiple imports share the same alias, fall back to the renamed AST via a fresh `TypeCheck` to disambiguate.
 >
 >    Both yield `(ModuleName, RealSrcSpan)`: the alias name and its span in the import declaration.
 > 3. Traverse all `LocatedN RdrName` nodes in `hsmodDecls` via SYB `listify`, collect those with `Qual alias _` matching the target alias — extract their `RealSrcSpan`s from the annotation.
