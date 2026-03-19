@@ -39,7 +39,7 @@ module Ide.Plugin.Rename.ImportAlias
 
 import           Control.Lens                     ((^.))
 import           Control.Monad                    (guard)
-import           Control.Monad.Except             (ExceptT, throwError)
+import           Control.Monad.Except             (ExceptT)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Data.Generics
 import qualified Data.Map                         as M
