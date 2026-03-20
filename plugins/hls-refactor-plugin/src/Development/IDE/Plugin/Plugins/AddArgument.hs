@@ -4,6 +4,7 @@ module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 import           Control.Monad                             (join)
 import           Control.Monad.Trans.Class                 (lift)
 import           Data.Bifunctor                            (Bifunctor (..))
+import           Data.Char                                 (isUpper)
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
@@ -68,11 +69,20 @@ type HsArrow pass = HsMultAnn pass
 --      In this case a new argument would have to add its type between b and c in the signature.
 plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
 plugin parsedModule Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
+  | Just (name, typ) <- matchVariableNotInScope message
+  , not (isQualifiedName name) = addArgumentAction parsedModule _range name typ
   | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
   | otherwise = pure []
   where
     message = unifySpaces _message
+    -- Qualified names (e.g. NE.toList) always start with an uppercase module
+    -- qualifier. Since "Variable not in scope" only reports variables and
+    -- operators, an unqualified name will never start with an uppercase letter.
+    -- Therefore, checking for an uppercase first character reliably identifies
+    -- qualified names, which can never be valid function argument patterns.
+    isQualifiedName name = case T.uncons name of
+      Just (c, _) -> isUpper c
+      Nothing     -> False
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
