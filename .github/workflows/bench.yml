@@ -27,7 +27,6 @@ jobs:
           paths_ignore: '[ "**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
-                         , ".circleci/**"
                          , "**.nix"
                          , "**/test/**"
                          , "flake.lock"
