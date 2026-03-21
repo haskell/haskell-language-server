@@ -52,12 +52,13 @@ getAtPoint file pos = runMaybeT $ do
   shakeExtras <- lift askShake
 
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
+  parsedModule <- fst <$> useWithStaleFastMT GetParsedModule file
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos'
+    AtPoint.atPoint opts shakeExtras hf dkMap env pos' parsedModule
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.

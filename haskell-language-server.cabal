@@ -2146,6 +2146,7 @@ test-suite ghcide-tests
     ClientSettingsTests
     CodeLensTests
     CompletionTests
+    ConstructorHoverTests
     CPPTests
     CradleTests
     DependentFileTest
@@ -2158,6 +2159,7 @@ test-suite ghcide-tests
     HaddockTests
     HieDbRetry
     HighlightTests
+    Hover
     IfaceTests
     InitializeResponseTests
     LogType
