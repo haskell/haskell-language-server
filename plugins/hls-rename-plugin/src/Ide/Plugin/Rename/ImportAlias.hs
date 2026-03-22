@@ -87,12 +87,12 @@ findImportAliasDeclAtPos
     -> Maybe ImportAlias
 findImportAliasDeclAtPos pos imports = listToMaybe
     [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
-    | _locatedImport@(L _ decl)      <- imports
-    , Just locatedAlias              <- [ideclAs decl]
-    , let aliasName = unLoc locatedAlias
-    , RealSrcSpan aliasDeclSpan _    <- [locA locatedAlias]
+    | importDecl                  <- map unLoc imports
+    , Just locatedAlias           <- [ideclAs importDecl]
+    , RealSrcSpan aliasDeclSpan _ <- [getLocA locatedAlias]
     , rangeContainsPosition (realSrcSpanToRange aliasDeclSpan) pos
-    , let aliasModuleName = unLoc (ideclName decl)
+    , let aliasName       = unLoc locatedAlias
+          aliasModuleName = unLoc (ideclName importDecl)
     ]
 
 -- | Find the 'ImportAlias' matching the name qualifier at the cursor, such as
@@ -106,8 +106,9 @@ findImportAliasUseAtPos
 findImportAliasUseAtPos pos decls imports =
     case listToMaybe
         [ qualifier
-        | L (ann :: Anno RdrName) (Qual qualifier _) <- listify (const True) decls
-        , RealSrcSpan useSiteSpan _  <- [locA ann]
+        | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
+        , Qual qualifier _                     <- [unLoc locatedRdrName]
+        , RealSrcSpan useSiteSpan _            <- [getLocA locatedRdrName]
         , rangeContainsPosition (realSrcSpanToRange useSiteSpan) pos
         , let qualifierLength = fromIntegral (length (moduleNameString qualifier))
               start           = realSrcSpanStart useSiteSpan
@@ -121,12 +122,12 @@ findImportAliasUseAtPos pos decls imports =
     Nothing -> []
     Just qualifierAtPos ->
         [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
-        | _locatedImport@(L _ decl)   <- imports
-        , Just locatedAlias           <- [ideclAs decl]
+        | importDecl                  <- map unLoc imports
+        , Just locatedAlias           <- [ideclAs importDecl]
         , let aliasName = unLoc locatedAlias
         , aliasName == qualifierAtPos
-        , RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]
-        , let aliasModuleName = unLoc (ideclName decl)
+        , RealSrcSpan aliasDeclSpan _ <- [getLocA locatedAlias]
+        , let aliasModuleName = unLoc (ideclName importDecl)
         ]
 
 -- | Return the module name and declaration span for the alias being renamed at
@@ -171,9 +172,9 @@ aliasBasedRename state nfp uri importAlias imports decls newNameText = do
         declSpan = aliasDeclSpan importAlias
         duplicateAlias =
             length [ ()
-                   | L _ decl <- imports
-                   , Just locAlias <- [ideclAs decl]
-                   , unLoc locAlias == oldAlias
+                   | importDecl <- map unLoc imports
+                   , Just locatedAlias <- [ideclAs importDecl]
+                   , unLoc locatedAlias == oldAlias
                    ] > 1
     useSiteSpans <-
         if duplicateAlias
@@ -198,9 +199,10 @@ importAliasUseSiteSpans
     -> [RealSrcSpan]
 importAliasUseSiteSpans importAlias decls =
     [ fullNameSpan
-    | L (ann :: Anno RdrName) (Qual moduleAlias _) <- listify (const True) decls
-    , moduleAlias == aliasName importAlias
-    , RealSrcSpan fullNameSpan _ <- [locA ann]
+    | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
+    , Qual qualifier _                     <- [unLoc locatedRdrName]
+    , qualifier == aliasName importAlias
+    , RealSrcSpan fullNameSpan _           <- [getLocA locatedRdrName]
     ]
 
 -- | Build a 'TextEdit' replacing the qualifier part in a qualified name (like
@@ -255,11 +257,11 @@ disambiguateAliasAtPos state nfp namesAtPos imports = do
         gre <- maybeToList (lookupGRE_Name rdrEnv name)
         impSpec <- gre_imp gre
         let declSpec = is_decl impSpec
-            specModuleName = moduleName (is_mod declSpec)
+            specModuleName = importSpecModule impSpec
             specAlias = is_as declSpec
-        L _ decl <- imports
-        guard (unLoc (ideclName decl) == specModuleName)
-        Just locatedAlias <- [ideclAs decl]
+        importDecl <- map unLoc imports
+        guard (unLoc (ideclName importDecl) == specModuleName)
+        Just locatedAlias <- [ideclAs importDecl]
         RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]
         pure (ImportAlias specModuleName specAlias aliasDeclSpan)
 
@@ -276,16 +278,17 @@ importAliasUseSiteSpansDisambiguated
 importAliasUseSiteSpansDisambiguated state nfp importAlias decls = do
     tcModule <- runActionE "rename.useSiteSpans" state (useE TypeCheck nfp)
     let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
-        allSpans = importAliasUseSiteSpansWithOcc (aliasName importAlias) decls
-        ImportAlias actualMod _ _ = importAlias
-    pure
-        [ rsp
-        | (occName, rsp) <- allSpans
-        , gre <- lookupGRE rdrEnv $
-            LookupRdrName (Qual (aliasName importAlias) occName) AllRelevantGREs
-        , impSpec <- gre_imp gre
-        , moduleName (is_mod (is_decl impSpec)) == actualMod
-        ]
+        ImportAlias{aliasModuleName, aliasName} = importAlias
+        allSpans = importAliasUseSiteSpansWithOcc aliasName decls
+        maybeMatchingSpan (occName, rsp) =
+            let rdrName = Qual aliasName occName
+            in listToMaybe
+                [ rsp
+                | gre <- pickGREs rdrName $ lookupGlobalRdrEnv rdrEnv occName
+                , impSpec <- gre_imp gre
+                , importSpecModule impSpec == aliasModuleName
+                ]
+    pure $ mapMaybe maybeMatchingSpan allSpans
 
 -- | Like 'importAliasUseSiteSpans' but also returns the 'OccName' of each
 -- use, needed for 'GlobalRdrEnv' lookup in the disambiguated path.
@@ -295,7 +298,8 @@ importAliasUseSiteSpansWithOcc
     -> [(OccName, RealSrcSpan)]
 importAliasUseSiteSpansWithOcc oldAlias decls =
     [ (occName, rsp)
-    | L (ann :: Anno RdrName) (Qual moduleAlias occName) <- listify (const True) decls
-    , moduleAlias == oldAlias
-    , RealSrcSpan rsp _ <- [locA ann]
+    | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
+    , Qual qualifier occName               <- [unLoc locatedRdrName]
+    , qualifier == oldAlias
+    , RealSrcSpan rsp _                    <- [getLocA locatedRdrName]
     ]
