@@ -1,9 +1,8 @@
 # Notes
 
-This branch is for experimenting and attempting to implement renaming qualified-as aliases. For example:
+This branch is for experimenting and attempting to implement renaming import aliases. For example:
 
 ```haskell
-
 -- Before: ----------------------------
 
 import qualified Data.List as L
@@ -21,22 +20,27 @@ bar = List.take
 
 The author uses generative AI (specifically, Claude Sonnet 4.6) to understand key concepts and draft code.
 
-*The author has reviewed and understood all AI-generated content introduced in this branch, and can personally vouch for and explain it if needed.*
+*The author has reviewed and understood every line of AI-generated content in this branch, personally vouches for it, and can explain any part of it if needed.*
 
 All notes generated through Claude are marked as such.
 
 ## How renaming currently works
 
-When the user hovers the cursor over `L` or `L.take`, the `hls-rename-plugin` consults GHC’ AST and determines the identifier at point. An identifier is of type `Identifier`, defined as `type Identifier = Either ModuleName Name`.
+`hls-rename-plugin` currently doesn’t handle import aliases.
 
-- In `import qualified Data.List as L`, `L` is considered a `ModuleName`.
-- In `L.take`, the entirety of `L.take` is considered a single `Name`. The AST records the name as external, coming from the `Data.List` module (not the `L` module, because the name is resolved).
+Consider the `-- Before: --` example above. When the user places the cursor on either occurrence of `L`, `hls-rename-plugin` consults the HIE AST and finds the identifier at the cursor.
 
-The plugin only considers `Name` identifiers as eligible for renaming. Therefore, if the user hovers over `L` in `import qualified Data.List as L`, the plugin says “No symbol to rename at given location.”
+- In `import qualified Data.List as L`, `L` is a `ModuleName` identifier.
 
-Also, a `Name` records the module in which the identifier is *defined*, not the module that the identifier is imported from. This can cause problems, especially for modules that re-export other modules.
+    The plugin currently doesn’t consider `ModuleName` identifiers renameable, so it responds with “No symbol to rename at given location.”
 
-## Possible approach
+- In `L.take`, the entirety of `L.take` is a single `Name` identifier.
+
+    The AST records the name as external, coming from the `Data.List` module (not `L`, because the import alias is resolved). Information about the alias `L` is therefore lost.
+
+    Also, a `Name` records the module in which the identifier is *defined*, not the module that the identifier is imported from. This can cause problems, especially for modules that re-export other modules.
+
+## Initial approach
 
 1. When the user hovers over `L.take`, use the HIE AST to get the full span of the identifier.
 2. Use [`GHC.Parser`](https://hackage-content.haskell.org/package/ghc-9.12.1/docs/GHC-Parser.html) to parse the identifier into a `RdrName` of the form `Qual ModuleName OccName` and obtain the module alias as listed in the import section.
@@ -62,20 +66,40 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
 
 1. Using the parsed AST instead of the full HIE AST allows us to inspect `RdrName` identifiers, which contain unresolved import module aliases. It also turns out that this is already implemented as a rule in HLS.
 
-2. The cursor can be on either an import alias declaration (such as `Ls` in `import Data.List as Ls`) or a use site (such as `Ls` in `Ls.take`).
+2. The cursor can be on either an import alias declaration (such as `L` in `import Data.List as L`) or a use site (such as `L` in `L.take`).
 
-    - FIXME: Targeting `L` in `L.take` in this example causes the wrong alias to be renamed:
+    - Common case (fast): If only one module is imported as `L`, then all renaming is done through the parsed AST, which is fast.
 
-        ``` haskell
-        import Control.Lens as L
-        import Data.List as L
+    - Special case (slow, but rare): If multiple modules are imported as `L`, then `hls-rename-plugin` consults the typechecked AST and `GlobalRdrEnv` to find which imported module is referred to.
 
-        f = L.take
+        For example, targeting `L` in `L.take` in this example leaves the `Control.Lens` import unchanged:
+
+        ```haskell
+        import Control.Lens as L  -- >  import Control.Lens as L
+        import Data.List as L     -- >  import Data.List as List
+                                  -- >
+        f = L.take                -- >  f = List.take
         ```
 
-        Relevant link: [GHC wiki page](https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/compiler/renamer?version_id=9dccaa3e023565a2ef5091b4a08da847872714ff)
+        Relevant link: [GHC wiki page on the renamer](https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/compiler/renamer?version_id=9dccaa3e023565a2ef5091b4a08da847872714ff)
 
-3. Traversing the AST is done using `listify` from `syb`. `listify` needs to be monomorphic. To apply the correct type, use the `Anno` type family.
+        - NOTE: If any import declarations mention a module not found in any dependencies (like `Control.Lens` without `lens`), then typechecking fails, and the plugin can’t disambiguate the alias. This case should result in a meaningful error message.
+
+            This also means disambiguation can only happen after typechecking is complete. (Also, typechecking and renaming can be thought of as happening in the same pass.[^1] [^2])
+
+        - ~~TODO~~ DONE: Handle when both a module and its re-exporter are imported, like this:
+
+            ```haskell
+            import Control.Lens as L
+            import Control.Lens.Getter as L
+
+            f = L.view
+            ```
+
+            - If the cursor is on `L` in `L.view`, then throw an error like “Can’t rename: There are 2 matching imports with the alias 'L'. Click on one of these 'L' aliases in the import declarations and try renaming again.”
+            - If the cursor is on `L` in either `as L` declaration, then rename all entities exported by the corresponding module (including re-exported ones).
+
+3. Traversing the AST is done using `listify` from `syb`. `listify` needs to be monomorphic. To apply the correct type, use the `XRec` and `Anno` type families.
 
 4. GHC uses 1-based positioning; LSP uses 0-based positioning.
 
@@ -100,3 +124,7 @@ Also, a `Name` records the module in which the identifier is *defined*, not the 
         TODO: In general, `PrepareRenameResult` feels underutilized.
 
     3. Fail early if HLS can’t get the parsed module, instead of falling through. The existing renaming logic also needs the module to be parsed (and then typechecked) anyway.
+
+[^1]: https://ghc-proposals.readthedocs.io/en/latest/proposals/0107-source-plugins.html
+
+[^2]: https://downloads.haskell.org/ghc/latest/docs/users_guide/extending_ghc.html

@@ -8,7 +8,7 @@ import           Control.Lens               ((^.))
 import           Data.Aeson
 import           Data.Functor               (void)
 import qualified Data.Map                   as M
-import           Data.Text                  (Text, pack)
+import           Data.Text                  (Text, isInfixOf, pack, unpack)
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename          as Rename
 import qualified Language.LSP.Protocol.Lens as L
@@ -48,14 +48,26 @@ renameTests = testGroup "Identifier"
         rename doc (Position 6 37) "Expr"
     , goldenWithRename "Hidden function" "HiddenFunction" $ \doc ->
         rename doc (Position 0 32) "quux"
-    , goldenWithRename "Import alias in declaration" "ImportAlias" $ \doc ->
-        rename doc (Position 1 24) "G"
-    , goldenWithRename "Import alias in use" "ImportAlias" $ \doc ->
-        rename doc (Position 4 6) "G"
-    , goldenWithRename "Import alias (shared) in declaration" "ImportAliasShared" $ \doc ->
+    , goldenWithRename "Import alias declaration" "ImportAlias" $ \doc ->
+        rename doc (Position 1 14) "G"
+    , goldenWithRename "Import alias at use site" "ImportAlias" $ \doc ->
+        rename doc (Position 5 6) "G"
+    , goldenWithRename "Import alias declaration (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
         rename doc (Position 1 31) "Maybe"
-    , goldenWithRename "Import alias (shared) in use" "ImportAliasShared" $ \doc ->
+    , goldenWithRename "Import alias at use site (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
         rename doc (Position 4 6) "Maybe"
+    , goldenWithRename "Import alias declaration (with re-exports)" "ImportAliasReexport" $ \doc -> do
+        rename doc (Position 1 18) "Reexport"
+    , testCase "Import alias at use site (ambiguous due to re-exports)" $ runRenameSession "" $ do
+        doc <- openDoc "ImportAliasReexport.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "typecheck"
+        renameErr <- expectRenameError doc (Position 4 6) "G"
+        liftIO $ do
+            renameErr ^. L.code @?= InR ErrorCodes_InvalidParams
+            let errMessage = renameErr ^. L.message
+            assertBool
+                ("expected error due to ambiguous alias, but got: " <> unpack errMessage)
+                ("Alias ‘F’ is ambiguous" `isInfixOf` errMessage)
     , goldenWithRename "Imported function" "ImportedFunction" $ \doc ->
         rename doc (Position 3 8) "baz"
     , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->

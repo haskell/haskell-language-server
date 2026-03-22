@@ -1,4 +1,5 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-| Logic for renaming qualified import aliases.
 
@@ -38,8 +39,8 @@ module Ide.Plugin.Rename.ImportAlias
     ) where
 
 import           Control.Lens                     ((^.))
-import           Control.Monad                    (guard)
-import           Control.Monad.Except             (ExceptT)
+import           Control.Monad.Except             (ExceptT,
+                                                   MonadError (throwError))
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Data.Generics
 import qualified Data.Map                         as M
@@ -152,9 +153,29 @@ resolveAliasAtPos getNamesAtPosFn state nfp pos decls imports =
         Nothing     -> case findImportAliasUseAtPos pos decls imports of
             []       -> pure Nothing
             [result] -> pure (Just result)
-            _many    -> do
+            candidates -> do
                 namesAtPos <- getNamesAtPosFn state nfp pos
-                disambiguateAliasAtPos state nfp namesAtPos imports
+                disambiguated <- disambiguateAliasUse state nfp namesAtPos candidates
+                case disambiguated of
+                    [] -> pure Nothing
+                    [result] -> pure (Just result)
+                    aliases -> throwError $ PluginInvalidParams $
+                        ambiguousAliasErrorMessage aliases
+    where
+        ambiguousAliasErrorMessage [] = ""
+        ambiguousAliasErrorMessage [_] = ""
+        ambiguousAliasErrorMessage aliases@(alias1 : alias2 : _) =
+            let aliasCount = T.show (length aliases)
+                aliasText = T.pack (moduleNameString (aliasName alias1))
+                module1 = T.pack (moduleNameString (aliasModuleName alias1))
+                module2 = T.pack (moduleNameString (aliasModuleName alias2))
+                quote t = "‘" <> t <> "’"
+            in ("Alias " <> quote aliasText
+                <> " is ambiguous (matching " <> aliasCount
+                <> " imports, including "
+                <> quote module1 <> " and " <> quote module2
+                <> "). Try renaming " <> quote aliasText
+                <> " in one of these import declarations directly.")
 
 -- | Build a 'WorkspaceEdit' renaming an import alias and all its use sites.
 aliasBasedRename
@@ -240,30 +261,27 @@ rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)
 
 -- | Resolve an ambiguous alias use site by consulting the typechecked
 -- module's 'GlobalRdrEnv'. Used when multiple imports share the same alias.
--- The caller is responsible for providing the names under the cursor.
--- TODO: Rename it to @disambiguateAliasUseAtPos@.
-disambiguateAliasAtPos
+-- The caller is responsible for providing the names at the cursor.
+-- Returns multiple results if they both export the same name (such as @L.view@
+-- with both @Control.Lens as L@ and @Control.Lens.Getter as L@).
+disambiguateAliasUse
     :: MonadIO m
     => IdeState
     -> NormalizedFilePath
     -> [Name]
-    -> [LImportDecl GhcPs]
-    -> ExceptT PluginError m (Maybe ImportAlias)
-disambiguateAliasAtPos state nfp namesAtPos imports = do
+    -> [ImportAlias]
+    -> ExceptT PluginError m [ImportAlias]
+disambiguateAliasUse state nfp namesAtPos candidates = do
     tcModule <- runActionE "rename.disambiguateAlias" state (useE TypeCheck nfp)
     let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
-    pure $ listToMaybe $ do
-        name <- namesAtPos
-        gre <- maybeToList (lookupGRE_Name rdrEnv name)
-        impSpec <- gre_imp gre
-        let declSpec = is_decl impSpec
-            specModuleName = importSpecModule impSpec
-            specAlias = is_as declSpec
-        importDecl <- map unLoc imports
-        guard (unLoc (ideclName importDecl) == specModuleName)
-        Just locatedAlias <- [ideclAs importDecl]
-        RealSrcSpan aliasDeclSpan _ <- [locA locatedAlias]
-        pure (ImportAlias specModuleName specAlias aliasDeclSpan)
+    pure
+        [ candidate
+        | name <- namesAtPos
+        , globalRdrEnvElement <- maybeToList (lookupGRE_Name rdrEnv name)
+        , importSpec <- gre_imp globalRdrEnvElement
+        , candidate@ImportAlias{aliasModuleName} <- candidates
+        , importSpecModule importSpec == aliasModuleName
+        ]
 
 -- | Like 'importAliasUseSiteSpans' but filters to use sites that resolve
 -- to names from @actualMod@, using the typechecked module's 'GlobalRdrEnv'.

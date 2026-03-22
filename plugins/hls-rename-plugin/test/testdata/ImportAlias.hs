@@ -1,5 +1,6 @@
 import Foo ((!))
-import qualified Foo as F
+import Foo as F
+import Missing.Module as M
 
 bar :: Int -> Int
 bar = F.foo
