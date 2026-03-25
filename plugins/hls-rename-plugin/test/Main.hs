@@ -33,7 +33,6 @@ prepareRenameTests :: TestTree
 prepareRenameTests = testGroup "PrepareRename"
     [ testCase "Module name (not yet renameable)" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
-        -- REVIEW: The wait is for consistency with 'goldenWithDoc'. Is it necessary?
         void waitForBuildQueue
         result <- prepareRename doc (Position 0 9)
         liftIO $ result @?= InR Null
@@ -221,6 +220,8 @@ goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
        renamePlugin title testDataDir path "expected" "hs" act
 
+-- NOTE: This should eventually be moved upstream to lsp-test (see
+-- https://github.com/haskell/lsp/issues/636).
 prepareRename :: TextDocumentIdentifier -> Position -> Session (PrepareRenameResult |? Null)
 prepareRename doc pos = do
   let params = PrepareRenameParams doc pos Nothing
