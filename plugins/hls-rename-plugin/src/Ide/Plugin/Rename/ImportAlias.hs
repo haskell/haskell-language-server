@@ -86,59 +86,6 @@ getParsedModuleStale state nfp =
         runAction "rename.getParsedModuleStale" state
             (useWithStale GetParsedModule nfp)
 
--- | Find the 'ImportAlias' if the cursor is on an import alias declaration,
--- such as @L@ in @import Data.List as L@.
-findAliasDeclAtPos ::
-    VFS.CodePointPosition ->
-    [LImportDecl GhcPs] ->
-    Maybe ImportAlias
-findAliasDeclAtPos pos imports = listToMaybe $ do
-    let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
-    importDecl <- map unLoc imports
-    Just locatedAlias <- [ideclAs importDecl]
-    RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
-    let aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
-    guard (rangeContainsPosition aliasDeclRange pos)
-    let aliasModuleName = unLoc (ideclName importDecl)
-        aliasName = unLoc locatedAlias
-        aliasIsShared = length (filter (== aliasName) allAliases) > 1
-    [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
-
--- | Find the 'ImportAlias' matching the name qualifier at the cursor, such as
--- @L@ in @L.take@.
--- Returns multiple values if multiple modules share the same alias.
-findAliasUseAtPos ::
-    VFS.CodePointPosition ->
-    [LImportDecl GhcPs] ->
-    [LHsDecl GhcPs] ->
-    [ImportAlias]
-findAliasUseAtPos pos imports hsDecls =
-    let qualifiersAtPos = do
-            locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
-            Qual qualifier _ <- [unLoc locatedRdrName]
-            RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
-            let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
-            guard (rangeContainsPosition qualifiedNameRange pos)
-            let qualifierLength = fromIntegral (moduleNameLength qualifier)
-                qualifierStart = qualifiedNameRange ^. VFS.start
-                qualifierRange = qualifiedNameRange
-                    & VFS.end .~ (qualifierStart & VFS.character +~ qualifierLength)
-            guard (rangeContainsPosition qualifierRange pos)
-            [qualifier]
-    in case qualifiersAtPos of
-        [] -> []
-        qualifierAtPos : _ -> do
-            let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
-            importDecl <- map unLoc imports
-            Just locatedAlias <- [ideclAs importDecl]
-            let aliasName = unLoc locatedAlias
-            guard (aliasName == qualifierAtPos)
-            RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
-            let aliasModuleName = unLoc (ideclName importDecl)
-                aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
-                aliasIsShared = length (filter (== aliasName) allAliases) > 1
-            [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
-
 -- | Return the 'ImportAlias' being renamed at the cursor. The cursor may be on
 -- the alias token in an import declaration or on a qualifier at a use site. If
 -- multiple imports share the same alias, falls back to the typechecked module's
@@ -205,6 +152,59 @@ aliasBasedRename state nfp uri importAlias hsDecls newNameText = do
         -- TODO: Replace 'Nothing' with meaningful details for the workspace edit.
         workspaceEdit = WorkspaceEdit fileChanges Nothing Nothing
     pure $ InL workspaceEdit
+
+-- | Find the 'ImportAlias' if the cursor is on an import alias declaration,
+-- such as @L@ in @import Data.List as L@.
+findAliasDeclAtPos ::
+    VFS.CodePointPosition ->
+    [LImportDecl GhcPs] ->
+    Maybe ImportAlias
+findAliasDeclAtPos pos imports = listToMaybe $ do
+    let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
+    importDecl <- map unLoc imports
+    Just locatedAlias <- [ideclAs importDecl]
+    RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
+    let aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
+    guard (rangeContainsPosition aliasDeclRange pos)
+    let aliasModuleName = unLoc (ideclName importDecl)
+        aliasName = unLoc locatedAlias
+        aliasIsShared = length (filter (== aliasName) allAliases) > 1
+    [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
+
+-- | Find the 'ImportAlias' matching the name qualifier at the cursor, such as
+-- @L@ in @L.take@.
+-- Returns multiple values if multiple modules share the same alias.
+findAliasUseAtPos ::
+    VFS.CodePointPosition ->
+    [LImportDecl GhcPs] ->
+    [LHsDecl GhcPs] ->
+    [ImportAlias]
+findAliasUseAtPos pos imports hsDecls =
+    let qualifiersAtPos = do
+            locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+            Qual qualifier _ <- [unLoc locatedRdrName]
+            RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
+            let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
+            guard (rangeContainsPosition qualifiedNameRange pos)
+            let qualifierLength = fromIntegral (moduleNameLength qualifier)
+                qualifierStart = qualifiedNameRange ^. VFS.start
+                qualifierRange = qualifiedNameRange
+                    & VFS.end .~ (qualifierStart & VFS.character +~ qualifierLength)
+            guard (rangeContainsPosition qualifierRange pos)
+            [qualifier]
+    in case qualifiersAtPos of
+        [] -> []
+        qualifierAtPos : _ -> do
+            let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
+            importDecl <- map unLoc imports
+            Just locatedAlias <- [ideclAs importDecl]
+            let aliasName = unLoc locatedAlias
+            guard (aliasName == qualifierAtPos)
+            RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
+            let aliasModuleName = unLoc (ideclName importDecl)
+                aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
+                aliasIsShared = length (filter (== aliasName) allAliases) > 1
+            [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
 
 -- | Collect the 'CodePointRange' of every qualified use of @importAlias@, such
 -- as @L@ in @L.take@, @L.drop@, and so on.
