@@ -104,7 +104,8 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
             maybeAlias <- ImportAlias.resolveAliasAtPos
                 getNamesAtPos state nfp lspPos codePointPos imports hsDecls
             case maybeAlias of
-                Just _ -> pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True
+                Just (lspRange, _importAlias) ->
+                    pure $ InL $ PrepareRenameResult $ InL $ lspRange
                 Nothing -> do
                     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
                     -- and doesn't even allow you to create full rename request.
@@ -132,7 +133,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) l
             maybeAlias <- ImportAlias.resolveAliasAtPos
                 getNamesAtPos state nfp lspPos codePointPos imports hsDecls
             case maybeAlias of
-                Just importAlias -> ImportAlias.aliasBasedRename
+                Just (_lspRange, importAlias) -> ImportAlias.aliasBasedRename
                     state nfp uri importAlias hsDecls newNameText
                 Nothing ->
                     nameBasedRename state pluginId nfp lspPos newNameText

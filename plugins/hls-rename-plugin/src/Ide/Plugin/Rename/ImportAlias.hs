@@ -60,6 +60,7 @@ import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types      hiding (Position, Range)
 import qualified Language.LSP.Protocol.Types      as LSP
+import           Language.LSP.VFS                 (codePointRangeToRange)
 import qualified Language.LSP.VFS                 as VFS
 
 -- | The module name, alias name, declaration text range, and sharing status
@@ -86,10 +87,10 @@ getParsedModuleStale state nfp =
         runAction "rename.getParsedModuleStale" state
             (useWithStale GetParsedModule nfp)
 
--- | Return the 'ImportAlias' being renamed at the cursor. The cursor may be on
--- the alias token in an import declaration or on a qualifier at a use site. If
--- multiple imports share the same alias, falls back to the typechecked module's
--- 'GlobalRdrEnv' to disambiguate.
+-- | Return the 'ImportAlias' and corresponding text range at the cursor. The
+-- cursor may be on the alias token in an import declaration or on a qualifier
+-- at a use site. If multiple imports share the same alias, falls back to the
+-- typechecked module's 'GlobalRdrEnv' to disambiguate.
 -- Returns @Nothing@ if the cursor is not on an import alias.
 -- HACK: The first argument is `Rename.getNamesAtPos`, parameterized to avoid a
 -- circular dependency.
@@ -102,19 +103,27 @@ resolveAliasAtPos ::
     VFS.CodePointPosition ->
     [LImportDecl GhcPs] ->
     [LHsDecl GhcPs] ->
-    ExceptT PluginError m (Maybe ImportAlias)
-resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos imports hsDecls =
+    ExceptT PluginError m (Maybe (LSP.Range, ImportAlias))
+resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos imports hsDecls = do
+    virtualFile <- runActionE "rename.getVirtualFile" state
+        $ handleMaybeM (PluginInternalError
+            ("Virtual file not found: " <> T.pack (show nfp)))
+        $ getVirtualFile nfp
+    let toLSPRange (range, alias) = case codePointRangeToRange virtualFile range of
+            Nothing       -> Nothing
+            Just lspRange -> Just (lspRange, alias)
     case findAliasDeclAtPos pos imports of
-        Just alias -> pure (Just alias)
+        Just alias -> pure $ toLSPRange (aliasDeclRange alias, alias)
         Nothing -> case findAliasUseAtPos pos imports hsDecls of
-            [] -> pure Nothing
-            [alias] -> pure (Just alias)
-            candidates -> do
+            Nothing -> pure Nothing
+            Just (_, []) -> pure Nothing
+            Just (range, [alias]) -> pure $ toLSPRange (range, alias)
+            Just (range, candidates) -> do
                 tcModule <- runActionE "rename.resolveAlias" state $ useE TypeCheck nfp
                 namesAtPos <- getNamesAtPosFn state nfp lspPos
                 case disambiguateAliasUse tcModule namesAtPos candidates of
                     [] -> pure Nothing
-                    [alias] -> pure (Just alias)
+                    [alias] -> pure $ toLSPRange (range, alias)
                     aliases -> throwError $ PluginInvalidParams $
                         ambiguousAliasErrorMessage aliases
 
@@ -171,14 +180,14 @@ findAliasDeclAtPos pos imports = listToMaybe $ do
         aliasIsShared = length (filter (== aliasName) allAliases) > 1
     [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
 
--- | Find the 'ImportAlias' matching the name qualifier at the cursor, such as
--- @L@ in @L.take@.
--- Returns multiple values if multiple modules share the same alias.
+-- | Find the text range and matching 'ImportAlias' for the name qualifier at
+-- the cursor, such as @L@ in @L.take@.
+-- Returns multiple aliases if multiple modules share the same alias.
 findAliasUseAtPos ::
     VFS.CodePointPosition ->
     [LImportDecl GhcPs] ->
     [LHsDecl GhcPs] ->
-    [ImportAlias]
+    Maybe (VFS.CodePointRange, [ImportAlias])
 findAliasUseAtPos pos imports hsDecls =
     let qualifiersAtPos = do
             locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
@@ -191,10 +200,10 @@ findAliasUseAtPos pos imports hsDecls =
                 qualifierRange = qualifiedNameRange
                     & VFS.end .~ (qualifierStart & VFS.character +~ qualifierLength)
             guard (rangeContainsPosition qualifierRange pos)
-            [qualifier]
+            [(qualifierRange, qualifier)]
     in case qualifiersAtPos of
-        [] -> []
-        qualifierAtPos : _ -> do
+        [] -> Nothing
+        (rangeAtPos, qualifierAtPos) : _ -> Just $ (,) rangeAtPos $ do
             let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
             importDecl <- map unLoc imports
             Just locatedAlias <- [ideclAs importDecl]
