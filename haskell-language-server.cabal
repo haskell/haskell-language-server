@@ -609,6 +609,7 @@ library hls-rename-plugin
     , hls-plugin-api        == 2.13.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
+    , lsp
     , lsp-types
     , mtl
     , mod

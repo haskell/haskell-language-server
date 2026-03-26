@@ -23,7 +23,12 @@ The basic approach is this:
     using 'GlobalRdrEnv' and the typechecked AST.
 
 The common case, with each alias corresponding to one module, should be very
-fast, even if the user renames multiple aliases in quick succession.
+fast, even when the user renames multiple aliases in quick succession.
+
+NOTE: This module avoids manipulating LSP 'Position' and 'Range' values
+directly, because by default these are in UTF-16 code units, while GHC source
+spans are in Unicode code points. Instead, this module uses
+'VFS.CodePointPosition' and 'VFS.CodePointRange'.
 -}
 module Ide.Plugin.Rename.ImportAlias
     ( getParsedModuleStale
@@ -35,7 +40,7 @@ module Ide.Plugin.Rename.ImportAlias
     , importAliasUseSiteSpans
     , importAliasUseSiteEdit
     , importAliasDeclEdit
-    , rangeContainsPosition
+    , codePointRangeContainsPosition
     ) where
 
 import           Control.Lens                     ((^.))
@@ -46,7 +51,6 @@ import           Data.Generics
 import qualified Data.Map                         as M
 import           Data.Maybe
 import qualified Data.Text                        as T
-import           Development.IDE                  (realSrcSpanToRange)
 import           Development.IDE.Core.FileStore   (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes
@@ -58,6 +62,7 @@ import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import qualified Language.LSP.VFS                 as VFS
 
 -- | The module name, alias name, and declaration span for an import alias.
 -- For example, @import Data.List as L@ corresponds to
@@ -83,15 +88,15 @@ getParsedModuleStale state nfp =
 -- | Find the 'ImportAlias' for the alias declaration at the cursor, such as
 -- @Alias@ in @import Module as Alias@.
 findImportAliasDeclAtPos
-    :: Position
+    :: VFS.CodePointPosition
     -> [LImportDecl GhcPs]
     -> Maybe ImportAlias
-findImportAliasDeclAtPos pos imports = listToMaybe
+findImportAliasDeclAtPos codePointPos imports = listToMaybe
     [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
     | importDecl                  <- map unLoc imports
     , Just locatedAlias           <- [ideclAs importDecl]
     , RealSrcSpan aliasDeclSpan _ <- [getLocA locatedAlias]
-    , rangeContainsPosition (realSrcSpanToRange aliasDeclSpan) pos
+    , codePointRangeContainsPosition (realSrcSpanToCodePointRange aliasDeclSpan) codePointPos
     , let aliasName       = unLoc locatedAlias
           aliasModuleName = unLoc (ideclName importDecl)
     ]
@@ -100,25 +105,25 @@ findImportAliasDeclAtPos pos imports = listToMaybe
 -- @Alias@ in @Alias.name@.
 -- Returns multiple values if multiple modules share the same alias.
 findImportAliasUseAtPos
-    :: Position
+    :: VFS.CodePointPosition
     -> [LHsDecl GhcPs]
     -> [LImportDecl GhcPs]
     -> [ImportAlias]
-findImportAliasUseAtPos pos decls imports =
+findImportAliasUseAtPos codePointPos decls imports =
     case listToMaybe
         [ qualifier
         | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
         , Qual qualifier _                     <- [unLoc locatedRdrName]
         , RealSrcSpan useSiteSpan _            <- [getLocA locatedRdrName]
-        , rangeContainsPosition (realSrcSpanToRange useSiteSpan) pos
+        , codePointRangeContainsPosition (realSrcSpanToCodePointRange useSiteSpan) codePointPos
         , let qualifierLength = fromIntegral (length (moduleNameString qualifier))
-              start           = realSrcSpanStart useSiteSpan
-              line            = fromIntegral (srcLocLine start)
-              startColumn     = fromIntegral (srcLocCol start)
-              qualifierRange  = Range
-                  (Position (line - 1) (startColumn - 1))
-                  (Position (line - 1) (startColumn - 1 + qualifierLength))
-        , rangeContainsPosition qualifierRange pos
+              spanStart       = realSrcSpanStart useSiteSpan
+              line            = fromIntegral (srcLocLine spanStart) - 1
+              startColumn     = fromIntegral (srcLocCol  spanStart) - 1
+              qualifierRange  = VFS.CodePointRange
+                  (VFS.CodePointPosition line startColumn)
+                  (VFS.CodePointPosition line (startColumn + qualifierLength))
+        , codePointRangeContainsPosition qualifierRange codePointPos
         ] of
     Nothing -> []
     Just qualifierAtPos ->
@@ -144,13 +149,14 @@ resolveAliasAtPos
     -> IdeState
     -> NormalizedFilePath
     -> Position
+    -> VFS.CodePointPosition
     -> [LHsDecl GhcPs]
     -> [LImportDecl GhcPs]
     -> ExceptT PluginError m (Maybe ImportAlias)
-resolveAliasAtPos getNamesAtPosFn state nfp pos decls imports =
-    case findImportAliasDeclAtPos pos imports of
+resolveAliasAtPos getNamesAtPosFn state nfp pos codePointPos decls imports =
+    case findImportAliasDeclAtPos codePointPos imports of
         Just result -> pure (Just result)
-        Nothing     -> case findImportAliasUseAtPos pos decls imports of
+        Nothing     -> case findImportAliasUseAtPos codePointPos decls imports of
             []       -> pure Nothing
             [result] -> pure (Just result)
             candidates -> do
@@ -197,13 +203,18 @@ aliasBasedRename state nfp uri importAlias imports decls newNameText = do
                    , Just locatedAlias <- [ideclAs importDecl]
                    , unLoc locatedAlias == oldAlias
                    ] > 1
+    virtualFile <- runActionE "rename.getVirtualFile" state $
+        handleMaybeM (PluginInternalError ("Virtual file not found: " <> T.show nfp)) $
+        getVirtualFile nfp
     useSiteSpans <-
         if duplicateAlias
         then importAliasUseSiteSpansDisambiguated state nfp importAlias decls
         else pure $ importAliasUseSiteSpans importAlias decls
-    let declEdit = importAliasDeclEdit newNameText declSpan
-        useEdits = map (importAliasUseSiteEdit oldAlias newNameText) useSiteSpans
-        allEdits = declEdit : useEdits
+    declEdit <- handleMaybe (PluginInternalError "Alias declaration span is out of range") $
+        importAliasDeclEdit virtualFile newNameText declSpan
+    useEdits <- handleMaybe (PluginInternalError "A use site span is out of range") $
+        mapM (importAliasUseSiteEdit virtualFile oldAlias newNameText) useSiteSpans
+    let allEdits = declEdit : useEdits
     verTxtDocId <- liftIO $ runAction "rename.getVersionedTextDoc" state $
         getVersionedTextDoc (TextDocumentIdentifier uri)
     let fileChanges = Just $ M.singleton (verTxtDocId ^. L.uri) allEdits
@@ -228,33 +239,45 @@ importAliasUseSiteSpans importAlias decls =
 
 -- | Build a 'TextEdit' replacing the qualifier part in a qualified name (like
 -- from @Alias.name@ to @NewAlias.name@).
--- (NOTE: GHC uses 1-based positioning; LSP uses 0-based.)
+-- Returns 'Nothing' if the span is out of bounds in the VFS.
 importAliasUseSiteEdit
-    :: ModuleName   -- ^ old alias, used to compute the qualifier width
+    :: VFS.VirtualFile
+    -> ModuleName   -- ^ old alias, used to compute the qualifier width
     -> T.Text       -- ^ new alias text
-    -> RealSrcSpan  -- ^ span of the full qualified name, such as @Alias.name@
-    -> TextEdit
-importAliasUseSiteEdit oldAlias newAlias fullNameSpan = TextEdit range newAlias
+    -> RealSrcSpan  -- ^ span of the full qualified name, e.g. @Alias.name@
+    -> Maybe TextEdit
+importAliasUseSiteEdit virtualFile oldAlias newAlias fullNameSpan =
+    codePointRangeToTextEdit virtualFile newAlias qualifierCodePointRange
     where
-        start    = realSrcSpanStart fullNameSpan
-        line     = fromIntegral (srcLocLine start) - 1
-        startCol = fromIntegral (srcLocCol  start) - 1
-        endCol   = startCol + fromIntegral (length (moduleNameString oldAlias))
-        range    = Range (Position line startCol) (Position line endCol)
+        spanStart           = realSrcSpanStart fullNameSpan
+        line                = fromIntegral (srcLocLine spanStart) - 1
+        startColumn         = fromIntegral (srcLocCol  spanStart) - 1
+        qualifierLength     = fromIntegral (length (moduleNameString oldAlias))
+        qualifierCodePointRange = VFS.CodePointRange
+            (VFS.CodePointPosition line startColumn)
+            (VFS.CodePointPosition line (startColumn + qualifierLength))
 
 -- | Build a 'TextEdit' replacing the alias token in an import declaration (like
 -- from @import Module as Alias@ to @import Module as NewAlias@).
+-- Returns 'Nothing' if the span is out of bounds in the VFS.
 importAliasDeclEdit
-    :: T.Text       -- ^ new alias text
+    :: VFS.VirtualFile
+    -> T.Text       -- ^ new alias text
     -> RealSrcSpan  -- ^ span of @Alias@ in @import Module as Alias@
-    -> TextEdit
-importAliasDeclEdit newAlias rsp = TextEdit (realSrcSpanToRange rsp) newAlias
+    -> Maybe TextEdit
+importAliasDeclEdit virtualFile newAlias rsp =
+    codePointRangeToTextEdit virtualFile newAlias (realSrcSpanToCodePointRange rsp)
 
--- | Check whether a range contains a position (inclusive start, exclusive end).
-rangeContainsPosition :: Range -> Position -> Bool
-rangeContainsPosition (Range (Position sl sc) (Position el ec)) (Position l c)
-    =  (l > sl || (l == sl && c >= sc))
-    && (l < el || (l == el && c <  ec))
+-- | Check whether a 'CodePointRange' contains a 'CodePointPosition'
+-- (inclusive start, exclusive end).
+codePointRangeContainsPosition :: VFS.CodePointRange -> VFS.CodePointPosition -> Bool
+codePointRangeContainsPosition
+    (VFS.CodePointRange
+        (VFS.CodePointPosition startLine startColumn)
+        (VFS.CodePointPosition endLine endColumn))
+    (VFS.CodePointPosition line column)
+    =  (line > startLine || (line == startLine && column >= startColumn))
+    && (line < endLine   || (line == endLine   && column <  endColumn))
 
 ---------------------------------------------------------------------------------------------------
 -- Internal helpers
@@ -321,3 +344,24 @@ importAliasUseSiteSpansWithOcc oldAlias decls =
     , qualifier == oldAlias
     , RealSrcSpan rsp _                    <- [getLocA locatedRdrName]
     ]
+
+---------------------------------------------------------------------------------------------------
+-- Util
+
+-- | Convert a 'RealSrcSpan' to a 'VFS.CodePointRange'.
+-- GHC uses 1-based lines and columns; 'CodePointPosition' is 0-based.
+realSrcSpanToCodePointRange :: RealSrcSpan -> VFS.CodePointRange
+realSrcSpanToCodePointRange rsp = VFS.CodePointRange
+    (VFS.CodePointPosition
+        (fromIntegral (srcLocLine (realSrcSpanStart rsp)) - 1)
+        (fromIntegral (srcLocCol  (realSrcSpanStart rsp)) - 1))
+    (VFS.CodePointPosition
+        (fromIntegral (srcLocLine (realSrcSpanEnd rsp)) - 1)
+        (fromIntegral (srcLocCol  (realSrcSpanEnd rsp)) - 1))
+
+-- | Build a 'TextEdit' from a 'VFS.CodePointRange' and replacement text.
+-- Returns 'Nothing' if the range is out of bounds in the VFS.
+codePointRangeToTextEdit :: VFS.VirtualFile -> T.Text -> VFS.CodePointRange -> Maybe TextEdit
+codePointRangeToTextEdit virtualFile newText codePointRange =
+    TextEdit <$> VFS.codePointRangeToRange virtualFile codePointRange
+             <*> Just newText

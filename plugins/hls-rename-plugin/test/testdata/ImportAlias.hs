@@ -1,9 +1,9 @@
 import Foo ((!))
-import Foo as F
+import Foo as 𝐹𝔽
 import Missing.Module as M
 
 bar :: Int -> Int
-bar = F.foo
+bar = 𝐹𝔽.foo
 
 baz :: Int -> Int -> Int
 baz = (!)

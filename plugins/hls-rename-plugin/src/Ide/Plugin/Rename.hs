@@ -60,6 +60,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import qualified Language.LSP.VFS                      as VFS
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -89,19 +90,21 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
         moduleNameRecorder = cmapWithPrio LogModuleName recorder
 
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
-prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
+prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) lspPos _progressToken) = do
     nfp <- getNormalizedFilePathE uri
+    codePointPos <- getCodePointPosition state nfp lspPos
     maybeParsed <- ImportAlias.getParsedModuleStale state nfp
     case maybeParsed of
         Nothing -> throwError $ PluginInternalError
-            "Cannot rename: HLS has not yet parsed this module. Please wait for indexing to complete and try again."
+            "The module hasn’t yet been parsed. Please wait for indexing to complete and try again."
         Just parsed -> do
             let hsModule = unLoc $ pm_parsed_source parsed
                 imports = hsmodImports hsModule
                 decls = hsmodDecls hsModule
-            maybeAlias <- ImportAlias.resolveAliasAtPos getNamesAtPos state nfp pos decls imports
+            maybeAlias <- ImportAlias.resolveAliasAtPos
+                getNamesAtPos state nfp lspPos codePointPos decls imports
             case maybeAlias of
-                Just _ -> pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True                                           -- [ ] AI
+                Just _ -> pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True
                 Nothing -> do
                     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
                     -- and doesn't even allow you to create full rename request.
@@ -110,27 +113,29 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
                     --
                     -- In particular it allows some cases through (e.g. cross-module renames),
                     -- so that the full rename handler can give more informative error about them.
-                    namesUnderCursor <- getNamesAtPos state nfp pos
+                    namesUnderCursor <- getNamesAtPos state nfp lspPos
                     let renameValid = not $ null namesUnderCursor
                     pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
-renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
+renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) lspPos newNameText) = do
     nfp <- getNormalizedFilePathE uri
+    codePointPos <- getCodePointPosition state nfp lspPos
     maybeParsed <- ImportAlias.getParsedModuleStale state nfp
     case maybeParsed of
         Nothing -> throwError $ PluginInternalError
-            "Cannot rename: HLS has not yet parsed this module. Please wait for indexing to complete and try again."  -- [x] AI
+            "The module hasn’t yet been parsed. Please wait for indexing to complete and try again."
         Just parsed -> do
             let hsModule = unLoc $ pm_parsed_source parsed
                 imports = hsmodImports hsModule
                 decls = hsmodDecls hsModule
-            maybeAlias <- ImportAlias.resolveAliasAtPos getNamesAtPos state nfp pos decls imports
+            maybeAlias <- ImportAlias.resolveAliasAtPos
+                getNamesAtPos state nfp lspPos codePointPos decls imports
             case maybeAlias of
                 Just importAlias ->
                     ImportAlias.aliasBasedRename state nfp uri importAlias imports decls newNameText
                 Nothing ->
-                    nameBasedRename state pluginId nfp pos newNameText
+                    nameBasedRename state pluginId nfp lspPos newNameText
 
 -- | Name-based rename: the original rename logic.
 nameBasedRename ::
@@ -274,6 +279,27 @@ nameLocs name (HAR _ _ rm _ _) =
 ---------------------------------------------------------------------------------------------------
 -- Util
 
+-- | Convert an LSP position (based on UTF-16 code units) to a position based on
+-- whole Unicode code points.
+getCodePointPosition ::
+    MonadIO m =>
+    IdeState ->
+    NormalizedFilePath ->
+    Position ->
+    ExceptT PluginError m VFS.CodePointPosition
+getCodePointPosition state nfp pos = do
+    virtualFile <- runActionE "rename.getVirtualFile" state
+        $ handleMaybeM (PluginInternalError ("Virtual file not found: " <> T.show nfp))
+        $ getVirtualFile nfp
+    case VFS.positionToCodePointPosition virtualFile pos of
+        Nothing -> throwError $ PluginInvalidParams
+            "The cursor position is inside a Unicode surrogate pair."
+        Just codePointPosition -> pure codePointPosition
+
+-- TODO: 'getNamesAtPos' passes the LSP 'Position' directly to 'pointCommand',
+-- which treats '_character' as a code-point column. This is incorrect for
+-- files with supplementary-plane Unicode characters before the cursor.
+-- Fixing it requires changes in ghcide, not here.
 getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
     HAR{hieAst} <- handleGetHieAst state nfp
