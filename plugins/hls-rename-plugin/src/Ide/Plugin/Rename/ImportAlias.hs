@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wall -Werror #-}
 
 {-| Logic for renaming qualified import aliases.
 
@@ -32,188 +33,171 @@ spans are in Unicode code points. Instead, this module uses
 -}
 module Ide.Plugin.Rename.ImportAlias
     ( getParsedModuleStale
-    , ImportAlias (..)
-    , findImportAliasDeclAtPos
-    , findImportAliasUseAtPos
     , resolveAliasAtPos
     , aliasBasedRename
-    , importAliasUseSiteSpans
-    , importAliasUseSiteEdit
-    , importAliasDeclEdit
-    , codePointRangeContainsPosition
     ) where
 
-import           Control.Lens                     ((^.))
+import           Control.Lens                     ((&), (+~), (.~), (^.))
+import           Control.Monad                    (guard)
 import           Control.Monad.Except             (ExceptT,
                                                    MonadError (throwError))
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Data.Containers.ListUtils        (nubOrd)
 import           Data.Generics
 import qualified Data.Map                         as M
 import           Data.Maybe
 import qualified Data.Text                        as T
+import           Development.IDE                  (realSrcSpanToCodePointRange)
 import           Development.IDE.Core.FileStore   (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service     hiding (Log)
 import           Development.IDE.Core.Shake       hiding (Log)
-import           Development.IDE.GHC.Compat
-import           Development.IDE.Types.Location
+import           Development.IDE.GHC.Compat       hiding (importDecl)
+import           GHC.Data.FastString              (lengthFS)
 import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding (Position, Range)
+import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.VFS                 as VFS
 
--- | The module name, alias name, and declaration span for an import alias.
--- For example, @import Data.List as L@ corresponds to
--- @ImportAlias "Data.List" "L" <span of "L">@.
+-- | The module name, alias name, declaration text range, and sharing status
+-- for an import alias.
+-- For example, @import Data.List as L@ corresponds to @ImportAlias "Data.List"
+-- "L" <text range of "L"> <whether any other modules are imported as "L">@.
 data ImportAlias = ImportAlias
     { aliasModuleName :: ModuleName
     , aliasName       :: ModuleName
-    , aliasDeclSpan   :: RealSrcSpan
+    , aliasDeclRange  :: VFS.CodePointRange
+    , aliasIsShared   :: Bool
     }
+    deriving (Eq, Ord)
 
 -- | Fetch the parsed module for a file, accepting a stale result.
 -- Returns @Nothing@ if the file has never been indexed.
-getParsedModuleStale
-    :: MonadIO m
-    => IdeState
-    -> NormalizedFilePath
-    -> m (Maybe ParsedModule)
+getParsedModuleStale ::
+    MonadIO m =>
+    IdeState ->
+    NormalizedFilePath ->
+    m (Maybe ParsedModule)
 getParsedModuleStale state nfp =
     liftIO $ fmap fst <$>
         runAction "rename.getParsedModuleStale" state
             (useWithStale GetParsedModule nfp)
 
--- | Find the 'ImportAlias' for the alias declaration at the cursor, such as
--- @Alias@ in @import Module as Alias@.
-findImportAliasDeclAtPos
-    :: VFS.CodePointPosition
-    -> [LImportDecl GhcPs]
-    -> Maybe ImportAlias
-findImportAliasDeclAtPos codePointPos imports = listToMaybe
-    [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
-    | importDecl                  <- map unLoc imports
-    , Just locatedAlias           <- [ideclAs importDecl]
-    , RealSrcSpan aliasDeclSpan _ <- [getLocA locatedAlias]
-    , codePointRangeContainsPosition (realSrcSpanToCodePointRange aliasDeclSpan) codePointPos
-    , let aliasName       = unLoc locatedAlias
-          aliasModuleName = unLoc (ideclName importDecl)
-    ]
+-- | Find the 'ImportAlias' if the cursor is on an import alias declaration,
+-- such as @L@ in @import Data.List as L@.
+findAliasDeclAtPos ::
+    VFS.CodePointPosition ->
+    [LImportDecl GhcPs] ->
+    Maybe ImportAlias
+findAliasDeclAtPos pos imports = listToMaybe $ do
+    let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
+    importDecl <- map unLoc imports
+    Just locatedAlias <- [ideclAs importDecl]
+    RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
+    let aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
+    guard (rangeContainsPosition aliasDeclRange pos)
+    let aliasModuleName = unLoc (ideclName importDecl)
+        aliasName = unLoc locatedAlias
+        aliasIsShared = length (filter (== aliasName) allAliases) > 1
+    [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
 
 -- | Find the 'ImportAlias' matching the name qualifier at the cursor, such as
--- @Alias@ in @Alias.name@.
+-- @L@ in @L.take@.
 -- Returns multiple values if multiple modules share the same alias.
-findImportAliasUseAtPos
-    :: VFS.CodePointPosition
-    -> [LHsDecl GhcPs]
-    -> [LImportDecl GhcPs]
-    -> [ImportAlias]
-findImportAliasUseAtPos codePointPos decls imports =
-    case listToMaybe
-        [ qualifier
-        | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
-        , Qual qualifier _                     <- [unLoc locatedRdrName]
-        , RealSrcSpan useSiteSpan _            <- [getLocA locatedRdrName]
-        , codePointRangeContainsPosition (realSrcSpanToCodePointRange useSiteSpan) codePointPos
-        , let qualifierLength = fromIntegral (length (moduleNameString qualifier))
-              spanStart       = realSrcSpanStart useSiteSpan
-              line            = fromIntegral (srcLocLine spanStart) - 1
-              startColumn     = fromIntegral (srcLocCol  spanStart) - 1
-              qualifierRange  = VFS.CodePointRange
-                  (VFS.CodePointPosition line startColumn)
-                  (VFS.CodePointPosition line (startColumn + qualifierLength))
-        , codePointRangeContainsPosition qualifierRange codePointPos
-        ] of
-    Nothing -> []
-    Just qualifierAtPos ->
-        [ ImportAlias {aliasModuleName, aliasName, aliasDeclSpan}
-        | importDecl                  <- map unLoc imports
-        , Just locatedAlias           <- [ideclAs importDecl]
-        , let aliasName = unLoc locatedAlias
-        , aliasName == qualifierAtPos
-        , RealSrcSpan aliasDeclSpan _ <- [getLocA locatedAlias]
-        , let aliasModuleName = unLoc (ideclName importDecl)
-        ]
+findAliasUseAtPos ::
+    VFS.CodePointPosition ->
+    [LImportDecl GhcPs] ->
+    [LHsDecl GhcPs] ->
+    [ImportAlias]
+findAliasUseAtPos pos imports hsDecls =
+    let qualifiersAtPos = do
+            locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+            Qual qualifier _ <- [unLoc locatedRdrName]
+            RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
+            let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
+            guard (rangeContainsPosition qualifiedNameRange pos)
+            let qualifierLength = fromIntegral (moduleNameLength qualifier)
+                qualifierStart = qualifiedNameRange ^. VFS.start
+                qualifierRange = qualifiedNameRange
+                    & VFS.end .~ (qualifierStart & VFS.character +~ qualifierLength)
+            guard (rangeContainsPosition qualifierRange pos)
+            [qualifier]
+    in case qualifiersAtPos of
+        [] -> []
+        qualifierAtPos : _ -> do
+            let allAliases = mapMaybe (fmap unLoc . ideclAs . unLoc) imports
+            importDecl <- map unLoc imports
+            Just locatedAlias <- [ideclAs importDecl]
+            let aliasName = unLoc locatedAlias
+            guard (aliasName == qualifierAtPos)
+            RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
+            let aliasModuleName = unLoc (ideclName importDecl)
+                aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
+                aliasIsShared = length (filter (== aliasName) allAliases) > 1
+            [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
 
--- | Return the module name and declaration span for the alias being renamed at
--- the cursor. The cursor may be on the alias token in an import declaration or
--- on a qualifier at a use site. If multiple imports share the same alias, falls
--- back to the typechecked module's 'GlobalRdrEnv' to disambiguate.
--- Returns @Nothing@ if the cursor is not on any alias declaration or qualifier.
+-- | Return the 'ImportAlias' being renamed at the cursor. The cursor may be on
+-- the alias token in an import declaration or on a qualifier at a use site. If
+-- multiple imports share the same alias, falls back to the typechecked module's
+-- 'GlobalRdrEnv' to disambiguate.
+-- Returns @Nothing@ if the cursor is not on an import alias.
 -- HACK: The first argument is `Rename.getNamesAtPos`, parameterized to avoid a
 -- circular dependency.
-resolveAliasAtPos
-    :: MonadIO m
-    => (IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name])
-    -> IdeState
-    -> NormalizedFilePath
-    -> Position
-    -> VFS.CodePointPosition
-    -> [LHsDecl GhcPs]
-    -> [LImportDecl GhcPs]
-    -> ExceptT PluginError m (Maybe ImportAlias)
-resolveAliasAtPos getNamesAtPosFn state nfp pos codePointPos decls imports =
-    case findImportAliasDeclAtPos codePointPos imports of
-        Just result -> pure (Just result)
-        Nothing     -> case findImportAliasUseAtPos codePointPos decls imports of
-            []       -> pure Nothing
-            [result] -> pure (Just result)
+resolveAliasAtPos ::
+    MonadIO m =>
+    (IdeState -> NormalizedFilePath -> LSP.Position -> ExceptT PluginError m [Name]) ->
+    IdeState ->
+    NormalizedFilePath ->
+    LSP.Position ->
+    VFS.CodePointPosition ->
+    [LImportDecl GhcPs] ->
+    [LHsDecl GhcPs] ->
+    ExceptT PluginError m (Maybe ImportAlias)
+resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos imports hsDecls =
+    case findAliasDeclAtPos pos imports of
+        Just alias -> pure (Just alias)
+        Nothing -> case findAliasUseAtPos pos imports hsDecls of
+            [] -> pure Nothing
+            [alias] -> pure (Just alias)
             candidates -> do
-                namesAtPos <- getNamesAtPosFn state nfp pos
-                disambiguated <- disambiguateAliasUse state nfp namesAtPos candidates
-                case disambiguated of
+                tcModule <- runActionE "rename.resolveAlias" state $ useE TypeCheck nfp
+                namesAtPos <- getNamesAtPosFn state nfp lspPos
+                case disambiguateAliasUse tcModule namesAtPos candidates of
                     [] -> pure Nothing
-                    [result] -> pure (Just result)
+                    [alias] -> pure (Just alias)
                     aliases -> throwError $ PluginInvalidParams $
                         ambiguousAliasErrorMessage aliases
-    where
-        ambiguousAliasErrorMessage [] = ""
-        ambiguousAliasErrorMessage [_] = ""
-        ambiguousAliasErrorMessage aliases@(alias1 : alias2 : _) =
-            let aliasCount = T.show (length aliases)
-                aliasText = T.pack (moduleNameString (aliasName alias1))
-                module1 = T.pack (moduleNameString (aliasModuleName alias1))
-                module2 = T.pack (moduleNameString (aliasModuleName alias2))
-                quote t = "‘" <> t <> "’"
-            in ("Alias " <> quote aliasText
-                <> " is ambiguous (matching " <> aliasCount
-                <> " imports, including "
-                <> quote module1 <> " and " <> quote module2
-                <> "). Try renaming " <> quote aliasText
-                <> " in one of these import declarations directly.")
 
 -- | Build a 'WorkspaceEdit' renaming an import alias and all its use sites.
-aliasBasedRename
-    :: MonadIO m
-    => IdeState
-    -> NormalizedFilePath
-    -> Uri
-    -> ImportAlias
-    -> [LImportDecl GhcPs]
-    -> [LHsDecl GhcPs]
-    -> T.Text
-    -> ExceptT PluginError m (MessageResult Method_TextDocumentRename)
-aliasBasedRename state nfp uri importAlias imports decls newNameText = do
-    let oldAlias = aliasName importAlias
-        declSpan = aliasDeclSpan importAlias
-        duplicateAlias =
-            length [ ()
-                   | importDecl <- map unLoc imports
-                   , Just locatedAlias <- [ideclAs importDecl]
-                   , unLoc locatedAlias == oldAlias
-                   ] > 1
-    virtualFile <- runActionE "rename.getVirtualFile" state $
-        handleMaybeM (PluginInternalError ("Virtual file not found: " <> T.show nfp)) $
-        getVirtualFile nfp
-    useSiteSpans <-
-        if duplicateAlias
-        then importAliasUseSiteSpansDisambiguated state nfp importAlias decls
-        else pure $ importAliasUseSiteSpans importAlias decls
-    declEdit <- handleMaybe (PluginInternalError "Alias declaration span is out of range") $
-        importAliasDeclEdit virtualFile newNameText declSpan
-    useEdits <- handleMaybe (PluginInternalError "A use site span is out of range") $
-        mapM (importAliasUseSiteEdit virtualFile oldAlias newNameText) useSiteSpans
+aliasBasedRename ::
+    MonadIO m =>
+    IdeState ->
+    NormalizedFilePath ->
+    Uri ->
+    ImportAlias ->
+    [LHsDecl GhcPs] ->
+    T.Text ->
+    ExceptT PluginError m (MessageResult Method_TextDocumentRename)
+aliasBasedRename state nfp uri importAlias hsDecls newNameText = do
+    let ImportAlias{aliasDeclRange, aliasIsShared} = importAlias
+    virtualFile <- runActionE "rename.getVirtualFile" state
+        $ handleMaybeM (PluginInternalError
+            ("Virtual file not found: " <> T.pack (show nfp)))
+        $ getVirtualFile nfp
+    useSiteRanges <-
+        if aliasIsShared
+        then do
+            tcModule <- runActionE "rename.sharedAliasRanges" state $ useE TypeCheck nfp
+            pure $ aliasUseSiteRangesDisambiguated tcModule importAlias hsDecls
+        else
+            pure $ aliasUseSiteRanges importAlias hsDecls
+    declEdit <- handleMaybe (PluginInternalError "Alias declaration span is out of range")
+        $ rangeToTextEdit virtualFile newNameText aliasDeclRange
+    useEdits <- handleMaybe (PluginInternalError "A use site span is out of range")
+        $ traverse (rangeToTextEdit virtualFile newNameText) useSiteRanges
     let allEdits = declEdit : useEdits
     verTxtDocId <- liftIO $ runAction "rename.getVersionedTextDoc" state $
         getVersionedTextDoc (TextDocumentIdentifier uri)
@@ -222,146 +206,104 @@ aliasBasedRename state nfp uri importAlias imports decls newNameText = do
         workspaceEdit = WorkspaceEdit fileChanges Nothing Nothing
     pure $ InL workspaceEdit
 
--- | Collect the 'RealSrcSpan' of every qualified use of @oldAlias@, such as in
--- @oldAlias.foo@, @oldAlias.bar@, and so on.
--- Does not disambiguate if multiple imports share the alias.
-importAliasUseSiteSpans
-    :: ImportAlias
-    -> [LHsDecl GhcPs]
-    -> [RealSrcSpan]
-importAliasUseSiteSpans importAlias decls =
-    [ fullNameSpan
-    | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
-    , Qual qualifier _                     <- [unLoc locatedRdrName]
-    , qualifier == aliasName importAlias
-    , RealSrcSpan fullNameSpan _           <- [getLocA locatedRdrName]
-    ]
+-- | Collect the 'CodePointRange' of every qualified use of @importAlias@, such
+-- as @L@ in @L.take@, @L.drop@, and so on.
+aliasUseSiteRanges :: ImportAlias -> [LHsDecl GhcPs] -> [VFS.CodePointRange]
+aliasUseSiteRanges importAlias hsDecls = nubOrd $ do
+    let ImportAlias{aliasName} = importAlias
+        aliasLength = fromIntegral (moduleNameLength aliasName)
+    locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+    Qual qualifier _ <- [unLoc locatedRdrName]
+    guard (qualifier == aliasName)
+    RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
+    let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
+        qualifierStart = qualifiedNameRange ^. VFS.start
+        qualifierRange = qualifiedNameRange
+            & VFS.end .~ (qualifierStart & VFS.character +~ aliasLength)
+    [qualifierRange]
 
--- | Build a 'TextEdit' replacing the qualifier part in a qualified name (like
--- from @Alias.name@ to @NewAlias.name@).
--- Returns 'Nothing' if the span is out of bounds in the VFS.
-importAliasUseSiteEdit
-    :: VFS.VirtualFile
-    -> ModuleName   -- ^ old alias, used to compute the qualifier width
-    -> T.Text       -- ^ new alias text
-    -> RealSrcSpan  -- ^ span of the full qualified name, e.g. @Alias.name@
-    -> Maybe TextEdit
-importAliasUseSiteEdit virtualFile oldAlias newAlias fullNameSpan =
-    codePointRangeToTextEdit virtualFile newAlias qualifierCodePointRange
-    where
-        spanStart           = realSrcSpanStart fullNameSpan
-        line                = fromIntegral (srcLocLine spanStart) - 1
-        startColumn         = fromIntegral (srcLocCol  spanStart) - 1
-        qualifierLength     = fromIntegral (length (moduleNameString oldAlias))
-        qualifierCodePointRange = VFS.CodePointRange
-            (VFS.CodePointPosition line startColumn)
-            (VFS.CodePointPosition line (startColumn + qualifierLength))
+---------------------------------------------------------------------------------------------------
+-- Special case: Multiple imports use the same alias
 
--- | Build a 'TextEdit' replacing the alias token in an import declaration (like
--- from @import Module as Alias@ to @import Module as NewAlias@).
--- Returns 'Nothing' if the span is out of bounds in the VFS.
-importAliasDeclEdit
-    :: VFS.VirtualFile
-    -> T.Text       -- ^ new alias text
-    -> RealSrcSpan  -- ^ span of @Alias@ in @import Module as Alias@
-    -> Maybe TextEdit
-importAliasDeclEdit virtualFile newAlias rsp =
-    codePointRangeToTextEdit virtualFile newAlias (realSrcSpanToCodePointRange rsp)
+-- | Resolve an ambiguous name qualifier by consulting the typechecked module's
+-- 'GlobalRdrEnv' (or GRE). Used when multiple imports share the same alias. The
+-- caller is responsible for providing the names at the cursor.
+-- Returns multiple results if multiple modules export the same name (such as
+-- @L.view@ with both @Control.Lens as L@ and @Control.Lens.Getter as L@).
+disambiguateAliasUse ::
+    TcModuleResult ->
+    [Name] ->
+    [ImportAlias] ->
+    [ImportAlias]
+disambiguateAliasUse tcModule namesAtPos candidates = nubOrd $ do
+    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
+    name <- namesAtPos
+    nameGREElement <- maybeToList (lookupGRE_Name rdrEnv name)
+    importSpec <- gre_imp nameGREElement
+    candidate@ImportAlias{aliasModuleName} <- candidates
+    guard (importSpecModule importSpec == aliasModuleName)
+    [candidate]
+
+-- | A variant of 'aliasUseSiteRanges' that resolves name qualifiers into full
+-- module names and only selects those matching the module of @importAlias@.
+-- Used when multiple imports share the same alias.
+aliasUseSiteRangesDisambiguated ::
+    TcModuleResult ->
+    ImportAlias ->
+    [LHsDecl GhcPs] ->
+    [VFS.CodePointRange]
+aliasUseSiteRangesDisambiguated tcModule importAlias hsDecls = nubOrd $ do
+    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
+        ImportAlias{aliasModuleName, aliasName} = importAlias
+        aliasLength = fromIntegral (moduleNameLength aliasName)
+    locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+    rdrName@(Qual qualifier name) <- [unLoc locatedRdrName]
+    guard (qualifier == aliasName)
+    nameGREElement <- pickGREs rdrName $ lookupGlobalRdrEnv rdrEnv name
+    importSpec <- gre_imp nameGREElement
+    guard (importSpecModule importSpec == aliasModuleName)
+    RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
+    let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
+        qualifierStart = qualifiedNameRange ^. VFS.start
+        qualifierRange = qualifiedNameRange
+            & VFS.end .~ (qualifierStart & VFS.character +~ aliasLength)
+    [qualifierRange]
+
+ambiguousAliasErrorMessage :: [ImportAlias] -> T.Text
+ambiguousAliasErrorMessage aliases@(alias1 : alias2 : _) =
+    let aliasCount = T.pack (show (length aliases))
+        aliasText = T.pack (moduleNameString (aliasName alias1))
+        module1 = T.pack (moduleNameString (aliasModuleName alias1))
+        module2 = T.pack (moduleNameString (aliasModuleName alias2))
+        quote t = "‘" <> t <> "’"
+    in ("Alias " <> quote aliasText
+        <> " is ambiguous (matching " <> aliasCount
+        <> " imports, including " <> quote module1 <> " and " <> quote module2
+        <> "). Try renaming " <> quote aliasText
+        <> " in one of these import declarations directly.")
+ambiguousAliasErrorMessage _ = ""
+
+---------------------------------------------------------------------------------------------------
+-- Utility functions
 
 -- | Check whether a 'CodePointRange' contains a 'CodePointPosition'
 -- (inclusive start, exclusive end).
-codePointRangeContainsPosition :: VFS.CodePointRange -> VFS.CodePointPosition -> Bool
-codePointRangeContainsPosition
+rangeContainsPosition :: VFS.CodePointRange -> VFS.CodePointPosition -> Bool
+rangeContainsPosition
     (VFS.CodePointRange
         (VFS.CodePointPosition startLine startColumn)
         (VFS.CodePointPosition endLine endColumn))
-    (VFS.CodePointPosition line column)
-    =  (line > startLine || (line == startLine && column >= startColumn))
-    && (line < endLine   || (line == endLine   && column <  endColumn))
-
----------------------------------------------------------------------------------------------------
--- Internal helpers
-
--- | Resolve an ambiguous alias use site by consulting the typechecked
--- module's 'GlobalRdrEnv'. Used when multiple imports share the same alias.
--- The caller is responsible for providing the names at the cursor.
--- Returns multiple results if they both export the same name (such as @L.view@
--- with both @Control.Lens as L@ and @Control.Lens.Getter as L@).
-disambiguateAliasUse
-    :: MonadIO m
-    => IdeState
-    -> NormalizedFilePath
-    -> [Name]
-    -> [ImportAlias]
-    -> ExceptT PluginError m [ImportAlias]
-disambiguateAliasUse state nfp namesAtPos candidates = do
-    tcModule <- runActionE "rename.disambiguateAlias" state (useE TypeCheck nfp)
-    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
-    pure
-        [ candidate
-        | name <- namesAtPos
-        , globalRdrEnvElement <- maybeToList (lookupGRE_Name rdrEnv name)
-        , importSpec <- gre_imp globalRdrEnvElement
-        , candidate@ImportAlias{aliasModuleName} <- candidates
-        , importSpecModule importSpec == aliasModuleName
-        ]
-
--- | Like 'importAliasUseSiteSpans' but filters to use sites that resolve
--- to names from @actualMod@, using the typechecked module's 'GlobalRdrEnv'.
--- Used when multiple imports share the same alias.
-importAliasUseSiteSpansDisambiguated
-    :: MonadIO m
-    => IdeState
-    -> NormalizedFilePath
-    -> ImportAlias
-    -> [LHsDecl GhcPs]
-    -> ExceptT PluginError m [RealSrcSpan]
-importAliasUseSiteSpansDisambiguated state nfp importAlias decls = do
-    tcModule <- runActionE "rename.useSiteSpans" state (useE TypeCheck nfp)
-    let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
-        ImportAlias{aliasModuleName, aliasName} = importAlias
-        allSpans = importAliasUseSiteSpansWithOcc aliasName decls
-        maybeMatchingSpan (occName, rsp) =
-            let rdrName = Qual aliasName occName
-            in listToMaybe
-                [ rsp
-                | gre <- pickGREs rdrName $ lookupGlobalRdrEnv rdrEnv occName
-                , impSpec <- gre_imp gre
-                , importSpecModule impSpec == aliasModuleName
-                ]
-    pure $ mapMaybe maybeMatchingSpan allSpans
-
--- | Like 'importAliasUseSiteSpans' but also returns the 'OccName' of each
--- use, needed for 'GlobalRdrEnv' lookup in the disambiguated path.
-importAliasUseSiteSpansWithOcc
-    :: ModuleName
-    -> [LHsDecl GhcPs]
-    -> [(OccName, RealSrcSpan)]
-importAliasUseSiteSpansWithOcc oldAlias decls =
-    [ (occName, rsp)
-    | locatedRdrName :: XRec GhcPs RdrName <- listify (const True) decls
-    , Qual qualifier occName               <- [unLoc locatedRdrName]
-    , qualifier == oldAlias
-    , RealSrcSpan rsp _                    <- [getLocA locatedRdrName]
-    ]
-
----------------------------------------------------------------------------------------------------
--- Util
-
--- | Convert a 'RealSrcSpan' to a 'VFS.CodePointRange'.
--- GHC uses 1-based lines and columns; 'CodePointPosition' is 0-based.
-realSrcSpanToCodePointRange :: RealSrcSpan -> VFS.CodePointRange
-realSrcSpanToCodePointRange rsp = VFS.CodePointRange
-    (VFS.CodePointPosition
-        (fromIntegral (srcLocLine (realSrcSpanStart rsp)) - 1)
-        (fromIntegral (srcLocCol  (realSrcSpanStart rsp)) - 1))
-    (VFS.CodePointPosition
-        (fromIntegral (srcLocLine (realSrcSpanEnd rsp)) - 1)
-        (fromIntegral (srcLocCol  (realSrcSpanEnd rsp)) - 1))
+    (VFS.CodePointPosition posLine posColumn)
+    =  (posLine > startLine || (posLine == startLine && posColumn >= startColumn))
+    && (posLine < endLine   || (posLine == endLine   && posColumn <  endColumn))
 
 -- | Build a 'TextEdit' from a 'VFS.CodePointRange' and replacement text.
--- Returns 'Nothing' if the range is out of bounds in the VFS.
-codePointRangeToTextEdit :: VFS.VirtualFile -> T.Text -> VFS.CodePointRange -> Maybe TextEdit
-codePointRangeToTextEdit virtualFile newText codePointRange =
-    TextEdit <$> VFS.codePointRangeToRange virtualFile codePointRange
-             <*> Just newText
+-- Returns @Nothing@ if the range is out of bounds in the VFS.
+rangeToTextEdit :: VFS.VirtualFile -> T.Text -> VFS.CodePointRange -> Maybe TextEdit
+rangeToTextEdit virtualFile newText range = TextEdit
+    <$> VFS.codePointRangeToRange virtualFile range
+    <*> Just newText
+
+-- | Returns the length in Unicode code points for a 'ModuleName'.
+moduleNameLength :: ModuleName -> Int
+moduleNameLength = lengthFS . moduleNameFS

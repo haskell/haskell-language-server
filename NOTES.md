@@ -125,7 +125,7 @@ Consider the `-- Before: --` example above. When the user places the cursor on e
 
     2. `prepareRenameProvider` returns `PrepareRenameDefaultBehavior True` if the cursor is on a renameable alias.
 
-        TODO: In general, `PrepareRenameResult` feels underutilized.
+        - TODO: PR #4867 replaces `defaultBehavior` with explicit `Range` responses. If it is accepted, modify this PR.
 
     3. Fail early if HLS can’t get the parsed module, instead of falling through. The existing renaming logic also needs the module to be parsed (and then typechecked) anyway.
 

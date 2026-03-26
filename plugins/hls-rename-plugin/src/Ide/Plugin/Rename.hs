@@ -100,9 +100,9 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
         Just parsed -> do
             let hsModule = unLoc $ pm_parsed_source parsed
                 imports = hsmodImports hsModule
-                decls = hsmodDecls hsModule
+                hsDecls = hsmodDecls hsModule
             maybeAlias <- ImportAlias.resolveAliasAtPos
-                getNamesAtPos state nfp lspPos codePointPos decls imports
+                getNamesAtPos state nfp lspPos codePointPos imports hsDecls
             case maybeAlias of
                 Just _ -> pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior True
                 Nothing -> do
@@ -128,12 +128,12 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) l
         Just parsed -> do
             let hsModule = unLoc $ pm_parsed_source parsed
                 imports = hsmodImports hsModule
-                decls = hsmodDecls hsModule
+                hsDecls = hsmodDecls hsModule
             maybeAlias <- ImportAlias.resolveAliasAtPos
-                getNamesAtPos state nfp lspPos codePointPos decls imports
+                getNamesAtPos state nfp lspPos codePointPos imports hsDecls
             case maybeAlias of
-                Just importAlias ->
-                    ImportAlias.aliasBasedRename state nfp uri importAlias imports decls newNameText
+                Just importAlias -> ImportAlias.aliasBasedRename
+                    state nfp uri importAlias hsDecls newNameText
                 Nothing ->
                     nameBasedRename state pluginId nfp lspPos newNameText
 
@@ -289,7 +289,8 @@ getCodePointPosition ::
     ExceptT PluginError m VFS.CodePointPosition
 getCodePointPosition state nfp pos = do
     virtualFile <- runActionE "rename.getVirtualFile" state
-        $ handleMaybeM (PluginInternalError ("Virtual file not found: " <> T.show nfp))
+        $ handleMaybeM (PluginInternalError
+            ("Virtual file not found: " <> T.pack (show nfp)))
         $ getVirtualFile nfp
     case VFS.positionToCodePointPosition virtualFile pos of
         Nothing -> throwError $ PluginInvalidParams
