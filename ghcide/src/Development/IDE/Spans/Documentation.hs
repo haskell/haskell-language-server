@@ -107,15 +107,11 @@ getDocumentationsTryGhc env linkTgts names = do
             let
               LinkTargets{linkDoc,linkSource} = linkTgts
               doc_link = case linkDoc of
-                LinkToHackage ->
-                  toHackageDocUriText env mod (takeFileName <$> doc)
-                LinkToLocal ->
-                  toFileUriText doc
+                LinkToHackage -> toHackageDocUriText env mod (takeFileName <$> doc)
+                LinkToLocal   -> toFileUriText doc
               src_link = case linkSource of
-                LinkToHackage ->
-                  toHackageSrcUriText env mod (takeFileName <$> src)
-                LinkToLocal ->
-                  toFileUriText src
+                LinkToHackage -> toHackageSrcUriText env mod (takeFileName <$> src)
+                LinkToLocal   -> toFileUriText src
             pure (doc_link, src_link)
           Nothing -> pure (Nothing, Nothing)
 
@@ -134,7 +130,7 @@ getDocumentationsTryGhc env linkTgts names = do
            Just foundFile -> T.replace "-" sep $ T.pack foundFile
      pure $!
       mconcat $
-      [ "http://hackage.haskell.org/package/"
+      [ "https://hackage.haskell.org/package/"
       , printOutputable (unitPackageName ui), "-", T.pack $ showVersion (unitPackageVersion ui), "/"
       , subdir , "/"
       , htmlFile
