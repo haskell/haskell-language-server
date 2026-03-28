@@ -24,6 +24,8 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat           (DynFlags (..),
+                                                       ms_hspp_opts)
 import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
@@ -52,13 +54,14 @@ getAtPoint file pos = runMaybeT $ do
   shakeExtras <- lift askShake
 
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
-  parsedModule <- fst <$> useWithStaleFastMT GetParsedModule file
+  modSummary <- fst <$> useWithStaleFastMT GetModSummary file
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+  let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' parsedModule
+    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.

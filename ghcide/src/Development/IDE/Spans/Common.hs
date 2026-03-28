@@ -38,7 +38,6 @@ import           Language.LSP.Protocol.Types
 type DocMap = NameEnv SpanDoc
 type TyThingMap = NameEnv TyThing
 type ArgDocMap = NameEnv (IntMap SpanDoc)
-data A = A Word Bool
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName GhcPs -> T.Text
