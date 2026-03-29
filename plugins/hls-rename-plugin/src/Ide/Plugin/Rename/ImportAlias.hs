@@ -101,10 +101,11 @@ resolveAliasAtPos ::
     NormalizedFilePath ->
     LSP.Position ->
     VFS.CodePointPosition ->
+    Maybe (XRec GhcPs [LIE GhcPs]) ->
     [LImportDecl GhcPs] ->
     [LHsDecl GhcPs] ->
     ExceptT PluginError m (Maybe (LSP.Range, ImportAlias))
-resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos imports hsDecls = do
+resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos exports imports hsDecls = do
     virtualFile <- runActionE "rename.getVirtualFile" state
         $ handleMaybeM (PluginInternalError
             ("Virtual file not found: " <> T.pack (show nfp)))
@@ -114,7 +115,7 @@ resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos imports hsDecls = do
             Just lspRange -> Just (lspRange, alias)
     case findAliasDeclAtPos pos imports of
         Just alias -> pure $ toLSPRange (aliasDeclRange alias, alias)
-        Nothing -> case findAliasUseAtPos pos imports hsDecls of
+        Nothing -> case findAliasUseAtPos pos exports imports hsDecls of
             Nothing -> pure Nothing
             Just (_, []) -> pure Nothing
             Just (range, [alias]) -> pure $ toLSPRange (range, alias)
@@ -134,10 +135,11 @@ aliasBasedRename ::
     NormalizedFilePath ->
     Uri ->
     ImportAlias ->
+    Maybe (XRec GhcPs [LIE GhcPs]) ->
     [LHsDecl GhcPs] ->
     T.Text ->
     ExceptT PluginError m (MessageResult Method_TextDocumentRename)
-aliasBasedRename state nfp uri importAlias hsDecls newNameText = do
+aliasBasedRename state nfp uri importAlias exports hsDecls newNameText = do
     let ImportAlias{aliasDeclRange, aliasIsShared} = importAlias
     virtualFile <- runActionE "rename.getVirtualFile" state
         $ handleMaybeM (PluginInternalError
@@ -147,9 +149,9 @@ aliasBasedRename state nfp uri importAlias hsDecls newNameText = do
         if aliasIsShared
         then do
             tcModule <- runActionE "rename.sharedAliasRanges" state $ useE TypeCheck nfp
-            pure $ aliasUseSiteRangesDisambiguated tcModule importAlias hsDecls
+            pure $ aliasUseSiteRangesDisambiguated tcModule importAlias exports hsDecls
         else
-            pure $ aliasUseSiteRanges importAlias hsDecls
+            pure $ aliasUseSiteRanges importAlias exports hsDecls
     declEdit <- handleMaybe (PluginInternalError "Alias declaration span is out of range")
         $ rangeToTextEdit virtualFile newNameText aliasDeclRange
     useEdits <- handleMaybe (PluginInternalError "A use site span is out of range")
@@ -185,12 +187,14 @@ findAliasDeclAtPos pos imports = listToMaybe $ do
 -- Returns multiple aliases if multiple modules share the same alias.
 findAliasUseAtPos ::
     VFS.CodePointPosition ->
+    Maybe (XRec GhcPs [LIE GhcPs]) ->
     [LImportDecl GhcPs] ->
     [LHsDecl GhcPs] ->
     Maybe (VFS.CodePointRange, [ImportAlias])
-findAliasUseAtPos pos imports hsDecls =
+findAliasUseAtPos pos exports imports hsDecls =
     let qualifiersAtPos = do
-            locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+            locatedRdrName :: XRec GhcPs RdrName <-
+                listify (const True) exports ++ listify (const True) hsDecls
             Qual qualifier _ <- [unLoc locatedRdrName]
             RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
             let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
@@ -217,11 +221,16 @@ findAliasUseAtPos pos imports hsDecls =
 
 -- | Collect the 'CodePointRange' of every qualified use of @importAlias@, such
 -- as @L@ in @L.take@, @L.drop@, and so on.
-aliasUseSiteRanges :: ImportAlias -> [LHsDecl GhcPs] -> [VFS.CodePointRange]
-aliasUseSiteRanges importAlias hsDecls = nubOrd $ do
+aliasUseSiteRanges ::
+    ImportAlias ->
+    Maybe (XRec GhcPs [LIE GhcPs]) ->
+    [LHsDecl GhcPs] ->
+    [VFS.CodePointRange]
+aliasUseSiteRanges importAlias exports hsDecls = nubOrd $ do
     let ImportAlias{aliasName} = importAlias
         aliasLength = fromIntegral (moduleNameLength aliasName)
-    locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+    locatedRdrName :: XRec GhcPs RdrName <-
+        listify (const True) exports ++ listify (const True) hsDecls
     Qual qualifier _ <- [unLoc locatedRdrName]
     guard (qualifier == aliasName)
     RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
@@ -259,13 +268,15 @@ disambiguateAliasUse tcModule namesAtPos candidates = nubOrd $ do
 aliasUseSiteRangesDisambiguated ::
     TcModuleResult ->
     ImportAlias ->
+    Maybe (XRec GhcPs [LIE GhcPs]) ->
     [LHsDecl GhcPs] ->
     [VFS.CodePointRange]
-aliasUseSiteRangesDisambiguated tcModule importAlias hsDecls = nubOrd $ do
+aliasUseSiteRangesDisambiguated tcModule importAlias exports hsDecls = nubOrd $ do
     let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
         ImportAlias{aliasModuleName, aliasName} = importAlias
         aliasLength = fromIntegral (moduleNameLength aliasName)
-    locatedRdrName :: XRec GhcPs RdrName <- listify (const True) hsDecls
+    locatedRdrName :: XRec GhcPs RdrName <-
+        listify (const True) exports ++ listify (const True) hsDecls
     rdrName@(Qual qualifier name) <- [unLoc locatedRdrName]
     guard (qualifier == aliasName)
     nameGREElement <- pickGREs rdrName $ lookupGlobalRdrEnv rdrEnv name

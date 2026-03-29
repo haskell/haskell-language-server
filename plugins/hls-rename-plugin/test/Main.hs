@@ -59,6 +59,13 @@ prepareRenameTests = testGroup "PrepareRename"
         resultOutside <- prepareRename doc (Position 10 16)
         liftIO $ resultOutside /= expected @? "Cursor is outside qualifier"
 
+    , testCase "Import alias in re-export" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 0 27)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 0 27) (Position 0 28))))
+
     , testCase "Function name" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
@@ -120,9 +127,9 @@ renameTests = testGroup "Identifier"
     , goldenWithRename "Import alias at use site" "ImportAlias" $ \doc ->
         rename doc (Position 5 10) "G"
     , goldenWithRename "Import alias declaration (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
-        rename doc (Position 1 31) "Maybe"
+        rename doc (Position 3 31) "Maybe"
     , goldenWithRename "Import alias at use site (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
-        rename doc (Position 4 6) "Maybe"
+        rename doc (Position 6 6) "Maybe"
     , goldenWithRename "Import alias declaration (with re-exports)" "ImportAliasReexport" $ \doc -> do
         rename doc (Position 1 18) "Reexport"
     , testCase "Import alias at use site (ambiguous due to re-exports)" $ runRenameSession "" $ do

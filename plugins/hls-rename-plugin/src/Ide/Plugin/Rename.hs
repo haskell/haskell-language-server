@@ -99,10 +99,11 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
             "The module hasn’t yet been parsed. Please wait for indexing to complete and try again."
         Just parsed -> do
             let hsModule = unLoc $ pm_parsed_source parsed
+                exports = hsmodExports hsModule
                 imports = hsmodImports hsModule
                 hsDecls = hsmodDecls hsModule
             maybeAlias <- ImportAlias.resolveAliasAtPos
-                getNamesAtPos state nfp lspPos codePointPos imports hsDecls
+                getNamesAtPos state nfp lspPos codePointPos exports imports hsDecls
             case maybeAlias of
                 Just (lspRange, _importAlias) ->
                     pure $ InL $ PrepareRenameResult $ InL $ lspRange
@@ -134,13 +135,14 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) l
             "The module hasn’t yet been parsed. Please wait for indexing to complete and try again."
         Just parsed -> do
             let hsModule = unLoc $ pm_parsed_source parsed
+                exports = hsmodExports hsModule
                 imports = hsmodImports hsModule
                 hsDecls = hsmodDecls hsModule
             maybeAlias <- ImportAlias.resolveAliasAtPos
-                getNamesAtPos state nfp lspPos codePointPos imports hsDecls
+                getNamesAtPos state nfp lspPos codePointPos exports imports hsDecls
             case maybeAlias of
                 Just (_lspRange, importAlias) -> ImportAlias.aliasBasedRename
-                    state nfp uri importAlias hsDecls newNameText
+                    state nfp uri importAlias exports hsDecls newNameText
                 Nothing ->
                     nameBasedRename state pluginId nfp lspPos newNameText
 
