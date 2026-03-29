@@ -107,16 +107,22 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
                 Just (lspRange, _importAlias) ->
                     pure $ InL $ PrepareRenameResult $ InL $ lspRange
                 Nothing -> do
+                    HAR{hieAst} <- handleGetHieAst state nfp
+                    let spansWithNamesUnderCursor =
+                            [ srcSpan
+                            | (names, srcSpan) <- getNamesSpansAtPoint' hieAst pos
+                            , not (null names)]
                     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
                     -- and doesn't even allow you to create full rename request.
                     -- This handler deliberately approximates "things that definitely can't be renamed"
-                    -- to mean "there is no Name at given position".
+                    -- to mean "there is no Name at given position" (in which case
+                    -- `spansWithNamesUnderCursor` would be empty).
                     --
                     -- In particular it allows some cases through (e.g. cross-module renames),
                     -- so that the full rename handler can give more informative error about them.
-                    namesUnderCursor <- getNamesAtPos state nfp lspPos
-                    let renameValid = not $ null namesUnderCursor
-                    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
+                    pure $ case spansWithNamesUnderCursor of
+                        [] -> InR Null
+                        srcSpan : _ -> InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) lspPos newNameText) = do
@@ -349,6 +355,12 @@ collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS
 getNamesAtPoint' :: HieASTs a -> Position -> [Name]
 getNamesAtPoint' hf pos =
   concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
+
+-- | A variant of `getNamesAtPoint'` that also returns source spans.
+getNamesSpansAtPoint' :: HieASTs a -> Position -> [([Name], RealSrcSpan)]
+getNamesSpansAtPoint' hf pos =
+  pointCommand hf pos $
+    \astNode -> (rights . M.keys . getNodeIds $ astNode, nodeSpan astNode)
 
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri

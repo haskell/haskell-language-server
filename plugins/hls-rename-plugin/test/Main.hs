@@ -4,14 +4,15 @@
 
 module Main (main) where
 
-import           Control.Lens               ((^.))
-import           Data.Aeson
-import           Data.Functor               (void)
-import qualified Data.Map                   as M
-import           Data.Text                  (Text, isInfixOf, pack, unpack)
+import           Control.Lens                ((^.))
+import           Data.Aeson                  (KeyValue ((.=)))
+import           Data.Functor                (void)
+import qualified Data.Map                    as M
+import           Data.Text                   (Text, isInfixOf, pack, unpack)
 import           Ide.Plugin.Config
-import qualified Ide.Plugin.Rename          as Rename
-import qualified Language.LSP.Protocol.Lens as L
+import qualified Ide.Plugin.Rename           as Rename
+import qualified Language.LSP.Protocol.Lens  as L
+import           Language.LSP.Protocol.Types (Null (Null))
 import           System.FilePath
 import           Test.Hls
 
@@ -23,8 +24,52 @@ renamePlugin = mkPluginTestDescriptor Rename.descriptor "rename"
 
 tests :: TestTree
 tests = testGroup "Rename"
-    [ renameTests
+    [ prepareRenameTests
+    , renameTests
     , moduleNameTests
+    ]
+
+prepareRenameTests :: TestTree
+prepareRenameTests = testGroup "PrepareRename"
+    [ testCase "Module name (not yet renameable)" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 0 9)
+        liftIO $ result @?= InR Null
+
+    , testCase "Function name" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 8 1)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 8 0) (Position 8 3))))
+
+    , testCase "Imported function name" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 10 16)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 19))))
+
+    , testCase "Non-renameable position" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 6 23)
+        liftIO $ result @?= InR Null
+
+    , testCase "Operator" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 10 7)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 10 6) (Position 10 9))))
+
+    , testCase "Built-in operator" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 13 7)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 13 7) (Position 13 8))))
     ]
 
 renameTests :: TestTree
@@ -194,6 +239,16 @@ goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()
 goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
        renamePlugin title testDataDir path "expected" "hs" act
+
+-- NOTE: This should eventually be moved upstream to lsp-test (see
+-- https://github.com/haskell/lsp/issues/636).
+prepareRename :: TextDocumentIdentifier -> Position -> Session (PrepareRenameResult |? Null)
+prepareRename doc pos = do
+  let params = PrepareRenameParams doc pos Nothing
+  rsp <- request SMethod_TextDocumentPrepareRename params
+  case rsp ^. L.result of
+    Left rspError -> liftIO $ assertFailure $ "prepareRename failed: " <> show rspError
+    Right rspResult -> pure rspResult
 
 renameExpectError :: TResponseError Method_TextDocumentRename -> TextDocumentIdentifier -> Position -> Text -> Session ()
 renameExpectError expectedError doc pos newName = do
