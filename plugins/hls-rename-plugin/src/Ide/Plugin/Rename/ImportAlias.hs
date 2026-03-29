@@ -174,7 +174,7 @@ findAliasDeclAtPos pos imports = listToMaybe $ do
     Just locatedAlias <- [ideclAs importDecl]
     RealSrcSpan aliasDeclSpan _ <- [getLoc locatedAlias]
     let aliasDeclRange = realSrcSpanToCodePointRange aliasDeclSpan
-    guard (rangeContainsPosition aliasDeclRange pos)
+    guard (rangeContainsPositionInclusive aliasDeclRange pos)
     let aliasModuleName = unLoc (ideclName importDecl)
         aliasName = unLoc locatedAlias
         aliasIsShared = length (filter (== aliasName) allAliases) > 1
@@ -194,12 +194,12 @@ findAliasUseAtPos pos imports hsDecls =
             Qual qualifier _ <- [unLoc locatedRdrName]
             RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
             let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
-            guard (rangeContainsPosition qualifiedNameRange pos)
+            guard (rangeContainsPositionInclusive qualifiedNameRange pos)
             let qualifierLength = fromIntegral (moduleNameLength qualifier)
                 qualifierStart = qualifiedNameRange ^. VFS.start
                 qualifierRange = qualifiedNameRange
                     & VFS.end .~ (qualifierStart & VFS.character +~ qualifierLength)
-            guard (rangeContainsPosition qualifierRange pos)
+            guard (rangeContainsPositionInclusive qualifierRange pos)
             [(qualifierRange, qualifier)]
     in case qualifiersAtPos of
         [] -> Nothing
@@ -295,16 +295,18 @@ ambiguousAliasErrorMessage _ = ""
 ---------------------------------------------------------------------------------------------------
 -- Utility functions
 
--- | Check whether a 'CodePointRange' contains a 'CodePointPosition'
--- (inclusive start, exclusive end).
-rangeContainsPosition :: VFS.CodePointRange -> VFS.CodePointPosition -> Bool
-rangeContainsPosition
+-- | Check whether a 'CodePointRange' contains a 'CodePointPosition' (inclusive
+-- start, inclusive end).
+-- NOTE: The use of inclusive end allows the user to place the cursor at the end
+-- of an import alias and rename it.
+rangeContainsPositionInclusive :: VFS.CodePointRange -> VFS.CodePointPosition -> Bool
+rangeContainsPositionInclusive
     (VFS.CodePointRange
         (VFS.CodePointPosition startLine startColumn)
         (VFS.CodePointPosition endLine endColumn))
     (VFS.CodePointPosition posLine posColumn)
     =  (posLine > startLine || (posLine == startLine && posColumn >= startColumn))
-    && (posLine < endLine   || (posLine == endLine   && posColumn <  endColumn))
+    && (posLine < endLine   || (posLine == endLine   && posColumn <= endColumn))
 
 -- | Build a 'TextEdit' from a 'VFS.CodePointRange' and replacement text.
 -- Returns @Nothing@ if the range is out of bounds in the VFS.

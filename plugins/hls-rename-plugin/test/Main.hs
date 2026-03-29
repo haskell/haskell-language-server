@@ -37,6 +37,28 @@ prepareRenameTests = testGroup "PrepareRename"
         result <- prepareRename doc (Position 0 9)
         liftIO $ result @?= InR Null
 
+    , testCase "Import alias in declaration" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        let expected = InL (PrepareRenameResult (InL (Range (Position 2 24) (Position 2 25))))
+        resultAtStart <- prepareRename doc (Position 2 24)
+        liftIO $ resultAtStart @?= expected
+        resultAtEnd <- prepareRename doc (Position 2 25)
+        liftIO $ resultAtEnd @?= expected
+        resultOutside <- prepareRename doc (Position 2 26)
+        liftIO $ resultOutside /= expected @? "Cursor is outside alias"
+
+    , testCase "Import alias at use site" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        let expected = InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 15))))
+        resultAtStart <- prepareRename doc (Position 10 14)
+        liftIO $ resultAtStart @?= expected
+        resultAtEnd <- prepareRename doc (Position 10 15)
+        liftIO $ resultAtEnd @?= expected
+        resultOutside <- prepareRename doc (Position 10 16)
+        liftIO $ resultOutside /= expected @? "Cursor is outside qualifier"
+
     , testCase "Function name" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
@@ -96,7 +118,7 @@ renameTests = testGroup "Identifier"
     , goldenWithRename "Import alias declaration" "ImportAlias" $ \doc ->
         rename doc (Position 1 14) "G"
     , goldenWithRename "Import alias at use site" "ImportAlias" $ \doc ->
-        rename doc (Position 5 6) "G"
+        rename doc (Position 5 10) "G"
     , goldenWithRename "Import alias declaration (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
         rename doc (Position 1 31) "Maybe"
     , goldenWithRename "Import alias at use site (shared by unrelated imports)" "ImportAliasShared" $ \doc ->

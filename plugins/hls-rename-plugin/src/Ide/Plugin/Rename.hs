@@ -110,7 +110,7 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
                     HAR{hieAst} <- handleGetHieAst state nfp
                     let spansWithNamesUnderCursor =
                             [ srcSpan
-                            | (names, srcSpan) <- getNamesSpansAtPoint' hieAst pos
+                            | (names, srcSpan) <- getNamesSpansAtPoint' hieAst lspPos
                             , not (null names)]
                     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
                     -- and doesn't even allow you to create full rename request.
@@ -304,10 +304,10 @@ getCodePointPosition state nfp pos = do
             "The cursor position is inside a Unicode surrogate pair."
         Just codePointPosition -> pure codePointPosition
 
--- TODO: 'getNamesAtPos' passes the LSP 'Position' directly to 'pointCommand',
+-- FIXME: 'getNamesAtPos' passes the LSP 'Position' directly to 'pointCommand',
 -- which treats '_character' as a code-point column. This is incorrect for
 -- files with supplementary-plane Unicode characters before the cursor.
--- Fixing it requires changes in ghcide, not here.
+-- Fixing it requires changes to 'pointCommand' in ghcide, not here.
 getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
     HAR{hieAst} <- handleGetHieAst state nfp
@@ -352,11 +352,13 @@ collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
 collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS.toList
 
 -- | A variant 'getNamesAtPoint' that does not expect a 'PositionMapping'
+-- FIXME: The use of 'pointCommand' is problematic. See 'getNamesAtPos' above.
 getNamesAtPoint' :: HieASTs a -> Position -> [Name]
 getNamesAtPoint' hf pos =
   concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
 
 -- | A variant of `getNamesAtPoint'` that also returns source spans.
+-- FIXME: The use of 'pointCommand' is problematic. See 'getNamesAtPos' above.
 getNamesSpansAtPoint' :: HieASTs a -> Position -> [([Name], RealSrcSpan)]
 getNamesSpansAtPoint' hf pos =
   pointCommand hf pos $
