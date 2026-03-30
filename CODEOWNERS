@@ -48,7 +48,6 @@
 /docs @michaelpj
 
 # CI
-/.circleci
 /.github @michaelpj @fendor
 
 # Build

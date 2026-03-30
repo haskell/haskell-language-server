@@ -3,10 +3,13 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 module Test.AddArgument (tests) where
 
+import           Data.List                         (find)
+import           Data.Maybe                        (isJust)
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types       hiding
@@ -42,7 +45,8 @@ tests =
       mkGoldenAddArgTest "AddArgWithLambda" (r 1 0 1 50),
       mkGoldenAddArgTest "MultiSigFirst" (r 2 0 2 50),
       mkGoldenAddArgTest "MultiSigLast" (r 2 0 2 50),
-      mkGoldenAddArgTest "MultiSigMiddle" (r 2 0 2 50)
+      mkGoldenAddArgTest "MultiSigMiddle" (r 2 0 2 50),
+      mkNoAddArgForQualifiedNameTest
     ]
   where
     r x y x' y' = Range (Position x y) (Position x' y')
@@ -71,3 +75,30 @@ mkGoldenAddArgTest' testFileName range varName = do
       "expected"
       "hs"
       action
+
+-- | Verify that the "Add argument" code action is NOT offered for qualified names (e.g. NE.toList).
+-- We also verify that an import suggestion IS offered, to confirm we're testing the right diagnostic.
+mkNoAddArgForQualifiedNameTest :: TestTree
+mkNoAddArgForQualifiedNameTest =
+    testCase "No add argument for qualified names" $ runSessionWithServerInTmpDir def
+      (  mkPluginTestDescriptor Refactor.iePluginDescriptor "ghcide-code-actions-imports-exports"
+      <> mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings"
+      )
+      (FS.mkVirtualFileTree "plugins/hls-refactor-plugin/test/data/add-arg" (FS.directProject "QualifiedName.hs"))
+      $ do
+        doc <- openDoc "QualifiedName.hs" "haskell"
+        _ <- waitForDiagnostics
+        actions <- getCodeActions doc (Range (Position 5 0) (Position 5 50))
+        -- Verify that an import suggestion exists, confirming the right diagnostic.
+        let importAction = find (\case
+              InR CodeAction {_title = t} -> "Data.List.NonEmpty" `T.isInfixOf` t
+              _                           -> False) actions
+        liftIO $ assertBool
+          "Expected an import suggestion code action for Data.List.NonEmpty"
+          (isJust importAction)
+        -- Verify that the "Add argument" code action is NOT offered
+        let addArgAction = find (\case
+              InR CodeAction {_title = t} -> "Add argument" `T.isPrefixOf` t
+              _                           -> False) actions
+        liftIO $ addArgAction @?= Nothing
+

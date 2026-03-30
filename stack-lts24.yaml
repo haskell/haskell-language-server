@@ -1,4 +1,4 @@
-resolver: lts-22.44 # ghc-9.6.7
+resolver: lts-24.33 # ghc-9.10.3
 
 packages:
   - .
@@ -12,39 +12,38 @@ ghc-options:
 
 allow-newer: true
 allow-newer-deps:
-  - extensions
+  - hw-fingertree
+  - retrie
   # stan dependencies
   - directory-ospath-streaming
 
 extra-deps:
   - extra-1.8.1
-  - Diff-0.5
   - hiedb-0.8.0.0
-  - hie-bios-0.18.0
   - hie-compat-0.3.1.2
   - implicit-hie-0.1.4.0
+  - hie-bios-0.18.0
+  - hw-fingertree-0.1.2.1
+  - monad-dijkstra-0.1.1.5
+  - retrie-1.2.3
+  - unordered-containers-0.2.21
   - lsp-2.8.0.0
   - lsp-test-0.18.0.0
   - lsp-types-2.4.0.0
-  - websockets-0.13.0.0@sha256:9b3680ba5055e0b34ab29c341b21d70084bf067519fc059af0e597cd90a4a05a,7567
-  - monad-dijkstra-0.1.1.4 # 5
-  - retrie-1.2.3
-  - unordered-containers-0.2.21
-
-  # stan and friends
+  # stan dependencies not found in the stackage snapshot
   - stan-0.2.1.0
   - dir-traverse-0.2.3.0
-  - extensions-0.1.0.1
-  - tomland-1.3.3.2
+  - extensions-0.1.1.0
   - trial-0.0.0.0
   - trial-optparse-applicative-0.0.0.0
   - trial-tomland-0.0.0.0
-  - validation-selective-0.2.0.0
-  - cabal-add-0.2
-  - cabal-install-parsers-0.6.1.1
   - directory-ospath-streaming-0.2.2
-
-
+  - cabal-add-0.2
+  - fourmolu-0.19.0.1
+  - ormolu-0.8.0.2
+  - Cabal-3.14.2.0
+  - Cabal-syntax-3.14.2.0
+  - cabal-install-parsers-0.6.3
 configure-options:
   ghcide:
     - --disable-library-for-ghci
@@ -60,7 +59,7 @@ flags:
     BuildExecutable: false
   # stan dependencies
   directory-ospath-streaming:
-      os-string: false
+      os-string: true
 
 nix:
   packages: [icu libcxx zlib]
