@@ -72,7 +72,11 @@ module Development.IDE.Core.Shake(
     IndexQueue,
     HieDb,
     HieDbWriter(..),
+    PendingRestart(..),
+    RestartSlot(..),
     addPersistentRule,
+    newestVFSModified,
+    mergePendingRestart,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
@@ -133,10 +137,8 @@ import           Development.IDE.Core.WorkerThread
 import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
-import qualified Language.LSP.VFS                       as VFS
 
 import           Development.IDE.Core.Tracing
-import           Development.IDE.Core.WorkerThread
 #if MIN_VERSION_ghc(9,13,0)
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater,
@@ -830,15 +832,10 @@ mergePendingRestart :: PendingRestart -> Maybe PendingRestart -> PendingRestart
 mergePendingRestart new Nothing = new
 mergePendingRestart new (Just old) = PendingRestart
     { pendingRestartVFS = newestVFSModified (pendingRestartVFS new) (pendingRestartVFS old)
-    , pendingRestartActions = do
-        old' <- pendingRestartActions old
-        new' <- pendingRestartActions new
-        pure $ new' <> old'
     , pendingRestartReasons = pendingRestartReasons new <> pendingRestartReasons old
-    , pendingRestartActionBetweenSessions = do
-        old' <- pendingRestartActionBetweenSessions old
-        new' <- pendingRestartActionBetweenSessions new
-        pure $ new' <> old'
+    -- TODO: Contains a quadratic list append on the number of accumulated shake restarts.
+    , pendingRestartActions = pendingRestartActions old <> pendingRestartActions new
+    , pendingRestartActionBetweenSessions = pendingRestartActionBetweenSessions old <> pendingRestartActionBetweenSessions new
     , pendingRestartDoneSignals = pendingRestartDoneSignals new <> pendingRestartDoneSignals old    }
 
 data RestartSlot = RestartSlot
@@ -931,6 +928,7 @@ shakeEnqueue ShakeExtras{actionQueue, shakeRecorder} act = do
     return (wait' b >>= either throwIO return)
 
 data VFSModified = VFSUnmodified | VFSModified !VFS
+    deriving Show
 
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.

@@ -63,6 +63,7 @@ import           ReferenceTests
 import           ResolveTests
 import           RootUriTests
 import           SafeTests
+import           ShakeRestartTests
 import           SymlinkTests
 import           THTests
 import           UnitTests
@@ -105,4 +106,5 @@ main = do
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
     , ExceptionTests.tests
+    , ShakeRestartTests.tests
     ]
