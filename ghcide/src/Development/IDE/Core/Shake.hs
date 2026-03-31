@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -28,6 +29,7 @@ module Development.IDE.Core.Shake(
     IdeRule, IdeResult, RestartQueue,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
+    withRestartWorker, newRestartSlot,
     shakeEnqueue,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
@@ -127,6 +129,7 @@ import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.WorkerThread
 import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
@@ -144,6 +147,8 @@ import           Development.IDE.GHC.Compat             (NameCache,
                                                          initNameCache,
                                                          knownKeyNames)
 #endif
+import           Data.IORef.Extra                       (atomicModifyIORef'_)
+import qualified Data.Text.Encoding                     as T
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
                                                          action)
@@ -185,13 +190,16 @@ import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
-import           UnliftIO                               (MonadUnliftIO (withRunInIO))
+import           UnliftIO                               (IORef,
+                                                         MonadUnliftIO (withRunInIO),
+                                                         atomicModifyIORef',
+                                                         newIORef)
 
 
 data Log
   = LogCreateHieDbExportsMapStart
   | LogCreateHieDbExportsMapFinish !Int
-  | LogBuildSessionRestart !String ![DelayedActionInternal] !KeySet !Seconds !(Maybe FilePath)
+  | LogBuildSessionRestart ![T.Text] ![DelayedActionInternal] !KeySet !Seconds !(Maybe FilePath)
   | LogBuildSessionRestartTakingTooLong !Seconds
   | LogDelayedAction !(DelayedAction ()) !Seconds
   | LogBuildSessionFinish !(Maybe SomeException)
@@ -204,6 +212,7 @@ data Log
   | LogShakeGarbageCollection !T.Text !Int !Seconds
   -- * OfInterest Log messages
   | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
+  | LogRestartWorkerException !SomeException
   deriving Show
 
 instance Pretty Log where
@@ -247,6 +256,8 @@ instance Pretty Log where
     LogSetFilesOfInterest ofInterest ->
         "Set files of interst to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
+    LogRestartWorkerException e ->
+        "Restart worker exception:" <+> pretty (displayException e)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -268,9 +279,9 @@ type LoaderQueue = TaskQueue (IO ())
 
 
 data ThreadQueue = ThreadQueue {
-    tIndexQueue     :: IndexQueue
-    , tRestartQueue :: RestartQueue
-    , tLoaderQueue  :: LoaderQueue
+    tIndexQueue    :: IndexQueue
+    , tRestartSlot :: RestartSlot
+    , tLoaderQueue :: LoaderQueue
 }
 
 -- Note [Semantic Tokens Cache Location]
@@ -314,7 +325,7 @@ data ShakeExtras = ShakeExtras
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
         :: VFSModified
-        -> String
+        -> T.Text
         -> [DelayedAction ()]
         -> IO [Key]
         -> IO ()
@@ -341,8 +352,8 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
-    , restartQueue :: RestartQueue
-      -- ^ Queue of restart actions to be run.
+    , restartSlot :: RestartSlot
+      -- ^ Restart action to be run.
     , loaderQueue :: LoaderQueue
       -- ^ Queue of loader actions to be run.
     }
@@ -674,7 +685,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
   withHieDb threadQueue opts monitoring rules rootDir = mdo
     -- see Note [Serializing runs in separate thread]
     let indexQueue = tIndexQueue threadQueue
-        restartQueue = tRestartQueue threadQueue
+        restartSlot = tRestartSlot threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
 #if MIN_VERSION_ghc(9,13,0)
@@ -691,7 +702,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
         knownTargetsVar <- newTVarIO $ hashed emptyKnownTargets
-        let restartShakeSession = shakeRestart recorder ideState
+        let restartShakeSession = shakeRestart ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
@@ -765,7 +776,7 @@ shakeSessionInit recorder IdeState{..} = do
     -- Take a snapshot of the VFS - it should be empty as we've received no notifications
     -- till now, but it can't hurt to be in sync with the `lsp` library.
     vfs <- vfsSnapshot (lspEnv shakeExtras)
-    initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
+    initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] ["shakeSessionInit"]
     putMVar shakeSession initSession
     logWith recorder Debug LogSessionInitialised
 
@@ -803,38 +814,99 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+data PendingRestart = PendingRestart
+    { pendingRestartVFS                   :: VFSModified
+    , pendingRestartActionBetweenSessions :: IO [Key]
+    , pendingRestartReasons               :: [T.Text]
+    , pendingRestartActions               :: [DelayedActionInternal]
+    , pendingRestartDoneSignals           :: [TMVar ()]
+    }
+
+newestVFSModified :: VFSModified -> VFSModified -> VFSModified
+newestVFSModified VFSUnmodified old     = old
+newestVFSModified new@(VFSModified _) _ = new
+
+mergePendingRestart :: PendingRestart -> Maybe PendingRestart -> PendingRestart
+mergePendingRestart new Nothing = new
+mergePendingRestart new (Just old) = PendingRestart
+    { pendingRestartVFS = newestVFSModified (pendingRestartVFS new) (pendingRestartVFS old)
+    , pendingRestartActions = do
+        old' <- pendingRestartActions old
+        new' <- pendingRestartActions new
+        pure $ new' <> old'
+    , pendingRestartReasons = pendingRestartReasons new <> pendingRestartReasons old
+    , pendingRestartActionBetweenSessions = do
+        old' <- pendingRestartActionBetweenSessions old
+        new' <- pendingRestartActionBetweenSessions new
+        pure $ new' <> old'
+    , pendingRestartDoneSignals = pendingRestartDoneSignals new <> pendingRestartDoneSignals old    }
+
+data RestartSlot = RestartSlot
+    { queuedRestart :: IORef (Maybe (PendingRestart))
+    , restartSignal :: MVar ()
+    }
+
+newRestartSlot :: IO RestartSlot
+newRestartSlot = RestartSlot <$> newIORef Nothing <*> newEmptyMVar
 
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
-shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
-    void $ awaitRunInThread (restartQueue shakeExtras) $ do
-        withMVar'
-            shakeSession
-            (\runner -> do
-                (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                keys <- ioActionBetweenShakeSession
-                -- it is every important to update the dirty keys after we enter the critical section
-                -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
-                res <- shakeDatabaseProfile shakeDb
-                backlog <- readTVarIO $ dirtyKeys shakeExtras
-                queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+shakeRestart :: IdeState -> VFSModified -> T.Text -> [DelayedAction ()] -> IO [Key] -> IO ()
+shakeRestart IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
+    restartDone <- newEmptyTMVarIO
+    atomicModifyIORef'_ (queuedRestart (restartSlot shakeExtras)) $ Just . mergePendingRestart PendingRestart
+        { pendingRestartVFS = vfs
+        , pendingRestartActionBetweenSessions = ioActionBetweenShakeSession
+        , pendingRestartReasons = [reason]
+        , pendingRestartActions = acts
+        , pendingRestartDoneSignals = [restartDone]
+        }
+    void $ tryPutMVar (restartSignal (restartSlot shakeExtras)) ()
+    atomically $ readTMVar restartDone
 
-                -- this log is required by tests
-                logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-            )
-            -- It is crucial to be masked here, otherwise we can get killed
-            -- between spawning the new thread and updating shakeSession.
-            -- See https://github.com/haskell/ghcide/issues/79
-            (\() -> do
-            (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
-    where
-        logErrorAfter :: Seconds -> IO () -> IO ()
-        logErrorAfter seconds action = flip withAsync (const action) $ do
-            sleep seconds
-            logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
+-- | Run a worker that asynchronously processes shake restart requests. Will
+-- only ever queue upto 1 additional restart, accumulating data while processing
+-- any restart.
+withRestartWorker :: IdeState -> IO r -> IO r
+withRestartWorker ide@IdeState{..} action =
+    withAsync (forever $
+        processPendingRestart (shakeRecorder shakeExtras) ide
+            `catch` \(e :: SomeException) ->
+                logWith (shakeRecorder shakeExtras) Error (LogRestartWorkerException e)) $
+        \_ -> action
+
+processPendingRestart :: Recorder (WithPriority Log) -> IdeState -> IO ()
+processPendingRestart recorder IdeState{..} = do
+    takeMVar (restartSignal (restartSlot shakeExtras))
+    pendingRestart <- atomicModifyIORef' (queuedRestart (restartSlot shakeExtras)) (Nothing,)
+    void $ forM pendingRestart $ \PendingRestart {..} -> do
+        flip finally (atomically $ traverse (flip tryPutTMVar ()) pendingRestartDoneSignals) $ do
+            let sessionAction runner = do
+                    (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
+                    keys <- pendingRestartActionBetweenSessions
+                    -- it is every important to update the dirty keys after we enter the critical section
+                    -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                    atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                    res <- shakeDatabaseProfile shakeDb
+                    backlog <- readTVarIO $ dirtyKeys shakeExtras
+                    queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+
+                    -- this log is required by tests
+                    logWith recorder Debug $ LogBuildSessionRestart pendingRestartReasons queue backlog stopTime res
+
+            withMVar' shakeSession sessionAction $ \() ->
+                -- It is crucial to be masked here, otherwise we can get killed
+                -- between spawning the new thread and updating shakeSession.
+                -- See https://github.com/haskell/ghcide/issues/79
+                (,()) <$> newSession recorder shakeExtras pendingRestartVFS shakeDb pendingRestartActions pendingRestartReasons
+    pure ()
+  where
+    logErrorAfter :: Seconds -> IO () -> IO ()
+    logErrorAfter seconds action = flip withAsync (const action) $ do
+        sleep seconds
+        logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
+
 
 -- | Enqueue an action in the existing 'ShakeSession'.
 --   Returns a computation to block until the action is run, propagating exceptions.
@@ -868,9 +940,9 @@ newSession
     -> VFSModified
     -> ShakeDatabase
     -> [DelayedActionInternal]
-    -> String
+    -> [T.Text]
     -> IO ShakeSession
-newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
+newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reasons = do
 
     -- Take a new VFS snapshot
     case vfsMod of
@@ -901,7 +973,7 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())
         workRun restore = withSpan "Shake session" $ \otSpan -> do
-          setTag otSpan "reason" (fromString reason)
+          setTag otSpan "reason" (T.encodeUtf8 (T.intercalate ", " reasons))
           setTag otSpan "queue" (fromString $ unlines $ map actionName reenqueued)
           whenJust allPendingKeys $ \kk -> setTag otSpan "keys" (BS8.pack $ unlines $ map show $ toListKeySet kk)
           let keysActs = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)

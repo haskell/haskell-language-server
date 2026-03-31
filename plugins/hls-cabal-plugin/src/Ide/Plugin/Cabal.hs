@@ -180,7 +180,7 @@ Then we restart the shake session, so that changes to our virtual files are actu
 -}
 restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
 restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = do
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+  restartShakeSession shakeExtras (VFSModified vfs) (T.pack (List.intercalate " " [fromNormalizedFilePath file, actionMsg])) [] $ do
     keys <- actionBetweenSession
     return (toKey GetModificationTime file:keys)
 
@@ -189,7 +189,7 @@ restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = d
 -- rule to get re-run if the file changes on disk.
 restartCabalShakeSessionPhysical :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
 restartCabalShakeSessionPhysical shakeExtras vfs file actionMsg actionBetweenSession = do
-  restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
+  restartShakeSession shakeExtras (VFSModified vfs) (T.pack (List.intercalate " " [fromNormalizedFilePath file, actionMsg])) [] $ do
     keys <- actionBetweenSession
     return (toKey GetModificationTime file:toKey GetPhysicalModificationTime file:keys)
 

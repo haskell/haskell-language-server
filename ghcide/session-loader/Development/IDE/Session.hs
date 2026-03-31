@@ -729,7 +729,7 @@ checkInCache sessionState ncfp = runMaybeT $ do
 
 -- | Modify the shake state.
 data SessionShake = SessionShake
-  { restartSession :: VFSModified -> String -> [DelayedAction ()] -> IO [Key] -> IO ()
+  { restartSession :: VFSModified -> T.Text -> [DelayedAction ()] -> IO [Key] -> IO ()
   , invalidateCache :: IO Key
   , enqueueActions :: DelayedAction () -> IO (IO ())
   }

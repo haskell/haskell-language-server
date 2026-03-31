@@ -363,14 +363,15 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
 
         runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession $ \withHieDb' threadQueue' -> do
           ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
+          registerIdeConfiguration (shakeExtras ide) initConfig
           putMVar ideMVar ide
           -- Keep this after putMVar ideMVar ide; otherwise shutdown during
           -- initialization could leave handleInit blocked indefinitely on readMVar.
-          untilReactorStopSignal $ forever consumeChannel
+          withRestartWorker ide $ do
+            untilReactorStopSignal $ forever consumeChannel
         logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
-    registerIdeConfiguration (shakeExtras ide) initConfig
     pure $ Right (env,ide)
 
 
@@ -384,7 +385,7 @@ runWithWorkerThreads recorder dbLoc shutdownSession f = evalContT $ do
   -- being cleaned up, otherwise shake could be referencing dead connections.
   -- This is passed in via the callsites.
   ContT $ \action -> action () `finally` shutdownSession
-  sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
+  sessionRestartTQueue <- liftIO $ newRestartSlot
   sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
   liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
