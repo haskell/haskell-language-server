@@ -598,9 +598,14 @@ suggestDeleteUnusedBinding
   Diagnostic{_range=_range,..}
 -- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
     | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
-    , Just indexedContent <- indexedByPosition . T.unpack <$> contents
-      = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
-        in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
+    , Just indexedContent <- indexedByPosition . T.unpack <$> contents =
+        let nameStr = T.unpack name
+            ranges =
+                mergeRanges
+              . sortOn _start
+              $ relatedRanges indexedContent nameStr
+            edits = flip TextEdit "" <$> ranges
+        in  ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
     | otherwise = []
     where
       relatedRanges indexedContent name =
@@ -617,10 +622,10 @@ suggestDeleteUnusedBinding
           (L nLoc _name) | isTheBinding nLoc ->
             let findSig (L (RealSrcSpan l _) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
-            in
-              extendForSpaces indexedContent (toRange l) :
-              concatMap (findSig . reLoc) hsmodDecls
-          _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
+                withSpaces = extendToIncludePreviousNewlineIfPossible indexedContent
+                  (extendForHaddock indexedContent (toRange l))
+            in  withSpaces : concatMap (findSig . reLoc) hsmodDecls
+          _ ->  concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpans _ _ _ = []
 
       extractNameAndMatchesFromFunBind
@@ -637,7 +642,9 @@ suggestDeleteUnusedBinding
       findRelatedSigSpan indexedContent name l sig =
         let maybeSpan = findRelatedSigSpan1 name sig
         in case maybeSpan of
-          Just (_span, True) -> pure $ extendForSpaces indexedContent $ toRange l -- a :: Int
+          Just (_span, True) ->
+              pure $ extendToIncludePreviousNewlineIfPossible indexedContent
+                (extendForHaddock indexedContent (toRange l))
           Just (RealSrcSpan span _, False) -> pure $ toRange span -- a, b :: Int, a is unused
           _ -> []
 
@@ -700,7 +707,9 @@ suggestDeleteUnusedBinding
         then
           let findSig (L (RealSrcSpan l _) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
-          in extendForSpaces indexedContent (toRange l) : concatMap (findSig . reLoc) lsigs
+              withHaddock = extendForHaddock indexedContent (toRange l)
+              withSpaces  = extendForSpaces indexedContent withHaddock
+          in withSpaces : concatMap (findSig . reLoc) lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpanForHsBind _ _ _ _ = []
 
