@@ -2616,6 +2616,66 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "a = 3"
       , "b = 4"
       ]
+    , testSession "delete unused top level binding with single line haddock comment" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "-- | Haddock Comment 1"
+      , "-- Haddock Comment 2"
+      , "-- Haddock Comment 3"
+      , "f :: Int"
+      , "f = 42"
+      , ""
+      , "some = ()"
+      ]
+      (7, 0)
+      "Delete ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
+  , testSession "delete unused top level binding with block comment" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "{- | Haddock Comment 1"
+      , "Haddock Comment 2"
+      , "-}"
+      , "f :: Int"
+      , "f = 42"
+      , ""
+      , "some = ()"
+      ]
+      (7, 0)
+      "Delete ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
+  , testSession "delete unused top level binding with plain line comment" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "-- Line 1"
+      , "f :: Int"
+      , "f = 42"
+      , ""
+      , "some = ()"
+      ]
+      (5, 0)
+      "Delete ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "-- Line 1"
+      , ""
+      , "some = ()"
+      ]
   ]
   where
     testFor sourceLines pos@(l,c) expectedTitle expectedLines = do

@@ -12,8 +12,8 @@ module Development.IDE.Plugin.CodeAction.PositionIndexed
 where
 
 import           Data.Char
-import           Data.List as List
-import           Data.Map as Map
+import           Data.List                   as List
+import           Data.Map                    as Map
 import           Language.LSP.Protocol.Types (Position (Position),
                                               Range (Range, _end, _start))
 type PositionIndexed a = [(Position, a)]
@@ -191,7 +191,7 @@ countHaddockLines sigLine getLine =
             else if isHaddockBlockEnd stripped
             then case scanBlockUp (prevLineIdx - 1) of
               Just openerLine -> sigLine - openerLine
-              Nothing -> 0
+              Nothing         -> 0
 
             else if isLineHaddock stripped
             then sigLine - prevLineIdx
@@ -199,7 +199,7 @@ countHaddockLines sigLine getLine =
             else if isCommentLine stripped
             then case scanLineCommentBlockUp (prevLineIdx - 1) of
               Just haddockLine -> sigLine - haddockLine
-              Nothing -> 0
+              Nothing          -> 0
 
             else 0
   where
