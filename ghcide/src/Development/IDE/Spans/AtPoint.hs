@@ -261,8 +261,9 @@ atPoint
   -> DocAndTyThingMap
   -> HscEnv
   -> Position
+  -> Util.EnumSet Extension
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -318,7 +319,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
             let
               typeSig = case identType dets of
                 Just t -> prettyType (Just n) locationsMap t
-                Nothing -> case safeTyThingType =<< lookupNameEnv km n of
+                Nothing -> case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
                   Just kind -> prettyTypeFromType (Just n) locationsMap kind
                   Nothing   -> wrapHaskell (printOutputable n)
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))

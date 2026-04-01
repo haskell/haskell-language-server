@@ -4,7 +4,6 @@
 
 module Development.IDE.Spans.Common (
   unqualIEWrapName
-, safeTyThingId
 , safeTyThingType
 , SpanDoc(..)
 , SpanDocUris(..)
@@ -44,17 +43,12 @@ type ArgDocMap = NameEnv (IntMap SpanDoc)
 unqualIEWrapName :: IEWrappedName GhcPs -> T.Text
 unqualIEWrapName = printOutputable . rdrNameOcc . ieWrappedName
 
--- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
-safeTyThingType :: TyThing -> Maybe Type
-safeTyThingType thing
-  | Just i <- safeTyThingId thing = Just (varType i)
-safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
-safeTyThingType _                 = Nothing
-
-safeTyThingId :: TyThing -> Maybe Id
-safeTyThingId (AnId i)                         = Just i
-safeTyThingId (AConLike (RealDataCon dataCon)) = Just (dataConWrapId dataCon)
-safeTyThingId _                                = Nothing
+safeTyThingType :: Bool -> TyThing -> Maybe Type
+safeTyThingType showLinearType (AConLike (RealDataCon dataCon))
+                                    = Just (dataConDisplayType showLinearType dataCon)
+safeTyThingType _ (AnId i)          = Just (varType i)
+safeTyThingType _ (ATyCon tycon)    = Just (tyConKind tycon)
+safeTyThingType _ _                 = Nothing
 
 -- Possible documentation for an element in the code
 data SpanDoc

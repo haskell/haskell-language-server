@@ -39,6 +39,7 @@ import           BootTests
 import           ClientSettingsTests
 import           CodeLensTests
 import           CompletionTests
+import           ConstructorHoverTests
 import           CPPTests
 import           CradleTests
 import           DependentFileTest
@@ -79,6 +80,7 @@ main = do
     , CodeLensTests.tests
     , OutlineTests.tests
     , HighlightTests.tests
+    , ConstructorHoverTests.tests
     , FindDefinitionAndHoverTests.tests
     , FindImplementationAndHoverTests.tests
     , PluginSimpleTests.tests
