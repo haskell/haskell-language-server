@@ -130,6 +130,24 @@ renameTests = testGroup "Identifier"
         rename doc (Position 3 31) "Maybe"
     , goldenWithRename "Import alias at use site (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
         rename doc (Position 6 6) "Maybe"
+
+    -- REVIEW: `listify (const True) exports` produces 2 elements. The 2nd one,
+    -- `M.isJust`, has its alias at the cursor. The `qualifiersAtPos` pattern
+    -- match consumes it, and then doesn't consume any more elements. `listify
+    -- exports` then stops, and `listify hsDecls` is not evaluated at all.
+    -- The console shows 2 `listify:` traces.
+    , goldenWithRename "Import alias in export list (proving 'listify' is lazy)" "ImportAliasLazyListify" $ \doc ->
+        rename doc (Position 0 39) "Maybe"
+
+    -- REVIEW: `listify (const True) exports ++ listify (const True) hsDecls`
+    -- produces elements until it produces one whose alias is at the cursor.
+    -- This element is then consumed in the pattern match. `listify` then stops
+    -- producing.
+    -- The console shows traces for all `RdrName`s except for the `M.fromMaybe`
+    -- on the last line.
+    , goldenWithRename "Import alias in definition (proving 'listify' is lazy)" "ImportAliasLazyListify" $ \doc ->
+        rename doc (Position 9 6) "Maybe"
+
     , goldenWithRename "Import alias declaration (with re-exports)" "ImportAliasReexport" $ \doc -> do
         rename doc (Position 1 18) "Reexport"
     , testCase "Import alias at use site (ambiguous due to re-exports)" $ runRenameSession "" $ do
