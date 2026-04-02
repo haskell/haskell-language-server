@@ -1,17 +1,9 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall -Werror #-}
+{-# OPTIONS_GHC -Wall -Werror  #-}
 
 {-| Logic for renaming qualified import aliases.
-
-For example:
-
-> -- Before: ---------------------------
-> import qualified Data.List as L
-> bar = L.take
-> -- After: ----------------------------
-> import qualified Data.List as List
-> bar = List.take
 
 The basic approach is this:
 
@@ -38,7 +30,7 @@ module Ide.Plugin.Rename.ImportAlias
     ) where
 
 import           Control.Lens                     ((&), (+~), (.~), (^.))
-import           Control.Monad                    (guard)
+import           Control.Monad                    (guard, when)
 import           Control.Monad.Except             (ExceptT,
                                                    MonadError (throwError))
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
@@ -54,7 +46,9 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service     hiding (Log)
 import           Development.IDE.Core.Shake       hiding (Log)
 import           Development.IDE.GHC.Compat       hiding (importDecl)
+import           Development.IDE.GHC.Compat.Util  (stringToStringBuffer)
 import           GHC.Data.FastString              (lengthFS)
+import qualified GHC.Utils.Error                  as GHC
 import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
@@ -125,8 +119,17 @@ resolveAliasAtPos getNamesAtPosFn state nfp lspPos pos exports imports hsDecls =
                 case disambiguateAliasUse tcModule namesAtPos candidates of
                     [] -> pure Nothing
                     [alias] -> pure $ toLSPRange (range, alias)
-                    aliases -> throwError $ PluginInvalidParams $
-                        ambiguousAliasErrorMessage aliases
+                    aliases@(alias1 : alias2 : _) -> throwError $ PluginInvalidParams $
+                        let aliasCount = T.pack (show (length aliases))
+                            aliasText = moduleNameText (aliasName alias1)
+                            module1 = moduleNameText (aliasModuleName alias1)
+                            module2 = moduleNameText (aliasModuleName alias2)
+                        in "Alias " <> quote aliasText
+                            <> " is ambiguous (matching " <> aliasCount
+                            <> " imports, including " <> quote module1
+                            <> " and " <> quote module2
+                            <> "). Try renaming " <> quote aliasText
+                            <> " in one of these import declarations directly."
 
 -- | Build a 'WorkspaceEdit' renaming an import alias and all its use sites.
 aliasBasedRename ::
@@ -140,6 +143,8 @@ aliasBasedRename ::
     T.Text ->
     ExceptT PluginError m (MessageResult Method_TextDocumentRename)
 aliasBasedRename state nfp uri importAlias exports hsDecls newNameText = do
+    when (not (isValidAlias newNameText)) $
+        throwError (PluginInvalidParams (quote newNameText <> " is an invalid import alias."))
     let ImportAlias{aliasDeclRange, aliasIsShared} = importAlias
     virtualFile <- runActionE "rename.getVirtualFile" state
         $ handleMaybeM (PluginInternalError
@@ -160,7 +165,7 @@ aliasBasedRename state nfp uri importAlias exports hsDecls newNameText = do
     verTxtDocId <- liftIO $ runAction "rename.getVersionedTextDoc" state $
         getVersionedTextDoc (TextDocumentIdentifier uri)
     let fileChanges = Just $ M.singleton (verTxtDocId ^. L.uri) allEdits
-        -- TODO: Replace 'Nothing' with meaningful details for the workspace edit.
+        -- TODO: Replace 'Nothing' with meaningful details (`ChangeAnnotation`).
         workspaceEdit = WorkspaceEdit fileChanges Nothing Nothing
     pure $ InL workspaceEdit
 
@@ -179,7 +184,10 @@ findAliasDeclAtPos pos imports = listToMaybe $ do
     guard (rangeContainsPositionInclusive aliasDeclRange pos)
     let aliasModuleName = unLoc (ideclName importDecl)
         aliasName = unLoc locatedAlias
-        aliasIsShared = length (filter (== aliasName) allAliases) > 1
+        aliasIsShared = case filter (== aliasName) allAliases of
+            []          -> False
+            [_]         -> False
+            (_ : _ : _) -> True
     [ImportAlias{aliasModuleName, aliasName, aliasDeclRange, aliasIsShared}]
 
 -- | Find the text range and matching 'ImportAlias' for the name qualifier at
@@ -193,8 +201,7 @@ findAliasUseAtPos ::
     Maybe (VFS.CodePointRange, [ImportAlias])
 findAliasUseAtPos pos exports imports hsDecls =
     let qualifiersAtPos = do
-            locatedRdrName :: XRec GhcPs RdrName <-
-                listify (const True) exports ++ listify (const True) hsDecls
+            locatedRdrName <- locateRdrNames exports hsDecls
             Qual qualifier _ <- [unLoc locatedRdrName]
             RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
             let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
@@ -229,8 +236,7 @@ aliasUseSiteRanges ::
 aliasUseSiteRanges importAlias exports hsDecls = nubOrd $ do
     let ImportAlias{aliasName} = importAlias
         aliasLength = fromIntegral (moduleNameLength aliasName)
-    locatedRdrName :: XRec GhcPs RdrName <-
-        listify (const True) exports ++ listify (const True) hsDecls
+    locatedRdrName <- locateRdrNames exports hsDecls
     Qual qualifier _ <- [unLoc locatedRdrName]
     guard (qualifier == aliasName)
     RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
@@ -275,8 +281,7 @@ aliasUseSiteRangesDisambiguated tcModule importAlias exports hsDecls = nubOrd $ 
     let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
         ImportAlias{aliasModuleName, aliasName} = importAlias
         aliasLength = fromIntegral (moduleNameLength aliasName)
-    locatedRdrName :: XRec GhcPs RdrName <-
-        listify (const True) exports ++ listify (const True) hsDecls
+    locatedRdrName <- locateRdrNames exports hsDecls
     rdrName@(Qual qualifier name) <- [unLoc locatedRdrName]
     guard (qualifier == aliasName)
     nameGREElement <- pickGREs rdrName $ lookupGlobalRdrEnv rdrEnv name
@@ -289,22 +294,55 @@ aliasUseSiteRangesDisambiguated tcModule importAlias exports hsDecls = nubOrd $ 
             & VFS.end .~ (qualifierStart & VFS.character +~ aliasLength)
     [qualifierRange]
 
-ambiguousAliasErrorMessage :: [ImportAlias] -> T.Text
-ambiguousAliasErrorMessage aliases@(alias1 : alias2 : _) =
-    let aliasCount = T.pack (show (length aliases))
-        aliasText = T.pack (moduleNameString (aliasName alias1))
-        module1 = T.pack (moduleNameString (aliasModuleName alias1))
-        module2 = T.pack (moduleNameString (aliasModuleName alias2))
-        quote t = "‘" <> t <> "’"
-    in ("Alias " <> quote aliasText
-        <> " is ambiguous (matching " <> aliasCount
-        <> " imports, including " <> quote module1 <> " and " <> quote module2
-        <> "). Try renaming " <> quote aliasText
-        <> " in one of these import declarations directly.")
-ambiguousAliasErrorMessage _ = ""
-
 ---------------------------------------------------------------------------------------------------
 -- Utility functions
+
+-- | Locate 'RdrName' identifiers in the given export list and declarations.
+locateRdrNames ::
+    Maybe (XRec GhcPs [LIE GhcPs]) ->
+    [LHsDecl GhcPs] ->
+    [XRec GhcPs RdrName]
+locateRdrNames exports hsDecls =
+    listify (const True) exports ++ listify (const True) hsDecls
+
+-- | Check whether the given text is a valid alias.
+-- Allows Unicode characters the same way GHC does.
+-- REVIEW: If this looks good, we can add it to the existing name-based renaming
+-- logic too (and move the CPP stuff to @Compat@).
+isValidAlias :: T.Text -> Bool
+isValidAlias t = case unP parseIdentifier parseState of
+    POk _ _ -> True
+    _       -> False
+    where
+        filename = ""
+        location = mkRealSrcLoc filename 1 1
+        buffer = stringToStringBuffer (T.unpack (t <> ".f"))
+        parseState = initParserState minimalParserOpts buffer location
+
+minimalParserOpts :: ParserOpts
+#if MIN_VERSION_ghc(9,13,0)
+minimalParserOpts = mkParserOpts mempty emptyDiagOpts False False False False
+#else
+minimalParserOpts = mkParserOpts mempty emptyDiagOpts [] False False False False
+#endif
+
+emptyDiagOpts :: GHC.DiagOpts
+#if MIN_VERSION_ghc(9,7,0)
+emptyDiagOpts = GHC.emptyDiagOpts
+#else
+emptyDiagOpts = GHC.DiagOpts mempty mempty False False Nothing defaultSDocContext
+#endif
+
+-- >>> isValidAlias (T.pack "M") == True
+-- >>> isValidAlias (T.pack "M.F") == True
+-- >>> isValidAlias (T.pack "m") == False
+-- >>> isValidAlias (T.pack "m.F") == False
+-- >>> isValidAlias (T.pack "m.f") == False
+-- >>> isValidAlias (T.pack "M.F hiding ()") == False
+-- >>> isValidAlias (T.pack "Just . M") == False
+-- >>> isValidAlias (T.pack "ǲ") == True
+-- >>> isValidAlias (T.pack "𝐹") == True
+-- >>> isValidAlias (T.pack "𝑓") == False
 
 -- | Check whether a 'CodePointRange' contains a 'CodePointPosition' (inclusive
 -- start, inclusive end).
@@ -326,6 +364,15 @@ rangeToTextEdit virtualFile newText range = TextEdit
     <$> VFS.codePointRangeToRange virtualFile range
     <*> Just newText
 
--- | Returns the length in Unicode code points for a 'ModuleName'.
+-- | Return the length in Unicode code points for a 'ModuleName'.
 moduleNameLength :: ModuleName -> Int
 moduleNameLength = lengthFS . moduleNameFS
+
+-- | Return the module name as a 'Text' value.
+moduleNameText :: ModuleName -> T.Text
+moduleNameText = T.pack . moduleNameString
+
+-- | Surround the given text with curly single quotation marks (like GHC does in
+-- compiler messages).
+quote :: T.Text -> T.Text
+quote t = "‘" <> t <> "’"

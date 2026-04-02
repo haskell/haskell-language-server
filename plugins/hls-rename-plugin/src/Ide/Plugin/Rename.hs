@@ -146,7 +146,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) l
                 Nothing ->
                     nameBasedRename state pluginId nfp lspPos newNameText
 
--- | Name-based rename: the original rename logic.
+-- | Logic for renaming all occurrences of a 'Name'.
 nameBasedRename ::
     IdeState ->
     PluginId ->

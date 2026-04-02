@@ -125,7 +125,25 @@ renameTests = testGroup "Identifier"
     , goldenWithRename "Import alias declaration" "ImportAlias" $ \doc ->
         rename doc (Position 1 14) "G"
     , goldenWithRename "Import alias at use site" "ImportAlias" $ \doc ->
+        rename doc (Position 5 6) "G"
+    , goldenWithRename "Import alias declaration (cursor at end)" "ImportAlias" $ \doc ->
+        rename doc (Position 1 18) "G"
+    , goldenWithRename "Import alias at use site (cursor at end)" "ImportAlias" $ \doc ->
         rename doc (Position 5 10) "G"
+    , testCase "Import alias declaration (cursor at invalid Unicode position)" $ runRenameSession "" $ do
+        doc <- openDoc "ImportAlias.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "typecheck"
+        renameErr <- expectRenameError doc (Position 5 7) "G"
+        liftIO $ do
+            renameErr ^. L.code @?= InR ErrorCodes_InvalidParams
+            renameErr ^. L.message @?= "rename: Invalid Params: The cursor position is inside a Unicode surrogate pair."
+    , testCase "Import alias (invalid new alias)" $ runRenameSession "" $ do
+        doc <- openDoc "ImportAlias.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "typecheck"
+        renameErr <- expectRenameError doc (Position 5 6) "Just . G"
+        liftIO $ do
+            renameErr ^. L.code @?= InR ErrorCodes_InvalidParams
+            renameErr ^. L.message @?= "rename: Invalid Params: ‘Just . G’ is an invalid import alias."
     , goldenWithRename "Import alias declaration (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
         rename doc (Position 3 31) "Maybe"
     , goldenWithRename "Import alias at use site (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
