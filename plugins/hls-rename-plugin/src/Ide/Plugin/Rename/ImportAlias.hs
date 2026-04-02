@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -Werror #-}
 
 {-| Logic for renaming qualified import aliases.
 
@@ -47,7 +47,6 @@ import           Data.Generics
 import qualified Data.Map                         as M
 import           Data.Maybe
 import qualified Data.Text                        as T
-import           Debug.Trace                      (trace, traceShowWith)
 import           Development.IDE                  (realSrcSpanToCodePointRange)
 import           Development.IDE.Core.FileStore   (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
@@ -56,7 +55,6 @@ import           Development.IDE.Core.Service     hiding (Log)
 import           Development.IDE.Core.Shake       hiding (Log)
 import           Development.IDE.GHC.Compat       hiding (importDecl)
 import           GHC.Data.FastString              (lengthFS)
-import           GHC.Utils.Outputable             (showPprUnsafe)
 import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
@@ -195,7 +193,8 @@ findAliasUseAtPos ::
     Maybe (VFS.CodePointRange, [ImportAlias])
 findAliasUseAtPos pos exports imports hsDecls =
     let qualifiersAtPos = do
-            locatedRdrName <- locateRdrNames exports hsDecls True
+            locatedRdrName :: XRec GhcPs RdrName <-
+                listify (const True) exports ++ listify (const True) hsDecls
             Qual qualifier _ <- [unLoc locatedRdrName]
             RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
             let qualifiedNameRange = realSrcSpanToCodePointRange qualifiedNameSpan
@@ -205,7 +204,7 @@ findAliasUseAtPos pos exports imports hsDecls =
                 qualifierRange = qualifiedNameRange
                     & VFS.end .~ (qualifierStart & VFS.character +~ qualifierLength)
             guard (rangeContainsPositionInclusive qualifierRange pos)
-            traceShowWith (\x -> "findAliasUseAtPos/qualifierAtPos: " <> show x) [(qualifierRange, qualifier)]
+            [(qualifierRange, qualifier)]
     in case qualifiersAtPos of
         [] -> Nothing
         (rangeAtPos, qualifierAtPos) : _ -> Just $ (,) rangeAtPos $ do
@@ -230,7 +229,8 @@ aliasUseSiteRanges ::
 aliasUseSiteRanges importAlias exports hsDecls = nubOrd $ do
     let ImportAlias{aliasName} = importAlias
         aliasLength = fromIntegral (moduleNameLength aliasName)
-    locatedRdrName <- locateRdrNames exports hsDecls False
+    locatedRdrName :: XRec GhcPs RdrName <-
+        listify (const True) exports ++ listify (const True) hsDecls
     Qual qualifier _ <- [unLoc locatedRdrName]
     guard (qualifier == aliasName)
     RealSrcSpan qualifiedNameSpan _ <- [getLoc locatedRdrName]
@@ -275,7 +275,8 @@ aliasUseSiteRangesDisambiguated tcModule importAlias exports hsDecls = nubOrd $ 
     let rdrEnv = tcg_rdr_env (tmrTypechecked tcModule)
         ImportAlias{aliasModuleName, aliasName} = importAlias
         aliasLength = fromIntegral (moduleNameLength aliasName)
-    locatedRdrName <- locateRdrNames exports hsDecls False
+    locatedRdrName :: XRec GhcPs RdrName <-
+        listify (const True) exports ++ listify (const True) hsDecls
     rdrName@(Qual qualifier name) <- [unLoc locatedRdrName]
     guard (qualifier == aliasName)
     nameGREElement <- pickGREs rdrName $ lookupGlobalRdrEnv rdrEnv name
@@ -304,24 +305,6 @@ ambiguousAliasErrorMessage _ = ""
 
 ---------------------------------------------------------------------------------------------------
 -- Utility functions
-
-instance Show RdrName where
-    show (Unqual name)          = show name
-    show (Qual moduleName name) = show moduleName ++ "." ++ show name
-    show (Orig mod name)        = "Orig: " <> show mod <> "." <> show name
-    show (Exact name)           = "Exact: " <> showPprUnsafe name
-
--- | Locate 'RdrName' identifiers in the given export list and declarations.
-locateRdrNames ::
-    Maybe (XRec GhcPs [LIE GhcPs]) ->
-    [LHsDecl GhcPs] ->
-    Bool ->
-    [XRec GhcPs RdrName]
-locateRdrNames exports hsDecls traceEveryProducedName =
-    listify const_True exports ++ listify const_True hsDecls
-    where const_True = if traceEveryProducedName
-            then \x -> trace ("listify: " <> show (unLoc x) <> " at " <> show (getLoc x)) True
-            else const True
 
 -- | Check whether a 'CodePointRange' contains a 'CodePointPosition' (inclusive
 -- start, inclusive end).
