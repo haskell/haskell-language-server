@@ -92,6 +92,7 @@ import           Development.IDE.Graph                (RuleResult)
 import           Development.IDE.Graph.Classes        (Hashable, NFData)
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
+                                                       getFirstPragmaFast,
                                                        insertNewPragma)
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (Identifier)
@@ -227,8 +228,8 @@ codeActionResolveProvider ideState pId ca uri uid = do
 inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- getNormalizedFilePathE uri
-  pragma <- getFirstPragma pId state nfp
   runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
+    pragma <- getFirstPragmaFast pId state nfp
     (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
     let -- Get all records with dotdot in current nfp
         records = [ record
@@ -691,4 +692,3 @@ getRecPatterns _ = ([], False)
 
 printFieldName :: Outputable a => a -> Text
 printFieldName = stripOccNamePrefix . printOutputable
-

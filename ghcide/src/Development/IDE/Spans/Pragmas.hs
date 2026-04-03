@@ -7,7 +7,8 @@ module Development.IDE.Spans.Pragmas
   , LineSplitTextEdits(..)
   , getNextPragmaInfo
   , insertNewPragma
-  , getFirstPragma ) where
+  , getFirstPragma
+  , getFirstPragmaFast ) where
 
 import           Control.Lens                    ((&), (.~))
 import           Data.Bits                       (Bits (setBit))
@@ -17,7 +18,7 @@ import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
 import           Data.Text.Utf16.Rope.Mixed      (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed      as Rope
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
+import           Development.IDE                 (srcSpanToRange, IdeState (..), NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction, GetFileContents (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types    as LSP
@@ -55,6 +56,13 @@ getFirstPragma (PluginId pId) state nfp = do
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
   fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
   pure $ getNextPragmaInfo sessionDynFlags fileContents
+
+getFirstPragmaFast :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
+getFirstPragmaFast (PluginId pId) state nfp = do
+  runIdeActionE (T.unpack pId <> ".GhcSession") (shakeExtras state) $ do
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- useWithStaleFastE GhcSession nfp
+    fileContents <- fmap (snd . fst) $ useWithStaleFastE GetFileContents nfp
+    pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------
 

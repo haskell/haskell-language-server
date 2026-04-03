@@ -197,7 +197,8 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
     if isInlayHintsSupported state
     then do
         nfp <- getNormalizedFilePathE _uri
-        (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+        (ImportActionsResult {forLens, forResolve}, pm) <-
+          runIdeActionE "ImportActions" (shakeExtras state) $ useWithStaleFastE ImportActions nfp
         let inlayHints = [ inlayHint
                          | (range, (int, _)) <- forLens
                          , Just newRange <- [toCurrentRange pm range]
