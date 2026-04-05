@@ -40,7 +40,8 @@ import           Control.Concurrent.Extra              (newBarrier,
                                                         signalBarrier,
                                                         waitBarrier)
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
-import           Control.Monad.Trans.Cont              (evalContT)
+import           Control.Monad.Trans.Cont              (ContT (..), evalContT)
+import           Data.Foldable                         (traverse_)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service          (shutdown)
 import           Development.IDE.Core.Shake            hiding (Log)
@@ -54,6 +55,7 @@ import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
 import           System.Timeout                        (timeout)
+
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
@@ -291,9 +293,8 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
     ideMVar <- newEmptyMVar
 
     let
-      handleServerExceptionOrShutDown me = do
+      loggedTeardown me = do
         -- shutdown shake
-        tryReadMVar ideMVar >>= mapM_ shutdown
         case me of
           Left e -> do
             lifetimeConfirm "due to exception in reactor thread"
@@ -326,8 +327,12 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
                 $ \(e :: SomeException) -> do
                     exceptionInHandler e
                     k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
-    _ <- flip forkFinally handleServerExceptionOrShutDown $ do
-      runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' threadQueue' -> do
+    _ <- flip forkFinally loggedTeardown $ do
+      -- Need to be careful about when the shutdown occurs, it needs to be shut
+      -- down after the session loader and restarting threads, and before the
+      -- hiedb connections are closed.
+      let shutdownSession = tryReadMVar ideMVar >>= traverse_ shutdown
+      runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession $ \withHieDb' threadQueue' -> do
         ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
         putMVar ideMVar ide
         -- Keep this after putMVar ideMVar ide; otherwise shutdown during
@@ -349,12 +354,16 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
 -- | runWithWorkerThreads
 -- create several threads to run the session, db and session loader
 -- see Note [Serializing runs in separate thread]
-runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
-runWithWorkerThreads recorder dbLoc f = evalContT $ do
-            (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
-            sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
-            sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
-            liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
+runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> IO () -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
+runWithWorkerThreads recorder dbLoc shutdownSession f = evalContT $ do
+  (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
+  -- The shake session needs to be shut down prior to the hiedb connections
+  -- being cleaned up, otherwise shake could be referencing dead connections.
+  -- This is passed in via the callsites.
+  ContT $ \action -> action () `finally` shutdownSession
+  sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
+  sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
+  liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   It is important, that the thread that puts the 'MVar' is not dropped before it puts the 'MVar' i.e. it should
