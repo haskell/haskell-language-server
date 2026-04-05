@@ -36,6 +36,7 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
+import           Control.Concurrent.Async              (cancelMany)
 import           Control.Concurrent.Extra              (newBarrier,
                                                         signalBarrier,
                                                         waitBarrier)
@@ -54,6 +55,7 @@ import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
 import           System.Timeout                        (timeout)
+
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
@@ -332,7 +334,7 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
         putMVar ideMVar ide
         -- Keep this after putMVar ideMVar ide; otherwise shutdown during
         -- initialization could leave handleInit blocked indefinitely on readMVar.
-        untilReactorStopSignal $ forever $ do
+        untilReactorStopSignal $ flip finally (shutdown ide) $ forever $ do
           msg <- readChan $ ctxClientMsgChan lifecycleCtx
           -- We dispatch notifications synchronously and requests asynchronously
           -- This is to ensure that all file edits and config changes are applied before a request is handled
