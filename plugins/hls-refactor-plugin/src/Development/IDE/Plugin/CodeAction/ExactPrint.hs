@@ -18,9 +18,11 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
 
 import           Control.Monad
 import           Control.Monad.Trans
+import           Control.Applicative                     ((<|>))
 import           Data.Char                              (isAlphaNum)
 import           Data.Data                              (Data)
 import           Data.Generics                          (listify)
+import           Data.List                              (sortOn)
 import qualified Data.Text                              as T
 import           Development.IDE.GHC.Compat             hiding (Annotation)
 import           Development.IDE.GHC.Error
@@ -34,11 +36,16 @@ import           Language.LSP.Protocol.Types
 
 import           Control.Lens                           (_head, _last, over)
 import           Data.Bifunctor                         (first)
-import           Data.Maybe                             (fromMaybe, mapMaybe)
+import           Data.Maybe                             (fromMaybe, isJust,
+                                                         listToMaybe, mapMaybe)
 import           Development.IDE.Plugin.CodeAction.Util
 import           GHC                                    (AnnContext (..),
                                                          AnnList (..),
-                                                         DeltaPos (SameLine),
+#if !MIN_VERSION_ghc(9,9,0)
+                                                         Anchor (..),
+                                                         AnchorOperation (MovedAnchor),
+#endif
+                                                         DeltaPos (..),
                                                          EpAnn (..),
                                                          IsUnicodeSyntax (NormalSyntax),
                                                          NameAdornment (NameParens),
@@ -67,6 +74,7 @@ import           GHC                                    (addAnns, ann)
 
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC                                    (NoAnn (..))
+import           GHC                                    (EpaLocation' (..))
 import           GHC                                    (EpAnnComments (..))
 #endif
 
@@ -306,7 +314,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
     if x `elem` lies
       then TransformT $ lift (Left $ thing <> " already imported")
       else do
-        let lies' = addCommaInImportList lies x
+        let lies' = addSortedInImportListBy importItemSortKey lies x
         return $ L l it{ideclImportList = Just (hide, L l' lies')}
 extendImportTopLevel _ _ = TransformT $ lift $ Left "Unable to extend the import list"
 
@@ -397,10 +405,8 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
     | parent == unIEWrappedName ie = do
-        let hasSibling = not $ null lies'
         srcChild <- uniqueSrcSpanT
         let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
-        childRdr <- pure $ setEntryDP childRdr $ SameLine $ if hasSibling then 1 else 0
         let alreadyImported =
               printOutputable (occName (unLoc childRdr))
                 `elem` map (printOutputable @OccName) (listify (const True) lies')
@@ -412,12 +418,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
                                                childRdr
         let it' = it{ideclImportList = Just (hide, lies)}
             lies = L l' $ reverse pre ++
-                [L l'' (IEThingWith l''' twIE NoIEWildcard (over _last fixLast lies' ++ [childLIE])
+                [L l'' (IEThingWith l''' twIE NoIEWildcard (addSortedInImportListBy wrappedNameSortKey lies' childLIE)
 #if MIN_VERSION_ghc(9,9,0)
                                     docs
 #endif
                        )] ++ xs
-            fixLast = if hasSibling then first addComma else id
         return $ L l it'
   go hide l' pre (x : xs) = go hide l' (x : pre) xs
   go hide l' pre [] = do
@@ -460,9 +465,122 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
                                                         Nothing -- TODO preserve docs?
 #endif
 
-          lies' = addCommaInImportList (reverse pre) x
+          lies' = addSortedInImportListBy importItemSortKey (reverse pre) x
       return $ L l it{ideclImportList = Just (hide, L l' lies')}
 extendImportViaParent _ _ _ _ = TransformT $ lift $ Left "Unable to extend the import list via parent"
+
+-- | Insert a new import item, sort the explicit import list, and then render
+-- the whole list in one of two normalized layouts:
+--
+-- * Single-line input stays single-line: @( a, b, c )@
+-- * Multi-line input becomes one-item-per-line:
+--   @( a,\n  b,\n  c )@
+
+addSortedInImportListBy ::
+  Ord key =>
+  (LocatedAn AnnListItem a -> key) ->
+  [LocatedAn AnnListItem a] ->
+  LocatedAn AnnListItem a ->
+  [LocatedAn AnnListItem a]
+addSortedInImportListBy sortKey lies x =
+  normalizeSortedImportList wasMultiLine continuationIndent (sortOn sortKey extended)
+  where
+    extended = addCommaInImportList lies x
+    wasMultiLine = isMultiLineImportList lies
+    continuationIndent = continuationIndentFromImportList lies
+
+-- | Rewrite a sorted import list into a normalized layout.
+-- Commas are assigned after every item except the last .
+normalizeSortedImportList :: Bool -> Int -> [LocatedAn AnnListItem a] -> [LocatedAn AnnListItem a]
+normalizeSortedImportList _ _ [] = []
+normalizeSortedImportList wasMultiLine continuationIndent items =
+  zipWith applyLayout [0 ..] items
+  where
+    lastIndex = length items - 1
+    trailingCommaFor index = index < lastIndex
+
+    applyLayout index =
+      first updateComma . (`setEntryDP` deltaFor index)
+      where
+        updateComma = (if trailingCommaFor index then addComma else id) . removeComma
+
+    deltaFor index
+      | index == 0 = SameLine 0
+      | wasMultiLine = DifferentLine 1 continuationIndent
+      | otherwise = SameLine 1
+
+-- | Detect whether the original import list was multi-line. If any item starts
+-- on a different line from the previous one, we normalize the final result to
+-- the forced one-item-per-line layout.
+isMultiLineImportList :: [LocatedAn AnnListItem a] -> Bool
+isMultiLineImportList = any (isJust . importItemLayout)
+
+continuationIndentFromImportList :: [LocatedAn AnnListItem a] -> Int
+continuationIndentFromImportList = fromMaybe 2 . listToMaybe . mapMaybe importItemLayout
+
+-- | Read layout information from a single import item.
+--
+-- 'Nothing' means the item remains on the same line as the previous one.
+-- 'Just col' means the item starts on a new line with continuation indent
+-- column @col@.
+importItemLayout :: LocatedAn AnnListItem a -> Maybe Int
+#if MIN_VERSION_ghc(9,11,0)
+importItemLayout (L srcAnn _) = case srcAnn of
+  EpAnn anchor _ _ -> continuationIndentFromAnchor anchor
+  EpAnnNotUsed     -> Nothing
+#elif MIN_VERSION_ghc(9,9,0)
+importItemLayout (L srcAnn _) = case srcAnn of
+  EpAnn anchor _ _ -> continuationIndentFromAnchor anchor
+  EpAnnNotUsed     -> Nothing
+#else
+importItemLayout (L srcAnn _) = case ann srcAnn of
+  EpAnn Anchor{anchor_op = MovedAnchor (DifferentLine _ col)} _ _ -> Just col
+  _                                                                -> Nothing
+#endif
+
+#if MIN_VERSION_ghc(9,11,0)
+continuationIndentFromAnchor :: EpaLocation -> Maybe Int
+continuationIndentFromAnchor (EpaDelta _ (DifferentLine _ col) _) = Just col
+continuationIndentFromAnchor _                                    = Nothing
+#elif MIN_VERSION_ghc(9,9,0)
+continuationIndentFromAnchor :: EpaLocation -> Maybe Int
+continuationIndentFromAnchor (EpaDelta (DifferentLine _ col) _) = Just col
+continuationIndentFromAnchor _                                  = Nothing
+#endif
+
+importItemSortKey :: Outputable a => LocatedAn AnnListItem a -> (Bool, T.Text)
+importItemSortKey = sortKeyText . printOutputable . unLoc
+
+wrappedNameSortKey :: LocatedAn AnnListItem (IEWrappedName GhcPs) -> (Bool, T.Text)
+wrappedNameSortKey = sortKeyText . printOutputable . unLoc
+
+-- | Build a lexical sort key for rendered import items.
+--
+-- Strips @type@/@pattern@ prefixes and normalizes operator parens.
+sortKeyText :: T.Text -> (Bool, T.Text)
+sortKeyText raw =
+  let normalized = T.toCaseFold $ normalizeSortText raw
+  in (isSymbolLike normalized, normalized)
+
+normalizeSortText :: T.Text -> T.Text
+normalizeSortText =
+  stripWrappedOperator
+  . dropSortKeyword
+  . T.strip
+  where
+    dropSortKeyword t = fromMaybe t (T.stripPrefix "type " t <|> T.stripPrefix "pattern " t)
+    stripWrappedOperator t
+      | T.any (== ' ') t = t
+      | otherwise = fromMaybe t $ do
+          inner <- T.stripPrefix "(" t
+          T.stripSuffix ")" inner
+
+-- | True when the normalized import item starts like a symbolic name.
+isSymbolLike :: T.Text -> Bool
+isSymbolLike =
+  maybe False (not . isIdentifierLike) . T.find (not . (`elem` ['(', ')']))
+  where
+    isIdentifierLike c = isAlphaNum c || c == '_' || c == '\''
 
 -- Add an item in an import list, taking care of adding comma if needed.
 addCommaInImportList ::
