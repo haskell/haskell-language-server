@@ -116,7 +116,7 @@ completionTests =
         (Position 3 6)
         "join"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import Control.Monad (msum, join)", "f = joi"]
+        "module A where", "import Control.Monad (join, msum)", "f = joi"]
       , completionCommandTest
         "show imports not in list - multi-line"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
@@ -124,7 +124,7 @@ completionTests =
         (Position 4 6)
         "join"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import Control.Monad (\n    msum, join)", "f = joi"]
+        "module A where", "import Control.Monad (join,\n    msum)", "f = joi"]
       , completionCommandTest
         "show imports not in list - names with _"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
@@ -132,7 +132,32 @@ completionTests =
         (Position 3 11)
         "mapM_"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import Control.Monad as M (msum, mapM_)", "f = M.mapM_"]
+        "module A where", "import Control.Monad as M (mapM_, msum)", "f = M.mapM_"]
+      , completionSequenceTest
+          "sort repeated auto-imports"
+          [ ("FileTwo.hs", T.unlines
+              [ "module FileTwo (alpha, beta, charlie, delta) where"
+              , ""
+              , "alpha :: Int"
+              , "alpha = 1"
+              , ""
+              , "beta :: Int"
+              , "beta = 1"
+              , ""
+              , "charlie :: Int"
+              , "charlie = 1"
+              , ""
+              , "delta :: Int"
+              , "delta = 1"
+              ])
+          ]
+          ["module Main where", "import FileTwo ()", "e = del * cha * bet * alp", "main :: IO ()", "main = print e"]
+          [ (Position 2 6, "delta")
+          , (Position 2 12, "charlie")
+          , (Position 2 18, "beta")
+          , (Position 2 24, "alpha")
+          ]
+          ["module Main where", "import FileTwo (alpha, beta, charlie, delta)", "e = del * cha * bet * alp", "main :: IO ()", "main = print e"]
       , completionCommandTest
         "show imports not in list - initial empty list"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
@@ -279,6 +304,30 @@ completionCommandTest name src pos wanted expected = testSession name $ do
         else do
           expectMessages SMethod_WorkspaceApplyEdit 1 $ \edit ->
             liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
+
+completionSequenceTest :: TestName -> [(FilePath, T.Text)] -> [T.Text] -> [(Position, T.Text)] -> [T.Text] -> TestTree
+completionSequenceTest name setupDocs src steps expected = testSession name $ do
+  for_ setupDocs $ \(path, contents) -> do
+    _ <- createDoc path "haskell" contents
+    pure ()
+  docId <- createDoc "Main.hs" "haskell" (T.unlines src)
+  _ <- waitForDiagnostics
+  for_ steps $ \(pos, wanted) -> do
+    compls <- skipManyTill anyMessage (getCompletions docId pos)
+    let wantedC = mapMaybe (\case
+          CompletionItem {_insertText = Just x, _command = Just cmd}
+            | wanted `T.isPrefixOf` x -> Just cmd
+          _                           -> Nothing
+          ) compls
+    case wantedC of
+      [] ->
+        liftIO $ assertFailure $ "Cannot find completion " <> show wanted <> " in: " <> show [_label | CompletionItem {_label} <- compls]
+      command:_ -> do
+        executeCommand command
+        _ <- skipManyTill anyMessage (getDocumentEdit docId)
+        pure ()
+  modifiedCode <- documentContents docId
+  liftIO $ modifiedCode @?= T.unlines expected
 
 completionNoCommandTest :: TestName -> [T.Text] -> Position -> T.Text -> TestTree
 completionNoCommandTest name src pos wanted = testSession name $ do
@@ -1223,7 +1272,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA as A (stuffB, stuffA)"
+                    , "import ModuleA as A (stuffA, stuffB)"
                     , "main = print (stuffA, stuffB)"
                     ])
         , testSession "extend single line import with operator" $ template
@@ -1394,7 +1443,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import qualified ModuleA as A (stuffB, stuffA)"
+                    , "import qualified ModuleA as A (stuffA, stuffB)"
                     , "main = print (A.stuffA, A.stuffB)"
                     ])
         , testSession "extend multi line import with value" $ template
@@ -1415,7 +1464,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (stuffB, stuffA"
+                    , "import ModuleA (stuffA, stuffB"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
@@ -1437,7 +1486,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (stuffB, stuffA,"
+                    , "import ModuleA (stuffA, stuffB"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
