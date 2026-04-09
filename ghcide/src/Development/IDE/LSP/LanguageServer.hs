@@ -343,7 +343,7 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
         -- Completed MVars are pruned when new notifications are added.
         notificationLocks <- newTVarIO ([] :: [TMVar ()])
         let
-          consumeChannel = do
+          consumeChannel threadQueue = do
             msg <- readChan $ ctxClientMsgChan lifecycleCtx
             case msg of
               ReactorNotification act -> do
@@ -352,9 +352,21 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
                   old <- readTVar notificationLocks
                   pruned <- filterM (\m -> isNothing <$> tryReadTMVar m) old
                   writeTVar notificationLocks (done : pruned)
-                void $ async $
-                  handle exceptionInHandler act
-                    `finally` atomically (putTMVar done ())
+                let
+                  slot = tRestartSlot threadQueue
+                  -- After the notification handler returns, check whether
+                  -- a shake restart was triggered.
+                  --
+                  -- If so, wait for it to complete before signaling 'done'
+                  -- so that subsequent requests see the updated VFS /
+                  -- session.
+                  restartDone = do
+                    barrier <- atomically $ readTVar (lastRestartBarrier slot)
+                    async $ atomically $ do
+                      readTMVar barrier
+                      putTMVar done ()
+
+                finally (handle exceptionInHandler act) restartDone
               ReactorRequest _id act k -> do
                 currentNotifications <- readTVarIO notificationLocks
                 void $ async $ do
@@ -365,14 +377,12 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
           ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
           registerIdeConfiguration (shakeExtras ide) initConfig
           putMVar ideMVar ide
-          -- Keep this after putMVar ideMVar ide; otherwise shutdown during
-          -- initialization could leave handleInit blocked indefinitely on readMVar.
-          withRestartWorker ide $ do
-            untilReactorStopSignal $ forever consumeChannel
-        logWith recorder Info LogReactorThreadStopped
+
+          withRestartWorker ide $ untilReactorStopSignal $ forever (consumeChannel threadQueue')
+          logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
-    pure $ Right (env,ide)
+    pure $ Right (env, ide)
 
 
 -- | runWithWorkerThreads
