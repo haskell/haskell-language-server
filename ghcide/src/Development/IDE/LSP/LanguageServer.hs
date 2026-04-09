@@ -360,7 +360,7 @@ runWithWorkerThreads recorder dbLoc shutdownSession f = evalContT $ do
   -- The shake session needs to be shut down prior to the hiedb connections
   -- being cleaned up, otherwise shake could be referencing dead connections.
   -- This is passed in via the callsites.
-  void $ ContT $ \action -> action () `finally` shutdownSession
+  ContT $ \action -> action () `finally` shutdownSession
   sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
   sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
   liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
