@@ -817,11 +817,11 @@ delayedAction a = do
   liftIO $ shakeEnqueue extras a
 
 data PendingRestart = PendingRestart
-    { pendingRestartVFS                   :: VFSModified
-    , pendingRestartActionBetweenSessions :: IO [Key]
-    , pendingRestartReasons               :: [T.Text]
-    , pendingRestartActions               :: [DelayedActionInternal]
-    , pendingRestartDoneSignals           :: [TMVar ()]
+    { pendingRestartVFS                   :: !VFSModified
+    , pendingRestartActionBetweenSessions :: ![IO [Key]]
+    , pendingRestartReasons               :: ![T.Text]
+    , pendingRestartActions               :: ![DelayedActionInternal]
+    , pendingRestartDoneSignals           :: ![TMVar ()]
     }
 
 newestVFSModified :: VFSModified -> VFSModified -> VFSModified
@@ -832,34 +832,51 @@ mergePendingRestart :: PendingRestart -> Maybe PendingRestart -> PendingRestart
 mergePendingRestart new Nothing = new
 mergePendingRestart new (Just old) = PendingRestart
     { pendingRestartVFS = newestVFSModified (pendingRestartVFS new) (pendingRestartVFS old)
-    , pendingRestartReasons = pendingRestartReasons new <> pendingRestartReasons old
-    -- TODO: Contains a quadratic list append on the number of accumulated shake restarts.
-    , pendingRestartActions = pendingRestartActions old <> pendingRestartActions new
-    , pendingRestartActionBetweenSessions = pendingRestartActionBetweenSessions old <> pendingRestartActionBetweenSessions new
-    , pendingRestartDoneSignals = pendingRestartDoneSignals new <> pendingRestartDoneSignals old    }
+    , pendingRestartReasons = pendingRestartReasons new ++ pendingRestartReasons old
+    , pendingRestartActions = pendingRestartActions new ++ pendingRestartActions old
+    , pendingRestartActionBetweenSessions = pendingRestartActionBetweenSessions new ++ pendingRestartActionBetweenSessions old
+    , pendingRestartDoneSignals = pendingRestartDoneSignals new ++ pendingRestartDoneSignals old
+    }
 
 data RestartSlot = RestartSlot
-    { queuedRestart :: IORef (Maybe (PendingRestart))
-    , restartSignal :: MVar ()
+    { queuedRestart      :: IORef (Maybe PendingRestart)
+    , restartSignal      :: MVar ()
+    , lastRestartBarrier :: TVar (TMVar ())
+    -- ^ A barrier that is filled when the most recent shake restart completes.
+    --
+    -- Each call to 'shakeRestart' replaces this with a fresh empty TMVar. The
+    -- restart worker fills it when the restart finishes. Dependents on the
+    -- restart can then wait on this.
     }
 
 newRestartSlot :: IO RestartSlot
-newRestartSlot = RestartSlot <$> newIORef Nothing <*> newEmptyMVar
+newRestartSlot = do
+    initialBarrier <- newTMVarIO ()  -- starts filled (no pending restart)
+    RestartSlot <$> newIORef Nothing <*> newEmptyMVar <*> newTVarIO initialBarrier
 
 -- | Restart the current 'ShakeSession' with the given system actions.
---   Any actions running in the current session will be aborted,
---   but actions added via 'shakeEnqueue' will be requeued.
+--
+-- Any actions running in the current session will be aborted, but actions added
+-- via 'shakeEnqueue' will be requeued.
 shakeRestart :: IdeState -> VFSModified -> T.Text -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
     restartDone <- newEmptyTMVarIO
-    atomicModifyIORef'_ (queuedRestart (restartSlot shakeExtras)) $ Just . mergePendingRestart PendingRestart
+    let slot = restartSlot shakeExtras
+    -- Publish this restart's barrier, that dependents LSP requests can wait on.
+    atomically $ writeTVar (lastRestartBarrier slot) restartDone
+    atomicModifyIORef'_ (queuedRestart slot) $ Just . mergePendingRestart PendingRestart
         { pendingRestartVFS = vfs
-        , pendingRestartActionBetweenSessions = ioActionBetweenShakeSession
+        , pendingRestartActionBetweenSessions = [ioActionBetweenShakeSession]
         , pendingRestartReasons = [reason]
         , pendingRestartActions = acts
         , pendingRestartDoneSignals = [restartDone]
         }
-    void $ tryPutMVar (restartSignal (restartSlot shakeExtras)) ()
+    void $ tryPutMVar (restartSignal slot) ()
+    -- Block until the restart (including ioActionBetweenShakeSession) completes.
+    -- This preserves the invariant from the original synchronous shakeRestart:
+    -- callers (e.g. the session loader) must not proceed until their
+    -- between-session actions have run, otherwise downstream rules can observe
+    -- stale results (see Note at Session.hs restartSession call site).
     atomically $ readTMVar restartDone
 
 -- | Run a worker that asynchronously processes shake restart requests. Will
@@ -878,10 +895,10 @@ processPendingRestart recorder IdeState{..} = do
     takeMVar (restartSignal (restartSlot shakeExtras))
     pendingRestart <- atomicModifyIORef' (queuedRestart (restartSlot shakeExtras)) (Nothing,)
     void $ forM pendingRestart $ \PendingRestart {..} -> do
-        flip finally (atomically $ traverse (flip tryPutTMVar ()) pendingRestartDoneSignals) $ do
+        flip finally (atomically $ traverse (flip tryPutTMVar ()) (reverse pendingRestartDoneSignals)) $ do
             let sessionAction runner = do
                     (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                    keys <- pendingRestartActionBetweenSessions
+                    keys <- fmap concat (sequence (reverse pendingRestartActionBetweenSessions))
                     -- it is every important to update the dirty keys after we enter the critical section
                     -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
                     atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
@@ -890,13 +907,15 @@ processPendingRestart recorder IdeState{..} = do
                     queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
                     -- this log is required by tests
-                    logWith recorder Debug $ LogBuildSessionRestart pendingRestartReasons queue backlog stopTime res
+                    logWith recorder Debug $ LogBuildSessionRestart (reverse pendingRestartReasons) queue backlog stopTime res
 
             withMVar' shakeSession sessionAction $ \() ->
                 -- It is crucial to be masked here, otherwise we can get killed
                 -- between spawning the new thread and updating shakeSession.
                 -- See https://github.com/haskell/ghcide/issues/79
-                (,()) <$> newSession recorder shakeExtras pendingRestartVFS shakeDb pendingRestartActions pendingRestartReasons
+                (,()) <$> newSession recorder shakeExtras pendingRestartVFS shakeDb
+                    (reverse pendingRestartActions)
+                    (reverse pendingRestartReasons)
     pure ()
   where
     logErrorAfter :: Seconds -> IO () -> IO ()
