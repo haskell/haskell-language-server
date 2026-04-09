@@ -21,7 +21,7 @@ tests = testGroup "shake restart merging"
         newestVFSModified VFSUnmodified vfs1 @?= vfs1
 
     , testCase "mergePendingRestart Nothing" $ do
-        let p = PendingRestart VFSUnmodified (pure []) ["reason"] [] []
+        let p = PendingRestart VFSUnmodified [] ["reason"] [] []
         if mergePendingRestart p Nothing == p
           then pure ()
           else assertFailure "merging with nothing should get new"
@@ -31,18 +31,18 @@ tests = testGroup "shake restart merging"
         done2 <- newEmptyTMVarIO
         let key1 = newKey ("1" :: String)
             key2 = newKey ("2" :: String)
-            p1 = PendingRestart VFSUnmodified (pure [key1]) ["r1"] [] [done1]
-            p2 = PendingRestart VFSUnmodified (pure [key2]) ["r2"] [] [done2]
+            p1 = PendingRestart VFSUnmodified [pure [key1]] ["r1"] [] [done1]
+            p2 = PendingRestart VFSUnmodified [pure [key2]] ["r2"] [] [done2]
             merged = mergePendingRestart p1 (Just p2)
 
         pendingRestartReasons merged @?= ["r1", "r2"]
-        keys <- pendingRestartActionBetweenSessions merged
-        keys @?= [key2, key1]
+        keys <- sequence $ pendingRestartActionBetweenSessions merged
+        concat keys @?= [key2, key1]
 
     , testCase "RestartSlot coalescing" $ do
         slot <- newRestartSlot
-        let p1 = PendingRestart VFSUnmodified (pure []) ["r1"] [] []
-            p2 = PendingRestart VFSUnmodified (pure []) ["r2"] [] []
+        let p1 = PendingRestart VFSUnmodified [] ["r1"] [] []
+            p2 = PendingRestart VFSUnmodified [] ["r2"] [] []
 
         atomicModifyIORef'_ (queuedRestart slot) $ Just . mergePendingRestart p1
         atomicModifyIORef'_ (queuedRestart slot) $ Just . mergePendingRestart p2
