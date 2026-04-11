@@ -101,7 +101,6 @@ import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists              hiding (Log,
                                                                LogShake)
 import           Development.IDE.Core.FileStore               (getFileContents,
-                                                               getFileModTimeContents,
                                                                getModTime)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
@@ -924,7 +923,7 @@ getModSummaryRule displayTHWarning recorder = do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = setNonHomeFCHook $ hscSetFlags (modify_dflags $ hsc_dflags session') session' -- TODO wz1000
-        (_modTime, mFileContent) <- getFileModTimeContents f
+        mFileContent <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp (textToStringBuffer . Rope.toText <$> mFileContent)
