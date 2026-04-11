@@ -1,6 +1,6 @@
 module BootTests (tests) where
 
-import           Config                          (checkDefs, mkR, runInDir,
+import           Config                          (checkDefs, mkR,
                                                   runWithExtraFiles)
 import           Control.Applicative.Combinators
 import           Control.Monad

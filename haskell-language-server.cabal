@@ -899,9 +899,6 @@ test-suite hls-signature-help-plugin-tests
     , ghcide
     , haskell-language-server:hls-signature-help-plugin
     , hls-test-utils             == 2.13.0.0
-    , lens
-    , lsp-types
-    , string-interpolate         >= 0.3.1
     , text
   default-extensions:
     DerivingStrategies
@@ -934,10 +931,8 @@ library hls-pragmas-plugin
     , ghcide                == 2.13.0.0
     , hls-plugin-api        == 2.13.0.0
     , lens
-    , lens-aeson
     , lsp
     , text
-    , transformers
     , containers
 
 test-suite hls-pragmas-plugin-tests
@@ -1667,9 +1662,6 @@ library hls-refactor-plugin
     , mtl
     , lens
     , time
-    -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
-    , regex-applicative
-    , parser-combinators
   if impl(ghc < 9.10)
     build-depends: data-default
 
@@ -1697,7 +1689,6 @@ test-suite hls-refactor-plugin-tests
     , regex-tdfa
     , shake
     , tasty
-    , tasty-expected-failure
     , tasty-hunit
     , text
 

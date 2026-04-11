@@ -506,5 +506,6 @@ recDotDot x =
             unRecFieldsDotDot <$>
             unLoc <$> rec_dotdot x
 
+extract_cons :: DataDefnCons a -> [a]
 extract_cons (NewTypeCon x)      = [x]
 extract_cons (DataTypeCons _ xs) = xs
