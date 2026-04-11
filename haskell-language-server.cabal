@@ -1224,7 +1224,6 @@ test-suite hls-change-type-signature-plugin-tests
   build-depends:
     , filepath
     , haskell-language-server:hls-change-type-signature-plugin
-    , hls-plugin-api
     , hls-test-utils       == 2.13.0.0
     , regex-tdfa
     , text
@@ -1735,7 +1734,6 @@ library hls-semantic-tokens-plugin
     , text
     , transformers
     , bytestring
-    , syb
     , array
     , deepseq
     , dlist
