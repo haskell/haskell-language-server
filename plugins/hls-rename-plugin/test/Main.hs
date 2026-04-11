@@ -49,7 +49,7 @@ prepareRenameTests = testGroup "PrepareRename"
         void waitForBuildQueue
         result <- prepareRename doc (Position 10 16)
         liftIO $ result @?=
-            InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 19))))
+            InL (PrepareRenameResult (InL (Range (Position 10 16) (Position 10 19))))
 
     , testCase "Non-renameable position" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
