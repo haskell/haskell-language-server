@@ -42,12 +42,12 @@ import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
-import           GHC                                   (isGoodSrcSpan)
 import           GHC.Iface.Ext.Types                   (HieAST (..),
                                                         HieASTs (..),
                                                         NodeOrigin (..),
                                                         SourcedNodeInfo (..))
 import           GHC.Iface.Ext.Utils                   (generateReferencesMap)
+import           HieDb                                 ((:.) (..))
 import           HieDb.Query
 import           HieDb.Types                           (RefRow (refIsGenerated))
 import           Ide.Logger                            (Pretty (..),
@@ -97,7 +97,9 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     let spansWithNamesUnderCursor =
             [ srcSpan
             | (names, srcSpan) <- getNamesSpansAtPoint' hieAst pos
-            , not (null names)]
+            , not (null names)
+            , positionInSpan pos srcSpan  -- cursor must be within the trimmed span
+            ]
     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
     -- and doesn't even allow you to create full rename request.
     -- This handler deliberately approximates "things that definitely can't be renamed"
@@ -109,6 +111,15 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     pure $ case spansWithNamesUnderCursor of
         [] -> InR Null
         srcSpan : _ -> InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)
+
+positionInSpan :: Position -> RealSrcSpan -> Bool
+positionInSpan (Position l c) sp =
+    let start = realSrcSpanStart sp
+        end   = realSrcSpanEnd sp
+        line  = fromIntegral l + 1  -- LSP is 0-based, GHC is 1-based
+        col   = fromIntegral c + 1
+    in (line, col) >= (srcLocLine start, srcLocCol start)
+    && (line, col) <= (srcLocLine end,   srcLocCol end)
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
@@ -296,29 +307,28 @@ refsAtName ::
     NormalizedFilePath ->
     Name ->
     ExceptT PluginError m [Location]
-refsAtName state nfp targetName = do
-    HAR{refMap} <- handleGetHieAst state nfp
+refsAtName state nfp name = do
+    ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
+    ast <- handleGetHieAst state nfp
+    dbRefs <- case nameModule_maybe name of
+        Nothing -> pure []
+        Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
+            -- See Note [Generated references]
+            filter (\(refRow HieDb.:. _) -> not (refIsGenerated refRow)) <$>
+            findReferences
+                hieDb
+                True
+                (nameOccName name)
+                (Just $ moduleName mod)
+                (Just $ moduleUnit mod)
+                [fromNormalizedFilePath nfp]
+            )
+    pure $ nameLocs name ast ++ dbRefs
 
-    let localRefs =
-            case M.lookup (Right targetName) refMap of
-            Nothing    -> []
-            Just spans -> [ realSrcSpanToLocation sp | (sp, _) <- spans]
-
-    let defLoc = nameSrcSpan targetName
-        defLocations = case srcSpanToLocation defLoc of
-            Just loc | isGoodSrcSpan defLoc -> [loc]
-            _                               -> []
-
-    -- Only query HieDb if it's a global name
-    globalRefs <-
-        case nameModule_maybe targetName of
-            Nothing -> pure []
-            Just mod -> do
-                ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
-                liftIO $ withHieDb $ \hieDb ->
-                    fmap (mapMaybe rowToLoc) $ findReferences hieDb True (nameOccName targetName) (Just $ moduleName mod) (Just $ moduleUnit mod) []
-
-    pure (defLocations ++ localRefs ++ globalRefs)
+nameLocs :: Name -> HieAstResult -> [Location]
+nameLocs name (HAR _ _ rm _ _) =
+    concatMap (map (realSrcSpanToLocation . fst))
+              (M.lookup (Right name) rm)
 ---------------------------------------------------------------------------------------------------
 -- Util
 
@@ -370,11 +380,35 @@ getNamesAtPoint' :: HieASTs a -> Position -> [Name]
 getNamesAtPoint' hf pos =
   concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
 
--- | A variant of `getNamesAtPoint'` that also returns source spans.
+-- | A variant of `getNamesAtPoint'` that also returns source spans,
+--   trimmed to just the unqualified identifier (excluding any "Module." prefix).
 getNamesSpansAtPoint' :: HieASTs a -> Position -> [([Name], RealSrcSpan)]
 getNamesSpansAtPoint' hf pos =
   pointCommand hf pos $
-    \astNode -> (rights . M.keys . getNodeIds $ astNode, nodeSpan astNode)
+    \astNode ->
+        let names   = rights . M.keys . getNodeIds $ astNode
+            srcSpan = nodeSpan astNode
+            trimmed = trimQualifierSpan names srcSpan
+        in (names, trimmed)
+
+-- | Advance the start column of a span past any "Qualifier." prefix,
+--   using the OccName length of the first Name to find where the
+--   identifier begins.
+trimQualifierSpan :: [Name] -> RealSrcSpan -> RealSrcSpan
+trimQualifierSpan (n:_) sp
+    | qualLen > 0
+    = mkRealSrcSpan
+        (mkRealSrcLoc file startLine (startCol + qualLen))
+        (realSrcSpanEnd sp)
+    | otherwise = sp
+  where
+    spanLen  = srcLocCol (realSrcSpanEnd sp) - srcLocCol (realSrcSpanStart sp)
+    identLen = length (occNameString (nameOccName n))
+    qualLen  = spanLen - identLen
+    file     = srcSpanFile sp
+    startLine = srcLocLine (realSrcSpanStart sp)
+    startCol  = srcLocCol  (realSrcSpanStart sp)
+trimQualifierSpan [] sp = sp
 
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri
@@ -407,16 +441,14 @@ exportNameLocs pm names = do
 #else
                     IEVar _ ieWrapped  -> matchWrapped (getLoc export) ieWrapped
 #endif
-                    IEThingAll{}       -> unsupported
-                    IEThingWith{}      -> unsupported
-                    IEModuleContents{} -> unsupported
-                    IEThingAbs{}       -> unsupported
-                    IEGroup{}          -> unsupported
-                    IEDoc{}            -> unsupported
-                    IEDocNamed{}       -> unsupported
+                    IEThingAll{}       -> pure []
+                    IEThingWith{}      -> pure []
+                    IEModuleContents{} -> pure []
+                    IEThingAbs{}       -> pure []
+                    IEGroup{}          -> pure []
+                    IEDoc{}            -> pure []
+                    IEDocNamed{}       -> pure []
   where
-    unsupported = throwError $ PluginInternalError "Renaming is unsupported for complex export forms"
-
     matchWrapped :: SrcSpan -> LIEWrappedName GhcPs -> ExceptT PluginError (HandlerM config) [Location]
     matchWrapped l ieWrapped =
         case unwrapIEWrappedName (unLoc ieWrapped) of
