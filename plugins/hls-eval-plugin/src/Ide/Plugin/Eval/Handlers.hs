@@ -90,7 +90,6 @@ import           GHC.Types.SrcLoc                             (UnhelpfulSpanReas
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Types.Avail                              (DetOrdAvails (DefinitelyDeterministicAvails),
                                                                sortAvails)
-import           GHC.Tc.Types                                 (tcg_exports)
 import           GHC.Types.Name.Set                           (nameSetElemsStable)
 #endif
 import           Ide.Logger                                   (Priority (..),

@@ -1172,13 +1172,10 @@ withBootSuffix _          = id
 getModSummaryFromImports
   :: HscEnv
   -> FilePath
-  -> UTCTime
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
--- modTime is only used in GHC < 9.4
-getModSummaryFromImports env fp _modTime mContents = do
--- src_hash is only used in GHC >= 9.4
-    (contents, opts, ppEnv, _src_hash) <- preprocessor env fp mContents
+getModSummaryFromImports env fp mContents = do
+    (contents, opts, ppEnv, src_hash) <- preprocessor env fp mContents
 
     let dflags = hsc_dflags ppEnv
 
@@ -1194,8 +1191,7 @@ getModSummaryFromImports env fp _modTime mContents = do
         (src_idecls, ord_idecls) = partition ((== IsBoot) . ideclSource.unLoc) imps
 
         -- GHC.Prim doesn't exist physically, so don't go looking for it.
-        -- ghc_prim_imports is only used in GHC >= 9.4
-        (ordinary_imps, _ghc_prim_imports)
+        (ordinary_imps, ghc_prim_imports)
           = partition ((/= moduleName gHC_PRIM) . unLoc
                       . ideclName . unLoc)
                       ord_idecls
@@ -1233,7 +1229,7 @@ getModSummaryFromImports env fp _modTime mContents = do
         srcImports = rn_imps $ map convImport src_idecls
         textualImports = rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
 #endif
-        ghc_prim_import = not (null _ghc_prim_imports)
+        ghc_prim_import = not (null ghc_prim_imports)
 
 
     -- Force bits that might keep the string buffer and DynFlags alive unnecessarily
@@ -1253,11 +1249,11 @@ getModSummaryFromImports env fp _modTime mContents = do
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
-                , ms_dyn_obj_date    = Nothing
+                , ms_dyn_obj_date = Nothing
 #if !MIN_VERSION_ghc(9,13,0)
                 , ms_ghc_prim_import = ghc_prim_import
 #endif
-                , ms_hs_hash      = _src_hash
+                , ms_hs_hash      = src_hash
 
                 , ms_hsc_src      = sourceType
                 -- The contents are used by the GetModSummary rule
@@ -1528,36 +1524,21 @@ loadInterface
 loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
         mb_old_iface = hirModIface . fst <$> old_value
-        mb_old_version = snd <$> old_value
 
         core_file = ml_core_file (ms_location ms)
         iface_file = ml_hi_file (ms_location ms)
 
         !mod = ms_mod ms
 
-    mb_dest_version <- case mb_old_version of
-      Just ver -> pure $ Just ver
-      Nothing  -> get_file_version (toNormalizedFilePath' iface_file)
-
-    -- The source is modified if it is newer than the destination (iface file)
-    -- A more precise check for the core file is performed later
-    let _sourceMod = case mb_dest_version of -- sourceMod is only used in GHC < 9.4
-          Nothing -> SourceModified -- destination file doesn't exist, assume modified source
-          Just dest_version
-            | source_version <= dest_version -> SourceUnmodified
-            | otherwise -> SourceModified
-
-    -- old_iface is only used in GHC >= 9.4
-    _old_iface <- case mb_old_iface of
+    old_iface <- case mb_old_iface of
       Just iface -> pure (Just iface)
       Nothing -> do
-        -- ncu and read_dflags are only used in GHC >= 9.4
-        let _ncu = hsc_NC sessionWithMsDynFlags
-            _read_dflags = hsc_dflags sessionWithMsDynFlags
+        let ncu = hsc_NC sessionWithMsDynFlags
+            read_dflags = hsc_dflags sessionWithMsDynFlags
 #if MIN_VERSION_ghc(9,13,0)
-        read_result <- liftIO $ readIface (hsc_hooks sessionWithMsDynFlags) (hsc_logger sessionWithMsDynFlags) _read_dflags _ncu mod iface_file
+        read_result <- liftIO $ readIface (hsc_hooks sessionWithMsDynFlags) (hsc_logger sessionWithMsDynFlags) read_dflags ncu mod iface_file
 #else
-        read_result <- liftIO $ readIface _read_dflags _ncu mod iface_file
+        read_result <- liftIO $ readIface read_dflags ncu mod iface_file
 #endif
         case read_result of
           Util.Failed{}        -> return Nothing
@@ -1568,7 +1549,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     -- If mb_old_iface is nothing then checkOldIface will load it for us
     -- given that the source is unmodified
     (recomp_iface_reqd, mb_checked_iface)
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms _old_iface >>= \case
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms old_iface >>= \case
         UpToDateItem x -> pure (UpToDate, Just x)
         OutOfDateItem reason x -> pure (NeedsRecompile reason, x)
 

@@ -25,7 +25,6 @@ module Development.IDE.Core.FileStore(
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically)
-import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
 import           Control.Lens                                 ((^.))
 import           Control.Monad.Extra

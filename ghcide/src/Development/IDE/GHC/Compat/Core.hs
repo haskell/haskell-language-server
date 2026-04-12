@@ -484,7 +484,6 @@ import qualified GHC.Utils.Panic.Plain       as Plain
 
 import           Data.Foldable               (toList)
 import           GHC.Core.Multiplicity       (scaledThing)
-import           GHC.Data.Bag
 import qualified GHC.Data.Strict             as Strict
 import qualified GHC.Driver.Config.Finder    as GHC
 import qualified GHC.Driver.Config.Tidy      as GHC
@@ -531,9 +530,6 @@ import           GHC.Unit.Module.Graph
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-#if !MIN_VERSION_ghc(9,9,0)
-import           GHC.Hs                      (SrcSpanAnn')
-#endif
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
                                               ModIface_ (..), mi_fix
 #if MIN_VERSION_ghc(9,11,0)

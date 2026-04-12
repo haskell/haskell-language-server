@@ -168,7 +168,7 @@ tests = let
   ]
   where yes :: (TestTree -> Maybe TestTree)
         yes = Just -- test should run and pass
-        no = const Nothing -- don't run this test at all
+        _no = const Nothing -- don't run this test at all
 
 -- ----------------------------------------------------------------------------
 -- Helper functions for creating hover message verification

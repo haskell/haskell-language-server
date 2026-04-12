@@ -130,7 +130,6 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
 import qualified Language.LSP.Server                    as LSP
-import qualified Language.LSP.VFS                       as VFS
 
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
