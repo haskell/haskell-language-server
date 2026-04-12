@@ -1524,16 +1524,11 @@ loadInterface
 loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
         mb_old_iface = hirModIface . fst <$> old_value
-        mb_old_version = snd <$> old_value
 
         core_file = ml_core_file (ms_location ms)
         iface_file = ml_hi_file (ms_location ms)
 
         !mod = ms_mod ms
-
-    mb_dest_version <- case mb_old_version of
-      Just ver -> pure $ Just ver
-      Nothing  -> get_file_version (toNormalizedFilePath' iface_file)
 
     old_iface <- case mb_old_iface of
       Just iface -> pure (Just iface)
