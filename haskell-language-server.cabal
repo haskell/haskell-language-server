@@ -2096,6 +2096,7 @@ test-suite ghcide-tests
     , extra
     , filepath
     , ghcide
+    , hls-graph
     , hls-plugin-api
     , lens
     , list-t
@@ -2163,6 +2164,7 @@ test-suite ghcide-tests
     ResolveTests
     RootUriTests
     SafeTests
+    ShakeRestartTests
     SymlinkTests
     THTests
     UnitTests

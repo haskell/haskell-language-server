@@ -279,7 +279,7 @@ setFileModified recorder vfs state saved nfp actionBefore = do
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+    restartShakeSession (shakeExtras state) vfs (T.pack (fromNormalizedFilePath nfp ++ " (modified)")) [] $ do
         keys<-actionBefore
         return (toKey GetModificationTime nfp:keys)
     when checkParents $
@@ -301,7 +301,7 @@ typecheckParentsAction recorder nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: VFSModified -> IdeState -> String -> IO [Key] -> IO ()
+setSomethingModified :: VFSModified -> IdeState -> T.Text -> IO [Key] -> IO ()
 setSomethingModified vfs state reason actionBetweenSession = do
     -- Update database to remove any files that might have been renamed/deleted
     atomically $ writeTaskQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
