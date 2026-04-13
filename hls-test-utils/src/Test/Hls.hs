@@ -82,6 +82,7 @@ import           Control.Lens.Extras                      (is)
 import           Control.Monad                            (guard, unless, void)
 import           Control.Monad.Extra                      (forM)
 import           Control.Monad.IO.Class
+import           Control.Monad.Primitive                  (keepAlive)
 import           Data.Aeson                               (Result (Success),
                                                            Value (Null),
                                                            fromJSON, toJSON)
@@ -830,8 +831,8 @@ wrapClientLogger logger = do
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
     runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
-    (inR, inW) <- createPipe
-    (outR, outW) <- createPipe
+    pipeIn@(inR, inW) <- createPipe
+    pipeOut@(outR, outW) <- createPipe
     let serverRoot = fromMaybe root testServerRoot
     let clientRoot = fromMaybe root testClientRoot
 
@@ -850,19 +851,29 @@ runSessionWithTestConfig TestConfig{..} session =
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
         arguments = testingArgs serverRoot recorderIde plugins
-    server <- async $
-        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
-            arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
-    result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
-    hClose inW
-    timeout 3 (wait server) >>= \case
-        Just () -> pure ()
-        Nothing -> do
-            logWith testRecorder Info (TestServerExitTimeoutSeconds 3)
-            (t, _) <- duration $ cancel server
-            logWith testRecorder Info (TestServerCancelFinished (showDuration t))
-    logWith testRecorder Info TestRunFinished
-    pure result
+
+    -- Make an explicit call to keepAlive to protect both pipes from being GC'd.
+    --
+    -- If not done, a race condition forms from the handles of either pipe
+    -- being closed during the LSP shutdown process. For example, consider
+    -- lsp-test initiates the shutdown process, whereafter ghcide shuts down.
+    -- If it's write handle is closed due to GC, lsp-test, which has been
+    -- asynchronously reading from that handle's read end, will encounter a EOF
+    -- and crash.
+    keepAlive (pipeIn, pipeOut) $ do
+      server <- async $
+          IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
+              arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
+      result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
+      hClose inW
+      timeout 3 (wait server) >>= \case
+          Just () -> pure ()
+          Nothing -> do
+              logWith testRecorder Info (TestServerExitTimeoutSeconds 3)
+              (t, _) <- duration $ cancel server
+              logWith testRecorder Info (TestServerCancelFinished (showDuration t))
+      logWith testRecorder Info TestRunFinished
+      pure result
 
     where
         shiftRoot shiftTarget f  =

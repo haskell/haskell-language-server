@@ -50,6 +50,7 @@ library
     , lsp
     , lsp-test                ^>=0.18
     , lsp-types               ^>=2.4
+    , primitive
     , safe-exceptions
     , string-interpolate      >= 0.3.1
     , tasty
