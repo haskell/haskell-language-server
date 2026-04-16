@@ -1,5 +1,155 @@
 # Changelog for haskell-language-server
 
+## 2.14.0.0
+
+- Bindists for GHC 9.14.1
+- Bindists for GHC 9.12.4
+- Bindists for GHC 9.12.2
+- Bindists for GHC 9.10.3
+- Bindists for GHC 9.8.4
+- Bindists for GHC 9.6.7
+- Remove `hls-floskell-plugin`
+- Merge `hls-module-name-plugin` into `hls-rename-plugin`
+- Support for `ExplicitLevelImports` in GHC 9.14
+- Improved startup responsiveness via decoupled session loader
+- Improvements to ghcide
+  - Print hover types on a single line
+  - Only show linear arrows when `LinearTypes` is enabled
+  - Smart-case matching for module and filepath completions
+- Improvements to `hls-rename-plugin`
+  - Cross-module rename enabled by default
+  - `prepareRename` returns exact identifier range
+- Improvements to `hls-refactor-plugin`
+  - Don't offer 'Add Argument' for qualified names
+  - Fix spacing in constraint reduction
+  - Fix `makeDeltaAst` regression (#4731)
+- Improvements to `hls-explicit-record-fields-plugin`
+  - Cursor-aware record expansion
+  - Distinguish wildcard expansion from record syntax conversion
+  - Ignore compiler-generated match groups
+- Improvements to `hls-notes-plugin`
+  - Hover and autocompletion for note references and declarations
+  - Fix crash on single-line comments
+- Improvements to `hls-cabal-plugin`
+  - Completions in `custom-setup` stanzas
+- Improvements to `hls-fourmolu-plugin` / `hls-ormolu-plugin`
+  - Show actual parse errors from external formatters
+
+### Pull Requests
+
+- Allow skipping over non-required progress messages
+  ([#4896](https://github.com/haskell/haskell-language-server/pull/4896)) by @crtschin
+- Cleanup 9.4 leftovers, fix couple -Wunused-packages and import warnings
+  ([#4893](https://github.com/haskell/haskell-language-server/pull/4893)) by @jhrcek
+- Keep communication pipes between lsp-test and ghcide alive for the entire test
+  ([#4892](https://github.com/haskell/haskell-language-server/pull/4892)) by @crtschin
+- Cancel outstanding threads prior to closing sqlite connection
+  ([#4886](https://github.com/haskell/haskell-language-server/pull/4886)) by @crtschin
+- Bump cachix/cachix-action from 16 to 17
+  ([#4872](https://github.com/haskell/haskell-language-server/pull/4872)) by @dependabot[bot]
+- Fix cache clearing job
+  ([#4868](https://github.com/haskell/haskell-language-server/pull/4868)) by @vidit-od
+- Improve `prepareRename` responses
+  ([#4867](https://github.com/haskell/haskell-language-server/pull/4867)) by @izuzu-izuzu
+- Migrate stackage build on GHA
+  ([#4865](https://github.com/haskell/haskell-language-server/pull/4865)) by @vidit-od
+- new snapshot for stack build
+  ([#4864](https://github.com/haskell/haskell-language-server/pull/4864)) by @vidit-od
+- Pin version of extra to 1.8.1 for stack
+  ([#4863](https://github.com/haskell/haskell-language-server/pull/4863)) by @fendor
+- Only show linear arrows on data constructors with LinearTypes
+  ([#4862](https://github.com/haskell/haskell-language-server/pull/4862)) by @crtschin
+- Use 2 spaces for tab in HLS
+  ([#4860](https://github.com/haskell/haskell-language-server/pull/4860)) by @fendor
+- Produce structured error for unknown module
+  ([#4857](https://github.com/haskell/haskell-language-server/pull/4857)) by @vidit-od
+- Use Server side Diagnostics
+  ([#4856](https://github.com/haskell/haskell-language-server/pull/4856)) by @vidit-od
+- Fix: Show actual parse errors for external Fourmolu/Ormolu
+  ([#4855](https://github.com/haskell/haskell-language-server/pull/4855)) by @ijatinydv
+- Fixes redundant hash in ghcide cache path (getCacheDirsDefault)
+  ([#4854](https://github.com/haskell/haskell-language-server/pull/4854)) by @adpad-13
+- fix(refactor): do not offer 'Add Argument' for qualified names
+  ([#4852](https://github.com/haskell/haskell-language-server/pull/4852)) by @ijatinydv
+- Prefer extending import code actions
+  ([#4851](https://github.com/haskell/haskell-language-server/pull/4851)) by @vherrmann
+- Custom-setups completion in cabal files
+  ([#4848](https://github.com/haskell/haskell-language-server/pull/4848)) by @vidit-od
+- Move hls-module-name-plugin into hls-rename-plugin
+  ([#4847](https://github.com/haskell/haskell-language-server/pull/4847)) by @fendor
+- ghcide: implement level-aware module graph edges for GHC 9.14+
+  ([#4846](https://github.com/haskell/haskell-language-server/pull/4846)) by @ijatinydv
+- fix spacing issues while refactor-reduce
+  ([#4841](https://github.com/haskell/haskell-language-server/pull/4841)) by @vidit-od
+- Remove Floskell support
+  ([#4838](https://github.com/haskell/haskell-language-server/pull/4838)) by @omarjatoi
+- Ignore records in matching groups that are compiler-generated
+  ([#4837](https://github.com/haskell/haskell-language-server/pull/4837)) by @ozkutuk
+- Add tasty-options to control test execution
+  ([#4835](https://github.com/haskell/haskell-language-server/pull/4835)) by @observant2
+- Use `VirtualFileTree` in `hls-call-hierarchy-plugin-tests`
+  ([#4834](https://github.com/haskell/haskell-language-server/pull/4834)) by @fendor
+- fix notes crashing and leaking single comments notes
+  ([#4828](https://github.com/haskell/haskell-language-server/pull/4828)) by @vidit-od
+- Also add max-backjumps to caching job
+  ([#4827](https://github.com/haskell/haskell-language-server/pull/4827)) by @jhrcek
+- docs: add WSL build location note for contributors
+  ([#4824](https://github.com/haskell/haskell-language-server/pull/4824)) by @Siya-05
+- Smart Casing in modules and file paths
+  ([#4823](https://github.com/haskell/haskell-language-server/pull/4823)) by @vidit-od
+- Prune allow-newer for ghc 9.14, bump hiedb to 0.8
+  ([#4821](https://github.com/haskell/haskell-language-server/pull/4821)) by @jhrcek
+- Distinguish between wildcard expansion and traditional record syntax
+  ([#4819](https://github.com/haskell/haskell-language-server/pull/4819)) by @ozkutuk
+- Enable `crossModule` option by default
+  ([#4817](https://github.com/haskell/haskell-language-server/pull/4817)) by @Aster89
+- Re-introduce call to `makeDeltaAst` to fix #4731
+  ([#4814](https://github.com/haskell/haskell-language-server/pull/4814)) by @Aster89
+- Cursor aware record expansion
+  ([#4813](https://github.com/haskell/haskell-language-server/pull/4813)) by @vidit-od
+- Bump GHA versions
+  ([#4812](https://github.com/haskell/haskell-language-server/pull/4812)) by @fendor
+- Use macos-15-intel runners instead of arm macos-15
+  ([#4811](https://github.com/haskell/haskell-language-server/pull/4811)) by @fendor
+- Bump haskell-actions/setup from 2.8.2 to 2.10.3
+  ([#4809](https://github.com/haskell/haskell-language-server/pull/4809)) by @dependabot[bot]
+- Bump hlint action, move options to .hlint.yaml
+  ([#4808](https://github.com/haskell/haskell-language-server/pull/4808)) by @philderbeast
+- Add nix devShell for GHC 9.14
+  ([#4804](https://github.com/haskell/haskell-language-server/pull/4804)) by @jian-lin
+- Print type in one line
+  ([#4803](https://github.com/haskell/haskell-language-server/pull/4803)) by @jian-lin
+- Use Data.HashMap.lookupKey and Data.HashSet.lookupElement
+  ([#4802](https://github.com/haskell/haskell-language-server/pull/4802)) by @sjakobi
+- Mark 9.4.8 as deprecated
+  ([#4801](https://github.com/haskell/haskell-language-server/pull/4801)) by @fendor
+- Fix cache job on windows
+  ([#4800](https://github.com/haskell/haskell-language-server/pull/4800)) by @fendor
+- Fix GHC support table for 9.4.8
+  ([#4799](https://github.com/haskell/haskell-language-server/pull/4799)) by @fendor
+- More ghcup-metadata tweaks
+  ([#4798](https://github.com/haskell/haskell-language-server/pull/4798)) by @fendor
+- Bump haskell-actions/setup from 2.8.2 to 2.10.3 in /.github/actions/setup-build
+  ([#4796](https://github.com/haskell/haskell-language-server/pull/4796)) by @dependabot[bot]
+- Bump actions/cache from 3 to 5 in /.github/actions/setup-build
+  ([#4795](https://github.com/haskell/haskell-language-server/pull/4795)) by @dependabot[bot]
+- Bump actions/cache from 3 to 5
+  ([#4793](https://github.com/haskell/haskell-language-server/pull/4793)) by @dependabot[bot]
+- Improving Notes Plugin
+  ([#4791](https://github.com/haskell/haskell-language-server/pull/4791)) by @vidit-od
+- fix: git sub-repository files listing (#4788)
+  ([#4790](https://github.com/haskell/haskell-language-server/pull/4790)) by @blackheaven
+- Prepare release 2.13.0.0
+  ([#4785](https://github.com/haskell/haskell-language-server/pull/4785)) by @fendor
+- ghcide: Require unordered-containers >= 0.2.21
+  ([#4774](https://github.com/haskell/haskell-language-server/pull/4774)) by @sjakobi
+- Fix broken pipe during test and gracefully exit the server
+  ([#4701](https://github.com/haskell/haskell-language-server/pull/4701)) by @soulomoon
+- Change tracking of file types to language kinds
+  ([#4621](https://github.com/haskell/haskell-language-server/pull/4621)) by @VeryMilkyJoe
+- Decouple the session loader into reader and writer over the cache
+  ([#4445](https://github.com/haskell/haskell-language-server/pull/4445)) by @soulomoon
+
 ## 2.13.0.0
 
 - Bindists for GHC 9.14.1
@@ -7,7 +157,6 @@
 - Bindists for GHC 9.10.3
 - Bindists for GHC 9.8.4
 - Bindists for GHC 9.6.7
-- Last release supporting GHC 9.6
 
 Support for GHC 9.14.1 is preliminary, some plugins are not yet support but will
 be in the future.

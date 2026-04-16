@@ -67,6 +67,7 @@ data GHC
   | GHC984
   | GHC9103
   | GHC9122
+  | GHC9124
   | GHC9141
   deriving (Show, Eq, Ord, Enum, Bounded)
 
@@ -75,6 +76,7 @@ ghcVersion GHC967  = "9.6.7"
 ghcVersion GHC984  = "9.8.4"
 ghcVersion GHC9103 = "9.10.3"
 ghcVersion GHC9122 = "9.12.2"
+ghcVersion GHC9124 = "9.12.4"
 ghcVersion GHC9141 = "9.14.1"
 
 ghcVersionIdent :: GHC -> String

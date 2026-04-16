@@ -6,7 +6,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2026-02-24T00:00:00Z
+index-state: 2026-04-16T00:00:00Z
 
 tests: True
 test-show-details: direct
