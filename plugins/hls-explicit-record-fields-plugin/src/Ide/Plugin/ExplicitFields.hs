@@ -226,14 +226,14 @@ codeActionResolveProvider ideState pId ca uri uid = do
     mkWorkspaceEdit edits = WorkspaceEdit (Just $ Map.singleton uri edits) Nothing Nothing
 
 inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
-inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
+inlayHintDotdotProvider _ state _pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- getNormalizedFilePathE uri
   runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
-    pragma <- getFirstPragmaFast pId state nfp
-    (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
+    (pragmaInfo, pragmaPM) <- getFirstPragmaFast nfp
+    (crr@CRR {crCodeActions, crCodeActionResolve}, recordPM) <- useWithStaleFastE CollectRecords nfp
     let -- Get all records with dotdot in current nfp
         records = [ record
-                  | Just range <- [toCurrentRange pm visibleRange]
+                  | Just range <- [toCurrentRange recordPM visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
         -- Get the definition of each dotdot of record
@@ -241,16 +241,17 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
-    pure $ InL $ mapMaybe (mkInlayHint crr pragma pm) defnLocsList
+    pure $ InL $ mapMaybe (mkInlayHint crr pragmaInfo pragmaPM recordPM) defnLocsList
    where
-     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
-     mkInlayHint CRR {enabledExtensions, nameMap} pragma pm (defnLocs, record) =
+     mapTextEditRange pm (TextEdit r t) = (\r' -> TextEdit r' t) <$> toCurrentRange pm r
+     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> PositionMapping -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
+     mkInlayHint CRR {enabledExtensions, nameMap} pragma pragmaPM recordPM (defnLocs, record) =
        let range = recordInfoToDotDotRange record
-           textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
-                    <> maybeToList (pragmaEdit enabledExtensions pragma)
+           textEdits = mapMaybe (mapTextEditRange recordPM) (maybeToList (renderRecordInfoAsTextEdit nameMap record))
+             <> mapMaybe (mapTextEditRange pragmaPM) (maybeToList (pragmaEdit enabledExtensions pragma))
            names = renderRecordInfoAsDotdotLabelName record
        in do
-         currentEnd <- range >>= toCurrentPosition pm . _end
+         currentEnd <- range >>= toCurrentPosition recordPM . _end
          names' <- names
          defnLocs' <- defnLocs
          let excludeDotDot (Location _ (Range _ end)) = end /= currentEnd
