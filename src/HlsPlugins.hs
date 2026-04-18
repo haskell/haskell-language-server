@@ -131,6 +131,10 @@ import qualified Development.IDE.Plugin.CodeAction as Refactor
 import qualified Ide.Plugin.SemanticTokens         as SemanticTokens
 #endif
 
+#if hls_documentLink
+import qualified Ide.Plugin.DocumentLink           as DocumentLink
+#endif
+
 
 data Log = forall a. (Pretty a) => Log PluginId a
 
@@ -247,5 +251,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_notes
       let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_documentLink
+      let pId = "documentLink" in DocumentLink.descriptor (pluginRecorder pId) pId:
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
