@@ -52,17 +52,26 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
+-- | Compute where to insert the next pragma in @nfp@.
+--
+-- Blocks the calling thread via 'runAction'.
+-- NB: Prefer 'getFirstPragmaFast' when already inside an 'IdeAction' context.
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
   fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
   pure $ getNextPragmaInfo sessionDynFlags fileContents
 
+-- | Non-blocking variant of 'getFirstPragma' for use inside 'IdeAction'.
+--
+-- Returns the pragma insertion info together with a 'PositionMapping' that
+-- translates positions in the (possibly stale) file-contents snapshot to the
+-- current editor view.
 getFirstPragmaFast :: NormalizedFilePath -> ExceptT PluginError IdeAction (NextPragmaInfo, PositionMapping)
 getFirstPragmaFast nfp = do
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- useWithStaleFastE GhcSession nfp
   ((_, fileContents), pm) <- useWithStaleFastE GetFileContents nfp
-  pure (getNextPragmaInfo sessionDynFlags fileContents, pm)
+  pure (getNextPragmaInfo sessionDynFlags fileContents,  pm)
 
 -- Pre-declaration comments parser -----------------------------------------------------
 

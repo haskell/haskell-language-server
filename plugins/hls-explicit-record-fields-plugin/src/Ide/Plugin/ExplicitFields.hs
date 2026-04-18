@@ -243,7 +243,11 @@ inlayHintDotdotProvider _ state _pId InlayHintParams {_textDocument = TextDocume
     defnLocsList <- lift $ sequence locations
     pure $ InL $ mapMaybe (mkInlayHint crr pragmaInfo pragmaPM recordPM) defnLocsList
    where
+     mapTextEditRange :: PositionMapping -> TextEdit -> Maybe TextEdit
      mapTextEditRange pm (TextEdit r t) = (\r' -> TextEdit r' t) <$> toCurrentRange pm r
+     -- Two separate position mappings are required because 'GetFileContents' and
+     -- 'CollectRecords' can be at different stale generations: 'CollectRecords'
+     -- depends on 'TypeCheck', which is further downstream than 'GetFileContents'.
      mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> PositionMapping -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
      mkInlayHint CRR {enabledExtensions, nameMap} pragma pragmaPM recordPM (defnLocs, record) =
        let range = recordInfoToDotDotRange record
