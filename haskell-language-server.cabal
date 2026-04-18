@@ -1212,6 +1212,22 @@ library hls-document-link-plugin
     , transformers
     , vector
 
+test-suite hls-document-link-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(documentLink)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-document-link-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , ghcide
+    , filepath
+    , haskell-language-server:hls-document-link-plugin
+    , hls-test-utils             == 2.13.0.0
+    , text
+    , lens
+    , lsp-types
+
 -----------------------------
 -- change type signature plugin
 -----------------------------
