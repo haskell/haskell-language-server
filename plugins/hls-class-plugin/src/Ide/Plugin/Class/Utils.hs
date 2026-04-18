@@ -4,7 +4,7 @@ module Ide.Plugin.Class.Utils where
 
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Except
-import           Data.Char                        (isAlpha)
+import           Data.Char                        (isAlpha, isDigit)
 import           Data.List                        (isPrefixOf)
 import           Data.String                      (IsString)
 import qualified Data.Text                        as T
@@ -22,8 +22,20 @@ import           Language.LSP.Protocol.Types
 bindingPrefix :: IsString s => s
 bindingPrefix = "$c"
 
+-- | Superclasses generate bindings in typeclasses as well.
+--
+-- At the time of writing, this corresponds to the @mkSuperDictAuxOcc@ function
+-- in Occurrence.hs in GHC, see the subsection on @Making system names@ for the
+-- relevant bit. When determining which bindings to create placeholders for,
+-- these superclass-generated names need to be excluded.
+isSuperClassesBindingPrefix :: String -> Bool
+isSuperClassesBindingPrefix ('$' : 'c' : 'p' : n : _) | isDigit n = True
+isSuperClassesBindingPrefix _ = False
+
 isBindingName :: Name -> Bool
-isBindingName name = isPrefixOf bindingPrefix $ occNameString $ nameOccName name
+isBindingName name =
+  let bindingName = occNameString $ nameOccName name
+   in isPrefixOf bindingPrefix bindingName && not (isSuperClassesBindingPrefix bindingName)
 
 -- | Check if some `HasSrcSpan` value in the given range
 inRange :: Range -> SrcSpan -> Bool
