@@ -27,13 +27,17 @@ tests = testGroup "documentLink"
   , mkTest "links of primitive types" "Definition"
       [ (mkDocLink (mkRange 0 10 0 13) (Uri "GHC-Types.html#t:Int"))
       , (mkDocLink (mkRange 2 10 2 14) (Uri "GHC-Types.html#t:Bool"))
-      , (mkDocLink (mkRange 3 9 3 13) (Uri "GHC-Types.html#v:True"))
+      , (mkDocLink (mkRange 3 9  3 13) (Uri "GHC-Types.html#v:True"))
       ]
   , mkTest "links from modules" "ImportModule"
-      [ (mkDocLink (mkRange 0 19 0 27) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
-      , (mkDocLink (mkRange 0 29 0 38) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
-      , (mkDocLink (mkRange 1 5 1 13) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
-      , (mkDocLink (mkRange 1 15 1 24) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
+      [ (mkDocLink (mkRange 0 20 0 28) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
+      , (mkDocLink (mkRange 0 30 0 39) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
+      , (mkDocLink (mkRange 0 41 0 46) (Uri "GHC-Internal-Maybe.html#t:Maybe"))
+      , (mkDocLink (mkRange 0 47 0 51) (Uri "GHC-Internal-Maybe.html#v:Just"))
+      , (mkDocLink (mkRange 0 53 0 60) (Uri "GHC-Internal-Maybe.html#v:Nothing"))
+      , (mkDocLink (mkRange 1 20 1 26) (Uri "GHC-Internal-Data-Either.html#t:Either"))
+      , (mkDocLink (mkRange 2 5  2 13) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
+      , (mkDocLink (mkRange 2 15 2 24) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
       ]
   ]
 
