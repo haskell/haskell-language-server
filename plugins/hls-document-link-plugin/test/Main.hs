@@ -23,47 +23,23 @@ main = defaultTestRunner tests
 
 tests :: TestTree
 tests = testGroup "documentLink"
-  [ goldenTest "no document links" "NoDocumentLinks" [],
-    goldenTest "links of primitive types" "Definition"
-      [ (SimilarDocumentLink
-          (DocumentLink (Range (Position 0 10) (Position 0 13))
-                               (Just (Uri "GHC-Types.html#t:Int"))
-                               Nothing
-                               Nothing)),
-        (SimilarDocumentLink
-          (DocumentLink (Range (Position 2 10) (Position 2 14))
-                               (Just (Uri "GHC-Types.html#t:Bool"))
-                               Nothing
-                               Nothing)),
-        (SimilarDocumentLink
-          (DocumentLink (Range (Position 3 9) (Position 3 13))
-                               (Just (Uri "GHC-Types.html#v:True"))
-                               Nothing
-                               Nothing))
-      ],
-    goldenTest "links from modules" "ImportModule"
-      [ (SimilarDocumentLink
-          (DocumentLink (Range (Position 0 19) (Position 0 27))
-                               (Just (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
-                               Nothing
-                               Nothing)),
-        (SimilarDocumentLink
-          (DocumentLink (Range (Position 0 29) (Position 0 38))
-                               (Just (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
-                               Nothing
-                               Nothing)),
-        (SimilarDocumentLink
-          (DocumentLink (Range (Position 1 5) (Position 1 13))
-                               (Just (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
-                               Nothing
-                               Nothing)),
-        (SimilarDocumentLink
-          (DocumentLink (Range (Position 1 15) (Position 1 24))
-                               (Just (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
-                               Nothing
-                               Nothing))
+  [ goldenTest "no document links" "NoDocumentLinks" []
+  , goldenTest "links of primitive types" "Definition"
+      [ (mkDocLink (mkRange 0 10 0 13) (Uri "GHC-Types.html#t:Int"))
+      , (mkDocLink (mkRange 2 10 2 14) (Uri "GHC-Types.html#t:Bool"))
+      , (mkDocLink (mkRange 3 9 3 13) (Uri "GHC-Types.html#v:True"))
+      ]
+  , goldenTest "links from modules" "ImportModule"
+      [ (mkDocLink (mkRange 0 19 0 27) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
+      , (mkDocLink (mkRange 0 29 0 38) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
+      , (mkDocLink (mkRange 1 5 1 13) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
+      , (mkDocLink (mkRange 1 15 1 24) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
       ]
   ]
+
+mkDocLink :: Range -> Uri -> SimilarDocumentLink
+mkDocLink range uri =
+  SimilarDocumentLink (DocumentLink range (Just uri) Nothing Nothing)
 
 goldenTest :: TestName -> FilePath -> [SimilarDocumentLink] -> TestTree
 goldenTest title file expected = testCase title $ runWithDocumentLink filehs $ do
