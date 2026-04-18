@@ -22,6 +22,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Selection range](#selection-range)                 | `textDocument/selectionRange`                                                                     |
 | [Rename](#rename)                                   | `textDocument/rename`                                                                             |
 | [Semantic tokens](#semantic-tokens)                 | `textDocument/semanticTokens/full`                                                                |
+| [Document links](#document-links)                   | `textDocument/documentLink`                                                                       |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [plugin support page](./support/plugin-support.md) for details.
@@ -434,6 +435,13 @@ Provided by: `hls-semantic-tokens-plugin`
 
 Provides semantic tokens for each token in the source code to support semantic highlighting.
 
+## Document links
+
+Provided by: `hls-document-link-plugin`
+
+Extracts clickable links (e.g., URLs in Haddock comments) and makes them available as LSP document links.
+This allows editors to open the linked resource directly from the source code.
+
 ## Rewrite to overloaded record syntax
 
 Provided by: `hls-overloaded-record-dot-plugin`
@@ -454,7 +462,6 @@ Contributions welcome!
 | Jump to declaration    | Unclear if useful | `textDocument/declaration`                     |
 | Jump to implementation | Unclear if useful | `textDocument/implementation`                  |
 | Linked editing         | Unimplemented     | `textDocument/linkedEditingRange`              |
-| Document links         | Unimplemented     | `textDocument/documentLink`                    |
 | Document color         | Unclear if useful | `textDocument/documentColor`                   |
 | Color presentation     | Unclear if useful | `textDocument/colorPresentation`               |
 | Monikers               | Unclear if useful | `textDocument/moniker`                         |
