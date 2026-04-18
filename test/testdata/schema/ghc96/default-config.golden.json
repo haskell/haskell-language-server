@@ -38,6 +38,9 @@
             "codeActionsOn": true,
             "codeLensOn": true
         },
+        "documentLink": {
+            "globalOn": true
+        },
         "eval": {
             "codeActionsOn": true,
             "codeLensOn": true,
