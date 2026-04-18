@@ -23,13 +23,13 @@ main = defaultTestRunner tests
 
 tests :: TestTree
 tests = testGroup "documentLink"
-  [ goldenTest "no document links" "NoDocumentLinks" []
-  , goldenTest "links of primitive types" "Definition"
+  [ mkTest "no document links" "NoDocumentLinks" []
+  , mkTest "links of primitive types" "Definition"
       [ (mkDocLink (mkRange 0 10 0 13) (Uri "GHC-Types.html#t:Int"))
       , (mkDocLink (mkRange 2 10 2 14) (Uri "GHC-Types.html#t:Bool"))
       , (mkDocLink (mkRange 3 9 3 13) (Uri "GHC-Types.html#v:True"))
       ]
-  , goldenTest "links from modules" "ImportModule"
+  , mkTest "links from modules" "ImportModule"
       [ (mkDocLink (mkRange 0 19 0 27) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
       , (mkDocLink (mkRange 0 29 0 38) (Uri "GHC-Internal-Data-Maybe.html#v:fromMaybe"))
       , (mkDocLink (mkRange 1 5 1 13) (Uri "GHC-Internal-Data-Maybe.html#v:fromJust"))
@@ -41,8 +41,8 @@ mkDocLink :: Range -> Uri -> SimilarDocumentLink
 mkDocLink range uri =
   SimilarDocumentLink (DocumentLink range (Just uri) Nothing Nothing)
 
-goldenTest :: TestName -> FilePath -> [SimilarDocumentLink] -> TestTree
-goldenTest title file expected = testCase title $ runWithDocumentLink filehs $ do
+mkTest :: TestName -> FilePath -> [SimilarDocumentLink] -> TestTree
+mkTest title file expected = testCase title $ runWithDocumentLink filehs $ do
   adoc <- openDoc filehs "haskell"
   void waitForBuildQueue
   documentLink <- getDocumentLink adoc
