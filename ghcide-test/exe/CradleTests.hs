@@ -17,11 +17,14 @@ import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult (..))
+import           Development.IDE.Session         (CradleInfo (..),
+                                                  cradleInfoNotificationMethod)
 import           Development.IDE.Test            (expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   isReferenceReady,
-                                                  waitForAction)
+                                                  waitForAction,
+                                                  waitForCustomMessage)
 import           Development.IDE.Types.Location
 import           GHC.TypeLits                    (symbolVal)
 import           Ide.Types                       (Config (..),
@@ -34,6 +37,7 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
+import           System.Directory                (removeFile)
 import           System.FilePath
 import           Test.Hls                        (TestConfig (..), def,
                                                   runSessionWithTestConfig,
@@ -48,6 +52,7 @@ import           Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
+    ,testGroup "info" [explicitCradleInfo, implicitCradleInfo]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "regression.batch" batchLoadRegressionTests
@@ -107,6 +112,44 @@ cradleLoadedMessage = satisfy $ \case
 
 cradleLoadedMethod :: String
 cradleLoadedMethod = "ghcide/cradle/loaded"
+
+-- | Waits for the cradle information notification emitted for an opened file.
+waitForCradleInfo :: Session CradleInfo
+waitForCradleInfo =
+  waitForCustomMessage cradleInfoNotificationMethod $ \value ->
+    case A.fromJSON value of
+      A.Success cradleInfo -> Just cradleInfo
+      A.Error _            -> Nothing
+
+-- | Checks that explicit cradle configuration is reported to clients.
+explicitCradleInfo :: TestTree
+explicitCradleInfo =
+  testCase "explicit cradle info" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    let mainPath = dir </> "a/src/Main.hs"
+    _ <- openDoc mainPath "haskell"
+    cradleInfo <- waitForCradleInfo
+    liftIO $ cradleInfoType cradleInfo @?= "cabal"
+    liftIO $ cradleInfoInferred cradleInfo @?= False
+    liftIO $ assertBool "file path should match the opened file" $
+      equalFilePath (cradleInfoFile cradleInfo) mainPath
+    liftIO $ assertBool "root dir should match the workspace fixture" $
+      equalFilePath (cradleInfoRootDir cradleInfo) dir
+
+-- | Checks that implicit cradle inference is reported to clients.
+implicitCradleInfo :: TestTree
+implicitCradleInfo =
+  testCase "implicit cradle info" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    let hieYamlPath = dir </> "hie.yaml"
+        mainPath = dir </> "a/src/Main.hs"
+    liftIO $ removeFile hieYamlPath
+    _ <- openDoc mainPath "haskell"
+    cradleInfo <- waitForCradleInfo
+    liftIO $ cradleInfoType cradleInfo @?= "cabal"
+    liftIO $ cradleInfoInferred cradleInfo @?= True
+    liftIO $ assertBool "file path should match the opened file" $
+      equalFilePath (cradleInfoFile cradleInfo) mainPath
+    liftIO $ assertBool "root dir should match the workspace fixture" $
+      equalFilePath (cradleInfoRootDir cradleInfo) dir
 
 ignoreFatalWarning :: TestTree
 ignoreFatalWarning = testCase "ignore-fatal-warning" $ runWithExtraFiles "ignore-fatal" $ \dir -> do

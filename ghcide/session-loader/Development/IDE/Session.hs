@@ -6,6 +6,8 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
+  ,CradleInfo(..)
+  ,cradleInfoNotificationMethod
   ,loadSessionWithOptions
   ,getInitialGhcLibDirDefault
   ,getHieDbLoc
@@ -695,6 +697,60 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
       let absFile = toAbsolutePath file
       absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
 
+data CradleInfo = CradleInfo
+  { cradleInfoFile      :: FilePath
+  , cradleInfoRootDir   :: FilePath
+  , cradleInfoType      :: T.Text
+  , cradleInfoInferred  :: Bool
+  }
+
+instance ToJSON CradleInfo where
+  toJSON (CradleInfo file rootDir cradleType inferred) =
+    object
+      [ "file" .= file
+      , "rootDir" .= rootDir
+      , "cradleType" .= cradleType
+      , "inferred" .= inferred
+      ]
+
+instance FromJSON CradleInfo where
+  parseJSON = withObject "CradleInfo" $ \obj ->
+    CradleInfo
+      <$> obj .: "file"
+      <*> obj .: "rootDir"
+      <*> obj .: "cradleType"
+      <*> obj .: "inferred"
+
+-- | Names the custom notification that reports the loaded cradle to clients.
+cradleInfoNotificationMethod :: T.Text
+cradleInfoNotificationMethod = "ghcide/cradle/info"
+
+-- | Builds the small cradle summary that editors can display to users.
+mkCradleInfo :: FilePath -> Maybe FilePath -> Cradle a -> CradleInfo
+mkCradleInfo file hieYaml cradle =
+  CradleInfo
+    { cradleInfoFile = file
+    , cradleInfoRootDir = cradleRootDir cradle
+    , cradleInfoType = cradleTypeLabel cradle
+    , cradleInfoInferred = isNothing hieYaml
+    }
+
+-- | Converts the cradle action into a stable, editor-friendly label.
+cradleTypeLabel :: Cradle a -> T.Text
+cradleTypeLabel cradle = case actionName (cradleOptsProg cradle) of
+  Cabal   -> "cabal"
+  Stack   -> "stack"
+  Direct  -> "direct"
+  Default -> "default"
+  _       -> "bios"
+
+-- | Sends the current cradle summary to interested LSP clients when available.
+sendCradleInfoNotification :: Maybe (LanguageContextEnv Config) -> CradleInfo -> IO ()
+sendCradleInfoNotification lspEnv cradleInfo =
+  for_ lspEnv $ \env ->
+    void $ runLspT env $
+      sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/info")) (toJSON cradleInfo)
+
 -- | Given a file, this function will return the HscEnv and the dependencies
 -- it would look up the cache first, if the cache is not available, it would
 -- submit a request to the getOptionsLoop to get the options for the file
@@ -1008,9 +1064,12 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
   loadingOptions <- asks sessionLoadingOptions
   cradle <- liftIO $ loadCradle loadingOptions recorder hieYaml rootDir
 
+  -- Expose the loaded cradle so clients can surface it in their UI.
+  lspEnv <- asks sessionLspContext
+  liftIO $ sendCradleInfoNotification lspEnv (mkCradleInfo cfp hieYaml cradle)
+
   -- Test notification for better observability.
   IdeTesting isTesting <- asks (optTesting . sessionIdeOptions)
-  lspEnv <- asks sessionLspContext
   when isTesting $ mRunLspT lspEnv $
     sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
 
