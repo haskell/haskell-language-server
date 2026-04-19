@@ -2,19 +2,19 @@
 
 module Development.IDE.Plugin.Completions.Context where
 
-import           Control.DeepSeq                 (NFData (..), rwhnf)
-import           Data.Hashable                   (Hashable)
-import qualified Data.IntervalMap.FingerTree     as IM
-import           Data.List                       (maximumBy)
-import           Data.Maybe                      (maybeToList)
-import           Data.Ord                        (Down (..), comparing)
-import qualified Data.Text                       as T
+import           Control.DeepSeq                      (NFData (..), rwhnf)
+import           Data.Hashable                        (Hashable)
+import qualified Data.IntervalMap.FingerTree          as IM
+import           Data.List                            (maximumBy)
+import           Data.Maybe                           (maybeToList)
+import           Data.Ord                             (Down (..), comparing)
+import qualified Data.Text                            as T
 import           Development.IDE
+import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
-import           GHC.Generics                    (Generic)
-import           Ide.Plugin.RangeMap             (RangeMap (..), fromList')
-import Development.IDE.GHC.Compat.Util (bagToList)
-import Development.IDE.Core.PositionMapping
+import           Development.IDE.GHC.Compat.Util      (bagToList)
+import           GHC.Generics                         (Generic)
+import           Ide.Plugin.RangeMap                  (RangeMap (..), fromList')
 
 -- | A context of a declaration in the program
 -- e.g. is the declaration a type declaration or a value declaration
@@ -107,14 +107,15 @@ getContextTree pm = ContextTree $ fromList' entries
     declEntry (L (locA -> ss) decl) = case srcSpanToRange ss of
       Nothing -> []
       Just range -> case decl of
-        SigD {}              -> [(range, TypeContext)]
-        ValD {}              -> [(range, ValueContext)]
+        SigD {}                -> [(range, TypeContext)]
+        ValD {}                -> [(range, ValueContext)]
         TyClD _ cd@ClassDecl{} -> (range, TypeContext) : classEntries cd
-        TyClD {}             -> [(range, TypeContext)]   -- DataDecl, SynDecl, FamilyDecl
-        InstD {}             -> [(range, ValueContext)]
-        DerivD {}            -> [(range, TypeContext)]
-        ForD {}              -> [(range, ValueContext)]
-        _                    -> [(range, DefaultContext)]  -- DefD, WarningD, AnnD, RuleD, SpliceD, DocD, KindSigD
+        TyClD {}               -> [(range, TypeContext)]   -- DataDecl, SynDecl, FamilyDecl
+        InstD {}               -> [(range, ValueContext)]
+        DerivD {}              -> [(range, TypeContext)]
+        ForD {}                -> [(range, ValueContext)]
+        SpliceD {}             -> [(range, TopContext)]
+        _                      -> [(range, DefaultContext)]  -- DefD, WarningD, AnnD, RuleD, DocD, KindSigD
 
     -- One level into class bodies: method sigs and default implementations
     classEntries :: TyClDecl GhcPs -> [(Range, Context)]
@@ -138,5 +139,5 @@ getContext (ContextTree (RangeMap im)) pos =
       xs -> snd $ maximumBy (comparing (\(iv, _) -> (IM.low iv, Down (IM.high iv)))) xs
   where
     pointInterval = case pos of
-      PositionExact p -> IM.Interval p p
+      PositionExact p   -> IM.Interval p p
       PositionRange l u -> IM.Interval l u

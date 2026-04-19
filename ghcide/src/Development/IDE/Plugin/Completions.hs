@@ -8,55 +8,57 @@ module Development.IDE.Plugin.Completions
     , ghcideCompletionsPluginPriority
     ) where
 
-import           Control.Concurrent.Async                 (concurrently)
-import           Control.Concurrent.STM.Stats             (readTVarIO)
-import           Control.Lens                             ((&), (.~), (?~))
+import           Control.Concurrent.Async                   (concurrently)
+import           Control.Concurrent.STM.Stats               (readTVarIO)
+import           Control.Lens                               ((&), (.~), (?~))
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except               (ExceptT (ExceptT),
-                                                           withExceptT)
-import qualified Data.HashMap.Strict                      as Map
-import qualified Data.HashSet                             as Set
+import           Control.Monad.Trans.Except                 (ExceptT (ExceptT),
+                                                             withExceptT)
+import qualified Data.HashMap.Strict                        as Map
+import qualified Data.HashSet                               as Set
 import           Data.Maybe
-import qualified Data.Text                                as T
+import qualified Data.Text                                  as T
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileStore           (getUriContents)
+import           Development.IDE.Core.FileStore             (getUriContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service             hiding (Log, LogShake)
-import           Development.IDE.Core.Shake               hiding (Log,
-                                                           knownTargets)
-import qualified Development.IDE.Core.Shake               as Shake
+import           Development.IDE.Core.Service               hiding (Log,
+                                                             LogShake)
+import           Development.IDE.Core.Shake                 hiding (Log,
+                                                             knownTargets)
+import qualified Development.IDE.Core.Shake                 as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
+import           Development.IDE.Plugin.Completions.Context
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports, envVisibleModuleNames),
-                                                           hscEnv)
-import qualified Development.IDE.Types.KnownTargets       as KT
+import           Development.IDE.Types.HscEnvEq             (HscEnvEq (envPackageExports, envVisibleModuleNames),
+                                                             hscEnv)
+import qualified Development.IDE.Types.KnownTargets         as KT
 import           Development.IDE.Types.Location
-import           Ide.Logger                               (Pretty (pretty),
-                                                           Recorder,
-                                                           WithPriority,
-                                                           cmapWithPrio)
+import           Ide.Logger                                 (Pretty (pretty),
+                                                             Recorder,
+                                                             WithPriority,
+                                                             cmapWithPrio)
 import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens               as L
+import qualified Language.LSP.Protocol.Lens                 as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Numeric.Natural
-import           Prelude                                  hiding (mod)
-import           Text.Fuzzy.Parallel                      (Scored (..))
+import           Prelude                                    hiding (mod)
+import           Text.Fuzzy.Parallel                        (Scored (..))
 
-import           Development.IDE.Core.Rules               (usePropertyAction)
+import           Development.IDE.Core.Rules                 (usePropertyAction)
 
-import qualified Ide.Plugin.Config                        as Config
+import qualified Ide.Plugin.Config                          as Config
 
-import qualified GHC.LanguageExtensions                   as LangExt
+import qualified GHC.LanguageExtensions                     as LangExt
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -89,6 +91,9 @@ produceCompletions recorder = do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
             _ -> return ([], Nothing)
+    define (cmapWithPrio LogShake recorder) $ \GetContextTree file -> do
+        mbPm <- useWithStale GetParsedModule file
+        return ([], getContextTree . fst <$> mbPm)
     define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
         -- synthesizing a fake module with an empty body from the buffer
@@ -170,7 +175,7 @@ getCompletionsLSP ide plId
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
-            pm <- useWithStaleFast GetParsedModule npath
+            ctxTree <- useWithStaleFast GetContextTree npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
             let localModules = maybe [] (Map.keys . targetMap) knownTargets
@@ -194,9 +199,9 @@ getCompletionsLSP ide plId
                 ->  useWithStaleFast GetHieAst npath
               _ -> return Nothing
 
-            pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
+            pure (opts, fmap (,ctxTree,binds) compls, moduleExports, astres)
         case compls of
-          Just (cci', parsedMod, bindMap) -> do
+          Just (cci', ctxTree, bindMap) -> do
             let pfix = getCompletionPrefixFromRope position cnts
             case (pfix, completionContext) of
               (PosPrefixInfo _ "" _ _, Just CompletionContext { _triggerCharacter = Just "."})
@@ -206,7 +211,7 @@ getCompletionsLSP ide plId
                     plugins = idePlugins $ shakeExtras ide
                 config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
-                let allCompletions = getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
+                let allCompletions = getCompletions plugins ideOpts cci' ctxTree astres bindMap pfix clientCaps config moduleExports uri
                 pure $ InL (orderedCompletions allCompletions)
           _ -> return (InL [])
       _ -> return (InL [])
