@@ -29,6 +29,7 @@ import           Development.IDE.Core.PluginUtils     (runIdeActionE,
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
 import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        RealSrcSpan,
+                                                       generatedNodeInfo,
                                                        getSourceNodeIds,
                                                        isAnnotationInNodeInfo,
                                                        mkRealSrcLoc,
@@ -295,11 +296,19 @@ getNodeNameAndTypes hieKind hieAst =
           Nothing -> Nothing
           Just name ->
             let mTypeOfName = identType identifierDetails
+                -- types from the source NodeInfo
                 typesOfNode = case sourceNodeInfo hieAst of
                   Nothing       -> []
                   Just nodeInfo -> nodeType nodeInfo
+                -- fall back to generated NodeInfo when source has no types
+                typesOfGeneratedNode = case generatedNodeInfo hieAst of
+                  Nothing       -> []
+                  Just nodeInfo -> nodeType nodeInfo
                 allTypes = case mTypeOfName of
-                  Nothing -> typesOfNode
+                  Nothing ->
+                    case typesOfNode of
+                      [] -> typesOfGeneratedNode
+                      ts -> ts
                   -- (the last?) one type of 'typesOfNode' may (always?) be the same as 'typeOfName'
                   -- To avoid generating two identical signature helps, we do a filtering here
                   -- This is similar to 'dropEnd1' in Development.IDE.Spans.AtPoint.atPoint
