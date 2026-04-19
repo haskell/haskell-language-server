@@ -175,6 +175,7 @@ library
     Development.IDE.Plugin
     Development.IDE.Plugin.Completions
     Development.IDE.Plugin.Completions.Context
+    Development.IDE.Plugin.Completions.Snippet
     Development.IDE.Plugin.Completions.Types
     Development.IDE.Plugin.Completions.Logic
     Development.IDE.Plugin.HLS
