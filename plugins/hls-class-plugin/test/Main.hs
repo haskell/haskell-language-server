@@ -72,6 +72,8 @@ codeActionTests = testGroup
         goldenWithClass "Creates a placeholder for '<>'" "T8" "diamond" $
       getActionByTitle "Add placeholders for '<>'"
       ]
+  , goldenWithClass "Creates a placeholder for type classes with super classes" "T9" "" $
+      getActionByTitle "Add placeholders for all missing methods"
   , goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
       getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $
