@@ -96,6 +96,7 @@ data Context = TypeContext
              | ImportListContext String -- ^ import list context with module name
              | ImportHidingContext String -- ^ import hiding context with module name
              | ExportContext -- ^ List of exported identifiers from the current module
+             | TopContext -- Top-level context
   deriving (Show, Eq)
 
 -- | Generates a map of where the context is a type and where the context is a value
@@ -729,9 +730,6 @@ getCompletions
           (isQual, CompletionItem{_label,_detail}) -> do
             let isLocal = maybe False (":" `T.isPrefixOf`) _detail
             (Down isQual, Down score, Down isLocal, _label, _detail)
-
-
-
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =
