@@ -24,10 +24,10 @@ bindingPrefix = "$c"
 
 -- | Superclasses generate bindings in typeclasses as well.
 --
--- At the time of writing, this corresponds to the @mkSuperDictAuxOcc@ function
--- in Occurrence.hs in GHC, see the subsection on @Making system names@ for the
--- relevant bit. When determining which bindings to create placeholders for,
--- these superclass-generated names need to be excluded.
+-- When determining which bindings to create placeholders for, these
+-- superclass-generated names need to be excluded.
+-- TODO: This function should be replaced by an equivalent one from GHC:
+--   https://gitlab.haskell.org/ghc/ghc/-/issues/27195
 isSuperClassesBindingPrefix :: String -> Bool
 isSuperClassesBindingPrefix ('$' : 'c' : 'p' : n : _) | isDigit n = True
 isSuperClassesBindingPrefix _ = False
