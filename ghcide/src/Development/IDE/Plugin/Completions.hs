@@ -97,9 +97,9 @@ produceCompletions recorder = do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
             _ -> return ([], Nothing)
-    define (cmapWithPrio LogShake recorder) $ \GetContextTree file -> do
+    define (cmapWithPrio LogShake recorder) $ \GetContextMap file -> do
         mbPm <- useWithStale GetParsedModule file
-        return ([], getContextTree . fst <$> mbPm)
+        return ([], getContextMap . fst <$> mbPm)
     define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
         -- synthesizing a fake module with an empty body from the buffer
@@ -181,7 +181,7 @@ getCompletionsLSP recorder ide plId
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
-            ctxTree <- useWithStaleFast GetContextTree npath
+            ctxTree <- useWithStaleFast GetContextMap npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
             let localModules = maybe [] (Map.keys . targetMap) knownTargets
