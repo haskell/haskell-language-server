@@ -42,9 +42,11 @@ import           Development.IDE.Types.HscEnvEq             (HscEnvEq (envPackag
 import qualified Development.IDE.Types.KnownTargets         as KT
 import           Development.IDE.Types.Location
 import           Ide.Logger                                 (Pretty (pretty),
+                                                             Priority (..),
                                                              Recorder,
                                                              WithPriority,
-                                                             cmapWithPrio)
+                                                             cmapWithPrio,
+                                                             logWith)
 import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                 as L
@@ -58,13 +60,18 @@ import           Development.IDE.Core.Rules                 (usePropertyAction)
 
 import qualified Ide.Plugin.Config                          as Config
 
+import qualified Development.IDE.Plugin.Completions.Context as Context
 import qualified GHC.LanguageExtensions                     as LangExt
 
-data Log = LogShake Shake.Log deriving Show
+data Log
+  = LogShake Shake.Log
+  | LogDetectedContext Context
+  deriving Show
 
 instance Pretty Log where
   pretty = \case
     LogShake msg -> pretty msg
+    LogDetectedContext context -> "Completion context detected: " <> pretty context
 
 ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority
@@ -72,7 +79,7 @@ ghcideCompletionsPluginPriority = defaultPluginPriority
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = produceCompletions recorder
-  , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
+  , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion (getCompletionsLSP recorder)
                      <> mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
@@ -161,8 +168,8 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
       (_,res) -> res
 
 -- | Generate code actions.
-getCompletionsLSP :: PluginMethodHandler IdeState Method_TextDocumentCompletion
-getCompletionsLSP ide plId
+getCompletionsLSP :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCompletion
+getCompletionsLSP recorder ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
                   ,_context=completionContext} = ExceptT $ do
@@ -209,9 +216,11 @@ getCompletionsLSP ide plId
               (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
+                    context = deduceContext ctxTree (cursorPos pfix)
                 config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
-                let allCompletions = getCompletions plugins ideOpts cci' ctxTree astres bindMap pfix clientCaps config moduleExports uri
+                let allCompletions = getCompletions plugins ideOpts cci' context astres bindMap pfix clientCaps config moduleExports uri
+                logWith recorder Debug $ LogDetectedContext context
                 pure $ InL (orderedCompletions allCompletions)
           _ -> return (InL [])
       _ -> return (InL [])

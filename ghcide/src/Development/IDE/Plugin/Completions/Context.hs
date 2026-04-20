@@ -39,6 +39,18 @@ data Context
     DefaultContext
   deriving (Show, Eq)
 
+instance Pretty Context where
+  pretty = \case
+    TypeContext -> "type context"
+    ValueContext -> "value context"
+    ModuleContext mod -> "module context " <> pretty mod
+    ImportContext mod -> "import context " <> pretty mod
+    ImportListContext mod -> "import explicit context " <> pretty mod
+    ImportHidingContext mod -> "import hiding context " <> pretty mod
+    ExportContext -> "export context"
+    TopContext -> "top context"
+    DefaultContext -> "unknown context"
+
 data GetContextTree = GetContextTree
   deriving (Eq, Show, Generic)
 instance Hashable GetContextTree
