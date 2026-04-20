@@ -47,7 +47,7 @@ import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Context (Context (..),
-                                                             ContextTree)
+                                                             ContextMap)
 import qualified Development.IDE.Plugin.Completions.Context as Context
 import           Development.IDE.Plugin.Completions.Snippet
 import           Development.IDE.Plugin.Completions.Types
@@ -654,7 +654,7 @@ getCompletions
             (Down isQual, Down score, Down isLocal, _label, _detail)
 
 -- If we have a context tree, use it to determine which completion to show.
-deduceContext :: Maybe (ContextTree, PositionMapping) -> Position -> Context
+deduceContext :: Maybe (ContextMap, PositionMapping) -> Position -> Context
 deduceContext maybeCtx pos = case maybeCtx of
   Nothing -> DefaultContext
   Just (ct, pmapping) ->
