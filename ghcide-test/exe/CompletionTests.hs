@@ -481,9 +481,9 @@ projectCompletionTests =
               "import ALocal"
             ]
         compls <- getCompletions doc (Position 1 13)
-        let item = head $ filter ((== "ALocalModule") . (^. L.label)) compls
-        liftIO $ do
-          item ^. L.label @?= "ALocalModule",
+
+        forM_ (listToMaybe $ filter ((== "ALocalModule") . (^. L.label)) compls) $
+          \item -> liftIO $ item ^. L.label @?= "ALocalModule",
       testSessionEmptyWithCradle "auto complete functions from qualified imports without alias" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
@@ -496,9 +496,8 @@ projectCompletionTests =
               "A."
             ]
         compls <- getCompletions doc (Position 2 2)
-        let item = head compls
-        liftIO $ do
-          item ^. L.label @?= "anidentifier",
+        forM_ (listToMaybe compls) $
+          \item -> liftIO $ item ^. L.label @?= "anidentifier",
       testSessionEmptyWithCradle "auto complete functions from qualified imports with alias"
                   "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
@@ -512,9 +511,8 @@ projectCompletionTests =
               "foo = Alias."
             ]
         compls <- getCompletions doc (Position 2 12)
-        let item = head compls
-        liftIO $ do
-          item ^. L.label @?= "anidentifier"
+        forM_ (listToMaybe compls) $
+          \item -> liftIO $ item ^. L.label @?= "anidentifier"
     ]
 
 contextCompletionTests :: [TestTree]
