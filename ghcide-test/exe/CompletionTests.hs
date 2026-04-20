@@ -43,6 +43,7 @@ tests
     , testGroup "package" packageCompletionTests
     , testGroup "project" projectCompletionTests
     , testGroup "other" otherCompletionTests
+    , testGroup "context" contextCompletionTests
     , testGroup "doc" completionDocTests
     ]
 
@@ -515,6 +516,99 @@ projectCompletionTests =
         liftIO $ do
           item ^. L.label @?= "anidentifier"
     ]
+
+contextCompletionTests :: [TestTree]
+contextCompletionTests =
+  [ testSessionSingleFile "import snippets at top level" "A.hs"
+      (T.unlines ["module A where", "imp"]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      let importSnippets = [ c | c@CompletionItem{..} <- compls
+                           , _kind == Just CompletionItemKind_Snippet
+                           , _label == "import" ]
+      liftIO $ length importSnippets @?= 4
+
+  , completionTest
+      "function snippet at top level"
+      [ "module A where"
+      , "foo = ()"
+      , "fun"
+      ]
+      (Position 2 3)
+      [("function", CompletionItemKind_Snippet,
+        "${1:identifier} :: ${2:type}\n${1:identifier} = ${3:body}",
+        False, False, Nothing)]
+
+  , completionTest
+      "class snippet at top level"
+      [ "module A where"
+      , "foo = ()"
+      , "cla"
+      ]
+      (Position 2 3)
+      [("class", CompletionItemKind_Snippet, "class ${1:name} where",
+        False, False, Nothing)]
+
+  , completionTest
+      "instance snippet at top level"
+      ["module A where", "foo = ()", "inst"]
+      (Position 2 4)
+      [("instance", CompletionItemKind_Snippet, "instance ${1:name} where",
+        False, False, Nothing)]
+
+  , testSessionSingleFile "no snippets in value binding" "A.hs"
+      (T.unlines ["module A where", "foo = imp"]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 9)
+      let snippets = [ c | c@CompletionItem{..} <- compls
+                     , _kind == Just CompletionItemKind_Snippet
+                     , _label == "import" ]
+      liftIO $ snippets @?= []
+
+  , testSessionSingleFile "no snippets in instance body" "A.hs"
+      (T.unlines
+        [ "module A where"
+        , "class Foo a where"
+        , "  bar :: a -> ()"
+        , "instance Foo Int where"
+        , "  bar _ = imp"
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 4 13)
+      let snippets = [ c | c@CompletionItem{..} <- compls
+                     , _kind == Just CompletionItemKind_Snippet
+                     , _label == "import" ]
+      liftIO $ snippets @?= []
+
+  , testSessionSingleFile "top level excludes regular completions" "A.hs"
+      (T.unlines ["module A where", "hea"]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      let headCompls = [ c | c@CompletionItem{..} <- compls, _label == "head" ]
+      liftIO $ headCompls @?= []
+
+  , testSessionSingleFile "unmatched prefix at top level returns empty" "A.hs"
+      (T.unlines ["module A where", "xyz"]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      liftIO $ compls @?= []
+
+  , completionTest
+      "type context filters out value completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "g :: Xxx"
+      ]
+      (Position 4 8)
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+  ]
 
 completionDocTests :: [TestTree]
 completionDocTests =
