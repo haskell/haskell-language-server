@@ -9,6 +9,7 @@ module Development.IDE.Plugin.Completions.Logic (
 , cacheDataProducer
 , localCompletionsForParsedModule
 , getCompletions
+, deduceContext
 , fromIdentInfo
 , getCompletionPrefix
 , getCompletionPrefixFromRope
@@ -451,7 +452,7 @@ getCompletions
     :: IdePlugins a
     -> IdeOptions
     -> CachedCompletions
-    -> Maybe (ContextTree, PositionMapping)
+    -> Context
     -> Maybe (HieAstResult, PositionMapping)
     -> (Bindings, PositionMapping)
     -> PosPrefixInfo
@@ -464,7 +465,7 @@ getCompletions
     plugins
     ideOpts
     CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-    maybe_ctx
+    context
     maybe_ast_res
     (localBindings, bmapping)
     prefixInfo@(PosPrefixInfo { fullLine, prefixScope, prefixText })
@@ -474,15 +475,15 @@ getCompletions
     uri
     -- ------------------------------------------------------------------------
     -- IMPORT MODULENAME (NAM|)
-    | ImportListContext moduleName <- maybeContext
+    | ImportListContext moduleName <- context
     = moduleImportListCompletions moduleName
 
-    | ImportHidingContext moduleName <- maybeContext
+    | ImportHidingContext moduleName <- context
     = moduleImportListCompletions moduleName
 
     -- ------------------------------------------------------------------------
     -- IMPORT MODULENAM|
-    | ImportContext _ <- maybeContext
+    | ImportContext _ <- context
     = filtImportCompls
 
     -- ------------------------------------------------------------------------
@@ -493,8 +494,8 @@ getCompletions
     = []
 
     -- ------------------------------------------------------------------------
-    | TopContext <- maybeContext
-    = filtTopContextCompls
+    | TopContext <- context
+    = fmap (fmap (toggleSnippets caps config)) filtTopContextCompls
 
     -- ------------------------------------------------------------------------
     | otherwise =
@@ -533,15 +534,6 @@ getCompletions
           $ Fuzzy.simpleFilter chunkSize maxC fullPrefix
           $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
             allModNamesAsNS
-
-      -- If we have a context tree, use it to determine which completion to show.
-      maybeContext :: Context
-      maybeContext = case maybe_ctx of
-        Nothing -> DefaultContext
-        Just (ct, pmapping) ->
-          let PositionMapping pDelta = pmapping
-              position' = fromDelta pDelta pos
-          in Context.getContext ct position'
 
       filtCompls :: [Scored (Bool, CompItem)]
       filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls (label . snd)
@@ -583,7 +575,7 @@ getCompletions
                 })
 
           -- completions specific to the current context
-          ctxCompls' = case maybeContext of
+          ctxCompls' = case context of
                         TypeContext    -> filter (isTypeCompl . snd) compls
                         ValueContext   -> filter (not . isTypeCompl . snd) compls
                         DefaultContext -> compls
@@ -660,6 +652,15 @@ getCompletions
           (isQual, CompletionItem{_label,_detail}) -> do
             let isLocal = maybe False (":" `T.isPrefixOf`) _detail
             (Down isQual, Down score, Down isLocal, _label, _detail)
+
+-- If we have a context tree, use it to determine which completion to show.
+deduceContext :: Maybe (ContextTree, PositionMapping) -> Position -> Context
+deduceContext maybeCtx pos = case maybeCtx of
+  Nothing -> DefaultContext
+  Just (ct, pmapping) ->
+    let PositionMapping pDelta = pmapping
+        position' = fromDelta pDelta pos
+    in Context.getContext ct position'
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =
