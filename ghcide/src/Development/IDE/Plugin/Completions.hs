@@ -60,7 +60,6 @@ import           Development.IDE.Core.Rules                 (usePropertyAction)
 
 import qualified Ide.Plugin.Config                          as Config
 
-import qualified Development.IDE.Plugin.Completions.Context as Context
 import qualified GHC.LanguageExtensions                     as LangExt
 
 data Log

@@ -22,8 +22,6 @@ import           Ide.Plugin.RangeMap                  (RangeMap (..), fromList')
 data Context
   = TypeContext
   | ValueContext
-  | -- | module context with module name
-    ModuleContext T.Text
   | -- | import context with module name
     ImportContext T.Text
   | -- | import list context with module name
@@ -39,11 +37,15 @@ data Context
     DefaultContext
   deriving (Show, Eq)
 
+data ContextGroup
+    = ModuleGroup
+    | ImportGroup
+    | DeclGroup
+
 instance Pretty Context where
   pretty = \case
     TypeContext -> "type context"
     ValueContext -> "value context"
-    ModuleContext mod -> "module context " <> pretty mod
     ImportContext mod -> "import context " <> pretty mod
     ImportListContext mod -> "import explicit context " <> pretty mod
     ImportHidingContext mod -> "import hiding context " <> pretty mod
@@ -77,17 +79,11 @@ instance NFData ContextTree where rnf = rwhnf
 getContextTree :: ParsedModule -> ContextTree
 getContextTree pm = ContextTree $ fromList' entries
   where
-    HsModule{hsmodName, hsmodExports, hsmodImports, hsmodDecls} =
+    HsModule{hsmodExports, hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
 
     entries :: [(Range, Context)]
-    entries = moduleEntry ++ exportEntry ++ importEntries ++ declEntries
-
-    -- Module name keyword span -> ModuleContext
-    moduleEntry = case hsmodName of
-      Just (L (locA -> ss) modName) ->
-        maybeToList $ (, ModuleContext (T.pack $ moduleNameString modName)) <$> srcSpanToRange ss
-      Nothing -> []
+    entries = exportEntry ++ importEntries ++ declEntries
 
     -- Export list -> ExportContext
     exportEntry = case hsmodExports of
