@@ -381,6 +381,21 @@ main =
             Nothing,
             Nothing,
             Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: forall a b c. a -> b -> c" Nothing (Just [ParameterInformation (InR (19, 20)) Nothing, ParameterInformation (InR (24, 25)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0))
+          ],
+        -- Prevents https://github.com/haskell/haskell-language-server/issues/4769
+        mkTest
+          "inside do block"
+          [__i|
+            f :: Int -> Int -> Int
+            f = _
+            test :: IO ()
+            test = do
+              x <- pure 1
+              print (f x 2)
+                       ^ ^
+          |]
+          [ Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5, 8)) Nothing, ParameterInformation (InR (12, 15)) Nothing]) (Just (InL 0))] (Just 0) (Just (InL 0)),
+            Just $ SimilarSignatureHelp $ SignatureHelp [SignatureInformation "f :: Int -> Int -> Int" Nothing (Just [ParameterInformation (InR (5, 8)) Nothing, ParameterInformation (InR (12, 15)) Nothing]) (Just (InL 1))] (Just 0) (Just (InL 1))
           ]
       ]
 
