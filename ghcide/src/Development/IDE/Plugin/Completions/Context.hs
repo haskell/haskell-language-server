@@ -12,11 +12,9 @@ module Development.IDE.Plugin.Completions.Context
   ) where
 
 import           Control.DeepSeq                      (NFData (..), rwhnf)
-import           Control.Monad                        (join)
 import           Data.Hashable                        (Hashable)
-import           Data.List                            (maximumBy, singleton)
-import           Data.Maybe                           (catMaybes, mapMaybe,
-                                                       maybeToList)
+import           Data.List                            (maximumBy)
+import           Data.Maybe                           (catMaybes, mapMaybe)
 import           Data.Ord                             (Down (..), comparing)
 import qualified Data.Text                            as T
 import           Development.IDE
@@ -38,10 +36,11 @@ data Context
     ImportListContext T.Text
   | -- | import hiding context with module name.
     ImportHidingContext T.Text
-  | -- | List of exported identifiers from the current module.
-    ExportContext
   | -- | Top-level context, with context groups indicating what would be valid
-    -- in that top-level context. NB: An empty list denotes _all_ contexts
+    -- in that top-level context.
+    --
+    -- NB: An empty list denotes _all_ contexts, this occurs in splices which
+    -- overlap with the top-level declaration snippets while typing.
     TopContext [ContextGroup]
   | -- | Unsupported context, a placeholder context where we give up being smart
     -- and show all known symbols.
@@ -61,7 +60,6 @@ instance Pretty Context where
     ImportContext mod -> "import context " <> pretty mod
     ImportListContext mod -> "import explicit context " <> pretty mod
     ImportHidingContext mod -> "import hiding context " <> pretty mod
-    ExportContext -> "export context"
     TopContext cg -> "top context " <> pretty cg
     DefaultContext -> "unknown context"
 
@@ -87,15 +85,6 @@ data ContextChunk = Chunk
   , group :: {-# UNPACK #-} !ContextGroup
   , items :: [(Range, Context)]
   }
-
--- | Build a single 'Chunk' from a flat list of entries, or 'ChunkEnd' if empty.
-singleChunk :: ContextGroup -> [(Range, Context)] -> ContextMap
-singleChunk _ [] = ContextMap mempty
-singleChunk group items = ContextMap $ singleton $ Chunk
-  (minimum (map (_start . fst) items))
-  (maximum (map (_end   . fst) items))
-  group
-  items
 
 -- | Build lazy 'ContextChunk' by processing @n@ source items at a time.
 groupedChunks :: Int -> ContextGroup -> (a -> Maybe Range) -> (a -> [(Range, Context)]) -> [a] -> ContextMap
@@ -126,20 +115,15 @@ instance NFData ContextMap where rnf = rwhnf
 -- as a Shake rule.
 getContextMap :: ParsedModule -> ContextMap
 getContextMap pm =
-  singleChunk HeaderGroup exportEntry
-    <> groupedChunks 10 ImportGroup rangeOf importEntry hsmodImports
+    groupedChunks 10 ImportGroup rangeOf importEntry hsmodImports
     <> groupedChunks 10 DeclarationGroup rangeOf declEntry hsmodDecls
   where
-    HsModule {hsmodExports, hsmodImports, hsmodDecls} =
+    HsModule {hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
 
     rangeOf :: HasLoc (Anno a) => XRec GhcPs a -> Maybe Range
     rangeOf (L (locA -> ss) _) = srcSpanToRange ss
     fromSpan context ss = (,context) <$> rangeOf ss
-
-    -- Export list -> ExportContext
-    exportEntry :: [(Range, Context)]
-    exportEntry = maybeToList $ join $ fmap (fromSpan ExportContext) hsmodExports
 
     importEntry :: LImportDecl GhcPs -> [(Range, Context)]
     importEntry decl@(L _ impDecl) =
@@ -210,7 +194,7 @@ getContextMap pm =
 -- query position are forced; later chunks remain as unevaluated thunks.
 getContext :: ContextMap -> PositionResult Position -> Context
 getContext (ContextMap chunks) pos =
-  case searchChunks chunks of
+  case searchChunks True chunks of
     ([], []) -> TopContext []
     (groups, []) -> TopContext groups
     (_, xs) -> snd $ maximumBy (comparing (\(Range s e, _) -> (s, Down e))) xs
@@ -222,12 +206,12 @@ getContext (ContextMap chunks) pos =
     dominates :: (Range, Context) -> Bool
     dominates (Range s e, _) = s <= qLo && qHi <= e
 
-    searchChunks :: [ContextChunk] -> ([ContextGroup], [(Range, Context)])
-    searchChunks [] = ([], [])
-    searchChunks (Chunk cLo cHi group items : rest)
+    searchChunks :: Bool -> [ContextChunk] -> ([ContextGroup], [(Range, Context)])
+    searchChunks _ [] = ([], [])
+    searchChunks firstChunk (Chunk cLo cHi group items : rest)
       | -- query is past this chunk
-        qLo > cHi = searchChunks rest
+        qLo > cHi = searchChunks False rest
       | -- query is before this chunk
-        qHi < cLo = ([], [])
+        qHi < cLo = (if firstChunk then [HeaderGroup] else [], [])
         -- this chunk is relevant, emit the group and all relevant intervals
-      | otherwise  = ([group], filter dominates items) <> searchChunks rest
+      | otherwise  = ([group], filter dominates items) <> searchChunks False rest
