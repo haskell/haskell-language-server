@@ -690,7 +690,7 @@ contextCompletionTests =
       , "        sig :: Xxx"
       , "        sig = undefined"
       ]
-      (Position 8 19)  -- after "Xxx" in "        sig :: Xxx"
+      (Position 8 18)
       [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
 
   , completionTest
