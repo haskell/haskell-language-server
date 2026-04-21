@@ -53,12 +53,12 @@ testSessionEmpty name = testWithDummyPlugin name (mkIdeTestFs [FS.directCradle [
 testSessionEmptyWithCradle :: TestName -> T.Text -> Session () -> TestTree
 testSessionEmptyWithCradle name cradle = testWithDummyPlugin name (mkIdeTestFs [file "hie.yaml" (text cradle)])
 
-testSessionSingleFile :: TestName -> FilePath -> T.Text -> Session () -> TestTree
-testSessionSingleFile testName fp txt session =
-    testWithDummyPlugin testName (mkIdeTestFs [FS.directCradle [T.pack fp] , file fp (text txt)]) session
+testSessionSingleFile :: TestName -> FilePath -> [T.Text] -> Session () -> TestTree
+testSessionSingleFile testName fp txts session =
+    testWithDummyPlugin testName (mkIdeTestFs [FS.directCradle [T.pack fp] , file fp (text (T.unlines txts))]) session
 
 completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
-completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
+completionTest name src pos expected = testSessionSingleFile name "A.hs" src $ do
     docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
 
@@ -518,14 +518,24 @@ projectCompletionTests =
 contextCompletionTests :: [TestTree]
 contextCompletionTests =
   [ testSessionSingleFile "import snippets at top level" "A.hs"
-      (T.unlines ["module A where", "imp"]) $ do
+      [ "module A where"
+      , "imp"
+      ] $ do
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 1 3)
       let importSnippets = [ c | c@CompletionItem{..} <- compls
-                           , _kind == Just CompletionItemKind_Snippet
-                           , _label == "import" ]
+                          , _kind == Just CompletionItemKind_Snippet
+                          , _label == "import" ]
       liftIO $ length importSnippets @?= 4
+
+  , completionTest "no import snippet past a declaration"
+      [ "module A where"
+      , "foo = ()"
+      , "imp"
+      ]
+      (Position 2 3)
+      []
 
   , completionTest
       "function snippet at top level"
@@ -537,6 +547,14 @@ contextCompletionTests =
       [("function", CompletionItemKind_Snippet,
         "${1:identifier} :: ${2:type}\n${1:identifier} = ${3:body}",
         False, False, Nothing)]
+
+  , completionTest "no function snippet past an import"
+      [ "module A where"
+      , "fun"
+      , "import Control.Monad hiding (join)"
+      ]
+      (Position 2 3)
+      []
 
   , completionTest
       "class snippet at top level"
@@ -556,7 +574,9 @@ contextCompletionTests =
         False, False, Nothing)]
 
   , testSessionSingleFile "no snippets in value binding" "A.hs"
-      (T.unlines ["module A where", "foo = imp"]) $ do
+      [ "module A where"
+      , "foo = imp"
+      ] $ do
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 1 9)
@@ -566,13 +586,12 @@ contextCompletionTests =
       liftIO $ snippets @?= []
 
   , testSessionSingleFile "no snippets in instance body" "A.hs"
-      (T.unlines
-        [ "module A where"
-        , "class Foo a where"
-        , "  bar :: a -> ()"
-        , "instance Foo Int where"
-        , "  bar _ = imp"
-        ]) $ do
+      [ "module A where"
+      , "class Foo a where"
+      , "  bar :: a -> ()"
+      , "instance Foo Int where"
+      , "  bar _ = imp"
+      ] $ do
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 4 13)
@@ -582,7 +601,9 @@ contextCompletionTests =
       liftIO $ snippets @?= []
 
   , testSessionSingleFile "top level excludes regular completions" "A.hs"
-      (T.unlines ["module A where", "hea"]) $ do
+      [ "module A where"
+      , "hea"
+      ] $ do
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 1 3)
@@ -590,7 +611,9 @@ contextCompletionTests =
       liftIO $ headCompls @?= []
 
   , testSessionSingleFile "unmatched prefix at top level returns empty" "A.hs"
-      (T.unlines ["module A where", "xyz"]) $ do
+      [ "module A where"
+      , "xyz"
+      ] $ do
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 1 3)
