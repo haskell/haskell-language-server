@@ -24,11 +24,15 @@ getContextSnippets groups = concatMap (fmap mkSnippetCompletion . concat . maybe
 
 topContextSnippets :: [(ContextGroup, [SnippetCompletion])]
 topContextSnippets =
-  [ ( ImportGroup
+  [ ( HeaderGroup
+    , [ SnippetCompletion "module" "module header" moduleHeaderSnippet
+      ]
+    ),
+    ( ImportGroup
     , [ SnippetCompletion "import" "import module" importUnqualifiedSnippet
       , SnippetCompletion "import" "import module (explicit list)" importExplicitSnippet
-      , SnippetCompletion "import" "import module hiding" importHidingSnippet
       , SnippetCompletion "import" "import module qualified as" importQualifiedAsSnippet
+      , SnippetCompletion "import" "import module hiding" importHidingSnippet
       ]
     ),
     ( DeclarationGroup
@@ -46,6 +50,9 @@ mkSnippetCompletion SnippetCompletion {..} =
     & L.detail ?~ snippetDetail
     & L.insertText ?~ snippetContents
     & L.insertTextFormat ?~ InsertTextFormat_Snippet
+
+moduleHeaderSnippet :: (IsString s) => s
+moduleHeaderSnippet = "module ${1:name} where"
 
 importUnqualifiedSnippet :: (IsString s) => s
 importUnqualifiedSnippet = "import ${1:module}"
