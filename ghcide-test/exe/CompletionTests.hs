@@ -8,7 +8,7 @@
 module CompletionTests (tests) where
 
 import           Config
-import           Control.Lens                   ((^.))
+import           Control.Lens                   (view, (^.))
 import qualified Control.Lens                   as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class         (liftIO)
@@ -628,6 +628,110 @@ contextCompletionTests =
       , "g :: Xxx"
       ]
       (Position 4 8)
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  -- where-clause / local binding context tests
+
+  , completionTest
+      "type sig in where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = bar"
+      , "  where"
+      , "    helper :: Xxx"
+      , "    helper = bar"
+      ]
+      (Position 6 17)  -- after "Xxx" in "    helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , testSessionSingleFile "value binding in where-clause gives value completions" "A.hs"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = bar"
+      , "  where"
+      , "    helper = xxxv"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 6 16)  -- after "xxxv"
+      let labels = map (view L.label) compls
+      liftIO $ assertBool "xxxval should appear in value context" ("xxxval" `elem` labels)
+      liftIO $ assertBool "Xxxtype should not appear in value context"
+                          (not ("Xxxtype" `elem` labels))
+
+  , testSessionSingleFile "no snippets in where-clause" "A.hs"
+      [ "module A where"
+      , "foo x = bar"
+      , "  where"
+      , "    helper = imp"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 3 15)  -- after "imp" in "    helper = imp"
+      let snippets = [ c | c@CompletionItem{..} <- compls
+                     , _kind == Just CompletionItemKind_Snippet
+                     , _label == "import" ]
+      liftIO $ snippets @?= []
+
+  , completionTest
+      "type sig in nested where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = outer"
+      , "  where"
+      , "    inner y = result"
+      , "      where"
+      , "        sig :: Xxx"
+      , "        sig = undefined"
+      ]
+      (Position 8 19)  -- after "Xxx" in "        sig :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in match alternative where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo 0 = bar"
+      , "  where helper :: Xxx"
+      , "foo _ = baz"
+      ]
+      (Position 5 21)  -- after "Xxx" in "  where helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in pattern binding where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "(a, b) = (undefined, undefined)"
+      , "  where"
+      , "    helper :: Xxx"
+      , "    helper = undefined"
+      ]
+      (Position 6 17)  -- after "Xxx" in "    helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in let expression gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo ="
+      , "  let helper :: Xxx"
+      , "      helper = undefined"
+      , "  in helper"
+      ]
+      (Position 5 19)  -- after "Xxx" in "  let helper :: Xxx"
       [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
   ]
 
