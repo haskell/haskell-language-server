@@ -494,8 +494,8 @@ getCompletions
     = []
 
     -- ------------------------------------------------------------------------
-    | TopContext <- context
-    = fmap (fmap (toggleSnippets caps config)) filtTopContextCompls
+    | TopContext groups <- context
+    = fmap (fmap (toggleSnippets caps config)) (filtTopContextCompls groups)
 
     -- ------------------------------------------------------------------------
     | otherwise =
@@ -633,11 +633,10 @@ getCompletions
           | T.null prefixScope = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
-      filtTopContextCompls :: [Scored CompletionItem]
-      filtTopContextCompls
+      filtTopContextCompls :: [Context.ContextGroup] -> [Scored CompletionItem]
+      filtTopContextCompls groups
           | T.null prefixScope
-          = fmap (fmap mkTopSnippetCompl) $
-            Fuzzy.filter chunkSize maxC fullPrefix topContextSnippets snippetLabel
+          = Fuzzy.filter chunkSize maxC fullPrefix (getContextSnippets groups) (view L.label)
           | otherwise = []
 
       -- We use this ordering to alphabetically sort suggestions while respecting

@@ -4,6 +4,7 @@
 
 module Development.IDE.Plugin.Completions.Context
   ( Context (..)
+  , ContextGroup (..)
   , ContextMap
   , GetContextMap (..)
   , getContext
@@ -11,9 +12,11 @@ module Development.IDE.Plugin.Completions.Context
   ) where
 
 import           Control.DeepSeq                      (NFData (..), rwhnf)
+import           Control.Monad                        (join)
 import           Data.Hashable                        (Hashable)
 import           Data.List                            (maximumBy, singleton)
-import           Data.Maybe                           (maybeToList)
+import           Data.Maybe                           (catMaybes, mapMaybe,
+                                                       maybeToList)
 import           Data.Ord                             (Down (..), comparing)
 import qualified Data.Text                            as T
 import           Development.IDE
@@ -21,6 +24,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat           hiding (getContext)
 import           Development.IDE.GHC.Compat.Util      (bagToList)
 import           GHC.Generics                         (Generic)
+import           GHC.Hs                               (HasLoc)
 
 -- | A context of a declaration in the program
 -- e.g. is the declaration a type declaration or a value declaration
@@ -28,20 +32,27 @@ import           GHC.Generics                         (Generic)
 data Context
   = TypeContext
   | ValueContext
-  | -- | import context with module name
+  | -- | import context with module name.
     ImportContext T.Text
-  | -- | import list context with module name
+  | -- | import list context with module name.
     ImportListContext T.Text
-  | -- | import hiding context with module name
+  | -- | import hiding context with module name.
     ImportHidingContext T.Text
-  | -- | List of exported identifiers from the current module
+  | -- | List of exported identifiers from the current module.
     ExportContext
-  | -- | Top-level context
-    TopContext
+  | -- | Top-level context, with context groups indicating what would be valid
+    -- in that top-level context. NB: An empty list denotes _all_ contexts
+    TopContext [ContextGroup]
   | -- | Unsupported context, a placeholder context where we give up being smart
     -- and show all known symbols.
     DefaultContext
   deriving (Show, Eq)
+
+data ContextGroup
+  = HeaderGroup
+  | ImportGroup
+  | DeclarationGroup
+  deriving (Show, Eq, Ord)
 
 instance Pretty Context where
   pretty = \case
@@ -51,8 +62,14 @@ instance Pretty Context where
     ImportListContext mod -> "import explicit context " <> pretty mod
     ImportHidingContext mod -> "import hiding context " <> pretty mod
     ExportContext -> "export context"
-    TopContext -> "top context"
+    TopContext cg -> "top context " <> pretty cg
     DefaultContext -> "unknown context"
+
+instance Pretty ContextGroup where
+  pretty = \case
+    HeaderGroup -> "header"
+    ImportGroup -> "imports"
+    DeclarationGroup -> "declarations"
 
 data GetContextMap = GetContextMap
   deriving (Eq, Show, Generic)
@@ -63,37 +80,38 @@ type instance RuleResult GetContextMap = ContextMap
 -- | A lazy chunked interval structure for context lookups.
 --
 -- Entries within each chunk are from a contiguous group of source items
--- (imports or declarations). The spine is purposefully lazy, to avoid finding
--- what context the cursor precisely is in.
+-- (imports or declarations).
 data ContextChunk = Chunk
   { low   :: {-# UNPACK #-} !Position
   , high  :: {-# UNPACK #-} !Position
+  , group :: {-# UNPACK #-} !ContextGroup
   , items :: [(Range, Context)]
   }
 
 -- | Build a single 'Chunk' from a flat list of entries, or 'ChunkEnd' if empty.
-singleChunk :: [(Range, Context)] -> ContextMap
-singleChunk [] = ContextMap mempty
-singleChunk items = ContextMap $ singleton $ Chunk
+singleChunk :: ContextGroup -> [(Range, Context)] -> ContextMap
+singleChunk _ [] = ContextMap mempty
+singleChunk group items = ContextMap $ singleton $ Chunk
   (minimum (map (_start . fst) items))
   (maximum (map (_end   . fst) items))
+  group
   items
 
--- | Build lazy 'ContextChunks' by processing @n@ source items at a time.
--- The spine past the first chunk is a thunk until queried.
-groupedChunks :: Int -> (a -> [(Range, Context)]) -> [a] -> ContextMap
-groupedChunks n f xs = ContextMap $ go xs
+-- | Build lazy 'ContextChunk' by processing @n@ source items at a time.
+groupedChunks :: Int -> ContextGroup -> (a -> Maybe Range) -> (a -> [(Range, Context)]) -> [a] -> ContextMap
+groupedChunks n group getPos getRanges xs = ContextMap $ go xs
   where
     go [] = []
     go xs =
-      let (group, rest) = splitAt n xs
-          items = concatMap f group
+      let (chunk, rest) = splitAt n xs
+          items = concatMap getRanges chunk
       in case items of
             [] -> go rest
             _  -> Chunk
-              { low   = minimum (map (_start . fst) items)
-              , high  = maximum (map (_end   . fst) items)
-              , items = items
+              { low   = minimum (mapMaybe (fmap _start  . getPos) chunk)
+              , high  = maximum (mapMaybe (fmap _end  . getPos) chunk)
+              , group
+              , items
               } : go rest
 
 newtype ContextMap = ContextMap [ContextChunk]
@@ -108,33 +126,31 @@ instance NFData ContextMap where rnf = rwhnf
 -- as a Shake rule.
 getContextMap :: ParsedModule -> ContextMap
 getContextMap pm =
-  singleChunk exportEntry
-    <> groupedChunks 10 importEntry hsmodImports
-    <> groupedChunks 10 declEntry hsmodDecls
+  singleChunk HeaderGroup exportEntry
+    <> groupedChunks 10 ImportGroup rangeOf importEntry hsmodImports
+    <> groupedChunks 10 DeclarationGroup rangeOf declEntry hsmodDecls
   where
     HsModule {hsmodExports, hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
 
+    rangeOf :: HasLoc (Anno a) => XRec GhcPs a -> Maybe Range
+    rangeOf (L (locA -> ss) _) = srcSpanToRange ss
+    fromSpan context ss = (,context) <$> rangeOf ss
+
     -- Export list -> ExportContext
     exportEntry :: [(Range, Context)]
-    exportEntry = case hsmodExports of
-      Just (L (locA -> ss) _) ->
-        maybeToList $ (,ExportContext) <$> srcSpanToRange ss
-      Nothing -> []
+    exportEntry = maybeToList $ join $ fmap (fromSpan ExportContext) hsmodExports
 
     importEntry :: LImportDecl GhcPs -> [(Range, Context)]
-    importEntry (L (locA -> ss) impDecl) =
+    importEntry decl@(L _ impDecl) =
       let modName = T.pack $ moduleNameString $ unLoc $ ideclName impDecl
-          outerCtx = (,ImportContext modName) <$> srcSpanToRange ss
+          outerCtx = fromSpan (ImportContext modName) decl
           innerCtx = importListEntry modName (fmap (fmap reLoc) $ ideclImportList impDecl)
-       in maybeToList outerCtx ++ innerCtx
+       in catMaybes [outerCtx, innerCtx]
 
-    importListEntry :: T.Text -> Maybe (ImportListInterpretation, Located [LIE GhcPs]) -> [(Range, Context)]
-    importListEntry modName (Just (EverythingBut, L ss _)) =
-      maybeToList $ (,ImportHidingContext modName) <$> srcSpanToRange ss
-    importListEntry modName (Just (Exactly, L ss _)) =
-      maybeToList $ (,ImportListContext modName) <$> srcSpanToRange ss
-    importListEntry _ _ = []
+    importListEntry modName (Just (EverythingBut, imps)) = fromSpan (ImportHidingContext modName) imps
+    importListEntry modName (Just (Exactly, imps)) = fromSpan (ImportHidingContext modName) imps
+    importListEntry _ _ = Nothing
 
     declEntry :: LHsDecl GhcPs -> [(Range, Context)]
     declEntry (L (locA -> ss) decl) = case srcSpanToRange ss of
@@ -147,7 +163,7 @@ getContextMap pm =
         InstD _ instDecl       -> (range, ValueContext) : instEntries instDecl
         DerivD {}              -> [(range, TypeContext)]
         ForD {}                -> [(range, ValueContext)]
-        SpliceD {}             -> [(range, TopContext)]
+        SpliceD {}             -> [(range, TopContext [])]
         _                      -> [(range, DefaultContext)]  -- DefD, WarningD, AnnD, RuleD, DocD, KindSigD
 
     sigsAndBindEntries :: [LSig GhcPs] -> LHsBinds GhcPs -> [(Range, Context)]
@@ -195,8 +211,9 @@ getContextMap pm =
 getContext :: ContextMap -> PositionResult Position -> Context
 getContext (ContextMap chunks) pos =
   case searchChunks chunks of
-    [] -> TopContext
-    xs -> snd $ maximumBy (comparing (\(Range s e, _) -> (s, Down e))) xs
+    ([], []) -> TopContext []
+    (groups, []) -> TopContext groups
+    (_, xs) -> snd $ maximumBy (comparing (\(Range s e, _) -> (s, Down e))) xs
   where
     (qLo, qHi) = case pos of
       PositionExact p   -> (p, p)
@@ -205,9 +222,12 @@ getContext (ContextMap chunks) pos =
     dominates :: (Range, Context) -> Bool
     dominates (Range s e, _) = s <= qLo && qHi <= e
 
-    searchChunks :: [ContextChunk] -> [(Range, Context)]
-    searchChunks [] = []
-    searchChunks (Chunk cLo cHi items : rest)
-      | qLo > cHi = searchChunks rest  -- query is past this chunk
-      | qHi < cLo = []                 -- query is before this chunk; stop (source order)
-      | otherwise  = filter dominates items ++ searchChunks rest
+    searchChunks :: [ContextChunk] -> ([ContextGroup], [(Range, Context)])
+    searchChunks [] = ([], [])
+    searchChunks (Chunk cLo cHi group items : rest)
+      | -- query is past this chunk
+        qLo > cHi = searchChunks rest
+      | -- query is before this chunk
+        qHi < cLo = ([], [])
+        -- this chunk is relevant, emit the group and all relevant intervals
+      | otherwise  = ([group], filter dominates items) <> searchChunks rest

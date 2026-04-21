@@ -1,34 +1,46 @@
-module Development.IDE.Plugin.Completions.Snippet where
+module Development.IDE.Plugin.Completions.Snippet (getContextSnippets) where
 
 import           Control.Lens
-import           Data.String                              (IsString)
-import           Data.Text                                (Text)
+import           Data.Maybe                                 (maybeToList)
+import           Data.String                                (IsString)
+import           Data.Text                                  (Text)
+import           Development.IDE.Plugin.Completions.Context
 import           Development.IDE.Plugin.Completions.Types
-import qualified Language.LSP.Protocol.Lens               as L
+import qualified Language.LSP.Protocol.Lens                 as L
 import           Language.LSP.Protocol.Types
 
 data SnippetCompletion = SnippetCompletion
-  { snippetLabel    :: {-# UNPACK #-} !Text,
-    snippetDetail   :: {-# UNPACK #-} !Text,
+  { snippetLabel    :: {-# UNPACK #-} !Text
+  , snippetDetail   :: {-# UNPACK #-} !Text
     -- | Might be good to use the structured snippets instead of bare text.
     -- This is fine for now though, none of the top-level snippet completions are
     -- parameterized.
-    snippetContents :: {-# UNPACK #-} !Text
+  , snippetContents :: {-# UNPACK #-} !Text
   }
 
-topContextSnippets :: [SnippetCompletion]
+getContextSnippets :: [ContextGroup] -> [CompletionItem]
+getContextSnippets [] = concatMap (fmap mkSnippetCompletion . snd) topContextSnippets
+getContextSnippets groups = concatMap (fmap mkSnippetCompletion . concat . maybeToList . (`lookup` topContextSnippets)) groups
+
+topContextSnippets :: [(ContextGroup, [SnippetCompletion])]
 topContextSnippets =
-  [ SnippetCompletion "import" "import module" importUnqualifiedSnippet,
-    SnippetCompletion "import" "import module (explicit list)" importExplicitSnippet,
-    SnippetCompletion "import" "import module hiding" importHidingSnippet,
-    SnippetCompletion "import" "import module qualified as" importQualifiedAsSnippet,
-    SnippetCompletion "function" "function definition" functionDefinitionSnippet,
-    SnippetCompletion "class" "class declaration" classDeclarationSnippet,
-    SnippetCompletion "instance" "instance declaration" instanceDeclarationSnippet
+  [ ( ImportGroup
+    , [ SnippetCompletion "import" "import module" importUnqualifiedSnippet
+      , SnippetCompletion "import" "import module (explicit list)" importExplicitSnippet
+      , SnippetCompletion "import" "import module hiding" importHidingSnippet
+      , SnippetCompletion "import" "import module qualified as" importQualifiedAsSnippet
+      ]
+    ),
+    ( DeclarationGroup
+    , [ SnippetCompletion "function" "function definition" functionDefinitionSnippet
+      , SnippetCompletion "instance" "instance declaration" instanceDeclarationSnippet
+      , SnippetCompletion "class" "class declaration" classDeclarationSnippet
+      ]
+    )
   ]
 
-mkTopSnippetCompl :: SnippetCompletion -> CompletionItem
-mkTopSnippetCompl SnippetCompletion {..} =
+mkSnippetCompletion :: SnippetCompletion -> CompletionItem
+mkSnippetCompletion SnippetCompletion {..} =
   defaultCompletionItemWithLabel snippetLabel
     & L.kind ?~ CompletionItemKind_Snippet
     & L.detail ?~ snippetDetail
