@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NoFieldSelectors   #-}
 {-# LANGUAGE TypeFamilies       #-}
@@ -174,18 +175,34 @@ getContextMap pm =
     bindEntries :: HsBind GhcPs -> [(Range, Context)]
     bindEntries FunBind { fun_matches = MG { mg_alts = L _ alts } } =
       concatMap matchLocalEntries alts
-    bindEntries PatBind { pat_rhs = GRHSs { grhssLocalBinds } } =
+    bindEntries PatBind { pat_rhs = GRHSs { grhssLocalBinds, grhssGRHSs } } =
       localBindEntries grhssLocalBinds
+      ++ concatMap exprLocalEntries [ body | L _ (GRHS _ _ body) <- grhssGRHSs ]
     bindEntries _ = []
 
     matchLocalEntries :: LMatch GhcPs (LHsExpr GhcPs) -> [(Range, Context)]
-    matchLocalEntries (L _ Match { m_grhss = GRHSs { grhssLocalBinds } }) =
+    matchLocalEntries (L _ Match { m_grhss = GRHSs { grhssLocalBinds, grhssGRHSs } }) =
       localBindEntries grhssLocalBinds
+      ++ concatMap exprLocalEntries [ body | L _ (GRHS _ _ body) <- grhssGRHSs ]
 
     localBindEntries :: HsLocalBinds GhcPs -> [(Range, Context)]
     localBindEntries (HsValBinds _ (ValBinds _ binds sigs)) =
       sigsAndBindEntries sigs binds
     localBindEntries _ = []
+
+    exprLocalEntries :: LHsExpr GhcPs -> [(Range, Context)]
+    exprLocalEntries (L _ expr) = case expr of
+#if !MIN_VERSION_ghc(9,9,0)
+      HsLet _ _ binds _ body -> localBindEntries binds ++ exprLocalEntries body
+#else
+      HsLet _ binds body -> localBindEntries binds ++ exprLocalEntries body
+#endif
+      HsDo _ _ stmts ->
+        [ entry
+        | L _ (LetStmt _ lbs) <- unLoc stmts
+        , entry <- localBindEntries lbs
+        ]
+      _ -> []
 
 -- | Look up the completion context at a given position.
 -- Returns the innermost (most specific) context that contains the position.
