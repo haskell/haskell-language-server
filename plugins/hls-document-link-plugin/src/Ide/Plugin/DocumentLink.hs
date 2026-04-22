@@ -58,9 +58,8 @@ import           Language.LSP.Protocol.Types      (DocumentLink (..),
 newtype Log = LogShake Shake.Log
 
 instance Pretty Log where
-  pretty = \case {
+  pretty = \case
     LogShake shakeLog -> pretty shakeLog
-  }
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId =
@@ -101,12 +100,16 @@ getDocumentLinkRule recorder =
   defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetDocumentLinks nfp -> runMaybeT $ do
     HAR {hieAst} <- useMT GetHieAst nfp
     DKMap {getDocMap} <- useMT GetDocMap nfp
-    ast <- hoistMaybe $ getAsts hieAst Map.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
+    ast <- hoistMaybe $ getAsts hieAst Map.!? HiePath (mkFastString $ fromNormalizedFilePath nfp)
     let lookup = lookupDoc getDocMap
     pure $ DocumentLinks (foldAst lookup ast)
 
+-- | Recursively traverses the HieAST in depth-first order to collect information
+-- from leaf nodes. For each leaf, it extracts all identifiers and their source
+-- spans, applies the lookup function, and aggregates the results using the
+-- Monoid instance.
 foldAst :: forall a t. Monoid a => ((Identifier, Span) -> a) -> HieAST t -> a
-foldAst lookup ast = case (nodeChildren ast) of
+foldAst lookup ast = case nodeChildren ast of
   []   -> visitLeaf ast
   asts -> foldMap (foldAst lookup) asts
   where
