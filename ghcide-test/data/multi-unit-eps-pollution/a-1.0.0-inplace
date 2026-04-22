@@ -1,0 +1,8 @@
+-i
+-ia
+-this-unit-id
+a-1.0.0-inplace
+-package
+base
+-XHaskell2010
+A
