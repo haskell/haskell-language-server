@@ -2079,6 +2079,7 @@ test-suite ghcide-tests
     CradleTests
     DependentFileTest
     DiagnosticTests
+    EpsPollutionTests
     ExceptionTests
     FindDefinitionAndHoverTests
     FindImplementationAndHoverTests

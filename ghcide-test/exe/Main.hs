@@ -45,6 +45,7 @@ import           CPPTests
 import           CradleTests
 import           DependentFileTest
 import           DiagnosticTests
+import           EpsPollutionTests
 import           ExceptionTests
 import           FindDefinitionAndHoverTests
 import           FindImplementationAndHoverTests
@@ -95,6 +96,7 @@ main = do
     , WatchedFileTests.tests
     , CradleTests.tests
     , DependentFileTest.tests
+    , EpsPollutionTests.tests
     , NonLspCommandLine.tests
     , IfaceTests.tests
     , BootTests.tests
