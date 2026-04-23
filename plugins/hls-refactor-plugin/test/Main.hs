@@ -189,30 +189,30 @@ completionTests =
       , testGroup "Data constructor"
         [ completionCommandTest
             "not imported"
-            ["module A where", "import Text.Printf ()", "ZeroPad"]
-            (Position 2 4)
+            ["module A where", "import Text.Printf ()", "a = ZeroPad"]
+            (Position 2 8)
             "ZeroPad"
-            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "a = ZeroPad"]
         , completionCommandTest
             "parent imported abs"
-            ["module A where", "import Text.Printf (FormatAdjustment)", "ZeroPad"]
-            (Position 2 4)
+            ["module A where", "import Text.Printf (FormatAdjustment)", "a = ZeroP"]
+            (Position 2 8)
             "ZeroPad"
-            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "a = ZeroP"]
         , completionNoCommandTest
             "parent imported all"
-            ["module A where", "import Text.Printf (FormatAdjustment (..))", "ZeroPad"]
-            (Position 2 4)
+            ["module A where", "import Text.Printf (FormatAdjustment (..))", "a = ZeroP"]
+            (Position 2 8)
             "ZeroPad"
         , completionNoCommandTest
             "already imported"
-            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
-            (Position 2 4)
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "a = ZeroP"]
+            (Position 2 8)
             "ZeroPad"
         , completionNoCommandTest
             "function from Prelude"
-            ["module A where", "import Data.Maybe ()", "Nothing"]
-            (Position 2 4)
+            ["module A where", "import Data.Maybe ()", "a = Nothi"]
+            (Position 2 8)
             "Nothing"
         , completionCommandTest
             "type operator parent"
@@ -224,20 +224,20 @@ completionTests =
       , testGroup "Record completion"
         [ completionCommandTest
             "not imported"
-            ["module A where", "import Text.Printf ()", "FormatParse"]
-            (Position 2 10)
+            ["module A where", "import Text.Printf ()", "a :: FormatParse"]
+            (Position 2 14)
             "FormatParse"
-            ["module A where", "import Text.Printf (FormatParse)", "FormatParse"]
+            ["module A where", "import Text.Printf (FormatParse)", "a :: FormatParse"]
         , completionCommandTest
             "parent imported"
-            ["module A where", "import Text.Printf (FormatParse)", "FormatParse"]
-            (Position 2 10)
+            ["module A where", "import Text.Printf (FormatParse)", "a = FormatParse"]
+            (Position 2 14)
             "FormatParse"
-            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
+            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "a = FormatParse"]
         , completionNoCommandTest
             "already imported"
-            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
-            (Position 2 10)
+            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "a = FormatP"]
+            (Position 2 14)
             "FormatParse"
         ]
         , testGroup "Package completion"

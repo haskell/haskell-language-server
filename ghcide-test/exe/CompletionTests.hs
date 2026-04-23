@@ -523,9 +523,7 @@ contextCompletionTests =
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 1 3)
-      let importSnippets = [ c | c@CompletionItem{..} <- compls
-                          , _kind == Just CompletionItemKind_Snippet
-                          , _label == "import" ]
+      let importSnippets = filterSnippetsLabel "import" compls
       liftIO $ length importSnippets @?= 4
 
   , completionTest "no import snippet past a declaration"
@@ -594,9 +592,7 @@ contextCompletionTests =
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 4 13)
-      let snippets = [ c | c@CompletionItem{..} <- compls
-                     , _kind == Just CompletionItemKind_Snippet
-                     , _label == "import" ]
+      let snippets = filterSnippetsLabel "import" compls
       liftIO $ snippets @?= []
 
   , testSessionSingleFile "top level excludes regular completions" "A.hs"
@@ -671,9 +667,7 @@ contextCompletionTests =
       doc <- openDoc "A.hs" "haskell"
       _ <- waitForDiagnostics
       compls <- getCompletions doc (Position 3 15)  -- after "imp" in "    helper = imp"
-      let snippets = [ c | c@CompletionItem{..} <- compls
-                     , _kind == Just CompletionItemKind_Snippet
-                     , _label == "import" ]
+      let snippets = filterSnippetsLabel "import" compls
       liftIO $ snippets @?= []
 
   , completionTest
@@ -733,6 +727,12 @@ contextCompletionTests =
       (Position 5 19)  -- after "Xxx" in "  let helper :: Xxx"
       [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
   ]
+  where
+    filterSnippetsLabel l snippets =
+      [ c | c@CompletionItem{..} <- snippets
+      , _kind == Just CompletionItemKind_Snippet
+      , _label == l
+      ]
 
 completionDocTests :: [TestTree]
 completionDocTests =
