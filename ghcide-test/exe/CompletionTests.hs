@@ -200,18 +200,17 @@ localCompletionTests = [
         ,("abcde", CompletionItemKind_Function, "abcde", True, False, Nothing)
         ],
     testSessionEmpty "incomplete entries" $ do
-        let src a = "data Data = " <> a
-        doc <- createDoc "A.hs" "haskell" $ src "AAA"
+        let src a = a <> " = aaa"
+        doc <- createDoc "A.hs" "haskell" $ src "aaa"
         void $ waitForTypecheck doc
-        let editA rhs =
-                changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ src rhs]
-        editA "AAAA"
+        let editA rhs = changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ src rhs]
+        editA "aaaa"
         void $ waitForTypecheck doc
-        editA "AAAAA"
+        editA "aaaaa"
         void $ waitForTypecheck doc
 
-        compls <- getCompletions doc (Position 0 15)
-        liftIO $ filter ("AAA" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["AAAAA"]
+        compls <- getCompletions doc (Position 0 11)
+        liftIO $ filter ("aaa" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["aaaaa"]
         pure (),
     completionTest
         "polymorphic record dot completion"
@@ -345,10 +344,10 @@ otherCompletionTests = [
           T.unlines
             [ "module A where",
               "import B",
-              "memb"
+              "3 = memb"
             ]
       _ <- waitForDiagnostics
-      compls <- getCompletions docA $ Position 2 4
+      compls <- getCompletions docA $ Position 2 7
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
       liftIO $ take 1 compls' @?= ["member"],
 

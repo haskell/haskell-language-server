@@ -155,8 +155,9 @@ getContext (ContextMap chunks) query =
     searchChunks :: Bool -> [ContextChunk] -> ([ContextGroup], ContextResult)
     searchChunks _ [] = ([], mempty)
     searchChunks firstChunk (Chunk cLo cHi group contextOf : rest)
-      | -- query is past this chunk
-        qLo > cHi = searchChunks False rest
+      | -- query is past this chunk (line-only comparison so cursors
+        -- past the last column on the final line still match)
+        _line qLo > _line cHi = searchChunks False rest
       | -- query is before this chunk
         qHi < cLo = (if firstChunk then [HeaderGroup] else [], mempty)
         -- this chunk is relevant, emit the group and all relevant intervals
@@ -209,8 +210,13 @@ contextual context shouldStop query s =
 dominates :: Range -> Range -> Bool
 dominates (Range s e) (Range qs qe) = s <= qs && qe <= e
 
+-- | A query range is outside a source range if it ends before the source
+-- starts, or it starts on a line after the source ends.
+-- We intentionally compare only lines (not columns) for the trailing
+-- boundary so that a cursor past the last token on a line still falls
+-- inside the node occupying that line.
 outside :: Range -> Range -> Bool
-outside (Range ps pe) (Range qs qe) = pe < qs || ps > qe
+outside (Range ps pe) (Range qs qe) = pe < qs || _line ps > _line qe
 
 instance Pretty Context where
   pretty = \case
