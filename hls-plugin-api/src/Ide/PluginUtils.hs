@@ -7,7 +7,7 @@ module Ide.PluginUtils
     extendNextLine,
     extendLineStart,
     extendToFullLines,
-    WithDeletions(..),
+    WithDeletions (..),
     getProcessID,
     makeDiffTextEdit,
     makeDiffTextEditAdditive,
@@ -31,10 +31,12 @@ module Ide.PluginUtils
     rangesOverlap,
     positionInRange,
     usePropertyLsp,
+
     -- * Escape
     unescape,
+
     -- * toAbsolute
-    toAbsolute
+    toAbsolute,
   )
 where
 
@@ -98,7 +100,6 @@ extendLineStart (Range (Position sl _) e) =
 -- Range (Position 5 0) (Position 8 0)
 extendToFullLines :: Range -> Range
 extendToFullLines = extendLineStart . extendNextLine
-
 
 -- ---------------------------------------------------------------------
 
@@ -278,7 +279,6 @@ fullRange s = Range startPos endPos
 subRange :: Range -> Range -> Bool
 subRange = isSubrangeOf
 
-
 -- | Check whether the two 'Range's overlap in any way.
 --
 -- >>> rangesOverlap (mkRange 1 0 1 4) (mkRange 1 2 1 5)
@@ -305,7 +305,6 @@ allLspCmdIds pid commands = concatMap go commands
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
 -- ---------------------------------------------------------------------
-
 
 type TextParser = P.Parsec Void T.Text
 
