@@ -22,7 +22,11 @@ import           Development.IDE
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat           hiding (getContext)
 import           GHC.Generics                         (Generic)
+
+#if MIN_VERSION_ghc(9,9,0)
 import           GHC.Hs                               (HasLoc)
+#endif
+
 
 -- | A context of a declaration in the program e.g. is the declaration a
 -- type declaration or a value declaration. Used for determining which code
@@ -118,8 +122,13 @@ getContextMap pm =
     HsModule {hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
 
+#if MIN_VERSION_ghc(9,9,0)
 rangeOf :: HasLoc a => a -> Maybe Range
 rangeOf = srcSpanToRange . locA
+#else
+rangeOf :: GenLocated (SrcSpanAnn' a) e -> Maybe Range
+rangeOf = srcSpanToRange . getLocA
+#endif
 
 getImportContext :: LImportDecl GhcPs -> Range -> ContextResult
 getImportContext imports query =
@@ -197,7 +206,12 @@ sigQ = contextual TypeContext True
 bindQ :: Range -> LHsBind GhcPs -> (ContextResult, Bool)
 bindQ = contextual ValueContext False
 
+
+#if MIN_VERSION_ghc(9,9,0)
 contextual :: HasLoc a => Context -> Bool -> Range -> a -> (ContextResult, Bool)
+#else
+contextual :: Context -> Bool -> Range -> GenLocated (SrcSpanAnn' a) e -> (ContextResult, Bool)
+#endif
 contextual context shouldStop query s =
   let range = rangeOf s
    in case range of
