@@ -14,15 +14,10 @@ module Development.IDE.Plugin.Completions.Context
   ) where
 
 import           Control.DeepSeq                      (NFData (..), rwhnf)
+import           Control.Monad                        (join)
 import           Data.Generics                        (Data (..), GenericQ,
                                                        extQ, mkQ)
 import           Data.Hashable                        (Hashable)
-import           Data.List.Extra                      (nubOrd)
-import           Data.Maybe                           (fromJust, isJust,
-                                                       mapMaybe)
-import           Data.List.Extra                      (nubOrd)
-import           Data.Maybe                           (isJust, mapMaybe,
-                                                       maybeToList)
 import           Data.List.Extra                      (nub)
 import           Data.Maybe                           (isJust, mapMaybe,
                                                        maybeToList)
@@ -100,10 +95,9 @@ groupedChunks n group getPos locate xs = go xs
               } : go rest
 
 -- | Build lazy 'ContextChunk' by processing @n@ source items at a time.
-singletonChunk :: ContextGroup -> (a -> Maybe Range) -> (a -> Range -> ContextResult) -> a -> ContextChunk
-singletonChunk group getPos locate inp = Chunk s e group (locate inp)
-  where
-    Range s e = fromJust $ getPos inp
+singletonChunk :: ContextGroup -> (a -> Maybe Range) -> (a -> Range -> ContextResult) -> a -> Maybe ContextChunk
+singletonChunk group getPos locate inp = flip fmap (getPos inp) $
+  \(Range s e) -> Chunk s e group (locate inp)
 
 -- | Used during context finding, combines into the tightest interval.
 -- As an intuition, the primary interface is through
@@ -145,6 +139,11 @@ getContextMap pm =
     <> groupedChunks 10 ImportGroup rangeOf getImportContext hsmodImports
     <> groupedChunks 4 DeclarationGroup rangeOf getDeclContext hsmodDecls
   where
+#if MIN_VERSION_ghc(9,9,0)
+    moduleChunk = maybeToList (singletonChunk HeaderGroup rangeOf getHeaderContext hsmodName)
+#else
+    moduleChunk = maybeToList $ join $ fmap (singletonChunk HeaderGroup rangeOf getHeaderContext) hsmodName
+#endif
     HsModule {hsmodName, hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
 
