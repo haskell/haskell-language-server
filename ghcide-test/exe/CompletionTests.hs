@@ -625,8 +625,6 @@ contextCompletionTests =
       (Position 4 8)
       [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
 
-  -- where-clause / local binding context tests
-
   , completionTest
       "type sig in where-clause gives type completions"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
@@ -726,6 +724,25 @@ contextCompletionTests =
       ]
       (Position 5 19)  -- after "Xxx" in "  let helper :: Xxx"
       [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , testSessionSingleFile "module header snippet shown when no module declaration" "A.hs"
+      [ "mod"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 0 3)
+      let moduleSnippets = filterSnippetsLabel "module" compls
+      liftIO $ length moduleSnippets @?= 1
+
+  , testSessionSingleFile "module header snippet not shown when module declaration exists" "A.hs"
+      [ "module A where"
+      , "mod"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      let moduleSnippets = filterSnippetsLabel "module" compls
+      liftIO $ moduleSnippets @?= []
   ]
   where
     filterSnippetsLabel l snippets =

@@ -8,15 +8,24 @@ module Development.IDE.Plugin.Completions.Context
   , ContextGroup (..)
   , ContextMap
   , GetContextMap (..)
+  , contextHasModuleHeader
   , getContext
   , getContextMap
   ) where
 
 import           Control.DeepSeq                      (NFData (..), rwhnf)
-import           Data.Generics                        (extQ, mkQ)
-import           Data.Generics.Schemes                (everythingBut)
+import           Data.Generics                        (Data (..), GenericQ,
+                                                       extQ, mkQ)
 import           Data.Hashable                        (Hashable)
-import           Data.Maybe                           (mapMaybe)
+import           Data.List.Extra                      (nubOrd)
+import           Data.Maybe                           (fromJust, isJust,
+                                                       mapMaybe)
+import           Data.List.Extra                      (nubOrd)
+import           Data.Maybe                           (isJust, mapMaybe,
+                                                       maybeToList)
+import           Data.List.Extra                      (nub)
+import           Data.Maybe                           (isJust, mapMaybe,
+                                                       maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.PositionMapping
@@ -68,31 +77,38 @@ type instance RuleResult GetContextMap = ContextMap
 data ContextChunk = Chunk
   { low     :: {-# UNPACK #-} !Position
   , high    :: {-# UNPACK #-} !Position
-  , group   :: {-# UNPACK #-} !ContextGroup
+  , group   :: !ContextGroup
   , context :: Range -> ContextResult
   }
 
 -- | Build lazy 'ContextChunk' by processing @n@ source items at a time.
-groupedChunks :: Int -> ContextGroup -> (a -> Maybe Range) -> (a -> Range -> ContextResult) -> [a] -> ContextMap
-groupedChunks n group getPos locate xs = ContextMap $ go xs
+groupedChunks :: Int -> ContextGroup -> (a -> Maybe Range) -> (a -> Range -> ContextResult) -> [a] -> [ContextChunk]
+groupedChunks n group getPos locate xs = go xs
   where
     go [] = []
     go xs =
       let (chunk, rest) = splitAt n xs
           context = foldMap locate chunk
-      in case chunk of
+          positions = mapMaybe getPos chunk
+      in case positions of
             [] -> go rest
-            _  -> Chunk
-              { low   = minimum (mapMaybe (fmap _start  . getPos) chunk)
-              , high  = maximum (mapMaybe (fmap _end  . getPos) chunk)
+            ps -> Chunk
+              { low   = minimum (fmap _start ps)
+              , high  = maximum (fmap _end ps)
               , group
               , context
               } : go rest
 
+-- | Build lazy 'ContextChunk' by processing @n@ source items at a time.
+singletonChunk :: ContextGroup -> (a -> Maybe Range) -> (a -> Range -> ContextResult) -> a -> ContextChunk
+singletonChunk group getPos locate inp = Chunk s e group (locate inp)
+  where
+    Range s e = fromJust $ getPos inp
+
 -- | Used during context finding, combines into the tightest interval.
 -- As an intuition, the primary interface is through
--- @Monoid (Position -> ContextResult)@.
-data ContextResult = NoContext | ContextResult Range Context
+-- @Monoid (Range -> ContextResult)@.
+data ContextResult = NoContext | ContextResult !Range !Context
 instance Monoid ContextResult where mempty = NoContext
 instance Semigroup ContextResult where (<>) = tighten
 
@@ -102,8 +118,14 @@ tighten a NoContext = a
 tighten ar@(ContextResult a _) br@(ContextResult b _) =
   if a `dominates` b then br else ar
 
-newtype ContextMap = ContextMap [ContextChunk]
-  deriving newtype (Monoid, Semigroup)
+-- | A context map, built from a parsed module. Stores whether the module
+-- already has a @module ... where@ header, so that the header snippet can
+-- be suppressed for files that already declare a module.
+data ContextMap = ContextMap !Bool [ContextChunk]
+instance Semigroup ContextMap where
+  ContextMap h1 c1 <> ContextMap h2 c2 = ContextMap (h1 || h2) (c1 <> c2)
+instance Monoid ContextMap where
+  mempty = ContextMap False []
 instance Show ContextMap where show _ = "<context map>"
 instance NFData ContextMap where rnf = rwhnf
 
@@ -116,10 +138,14 @@ instance NFData ContextMap where rnf = rwhnf
 -- as a Shake rule.
 getContextMap :: ParsedModule -> ContextMap
 getContextMap pm =
-  groupedChunks 10 ImportGroup rangeOf getImportContext hsmodImports
-    <> groupedChunks 5 DeclarationGroup rangeOf getDeclContext hsmodDecls
+  ContextMap (isJust hsmodName) $
+    -- These denote the size of the "jumps" of the cursor when traversing the AST.
+    -- Reduces the amount of data we have to look at with syb.
+  moduleChunk
+    <> groupedChunks 10 ImportGroup rangeOf getImportContext hsmodImports
+    <> groupedChunks 4 DeclarationGroup rangeOf getDeclContext hsmodDecls
   where
-    HsModule {hsmodImports, hsmodDecls} =
+    HsModule {hsmodName, hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
 
 #if MIN_VERSION_ghc(9,9,0)
@@ -130,21 +156,33 @@ rangeOf :: GenLocated (SrcSpanAnn' a) e -> Maybe Range
 rangeOf = srcSpanToRange . getLocA
 #endif
 
+getHeaderContext :: Data a => a -> Range -> ContextResult
+getHeaderContext decl query =
+  gather
+    (<>)
+    ((mempty, False) `mkQ` modNameQ query)
+    decl
+
 getImportContext :: LImportDecl GhcPs -> Range -> ContextResult
 getImportContext imports query =
-  everythingBut
+  gather
     (<>)
     ((mempty, False) `mkQ` importQ query)
     imports
 
 getDeclContext :: LHsDecl GhcPs -> Range -> ContextResult
 getDeclContext declarations query =
-  everythingBut
+  gather
     (<>)
     ((mempty, False) `mkQ` sigQ query `extQ` bindQ query `extQ` declQ query)
     declarations
 
 -- * Querying
+
+-- | Returns 'True' when the parsed module already has a @module ... where@
+-- declaration. Used downstream to suppress the module header snippet.
+contextHasModuleHeader :: ContextMap -> Bool
+contextHasModuleHeader (ContextMap h _) = h
 
 -- | Look up the completion context at a given position.
 -- Returns the innermost (most specific) context that contains the position.
@@ -152,25 +190,25 @@ getDeclContext declarations query =
 -- Only the 'ContextChunks' up to and including the chunk containing the
 -- query position are forced; later chunks remain as unevaluated thunks.
 getContext :: ContextMap -> PositionResult Position -> Context
-getContext (ContextMap chunks) query =
-  case searchChunks True chunks of
-    (groups, NoContext)        -> TopContext groups
+getContext (ContextMap _ chunks) query =
+  case searchChunks HeaderGroup chunks mempty of
+    (groups, NoContext)        -> TopContext $ nub groups
     (_, ContextResult _ found) -> found
   where
     (qLo, qHi) = case query of
       PositionExact p   -> (p, p)
       PositionRange l u -> (l, u)
 
-    searchChunks :: Bool -> [ContextChunk] -> ([ContextGroup], ContextResult)
-    searchChunks _ [] = ([], mempty)
-    searchChunks firstChunk (Chunk cLo cHi group contextOf : rest)
+    searchChunks :: ContextGroup -> [ContextChunk] -> ([ContextGroup], ContextResult) -> ([ContextGroup], ContextResult)
+    searchChunks _ [] !acc = acc
+    searchChunks lastChunk (Chunk cLo cHi group contextOf : rest) !acc
       | -- query is past this chunk (line-only comparison so cursors
         -- past the last column on the final line still match)
-        _line qLo > _line cHi = searchChunks False rest
+        _line qLo > _line cHi = searchChunks group rest acc
       | -- query is before this chunk
-        qHi < cLo = (if firstChunk then [HeaderGroup] else [], mempty)
+        qHi < cLo = ([lastChunk, group], mempty) <> acc
         -- this chunk is relevant, emit the group and all relevant intervals
-      | otherwise  = ([group], contextOf (Range qLo qHi)) <> searchChunks False rest
+      | otherwise = searchChunks group rest (([group], contextOf (Range qLo qHi)) <> acc)
 
 -- * SYB queries types
 
@@ -199,6 +237,9 @@ declQ query (L (locA -> ss) decl) = case srcSpanToRange ss of
     DerivD {}  -> (ContextResult range TypeContext, True)
     SpliceD {} -> (ContextResult range (TopContext []), True)
     _          -> (ContextResult range DefaultContext, True)  -- DefD, WarningD, AnnD, RuleD, DocD, KindSigD
+
+modNameQ :: Range -> XRec GhcPs ModuleName -> (ContextResult, Bool)
+modNameQ = contextual (TopContext [HeaderGroup]) True
 
 sigQ :: Range -> LSig GhcPs -> (ContextResult, Bool)
 sigQ = contextual TypeContext True
@@ -247,3 +288,13 @@ instance Pretty ContextGroup where
     HeaderGroup -> "header"
     ImportGroup -> "imports"
     DeclarationGroup -> "declarations"
+
+-- | Variation of @Data.Generics.Schemes.everythingBut@, but uses foldl'.
+gather :: forall r. (r -> r -> r) -> GenericQ (r, Bool) -> GenericQ r
+gather k f = go
+  where
+    go :: GenericQ r
+    go x = let (v, stop) = f x
+           in if stop
+                then v
+                else foldl' k v (gmapQ go x)
