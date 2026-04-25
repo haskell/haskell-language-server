@@ -18,7 +18,7 @@ import           Control.Monad                        (join)
 import           Data.Generics                        (Data (..), GenericQ,
                                                        extQ, mkQ)
 import           Data.Hashable                        (Hashable)
-import           Data.List.Extra                      (nub)
+import           Data.List.Extra                      (foldl', nub)
 import           Data.Maybe                           (isJust, mapMaybe,
                                                        maybeToList)
 import qualified Data.Text                            as T
