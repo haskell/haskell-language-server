@@ -18,9 +18,14 @@ data SnippetCompletion = SnippetCompletion
   , snippetContents :: {-# UNPACK #-} !Text
   }
 
-getContextSnippets :: [ContextGroup] -> [CompletionItem]
-getContextSnippets [] = concatMap (fmap mkSnippetCompletion . snd) topContextSnippets
-getContextSnippets groups = concatMap (fmap mkSnippetCompletion . concat . maybeToList . (`lookup` topContextSnippets)) groups
+getContextSnippets :: Bool -> [ContextGroup] -> [CompletionItem]
+getContextSnippets hasModuleHeader groups =
+  let tbl = if hasModuleHeader
+              then filter ((/= HeaderGroup) . fst) topContextSnippets
+              else topContextSnippets
+  in fmap mkSnippetCompletion $ case groups of
+    [] -> concatMap snd tbl
+    _  -> concatMap (concat . maybeToList . (`lookup` tbl)) groups
 
 topContextSnippets :: [(ContextGroup, [SnippetCompletion])]
 topContextSnippets =

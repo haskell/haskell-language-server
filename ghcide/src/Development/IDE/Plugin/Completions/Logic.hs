@@ -453,6 +453,7 @@ getCompletions
     -> IdeOptions
     -> CachedCompletions
     -> Context
+    -> Bool
     -> Maybe (HieAstResult, PositionMapping)
     -> (Bindings, PositionMapping)
     -> PosPrefixInfo
@@ -466,6 +467,7 @@ getCompletions
     ideOpts
     CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
     context
+    hasModuleHeader
     maybe_ast_res
     (localBindings, bmapping)
     prefixInfo@(PosPrefixInfo { fullLine, prefixScope, prefixText })
@@ -636,7 +638,7 @@ getCompletions
       filtTopContextCompls :: [Context.ContextGroup] -> [Scored CompletionItem]
       filtTopContextCompls groups
           | T.null prefixScope
-          = Fuzzy.filter chunkSize maxC fullPrefix (getContextSnippets groups) (view L.label)
+          = Fuzzy.filter chunkSize maxC fullPrefix (getContextSnippets hasModuleHeader groups) (view L.label)
           | otherwise = []
 
       -- We use this ordering to alphabetically sort suggestions while respecting

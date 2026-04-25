@@ -216,9 +216,10 @@ getCompletionsLSP recorder ide plId
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
                     context = deduceContext ctxTree (cursorPos pfix)
+                    hasModuleHeader = maybe False (contextHasModuleHeader . fst) ctxTree
                 config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
-                let allCompletions = getCompletions plugins ideOpts cci' context astres bindMap pfix clientCaps config moduleExports uri
+                let allCompletions = getCompletions plugins ideOpts cci' context hasModuleHeader astres bindMap pfix clientCaps config moduleExports uri
                 logWith recorder Debug $ LogDetectedContext context
                 pure $ InL (orderedCompletions allCompletions)
           _ -> return (InL [])
