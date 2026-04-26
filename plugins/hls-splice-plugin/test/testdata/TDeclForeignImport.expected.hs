@@ -2,4 +2,4 @@
 module TDeclForeignImport where
 import Language.Haskell.TH
 
- importccall unsafe "math.h sin" c_sin :: Double -> Double
+foreign import ccall unsafe "math.h sin" c_sin :: Double -> Double

@@ -2,6 +2,6 @@
 module TDeclNewtype where
 import Language.Haskell.TH
 
-MyNewtype
+newtype MyNewtype
   = MkMyNewtype Int
   deriving Show

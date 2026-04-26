@@ -2,6 +2,6 @@
 module TDeclInstance where
 import Language.Haskell.TH
 
-Wrapper = MkWrapper Int
-Show Wrapper where
+data Wrapper = MkWrapper Int
+instance Show Wrapper where
   show (MkWrapper n) = ("Wrapper:" ++ show n)

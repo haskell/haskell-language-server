@@ -2,6 +2,6 @@
 module TDeclData where
 import Language.Haskell.TH
 
-MyData
+data MyData
   = MyConA Int | MyConB String
   deriving (Show, Eq)

@@ -3,4 +3,4 @@
 module TDeclPatSyn where
 import Language.Haskell.TH
 
-MyPattern <- 42
+pattern MyPattern <- 42

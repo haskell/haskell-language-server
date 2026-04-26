@@ -3,5 +3,5 @@ module TDeclPragma where
 import Language.Haskell.TH
 
 myId :: Int -> Int
-myId #-}
+{-# INLINE myId #-}
 myId x = x
