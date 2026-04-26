@@ -136,6 +136,9 @@
         },
         "signatureHelp": {
             "globalOn": true
+        },
+        "splice": {
+            "globalOn": true
         }
     },
     "sessionLoading": "singleComponent"
