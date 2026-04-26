@@ -9,7 +9,6 @@ module Development.IDE.Plugin.Completions.Logic (
 , cacheDataProducer
 , localCompletionsForParsedModule
 , getCompletions
-, deduceContext
 , fromIdentInfo
 , getCompletionPrefix
 , getCompletionPrefixFromRope
@@ -46,8 +45,7 @@ import qualified Development.IDE.GHC.Compat                 as GHC
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
-import           Development.IDE.Plugin.Completions.Context (Context (..),
-                                                             ContextMap)
+import           Development.IDE.Plugin.Completions.Context (Context (..))
 import qualified Development.IDE.Plugin.Completions.Context as Context
 import           Development.IDE.Plugin.Completions.Snippet
 import           Development.IDE.Plugin.Completions.Types
@@ -653,15 +651,6 @@ getCompletions
           (isQual, CompletionItem{_label,_detail}) -> do
             let isLocal = maybe False (":" `T.isPrefixOf`) _detail
             (Down isQual, Down score, Down isLocal, _label, _detail)
-
--- If we have a context tree, use it to determine which completion to show.
-deduceContext :: Maybe (ContextMap, PositionMapping) -> Position -> Context
-deduceContext maybeCtx pos = case maybeCtx of
-  Nothing -> DefaultContext
-  Just (ct, pmapping) ->
-    let PositionMapping pDelta = pmapping
-        position' = fromDelta pDelta pos
-    in Context.getContext ct position'
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =

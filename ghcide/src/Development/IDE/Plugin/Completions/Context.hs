@@ -9,6 +9,7 @@ module Development.IDE.Plugin.Completions.Context
   , ContextMap
   , GetContextMap (..)
   , contextHasModuleHeader
+  , deduceContext
   , getContext
   , getContextMap
   ) where
@@ -18,7 +19,8 @@ import           Control.Monad                        (join)
 import           Data.Generics                        (Data (..), GenericQ,
                                                        extQ, mkQ)
 import           Data.Hashable                        (Hashable)
-import           Data.List.Extra                      (foldl', nub)
+import           Data.List                            (foldl')
+import           Data.List.Extra                      (nub)
 import           Data.Maybe                           (isJust, mapMaybe,
                                                        maybeToList)
 import qualified Data.Text                            as T
@@ -26,6 +28,7 @@ import           Development.IDE
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat           hiding (getContext)
 import           GHC.Generics                         (Generic)
+import           Language.LSP.Protocol.Types          (isSubrangeOf)
 
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC.Hs                               (HasLoc)
@@ -110,7 +113,7 @@ tighten :: ContextResult -> ContextResult -> ContextResult
 tighten NoContext b = b
 tighten a NoContext = a
 tighten ar@(ContextResult a _) br@(ContextResult b _) =
-  if a `dominates` b then br else ar
+  if b `isSubrangeOf` a then br else ar
 
 -- | A context map, built from a parsed module. Stores whether the module
 -- already has a @module ... where@ header, so that the header snippet can
@@ -137,7 +140,7 @@ getContextMap pm =
     -- Reduces the amount of data we have to look at with syb.
   moduleChunk
     <> groupedChunks 10 ImportGroup rangeOf getImportContext hsmodImports
-    <> groupedChunks 4 DeclarationGroup rangeOf getDeclContext hsmodDecls
+    <> groupedChunks 5 DeclarationGroup rangeOf getDeclContext hsmodDecls
   where
 #if MIN_VERSION_ghc(9,9,0)
     moduleChunk = maybeToList (singletonChunk HeaderGroup rangeOf getHeaderContext hsmodName)
@@ -146,14 +149,6 @@ getContextMap pm =
 #endif
     HsModule {hsmodName, hsmodImports, hsmodDecls} =
       unLoc (pm_parsed_source pm)
-
-#if MIN_VERSION_ghc(9,9,0)
-rangeOf :: HasLoc a => a -> Maybe Range
-rangeOf = srcSpanToRange . locA
-#else
-rangeOf :: GenLocated (SrcSpanAnn' a) e -> Maybe Range
-rangeOf = srcSpanToRange . getLocA
-#endif
 
 getHeaderContext :: Data a => a -> Range -> ContextResult
 getHeaderContext decl query =
@@ -209,6 +204,16 @@ getContext (ContextMap _ chunks) query =
         -- this chunk is relevant, emit the group and all relevant intervals
       | otherwise = searchChunks group rest (([group], contextOf (Range qLo qHi)) <> acc)
 
+-- | Look up the completion context at the given position, applying a position
+-- mapping to account for stale data.
+deduceContext :: Maybe (ContextMap, PositionMapping) -> Position -> Context
+deduceContext maybeCtx pos = case maybeCtx of
+  Nothing -> DefaultContext
+  Just (ct, pmapping) ->
+    let PositionMapping pDelta = pmapping
+        position' = fromDelta pDelta pos
+    in getContext ct position'
+
 -- * SYB queries types
 
 importQ :: Range -> LImportDecl GhcPs -> (ContextResult, Bool)
@@ -221,21 +226,20 @@ importQ query impDecl'@(L _ impDecl) =
         case which of
           EverythingBut -> contextual (ImportHidingContext modName) True query l
           Exactly       -> contextual (ImportListContext modName) True query l
-   in (inlineResults <> importResult, False)
+   in (inlineResults <> importResult, True)
 
 
 declQ :: Range -> LHsDecl GhcPs -> (ContextResult, Bool)
-declQ query (L (locA -> ss) decl) = case srcSpanToRange ss of
-  Nothing -> (mempty, True)
-  Just range | outside query range -> (mempty, True)
-  Just range -> case decl of
-    SigD {}    -> (ContextResult range TypeContext, True)
-    ValD {}    -> (ContextResult range ValueContext, False)
-    TyClD {}   -> (ContextResult range TypeContext, False)   -- DataDecl, SynDecl, FamilyDecl
-    InstD {}   -> (ContextResult range ValueContext, False)
-    DerivD {}  -> (ContextResult range TypeContext, True)
-    SpliceD {} -> (ContextResult range (TopContext []), True)
-    _          -> (ContextResult range DefaultContext, True)  -- DefD, WarningD, AnnD, RuleD, DocD, KindSigD
+declQ query decl'@(L _ decl) =
+  let range = rangeOf decl'
+  in contInRange query range $ \declRange -> case decl of
+    SigD {}    -> (ContextResult declRange TypeContext, True)
+    ValD {}    -> (ContextResult declRange ValueContext, False)
+    TyClD {}   -> (ContextResult declRange TypeContext, False)   -- DataDecl, SynDecl, FamilyDecl
+    InstD {}   -> (ContextResult declRange ValueContext, False)
+    DerivD {}  -> (ContextResult declRange TypeContext, True)
+    SpliceD {} -> (ContextResult declRange (TopContext []), True)
+    _          -> (ContextResult declRange DefaultContext, True)  -- DefD, WarningD, AnnD, RuleD, DocD, KindSigD
 
 modNameQ :: Range -> XRec GhcPs ModuleName -> (ContextResult, Bool)
 modNameQ = contextual (TopContext [HeaderGroup]) True
@@ -246,7 +250,6 @@ sigQ = contextual TypeContext True
 bindQ :: Range -> LHsBind GhcPs -> (ContextResult, Bool)
 bindQ = contextual ValueContext False
 
-
 #if MIN_VERSION_ghc(9,9,0)
 contextual :: HasLoc a => Context -> Bool -> Range -> a -> (ContextResult, Bool)
 #else
@@ -254,15 +257,17 @@ contextual :: Context -> Bool -> Range -> GenLocated (SrcSpanAnn' a) e -> (Conte
 #endif
 contextual context shouldStop query s =
   let range = rangeOf s
-   in case range of
-        Nothing -> (mempty, True)
-        Just range | outside query range -> (mempty, True)
-        Just range -> (ContextResult range context, shouldStop)
+   in contInRange query range $ \range -> (ContextResult range context, shouldStop)
+
+-- | Run a continuation with the 'Range' of a source span, returning no context
+-- if the span is missing or outside the query range.
+contInRange :: Range -> Maybe Range -> (Range -> (ContextResult, Bool)) -> (ContextResult, Bool)
+contInRange query range k = case range of
+  Nothing                            -> (NoContext, True)
+  Just range' | outside query range' -> (NoContext, True)
+  Just range'                        -> k range'
 
 -- * Helpers
-
-dominates :: Range -> Range -> Bool
-dominates (Range s e) (Range qs qe) = s <= qs && qe <= e
 
 -- | A query range is outside a source range if it ends before the source
 -- starts, or it starts on a line after the source ends.
@@ -271,6 +276,14 @@ dominates (Range s e) (Range qs qe) = s <= qs && qe <= e
 -- inside the node occupying that line.
 outside :: Range -> Range -> Bool
 outside (Range ps pe) (Range qs qe) = pe < qs || _line ps > _line qe
+
+#if MIN_VERSION_ghc(9,9,0)
+rangeOf :: HasLoc a => a -> Maybe Range
+rangeOf = srcSpanToRange . locA
+#else
+rangeOf :: GenLocated (SrcSpanAnn' a) e -> Maybe Range
+rangeOf = srcSpanToRange . getLocA
+#endif
 
 instance Pretty Context where
   pretty = \case
