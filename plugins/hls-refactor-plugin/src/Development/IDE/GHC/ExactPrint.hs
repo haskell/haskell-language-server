@@ -301,7 +301,7 @@ graft' ::
     LocatedAn l ast ->
     Graft (Either String) a
 graft' needs_space dst val = Graft $ \dflags a -> do
-    val' <- annotate dflags needs_space val
+    val' <- annotate dflags needs_space dst val
     pure $
         everywhere'
             ( mkT $
@@ -371,7 +371,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
                             Just val' -> do
                                 val'' <-
                                     hoistTransform (either Fail.fail pure)
-                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
+                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space dst (mk_parens val'))
                                 pure val''
                             Nothing -> pure val
                 l -> pure l
@@ -395,7 +395,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
                             Just val' -> do
                                 val'' <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags False $ maybeParensAST val'
+                                        annotate dflags False dst $ maybeParensAST val'
                                 pure val''
                             Nothing -> pure val
                 l -> pure l
@@ -667,6 +667,7 @@ class
     , Typeable l
     , Outputable l
     , Outputable ast
+    , ExactPrint (LocatedAn l ast)
 #if !MIN_VERSION_ghc(9,9,0)
     , Default l
 #endif
@@ -719,12 +720,17 @@ instance ASTElement NameAnn RdrName where
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
 annotate :: ASTElement l ast
-    => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
-annotate dflags needs_space ast = do
+    => DynFlags -> Bool -> SrcSpan -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
+annotate dflags _needs_space _loc ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
-    pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
+#if MIN_VERSION_ghc(9,9,0)
+    let L l e = makeDeltaAst expr'
+    pure $ L l{entry = spanAsAnchor _loc} e
+#else
+    pure $ setPrecedingLines expr' 0 (bool 0 1 _needs_space)
+#endif
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
@@ -732,7 +738,12 @@ annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
-    pure $ setPrecedingLines expr' 1 0
+#if MIN_VERSION_ghc(9,9,0)
+    let expr'' = makeDeltaAst expr'
+#else
+    let expr'' = expr'
+#endif
+    pure $ setPrecedingLines expr'' 1 0
 
 ------------------------------------------------------------------------------
 
