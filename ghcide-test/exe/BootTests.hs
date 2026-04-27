@@ -52,4 +52,8 @@ tests = testGroup "boot"
   , testCase "graph with boot modules" $ runWithExtraFiles "boot2" $ \dir -> do
       _ <- openDoc (dir </> "A.hs") "haskell"
       expectNoMoreDiagnostics 2
+  , testCase "qualified import alongside SOURCE import resolves to full module" $
+      runWithExtraFiles "boot-qualified" $ \dir -> do
+        _ <- openDoc (dir </> "B.hs") "haskell"
+        expectNoMoreDiagnostics 5
   ]
