@@ -38,7 +38,7 @@ test = testGroup "explicit-fields"
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
     , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
     , mkConversionTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
-    , mkConversionTest "QualifiedPositionalConstruction" "QualifiedPositionalConstruction" 10 5 10 15
+    , mkConversionTest "QualifiedPositionalConstruction" "QualifiedPositionalConstruction" 9 10 9 15
     , mkConversionTest "CursorAwarePositional" "CursorPositional" 15 26 15 34
     , mkExpansionTest "CursorAwareRecords" "CursorRecords" 9 40 9 40
     ]
