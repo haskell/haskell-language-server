@@ -8,7 +8,7 @@
 module CompletionTests (tests) where
 
 import           Config
-import           Control.Lens                   ((^.))
+import           Control.Lens                   (view, (^.))
 import qualified Control.Lens                   as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class         (liftIO)
@@ -43,6 +43,7 @@ tests
     , testGroup "package" packageCompletionTests
     , testGroup "project" projectCompletionTests
     , testGroup "other" otherCompletionTests
+    , testGroup "context" contextCompletionTests
     , testGroup "doc" completionDocTests
     ]
 
@@ -52,12 +53,12 @@ testSessionEmpty name = testWithDummyPlugin name (mkIdeTestFs [FS.directCradle [
 testSessionEmptyWithCradle :: TestName -> T.Text -> Session () -> TestTree
 testSessionEmptyWithCradle name cradle = testWithDummyPlugin name (mkIdeTestFs [file "hie.yaml" (text cradle)])
 
-testSessionSingleFile :: TestName -> FilePath -> T.Text -> Session () -> TestTree
-testSessionSingleFile testName fp txt session =
-    testWithDummyPlugin testName (mkIdeTestFs [FS.directCradle [T.pack fp] , file fp (text txt)]) session
+testSessionSingleFile :: TestName -> FilePath -> [T.Text] -> Session () -> TestTree
+testSessionSingleFile testName fp txts session =
+    testWithDummyPlugin testName (mkIdeTestFs [FS.directCradle [T.pack fp] , file fp (text (T.unlines txts))]) session
 
 completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
-completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
+completionTest name src pos expected = testSessionSingleFile name "A.hs" src $ do
     docId <- openDoc "A.hs" "haskell"
     _ <- waitForDiagnostics
 
@@ -199,18 +200,17 @@ localCompletionTests = [
         ,("abcde", CompletionItemKind_Function, "abcde", True, False, Nothing)
         ],
     testSessionEmpty "incomplete entries" $ do
-        let src a = "data Data = " <> a
-        doc <- createDoc "A.hs" "haskell" $ src "AAA"
+        let src a = a <> " = aaa"
+        doc <- createDoc "A.hs" "haskell" $ src "aaa"
         void $ waitForTypecheck doc
-        let editA rhs =
-                changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ src rhs]
-        editA "AAAA"
+        let editA rhs = changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ src rhs]
+        editA "aaaa"
         void $ waitForTypecheck doc
-        editA "AAAAA"
+        editA "aaaaa"
         void $ waitForTypecheck doc
 
-        compls <- getCompletions doc (Position 0 15)
-        liftIO $ filter ("AAA" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["AAAAA"]
+        compls <- getCompletions doc (Position 0 11)
+        liftIO $ filter ("aaa" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["aaaaa"]
         pure (),
     completionTest
         "polymorphic record dot completion"
@@ -344,10 +344,10 @@ otherCompletionTests = [
           T.unlines
             [ "module A where",
               "import B",
-              "memb"
+              "3 = memb"
             ]
       _ <- waitForDiagnostics
-      compls <- getCompletions docA $ Position 2 4
+      compls <- getCompletions docA $ Position 2 7
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
       liftIO $ take 1 compls' @?= ["member"],
 
@@ -480,9 +480,9 @@ projectCompletionTests =
               "import ALocal"
             ]
         compls <- getCompletions doc (Position 1 13)
-        let item = head $ filter ((== "ALocalModule") . (^. L.label)) compls
-        liftIO $ do
-          item ^. L.label @?= "ALocalModule",
+
+        forM_ (listToMaybe $ filter ((== "ALocalModule") . (^. L.label)) compls) $
+          \item -> liftIO $ item ^. L.label @?= "ALocalModule",
       testSessionEmptyWithCradle "auto complete functions from qualified imports without alias" "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
             [  "module A (anidentifier) where",
@@ -495,9 +495,8 @@ projectCompletionTests =
               "A."
             ]
         compls <- getCompletions doc (Position 2 2)
-        let item = head compls
-        liftIO $ do
-          item ^. L.label @?= "anidentifier",
+        forM_ (listToMaybe compls) $
+          \item -> liftIO $ item ^. L.label @?= "anidentifier",
       testSessionEmptyWithCradle "auto complete functions from qualified imports with alias"
                   "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
         _ <- createDoc "A.hs" "haskell" $ T.unlines
@@ -511,10 +510,246 @@ projectCompletionTests =
               "foo = Alias."
             ]
         compls <- getCompletions doc (Position 2 12)
-        let item = head compls
-        liftIO $ do
-          item ^. L.label @?= "anidentifier"
+        forM_ (listToMaybe compls) $
+          \item -> liftIO $ item ^. L.label @?= "anidentifier"
     ]
+
+contextCompletionTests :: [TestTree]
+contextCompletionTests =
+  [ testSessionSingleFile "import snippets at top level" "A.hs"
+      [ "module A where"
+      , "imp"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      let importSnippets = filterSnippetsLabel "import" compls
+      liftIO $ length importSnippets @?= 4
+
+  , completionTest "no import snippet past a declaration"
+      [ "module A where"
+      , "foo = ()"
+      , "imp"
+      ]
+      (Position 2 3)
+      []
+
+  , completionTest
+      "function snippet at top level"
+      [ "module A where"
+      , "foo = ()"
+      , "fun"
+      ]
+      (Position 2 3)
+      [("function", CompletionItemKind_Snippet,
+        "${1:identifier} :: ${2:type}\n${1:identifier} = ${3:body}",
+        False, False, Nothing)]
+
+  , completionTest "no function snippet past an import"
+      [ "module A where"
+      , "fun"
+      , "import Control.Monad hiding (join)"
+      ]
+      (Position 2 3)
+      []
+
+  , completionTest
+      "class snippet at top level"
+      [ "module A where"
+      , "foo = ()"
+      , "cla"
+      ]
+      (Position 2 3)
+      [("class", CompletionItemKind_Snippet, "class ${1:name} where",
+        False, False, Nothing)]
+
+  , completionTest
+      "instance snippet at top level"
+      ["module A where", "foo = ()", "inst"]
+      (Position 2 4)
+      [("instance", CompletionItemKind_Snippet, "instance ${1:name} where",
+        False, False, Nothing)]
+
+  , testSessionSingleFile "no snippets in value binding" "A.hs"
+      [ "module A where"
+      , "foo = imp"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 9)
+      let snippets = [ c | c@CompletionItem{..} <- compls
+                     , _kind == Just CompletionItemKind_Snippet
+                     , _label == "import" ]
+      liftIO $ snippets @?= []
+
+  , testSessionSingleFile "no snippets in instance body" "A.hs"
+      [ "module A where"
+      , "class Foo a where"
+      , "  bar :: a -> ()"
+      , "instance Foo Int where"
+      , "  bar _ = imp"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 4 13)
+      let snippets = filterSnippetsLabel "import" compls
+      liftIO $ snippets @?= []
+
+  , testSessionSingleFile "top level excludes regular completions" "A.hs"
+      [ "module A where"
+      , "hea"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      let headCompls = [ c | c@CompletionItem{..} <- compls, _label == "head" ]
+      liftIO $ headCompls @?= []
+
+  , testSessionSingleFile "unmatched prefix at top level returns empty" "A.hs"
+      [ "module A where"
+      , "xyz"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      liftIO $ compls @?= []
+
+  , completionTest
+      "type context filters out value completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "g :: Xxx"
+      ]
+      (Position 4 8)
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = bar"
+      , "  where"
+      , "    helper :: Xxx"
+      , "    helper = bar"
+      ]
+      (Position 6 17)  -- after "Xxx" in "    helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , testSessionSingleFile "value binding in where-clause gives value completions" "A.hs"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = bar"
+      , "  where"
+      , "    helper = xxxv"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 6 16)  -- after "xxxv"
+      let labels = map (view L.label) compls
+      liftIO $ assertBool "xxxval should appear in value context" ("xxxval" `elem` labels)
+      liftIO $ assertBool "Xxxtype should not appear in value context"
+                          (not ("Xxxtype" `elem` labels))
+
+  , testSessionSingleFile "no snippets in where-clause" "A.hs"
+      [ "module A where"
+      , "foo x = bar"
+      , "  where"
+      , "    helper = imp"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 3 15)  -- after "imp" in "    helper = imp"
+      let snippets = filterSnippetsLabel "import" compls
+      liftIO $ snippets @?= []
+
+  , completionTest
+      "type sig in nested where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = outer"
+      , "  where"
+      , "    inner y = result"
+      , "      where"
+      , "        sig :: Xxx"
+      , "        sig = undefined"
+      ]
+      (Position 8 18)
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in match alternative where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo 0 = bar"
+      , "  where helper :: Xxx"
+      , "foo _ = baz"
+      ]
+      (Position 5 21)  -- after "Xxx" in "  where helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in pattern binding where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "(a, b) = (undefined, undefined)"
+      , "  where"
+      , "    helper :: Xxx"
+      , "    helper = undefined"
+      ]
+      (Position 6 17)  -- after "Xxx" in "    helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in let expression gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo ="
+      , "  let helper :: Xxx"
+      , "      helper = undefined"
+      , "  in helper"
+      ]
+      (Position 5 19)  -- after "Xxx" in "  let helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , testSessionSingleFile "module header snippet shown when no module declaration" "A.hs"
+      [ "mod"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 0 3)
+      let moduleSnippets = filterSnippetsLabel "module" compls
+      liftIO $ length moduleSnippets @?= 1
+
+  , testSessionSingleFile "module header snippet not shown when module declaration exists" "A.hs"
+      [ "module A where"
+      , "mod"
+      ] $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 3)
+      let moduleSnippets = filterSnippetsLabel "module" compls
+      liftIO $ moduleSnippets @?= []
+  ]
+  where
+    filterSnippetsLabel l snippets =
+      [ c | c@CompletionItem{..} <- snippets
+      , _kind == Just CompletionItemKind_Snippet
+      , _label == l
+      ]
 
 completionDocTests :: [TestTree]
 completionDocTests =
