@@ -60,7 +60,9 @@ import           Data.Foldable                         (Foldable (foldl'))
 
 import           GHC.Data.Bag                          (Bag)
 
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Parser.Annotation                 (EpAnn (..), EpToken (..))
+#elif MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                 (EpAnn (..))
 #else
 import           GHC.Parser.Annotation                 (SrcSpanAnn' (..))
@@ -305,10 +307,18 @@ class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast wher
 instance HasSplice AnnListItem HsExpr where
     type SpliceOf HsExpr = HsSpliceCompat
     matchSplice _ (HsUntypedSplice _ spl) = Just (UntypedSplice spl)
+#if MIN_VERSION_ghc(9,13,0)
+    matchSplice _ (HsTypedSplice _ (HsTypedSpliceExpr _ spl)) = Just (TypedSplice spl)
+#else
     matchSplice _ (HsTypedSplice _ spl)   = Just (TypedSplice spl)
+#endif
     matchSplice _ _                       = Nothing
     expandSplice _ (UntypedSplice e) = fmap (first Right) $ rnUntypedSpliceExpr e
+#if MIN_VERSION_ghc(9,13,0)
+    expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice (HsTypedSpliceExpr NoEpTok e)
+#else
     expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice e
+#endif
 
 instance HasSplice AnnListItem Pat where
     type SpliceOf Pat = HsUntypedSplice
@@ -408,7 +418,11 @@ toDiagnosticMessage message =
                           message
 
         , diagReason  = Error.diagnosticReason  message
+#if MIN_VERSION_ghc(9,13,0)
+        , diagHints   = []
+#else
         , diagHints   = Error.diagnosticHints   message
+#endif
         }
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
