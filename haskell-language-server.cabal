@@ -1177,6 +1177,58 @@ test-suite hls-code-range-plugin-tests
     , vector
 
 -----------------------------
+-- document link
+-----------------------------
+
+flag documentLink
+  description: Enable documentLink plugin
+  default:     True
+  manual:      True
+
+common documentLink
+  if flag(documentLink)
+    build-depends: haskell-language-server:hls-document-link-plugin
+    cpp-options: -Dhls_documentLink
+
+library hls-document-link-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(documentLink)
+    buildable: False
+  exposed-modules:
+    Ide.Plugin.DocumentLink
+  hs-source-dirs: plugins/hls-document-link-plugin/src
+  build-depends:
+    , containers
+    , deepseq
+    , extra
+    , ghc
+    , ghcide           == 2.13.0.0
+    , hashable
+    , hls-plugin-api   == 2.13.0.0
+    , lens
+    , lsp
+    , mtl
+    , semigroupoids
+    , transformers
+    , vector
+
+test-suite hls-document-link-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(documentLink)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-document-link-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , ghcide
+    , filepath
+    , haskell-language-server:hls-document-link-plugin
+    , hls-test-utils             == 2.13.0.0
+    , text
+    , lens
+    , lsp-types
+
+-----------------------------
 -- change type signature plugin
 -----------------------------
 
@@ -1846,6 +1898,7 @@ library
                   , hlint
                   , stan
                   , signatureHelp
+                  , documentLink
                   , pragmas
                   , splice
                   , alternateNumberFormat

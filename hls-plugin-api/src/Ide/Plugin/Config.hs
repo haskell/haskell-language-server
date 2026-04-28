@@ -78,6 +78,7 @@ parsePluginConfig def = A.withObject "PluginConfig" $ \o -> PluginConfig
       <*> o .:? "selectionRangeOn" .!= plcSelectionRangeOn def
       <*> o .:? "foldingRangeOn"   .!= plcFoldingRangeOn def
       <*> o .:? "semanticTokensOn" .!= plcSemanticTokensOn def
+      <*> o .:? "documentLinkOn"   .!= plcDocumentLinkOn def
       <*> o .:? "config"           .!= plcConfig        def
 
 -- ---------------------------------------------------------------------
