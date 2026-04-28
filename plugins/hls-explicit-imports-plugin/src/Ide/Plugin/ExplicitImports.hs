@@ -16,7 +16,8 @@ module Ide.Plugin.ExplicitImports
   ) where
 
 import           Control.DeepSeq
-import           Control.Lens                         (_Just, (&), (?~), (^?))
+import           Control.Lens                         (_Just, (&), (?~), (^.),
+                                                       (^?))
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
@@ -25,13 +26,14 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
 import           Data.Char                            (isSpace)
+import           Data.Functor                         ((<&>))
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
 import           Data.List                            (singleton)
 import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (isJust, isNothing,
-                                                       mapMaybe)
+import           Data.Maybe                           (catMaybes, isJust,
+                                                       isNothing, mapMaybe)
 import qualified Data.Set                             as S
 import           Data.String                          (fromString)
 import qualified Data.Text                            as T
@@ -47,6 +49,10 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
+import           GHC.Parser.Annotation                (EpAnn (anns),
+                                                       epaLocationRealSrcSpan,
+                                                       realSrcSpan)
+import           GHC.Types.PkgQual                    (RawPkgQual (NoRawPkgQual))
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE,
                                                        handleMaybe)
@@ -108,6 +114,7 @@ descriptorForModules recorder modFilter plId =
         <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
         -- This plugin provides inlay hints
         <> mkPluginHandler SMethod_TextDocumentInlayHint (inlayHintProvider recorder)
+        <> mkPluginHandler SMethod_TextDocumentInlayHint (importPackageInlayHintProvider recorder)
         -- This plugin provides code actions
         <> codeActionHandlers
     }
@@ -235,6 +242,85 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
           title RefineImport   = Nothing -- does not provide imports statements that can be refined via inlay hints
       in title ieResType
 
+-- | Provide inlay hints that show which package a module is imported from.
+importPackageInlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
+importPackageInlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} =
+    if isInlayHintsSupported state
+    then do
+        nfp <- getNormalizedFilePathE _uri
+        (hscEnvEq, _) <- runActionE "ImportPackageInlayHint.GhcSessionDeps" state $ useWithStaleE GhcSessionDeps nfp
+        (parsedModule, pmap) <- runActionE "ImportPackageInlayHint.GetParsedModuleWithComments" state $ useWithStaleE GetParsedModule nfp
+
+        let moduleNamePositions = getModuleNamePositions parsedModule
+            env = hscEnv hscEnvEq
+
+        packagePositions <- fmap catMaybes $ for moduleNamePositions $ \(pos, moduleName) -> do
+            packageName <- liftIO $ packageNameForModuleName moduleName env
+            case packageName of
+                Nothing          -> pure Nothing
+                Just packageName -> pure $ Just (pos, packageName)
+
+        let inlayHints = [ generateInlayHint newPos txt
+                         | (pos, txt) <- packagePositions
+                         , Just newPos <- [toCurrentPosition pmap pos]
+                         , positionInRange newPos visibleRange]
+        pure $ InL inlayHints
+    -- When the client does not support inlay hints, do not display anything
+    else pure $ InL []
+  where
+    generateInlayHint :: Position -> T.Text -> InlayHint
+    generateInlayHint pos txt =
+      InlayHint { _position = pos
+                , _label = InL txt
+                , _kind = Nothing
+                , _textEdits = Nothing
+                , _tooltip = Nothing
+                , _paddingLeft = Just True
+                , _paddingRight = Nothing
+                , _data_ = Nothing
+                }
+
+    packageNameForModuleName :: ModuleName -> HscEnv -> IO (Maybe T.Text)
+    packageNameForModuleName modName env = runMaybeT $ do
+        mod <- MaybeT $ findImportedModule env modName
+        let pid = moduleUnit mod
+        conf <- MaybeT $ return $ lookupUnit env pid
+        let packageName = T.pack $ unitPackageNameString conf
+        return $ "\"" <> packageName <> "\""
+
+    getModuleNamePositions :: ParsedModule -> [(Position, ModuleName)]
+    getModuleNamePositions parsedModule =
+        let isPackageImport :: ImportDecl GhcPs -> Bool
+            isPackageImport ImportDecl{ideclPkgQual = NoRawPkgQual} = False
+            isPackageImport _                                       = True
+
+            L _ hsImports = hsmodImports <$> pm_parsed_source parsedModule
+
+            realSrcSpanToEndPosition :: RealSrcSpan -> Position
+            realSrcSpanToEndPosition realSrcSpan = realSrcSpanToRange realSrcSpan ^. L.end
+
+            importAnnotation :: ImportDecl GhcPs -> EpAnnImportDecl
+#if MIN_VERSION_ghc(9,5,0)
+            importAnnotation = anns . ideclAnn . ideclExt
+#else
+            importAnnotation = anns . ideclExt
+#endif
+
+            hintPosition :: ImportDecl GhcPs -> Position
+            hintPosition importDecl =
+              let importAnn = importAnnotation importDecl
+                  importPosition = realSrcSpanToEndPosition . epaLocationRealSrcSpan $ importDeclAnnImport importAnn
+                  moduleNamePosition = realSrcSpanToEndPosition $ realSrcSpan $ getLoc $ ideclName importDecl
+                  maybeQualifiedPosition = realSrcSpanToEndPosition . epaLocationRealSrcSpan <$> importDeclAnnQualified importAnn
+              in case maybeQualifiedPosition of
+                  Just qualifiedPosition -> if qualifiedPosition < moduleNamePosition
+                                            then qualifiedPosition
+                                            else importPosition
+                  Nothing -> importPosition
+        in hsImports
+            & filter (\(L _ importDecl) -> not $ isPackageImport importDecl)
+            & map (\(L _ importDecl) ->
+              (hintPosition importDecl, unLoc $ ideclName importDecl))
 
 -- |For explicit imports: If there are any implicit imports, provide both one
 -- code action per import to make that specific import explicit, and one code
