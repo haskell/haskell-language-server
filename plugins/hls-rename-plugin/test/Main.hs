@@ -8,7 +8,7 @@ import           Control.Lens                ((^.))
 import           Data.Aeson                  (KeyValue ((.=)))
 import           Data.Functor                (void)
 import qualified Data.Map                    as M
-import           Data.Text                   (Text, pack)
+import           Data.Text                   (Text, isInfixOf, pack, unpack)
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename           as Rename
 import qualified Language.LSP.Protocol.Lens  as L
@@ -36,6 +36,35 @@ prepareRenameTests = testGroup "PrepareRename"
         void waitForBuildQueue
         result <- prepareRename doc (Position 0 9)
         liftIO $ result @?= InR Null
+
+    , testCase "Import alias in declaration" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        let expected = InL (PrepareRenameResult (InL (Range (Position 2 24) (Position 2 25))))
+        resultAtStart <- prepareRename doc (Position 2 24)
+        liftIO $ resultAtStart @?= expected
+        resultAtEnd <- prepareRename doc (Position 2 25)
+        liftIO $ resultAtEnd @?= expected
+        resultOutside <- prepareRename doc (Position 2 26)
+        liftIO $ resultOutside /= expected @? "Cursor is outside alias"
+
+    , testCase "Import alias at use site" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        let expected = InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 15))))
+        resultAtStart <- prepareRename doc (Position 10 14)
+        liftIO $ resultAtStart @?= expected
+        resultAtEnd <- prepareRename doc (Position 10 15)
+        liftIO $ resultAtEnd @?= expected
+        resultOutside <- prepareRename doc (Position 10 16)
+        liftIO $ resultOutside /= expected @? "Cursor is outside qualifier"
+
+    , testCase "Import alias in re-export" $ runRenameSession "" $ do
+        doc <- openDoc "PrepareRename.hs" "haskell"
+        void waitForBuildQueue
+        result <- prepareRename doc (Position 0 27)
+        liftIO $ result @?=
+            InL (PrepareRenameResult (InL (Range (Position 0 27) (Position 0 28))))
 
     , testCase "Function name" $ runRenameSession "" $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
@@ -93,6 +122,44 @@ renameTests = testGroup "Identifier"
         rename doc (Position 6 37) "Expr"
     , goldenWithRename "Hidden function" "HiddenFunction" $ \doc ->
         rename doc (Position 0 32) "quux"
+    , goldenWithRename "Import alias declaration" "ImportAlias" $ \doc ->
+        rename doc (Position 1 14) "G"
+    , goldenWithRename "Import alias at use site" "ImportAlias" $ \doc ->
+        rename doc (Position 5 6) "G"
+    , goldenWithRename "Import alias declaration (cursor at end)" "ImportAlias" $ \doc ->
+        rename doc (Position 1 18) "G"
+    , goldenWithRename "Import alias at use site (cursor at end)" "ImportAlias" $ \doc ->
+        rename doc (Position 5 10) "G"
+    , testCase "Import alias declaration (cursor at invalid Unicode position)" $ runRenameSession "" $ do
+        doc <- openDoc "ImportAlias.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "typecheck"
+        renameErr <- expectRenameError doc (Position 5 7) "G"
+        liftIO $ do
+            renameErr ^. L.code @?= InR ErrorCodes_InvalidParams
+            renameErr ^. L.message @?= "rename: Invalid Params: The cursor position is inside a Unicode surrogate pair."
+    , testCase "Import alias (invalid new alias)" $ runRenameSession "" $ do
+        doc <- openDoc "ImportAlias.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "typecheck"
+        renameErr <- expectRenameError doc (Position 5 6) "Just . G"
+        liftIO $ do
+            renameErr ^. L.code @?= InR ErrorCodes_InvalidParams
+            renameErr ^. L.message @?= "rename: Invalid Params: ‘Just . G’ is an invalid import alias."
+    , goldenWithRename "Import alias declaration (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
+        rename doc (Position 3 31) "Maybe"
+    , goldenWithRename "Import alias at use site (shared by unrelated imports)" "ImportAliasShared" $ \doc ->
+        rename doc (Position 6 6) "Maybe"
+    , goldenWithRename "Import alias declaration (with re-exports)" "ImportAliasReexport" $ \doc -> do
+        rename doc (Position 1 18) "Reexport"
+    , testCase "Import alias at use site (ambiguous due to re-exports)" $ runRenameSession "" $ do
+        doc <- openDoc "ImportAliasReexport.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "typecheck"
+        renameErr <- expectRenameError doc (Position 4 6) "G"
+        liftIO $ do
+            renameErr ^. L.code @?= InR ErrorCodes_InvalidParams
+            let errMessage = renameErr ^. L.message
+            assertBool
+                ("expected error due to ambiguous alias, but got: " <> unpack errMessage)
+                ("Alias ‘F’ is ambiguous" `isInfixOf` errMessage)
     , goldenWithRename "Imported function" "ImportedFunction" $ \doc ->
         rename doc (Position 3 8) "baz"
     , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->
@@ -101,7 +168,7 @@ renameTests = testGroup "Identifier"
         rename doc (Position 4 23) "blah"
     , goldenWithRename "Let expression" "LetExpression" $ \doc ->
         rename doc (Position 5 11) "foobar"
-    , goldenWithRename "Qualified as" "QualifiedAs" $ \doc ->
+    , goldenWithRename "Qualified-as function" "QualifiedAsFunction" $ \doc ->
         rename doc (Position 3 10) "baz"
     , goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc ->
         rename doc (Position 3 12) "foobar"
