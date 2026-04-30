@@ -40,6 +40,7 @@ import           Development.IDE                      (IdeState,
                                                        defineNoDiagnostics,
                                                        getDefinition, hscEnv,
                                                        hsep, printName,
+                                                       printOutputableQualified,
                                                        realSrcSpanToRange,
                                                        shakeExtras,
                                                        srcSpanToLocation,
@@ -74,7 +75,6 @@ import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        mkPrintUnqualifiedDefault,
                                                        nameSrcSpan,
                                                        pprNameUnqualified,
-                                                       printSDocQualifiedUnsafe,
                                                        recDotDot, tcg_rdr_env,
                                                        unLoc)
 import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns),
@@ -98,8 +98,7 @@ import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        insertNewPragma)
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (Identifier)
-import           GHC.Utils.Outputable                 (NamePprCtx,
-                                                       Outputable (..))
+import           GHC.Utils.Outputable                 (NamePprCtx)
 import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
@@ -599,7 +598,7 @@ showRecordPatFlds _ = Nothing
 
 showRecordCon :: Outputable (HsExpr (GhcPass c)) => NamePprCtx -> HsExpr (GhcPass c) -> Maybe Text
 showRecordCon pprCtx expr@(RecordCon _ _ flds) =
-  Just $ formatOutputable pprCtx $
+  Just $ printOutputableQualified pprCtx $
     expr { rcon_flds = preprocessRecordCon flds }
 showRecordCon _ _ = Nothing
 
@@ -614,13 +613,10 @@ showRecordConFlds _ = Nothing
 
 showRecordApp :: NamePprCtx -> RecordAppExpr -> Maybe Text
 showRecordApp pprCtx (RecordAppExpr _ recConstr fla)
-  = Just $ formatOutputable pprCtx recConstr <>  " { "
+  = Just $ printOutputableQualified pprCtx recConstr <>  " { "
          <> T.intercalate ", " (showFieldWithArg <$> fla)
          <> " }"
-  where showFieldWithArg (field, arg) = printFieldName pprCtx field <> " = " <> formatOutputable pprCtx arg
-
-formatOutputable :: Outputable a => NamePprCtx -> a -> Text
-formatOutputable pprCtx a = T.pack $ printSDocQualifiedUnsafe pprCtx (ppr a)
+  where showFieldWithArg (field, arg) = printFieldName pprCtx field <> " = " <> printOutputableQualified pprCtx arg
 
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everythingBut (<>) (([], False) `mkQ` ignoreGenerated `extQ` getRecPatterns `extQ` getRecCons)
@@ -714,4 +710,4 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
 getRecPatterns _ = ([], False)
 
 printFieldName :: Outputable a => NamePprCtx -> a -> Text
-printFieldName pprCtx = stripOccNamePrefix . formatOutputable pprCtx
+printFieldName pprCtx = stripOccNamePrefix . printOutputableQualified pprCtx
