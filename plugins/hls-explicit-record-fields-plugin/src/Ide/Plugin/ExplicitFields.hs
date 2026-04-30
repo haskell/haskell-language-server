@@ -182,7 +182,7 @@ getConversionType = \case
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
-  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CodeAction" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
   let recordsWithUid = [ (RecordConversion uid conversionType, record)
@@ -212,7 +212,7 @@ codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionReso
 codeActionResolveProvider ideState pId ca uri uid = do
   nfp <- getNormalizedFilePathE uri
   pragma <- getFirstPragma pId ideState nfp
-  (CRR {crCodeActionResolve, nameMap, enabledExtensions}, pprCtx) <- runActionE "ExplicitFields.CodeAction" ideState $ do
+  (CRR {crCodeActionResolve, nameMap, enabledExtensions}, pprCtx) <- runActionE "ExplicitFields.CodeActionResolve" ideState $ do
     cr <- useE CollectRecords nfp
     typechecked <- useE TypeCheck nfp
     hscEnvEq <- useE GhcSession nfp
@@ -240,7 +240,7 @@ inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler Id
 inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- getNormalizedFilePathE uri
   pragma <- getFirstPragma pId state nfp
-  runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
+  runIdeActionE "ExplicitFields.InlayHintDotDot" (shakeExtras state) $ do
     (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
     (typechecked, _) <- useWithStaleFastE TypeCheck nfp
     (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
@@ -294,7 +294,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
 inlayHintPosRecProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- getNormalizedFilePathE uri
-  runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
+  runIdeActionE "ExplicitFields.InlayHintPosRec" (shakeExtras state) $ do
     (CRR {crCodeActions, nameMap, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
     (typechecked, _) <- useWithStaleFastE TypeCheck nfp
     (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
@@ -465,10 +465,12 @@ data RecordInfo
   deriving (Generic)
 
 instance Pretty RecordInfo where
-  pretty (RecordInfoPat _ p) = pretty (printOutputable p)
-  pretty (RecordInfoCon _ e) = pretty (printOutputable e)
-  pretty (RecordInfoApp _ (RecordAppExpr _ _ fla))
-    = hsep (map (pretty . printOutputable) fla)
+  pretty rec = case rec of
+    (RecordInfoPat ss p) -> formatSrcSpan ss <+> pretty (printOutputable p)
+    (RecordInfoCon ss e) -> formatSrcSpan ss <+> pretty (printOutputable e)
+    (RecordInfoApp ss (RecordAppExpr _ _ fla)) -> formatSrcSpan ss <+> hsep (map (pretty . printOutputable) fla)
+   where
+    formatSrcSpan ss = pretty (stripOccNamePrefix (printOutputable ss)) <> ":"
 
 recordInfoToRange :: RecordInfo -> Range
 recordInfoToRange (RecordInfoPat ss _) = realSrcSpanToRange ss
