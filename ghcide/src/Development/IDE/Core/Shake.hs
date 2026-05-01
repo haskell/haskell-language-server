@@ -889,7 +889,9 @@ withRestartWorker ide@IdeState{..} action =
     withAsync (forever $
         processPendingRestart (shakeRecorder shakeExtras) ide
             `catch` \(e :: SomeException) ->
-                logWith (shakeRecorder shakeExtras) Error (LogRestartWorkerException e)) $
+                case fromException e of
+                  Just AsyncCancelled -> throwIO e
+                  _ -> logWith (shakeRecorder shakeExtras) Error (LogRestartWorkerException e)) $
         \_ -> action
 
 processPendingRestart :: Recorder (WithPriority Log) -> IdeState -> IO ()

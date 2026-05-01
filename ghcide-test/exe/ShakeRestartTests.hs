@@ -36,7 +36,7 @@ tests = testGroup "shake restart merging"
             merged = mergePendingRestart p1 (Just p2)
 
         pendingRestartReasons merged @?= ["r1", "r2"]
-        keys <- sequence $ pendingRestartActionBetweenSessions merged
+        keys <- sequence $ reverse $ pendingRestartActionBetweenSessions merged
         concat keys @?= [key2, key1]
 
     , testCase "RestartSlot coalescing" $ do
