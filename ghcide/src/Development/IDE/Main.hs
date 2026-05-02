@@ -53,8 +53,7 @@ import qualified Development.IDE.Core.Service             as Service
 import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
                                                            ThreadQueue (tLoaderQueue),
                                                            shakeSessionInit,
-                                                           uses,
-                                                           withRestartWorker)
+                                                           uses)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Graph                    (action)
 import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
@@ -379,7 +378,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         Check argFiles -> do
           let dir = argsProjectRoot
           dbLoc <- getHieDbLoc dir
-          runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc mempty $ \hiedb threadQueue -> do
+          ideMVar <- newEmptyMVar
+          runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc mempty ideMVar $ \hiedb threadQueue -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -408,23 +408,23 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
             ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb threadQueue mempty dir
-            withRestartWorker ide $ do
-                shakeSessionInit (cmapWithPrio LogShake recorder) ide
-                registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
+            putMVar ideMVar ide
+            shakeSessionInit (cmapWithPrio LogShake recorder) ide
+            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
-                putStrLn "\nStep 4/4: Type checking the files"
-                setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
-                results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
-                _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
-                _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
-                let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
-                when (failed /= []) $
-                    putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
+            putStrLn "\nStep 4/4: Type checking the files"
+            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
+            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
+            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
+            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
+            let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
+            when (failed /= []) $
+                putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
 
-                let nfiles xs = let n' = length xs in if n' == 1 then "1 file" else show n' ++ " files"
-                putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
+            let nfiles xs = let n' = length xs in if n' == 1 then "1 file" else show n' ++ " files"
+            putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
 
-                unless (null failed) (exitWith $ ExitFailure (length failed))
+            unless (null failed) (exitWith $ ExitFailure (length failed))
         Db opts cmd -> do
             let root = argsProjectRoot
             dbLoc <- getHieDbLoc root
@@ -438,7 +438,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         Custom (IdeCommand c) -> do
           let root = argsProjectRoot
           dbLoc <- getHieDbLoc root
-          runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc mempty $ \hiedb threadQueue -> do
+          ideMVar <- newEmptyMVar
+          runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc mempty ideMVar $ \hiedb threadQueue -> do
             sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions "." (tLoaderQueue threadQueue)
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 ideOptions = def_options
@@ -447,10 +448,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
             ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing debouncer ideOptions hiedb threadQueue mempty root
-            withRestartWorker ide $ do
-                shakeSessionInit (cmapWithPrio LogShake recorder) ide
-                registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
-                c ide
+            putMVar ideMVar ide
+            shakeSessionInit (cmapWithPrio LogShake recorder) ide
+            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
+            c ide
 
 -- | List the haskell files given some paths
 --

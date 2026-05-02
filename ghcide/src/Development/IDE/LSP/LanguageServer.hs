@@ -373,12 +373,12 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
                   void $ atomically (traverse readTMVar currentNotifications)
                   checkCancelled _id act k
 
-        runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession $ \withHieDb' threadQueue' -> do
+        runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession ideMVar $ \withHieDb' threadQueue' -> do
           ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
           registerIdeConfiguration (shakeExtras ide) initConfig
           putMVar ideMVar ide
 
-          withRestartWorker ide $ untilReactorStopSignal $ forever (consumeChannel threadQueue')
+          untilReactorStopSignal $ forever (consumeChannel threadQueue')
           logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
@@ -388,8 +388,14 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
 -- | runWithWorkerThreads
 -- create several threads to run the session, db and session loader
 -- see Note [Serializing runs in separate thread]
-runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> IO () -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
-runWithWorkerThreads recorder dbLoc shutdownSession f = evalContT $ do
+runWithWorkerThreads
+    :: Recorder (WithPriority Session.Log)
+    -> FilePath
+    -> IO ()
+    -> MVar IdeState
+    -> (WithHieDb -> ThreadQueue -> IO ())
+    -> IO ()
+runWithWorkerThreads recorder dbLoc shutdownSession ideMVar f = evalContT $ do
   (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
   -- The shake session needs to be shut down prior to the hiedb connections
   -- being cleaned up, otherwise shake could be referencing dead connections.
@@ -397,6 +403,7 @@ runWithWorkerThreads recorder dbLoc shutdownSession f = evalContT $ do
   ContT $ \action -> action () `finally` shutdownSession
   sessionRestartTQueue <- liftIO $ newRestartSlot
   sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
+  ContT $ \action -> withRestartWorker ideMVar $ action ()
   liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.

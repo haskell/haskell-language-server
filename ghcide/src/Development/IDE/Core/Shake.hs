@@ -884,15 +884,17 @@ shakeRestart IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
 -- | Run a worker that asynchronously processes shake restart requests. Will
 -- only ever queue upto 1 additional restart, accumulating data while processing
 -- any restart.
-withRestartWorker :: IdeState -> IO r -> IO r
-withRestartWorker ide@IdeState{..} action =
-    withAsync (forever $
-        processPendingRestart (shakeRecorder shakeExtras) ide
+withRestartWorker :: MVar IdeState -> IO r -> IO r
+withRestartWorker ideMVar action = do
+    let restartWorkerAction = do
+          ide@IdeState{..} <- readMVar ideMVar
+          forever (processPendingRestart (shakeRecorder shakeExtras) ide)
             `catch` \(e :: SomeException) ->
                 case fromException e of
-                  Just AsyncCancelled -> throwIO e
-                  _ -> logWith (shakeRecorder shakeExtras) Error (LogRestartWorkerException e)) $
-        \_ -> action
+                    Just AsyncCancelled -> throwIO e
+                    _ -> logWith (shakeRecorder shakeExtras) Error (LogRestartWorkerException e)
+
+    withAsync restartWorkerAction $ \_ -> action
 
 processPendingRestart :: Recorder (WithPriority Log) -> IdeState -> IO ()
 processPendingRestart recorder IdeState{..} = do
@@ -920,7 +922,6 @@ processPendingRestart recorder IdeState{..} = do
                 (,()) <$> newSession recorder shakeExtras pendingRestartVFS shakeDb
                     (reverse pendingRestartActions)
                     (reverse pendingRestartReasons)
-    pure ()
   where
     logErrorAfter :: Seconds -> IO () -> IO ()
     logErrorAfter seconds action = flip withAsync (const action) $ do
