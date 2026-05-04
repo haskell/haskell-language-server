@@ -400,11 +400,13 @@ runWithWorkerThreads recorder dbLoc shutdownSession ideMVar f = evalContT $ do
   -- The shake session needs to be shut down prior to the hiedb connections
   -- being cleaned up, otherwise shake could be referencing dead connections.
   -- This is passed in via the callsites.
+  let workerRecorder = cmapWithPrio Session.LogSessionWorkerThread recorder
+  let shakeRecorder = cmapWithPrio Session.LogShake recorder
+  sessionRestartTQueue <- withWorkerRef workerRecorder "sessionRestartTQueue" (processPendingRestart shakeRecorder ideMVar)
   ContT $ \action -> action () `finally` shutdownSession
-  sessionRestartTQueue <- liftIO $ newRestartSlot
-  sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
-  ContT $ \action -> withRestartWorker ideMVar $ action ()
-  liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
+  sessionLoaderTQueue <- withWorkerQueueSimple workerRecorder "SessionLoaderTQueue"
+  restartSlot <- liftIO $ newRestartSlot sessionRestartTQueue
+  liftIO $ f hiedb (ThreadQueue threadQueue restartSlot sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   It is important, that the thread that puts the 'MVar' is not dropped before it puts the 'MVar' i.e. it should

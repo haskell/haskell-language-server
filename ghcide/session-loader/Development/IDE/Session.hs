@@ -90,6 +90,7 @@ import           Data.HashMap.Strict                 (HashMap)
 import           Data.HashSet                        (HashSet)
 import qualified Data.HashSet                        as Set
 import           Database.SQLite.Simple
+import qualified Development.IDE.Core.Shake          as Shake
 import           Development.IDE.Core.Tracing        (withTrace)
 import           Development.IDE.Core.WorkerThread
 import           Development.IDE.Session.Dependency
@@ -136,6 +137,7 @@ data Log
   | LogLookupSessionCache !FilePath
   | LogTime !String
   | LogSessionGhc Ghc.Log
+  | LogShake Shake.Log
 deriving instance Show Log
 
 instance Pretty Log where
@@ -209,6 +211,7 @@ instance Pretty Log where
     LogSessionGhc msg -> pretty msg
     LogSessionLoadingChanged ->
       "Session Loading config changed, reloading the full session."
+    LogShake msg -> pretty msg
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -633,7 +636,7 @@ newSessionState = do
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 
-loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> TaskQueue (IO ()) -> IO (Action IdeGhcSession)
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> WorkerTasks STM (IO ()) -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
 
@@ -663,7 +666,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     -- see Note [Serializing runs in separate thread]
     -- Start the 'getOptionsLoop' if the queue is empty
     liftIO $ atomically $
-      Extra.whenM (isEmptyTaskQueue que) $ do
+      Extra.whenM (nullWorkerTasks que) $ do
         let newSessionLoadingOptions = SessionLoadingOptions
               { findCradle = cradleLoc
               , ..
@@ -683,7 +686,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionLoadingOptions = newSessionLoadingOptions
               }
 
-        writeTaskQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
+        addWorkerTask que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
 
     -- Each one of deps will be registered as a FileSystemWatcher in the GhcSession action
     -- so that we can get a workspace/didChangeWatchedFiles notification when a dep changes.
