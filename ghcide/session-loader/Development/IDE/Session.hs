@@ -107,6 +107,7 @@ import           Text.ParserCombinators.ReadP        (readP_to_S)
 
 import           Control.Concurrent.STM              (STM, TVar)
 import qualified Control.Monad.STM                   as STM
+import           Control.Monad.Trans.Class           (lift)
 import           Control.Monad.Trans.Reader
 import qualified Development.IDE.Session.Ghc         as Ghc
 import qualified Development.IDE.Session.OrderedSet  as S
@@ -446,6 +447,11 @@ data SessionState = SessionState
   -- ^ Map @hie.yaml@ to all modules that have this @hie.yaml@ as the root location.
   , filesMap     :: !FilesMap
   -- ^ Maps a 'NormalizedFilePath' to its @hie.yaml@, the reverse of 'fileToFlags'.
+  , globWatchers :: !(STM.Map (Maybe FilePath) [GlobPattern])
+  -- ^ Glob patterns to watch.
+  --
+  -- NB: for now, we only store the patterns themselves, not the files that
+  -- matched them (e.g. at session-load time).
   , version      :: !(Var Int)
     -- ^ Session loading version, incremented whenever the shake cache needs to be invalidated.
   , sessionLoadingPreferenceConfig :: !(Var (Maybe SessionLoadingPreferenceConfig))
@@ -519,6 +525,7 @@ resetFileMaps :: SessionState -> STM ()
 resetFileMaps state = do
   STM.reset (filesMap state)
   STM.reset (fileToFlags state)
+  STM.reset (globWatchers state)
 
 -- | Insert or update file flags for a specific hieYaml and normalized file path
 insertFileFlags :: SessionState -> Maybe FilePath -> NormalizedFilePath -> (IdeResult HscEnvEq, DependencyInfo) -> STM ()
@@ -615,6 +622,7 @@ newSessionState = do
     <*> newVar Map.empty            -- hscEnvs
     <*> STM.newIO                   -- fileToFlags
     <*> STM.newIO                   -- filesMap
+    <*> STM.newIO                   -- globWatchers
     <*> newVar 0                    -- version
     <*> newVar Nothing              -- sessionLoadingPreferenceConfig
   return sessionState
@@ -690,21 +698,29 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     -- The GlobPattern of a FileSystemWatcher can be absolute or relative.
     -- We use the absolute one because it is supported by more LSP clients.
     -- Here we make sure deps are absolute and later we use those absolute deps as GlobPattern.
-    let absolutePathsCradleDeps (eq, deps) = (eq, fmap toAbsolutePath $ Map.keys deps)
+    let toCradleDeps (deps, globs) = CradleDeps
+          { cradleFileDeps = fmap toAbsolutePath $ Map.keys deps
+          , cradleGlobDeps = map (GlobPattern . toAbsolutePath . getGlobPattern) globs
+          }
     returnWithVersion $ \file -> do
       let absFile = toAbsolutePath file
-      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
+      (eq, deps, globs) <- lookupOrWaitCache recorder sessionState absFile
+      return (eq, toCradleDeps (deps, globs))
 
 -- | Given a file, this function will return the HscEnv and the dependencies
 -- it would look up the cache first, if the cache is not available, it would
 -- submit a request to the getOptionsLoop to get the options for the file
 -- and wait until the options are available
-lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
+lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo, [GlobPattern])
 lookupOrWaitCache recorder sessionState absFile = do
   let ncfp = toNormalizedFilePath' absFile
   cacheResult <- maybeM
     (return Nothing)
-    (guardedA (checkDependencyInfo . snd))
+    -- Check file dependencies for staleness.
+    --
+    -- We don't do this for globs, as we (currently) only store the
+    -- glob patterns themselves, not the files that matched them.
+    (guardedA (\(_,di,_globPatterns) -> checkDependencyInfo di))
     (atomically $ do
       -- wait until target file is not in pendingFiles
       Extra.whenM (S.lookup absFile (pendingFiles sessionState)) STM.retry
@@ -721,11 +737,13 @@ lookupOrWaitCache recorder sessionState absFile = do
       atomically $ addToPending sessionState absFile
       lookupOrWaitCache recorder sessionState absFile
 
-checkInCache :: SessionState -> NormalizedFilePath -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo))
+checkInCache :: SessionState -> NormalizedFilePath -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo, [GlobPattern]))
 checkInCache sessionState ncfp = runMaybeT $ do
   cachedHieYamlLocation <- MaybeT $ STM.lookup ncfp (filesMap sessionState)
   m <- MaybeT $ STM.lookup cachedHieYamlLocation (fileToFlags sessionState)
-  MaybeT $ pure $ HM.lookup ncfp m
+  (eq, di) <- MaybeT $ pure $ HM.lookup ncfp m
+  globs <- lift $ STM.lookup cachedHieYamlLocation (globWatchers sessionState)
+  return (eq, di, fromMaybe [] globs)
 
 -- | Modify the shake state.
 data SessionShake = SessionShake

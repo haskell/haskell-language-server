@@ -745,17 +745,17 @@ loadGhcSession recorder ghcSessionDepsConfig = do
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         -- loading is always returning a absolute path now
-        (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
+        (val, CradleDeps { cradleFileDeps = deps, cradleGlobDeps = globs })
+          <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
 
         -- add the deps to the Shake graph
         let addDependency fp = do
                 -- VSCode uses absolute paths in its filewatch notifications
                 let nfp = toNormalizedFilePath' fp
                 itExists <- getFileExists nfp
-                when itExists $ void $ do
-                  use_ GetPhysicalModificationTime nfp
-
+                when itExists $ void $ use_ GetPhysicalModificationTime nfp
         mapM_ addDependency deps
+        mapM_ (\(GlobPattern fp) -> void $ use AddWatchedFile (toNormalizedFilePath' fp)) globs
 
         let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
