@@ -53,7 +53,7 @@ cabalKeywords =
   Map.fromList
     [ ("name:", nameCompleter),
       ("version:", noopCompleter),
-      ("build-type:", constantCompleter ["Simple", "Custom", "Configure", "Make"]),
+      ("build-type:", constantCompleter ["Simple", "Custom", "Configure", "Make", "Hooks"]),
       ("license:", weightedConstantCompleter licenseNames weightedLicenseNames),
       ("license-file:", filePathCompleter),
       ("license-files:", filePathCompleter),

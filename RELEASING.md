@@ -54,4 +54,5 @@
   - https://github.com/haskell/ghcup-hs/blob/master/docs/install.md#supported-platforms
   - https://github.com/haskell/ghcup-metadata/blob/44c6e2b5d0fcae15abeffff03e87544edf76dd7a/ghcup-gen/Main.hs#L67
 - [ ] post release on discourse and reddit
+  - Include links to the plugin support table (https://haskell-language-server.readthedocs.io/en/2.13.0.0/support/plugin-support.html) and ghc version support table (https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html)
 - [ ] merge release PR to master or forward port relevant changes

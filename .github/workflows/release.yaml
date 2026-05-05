@@ -22,6 +22,7 @@ jobs:
     - build-aarch64-linux-ubuntu2204-984
     - build-aarch64-linux-ubuntu2204-9103
     - build-aarch64-linux-ubuntu2204-9122
+    - build-aarch64-linux-ubuntu2204-9124
     - build-aarch64-linux-ubuntu2204-9141
     runs-on:
     - self-hosted
@@ -50,6 +51,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-aarch64-linux-ubuntu2204-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -92,6 +98,7 @@ jobs:
     - build-aarch64-mac-984
     - build-aarch64-mac-9103
     - build-aarch64-mac-9122
+    - build-aarch64-mac-9124
     - build-aarch64-mac-9141
     runs-on:
     - self-hosted
@@ -119,6 +126,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-aarch64-mac-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-aarch64-mac-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -167,6 +179,7 @@ jobs:
     - build-x86_64-linux-deb10-984
     - build-x86_64-linux-deb10-9103
     - build-x86_64-linux-deb10-9122
+    - build-x86_64-linux-deb10-9124
     - build-x86_64-linux-deb10-9141
     runs-on:
     - self-hosted
@@ -194,6 +207,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-deb10-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-deb10-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -231,6 +249,7 @@ jobs:
     - build-x86_64-linux-deb11-984
     - build-x86_64-linux-deb11-9103
     - build-x86_64-linux-deb11-9122
+    - build-x86_64-linux-deb11-9124
     - build-x86_64-linux-deb11-9141
     runs-on:
     - self-hosted
@@ -258,6 +277,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-deb11-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-deb11-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -295,6 +319,7 @@ jobs:
     - build-x86_64-linux-deb12-984
     - build-x86_64-linux-deb12-9103
     - build-x86_64-linux-deb12-9122
+    - build-x86_64-linux-deb12-9124
     - build-x86_64-linux-deb12-9141
     runs-on:
     - self-hosted
@@ -322,6 +347,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-deb12-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-deb12-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -359,6 +389,7 @@ jobs:
     - build-x86_64-linux-deb13-984
     - build-x86_64-linux-deb13-9103
     - build-x86_64-linux-deb13-9122
+    - build-x86_64-linux-deb13-9124
     - build-x86_64-linux-deb13-9141
     runs-on:
     - self-hosted
@@ -386,6 +417,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-deb13-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-deb13-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -423,6 +459,7 @@ jobs:
     - build-x86_64-linux-fedora33-984
     - build-x86_64-linux-fedora33-9103
     - build-x86_64-linux-fedora33-9122
+    - build-x86_64-linux-fedora33-9124
     - build-x86_64-linux-fedora33-9141
     runs-on:
     - self-hosted
@@ -450,6 +487,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-fedora33-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-fedora33-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -487,6 +529,7 @@ jobs:
     - build-x86_64-linux-fedora40-984
     - build-x86_64-linux-fedora40-9103
     - build-x86_64-linux-fedora40-9122
+    - build-x86_64-linux-fedora40-9124
     - build-x86_64-linux-fedora40-9141
     runs-on:
     - self-hosted
@@ -514,6 +557,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-fedora40-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-fedora40-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -551,6 +599,7 @@ jobs:
     - build-x86_64-linux-mint202-984
     - build-x86_64-linux-mint202-9103
     - build-x86_64-linux-mint202-9122
+    - build-x86_64-linux-mint202-9124
     - build-x86_64-linux-mint202-9141
     runs-on:
     - self-hosted
@@ -578,6 +627,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-mint202-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-mint202-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -615,6 +669,7 @@ jobs:
     - build-x86_64-linux-mint213-984
     - build-x86_64-linux-mint213-9103
     - build-x86_64-linux-mint213-9122
+    - build-x86_64-linux-mint213-9124
     - build-x86_64-linux-mint213-9141
     runs-on:
     - self-hosted
@@ -642,6 +697,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-mint213-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-mint213-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -679,6 +739,7 @@ jobs:
     - build-x86_64-linux-mint222-984
     - build-x86_64-linux-mint222-9103
     - build-x86_64-linux-mint222-9122
+    - build-x86_64-linux-mint222-9124
     - build-x86_64-linux-mint222-9141
     runs-on:
     - self-hosted
@@ -706,6 +767,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-mint222-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-mint222-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -743,6 +809,7 @@ jobs:
     - build-x86_64-linux-ubuntu2004-984
     - build-x86_64-linux-ubuntu2004-9103
     - build-x86_64-linux-ubuntu2004-9122
+    - build-x86_64-linux-ubuntu2004-9124
     - build-x86_64-linux-ubuntu2004-9141
     runs-on:
     - self-hosted
@@ -770,6 +837,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-ubuntu2004-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -807,6 +879,7 @@ jobs:
     - build-x86_64-linux-ubuntu2204-984
     - build-x86_64-linux-ubuntu2204-9103
     - build-x86_64-linux-ubuntu2204-9122
+    - build-x86_64-linux-ubuntu2204-9124
     - build-x86_64-linux-ubuntu2204-9141
     runs-on:
     - self-hosted
@@ -834,6 +907,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-ubuntu2204-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -871,6 +949,7 @@ jobs:
     - build-x86_64-linux-ubuntu2404-984
     - build-x86_64-linux-ubuntu2404-9103
     - build-x86_64-linux-ubuntu2404-9122
+    - build-x86_64-linux-ubuntu2404-9124
     - build-x86_64-linux-ubuntu2404-9141
     runs-on:
     - self-hosted
@@ -898,6 +977,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-ubuntu2404-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -935,6 +1019,7 @@ jobs:
     - build-x86_64-linux-unknown-984
     - build-x86_64-linux-unknown-9103
     - build-x86_64-linux-unknown-9122
+    - build-x86_64-linux-unknown-9124
     - build-x86_64-linux-unknown-9141
     runs-on:
     - self-hosted
@@ -962,6 +1047,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-linux-unknown-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-linux-unknown-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -999,6 +1089,7 @@ jobs:
     - build-x86_64-mac-984
     - build-x86_64-mac-9103
     - build-x86_64-mac-9122
+    - build-x86_64-mac-9124
     - build-x86_64-mac-9141
     runs-on:
     - macOS-15-intel
@@ -1024,6 +1115,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-mac-9122
+        path: ./
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-mac-9124
         path: ./
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -1065,6 +1161,7 @@ jobs:
     - build-x86_64-windows-984
     - build-x86_64-windows-9103
     - build-x86_64-windows-9122
+    - build-x86_64-windows-9124
     - build-x86_64-windows-9141
     runs-on:
     - windows-latest
@@ -1090,6 +1187,11 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: artifacts-build-x86_64-windows-9122
+        path: ./out
+    - name: Download artifacts
+      uses: actions/download-artifact@v7
+      with:
+        name: artifacts-build-x86_64-windows-9124
         path: ./out
     - name: Download artifacts
       uses: actions/download-artifact@v7
@@ -1189,6 +1291,43 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9122
         path: out-aarch64-linux-ubuntu2204-9.12.2.tar
+        retention-days: 2
+  build-aarch64-linux-ubuntu2204-9124:
+    env:
+      ADD_CABAL_ARGS: ''
+      ARCH: ARM64
+      ARTIFACT: aarch64-linux-ubuntu2204
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-aarch64-linux-ubuntu2204-9124 (Build binaries)
+    runs-on:
+    - ubuntu-22.04-arm
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - env:
+        GHC_VERSION: 9.12.4
+      name: Build aarch64-linux binaries
+      uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
+      with:
+        args: bash .github/scripts/build.sh
+    - env:
+        GHC_VERSION: 9.12.4
+      name: Tar aarch64-linux binaries
+      uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
+      with:
+        args: bash .github/scripts/tar.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-aarch64-linux-ubuntu2204-9124
+        path: out-aarch64-linux-ubuntu2204-9.12.4.tar
         retention-days: 2
   build-aarch64-linux-ubuntu2204-9141:
     env:
@@ -1377,6 +1516,44 @@ jobs:
         name: artifacts-build-aarch64-mac-9122
         path: out-aarch64-apple-darwin-9.12.2.tar
         retention-days: 2
+  build-aarch64-mac-9124:
+    env:
+      ADD_CABAL_ARGS: ''
+      ARCH: ARM64
+      ARTIFACT: aarch64-apple-darwin
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      HOMEBREW_CHANGE_ARCH_TO_ARM: '1'
+      MACOSX_DEPLOYMENT_TARGET: '10.13'
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-aarch64-mac-9124 (Build binaries)
+    runs-on:
+    - self-hosted
+    - macOS
+    - ARM64
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - env:
+        GHC_VERSION: 9.12.4
+      name: Run build
+      run: |
+        bash .github/scripts/brew.sh git coreutils autoconf automake tree
+        export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$PATH"
+        export LD=ld
+        bash .github/scripts/build.sh
+        tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
+      shell: sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-aarch64-mac-9124
+        path: out-aarch64-apple-darwin-9.12.4.tar
+        retention-days: 2
   build-aarch64-mac-9141:
     env:
       ADD_CABAL_ARGS: ''
@@ -1551,6 +1728,36 @@ jobs:
         name: artifacts-build-x86_64-linux-deb10-9122
         path: out-x86_64-linux-deb10-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-deb10-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb10
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb10-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-deb10
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb10-9124
+        path: out-x86_64-linux-deb10-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-deb10-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -1700,6 +1907,36 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9122
         path: out-x86_64-linux-deb11-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-deb11-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb11
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb11-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-deb11
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb11-9124
+        path: out-x86_64-linux-deb11-9.12.4.tar
         retention-days: 2
   build-x86_64-linux-deb11-9141:
     env:
@@ -1851,6 +2088,36 @@ jobs:
         name: artifacts-build-x86_64-linux-deb12-9122
         path: out-x86_64-linux-deb12-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-deb12-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb12
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb12-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-deb12
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb12-9124
+        path: out-x86_64-linux-deb12-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-deb12-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -2000,6 +2267,36 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9122
         path: out-x86_64-linux-deb13-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-deb13-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-deb13
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-deb13-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-deb13
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-deb13-9124
+        path: out-x86_64-linux-deb13-9.12.4.tar
         retention-days: 2
   build-x86_64-linux-deb13-9141:
     env:
@@ -2151,6 +2448,36 @@ jobs:
         name: artifacts-build-x86_64-linux-fedora33-9122
         path: out-x86_64-linux-fedora33-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-fedora33-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora33
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora33-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-fedora33
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora33-9124
+        path: out-x86_64-linux-fedora33-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-fedora33-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -2300,6 +2627,36 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9122
         path: out-x86_64-linux-fedora40-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-fedora40-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-fedora40
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-fedora40-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-fedora40
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-fedora40-9124
+        path: out-x86_64-linux-fedora40-9.12.4.tar
         retention-days: 2
   build-x86_64-linux-fedora40-9141:
     env:
@@ -2451,6 +2808,36 @@ jobs:
         name: artifacts-build-x86_64-linux-mint202-9122
         path: out-x86_64-linux-mint202-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-mint202-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint202
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint202-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-mint202
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint202-9124
+        path: out-x86_64-linux-mint202-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-mint202-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -2600,6 +2987,36 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9122
         path: out-x86_64-linux-mint213-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-mint213-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint213
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint213-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-mint213
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint213-9124
+        path: out-x86_64-linux-mint213-9.12.4.tar
         retention-days: 2
   build-x86_64-linux-mint213-9141:
     env:
@@ -2751,6 +3168,36 @@ jobs:
         name: artifacts-build-x86_64-linux-mint222-9122
         path: out-x86_64-linux-mint222-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-mint222-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-mint222
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-mint222-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-mint222
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-mint222-9124
+        path: out-x86_64-linux-mint222-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-mint222-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -2900,6 +3347,36 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9122
         path: out-x86_64-linux-ubuntu2004-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-ubuntu2004-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-ubuntu2004
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-ubuntu2004-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-ubuntu2004
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-ubuntu2004-9124
+        path: out-x86_64-linux-ubuntu2004-9.12.4.tar
         retention-days: 2
   build-x86_64-linux-ubuntu2004-9141:
     env:
@@ -3051,6 +3528,36 @@ jobs:
         name: artifacts-build-x86_64-linux-ubuntu2204-9122
         path: out-x86_64-linux-ubuntu2204-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-ubuntu2204-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-ubuntu2204
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-ubuntu2204-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-ubuntu2204
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-ubuntu2204-9124
+        path: out-x86_64-linux-ubuntu2204-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-ubuntu2204-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -3201,6 +3708,36 @@ jobs:
         name: artifacts-build-x86_64-linux-ubuntu2404-9122
         path: out-x86_64-linux-ubuntu2404-9.12.2.tar
         retention-days: 2
+  build-x86_64-linux-ubuntu2404-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-ubuntu2404
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-ubuntu2404-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-ubuntu2404
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-ubuntu2404-9124
+        path: out-x86_64-linux-ubuntu2404-9.12.4.tar
+        retention-days: 2
   build-x86_64-linux-ubuntu2404-9141:
     env:
       ADD_CABAL_ARGS: --enable-split-sections
@@ -3350,6 +3887,36 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9122
         path: out-x86_64-linux-unknown-9.12.2.tar
+        retention-days: 2
+  build-x86_64-linux-unknown-9124:
+    env:
+      ADD_CABAL_ARGS: --enable-split-sections
+      ARCH: '64'
+      ARTIFACT: x86_64-linux-unknown
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DEBIAN_FRONTEND: noninteractive
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-linux-unknown-9124 (Build binaries)
+    runs-on:
+    - ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build 9.12.4
+      uses: ./.github/actions/bindist-actions/action-unknown
+      with:
+        stage: BUILD
+        version: 9.12.4
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-linux-unknown-9124
+        path: out-x86_64-linux-unknown-9.12.4.tar
         retention-days: 2
   build-x86_64-linux-unknown-9141:
     env:
@@ -3506,6 +4073,39 @@ jobs:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9122
         path: out-x86_64-apple-darwin-9.12.2.tar
+        retention-days: 2
+  build-x86_64-mac-9124:
+    env:
+      ADD_CABAL_ARGS: ''
+      ARCH: '64'
+      ARTIFACT: x86_64-apple-darwin
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      MACOSX_DEPLOYMENT_TARGET: '10.13'
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: tar.xz
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-mac-9124 (Build binaries)
+    runs-on:
+    - macOS-15-intel
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - env:
+        GHC_VERSION: 9.12.4
+      name: Run build
+      run: |
+        brew install coreutils tree
+        bash .github/scripts/build.sh
+        tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
+      shell: sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-mac-9124
+        path: out-x86_64-apple-darwin-9.12.4.tar
         retention-days: 2
   build-x86_64-mac-9141:
     env:
@@ -3670,6 +4270,39 @@ jobs:
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9122
+        path: ./out/*
+        retention-days: 2
+  build-x86_64-windows-9124:
+    env:
+      ADD_CABAL_ARGS: ''
+      ARCH: '64'
+      ARTIFACT: x86_64-mingw64
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      S3_HOST: ${{ secrets.S3_HOST }}
+      TARBALL_EXT: zip
+      TZ: Asia/Singapore
+    environment: CI
+    name: build-x86_64-windows-9124 (Build binaries)
+    runs-on:
+    - windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - env:
+        GHC_VERSION: 9.12.4
+      name: Run build
+      run: |
+        $env:CHERE_INVOKING = 1
+        $env:MSYS2_PATH_TYPE = "inherit"
+        $ErrorActionPreference = "Stop"
+        C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
+      shell: pwsh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        if-no-files-found: error
+        name: artifacts-build-x86_64-windows-9124
         path: ./out/*
         retention-days: 2
   build-x86_64-windows-9141:

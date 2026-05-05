@@ -28,6 +28,7 @@ module Development.IDE.GHC.Util(
     disableWarningsAsErrors,
     printOutputable,
     printOutputableOneLine,
+    printOutputableQualified,
     getExtensions,
     getExtensionsSet,
     stripOccNamePrefix,
@@ -270,6 +271,10 @@ printOutputable = printOutputable' printWithoutUniques
 
 printOutputableOneLine :: Outputable a => a -> T.Text
 printOutputableOneLine = printOutputable' printWithoutUniquesOneLine
+
+printOutputableQualified :: Outputable a => PrintUnqualified -> a -> T.Text
+printOutputableQualified ctx =
+    printOutputable' (printSDocQualifiedUnsafe ctx . ppr)
 
 printOutputable' :: Outputable a => (a -> String) -> a -> T.Text
 printOutputable' print =

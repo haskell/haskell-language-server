@@ -223,10 +223,12 @@ instance Pretty Log where
       hsep
         [ "Finished:" <+> pretty (actionName delayedAct)
         , "Took:" <+> pretty (showDuration seconds) ]
-    LogBuildSessionFinish e ->
-      vcat
+    LogBuildSessionFinish e -> case e of
+      Nothing -> "Finished build session"
+      Just e -> vcat
         [ "Finished build session"
-        , pretty (fmap displayException e) ]
+        , pretty (displayException e)
+        ]
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
@@ -909,8 +911,9 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
           return $ do
               let exception =
                     case res of
-                      Left e -> Just e
-                      _      -> Nothing
+                      Left (fromException -> Just AsyncCancelled) -> Nothing
+                      Left e                                      -> Just e
+                      _                                           -> Nothing
               logWith recorder Debug $ LogBuildSessionFinish exception
 
     -- Do the work in a background thread
