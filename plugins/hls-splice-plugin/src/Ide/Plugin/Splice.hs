@@ -407,10 +407,18 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
         dflags = hsc_dflags hscEnv
         showErrors = showBag
 
+#if MIN_VERSION_ghc(9,13,0)
+showBag :: (Error.Diagnostic a, Error.DiagnosticHint a ~ Error.GhcHint) => Bag (Error.MsgEnvelope a) -> String
+#else
 showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
+#endif
 showBag = show . fmap (fmap toDiagnosticMessage)
 
+#if MIN_VERSION_ghc(9,13,0)
+toDiagnosticMessage :: forall a. (Error.Diagnostic a, Error.DiagnosticHint a ~ Error.GhcHint) => a -> Error.DiagnosticMessage
+#else
 toDiagnosticMessage :: forall a. Error.Diagnostic a => a -> Error.DiagnosticMessage
+#endif
 toDiagnosticMessage message =
     Error.DiagnosticMessage
         { diagMessage = Error.diagnosticMessage
@@ -418,11 +426,7 @@ toDiagnosticMessage message =
                           message
 
         , diagReason  = Error.diagnosticReason  message
-#if MIN_VERSION_ghc(9,13,0)
-        , diagHints   = []
-#else
         , diagHints   = Error.diagnosticHints   message
-#endif
         }
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
