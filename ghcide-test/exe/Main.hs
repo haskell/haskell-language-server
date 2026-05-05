@@ -63,6 +63,7 @@ import           ReferenceTests
 import           ResolveTests
 import           RootUriTests
 import           SafeTests
+import           SetupHooksTests
 import           SymlinkTests
 import           THTests
 import           UnitTests
@@ -88,6 +89,7 @@ main = do
     , THTests.tests
     , SymlinkTests.tests
     , SafeTests.tests
+    , SetupHooksTests.tests
     , UnitTests.tests
     , HaddockTests.tests
     , PositionMappingTests.tests

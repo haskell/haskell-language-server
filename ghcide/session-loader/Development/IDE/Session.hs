@@ -42,6 +42,8 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                           as T
 import           Data.Version
+import           Development.IDE.Core.Rules.PreBuildHooks (PreBuildHookInfo (..),
+                                                           preBuildHookDeps)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake          hiding (Log, knownTargets,
                                                       withHieDb)
@@ -897,7 +899,8 @@ session ::
     SessionM ()
 session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, libDir) = do
   let initEmptyHscEnv = emptyHscEnvM libDir
-  (new_components_info, old_components_info) <- packageSetup recorder sessionState initEmptyHscEnv (hieYaml, cfp, opts)
+  hookInfo <- liftIO $ preBuildHookDeps (componentOptions opts)
+  (new_components_info, old_components_info) <- packageSetup recorder sessionState initEmptyHscEnv hookInfo (hieYaml, cfp, opts)
 
   -- For each component, now make a new HscEnvEq which contains the
   -- HscEnv for the hie.yaml file but the DynFlags for that component
@@ -920,6 +923,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         handleBatchLoadSuccess recorder sessionState hieYaml this_flags_map all_targets
         keys2 <- invalidateCache sessionShake
         keys1 <- extendKnownTargets recorder knownTargetsVar all_targets
+
         -- Typecheck all files in the project on startup
         unless (null new_components_info || not checkProject) $ do
             cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
@@ -933,17 +937,29 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
                 liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
         return [keys1, keys2]
 
--- | Create a new HscEnv from a hieYaml root and a set of options
-packageSetup :: Recorder (WithPriority Log) -> SessionState -> SessionM HscEnv -> (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> SessionM ([ComponentInfo], [ComponentInfo])
-packageSetup recorder sessionState newEmptyHscEnv (hieYaml, cfp, opts) = do
+-- | Create a new HscEnv from a hieYaml root and a set of options.
+packageSetup
+  :: Recorder (WithPriority Log)
+  -> SessionState
+  -> SessionM HscEnv
+  -> PreBuildHookInfo
+  -> (Maybe FilePath, NormalizedFilePath, ComponentOptions)
+  -> SessionM ([ComponentInfo], [ComponentInfo])
+packageSetup recorder sessionState newEmptyHscEnv hookInfo (hieYaml, cfp, opts) = do
   getCacheDirs <- asks (getCacheDirs . sessionLoadingOptions)
   haddockparse <- asks (optHaddockParse . sessionIdeOptions)
   rootDir <- asks sessionRootDir
   -- Parse DynFlags for the newly discovered component
   hscEnv <- newEmptyHscEnv
   newTargetDfs <- liftIO $ evalGhcEnv hscEnv $ setOptions haddockparse cfp opts (hsc_dflags hscEnv) rootDir
-  let deps = componentDependencies opts ++ maybeToList hieYaml
+  let PreBuildHookInfo{hookDepFiles, hookDepGlobs} = hookInfo
+      deps = componentDependencies opts ++ maybeToList hieYaml ++ hookDepFiles
   dep_info <- liftIO $ getDependencyInfo (fmap (toAbsolute rootDir) deps)
+  liftIO $ atomically $
+    STM.insert
+      (map (GlobPattern . toAbsolute rootDir . getGlobPattern) hookDepGlobs)
+      hieYaml
+      (globWatchers sessionState)
   -- Now lookup to see whether we are combining with an existing HscEnv
   -- or making a new one. The lookup returns the HscEnv and a list of
   -- information about other components loaded into the HscEnv

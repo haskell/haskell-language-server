@@ -139,6 +139,7 @@ library
     Development.IDE.Core.Preprocessor
     Development.IDE.Core.ProgressReporting
     Development.IDE.Core.Rules
+    Development.IDE.Core.Rules.PreBuildHooks
     Development.IDE.Core.RuleTypes
     Development.IDE.Core.Service
     Development.IDE.Core.Shake
