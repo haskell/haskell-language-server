@@ -53,7 +53,8 @@ import           UnliftIO                           (Async (asyncThreadId),
                                                      newEmptyTMVarIO, poll,
                                                      putTMVar, readTMVar,
                                                      readTVarIO, throwTo,
-                                                     waitCatch, withAsync)
+                                                     waitCatch,
+                                                     withAsyncWithUnmask)
 import           UnliftIO.Concurrent                (ThreadId, myThreadId)
 import qualified UnliftIO.Exception                 as UE
 
@@ -408,7 +409,7 @@ instance Exception AsyncParentKill where
   fromException = asyncExceptionFromException
 
 shutDatabase ::KeySet -> Database -> IO ()
-shutDatabase dirties db@Database{..} = uninterruptibleMask $ \unmask -> do
+shutDatabase dirties db@Database{..} = uninterruptibleMask $ \_unmask -> do
     -- wait for all threads to finish
     asyncs <- readTVarIO databaseThreads
     step <- readTVarIO databaseStep
@@ -420,7 +421,7 @@ shutDatabase dirties db@Database{..} = uninterruptibleMask $ \unmask -> do
     -- Wait until all the asyncs are done
     -- But if it takes more than 10 seconds, log to stderr
     unless (null asyncs) $ do
-        let warnIfTakingTooLong = unmask $ forever $ do
+        let warnIfTakingTooLong = forever $ do
                 sleep 5
                 as <- readTVarIO databaseThreads
                 -- poll each async: Nothing => still running
@@ -430,7 +431,7 @@ shutDatabase dirties db@Database{..} = uninterruptibleMask $ \unmask -> do
                 let still = [ (deliverName d, show (asyncThreadId a)) | (d,a,p) <- statuses, isNothing p ]
                 traceEventIO $ "cleanupAsync: waiting for asyncs to finish; total=" ++ show (length as) ++ ", stillRunning=" ++ show (length still)
                 traceEventIO $ "cleanupAsync: still running (deliverName, threadId) = " ++ show still
-        withAsync warnIfTakingTooLong $ \_ -> mapM_ (waitCatch . snd) toCancel
+        withAsyncWithUnmask (\restore -> restore warnIfTakingTooLong) $ \_ -> mapM_ (waitCatch . snd) toCancel
         forM_ toCancel $ \(d,_p) -> do
             let k = deliverKey d
             when (k /= newKey "root") $ atomically $ deleteDatabaseRuntimeDep k db
