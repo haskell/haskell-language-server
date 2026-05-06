@@ -8,5 +8,5 @@ import Q
 
 data D = D
 instance Data.String.IsString D where
-  Data.String.fromString s
+  fromString s
     = fromMaybe D (D <$ Just (GHC.Internal.Data.Ord.Down 1))

@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE GADTs        #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -84,7 +85,7 @@ import           Control.Lens                            (_last, (&))
 import           Control.Lens.Operators                  ((%~))
 import           Data.List                               (partition)
 import           GHC                                     (DeltaPos (..),
-                                                          NamePprCtx,
+                                                          LocatedN, NamePprCtx,
                                                           SrcSpanAnnN)
 import           GHC.Driver.DynFlags                     (initSDocContext)
 import           GHC.Utils.Outputable                    (mkUserStyle, Depth (..))
@@ -741,7 +742,7 @@ annotate dflags npc _needs_space _loc ast = do
 annotateDecl :: DynFlags -> NamePprCtx -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
 annotateDecl dflags npc ast = do
     uniq <- show <$> uniqueSrcSpanT
-    let rendered = render dflags npc ast
+    let rendered = render dflags npc $ unqualifyBindings ast
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
 #if MIN_VERSION_ghc(9,9,0)
     let expr'' = makeDeltaAst expr'
@@ -749,6 +750,10 @@ annotateDecl dflags npc ast = do
     let expr'' = expr'
 #endif
     pure $ setPrecedingLines expr'' 1 0
+  where
+    unqualifyBindings = everywhere $ mkT \case
+        fr@(FunRhs{mc_fun = L nl (Orig _ occ)}) -> fr{mc_fun = L nl (mkRdrUnqual occ)}
+        ctx -> ctx :: HsMatchContext (LocatedN RdrName)
 
 ------------------------------------------------------------------------------
 
