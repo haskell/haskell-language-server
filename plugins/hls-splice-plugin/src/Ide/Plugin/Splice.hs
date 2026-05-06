@@ -9,6 +9,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Ide.Plugin.Splice (descriptor) where
 
@@ -16,8 +17,9 @@ import           Control.Applicative                   (Alternative ((<|>)))
 import           Control.Arrow                         (Arrow (first))
 import           Control.Exception                     (SomeException)
 import qualified Control.Foldl                         as L
-import           Control.Lens                          (Identity (..), ix, view,
-                                                        (%~), (<&>), (^.))
+import           Control.Lens                          (Identity (..), _Just, at,
+                                                        ix, view, (%~), (<&>),
+                                                        (^.))
 import           Control.Monad                         (forM, guard, unless)
 import           Control.Monad.Error.Class             (MonadError (throwError))
 import           Control.Monad.Extra                   (eitherM)
@@ -33,9 +35,9 @@ import qualified Data.Bifunctor                        as B (first)
 import           Data.Function
 import           Data.Generics
 import qualified Data.Kind                             as Kinds
-import           Data.List                             (sortOn)
+import           Data.List                             (nub, sortOn)
 import           Data.Maybe                            (fromMaybe, listToMaybe,
-                                                        mapMaybe)
+                                                        mapMaybe, catMaybes)
 import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
@@ -47,6 +49,9 @@ import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
 import qualified GHC.Runtime.Loader                    as Loader
 import qualified GHC.Types.Error                       as Error
+import           GHC.Utils.Outputable                  (NamePprCtx,
+                                                        QualifyName (..),
+                                                        queryQualifyName)
 import           Ide.Plugin.Error                      (PluginError (PluginInternalError))
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
@@ -67,6 +72,13 @@ import           GHC.Parser.Annotation                 (EpAnn (..))
 #else
 import           GHC.Parser.Annotation                 (SrcSpanAnn' (..))
 #endif
+
+import Data.List.Extra (nubOrd)
+import Development.IDE.Plugin.CodeAction (newImport, newImportToEdit)
+import Development.IDE.Plugin.Plugins.ImportUtils (QualifiedImportStyle(QualifiedImportPostfix))
+import Development.IDE.Plugin.Plugins.ImportUtils (qualifiedImportStyle)
+import qualified Data.Text.Mixed.Rope as Rope
+import qualified Data.Set as Set
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -130,6 +142,8 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
         withTypeChecked fp TcModuleResult {..} = do
             (ps, hscEnv, dflags) <- setupHscEnv ideState fp tmrParsed
+            -- TODO is this the right way to get the contents?
+            fileContents <- liftIO $ runAction "expandTHSplice.getFileContents" ideState $ getFileContents fp
             let Splices {..} = tmrTopLevelSplices
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
@@ -165,7 +179,8 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                     HsType -> graftSpliceWith typeSuperSpans
                     HsDecl ->
                         declSuperSpans <&> \(_, expanded) ->
-                            transform
+                            transformWithExtraEdits
+                                (flip (foldl' (flip applyImportEdit)) (importEdits expanded))
                                 dflags
                                 prUnqual
                                 clientCapabilities
@@ -174,7 +189,27 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                                 ps
                                 <&>
                                 -- FIXME: Why ghc-exactprint sweeps preceding comments?
-                                adjustToRange (verTxtDocId ^. J.uri) range
+                                adjustToRange uri range
+                      where
+                        uri = verTxtDocId ^. J.uri
+                        importEdits = mapMaybe
+                            (\m -> snd <$> newImportToEdit (mkImport m) ps (maybe "" Rope.toText fileContents))
+                            . collectNotInScopeModules
+                        collectNotInScopeModules decls =
+                            nubOrd
+                                [ moduleName m
+                                | Orig m occ <- everything (<>) ([] `mkQ` pure) decls
+                                , not $ any ((== m) . nameModule . greName) $
+                                    lookupGlobalRdrEnv (tcg_rdr_env tmrTypechecked) occ
+                                ]
+                        -- TODO `newImport` has a pretty silly interface with the `modName == qual` forcing us to pass the same name twice
+                        mkImport modName = newImport
+                            (T.pack $ moduleNameString modName) Nothing
+                            (Just (T.pack $ moduleNameString modName, qualifiedImportStyle dflags)) False
+                        -- TODO not sure about this... do something more structured?
+                        applyImportEdit (TextEdit (Range (Position l _) _) newTxt) txt =
+                            let (before, after) = splitAt (fromIntegral l) (T.lines txt)
+                            in T.unlines (before ++ T.lines newTxt ++ after)
 
     res <- liftIO $ runMaybeT $ do
 

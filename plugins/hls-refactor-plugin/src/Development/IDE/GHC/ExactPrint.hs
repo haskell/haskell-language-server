@@ -17,6 +17,7 @@ module Development.IDE.GHC.ExactPrint
       genericGraftWithLargestM,
       graftSmallestDeclsWithM,
       transform,
+      transformWithExtraEdits,
       transformM,
       ExactPrint(..),
       modifySmallestDeclWithM,
@@ -230,11 +231,22 @@ transform ::
     Graft (Either String) ParsedSource ->
     ParsedSource ->
     Either String WorkspaceEdit
-transform dflags npc ccs verTxtDocId f a = do
+transform = transformWithExtraEdits id
+
+transformWithExtraEdits ::
+    (T.Text -> T.Text) ->
+    DynFlags ->
+    NamePprCtx ->
+    ClientCapabilities ->
+    VersionedTextDocumentIdentifier ->
+    Graft (Either String) ParsedSource ->
+    ParsedSource ->
+    Either String WorkspaceEdit
+transformWithExtraEdits postProcess dflags npc ccs verTxtDocId f a = do
     let src = printA a
     a' <- transformA a $ runGraft f (dflags, npc)
-    let res = printA a'
-    pure $ diffText ccs (verTxtDocId, T.pack src) (T.pack res) IncludeDeletions
+    let res = postProcess $ T.pack $ printA a'
+    pure $ diffText ccs (verTxtDocId, T.pack src) res IncludeDeletions
 
 ------------------------------------------------------------------------------
 
@@ -751,6 +763,8 @@ annotateDecl dflags npc ast = do
 #endif
     pure $ setPrecedingLines expr'' 1 0
   where
+    -- TODO is this doing an unnecessarily deep traversal?
+    -- is it even correct?
     unqualifyBindings = everywhere $ mkT \case
         fr@(FunRhs{mc_fun = L nl (Orig _ occ)}) -> fr{mc_fun = L nl (mkRdrUnqual occ)}
         ctx -> ctx :: HsMatchContext (LocatedN RdrName)
