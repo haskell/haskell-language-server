@@ -124,7 +124,7 @@ jobs:
       matrix:
         ghc: ${{ fromJSON(needs.pre_job.outputs.bench_ghc_versions) }}
         os: [ubuntu-latest]
-        cabal: ['3.14']
+        cabal: ['3.16.1.0']
         example: ['cabal', 'lsp-types']
 
     steps:
@@ -163,7 +163,7 @@ jobs:
         column -s, -t < bench-results/unprofiled/${{ matrix.example }}/resultDiff.csv | tee bench-results/unprofiled/${{ matrix.example }}/resultDiff.txt
 
     - name: tar benchmarking artifacts
-      run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
+      run:  find bench-results -name "*.csv" | xargs tar -czf benchmark-artifacts.tar.gz
 
     - name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v6
