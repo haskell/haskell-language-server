@@ -21,7 +21,7 @@ examples:
   # Medium-sized project without TH
   - name: cabal
     package: Cabal
-    version: 3.10.2.1
+    version: 3.16.1.0
     modules:
         - src/Distribution/Simple.hs
         - src/Distribution/Types/ComponentLocalBuildInfo.hs
@@ -29,7 +29,7 @@ examples:
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
-    version: 2.3.0.1
+    version: 2.4.0.0
     modules:
         - src/Language/LSP/Protocol/Types/SemanticTokens.hs
         - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
