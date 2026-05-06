@@ -87,7 +87,7 @@ import           GHC                                     (DeltaPos (..),
                                                           NamePprCtx,
                                                           SrcSpanAnnN)
 import           GHC.Driver.DynFlags                     (initSDocContext)
-import           GHC.Utils.Outputable                    (alwaysQualify, mkUserStyle, Depth (..))
+import           GHC.Utils.Outputable                    (mkUserStyle, Depth (..))
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -754,7 +754,7 @@ annotateDecl dflags npc ast = do
 
 -- | Print out something 'Outputable'.
 render :: Outputable a => DynFlags -> NamePprCtx -> a -> String
-render dflags npc = renderWithContext (initSDocContext dflags (mkUserStyle alwaysQualify AllTheWay)) . ppr
+render dflags npc = renderWithContext (initSDocContext dflags (mkUserStyle npc AllTheWay)) . ppr
 
 ------------------------------------------------------------------------------
 
