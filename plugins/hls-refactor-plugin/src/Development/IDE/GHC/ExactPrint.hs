@@ -85,6 +85,7 @@ import           Control.Lens.Operators                  ((%~))
 import           Data.List                               (partition)
 import           GHC                                     (DeltaPos (..),
                                                           SrcSpanAnnN)
+import           GHC.Driver.DynFlags                     (initSDocContext)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -749,7 +750,7 @@ annotateDecl dflags ast = do
 
 -- | Print out something 'Outputable'.
 render :: Outputable a => DynFlags -> a -> String
-render dflags = showSDoc dflags . ppr
+render dflags = renderWithContext (initSDocContext dflags defaultUserStyle) . ppr
 
 ------------------------------------------------------------------------------
 
