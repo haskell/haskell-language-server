@@ -51,7 +51,6 @@ jobs:
         # see discussion https://github.com/haskell/haskell-language-server/pull/4118
         # also possible to add more GHCs if we performs better in the future.
         ghc:
-          - '9.8'
           - '9.10'
         os:
           - ubuntu-latest
