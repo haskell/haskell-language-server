@@ -124,7 +124,7 @@ jobs:
       matrix:
         ghc: ${{ fromJSON(needs.pre_job.outputs.bench_ghc_versions) }}
         os: [ubuntu-latest]
-        cabal: ['3.16.1.0']
+        cabal: ['3.16']
         example: ['cabal', 'lsp-types']
 
     steps:
