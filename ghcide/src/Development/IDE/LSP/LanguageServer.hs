@@ -300,9 +300,7 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
             lifetimeConfirm "due to exception in reactor thread"
             logWith recorder Error $ LogReactorThreadException e
             ctxForceShutdown lifecycleCtx
-          _ -> do
-            lifetimeConfirm "due to shutdown message"
-            return ()
+          _ -> return ()
 
       exceptionInHandler e = do
         logWith recorder Error $ LogReactorMessageActionException e
@@ -344,7 +342,10 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
           case msg of
             ReactorNotification act  -> handle exceptionInHandler act
             ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-      logWith recorder Info LogReactorThreadStopped
+        -- Confirm as soon as the reactor loop observes the stop signal. Worker
+        -- and Shake cleanup continue while the surrounding ContT unwinds.
+        lifetimeConfirm "due to shutdown message"
+        logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
     registerIdeConfiguration (shakeExtras ide) initConfig
