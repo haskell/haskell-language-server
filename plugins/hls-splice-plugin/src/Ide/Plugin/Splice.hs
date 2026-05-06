@@ -129,7 +129,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                 params
 
         withTypeChecked fp TcModuleResult {..} = do
-            (ps, _hscEnv, dflags) <- setupHscEnv ideState fp tmrParsed
+            (ps, hscEnv, dflags) <- setupHscEnv ideState fp tmrParsed
             let Splices {..} = tmrTopLevelSplices
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
@@ -139,6 +139,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices
                 declSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan declSplices
+                prUnqual = mkPrintUnqualifiedDefault hscEnv $ tcg_rdr_env tmrTypechecked
 
                 graftSpliceWith ::
                     forall ast.
@@ -149,6 +150,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                     expandeds <&> \(_, expanded) ->
                         transform
                             dflags
+                            prUnqual
                             clientCapabilities
                             verTxtDocId
                             (graft (RealSrcSpan spliceSpan Nothing) expanded)
@@ -165,6 +167,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                         declSuperSpans <&> \(_, expanded) ->
                             transform
                                 dflags
+                                prUnqual
                                 clientCapabilities
                                 verTxtDocId
                                 (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
@@ -362,7 +365,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                 initTcWithGbl hscEnv typechkd srcSpan $
                     case classifyAST spliceContext of
                         IsHsDecl -> fmap (fmap $ adjustToRange (verTxtDocId ^. J.uri) ran) $
-                            flip (transformM dflags clientCapabilities verTxtDocId) ps $
+                            flip (transformM dflags prUnqual clientCapabilities verTxtDocId) ps $
                                 graftDeclsWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
@@ -375,7 +378,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                         pure $ Just eExpr
                                     _ -> pure Nothing
                         OneToOneAST astP ->
-                            flip (transformM dflags clientCapabilities verTxtDocId) ps $
+                            flip (transformM dflags prUnqual clientCapabilities verTxtDocId) ps $
                                 graftWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
@@ -404,6 +407,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
             ]
     pure resl
     where
+        prUnqual = mkPrintUnqualifiedDefault hscEnv (tcg_rdr_env typechkd)
         dflags = hsc_dflags hscEnv
         showErrors = showBag
 

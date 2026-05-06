@@ -84,6 +84,7 @@ import           Control.Lens                            (_last, (&))
 import           Control.Lens.Operators                  ((%~))
 import           Data.List                               (partition)
 import           GHC                                     (DeltaPos (..),
+                                                          NamePprCtx,
                                                           SrcSpanAnnN)
 import           GHC.Driver.DynFlags                     (initSDocContext)
 import           GHC.Utils.Outputable                    (alwaysQualify, mkUserStyle, Depth (..))
@@ -180,7 +181,7 @@ type Anchor = EpaLocation
  instance to combine 'Graft's, and run them via 'transform'.
 -}
 newtype Graft m a = Graft
-    { runGraft :: DynFlags -> a -> TransformT m a
+    { runGraft :: (DynFlags, NamePprCtx) -> a -> TransformT m a
     }
 
 hoistGraft :: (forall x. m x -> n x) -> Graft m a -> Graft n a
@@ -222,14 +223,15 @@ instance Monad m => Monoid (Graft m a) where
 -- | Convert a 'Graft' into a 'WorkspaceEdit'.
 transform ::
     DynFlags ->
+    NamePprCtx ->
     ClientCapabilities ->
     VersionedTextDocumentIdentifier ->
     Graft (Either String) ParsedSource ->
     ParsedSource ->
     Either String WorkspaceEdit
-transform dflags ccs verTxtDocId f a = do
+transform dflags npc ccs verTxtDocId f a = do
     let src = printA a
-    a' <- transformA a $ runGraft f dflags
+    a' <- transformA a $ runGraft f (dflags, npc)
     let res = printA a'
     pure $ diffText ccs (verTxtDocId, T.pack src) (T.pack res) IncludeDeletions
 
@@ -239,15 +241,16 @@ transform dflags ccs verTxtDocId f a = do
 transformM ::
     Monad m =>
     DynFlags ->
+    NamePprCtx ->
     ClientCapabilities ->
     VersionedTextDocumentIdentifier ->
     Graft (ExceptStringT m) ParsedSource ->
     ParsedSource ->
     m (Either String WorkspaceEdit)
-transformM dflags ccs verTextDocId f a = runExceptT $
+transformM dflags npc ccs verTextDocId f a = runExceptT $
     runExceptString $ do
         let src = printA a
-        a' <- transformA a $ runGraft f dflags
+        a' <- transformA a $ runGraft f (dflags, npc)
         let res = printA a'
         pure $ diffText ccs (verTextDocId, T.pack src) (T.pack res) IncludeDeletions
 
@@ -302,8 +305,8 @@ graft' ::
     SrcSpan ->
     LocatedAn l ast ->
     Graft (Either String) a
-graft' needs_space dst val = Graft $ \dflags a -> do
-    val' <- annotate dflags needs_space dst val
+graft' needs_space dst val = Graft $ \(dflags, npc) a -> do
+    val' <- annotate dflags npc needs_space dst val
     pure $
         everywhere'
             ( mkT $
@@ -323,12 +326,12 @@ graftExpr ::
     SrcSpan ->
     LHsExpr GhcPs ->
     Graft (Either String) a
-graftExpr dst val = Graft $ \dflags a -> do
+graftExpr dst val = Graft $ \(dflags, npc) a -> do
     let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
 
     runGraft
       (graft' needs_space dst $ mk_parens val)
-      dflags
+      (dflags, npc)
       a
 
 getNeedsSpaceAndParenthesize ::
@@ -360,7 +363,7 @@ graftExprWithM ::
     SrcSpan ->
     (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
     Graft m a
-graftExprWithM dst trans = Graft $ \dflags a -> do
+graftExprWithM dst trans = Graft $ \(dflags, npc) a -> do
     let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
 
     everywhereM'
@@ -373,7 +376,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
                             Just val' -> do
                                 val'' <-
                                     hoistTransform (either Fail.fail pure)
-                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space dst (mk_parens val'))
+                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags npc needs_space dst (mk_parens val'))
                                 pure val''
                             Nothing -> pure val
                 l -> pure l
@@ -386,7 +389,7 @@ graftWithM ::
     SrcSpan ->
     (LocatedAn l ast -> TransformT m (Maybe (LocatedAn l ast))) ->
     Graft m a
-graftWithM dst trans = Graft $ \dflags a -> do
+graftWithM dst trans = Graft $ \(dflags, npc) a -> do
     everywhereM'
         ( mkM $
             \case
@@ -397,7 +400,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
                             Just val' -> do
                                 val'' <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags False dst $ maybeParensAST val'
+                                        annotate dflags npc False dst $ maybeParensAST val'
                                 pure val''
                             Nothing -> pure val
                 l -> pure l
@@ -414,7 +417,7 @@ genericGraftWithSmallestM ::
     SrcSpan ->
     (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
-genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
+genericGraftWithSmallestM proxy dst trans = Graft $ \(dflags, _) ->
     smallestM (genericIsSubspan proxy dst) (trans dflags)
 
 -- | Run the given transformation only on the largest node in the tree that
@@ -427,7 +430,7 @@ genericGraftWithLargestM ::
     SrcSpan ->
     (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
-genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
+genericGraftWithLargestM proxy dst trans = Graft $ \(dflags, _) ->
     largestM (genericIsSubspan proxy dst) (trans dflags)
 
 
@@ -437,9 +440,9 @@ graftDecls ::
     SrcSpan ->
     [LHsDecl GhcPs] ->
     Graft (Either String) a
-graftDecls dst decs0 = Graft $ \dflags a -> do
+graftDecls dst decs0 = Graft $ \(dflags, npc) a -> do
     decs <- forM decs0 $ \decl -> do
-        annotateDecl dflags decl
+        annotateDecl dflags npc decl
     let go [] = DL.empty
         go (L src e : rest)
             | locA src `eqSrcSpan` dst = DL.fromList decs <> DL.fromList rest
@@ -630,13 +633,13 @@ graftSmallestDeclsWithM ::
     SrcSpan ->
     (LHsDecl GhcPs -> TransformT (Either String) (Maybe [LHsDecl GhcPs])) ->
     Graft (Either String) a
-graftSmallestDeclsWithM dst toDecls = Graft $ \dflags a -> do
+graftSmallestDeclsWithM dst toDecls = Graft $ \(dflags, npc) a -> do
     let go [] = pure DL.empty
         go (e@(L src _) : rest)
             | dst `isSubspanOf` locA src = toDecls e >>= \case
                 Just decs0 -> do
                     decs <- forM decs0 $ \decl ->
-                        annotateDecl dflags decl
+                        annotateDecl dflags npc decl
                     pure $ DL.fromList decs <> DL.fromList rest
                 Nothing -> (DL.singleton e <>) <$> go rest
             | otherwise = (DL.singleton e <>) <$> go rest
@@ -648,14 +651,14 @@ graftDeclsWithM ::
     SrcSpan ->
     (LHsDecl GhcPs -> TransformT m (Maybe [LHsDecl GhcPs])) ->
     Graft m a
-graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
+graftDeclsWithM dst toDecls = Graft $ \(dflags, npc) a -> do
     let go [] = pure DL.empty
         go (e@(L src _) : rest)
             | locA src `eqSrcSpan` dst = toDecls e >>= \case
                 Just decs0 -> do
                     decs <- forM decs0 $ \decl ->
                         hoistTransform (either Fail.fail pure) $
-                          annotateDecl dflags decl
+                          annotateDecl dflags npc decl
                     pure $ DL.fromList decs <> DL.fromList rest
                 Nothing -> (DL.singleton e <>) <$> go rest
             | otherwise = (DL.singleton e <>) <$> go rest
@@ -722,10 +725,10 @@ instance ASTElement NameAnn RdrName where
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
 annotate :: ASTElement l ast
-    => DynFlags -> Bool -> SrcSpan -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
-annotate dflags _needs_space _loc ast = do
+    => DynFlags -> NamePprCtx -> Bool -> SrcSpan -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
+annotate dflags npc _needs_space _loc ast = do
     uniq <- show <$> uniqueSrcSpanT
-    let rendered = render dflags ast
+    let rendered = render dflags npc ast
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
 #if MIN_VERSION_ghc(9,9,0)
     let L l e = makeDeltaAst expr'
@@ -735,10 +738,10 @@ annotate dflags _needs_space _loc ast = do
 #endif
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
-annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
-annotateDecl dflags ast = do
+annotateDecl :: DynFlags -> NamePprCtx -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
+annotateDecl dflags npc ast = do
     uniq <- show <$> uniqueSrcSpanT
-    let rendered = render dflags ast
+    let rendered = render dflags npc ast
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
 #if MIN_VERSION_ghc(9,9,0)
     let expr'' = makeDeltaAst expr'
@@ -750,8 +753,8 @@ annotateDecl dflags ast = do
 ------------------------------------------------------------------------------
 
 -- | Print out something 'Outputable'.
-render :: Outputable a => DynFlags -> a -> String
-render dflags = renderWithContext (initSDocContext dflags (mkUserStyle alwaysQualify AllTheWay)) . ppr
+render :: Outputable a => DynFlags -> NamePprCtx -> a -> String
+render dflags npc = renderWithContext (initSDocContext dflags (mkUserStyle alwaysQualify AllTheWay)) . ppr
 
 ------------------------------------------------------------------------------
 
