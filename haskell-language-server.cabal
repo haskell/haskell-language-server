@@ -1979,8 +1979,7 @@ benchmark benchmark
     main-is: Main.hs
     hs-source-dirs: bench
     build-tool-depends:
-        haskell-language-server:ghcide-bench,
-        eventlog2html:eventlog2html,
+        haskell-language-server:ghcide-bench
     default-extensions:
         LambdaCase
         RecordWildCards
