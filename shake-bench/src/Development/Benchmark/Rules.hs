@@ -379,13 +379,17 @@ csvRules build = do
           results = map tail allResults
       writeFileChanged out $ unlines $ header : concat results
   priority 2 $ build -/- "*/*/*/*/resultDiff.csv" %> \out -> do
-    let out2@[b, flav, example, ver, conf, exp_] = splitDirectories out
+    let [b, flav, example, ver, conf, _exp] = splitDirectories out
     prev <- fmap T.unpack $ askOracle $ GetParent $ T.pack ver
     allResultsCur <- readFileLines $ joinPath [b ,flav, example, ver, conf] </> "results.csv"
-    allResultsPrev <- readFileLines $ joinPath [b ,flav, example, prev, conf] </> "results.csv"
-    let resultsPrev = tail allResultsPrev
-    let resultsCur = tail allResultsCur
-    let resultDiff = zipWith convertToDiffResults resultsCur resultsPrev
+    resultDiff <-
+      if prev == ver
+        then pure []
+        else do
+          allResultsPrev <- readFileLines $ joinPath [b ,flav, example, prev, conf] </> "results.csv"
+          let resultsPrev = tail allResultsPrev
+          let resultsCur = tail allResultsCur
+          pure $ zipWith convertToDiffResults resultsCur resultsPrev
     writeFileChanged out $ unlines $ head allResultsCur : resultDiff
   -- aggregate all configurations for an experiment
   priority 3 $ build -/- "*/*/*/results.csv" %> genConfig "results.csv"
@@ -413,14 +417,31 @@ convertToDiffResults line baseLine = intercalate "," diffResults
 showItemDiffResult ::  (Item, Maybe Double) -> String
 showItemDiffResult (ItemString x, _) = x
 showItemDiffResult (_, Nothing)      = "NA"
-showItemDiffResult (Mem x, Just y)   = printf "%.2f" (y * 100 - 100) <> "%"
-showItemDiffResult (Time x, Just y)  = printf "%.2f" (y * 100 - 100) <> "%"
+showItemDiffResult (Mem _, Just y)   = showPercentageDiff y
+showItemDiffResult (Time _, Just y)  = showPercentageDiff y
+
+showPercentageDiff :: Double -> String
+showPercentageDiff ratio
+  | not (isFinite percent) = "NA"
+  | abs percent < 0.005 = ""
+  | otherwise = printf "%.2f" percent <> "%"
+  where
+    percent = ratio * 100 - 100
+
+isFinite :: Double -> Bool
+isFinite x = not (isNaN x || isInfinite x)
 
 diffItem :: Item -> Item -> (Item, Maybe Double)
-diffItem (Mem x) (Mem y) = (Mem x, Just $ fromIntegral x / fromIntegral y)
-diffItem (Time x) (Time y) = (Time x, if y == 0 then Nothing else Just $ x / y)
+diffItem (Mem x) (Mem y) = (Mem x, ratioMaybe (fromIntegral x) (fromIntegral y))
+diffItem (Time x) (Time y) = (Time x, ratioMaybe x y)
 diffItem (ItemString x) (ItemString y) = (ItemString x, Nothing)
 diffItem _ _ = (ItemString "no match", Nothing)
+
+ratioMaybe :: Double -> Double -> Maybe Double
+ratioMaybe x y
+  | y == 0 = Nothing
+  | not (isFinite x && isFinite y) = Nothing
+  | otherwise = Just $ x / y
 
 data Item = Mem Int | Time Double | ItemString String
   deriving (Show)
