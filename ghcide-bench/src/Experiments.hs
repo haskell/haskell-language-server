@@ -708,12 +708,11 @@ setup = do
             package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
-        unless alreadySetup $
-          case buildTool ?config of
+        case buildTool ?config of
             Cabal -> do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
-                callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
-                let hieYamlPath = path </> "hie.yaml"
+                unless alreadySetup $
+                    callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 writeFile hieYamlPath simpleCabalCradleContent
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
@@ -722,7 +721,7 @@ setup = do
                 writeFile
                     (path </> "cabal.project.local")
                     ""
-            Stack -> do
+            Stack -> unless alreadySetup $ do
                 let stackVerbosity = case verbosity ?config of
                         Quiet  -> "--silent"
                         Normal -> ""
@@ -780,8 +779,7 @@ cabalProjectForPackage :: ExamplePackage -> String
 cabalProjectForPackage ExamplePackage{packageName = "lsp-types"} =
     unlines
         [ "packages: ."
-        , "if impl(ghc >= 9.14)"
-        , "  allow-newer: boring:base"
+        , "allow-newer: boring:base"
         ]
 cabalProjectForPackage _ =
     "packages: ."
