@@ -34,48 +34,48 @@ examples:
         - src/Language/LSP/Protocol/Types/SemanticTokens.hs
         - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
 
-  # - name: MultiLayerModules
-  #   path: bench/MultiLayerModules.sh
-  #   script: True
-  #   script-args: ["--th"]
-  #   modules:
-  #       - MultiLayerModules.hs
-  #       - DummyLevel0M01.hs
-  #       - DummyLevel1M01.hs
-  # - name: MultiLayerModulesNoTH
-  #   path: bench/MultiLayerModules.sh
-  #   script: True
-  #   script-args: []
-  #   modules:
-  #       - MultiLayerModules.hs
-  #       - DummyLevel0M01.hs
-  #       - DummyLevel1M01.hs
+  - name: MultiLayerModules
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+  - name: MultiLayerModulesNoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
 
-  # - name: DummyLevel0M01
-  #   path: bench/MultiLayerModules.sh
-  #   script: True
-  #   script-args: ["--th"]
-  #   modules:
-  #       - DummyLevel0M01.hs
-  # - name: DummyLevel0M01NoTH
-  #   path: bench/MultiLayerModules.sh
-  #   script: True
-  #   script-args: []
-  #   modules:
-  #       - DummyLevel0M01.hs
+  - name: DummyLevel0M01
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - DummyLevel0M01.hs
+  - name: DummyLevel0M01NoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - DummyLevel0M01.hs
 
-  # - name: DummyLevel1M01
-  #   path: bench/MultiLayerModules.sh
-  #   script: True
-  #   script-args: ["--th"]
-  #   modules:
-  #       - DummyLevel1M01.hs
-  # - name: DummyLevel1M01NoTH
-  #   path: bench/MultiLayerModules.sh
-  #   script: True
-  #   script-args: []
-  #   modules:
-  #       - DummyLevel1M01.hs
+  - name: DummyLevel1M01
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - DummyLevel1M01.hs
+  - name: DummyLevel1M01NoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - DummyLevel1M01.hs
 
   # Small but heavily multi-component example
   # Disabled as it is far to slow. hie-bios >0.7.2 should help
@@ -125,9 +125,7 @@ versions:
 
 # - 1.8.0.0
 - upstream: origin/master
-# - improve-hls-runtime-keep-async-only-databse-keys-upsweep-tmp
 # - HEAD~1
-# - improve-hls-runtime-keep-async-only-databse-keys-downsweep-skip-non-dirties
 - HEAD
 
 # A list of plugin configurations to analyze
