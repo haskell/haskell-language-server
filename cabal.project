@@ -51,8 +51,10 @@ constraints:
 allow-newer:
   cabal-install-parsers:Cabal-syntax,
 
-if impl(ghc >= 9.11)
+if impl(ghc >= 9.15)
   benchmarks: False
+
+if impl(ghc >= 9.13)
   allow-newer:
     cabal-install-parsers:base,
     cabal-install-parsers:time,

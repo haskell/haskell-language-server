@@ -63,7 +63,7 @@ library
     , edit-distance
     , enummapset
     , exceptions
-    , extra                        >=1.7.14
+    , extra                        >=1.8
     , filepath
     , fingertree
     , focus                        >=1.0.3.2

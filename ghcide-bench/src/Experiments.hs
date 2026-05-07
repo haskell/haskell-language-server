@@ -708,21 +708,20 @@ setup = do
             package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
-        unless alreadySetup $
-          case buildTool ?config of
+        case buildTool ?config of
             Cabal -> do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
-                callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
-                let hieYamlPath = path </> "hie.yaml"
+                unless alreadySetup $
+                    callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 writeFile hieYamlPath simpleCabalCradleContent
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
-                    "packages: ."
+                    (cabalProjectForPackage ExamplePackage{..})
                 writeFile
                     (path </> "cabal.project.local")
                     ""
-            Stack -> do
+            Stack -> unless alreadySetup $ do
                 let stackVerbosity = case verbosity ?config of
                         Quiet  -> "--silent"
                         Normal -> ""
@@ -745,6 +744,11 @@ setup = do
                 writeFile hieYamlPath simpleStackCradleContent
         return path
 
+  checkExampleModulesExist benchDir (example ?config)
+  case (buildTool ?config, exampleDetails (example ?config)) of
+      (Cabal, ExampleHackage{}) -> buildCabalExample benchDir
+      _                         -> return ()
+
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
   let cleanUp = case exampleDetails (example ?config) of
@@ -755,6 +759,30 @@ setup = do
       runBenchmarks = runBenchmarksFun benchDir
 
   return SetupResult{..}
+
+checkExampleModulesExist :: FilePath -> Example -> IO ()
+checkExampleModulesExist benchDir Example{..} =
+    forM_ exampleModules $ \target -> do
+        let fullPath = benchDir </> target
+        exists <- doesFileExist fullPath
+        unless exists $
+            fail $ "Benchmark example " <> show exampleName
+                <> " is missing target file " <> show target
+                <> " at " <> fullPath
+
+buildCabalExample :: HasConfig => FilePath -> IO ()
+buildCabalExample path = do
+    output $ "cabal build all -j in " <> path
+    cmd_ (Cwd path) ("cabal" :: String) (["build", "all", "-j"] :: [String])
+
+cabalProjectForPackage :: ExamplePackage -> String
+cabalProjectForPackage ExamplePackage{packageName = "lsp-types"} =
+    unlines
+        [ "packages: ."
+        , "allow-newer: boring:base"
+        ]
+cabalProjectForPackage _ =
+    "packages: ."
 
 setupDocumentContents :: Config -> Session [DocumentPositions]
 setupDocumentContents config =

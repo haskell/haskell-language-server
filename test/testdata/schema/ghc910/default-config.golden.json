@@ -148,6 +148,9 @@
         "signatureHelp": {
             "globalOn": true
         },
+        "splice": {
+            "globalOn": true
+        },
         "stan": {
             "globalOn": false
         }
