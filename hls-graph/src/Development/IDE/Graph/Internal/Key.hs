@@ -62,7 +62,6 @@ pattern Key :: () => (Typeable a, Hashable a, Show a) => a -> Key
 pattern Key a <- (lookupKeyValue -> (KeyValue a _))
 pattern DirectKey :: Int -> Key
 pattern DirectKey a <- (lookupKeyValue -> (DirectKeyValue a))
-{-# COMPLETE Key #-}
 {-# COMPLETE Key, DirectKey #-}
 
 instance Pretty Key where

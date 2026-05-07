@@ -163,7 +163,7 @@ builderOne' parentKey db@Database {..} stack key = UE.uninterruptibleMask $ \res
     case (viewToRun $ keyStatus <$> status) of
       (Dirty prev) -> do
         SMap.focus (updateStatus $ Running current prev) key databaseValues
-        let register = spawnRefresh db stack key barrier prev (return ()) refresh
+        let register = spawnRefresh db stack key barrier prev refresh
                         -- why it is important to use rollback here
 
                         {- Note [Rollback is required if killed before registration]
@@ -384,17 +384,15 @@ spawnRefresh ::
   Key ->
   MVar (Either SomeException (Key, Result)) ->
   Maybe Result ->
-  STM () ->
   (Database -> t -> Key -> Maybe Result -> IO Result) ->
   (SomeException -> IO ()) ->
   (forall a. IO a -> IO a) ->
   IO ()
-spawnRefresh db@Database {..} stack key barrier prevResult registerHook  refresher rollBack restore = do
+spawnRefresh db@Database {..} stack key barrier prevResult refresher rollBack restore = do
   Step currentStep <- readTVarIO databaseStep
   spawnAsyncWithDbRegistration
     db
     (DeliverStatus currentStep ("async computation; " ++ show key) key)
-    registerHook
     (refresher db stack key prevResult)
     (\r -> do
         case r of

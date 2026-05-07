@@ -372,15 +372,14 @@ isRootKey _              = False
 -- 4. Exception safety with rollback on registration failure
 -- @ inline
 {-# INLINE spawnAsyncWithDbRegistration #-}
-spawnAsyncWithDbRegistration :: Database -> DeliverStatus -> STM () -> IO a1 -> (Either SomeException a1 -> IO ()) -> (forall a. IO a -> IO a) -> IO ()
-spawnAsyncWithDbRegistration db@Database{..} deliver registerHook asyncBody handler restore = do
+spawnAsyncWithDbRegistration :: Database -> DeliverStatus -> IO a1 -> (Either SomeException a1 -> IO ()) -> (forall a. IO a -> IO a) -> IO ()
+spawnAsyncWithDbRegistration db@Database{..} deliver asyncBody handler restore = do
     startBarrier <- newEmptyTMVarIO
     -- 1. we need to make sure the thread is registered before we actually start
     -- 2. we should not start in between the restart
     -- 3. if it is killed before we start, we need to cancel the async
     let register a = do
                     dbNotLocked db
-                    registerHook
                     modifyTVar' databaseThreads ((deliver, a):)
                     -- make sure we only start after the restart
                     putTMVar startBarrier ()
@@ -394,7 +393,7 @@ spawnAsyncWithDbRegistration db@Database{..} deliver registerHook asyncBody hand
 {-# INLINE runInThreadStmInNewThreads #-}
 runInThreadStmInNewThreads :: Database -> DeliverStatus -> IO a -> (Either SomeException a -> IO ()) -> IO ()
 runInThreadStmInNewThreads db deliver act handler = uninterruptibleMask $ \restore ->
-        spawnAsyncWithDbRegistration db deliver (return ()) act handler restore
+        spawnAsyncWithDbRegistration db deliver act handler restore
 
 getDataBaseStepInt :: Database -> STM Int
 getDataBaseStepInt db = do
