@@ -9,7 +9,7 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge, AsyncParentKill(..), computeToPreserve, getRunTimeRDeps, spawnAsyncWithDbRegistration) where
+module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge, AsyncParentKill(..), RuntimeRestartKeys(..), computeToPreserve, getRunTimeRDeps, spawnAsyncWithDbRegistration) where
 
 import           Prelude                              hiding (unzip)
 
@@ -38,9 +38,8 @@ import qualified StmContainers.Map                    as SMap
 import           System.Time.Extra                    (duration)
 import           UnliftIO                             (MVar, atomically,
                                                        newEmptyMVar, putMVar,
-                                                       takeMVar)
+                                                       readMVar)
 
-import qualified Data.List                            as List
 import qualified UnliftIO.Exception                   as UE
 
 #if MIN_VERSION_base(4,19,0)
@@ -65,12 +64,11 @@ newDatabase dataBaseLogger databaseActionQueue databaseExtra databaseRules = do
 -- | Increment the step and mark dirty.
 --   Assumes that the database is not running a build
 -- only some keys are dirty
-incDatabase :: Database -> Maybe (([Key], [Key]), KeySet) -> IO KeySet
-incDatabase db (Just ((_oldKeys, newKeys), preserves)) = do
+incDatabase :: Database -> Maybe (RuntimeRestartKeys, KeySet) -> IO KeySet
+incDatabase db (Just (RuntimeRestartKeys{..}, preserves)) = do
     atomicallyNamed "incDatabase" $ modifyTVar' (databaseStep db) $ \(Step i) -> Step $ i + 1
-    forM_ newKeys $ \newKey -> atomically $ SMap.focus updateDirty newKey (databaseValues db)
-    -- only upsweep the keys that are not preserved
-    -- atomically $ writeUpsweepQueue (filter  (`notMemberKeySet` preserves) oldkeys ++ newKeys) db
+    forM_ restartDirtyKeys $ \newKey -> atomically $ SMap.focus updateDirty newKey (databaseValues db)
+    -- Only re-enqueue actions that were not preserved across the restart.
     return $ preserves
 
 -- all keys are dirty
@@ -82,10 +80,29 @@ incDatabase db Nothing = do
         SMap.focus updateDirty k (databaseValues db)
     return $ mempty
 
-computeToPreserve :: Database -> KeySet -> STM (KeySet, ([Key], [Key]), Int, [Key])
-computeToPreserve db dirtySet = do
-  (oldKeys, newKeys, affected) <- transitiveDirtyListBottomUpDiff db (toListKeySet dirtySet) []
-  pure (affected, (oldKeys, newKeys), length newKeys, [])
+data RuntimeRestartKeys = RuntimeRestartKeys
+  { restartKillKeys  :: !KeySet
+    -- ^ Keys used to select running runtime actions to stop before the next
+    -- session starts. This may include rule keys and delayed-action 'DirectKey's.
+  , restartDirtyKeys :: ![Key]
+    -- ^ Rule database keys to mark dirty before the next run. In the ghcide
+    -- restart path this is rule-key-only by construction; the raw hls-graph API
+    -- does not enforce that invariant by type.
+  } deriving Show
+
+-- Note [RuntimeRestartKeys]
+-- The restart plan intentionally keeps runtime cancellation separate from rule
+-- dirtiness. 'restartKillKeys' is consumed by shutdown and may include direct
+-- delayed-action keys. 'restartDirtyKeys' is consumed by the rule database and
+-- is expected to contain only rule keys that can be marked dirty.
+-- For the ghcide restart path, the initial dirty seeds come from rule keys
+-- ('toKey'/'toNoFileKey'), so 'restartDirtyKeys' can use the
+-- 'databaseRRuntimeDep' closure directly. Direct/root runtime edges are stored
+-- separately in 'databaseRRuntimeDepRoot' by 'insertdatabaseRuntimeDep' and are
+-- expanded only for 'restartKillKeys'. The raw hls-graph API does not enforce
+-- this seed invariant by type.
+computeToPreserve :: Database -> KeySet -> STM RuntimeRestartKeys
+computeToPreserve = transitiveDirtyKeysBottomUp
 
 updateDirty :: Monad m => Focus.Focus KeyDetails m ()
 updateDirty = Focus.adjust $ \(KeyDetails status rdeps) ->
@@ -130,7 +147,7 @@ interpreBuildContinue :: Database -> Key -> (Key, BuildContinue) -> IO (Key, Res
 interpreBuildContinue _db _pk (_kid, BCStop k v) = return (k, v)
 interpreBuildContinue db _pk (kid, BCContinue Nothing) = builderOneFinal db emptyStack kid
 interpreBuildContinue _db _pk (_kid, BCContinue (Just barrier)) =
-    takeMVar barrier >>= either throwIO pure
+    readMVar barrier >>= either throwIO pure
 
 
 builderOne :: Key -> Database -> Stack -> Key -> IO (Key, BuildContinue)
@@ -324,32 +341,22 @@ getRunTimeRDeps db k = SMap.lookup k (databaseRRuntimeDep db)
 getDeps :: SMap.Map Key KeySet -> Key -> STM (Maybe KeySet)
 getDeps m k = SMap.lookup k m
 
--- Edges in the reverse-dependency graph go from a child to its parents.
--- We perform a DFS and, after exploring all outgoing edges, cons the node onto
--- the accumulator. This yields children-before-parents order directly.
-
--- the lefts are keys that are no longer affected, we can try to mark them clean
--- the rights are new affected keys, we need to mark them dirty
-transitiveDirtyListBottomUpDiff :: Database -> [Key] -> [Key] -> STM ([Key], [Key], KeySet)
-transitiveDirtyListBottomUpDiff database seeds allOldKeys = do
-  (newKeys, seen) <- cacheTransitiveDirtyListBottomUpDFSWithRootKey database $ fromListKeySet seeds
-  let oldKeys = filter (`notMemberKeySet` seen) allOldKeys
-  return (oldKeys, newKeys, seen)
-
-cacheTransitiveDirtyListBottomUpDFSWithRootKey :: Database -> KeySet -> STM ([Key], KeySet)
-cacheTransitiveDirtyListBottomUpDFSWithRootKey db@Database{..} seeds = do
-  (newKeys, seen) <- cacheTransitiveDirtyListBottomUpDFS db seeds
-  -- we should put pump root keys back to seen
-  -- for each new key, get its root keys and put them back to seen
-  -- newKeys is for upsweep, databaseRRuntimeDepRoot only add new root keys which is not needed for upsweep
-  -- but seen is for thread filtering, we need to make sure all root keys are in seen
-  (_newKeys, newSeen) <- transitiveDirtyListBottomUpDFS databaseRRuntimeDepRoot seen
+transitiveDirtyKeysBottomUp :: Database -> KeySet -> STM RuntimeRestartKeys
+transitiveDirtyKeysBottomUp db@Database{..} seeds = do
+  TransitiveDirtyKeys dirtyKeys seen <- cacheTransitiveDirtyListBottomUpDFS db seeds
+  -- restartDirtyKeys should contain only rule keys. restartKillKeys also needs
+  -- the root/direct delayed-action keys, so expand through the root dependency
+  -- map only for the kill set.
+  TransitiveDirtyKeys _newKeys newSeen <- transitiveDirtyListBottomUpDFS databaseRRuntimeDepRoot seen
   let rootKey = newKey "root"
-  return $ (List.delete rootKey newKeys, deleteKeySet rootKey newSeen)
+  pure RuntimeRestartKeys
+    { restartDirtyKeys = dirtyKeys
+    , restartKillKeys = deleteKeySet rootKey newSeen
+    }
 
 
 
-cacheTransitiveDirtyListBottomUpDFS :: Database -> KeySet -> STM ([Key], KeySet)
+cacheTransitiveDirtyListBottomUpDFS :: Database -> KeySet -> STM TransitiveDirtyKeys
 cacheTransitiveDirtyListBottomUpDFS Database{..} seeds = do
     SMap.lookup seeds databaseTransitiveRRuntimeDepCache >>= \case
         Just v  -> return v
@@ -358,22 +365,25 @@ cacheTransitiveDirtyListBottomUpDFS Database{..} seeds = do
             SMap.insert r seeds databaseTransitiveRRuntimeDepCache
             return r
 
-transitiveDirtyListBottomUpDFS :: SMap.Map Key KeySet -> KeySet -> STM ([Key], KeySet)
+-- Edges in the reverse-dependency graph go from a child to its parents.
+-- We perform a DFS and, after exploring all outgoing edges, cons the node onto
+-- the accumulator. This yields children-before-parents order directly.
+transitiveDirtyListBottomUpDFS :: SMap.Map Key KeySet -> KeySet -> STM TransitiveDirtyKeys
 transitiveDirtyListBottomUpDFS database seeds = do
-  let go1 :: Key -> ([Key], KeySet) -> STM ([Key], KeySet)
-      go1 x acc@(dirties, seen) = do
+  let go1 :: Key -> TransitiveDirtyKeys -> STM TransitiveDirtyKeys
+      go1 x acc@TransitiveDirtyKeys{transitiveDirtySet = seen} = do
         if x `memberKeySet` seen
           then pure acc
           else do
-            let newAcc = (dirties, insertKeySet x seen)
+            let newAcc = acc{transitiveDirtySet = insertKeySet x seen}
             mnext <- getDeps database x
-            (newDirties, newSeen) <- foldrM go1 newAcc (maybe mempty toListKeySet mnext)
-            return (x:newDirties, newSeen)
-                -- if it is root key, we do not add it to the dirty list
-                -- since root key is not up for upsweep
-                -- but it would be in the seen list, so we would kill dirty root key async
+            childClosure <- foldrM go1 newAcc (maybe mempty toListKeySet mnext)
+            return childClosure{transitiveDirtyList = x : transitiveDirtyList childClosure}
+                -- Root keys are filtered out by 'transitiveDirtyKeysBottomUp'
+                -- for the dirty list, but kept in the set long enough to find
+                -- runtime roots that need shutdown.
   -- traverse all seeds
-  foldrM go1 ([], mempty) (toListKeySet seeds)
+  foldrM go1 (TransitiveDirtyKeys [] mempty) (toListKeySet seeds)
 
 -- | Original spawnRefresh using the general pattern
 -- inline

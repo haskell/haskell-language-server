@@ -283,7 +283,7 @@ data Database = Database {
     -- if not in any of the transitive reverse deps of a dirty node, it is clean
     -- we can skip clean the threads.
     -- this is update right before we query the database for the key result.
-    databaseTransitiveRRuntimeDepCache :: SMap.Map KeySet ([Key], KeySet),
+    databaseTransitiveRRuntimeDepCache :: SMap.Map KeySet TransitiveDirtyKeys,
     -- ^ this is a cache for transitive reverse deps if we have computed it before
     -- and the databaseRRuntimeDep did not change since last time
     -- it is very useful for large projects where many files depend on a few common files
@@ -306,6 +306,13 @@ data Database = Database {
     databaseValues                     :: !(Map Key KeyDetails)
 
     }
+
+data TransitiveDirtyKeys = TransitiveDirtyKeys
+    { transitiveDirtyList :: ![Key]
+      -- ^ Dirty keys in children-before-parents order.
+    , transitiveDirtySet  :: !KeySet
+      -- ^ Same transitive closure as a set, used for membership/filtering.
+    } deriving Show
 
 
 ---------------------------------------------------------------------

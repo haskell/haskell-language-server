@@ -145,7 +145,8 @@ import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
                                                          action)
 import qualified Development.IDE.Graph                  as Shake
-import           Development.IDE.Graph.Database         (ShakeDatabase,
+import           Development.IDE.Graph.Database         (RuntimeRestartKeys (..),
+                                                         ShakeDatabase,
                                                          instantiateDelayedAction,
                                                          shakeComputeToPreserve,
                                                          shakeGetActionQueueLength,
@@ -873,17 +874,16 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
         prepareRuntimeRestart :: Bool -> [Key] -> IO (RuntimeKeysChanged, RuntimeRestartStats)
         prepareRuntimeRestart optRunSubset keys
           | optRunSubset = do
-              (affected, changedKeys, _lookupCount, _) <-
-                  shakeComputeToPreserve shakeDb $ fromListKeySet keys
-              logErrorAfter 10 $ shakeShutDatabase affected shakeDb
+              runtimeRestartKeys <- shakeComputeToPreserve shakeDb $ fromListKeySet keys
+              logErrorAfter 10 $ shakeShutDatabase (restartKillKeys runtimeRestartKeys) shakeDb
               surviving <- shakePeekAsyncsDelivers shakeDb
               queueCount <- shakeGetActionQueueLength shakeDb
               let preserved = fromListKeySet $ map GraphRuntime.deliverKey surviving
               pure
-                ( Just (changedKeys, preserved)
+                ( Just (runtimeRestartKeys, preserved)
                 , RuntimeRestartStats
                     { runtimeDirtyCount = length keys
-                    , runtimeAffectedCount = lengthKeySet affected
+                    , runtimeAffectedCount = lengthKeySet (restartKillKeys runtimeRestartKeys)
                     , runtimePreservedCount = lengthKeySet preserved
                     , runtimeActionQueueCount = queueCount
                     , runtimeSurvivingActions = map GraphRuntime.deliverName surviving
@@ -930,7 +930,7 @@ shakeEnqueue ShakeExtras{actionQueue, shakeRecorder} act = do
 
 data VFSModified = VFSUnmodified | VFSModified !VFS
 
-type RuntimeKeysChanged = Maybe (([Key], [Key]), KeySet)
+type RuntimeKeysChanged = Maybe (RuntimeRestartKeys, KeySet)
 
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.
@@ -961,8 +961,8 @@ newSession recorder ShakeExtras{..} vfsMod shakeDb acts reason runtimeKeysChange
         workRun restore = withSpan "Shake session" $ \otSpan -> do
           setTag otSpan "reason" (fromString reason)
           setTag otSpan "queue" (fromString $ unlines $ map actionName reenqueued)
-          whenJust runtimeKeysChanged $ \((_, newKeys), _) ->
-              setTag otSpan "keys" (BS8.pack $ unlines $ map show newKeys)
+          whenJust runtimeKeysChanged $ \(runtimeRestartKeys, _) ->
+              setTag otSpan "keys" (BS8.pack $ unlines $ map show $ restartDirtyKeys runtimeRestartKeys)
           res <- try @SomeException $
             restore startDatabase
           return $ do

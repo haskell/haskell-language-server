@@ -16,6 +16,7 @@ module Development.IDE.Graph.Database(
     ,shakeGetBuildEdges,
     shakeShutDatabase,
     shakeGetActionQueueLength,
+    RuntimeRestartKeys(..),
     shakeComputeToPreserve,
     -- shakedatabaseRuntimeDep,
     shakePeekAsyncsDelivers,
@@ -91,7 +92,7 @@ unvoid = fmap undefined
 -- seperate incrementing the step from running the build.
 -- Also immediately enqueues upsweep actions for the newly dirty keys.
 shakeRunDatabaseForKeysSep
-    :: Maybe (([Key],[Key]),KeySet) -- ^ Set of keys changed since last run. 'Nothing' means everything has changed
+    :: Maybe (RuntimeRestartKeys, KeySet) -- ^ Set of keys changed since last run. 'Nothing' means everything has changed
     -> ShakeDatabase
     -> [Action a]
     -> IO (IO [Either SomeException a])
@@ -126,7 +127,7 @@ mkDelayedAction s p a = do
     u <- newUnique
     return $ DelayedAction (newDirectKey $ hashUnique u) s (toEnum (fromEnum p)) a
 
-shakeComputeToPreserve :: ShakeDatabase -> KeySet -> IO (KeySet, ([Key], [Key]), Int, [Key])
+shakeComputeToPreserve :: ShakeDatabase -> KeySet -> IO RuntimeRestartKeys
 shakeComputeToPreserve (ShakeDatabase _ _ db) ks = atomically (computeToPreserve db ks)
 
 shakeRunDatabaseForKeys
@@ -146,7 +147,12 @@ shakeRunDatabaseForKeysWithExceptions
     -> IO [Either SomeException a]
 shakeRunDatabaseForKeysWithExceptions Nothing sdb as2 = join $ shakeRunDatabaseForKeysSep Nothing sdb as2
 shakeRunDatabaseForKeysWithExceptions (Just x) sdb as2 =
-    let y = fromListKeySet x in join $ shakeRunDatabaseForKeysSep (Just (([], toListKeySet y), y)) sdb as2
+    let y = fromListKeySet x
+        restartKeys = RuntimeRestartKeys
+            { restartKillKeys = y
+            , restartDirtyKeys = toListKeySet y
+            }
+    in join $ shakeRunDatabaseForKeysSep (Just (restartKeys, y)) sdb as2
 
 
 shakePeekAsyncsDelivers :: ShakeDatabase -> IO [DeliverStatus]
