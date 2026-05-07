@@ -41,7 +41,8 @@ data Import
 data ArtifactsLocation = ArtifactsLocation
   { artifactFilePath    :: !NormalizedFilePath
   , artifactModLocation :: !(Maybe ModLocation)
-  , artifactIsSource    :: !Bool          -- ^ True if a module is a source input
+  , artifactIsSource    :: !Bool          -- ^ 'True' for a real Haskell source file ('HsSrcFile');
+                                          -- 'False' for a boot ('HsBootFile') or signature ('HsigFile') file.
   , artifactModule      :: !(Maybe Module)
   } deriving Show
 

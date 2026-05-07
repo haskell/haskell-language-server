@@ -56,4 +56,8 @@ tests = testGroup "boot"
       runWithExtraFiles "boot-qualified" $ \dir -> do
         _ <- openDoc (dir </> "B.hs") "haskell"
         expectNoMoreDiagnostics 5
+  , testCase "GetLinkable on hs-boot via TH splice (clash-compiler reproducer)" $
+      runWithExtraFiles "boot-linkable" $ \dir -> do
+        _ <- openDoc (dir </> "Clash" </> "Promoted" </> "Nat.hs") "haskell"
+        expectNoMoreDiagnostics 10
   ]
