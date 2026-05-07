@@ -423,7 +423,6 @@ showItemDiffResult (Time _, Just y)  = showPercentageDiff y
 showPercentageDiff :: Double -> String
 showPercentageDiff ratio
   | not (isFinite percent) = "NA"
-  | abs percent < 0.005 = ""
   | otherwise = printf "%.2f" percent <> "%"
   where
     percent = ratio * 100 - 100
