@@ -93,7 +93,7 @@ keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
 -- This is useful for keys that are not based on user data, e.g., for
 -- tracking temporary actions.
 newDirectKey :: Int -> Key
-newDirectKey i = UnsafeMkKey (- abs i)
+newDirectKey i = UnsafeMkKey $ negate (abs i + 1)
 
 newKey :: (Typeable a, Hashable a, Show a) => a -> Key
 newKey k = unsafePerformIO $ do
