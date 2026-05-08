@@ -12,6 +12,7 @@ import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
+import           Data.Maybe                      (isJust)
 import           Data.Proxy                      (Proxy (..))
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
@@ -48,7 +49,6 @@ import           Test.Hls.Util                   (EnvSpec (..), OS (..),
                                                   ignoreInEnv)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import Data.Maybe (isJust)
 
 
 tests :: TestTree
@@ -136,7 +136,7 @@ waitForHlsStatus expectedStatus =
   waitForCustomMessage hlsStatusNotificationMethod $ \value ->
     case A.fromJSON value of
       A.Success status | hlsStatusStatus status == expectedStatus -> Just status
-      _                                                          -> Nothing
+      _                                                           -> Nothing
 
 -- | Checks that HLS reports the coarse setup lifecycle clients need for UI state.
 hlsStatusLifecycle :: TestTree

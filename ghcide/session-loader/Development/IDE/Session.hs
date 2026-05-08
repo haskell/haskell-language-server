@@ -705,7 +705,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
       absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
 
 data HlsReadyPayload = HlsReadyPayload
-  { hlsReadyPayloadInferred  :: Bool
+  { hlsReadyPayloadInferred   :: Bool
   , hlsReadyPayloadGhcVersion :: String
   }
   deriving (Eq, Show)
@@ -1001,7 +1001,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
     mkHlsStatus (T.pack "ready") (Just $ fromNormalizedFilePath cfp) (Just rootDir) (Just $ toJSON readyPayload)
 
 errorStatusMessage :: [FileDiagnostic] -> T.Text
-errorStatusMessage [] = T.pack "HLS setup failed"
+errorStatusMessage []          = T.pack "HLS setup failed"
 errorStatusMessage diagnostics = showDiagnostics diagnostics
 
 -- | Create a new HscEnv from a hieYaml root and a set of options
