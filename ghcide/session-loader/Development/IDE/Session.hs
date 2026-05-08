@@ -6,8 +6,11 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
-  ,CradleInfo(..)
-  ,cradleInfoNotificationMethod
+  ,HlsStatus(..)
+  ,HlsReadyPayload(..)
+  ,hlsStatusNotificationMethod
+  ,mkHlsStatus
+  ,sendHlsStatusNotification
   ,loadSessionWithOptions
   ,getInitialGhcLibDirDefault
   ,getHieDbLoc
@@ -558,6 +561,10 @@ getPendingFiles state = atomically $ S.toHashSet (pendingFiles state)
 -- | Handle errors during session loading by recording file as having error and removing from pending
 handleSingleFileProcessingError' :: SessionState -> Maybe FilePath -> FilePath -> PackageSetupException -> SessionM ()
 handleSingleFileProcessingError' state hieYaml file e = do
+  lspEnv <- asks sessionLspContext
+  rootDir <- asks sessionRootDir
+  liftIO $ sendHlsStatusNotification lspEnv $
+    mkHlsStatus (T.pack "error") (Just file) (Just rootDir) (Just $ errorStatusPayload $ T.pack $ showPackageSetupException e)
   handleSingleFileProcessingError state hieYaml file [renderPackageSetupException file e] mempty
 
 -- | Common pattern: Insert file flags, insert file mapping, and remove from pending
@@ -697,59 +704,73 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
       let absFile = toAbsolutePath file
       absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
 
-data CradleInfo = CradleInfo
-  { cradleInfoFile      :: FilePath
-  , cradleInfoRootDir   :: FilePath
-  , cradleInfoType      :: T.Text
-  , cradleInfoInferred  :: Bool
+data HlsReadyPayload = HlsReadyPayload
+  { hlsReadyPayloadInferred  :: Bool
+  , hlsReadyPayloadGhcVersion :: String
   }
+  deriving (Eq, Show)
 
-instance ToJSON CradleInfo where
-  toJSON (CradleInfo file rootDir cradleType inferred) =
+instance ToJSON HlsReadyPayload where
+  toJSON (HlsReadyPayload inferred ghcVersion) =
     object
-      [ "file" .= file
-      , "rootDir" .= rootDir
-      , "cradleType" .= cradleType
-      , "inferred" .= inferred
+      [ "inferred" .= inferred
+      , "ghcVersion" .= ghcVersion
       ]
 
-instance FromJSON CradleInfo where
-  parseJSON = withObject "CradleInfo" $ \obj ->
-    CradleInfo
-      <$> obj .: "file"
-      <*> obj .: "rootDir"
-      <*> obj .: "cradleType"
-      <*> obj .: "inferred"
+instance FromJSON HlsReadyPayload where
+  parseJSON = withObject "HlsReadyPayload" $ \obj ->
+    HlsReadyPayload
+      <$> obj .: "inferred"
+      <*> obj .: "ghcVersion"
 
--- | Names the custom notification that reports the loaded cradle to clients.
-cradleInfoNotificationMethod :: T.Text
-cradleInfoNotificationMethod = "ghcide/cradle/info"
-
--- | Builds the small cradle summary that editors can display to users.
-mkCradleInfo :: FilePath -> Maybe FilePath -> Cradle a -> CradleInfo
-mkCradleInfo file hieYaml cradle =
-  CradleInfo
-    { cradleInfoFile = file
-    , cradleInfoRootDir = cradleRootDir cradle
-    , cradleInfoType = cradleTypeLabel cradle
-    , cradleInfoInferred = isNothing hieYaml
+mkReadyPayload :: Maybe FilePath -> String -> HlsReadyPayload
+mkReadyPayload hieYaml ghcVersion =
+  HlsReadyPayload
+    { hlsReadyPayloadInferred = isNothing hieYaml
+    , hlsReadyPayloadGhcVersion = ghcVersion
     }
 
--- | Converts the cradle action into a stable, editor-friendly label.
-cradleTypeLabel :: Cradle a -> T.Text
-cradleTypeLabel cradle = case actionName (cradleOptsProg cradle) of
-  Cabal   -> "cabal"
-  Stack   -> "stack"
-  Direct  -> "direct"
-  Default -> "default"
-  _       -> "bios"
+data HlsStatus = HlsStatus
+  { hlsStatusStatus  :: T.Text
+  , hlsStatusFile    :: Maybe FilePath
+  , hlsStatusRootDir :: Maybe FilePath
+  , hlsStatusPayload :: Maybe Value
+  }
+  deriving (Eq, Show)
 
--- | Sends the current cradle summary to interested LSP clients when available.
-sendCradleInfoNotification :: Maybe (LanguageContextEnv Config) -> CradleInfo -> IO ()
-sendCradleInfoNotification lspEnv cradleInfo =
+instance ToJSON HlsStatus where
+  toJSON (HlsStatus status file rootDir payload) =
+    object
+      [ "status" .= status
+      , "file" .= file
+      , "rootDir" .= rootDir
+      , "payload" .= payload
+      ]
+
+instance FromJSON HlsStatus where
+  parseJSON = withObject "HlsStatus" $ \obj ->
+    HlsStatus
+      <$> obj .: "status"
+      <*> obj .:? "file"
+      <*> obj .:? "rootDir"
+      <*> obj .:? "payload"
+
+-- | Names the custom notification that reports HLS setup state to clients.
+hlsStatusNotificationMethod :: T.Text
+hlsStatusNotificationMethod = T.pack "ghcide/status"
+
+mkHlsStatus :: T.Text -> Maybe FilePath -> Maybe FilePath -> Maybe Value -> HlsStatus
+mkHlsStatus = HlsStatus
+
+errorStatusPayload :: T.Text -> Value
+errorStatusPayload msg =
+  object ["message" .= msg]
+
+sendHlsStatusNotification :: Maybe (LanguageContextEnv Config) -> HlsStatus -> IO ()
+sendHlsStatusNotification lspEnv status =
   for_ lspEnv $ \env ->
     void $ runLspT env $
-      sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/info")) (toJSON cradleInfo)
+      sendNotification (SMethod_CustomMethod (Proxy @"ghcide/status")) (toJSON status)
 
 -- | Given a file, this function will return the HscEnv and the dependencies
 -- it would look up the cache first, if the cache is not available, it would
@@ -889,7 +910,7 @@ consultCradle recorder sessionShake sessionState knownTargetsVar hieYaml cfp = d
       case reverse $ readP_to_S parseVersion version of
         [] -> error $ "GHC version could not be parsed: " <> version
         ((runTime, _):_)
-          | compileTime == runTime -> session recorder sessionShake sessionState knownTargetsVar (hieYaml, ncfp, opts, libDir)
+          | compileTime == runTime -> session recorder sessionShake sessionState knownTargetsVar (hieYaml, ncfp, opts, libDir, mkReadyPayload hieYaml version)
           | otherwise -> handleSingleFileProcessingError' sessionState hieYaml cfp (GhcVersionMismatch{..})
     -- Failure case, either a cradle error or the none cradle
     Left err -> do
@@ -919,6 +940,10 @@ consultCradle recorder sessionShake sessionState knownTargetsVar hieYaml cfp = d
             -- we can't load it.
             -- Add it to the list of permanently failed to load targets and do not retry!
             let res = map (\err' -> renderCradleError err' cradle ncfp) err
+            lspEnv <- asks sessionLspContext
+            rootDir <- asks sessionRootDir
+            liftIO $ sendHlsStatusNotification lspEnv $
+              mkHlsStatus (T.pack "error") (Just cfp) (Just rootDir) (Just $ errorStatusPayload $ errorStatusMessage res)
             handleSingleFileProcessingError sessionState hieYaml cfp res $ concatMap cradleErrorDependencies err
 
 -- | Set up the GHC session for the new 'ComponentOptions' we have discovered.
@@ -931,9 +956,9 @@ session ::
     SessionShake ->
     SessionState ->
     TVar (Hashed KnownTargets) ->
-    (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath) ->
+    (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath, HlsReadyPayload) ->
     SessionM ()
-session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, libDir) = do
+session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, libDir, readyPayload) = do
   let initEmptyHscEnv = emptyHscEnvM libDir
   (new_components_info, old_components_info) <- packageSetup recorder sessionState initEmptyHscEnv (hieYaml, cfp, opts)
 
@@ -970,6 +995,14 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
                 let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
                 liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
         return [keys1, keys2]
+  lspEnv <- asks sessionLspContext
+  rootDir <- asks sessionRootDir
+  liftIO $ sendHlsStatusNotification lspEnv $
+    mkHlsStatus (T.pack "ready") (Just $ fromNormalizedFilePath cfp) (Just rootDir) (Just $ toJSON readyPayload)
+
+errorStatusMessage :: [FileDiagnostic] -> T.Text
+errorStatusMessage [] = T.pack "HLS setup failed"
+errorStatusMessage diagnostics = showDiagnostics diagnostics
 
 -- | Create a new HscEnv from a hieYaml root and a set of options
 packageSetup :: Recorder (WithPriority Log) -> SessionState -> SessionM HscEnv -> (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> SessionM ([ComponentInfo], [ComponentInfo])
@@ -1062,11 +1095,10 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
 
   -- Find the 'Cradle' for the target
   loadingOptions <- asks sessionLoadingOptions
-  cradle <- liftIO $ loadCradle loadingOptions recorder hieYaml rootDir
-
-  -- Expose the loaded cradle so clients can surface it in their UI.
   lspEnv <- asks sessionLspContext
-  liftIO $ sendCradleInfoNotification lspEnv (mkCradleInfo cfp hieYaml cradle)
+  liftIO $ sendHlsStatusNotification lspEnv $
+    mkHlsStatus (T.pack "loading") (Just cfp) (Just rootDir) Nothing
+  cradle <- liftIO $ loadCradle loadingOptions recorder hieYaml rootDir
 
   -- Test notification for better observability.
   IdeTesting isTesting <- asks (optTesting . sessionIdeOptions)
