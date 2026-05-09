@@ -27,20 +27,17 @@
     │        └── commitid                         - Git commit id for this reference
     ├─ <example>
     │   ├── results.csv                           - aggregated results for all the versions and configurations
-    │   ├── <experiment>.svg                      - graph of bytes over elapsed time, for all the versions and configurations
     |   └── <git-reference>
     │       └── <configuration>
     │           ├── <experiment>.gcStats.log          - RTS -s output
     │           ├── <experiment>.csv                  - stats for the experiment
-    │           ├── <experiment>.svg                  - Graph of bytes over elapsed time
-    │           ├── <experiment>.diff.svg             - idem, including the previous version
-    │           ├── <experiment>.heap.svg             - Heap profile
+    │           ├── <experiment>.hp                   - raw heap profile data
     │           ├── <experiment>.log                  - bench stdout
     │           └── results.csv                       - results of all the experiments for the example
     ├── results.csv        - aggregated results of all the examples, experiments, versions and configurations
-    └── <experiment>.svg   - graph of bytes over elapsed time, for all the examples, experiments, versions and configurations
+    └── resultDiff.csv     - diff of aggregated results compared with previous version
 
-   For diff graphs, the "previous version" is the preceding entry in the list of versions
+   For diff results, the "previous version" is the preceding entry in the list of versions
    in the config file. A possible improvement is to obtain this info via `git rev-list`.
  -}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
@@ -50,8 +47,6 @@ module Development.Benchmark.Rules
       benchRules, MkBenchRules(..), BenchProject(..), ProfilingMode(..),
       addGetParentOracle,
       csvRules,
-      svgRules,
-      heapProfileRules,
       phonyRules,
       allTargetsForExample,
       GetExample(..), GetExamples(..),
@@ -68,47 +63,32 @@ module Development.Benchmark.Rules
   ) where
 
 import           Control.Applicative
-import           Control.Lens                              (preview, view, (^.))
+import           Control.Lens              (preview, (^.))
 import           Control.Monad
-import qualified Control.Monad.State                       as S
-import           Data.Aeson                                (FromJSON (..),
-                                                            ToJSON (..),
-                                                            Value (..), object,
-                                                            (.!=), (.:?), (.=))
-import           Data.Aeson.Lens                           (AsJSON (_JSON),
-                                                            _Object, _String)
-import           Data.ByteString.Lazy                      (ByteString)
-import           Data.Char                                 (isAlpha, isDigit)
-import           Data.List                                 (find, intercalate,
-                                                            isInfixOf,
-                                                            isSuffixOf,
-                                                            stripPrefix,
-                                                            transpose)
-import           Data.List.Extra                           (lower, splitOn)
-import           Data.Maybe                                (fromMaybe)
-import           Data.String                               (fromString)
-import           Data.Text                                 (Text)
-import qualified Data.Text                                 as T
+import           Data.Aeson                (FromJSON (..), ToJSON (..),
+                                            Value (..), object, (.!=), (.:?),
+                                            (.=))
+import           Data.Aeson.Lens           (AsJSON (_JSON), _Object, _String)
+import           Data.ByteString.Lazy      (ByteString)
+import           Data.Char                 (isDigit)
+import           Data.List                 (find, intercalate, isInfixOf,
+                                            isSuffixOf, stripPrefix, transpose)
+import           Data.List.Extra           (lower, splitOn)
+import           Data.Maybe                (fromMaybe)
+import           Data.String               (fromString)
+import           Data.Text                 (Text)
+import qualified Data.Text                 as T
 import           Development.Shake
-import           Development.Shake.Classes                 (Binary, Hashable,
-                                                            NFData, Typeable)
-import           GHC.Exts                                  (IsList (toList),
-                                                            fromList)
-import           GHC.Generics                              (Generic)
-import           GHC.Stack                                 (HasCallStack)
-import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
-import qualified Graphics.Rendering.Chart.Easy             as E
+import           Development.Shake.Classes (Binary, Hashable, NFData, Typeable)
+import           GHC.Exts                  (IsList (toList), fromList)
+import           GHC.Generics              (Generic)
 import           Numeric.Natural
-import           System.Directory                          (createDirectoryIfMissing,
-                                                            findExecutable,
-                                                            renameFile)
+import           System.Directory          (createDirectoryIfMissing,
+                                            findExecutable)
 import           System.FilePath
-import           System.Time.Extra                         (Seconds)
-import qualified Text.ParserCombinators.ReadP              as P
+import           System.Time.Extra         (Seconds)
 import           Text.Printf
-import           Text.Read                                 (Read (..), get,
-                                                            readMaybe,
-                                                            readP_to_Prec)
+import           Text.Read                 (readMaybe)
 
 newtype GetExperiments = GetExperiments () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 newtype GetVersions = GetVersions () deriving newtype (Binary, Eq, Hashable, NFData, Show)
@@ -142,28 +122,11 @@ class (Binary e, Eq e, Hashable e, NFData e, Show e, Typeable e) => IsExample e 
 
 allTargetsForExample :: IsExample e => ProfilingMode -> FilePath -> e -> Action [FilePath]
 allTargetsForExample prof baseFolder ex = do
-    experiments <- askOracle $ GetExperiments ()
-    versions    <- askOracle $ GetVersions ()
-    configurations <- askOracle $ GetConfigurations ()
     let buildFolder = baseFolder </> profilingPath prof
     return $
         [
             buildFolder </> getExampleName ex </> "results.csv"
             , buildFolder </> getExampleName ex </> "resultDiff.csv"]
-        ++ [ buildFolder </> getExampleName ex </> escaped (escapeExperiment e) <.> "svg"
-             | e <- experiments
-           ]
-        ++ [ buildFolder </>
-             getExampleName ex </>
-             T.unpack (humanName ver) </>
-             confName </>
-             escaped (escapeExperiment e) <.>
-             mode
-             | e <- experiments,
-               ver <- versions,
-               Configuration{confName} <- configurations,
-               mode <- ["svg", "diff.svg"] ++ ["heap.svg" | prof /= NoProfiling]
-           ]
 
 allBinaries :: FilePath -> String -> Action [FilePath]
 allBinaries buildFolder executableName = do
@@ -416,13 +379,17 @@ csvRules build = do
           results = map tail allResults
       writeFileChanged out $ unlines $ header : concat results
   priority 2 $ build -/- "*/*/*/*/resultDiff.csv" %> \out -> do
-    let out2@[b, flav, example, ver, conf, exp_] = splitDirectories out
+    let [b, flav, example, ver, conf, _exp] = splitDirectories out
     prev <- fmap T.unpack $ askOracle $ GetParent $ T.pack ver
     allResultsCur <- readFileLines $ joinPath [b ,flav, example, ver, conf] </> "results.csv"
-    allResultsPrev <- readFileLines $ joinPath [b ,flav, example, prev, conf] </> "results.csv"
-    let resultsPrev = tail allResultsPrev
-    let resultsCur = tail allResultsCur
-    let resultDiff = zipWith convertToDiffResults resultsCur resultsPrev
+    resultDiff <-
+      if prev == ver
+        then pure []
+        else do
+          allResultsPrev <- readFileLines $ joinPath [b ,flav, example, prev, conf] </> "results.csv"
+          let resultsPrev = tail allResultsPrev
+          let resultsCur = tail allResultsCur
+          pure $ zipWith convertToDiffResults resultsCur resultsPrev
     writeFileChanged out $ unlines $ head allResultsCur : resultDiff
   -- aggregate all configurations for an experiment
   priority 3 $ build -/- "*/*/*/results.csv" %> genConfig "results.csv"
@@ -450,14 +417,30 @@ convertToDiffResults line baseLine = intercalate "," diffResults
 showItemDiffResult ::  (Item, Maybe Double) -> String
 showItemDiffResult (ItemString x, _) = x
 showItemDiffResult (_, Nothing)      = "NA"
-showItemDiffResult (Mem x, Just y)   = printf "%.2f" (y * 100 - 100) <> "%"
-showItemDiffResult (Time x, Just y)  = printf "%.2f" (y * 100 - 100) <> "%"
+showItemDiffResult (Mem _, Just y)   = showPercentageDiff y
+showItemDiffResult (Time _, Just y)  = showPercentageDiff y
+
+showPercentageDiff :: Double -> String
+showPercentageDiff ratio
+  | not (isFinite percent) = "NA"
+  | otherwise = printf "%.2f" percent <> "%"
+  where
+    percent = ratio * 100 - 100
+
+isFinite :: Double -> Bool
+isFinite x = not (isNaN x || isInfinite x)
 
 diffItem :: Item -> Item -> (Item, Maybe Double)
-diffItem (Mem x) (Mem y) = (Mem x, Just $ fromIntegral x / fromIntegral y)
-diffItem (Time x) (Time y) = (Time x, if y == 0 then Nothing else Just $ x / y)
+diffItem (Mem x) (Mem y) = (Mem x, ratioMaybe (fromIntegral x) (fromIntegral y))
+diffItem (Time x) (Time y) = (Time x, ratioMaybe x y)
 diffItem (ItemString x) (ItemString y) = (ItemString x, Nothing)
 diffItem _ _ = (ItemString "no match", Nothing)
+
+ratioMaybe :: Double -> Double -> Maybe Double
+ratioMaybe x y
+  | y == 0 = Nothing
+  | not (isFinite x && isFinite y) = Nothing
+  | otherwise = Just $ x / y
 
 data Item = Mem Int | Time Double | ItemString String
   deriving (Show)
@@ -471,77 +454,6 @@ parseLine = map f . splitOn ","
             case readMaybe @Double x of
                 Just time -> Time time
                 Nothing   -> ItemString x
-
---------------------------------------------------------------------------------
-
--- | Rules to produce charts for the GC stats
-svgRules :: FilePattern -> Rules ()
-svgRules build = do
-  -- chart GC stats for an experiment on a given revision
-  priority 1 $
-    build -/- "*/*/*/*/*.svg" %> \out -> do
-      let [_, _, _example, ver, conf, _exp] = splitDirectories out
-      runLog <- loadRunLog (Escaped $ replaceExtension out "csv") ver conf
-      let diagram = Diagram Live [runLog] title
-          title = ver <> " live bytes over time"
-      plotDiagram True diagram out
-
-  -- chart of GC stats for an experiment on this and the previous revision
-  priority 2 $
-    build -/- "*/*/*/*/*.diff.svg" %> \out -> do
-      let [b, flav, example, ver, conf, exp_] = splitDirectories out
-          exp = Escaped $ dropExtension2 exp_
-      prev <- fmap T.unpack $ askOracle $ GetParent $ T.pack ver
-
-      runLog <- loadRunLog (Escaped $ replaceExtension (dropExtension out) "csv") ver conf
-      runLogPrev <- loadRunLog (Escaped $ joinPath [b,flav, example, prev, conf, replaceExtension (dropExtension exp_) "csv"]) prev conf
-
-      let diagram = Diagram Live [runLog, runLogPrev] title
-          title = show (unescapeExperiment exp) <> " - live bytes over time compared"
-      plotDiagram True diagram out
-
-  -- aggregated chart of GC stats for all the configurations
-  build -/- "*/*/*/*.svg" %> \out -> do
-    let exp = Escaped $ dropExtension $ takeFileName out
-        [b, flav, example, ver] = splitDirectories out
-    versions <- askOracle $ GetVersions ()
-    configurations <- askOracle $ GetConfigurations ()
-
-    runLogs <- forM configurations $ \Configuration{confName} -> do
-      loadRunLog (Escaped $ takeDirectory out </> confName </> replaceExtension (takeFileName out) "csv") ver confName
-
-    let diagram = Diagram Live runLogs title
-        title = show (unescapeExperiment exp) <> " - live bytes over time"
-    plotDiagram False diagram out
-
-  -- aggregated chart of GC stats for all the revisions
-  build -/- "*/*/*.svg" %> \out -> do
-    let exp = Escaped $ dropExtension $ takeFileName out
-    versions <- askOracle $ GetVersions ()
-    configurations <- askOracle $ GetConfigurations ()
-
-    runLogs <- forM (filter include versions) $ \v ->
-                forM configurations $ \Configuration{confName} -> do
-      let v' = T.unpack (humanName v)
-      loadRunLog (Escaped $ takeDirectory out </> v' </> confName </> replaceExtension (takeFileName out) "csv") v' confName
-
-    let diagram = Diagram Live (concat runLogs) title
-        title = show (unescapeExperiment exp) <> " - live bytes over time"
-    plotDiagram False diagram out
-
-heapProfileRules :: FilePattern -> Rules ()
-heapProfileRules build = do
-  priority 3 $
-    build -/- "*/*/*/*/*.heap.svg" %> \out -> do
-      let hpFile = dropExtension2 out <.> "hp"
-      need [hpFile]
-      cmd_ ("eventlog2html" :: String) ["--heap-profile", hpFile]
-      liftIO $ renameFile (dropExtension hpFile <.> "svg") out
-
-dropExtension2 :: FilePath -> FilePath
-dropExtension2 = dropExtension . dropExtension
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
 
 -- | Default build system that handles Cabal and Stack
 data BuildSystem = Cabal | Stack
@@ -611,119 +523,6 @@ findPrev name (x : y : xx)
   | otherwise = findPrev name (y : xx)
 findPrev name _ = name
 
---------------------------------------------------------------------------------
-
--- | A line in the output of -S
-data Frame = Frame
-  { allocated, copied, live            :: !Int,
-    user, elapsed, totUser, totElapsed :: !Double,
-    generation                         :: !Int
-  }
-  deriving (Show)
-
-instance Read Frame where
-  readPrec = do
-    spaces
-    allocated <- readPrec @Int <* spaces
-    copied <- readPrec @Int <* spaces
-    live <- readPrec @Int <* spaces
-    user <- readPrec @Double <* spaces
-    elapsed <- readPrec @Double <* spaces
-    totUser <- readPrec @Double <* spaces
-    totElapsed <- readPrec @Double <* spaces
-    _ <- readPrec @Int <* spaces
-    _ <- readPrec @Int <* spaces
-    "(Gen:  " <- replicateM 7 get
-    generation <- readPrec @Int
-    ')' <- get
-    return Frame {..}
-    where
-      spaces = readP_to_Prec $ const P.skipSpaces
-
--- | A file path containing the output of -S for a given run
-data RunLog = RunLog
-  { runVersion       :: !String,
-    runConfiguration :: !String,
-    runFrames        :: ![Frame],
-    runSuccess       :: !Bool,
-    runFirstReponse  :: !(Maybe Seconds)
-  }
-
-loadRunLog :: HasCallStack => Escaped FilePath -> String -> String -> Action RunLog
-loadRunLog (Escaped csv_fp) ver conf = do
-  let log_fp = replaceExtension csv_fp "gcStats.log"
-  log <- readFileLines log_fp
-  csv <- readFileLines csv_fp
-  let frames =
-        [ f
-          | l <- log,
-            Just f <- [readMaybe l],
-            -- filter out gen 0 events as there are too many
-            generation f == 1
-        ]
-      -- TODO this assumes a certain structure in the CSV file
-      (success, firstResponse) = case map (map T.strip . T.split (== ',') . T.pack) csv of
-          [header, row]
-            | let table = zip header row
-                  timeForFirstResponse :: Maybe Seconds
-                  timeForFirstResponse = readMaybe . T.unpack =<< lookup "firstBuildTime" table
-            , Just s <- lookup "success" table
-            , Just s <- readMaybe (T.unpack s)
-            -> (s,timeForFirstResponse)
-          _ -> error $ "Cannot parse: " <> csv_fp
-  return $ RunLog ver conf frames success firstResponse
-
---------------------------------------------------------------------------------
-
-data TraceMetric = Allocated | Copied | Live | User | Elapsed
-  deriving (Generic, Enum, Bounded, Read)
-
-instance Show TraceMetric where
-  show Allocated = "Allocated bytes"
-  show Copied    = "Copied bytes"
-  show Live      = "Live bytes"
-  show User      = "User time"
-  show Elapsed   = "Elapsed time"
-
-frameMetric :: TraceMetric -> Frame -> Double
-frameMetric Allocated = fromIntegral . allocated
-frameMetric Copied    = fromIntegral . copied
-frameMetric Live      = fromIntegral . live
-frameMetric Elapsed   = elapsed
-frameMetric User      = user
-
-data Diagram = Diagram
-  { traceMetric :: TraceMetric,
-    runLogs     :: [RunLog],
-    title       :: String
-  }
-  deriving (Generic)
-
-plotDiagram :: Bool -> Diagram -> FilePath -> Action ()
-plotDiagram includeFailed t@Diagram {traceMetric, runLogs} out = do
-  let extract = frameMetric traceMetric
-  liftIO $ E.toFile E.def out $ do
-    E.layout_title E..= title t
-    E.setColors myColors
-    forM_ runLogs $ \rl ->
-      when (includeFailed || runSuccess rl) $ do
-        -- Get the color we are going to use
-        ~(c:_) <- E.liftCState $ S.gets (E.view E.colors)
-        E.plot $ do
-          lplot <- E.line
-              (runVersion rl ++ " " ++ runConfiguration rl ++ if runSuccess rl then "" else " (FAILED)")
-              [ [ (totElapsed f, extract f)
-                  | f <- runFrames rl
-                  ]
-              ]
-          return (lplot E.& E.plot_lines_style . E.line_width E.*~ 2)
-        case runFirstReponse rl of
-          Just t -> E.plot $ pure $
-              E.vlinePlot ("First build: " ++ runVersion rl) (E.defaultPlotLineStyle E.& E.line_color E..~ c) t
-          _ -> pure ()
-
---------------------------------------------------------------------------------
-
 newtype Escaped a = Escaped {escaped :: a}
 
 newtype Unescaped a = Unescaped {unescaped :: a}
@@ -748,49 +547,6 @@ a -/- b = a <> "/" <> b
 
 interleave :: [[a]] -> [a]
 interleave = concat . transpose
-
---------------------------------------------------------------------------------
-
-myColors :: [E.AlphaColour Double]
-myColors = map E.opaque
-  [ E.blue
-  , E.green
-  , E.red
-  , E.orange
-  , E.yellow
-  , E.violet
-  , E.black
-  , E.gold
-  , E.brown
-  , E.hotpink
-  , E.aliceblue
-  , E.aqua
-  , E.beige
-  , E.bisque
-  , E.blueviolet
-  , E.burlywood
-  , E.cadetblue
-  , E.chartreuse
-  , E.coral
-  , E.crimson
-  , E.darkblue
-  , E.darkgray
-  , E.darkgreen
-  , E.darkkhaki
-  , E.darkmagenta
-  , E.deeppink
-  , E.dodgerblue
-  , E.firebrick
-  , E.forestgreen
-  , E.fuchsia
-  , E.greenyellow
-  , E.lightsalmon
-  , E.seagreen
-  , E.olive
-  , E.sandybrown
-  , E.sienna
-  , E.peru
-  ]
 
 dummyHp :: String
 dummyHp =
