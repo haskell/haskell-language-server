@@ -33,6 +33,7 @@ import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
+import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Location
 import           Ide.Logger
 import           Ide.Types
@@ -133,6 +134,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeConfiguration mempty
 
   , mkPluginNotificationHandler LSP.SMethod_Initialized $ \ide _ _ _ -> do
+      liftIO $ Session.sendHlsStatusNotification (lspEnv $ shakeExtras ide) $
+        Session.mkHlsStatus (Text.pack "started") Nothing (Just $ rootDir ide) Nothing
+
       --------- Initialize Shake session --------------------------------------------------------------------
       liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
 
