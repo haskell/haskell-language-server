@@ -262,8 +262,8 @@ getVersionedTextDocForNormalizedFilePath :: NormalizedFilePath -> Action Version
 getVersionedTextDocForNormalizedFilePath nfp = do
   mvf <- getVirtualFile nfp
   let ver = case mvf of
-        Just (VirtualFile lspver _ _) -> lspver
-        Nothing                       -> 0
+        Just (VirtualFile lspver _ _ _) -> lspver
+        Nothing                         -> 0
   return (VersionedTextDocumentIdentifier (fromNormalizedUri $ filePathToUri' nfp) ver)
 
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()

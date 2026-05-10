@@ -9,25 +9,24 @@ module Ide.Plugin.Cabal.Definition where
 import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
+import           Data.Foldable                                 (asum)
 import           Data.List                                     (find)
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
 import qualified Distribution.Fields                           as Syntax
-import           Distribution.PackageDescription               (Benchmark (..),
-                                                                BuildInfo (..),
-                                                                Executable (..),
-                                                                ForeignLib (..),
+import           Distribution.PackageDescription               (Benchmark (Benchmark, benchmarkBuildInfo, benchmarkName),
+                                                                BuildInfo (hsSourceDirs),
+                                                                Executable (Executable, buildInfo, exeName),
+                                                                ForeignLib (ForeignLib, foreignLibBuildInfo, foreignLibName),
                                                                 GenericPackageDescription,
-                                                                Library (..),
-                                                                LibraryName (LMainLibName, LSubLibName),
+                                                                Library (Library, libBuildInfo, libName),
                                                                 PackageDescription (..),
-                                                                TestSuite (..),
-                                                                library,
-                                                                unUnqualComponentName)
+                                                                TestSuite (TestSuite, testBuildInfo, testName))
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import qualified Distribution.Parsec.Position                  as Syntax
+import           Distribution.Types.ComponentName              (ComponentName (..))
 import           Distribution.Utils.Generic                    (safeHead)
 import           Distribution.Utils.Path                       (getSymbolicPath)
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
@@ -45,9 +44,6 @@ import           System.Directory                              (doesFileExist)
 import           System.FilePath                               (joinPath,
                                                                 takeDirectory,
                                                                 (<.>), (</>))
-import Distribution.Types.ComponentName (ComponentName)
-import Data.Foldable (asum)
-import Distribution.Types.ComponentName (ComponentName(..))
 
 -- | Handler for going to definitions.
 --
