@@ -1,4 +1,4 @@
-module PrepareRename where
+module PrepareRename (bar, F.foo) where
 
 import qualified Foo as F
 
