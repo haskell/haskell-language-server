@@ -51,6 +51,15 @@ runs:
         echo "HLS_TEST_ROOTDIR=C:\\hls-tests" >> $GITHUB_ENV
       shell: bash
 
+      # Enable long paths on Windows
+    - if: inputs.os == 'Windows'
+      name: (Windows) Enable long paths
+      shell: powershell
+      run: |
+        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+          -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+        git config --global core.longpaths true
+
     - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )
       name: (Linux,macOS) Platform config
       run: |
