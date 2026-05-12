@@ -15,65 +15,68 @@ module Development.IDE.Plugin.Completions.Logic (
 ) where
 
 import           Control.Applicative
-import           Control.Lens                             hiding (Context,
-                                                           parts)
-import           Data.Char                                (isAlphaNum, isUpper)
-import           Data.Default                             (def)
+import           Control.Lens                               hiding (Context,
+                                                             parts)
+import           Data.Char                                  (isAlphaNum,
+                                                             isUpper)
 import           Data.Generics
-import           Data.List.Extra                          as List hiding
-                                                                  (stripPrefix)
-import qualified Data.Map                                 as Map
-import           Prelude                                  hiding (mod)
+import           Data.List.Extra                            as List hiding
+                                                                    (stripPrefix)
+import qualified Data.Map                                   as Map
+import           Prelude                                    hiding (mod)
 
-import           Data.Maybe                               (fromMaybe, isJust,
-                                                           isNothing,
-                                                           listToMaybe,
-                                                           mapMaybe)
-import qualified Data.Text                                as T
-import qualified Text.Fuzzy.Parallel                      as Fuzzy
+import           Data.Maybe                                 (fromMaybe, isJust,
+                                                             isNothing,
+                                                             listToMaybe,
+                                                             mapMaybe)
+import qualified Data.Text                                  as T
+import qualified Text.Fuzzy.Parallel                        as Fuzzy
 
 import           Control.Monad
-import           Data.Aeson                               (ToJSON (toJSON))
-import           Data.Function                            (on)
+import           Data.Aeson                                 (ToJSON (toJSON))
+import           Data.Function                              (on)
 
-import qualified Data.HashSet                             as HashSet
-import           Data.Ord                                 (Down (Down))
-import qualified Data.Set                                 as Set
+import qualified Data.HashSet                               as HashSet
+import           Data.Ord                                   (Down (Down))
+import qualified Data.Set                                   as Set
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               hiding (isQual, ppr)
-import qualified Development.IDE.GHC.Compat               as GHC
+import           Development.IDE.GHC.Compat                 hiding (isQual, ppr)
+import qualified Development.IDE.GHC.Compat                 as GHC
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
+import           Development.IDE.Plugin.Completions.Context (Context (..))
+import qualified Development.IDE.Plugin.Completions.Context as Context
+import           Development.IDE.Plugin.Completions.Snippet
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Options
-import           GHC.Iface.Ext.Types                      (HieAST,
-                                                           NodeInfo (..))
-import           GHC.Iface.Ext.Utils                      (nodeInfo)
-import           Ide.PluginUtils                          (mkLspCommand)
-import           Ide.Types                                (CommandId (..),
-                                                           IdePlugins (..),
-                                                           PluginId)
+import           GHC.Iface.Ext.Types                        (HieAST,
+                                                             NodeInfo (..))
+import           GHC.Iface.Ext.Utils                        (nodeInfo)
+import           Ide.PluginUtils                            (mkLspCommand)
+import           Ide.Types                                  (CommandId (..),
+                                                             IdePlugins (..),
+                                                             PluginId)
 import           Language.Haskell.Syntax.Basic
-import qualified Language.LSP.Protocol.Lens               as L
+import qualified Language.LSP.Protocol.Lens                 as L
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.VFS                         as VFS
-import           Text.Fuzzy.Parallel                      (Scored (score),
-                                                           original)
+import qualified Language.LSP.VFS                           as VFS
+import           Text.Fuzzy.Parallel                        (Scored (score),
+                                                             original)
 
-import qualified Data.Text.Utf16.Rope.Mixed               as Rope
-import           Development.IDE                          hiding (line)
+import qualified Data.Text.Utf16.Rope.Mixed                 as Rope
+import           Development.IDE                            hiding (line)
 
-import           Development.IDE.Spans.AtPoint            (pointCommand)
+import           Development.IDE.Spans.AtPoint              (pointCommand)
 
 
-import qualified Development.IDE.Plugin.Completions.Types as C
-import           GHC.Plugins                              (Depth (AllTheWay),
-                                                           mkUserStyle,
-                                                           neverQualify,
-                                                           sdocStyle)
+import qualified Development.IDE.Plugin.Completions.Types   as C
+import           GHC.Plugins                                (Depth (AllTheWay),
+                                                             mkUserStyle,
+                                                             neverQualify,
+                                                             sdocStyle)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
@@ -81,82 +84,6 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
 chunkSize = 1000
-
--- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
-
--- | A context of a declaration in the program
--- e.g. is the declaration a type declaration or a value declaration
--- Used for determining which code completions to show
--- TODO: expand this with more contexts like classes or instances for
--- smarter code completion
-data Context = TypeContext
-             | ValueContext
-             | ModuleContext String -- ^ module context with module name
-             | ImportContext String -- ^ import context with module name
-             | ImportListContext String -- ^ import list context with module name
-             | ImportHidingContext String -- ^ import hiding context with module name
-             | ExportContext -- ^ List of exported identifiers from the current module
-  deriving (Show, Eq)
-
--- | Generates a map of where the context is a type and where the context is a value
--- i.e. where are the value decls and the type decls
-getCContext :: Position -> ParsedModule -> Maybe Context
-getCContext pos pm
-  | Just (L (locA -> r) modName) <- moduleHeader
-  , pos `isInsideSrcSpan` r
-  = Just (ModuleContext (moduleNameString modName))
-
-  | Just (L (locA -> r) _) <- exportList
-  , pos `isInsideSrcSpan` r
-  = Just ExportContext
-
-  | Just ctx <- something (Nothing `mkQ` go `extQ` goInline) decl
-  = Just ctx
-
-  | Just ctx <- something (Nothing `mkQ` importGo) imports
-  = Just ctx
-
-  | otherwise
-  = Nothing
-
-  where decl = hsmodDecls $ unLoc $ pm_parsed_source pm
-        moduleHeader = hsmodName $ unLoc $ pm_parsed_source pm
-        exportList = hsmodExports $ unLoc $ pm_parsed_source pm
-        imports = hsmodImports $ unLoc $ pm_parsed_source pm
-
-        go :: LHsDecl GhcPs -> Maybe Context
-        go (L (locA -> r) SigD {})
-          | pos `isInsideSrcSpan` r = Just TypeContext
-          | otherwise = Nothing
-        go (L (locA -> r) GHC.ValD {})
-          | pos `isInsideSrcSpan` r = Just ValueContext
-          | otherwise = Nothing
-        go _ = Nothing
-
-        goInline :: GHC.LHsType GhcPs -> Maybe Context
-        goInline (GHC.L (locA -> r) _)
-          | pos `isInsideSrcSpan` r = Just TypeContext
-        goInline _ = Nothing
-
-        importGo :: GHC.LImportDecl GhcPs -> Maybe Context
-        importGo (L (locA -> r) impDecl)
-          | pos `isInsideSrcSpan` r
-          = importInline importModuleName (fmap (fmap reLoc) $ ideclImportList impDecl)
-          <|> Just (ImportContext importModuleName)
-
-          | otherwise = Nothing
-          where importModuleName = moduleNameString $ unLoc $ ideclName impDecl
-
-        -- importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
-        importInline modName (Just (EverythingBut, L r _))
-          | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
-          | otherwise = Nothing
-
-        importInline modName (Just (Exactly, L r _))
-          | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
-          | otherwise = Nothing
-
-        importInline _ _ = Nothing
 
 occNameToComKind :: OccName -> CompletionItemKind
 occNameToComKind oc
@@ -286,11 +213,6 @@ mkExtCompl label =
     defaultCompletionItemWithLabel label
     & L.kind ?~ CompletionItemKind_Keyword
 
-defaultCompletionItemWithLabel :: T.Text -> CompletionItem
-defaultCompletionItemWithLabel label =
-    CompletionItem label def def def def def def def def def
-                         def def def def def def def def def
-
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc identInfo@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
@@ -328,7 +250,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
       asNamespace imp = maybe (iDeclToModName imp) GHC.unLoc (ideclAs imp)
       -- Full canonical names of imported modules
       importDeclarations = map unLoc limports
-
 
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclarations
@@ -529,7 +450,8 @@ getCompletions
     :: IdePlugins a
     -> IdeOptions
     -> CachedCompletions
-    -> Maybe (ParsedModule, PositionMapping)
+    -> Context
+    -> Bool
     -> Maybe (HieAstResult, PositionMapping)
     -> (Bindings, PositionMapping)
     -> PosPrefixInfo
@@ -542,7 +464,8 @@ getCompletions
     plugins
     ideOpts
     CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-    maybe_parsed
+    context
+    hasModuleHeader
     maybe_ast_res
     (localBindings, bmapping)
     prefixInfo@(PosPrefixInfo { fullLine, prefixScope, prefixText })
@@ -552,15 +475,15 @@ getCompletions
     uri
     -- ------------------------------------------------------------------------
     -- IMPORT MODULENAME (NAM|)
-    | Just (ImportListContext moduleName) <- maybeContext
+    | ImportListContext moduleName <- context
     = moduleImportListCompletions moduleName
 
-    | Just (ImportHidingContext moduleName) <- maybeContext
+    | ImportHidingContext moduleName <- context
     = moduleImportListCompletions moduleName
 
     -- ------------------------------------------------------------------------
     -- IMPORT MODULENAM|
-    | Just (ImportContext _moduleName) <- maybeContext
+    | ImportContext _ <- context
     = filtImportCompls
 
     -- ------------------------------------------------------------------------
@@ -569,6 +492,10 @@ getCompletions
     -- since HLS implements these completions (#haskell-language-server/pull/662)
     | "{-# " `T.isPrefixOf` fullLine
     = []
+
+    -- ------------------------------------------------------------------------
+    | TopContext groups <- context
+    = fmap (fmap (toggleSnippets caps config)) (filtTopContextCompls groups)
 
     -- ------------------------------------------------------------------------
     | otherwise =
@@ -607,16 +534,6 @@ getCompletions
           $ Fuzzy.simpleFilter chunkSize maxC fullPrefix
           $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
             allModNamesAsNS
-      -- If we have a parsed module, use it to determine which completion to show.
-      maybeContext :: Maybe Context
-      maybeContext = case maybe_parsed of
-            Nothing -> Nothing
-            Just (pm, pmapping) ->
-              let PositionMapping pDelta = pmapping
-                  position' = fromDelta pDelta pos
-                  lpos = lowerRange position'
-                  hpos = upperRange position'
-              in getCContext lpos pm <|> getCContext hpos pm
 
       filtCompls :: [Scored (Bool, CompItem)]
       filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls (label . snd)
@@ -658,11 +575,11 @@ getCompletions
                 })
 
           -- completions specific to the current context
-          ctxCompls' = case maybeContext of
-                        Nothing           -> compls
-                        Just TypeContext  -> filter ( isTypeCompl . snd) compls
-                        Just ValueContext -> filter (not . isTypeCompl . snd) compls
-                        Just _            -> filter (not . isTypeCompl . snd) compls
+          ctxCompls' = case context of
+                        TypeContext    -> filter (isTypeCompl . snd) compls
+                        ValueContext   -> filter (not . isTypeCompl . snd) compls
+                        DefaultContext -> compls
+                        _              -> filter (not . isTypeCompl . snd) compls
           -- Add whether the text to insert has backticks
           ctxCompls = (fmap.fmap) (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
@@ -699,12 +616,11 @@ getCompletions
         , enteredQual `T.isPrefixOf` original label
         ]
 
-      moduleImportListCompletions :: String -> [Scored CompletionItem]
-      moduleImportListCompletions moduleNameS =
-        let moduleName = T.pack moduleNameS
-            funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName moduleNameS
-            funs = map (show . name) $ HashSet.toList funcs
-        in filterModuleExports moduleName $ map T.pack funs
+      moduleImportListCompletions :: T.Text -> [Scored CompletionItem]
+      moduleImportListCompletions moduleName =
+        let funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName (T.unpack moduleName)
+            funs = map (T.pack . show . name) $ HashSet.toList funcs
+        in filterModuleExports moduleName funs
 
       filtImportCompls :: [Scored CompletionItem]
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
@@ -715,6 +631,12 @@ getCompletions
       filtKeywordCompls :: [Scored CompletionItem]
       filtKeywordCompls
           | T.null prefixScope = filtListWith mkExtCompl (optKeywords ideOpts)
+          | otherwise = []
+
+      filtTopContextCompls :: [Context.ContextGroup] -> [Scored CompletionItem]
+      filtTopContextCompls groups
+          | T.null prefixScope
+          = Fuzzy.filter chunkSize maxC fullPrefix (getContextSnippets hasModuleHeader groups) (view L.label)
           | otherwise = []
 
       -- We use this ordering to alphabetically sort suggestions while respecting
@@ -729,9 +651,6 @@ getCompletions
           (isQual, CompletionItem{_label,_detail}) -> do
             let isLocal = maybe False (":" `T.isPrefixOf`) _detail
             (Down isQual, Down score, Down isLocal, _label, _detail)
-
-
-
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =
