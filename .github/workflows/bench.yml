@@ -23,11 +23,11 @@ jobs:
     steps:
       - id: set_ghc_versions
         run: |
-          # benching the two latest GHCs we support now
-          # since benchmark are expansive.
-          # choosing the two latest are easier to maintain and more forward looking
-          # see discussion https://github.com/haskell/haskell-language-server/pull/4118
-          # also possible to add more GHCs if we performs better in the future.
+          # Benchmarking only the two latest GHCs we support now
+          # since benchmark are expensive.
+          # Choosing the two latest is easier to maintain and more forward looking.
+          # See discussion https://github.com/haskell/haskell-language-server/pull/4118
+          # also possible to add more GHCs if we perform better in the future.
           echo 'versions=["9.12", "9.14"]' >> $GITHUB_OUTPUT
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5.3.1
