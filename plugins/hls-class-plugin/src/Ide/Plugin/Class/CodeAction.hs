@@ -185,7 +185,7 @@ minDefToMethodGroups hsc gblEnv methods minDef = makeMethodGroup <$> go minDef
 
         matchMethod n =
             map (makeMethodDefinition hsc gblEnv)
-                $ filter ((== printOutputable n) . printOutputable . fst) methods
+                $ filter ((== n) . fst) methods
 #if __GLASGOW_HASKELL__ >= 913
         go (Var lmn)  = pure $ matchMethod (unLoc lmn)
 #else
