@@ -50,7 +50,7 @@ codeLensResolve state plId cl uri uniqueID = do
     (hscEnv -> hsc, _) <- runActionE "classplugin.codeAction.GhcSession" state $ useWithStaleE GhcSession nfp
     (range, name, typ) <- handleMaybe PluginStaleResolve
                     $ IntMap.lookup uniqueID lensDetails
-    let title = prettyBindingNameString (printOutputable name) <> " :: " <> T.pack (showDoc hsc gblEnv typ)
+    let title = toMethodName (printOutputable name) <> " :: " <> T.pack (showDoc hsc gblEnv typ)
     edit <- handleMaybe (PluginInvalidUserState "toCurrentRange") $ makeEdit range title pm
     let command = mkLspCommand plId typeLensCommandId title (Just [toJSON $ InstanceBindLensCommand uri edit])
     pure $ cl & L.command ?~ command
