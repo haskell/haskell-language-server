@@ -47,6 +47,8 @@ Currently the following experiments are defined:
 - *code actions*: makes an edit that breaks typechecking and asks for code actions
 - *hole fit suggestions*: measures the performance of hole fits
 - *X after edit*: combines the *edit* and X experiments
+- *X after typing burst*: makes five hygienic edits with a 250 ms delay between
+  edits, then waits for the X response
 - *X after cradle edit*: combines the X experiments with an edit to the `hie.yaml` file
 
 One can define additional experiments easily, for e.g. formatting, code lenses, renames, etc.

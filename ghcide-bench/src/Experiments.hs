@@ -83,6 +83,12 @@ headerEdit =
         , _text = "-- header comment \n"
         }
 
+typingBurstEditCount :: Int
+typingBurstEditCount = 5
+
+typingBurstDelay :: Seconds
+typingBurstDelay = 0.25
+
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
     identifierP    :: Maybe Position,
@@ -100,6 +106,14 @@ allWithIdentifierPos f docs = case applicableDocs of
   where
     applicableDocs = filter (isJust . identifierP) docs
 
+applyTypingBurst :: [DocumentPositions] -> Session ()
+applyTypingBurst docs =
+    forM_ [1..typingBurstEditCount] $ \n -> do
+        forM_ docs $ \DocumentPositions{..} ->
+            changeDoc doc [charEdit stringLiteralP]
+        when (n < typingBurstEditCount) $
+            liftIO $ sleep typingBurstDelay
+
 experiments :: HasConfig => [Bench]
 experiments =
     [
@@ -115,12 +129,26 @@ experiments =
                 Nothing -> return False
         return $ and r,
       ---------------------------------------------------------------------------------------
+      bench "semanticTokens after typing burst" $ \docs -> do
+        applyTypingBurst docs
+        r <- forM docs $ \DocumentPositions{..} -> do
+            tks <- getSemanticTokens doc
+            case tks ^? LSP._L of
+                Just _  -> return True
+                Nothing -> return False
+        return $ and r,
+      ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "hover after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          isJust <$> getHover doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "hover after typing burst" $ \docs -> do
+        applyTypingBurst docs
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
@@ -158,10 +186,15 @@ experiments =
         hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition after edit" $ \docs -> do
-          forM_ docs $ \DocumentPositions{..} ->
-            changeDoc doc [charEdit stringLiteralP]
-          flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-            hasDefinitions <$> getDefinitions doc (fromJust identifierP),
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          hasDefinitions <$> getDefinitions doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "getDefinition after typing burst" $ \docs -> do
+        applyTypingBurst docs
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -172,6 +205,11 @@ experiments =
         flip allM docs $ \DocumentPositions{..} ->
           either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
+      bench "documentSymbols after typing burst" $ \docs -> do
+        applyTypingBurst docs
+        flip allM docs $ \DocumentPositions{..} ->
+          either (not . null) (not . null) <$> getDocumentSymbols doc,
+      ---------------------------------------------------------------------------------------
       bench "completions" $ \docs -> do
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
@@ -179,6 +217,11 @@ experiments =
       bench "completions after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          not . null <$> getCompletions doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "completions after typing burst" $ \docs -> do
+        applyTypingBurst docs
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
@@ -201,6 +244,17 @@ experiments =
               changeDoc doc [charEdit stringLiteralP]
               waitForProgressStart
             waitForProgressDone
+            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+              forM identifierP $ \p ->
+                getCodeActions doc (Range p p))
+        ),
+      ---------------------------------------------------------------------------------------
+      bench
+        "code actions after typing burst"
+        ( \docs -> do
+            unless (any (isJust . identifierP) docs) $
+                error "None of the example modules is suitable for this experiment"
+            applyTypingBurst docs
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
@@ -383,7 +437,7 @@ configP =
 
       packageP = ExamplePackage
             <$> strOption (long "example-package-name" <> value "Cabal")
-            <*> option versionP (long "example-package-version" <> value (makeVersion [3,6,0,0]))
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,16,1,0]))
       pathOrScriptP = ExamplePath   <$> strOption (long "example-path")
                   <|> ExampleScript <$> strOption (long "example-script") <*> many (strOption (long "example-script-args" <> help "arguments for the example generation script"))
 
