@@ -77,6 +77,8 @@ withWorkerQueue
   -> ContT () IO (WorkerTasks STM a)
 withWorkerQueue = withWorkerTasks workerTaskQueue
 
+-- | Similar to @withWorkerQueue@, but facilitates squashing actions using some
+-- @Semigroup@ semantics.
 withWorkerRef
   :: Semigroup a
   => Recorder (WithPriority LogWorkerThread)

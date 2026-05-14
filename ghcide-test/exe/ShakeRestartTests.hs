@@ -3,9 +3,9 @@
 
 module ShakeRestartTests (tests) where
 
-import           Control.Concurrent.STM
+import qualified Data.Map.Lazy               as Map
 import           Development.IDE.Core.Shake
-import           Development.IDE.Graph      (newKey)
+import           Language.LSP.Protocol.Types (Uri (..), toNormalizedUri)
 import           Language.LSP.VFS
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -18,18 +18,22 @@ tests = testGroup "shake restart merging"
         newestVFSModified vfs1 VFSUnmodified @?= vfs1
         newestVFSModified VFSUnmodified vfs1 @?= vfs1
 
-    , testCase "<>" $ do
-        done1 <- newEmptyTMVarIO
-        done2 <- newEmptyTMVarIO
-        let key1 = newKey ("1" :: String)
-            key2 = newKey ("2" :: String)
-            p1 = PendingRestart VFSUnmodified [pure [key1]] ["r1"] [] [done1]
-            p2 = PendingRestart VFSUnmodified [pure [key2]] ["r2"] [] [done2]
-            merged = p1 <> p2
+    , testCase "<> appends reasons in chronological order" $ do
+        let p1 = PendingRestart VFSUnmodified mempty ["r1"] [] []
+            p2 = PendingRestart VFSUnmodified mempty ["r2"] [] []
+        pendingRestartReasons (p1 <> p2) @?= ["r1", "r2"]
 
-        pendingRestartReasons merged @?= ["r1", "r2"]
-        keys <- sequence $ reverse $ pendingRestartActionBetweenSessions merged
-        concat keys @?= [key2, key1]
+    , testCase "<> takes VFS from the right operand" $ do
+        let olderUri  = toNormalizedUri (Uri "older")
+            newerUri  = toNormalizedUri (Uri "newer")
+            unforced  = error "VFS payload should not be forced by Map.keys"
+            olderVfs  = VFSModified (VFS (Map.singleton olderUri unforced))
+            newerVfs  = VFSModified (VFS (Map.singleton newerUri unforced))
+            older     = PendingRestart olderVfs mempty ["older"] [] []
+            newer     = PendingRestart newerVfs mempty ["newer"] [] []
+        case pendingRestartVFS (older <> newer) of
+            VFSModified (VFS m) -> Map.keys m @?= [newerUri]
+            VFSUnmodified       -> assertFailure "expected VFSModified"
     ]
 
 instance Eq VFSModified where

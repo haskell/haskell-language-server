@@ -114,8 +114,7 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.List.Extra                        (foldl', partition,
-                                                         takeEnd)
+import           Data.List.Extra                        (partition, takeEnd)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
 import qualified Data.SortedList                        as SL
@@ -814,20 +813,22 @@ delayedAction a = do
   liftIO $ shakeEnqueue extras a
 
 data PendingRestart = PendingRestart
-    { pendingRestartVFS                   :: !VFSModified
-    , pendingRestartActionBetweenSessions :: ![IO [Key]]
-    , pendingRestartReasons               :: ![T.Text]
-    , pendingRestartActions               :: ![DelayedActionInternal]
-    , pendingRestartDoneSignals           :: ![TMVar ()]
+    { pendingRestartVFS         :: !VFSModified
+    , pendingRestartDirtyKeys   :: !KeySet
+    , pendingRestartReasons     :: ![T.Text]
+    , pendingRestartActions     :: ![DelayedActionInternal]
+    , pendingRestartDoneSignals :: ![TMVar ()]
     }
 
+-- | TODO(crtschin): This isn't commutative because of VFS ordering. Make this a
+-- proper function.
 instance Semigroup PendingRestart where
-  new <> old = PendingRestart
-    { pendingRestartVFS = newestVFSModified (pendingRestartVFS new) (pendingRestartVFS old)
-    , pendingRestartReasons = pendingRestartReasons new ++ pendingRestartReasons old
-    , pendingRestartActions = pendingRestartActions new ++ pendingRestartActions old
-    , pendingRestartActionBetweenSessions = pendingRestartActionBetweenSessions new ++ pendingRestartActionBetweenSessions old
-    , pendingRestartDoneSignals = pendingRestartDoneSignals new ++ pendingRestartDoneSignals old
+  older <> newer = PendingRestart
+    { pendingRestartVFS = newestVFSModified (pendingRestartVFS newer) (pendingRestartVFS older)
+    , pendingRestartDirtyKeys = pendingRestartDirtyKeys older <> pendingRestartDirtyKeys newer
+    , pendingRestartReasons = pendingRestartReasons older ++ pendingRestartReasons newer
+    , pendingRestartActions = pendingRestartActions older ++ pendingRestartActions newer
+    , pendingRestartDoneSignals = pendingRestartDoneSignals older ++ pendingRestartDoneSignals newer
     }
 
 newestVFSModified :: VFSModified -> VFSModified -> VFSModified
@@ -857,12 +858,20 @@ shakeRestart :: IdeState -> VFSModified -> T.Text -> [DelayedAction ()] -> IO [K
 shakeRestart IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
   restartDone <- newEmptyTMVarIO
   let RestartSlot {..} = restartSlot shakeExtras
-  -- Publish this restart's barrier, that dependents LSP requests can wait on.
+  -- Run the between-session action here (not on the worker) so notification
+  -- side effects are visible by the time the LSP notification handler returns.
+  --
+  -- If not here, then it would be hard to determine exactly where to place
+  -- these side-effects when shake restarts are merged. While these side-effects
+  -- do need to occur here, the keys they invalidate need to propagate to the
+  -- worker so it can be used during the concrete restart.
+  -- See Note [Housekeeping rule cache and dirty key outside of hls-graph].
+  !newDirty <- fromListKeySet <$> ioActionBetweenShakeSession
   atomically $ do
     writeTVar lastRestartBarrier restartDone
     addWorkerTask restartRef $ PendingRestart
       { pendingRestartVFS = vfs
-      , pendingRestartActionBetweenSessions = [ioActionBetweenShakeSession]
+      , pendingRestartDirtyKeys = newDirty
       , pendingRestartReasons = [reason]
       , pendingRestartActions = acts
       , pendingRestartDoneSignals = [restartDone]
@@ -882,10 +891,11 @@ processPendingRestart' recorder ideMVar PendingRestart{..} = do
     flip finally (atomically $ traverse (flip tryPutTMVar ()) (reverse pendingRestartDoneSignals)) $ do
         let sessionAction runner = do
                 (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                keys <- fmap concat (sequence (reverse pendingRestartActionBetweenSessions))
-                -- it is every important to update the dirty keys after we enter the critical section
-                -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                -- Apply dirty keys after the dying session's work thread is dead
+                -- (cancelShakeSession is synchronous). This is the only placement
+                -- immune to concern 1.2 in
+                --   Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) (<> pendingRestartDirtyKeys)
                 res <- shakeDatabaseProfile shakeDb
                 backlog <- readTVarIO $ dirtyKeys shakeExtras
                 queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
