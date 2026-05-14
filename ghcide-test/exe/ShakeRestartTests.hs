@@ -12,16 +12,16 @@ import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "shake restart merging"
-    [ testCase "newestVFSModified" $ do
+    [ testCase "succeedVFS" $ do
         let vfs1 = VFSModified (VFS mempty)
-        newestVFSModified VFSUnmodified VFSUnmodified @?= VFSUnmodified
-        newestVFSModified vfs1 VFSUnmodified @?= vfs1
-        newestVFSModified VFSUnmodified vfs1 @?= vfs1
+        succeedVFS VFSUnmodified VFSUnmodified @?= VFSUnmodified
+        succeedVFS VFSUnmodified vfs1 @?= vfs1
+        succeedVFS vfs1 VFSUnmodified @?= vfs1
 
     , testCase "<> appends reasons in chronological order" $ do
         let p1 = PendingRestart VFSUnmodified mempty ["r1"] [] []
             p2 = PendingRestart VFSUnmodified mempty ["r2"] [] []
-        pendingRestartReasons (p1 <> p2) @?= ["r1", "r2"]
+        pendingRestartReasons (succeedPendingRestart p1 p2) @?= ["r1", "r2"]
 
     , testCase "<> takes VFS from the right operand" $ do
         let olderUri  = toNormalizedUri (Uri "older")
@@ -31,7 +31,7 @@ tests = testGroup "shake restart merging"
             newerVfs  = VFSModified (VFS (Map.singleton newerUri unforced))
             older     = PendingRestart olderVfs mempty ["older"] [] []
             newer     = PendingRestart newerVfs mempty ["newer"] [] []
-        case pendingRestartVFS (older <> newer) of
+        case pendingRestartVFS (succeedPendingRestart older newer) of
             VFSModified (VFS m) -> Map.keys m @?= [newerUri]
             VFSUnmodified       -> assertFailure "expected VFSModified"
     ]

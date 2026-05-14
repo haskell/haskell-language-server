@@ -30,7 +30,7 @@ import           Control.Concurrent.Strict (newBarrier, signalBarrier,
                                             waitBarrier)
 import           Control.Exception.Safe    (SomeException, finally, throwIO,
                                             try)
-import           Control.Monad.Cont        (ContT (ContT))
+import           Control.Monad.Cont        (ContT (..))
 import           Data.Maybe                (isNothing)
 import qualified Data.Text                 as T
 import           Ide.Logger
@@ -80,14 +80,19 @@ withWorkerQueue = withWorkerTasks workerTaskQueue
 -- | Similar to @withWorkerQueue@, but facilitates squashing actions using some
 -- @Semigroup@ semantics.
 withWorkerRef
-  :: Semigroup a
-  => Recorder (WithPriority LogWorkerThread)
+  :: (a -> a -> a)
+  -> Recorder (WithPriority LogWorkerThread)
   -> T.Text
   -> (a -> IO ())
   -> ContT () IO (WorkerTasks STM a)
-withWorkerRef = withWorkerTasks workerTaskRef
+withWorkerRef combine = withWorkerTasks (workerTaskRef combine)
 
-withWorkerTasks :: WorkerTasks' STM t a -> Recorder (WithPriority LogWorkerThread) -> T.Text -> (a -> IO ()) -> ContT () IO (WorkerTasks STM a)
+withWorkerTasks
+  :: WorkerTasks' STM t a
+  -> Recorder (WithPriority LogWorkerThread)
+  -> T.Text
+  -> (a -> IO ())
+  -> ContT () IO (WorkerTasks STM a)
 withWorkerTasks WorkerTasks'{..} recorder title workerAction = ContT $ \mainAction -> do
   q <- atomically newWorkerTasks'
   -- Use a TMVar as a stop flag to coordinate graceful shutdown.
@@ -186,14 +191,14 @@ tryReadTaskQueue (TaskQueue q) = tryReadTQueue q
 -- @Semigroup@ semantics.
 newtype TaskRef a = TaskRef (TVar (Maybe a))
 
-workerTaskRef :: Semigroup a => WorkerTasks' STM TaskRef a
-workerTaskRef = WorkerTasks'
-  { newWorkerTasks' = TaskRef <$> newTVar mempty
+workerTaskRef :: (a -> a -> a) -> WorkerTasks' STM TaskRef a
+workerTaskRef combine = WorkerTasks'
+  { newWorkerTasks' = TaskRef <$> newTVar Nothing
   , addWorkerTask' = \(TaskRef t) a -> do
       workerTask <- readTVar t
       case workerTask of
         Nothing -> writeTVar t (Just a)
-        Just wt -> writeTVar t (Just (wt <> a))
+        Just wt -> writeTVar t (Just (combine wt a))
   , nullWorkerTasks' = \(TaskRef t) -> do
       workerTask <- readTVar t
       pure $ isNothing workerTask

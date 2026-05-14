@@ -75,11 +75,12 @@ module Development.IDE.Core.Shake(
     PendingRestart(..),
     RestartSlot(..),
     addPersistentRule,
-    newestVFSModified,
+    succeedPendingRestart, succeedVFS,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
     VFSModified(..), getClientConfigAction,
+    waitForLastRestart,
     ThreadQueue(..),
     runWithSignal,
     askShake,
@@ -820,20 +821,18 @@ data PendingRestart = PendingRestart
     , pendingRestartDoneSignals :: ![TMVar ()]
     }
 
--- | TODO(crtschin): This isn't commutative because of VFS ordering. Make this a
--- proper function.
-instance Semigroup PendingRestart where
-  older <> newer = PendingRestart
-    { pendingRestartVFS = newestVFSModified (pendingRestartVFS newer) (pendingRestartVFS older)
+succeedPendingRestart :: PendingRestart -> PendingRestart -> PendingRestart
+succeedPendingRestart older newer = PendingRestart
+    { pendingRestartVFS = succeedVFS (pendingRestartVFS older) (pendingRestartVFS newer)
     , pendingRestartDirtyKeys = pendingRestartDirtyKeys older <> pendingRestartDirtyKeys newer
     , pendingRestartReasons = pendingRestartReasons older ++ pendingRestartReasons newer
     , pendingRestartActions = pendingRestartActions older ++ pendingRestartActions newer
     , pendingRestartDoneSignals = pendingRestartDoneSignals older ++ pendingRestartDoneSignals newer
     }
 
-newestVFSModified :: VFSModified -> VFSModified -> VFSModified
-newestVFSModified VFSUnmodified old     = old
-newestVFSModified new@(VFSModified _) _ = new
+succeedVFS :: VFSModified -> VFSModified -> VFSModified
+succeedVFS old VFSUnmodified     = old
+succeedVFS _ new@(VFSModified _) = new
 
 data RestartSlot = RestartSlot
     { restartRef         :: WorkerTasks STM PendingRestart
@@ -849,6 +848,28 @@ newRestartSlot :: RestartRef -> IO RestartSlot
 newRestartSlot queuedRestart = do
     initialBarrier <- newTMVarIO ()  -- starts filled (no pending restart)
     RestartSlot <$> pure queuedRestart <*> newTVarIO initialBarrier
+
+-- | Block until the most recently enqueued restart has started its new session.
+--
+-- Needed by request handlers, not notification handlers,
+--   (See Note [Notification vs request restart ordering])
+-- that call @shakeRestart@ and then run a @runAction@ depending on a rule
+-- cached in the old session. Without this, the rule's cached result survives
+-- because hls-graph's @isDirty@ check ignores @alwaysRerun@ within a
+-- session, see #4697.
+waitForLastRestart :: IdeState -> IO ()
+waitForLastRestart IdeState{shakeExtras} =
+    atomically $ readTVar (lastRestartBarrier (restartSlot shakeExtras)) >>= readTMVar
+
+-- Note [Notification vs request restart ordering]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- @shakeRestart@ is non-blocking. @restartDone@ delays any notification's
+-- @done@ barrier until its restart completes, so any subsequent request waiting
+-- on @notificationLocks@ observes the new session.
+--
+-- Request handlers that call @shakeRestart@ themselves are not covered.
+-- They must call @waitForLastRestart@ before any @runAction@ that needs a
+-- rule to be recomputed in the new session.
 
 -- | Restart the current 'ShakeSession' with the given system actions.
 --

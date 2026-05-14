@@ -402,7 +402,7 @@ runWithWorkerThreads recorder dbLoc shutdownSession ideMVar f = evalContT $ do
   -- This is passed in via the callsites.
   let workerRecorder = cmapWithPrio Session.LogSessionWorkerThread recorder
   let shakeRecorder = cmapWithPrio Session.LogShake recorder
-  sessionRestartTQueue <- withWorkerRef workerRecorder "sessionRestartTQueue" (processPendingRestart shakeRecorder ideMVar)
+  sessionRestartTQueue <- withWorkerRef succeedPendingRestart workerRecorder "sessionRestartTQueue" (processPendingRestart shakeRecorder ideMVar)
   ContT $ \action -> action () `finally` shutdownSession
   sessionLoaderTQueue <- withWorkerQueueSimple workerRecorder "SessionLoaderTQueue"
   restartSlot <- liftIO $ newRestartSlot sessionRestartTQueue
