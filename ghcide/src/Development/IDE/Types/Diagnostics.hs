@@ -164,7 +164,7 @@ ideErrorWithSource source sev fdFilePath msg origMsg =
   in
   ideErrorFromLspDiag lspDiagnostic fdFilePath origMsg
 
--- | Defines whether a particular diagnostic should be reported
+-- | Defines whether a particular diagnostic should be reported
 --   back to the user.
 --
 --   One important use case is "missing signature" code lenses,
