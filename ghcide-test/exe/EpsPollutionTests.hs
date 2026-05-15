@@ -7,8 +7,8 @@
 -- 'ClsInst' twice (once via @ie_global@ from the EPS, once via
 -- @ie_local@ from 'hptInstancesBelow').
 --
--- The pollution enters through 'Development.IDE.Spans.Documentation.mkDocMap'.
--- Its 'Rules.GetDocMap' rule reads three inputs via independent
+-- The pollution entered through 'Development.IDE.Spans.Documentation.mkDocMap'.
+-- Its 'Rules.GetDocMap' rule read three inputs via independent
 -- @useWithStale_@ calls: 'TypeCheck', 'GhcSessionDeps' and 'GetHieAst'.
 -- These three can diverge: an edit that merely changes imports lets
 -- 'GhcSessionDeps' re-evaluate (fresh, with a different HPT) while
@@ -21,28 +21,22 @@
 -- evicts anything, so the pollution is permanent for the session.
 module EpsPollutionTests (tests) where
 
-import           Config                      (runWithExtraFiles)
+import           Config                      (Expect (ExpectHoverText),
+                                              runWithExtraFiles)
 import           Control.Lens                ((^.))
-import           Control.Monad.IO.Class      (liftIO)
+import           Control.Monad               (void)
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util    (readFileUtf8)
-import           Development.IDE.Test        (waitForTypecheck)
+import           Hover
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           System.FilePath
-import           Test.Hls                    (expectFailBecause,
-                                              waitForDiagnosticsFrom)
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import           Test.Hls
 
 tests :: TestTree
 tests = testGroup "eps-pollution"
-    [ expectFailBecause
-        "The EPS gets polluted with a home-module instance via GetDocMap's \
-        \inconsistent stale-value snapshot; the next successful typecheck \
-        \sees the instance twice."
-        staleHieProvokesOverlapping
+    [ staleHieProvokesOverlapping
     ]
 
 -- The fixture at ghcide-test/data/multi-unit-eps-pollution/ sets up two
@@ -59,11 +53,13 @@ staleHieProvokesOverlapping =
     originalC <- liftIO $ readFileUtf8 cPath
     let brokenC = T.replace "import A" "" originalC
     cdoc <- openDoc cPath "haskell"
-    True <- waitForTypecheck cdoc
+    void $ waitForTypecheck cdoc
     -- Hovering triggers the hover pipeline, which forces GetDocMap.
     -- While C is healthy this populates GetHieAst with a RefMap
     -- referencing A's names -- the stale value we rely on below.
-    _ <- getHover cdoc (hoverOnMyMethod originalC)
+    hover <- getHover cdoc (hoverOnMyMethod originalC)
+    checkHover hover [ExpectHoverText ["myMethod", "MyClass"]]
+
     -- Break C's import of A. C fails to typecheck, but GhcSessionDeps
     -- re-evaluates successfully (it only needs the import list) with an
     -- HPT that no longer contains A. A further hover forces GetDocMap
@@ -74,7 +70,6 @@ staleHieProvokesOverlapping =
 
     void $ waitForDiagnosticsFrom cdoc
     void $ getHover cdoc (hoverOnMyMethod brokenC)
-
     -- Repair C. The next typecheck legitimately has A in its HPT; with
     -- the polluted EPS it also has A's ClsInst in eps_inst_env, so
     -- instance resolution for 'myMethod x :: AType -> String' finds
