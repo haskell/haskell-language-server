@@ -1,5 +1,7 @@
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wall #-}
 module C where
 import A
 
-cFoo :: AType -> String
-cFoo = myMethod
+-- Omit top-level signature so we have a warning we can check against
+cFoo = myMethod @AType
