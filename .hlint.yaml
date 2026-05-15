@@ -161,8 +161,7 @@
     - Ide.PluginUtils
     - Ide.Plugin.Eval.Parse.Comments
     - Ide.Plugin.Eval.CodeLens
-    - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
-    - FindImplementationAndHoverTests #Previously part of GHCIDE Main tests
+    - Hover #Used for tests that are allowed to crash
 
   - name: [Prelude.init, Data.List.init]
     within:
