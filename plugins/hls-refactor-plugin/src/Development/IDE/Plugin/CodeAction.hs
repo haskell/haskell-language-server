@@ -599,14 +599,16 @@ suggestDeleteUnusedBinding
 -- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
     | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
-      = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
+      = let edits = flip TextEdit "" <$> mergeRanges (sortOn _start $ relatedRanges indexedContent (T.unpack name))
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
     | otherwise = []
     where
       relatedRanges indexedContent name =
         concatMap (findRelatedSpans indexedContent name . reLoc) hsmodDecls
       toRange = realSrcSpanToRange
-      extendForSpaces = extendToIncludePreviousNewlineIfPossible
+      extendForDeletion indexedContent =
+        extendToIncludePreviousNewlineIfPossible indexedContent
+          . extendToIncludeAssociatedHaddock contents
 
       findRelatedSpans :: PositionIndexedString -> String -> Located (HsDecl GhcPs) -> [Range]
       findRelatedSpans
@@ -618,7 +620,7 @@ suggestDeleteUnusedBinding
             let findSig (L (RealSrcSpan l _) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
             in
-              extendForSpaces indexedContent (toRange l) :
+              extendForDeletion indexedContent (toRange l) :
               concatMap (findSig . reLoc) hsmodDecls
           _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpans _ _ _ = []
@@ -637,7 +639,7 @@ suggestDeleteUnusedBinding
       findRelatedSigSpan indexedContent name l sig =
         let maybeSpan = findRelatedSigSpan1 name sig
         in case maybeSpan of
-          Just (_span, True) -> pure $ extendForSpaces indexedContent $ toRange l -- a :: Int
+          Just (_span, True) -> pure $ extendForDeletion indexedContent $ toRange l -- a :: Int
           Just (RealSrcSpan span _, False) -> pure $ toRange span -- a, b :: Int, a is unused
           _ -> []
 
@@ -700,7 +702,7 @@ suggestDeleteUnusedBinding
         then
           let findSig (L (RealSrcSpan l _) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
-          in extendForSpaces indexedContent (toRange l) : concatMap (findSig . reLoc) lsigs
+          in extendForDeletion indexedContent (toRange l) : concatMap (findSig . reLoc) lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpanForHsBind _ _ _ _ = []
 
@@ -709,6 +711,52 @@ suggestDeleteUnusedBinding
 
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = T.unpack (printOutputable x) == name
+
+extendToIncludeAssociatedHaddock :: Maybe T.Text -> Range -> Range
+extendToIncludeAssociatedHaddock Nothing range = range
+extendToIncludeAssociatedHaddock (Just source) range =
+  maybe range (\line -> range { _start = Position line 0 }) $
+    attachedHaddockStartLine (T.lines source) (_start range)
+
+attachedHaddockStartLine :: [T.Text] -> Position -> Maybe UInt
+attachedHaddockStartLine sourceLines startPos
+  | startLine <= 0 = Nothing
+  | otherwise =
+      let preceding = take startLine sourceLines
+      in case reverse preceding of
+          prevLine : _
+            | isLineComment (T.stripStart prevLine) ->
+                let commentBlock = takeWhile (isLineComment . T.stripStart) (reverse preceding)
+                in case reverse commentBlock of
+                    [] -> Nothing
+                    firstLine : _
+                      | isHaddockLineStart (T.stripStart firstLine)
+                      -> Just . fromIntegral $ startLine - length commentBlock
+                    _ -> Nothing
+            | isBlockCommentEnd (T.stripStart prevLine) ->
+                let block = takeUntilBlockHaddockStart (reverse preceding)
+                in case block of
+                    firstLine : _
+                      | isHaddockBlockStart (T.stripStart firstLine)
+                      -> Just . fromIntegral $ startLine - length block
+                    _ -> Nothing
+            | otherwise -> Nothing
+          [] -> Nothing
+  where
+    startLine = fromIntegral (_line startPos)
+
+    isLineComment = T.isPrefixOf (T.pack "--")
+    isHaddockLineStart txt = any (`T.isPrefixOf` txt) [T.pack "-- |", T.pack "-- ^"]
+    isBlockCommentEnd txt = T.isSuffixOf (T.pack "-}") txt
+    isHaddockBlockStart txt = any (`T.isPrefixOf` txt) [T.pack "{-|", T.pack "{-^"]
+
+    takeUntilBlockHaddockStart = go []
+      where
+        go acc [] = acc
+        go acc (line:rest)
+          | T.null (T.strip line) = []
+          | isHaddockBlockStart (T.stripStart line) = line : acc
+          | otherwise = go (line : acc) rest
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
