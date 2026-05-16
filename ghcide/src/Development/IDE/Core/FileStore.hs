@@ -286,8 +286,9 @@ setFileModified recorder vfs state saved nfp actionBefore = do
       typecheckParents recorder state nfp
 
 typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
-typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
-  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
+typecheckParents recorder state nfp = do
+  parents <- mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
+  void $ shakeEnqueue (shakeExtras state) parents
 
 typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do

@@ -396,7 +396,28 @@ examplesPath :: FilePath
 examplesPath = "bench/example"
 
 defConfig :: Config
-Success defConfig = execParserPure defaultPrefs (info configP fullDesc) []
+defConfig = Config
+  { verbosity = Normal
+  , shakeProfiling = Nothing
+  , otMemoryProfiling = Nothing
+  , outputCSV = "results.csv"
+  , buildTool = Cabal
+  , ghcideOptions = []
+  , matches = []
+  , repetitions = Nothing
+  , ghcide = "ghcide"
+  , timeoutLsp = 60
+  , example = Example
+      { exampleName = "Cabal"
+      , exampleDetails = ExampleHackage ExamplePackage
+          { packageName = "Cabal"
+          , packageVersion = makeVersion [3,16,1,0]
+          }
+      , exampleModules = ["src/Distribution/Simple.hs"]
+      , exampleExtraArgs = []
+      }
+  , lspConfig = False
+  }
 
 quiet, verbose :: Config -> Bool
 verbose = (== All) . verbosity

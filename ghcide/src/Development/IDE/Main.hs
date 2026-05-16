@@ -40,7 +40,7 @@ import           Development.IDE.Core.IdeConfiguration    (IdeConfiguration (..)
                                                            modifyClientSettings,
                                                            registerIdeConfiguration)
 import           Development.IDE.Core.OfInterest          (FileOfInterestStatus (OnDisk),
-                                                           kick,
+                                                           doKick,
                                                            setFilesOfInterest)
 import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
@@ -304,7 +304,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         argsParseConfig = getConfigFromNotification argsHlsPlugins
         rules = do
             argsRules
-            unless argsDisableKick $ action kick
+            unless argsDisableKick $ action $ doKick
             pluginRules plugins
         -- install the main and ghcide-plugin rules
         -- install the kick action, which triggers a typecheck on every

@@ -108,5 +108,6 @@ shutdown = shakeShut
 -- available.  There might still be other rules running at this point,
 -- e.g., the ofInterestRule.
 runAction :: String -> IdeState -> Action a -> IO a
-runAction herald ide act =
-  join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug act)
+runAction herald ide act = do
+  delayed <- mkDelayedAction herald Logger.Debug act
+  join $ shakeEnqueue (shakeExtras ide) delayed

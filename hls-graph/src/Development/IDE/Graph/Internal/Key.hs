@@ -6,6 +6,7 @@ module Development.IDE.Graph.Internal.Key
     ( Key -- Opaque - don't expose constructor, use newKey to create
     , KeyValue (..)
     , pattern Key
+    , pattern DirectKey
     , newKey
     , renderKey
     -- * KeyMap
@@ -31,6 +32,9 @@ module Development.IDE.Graph.Internal.Key
     , fromListKeySet
     , deleteKeySet
     , differenceKeySet
+    , unionKeySet
+    , notMemberKeySet
+    , newDirectKey
     ) where
 
 --import Control.Monad.IO.Class ()
@@ -47,30 +51,49 @@ import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
+import           Prettyprinter
 import           System.IO.Unsafe
 
 
 newtype Key = UnsafeMkKey Int
 
-pattern Key :: () => (Typeable a, Hashable a, Show a) => a -> Key
-pattern Key a <- (lookupKeyValue -> KeyValue a _)
-{-# COMPLETE Key #-}
 
-data KeyValue = forall a . (Typeable a, Hashable a, Show a) => KeyValue a Text
+pattern Key :: () => (Typeable a, Hashable a, Show a) => a -> Key
+pattern Key a <- (lookupKeyValue -> (KeyValue a _))
+pattern DirectKey :: Int -> Key
+pattern DirectKey a <- (lookupKeyValue -> (DirectKeyValue a))
+{-# COMPLETE Key, DirectKey #-}
+
+instance Pretty Key where
+  pretty = pretty . renderKey
+
+data KeyValue = forall a . (Typeable a, Hashable a, Show a) =>
+    KeyValue a Text |
+    DirectKeyValue Int
 
 instance Eq KeyValue where
-    KeyValue a _ == KeyValue b _ = Just a == cast b
+    KeyValue a _ == KeyValue b _         = Just a == cast b
+    DirectKeyValue a == DirectKeyValue b = a == b
+    _ == _                               = False
 instance Hashable KeyValue where
-    hashWithSalt i (KeyValue x _) = hashWithSalt i (typeOf x, x)
+
+    hashWithSalt i (KeyValue x _)     = hashWithSalt i (typeOf x, x)
+    hashWithSalt i (DirectKeyValue x) = hashWithSalt i (typeOf x, x)
 instance Show KeyValue where
-    show (KeyValue _ t) = T.unpack t
+    show (KeyValue _ t)     = T.unpack t
+    show (DirectKeyValue i) = "DirectKeyValue " ++ show i
 
 data GlobalKeyValueMap = GlobalKeyValueMap !(Map.HashMap KeyValue Key) !(IntMap KeyValue) {-# UNPACK #-} !Int
 
 keyMap :: IORef GlobalKeyValueMap
 keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
-
 {-# NOINLINE keyMap #-}
+
+-- | Create a new key that is guaranteed not to collide with any other key.
+-- This is useful for keys that are not based on user data, e.g., for
+-- tracking temporary actions.
+newDirectKey :: Int -> Key
+newDirectKey i = UnsafeMkKey $ negate (abs i + 1)
 
 newKey :: (Typeable a, Hashable a, Show a) => a -> Key
 newKey k = unsafePerformIO $ do
@@ -94,7 +117,9 @@ lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
   -- i.e. when it is forced for the lookup in the IntMap.
   k <- evaluate x
   GlobalKeyValueMap _ im _ <- readIORef keyMap
-  pure $! im IM.! k
+  case im IM.!? k of
+    Just v  -> pure $! v
+    Nothing -> pure $! DirectKeyValue k
 
 {-# NOINLINE lookupKeyValue #-}
 
@@ -103,13 +128,18 @@ instance Eq Key where
 instance Hashable Key where
   hashWithSalt i (UnsafeMkKey x) = hashWithSalt i x
 instance Show Key where
-  show (Key x) = show x
+  show (Key x)       = show x
+  show (DirectKey x) = "DirectKey " ++ show x
 
 renderKey :: Key -> Text
-renderKey (lookupKeyValue -> KeyValue _ t) = t
+renderKey (lookupKeyValue -> (KeyValue _ t)) = t
+renderKey (lookupKeyValue -> (DirectKeyValue i)) = T.pack ("DirectKeyValue " ++ show i)
 
 newtype KeySet = KeySet IntSet
-  deriving newtype (Eq, Ord, Semigroup, Monoid, NFData)
+  deriving newtype (Eq, Ord, Semigroup, Monoid, NFData, Hashable)
+
+instance Pretty KeySet where
+  pretty (KeySet is) = pretty (coerce (IS.toList is) :: [Key])
 
 instance Show KeySet where
   showsPrec p (KeySet is)= showParen (p > 10) $
@@ -122,6 +152,9 @@ insertKeySet = coerce IS.insert
 memberKeySet :: Key -> KeySet -> Bool
 memberKeySet = coerce IS.member
 
+notMemberKeySet :: Key -> KeySet -> Bool
+notMemberKeySet = coerce IS.notMember
+
 toListKeySet :: KeySet -> [Key]
 toListKeySet = coerce IS.toList
 
@@ -130,6 +163,10 @@ nullKeySet = coerce IS.null
 
 differenceKeySet :: KeySet -> KeySet -> KeySet
 differenceKeySet = coerce IS.difference
+
+
+unionKeySet :: KeySet -> KeySet -> KeySet
+unionKeySet = coerce IS.union
 
 deleteKeySet :: Key -> KeySet -> KeySet
 deleteKeySet = coerce IS.delete

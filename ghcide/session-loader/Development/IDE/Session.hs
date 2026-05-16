@@ -905,7 +905,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         -- Typecheck all files in the project on startup
         unless (null new_components_info || not checkProject) $ do
             cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
-            void $ enqueueActions sessionShake $ mkDelayedAction "InitialLoad" Debug $ void $ do
+            initialLoad <- mkDelayedAction "InitialLoad" Debug $ void $ do
                 mmt <- uses GetModificationTime cfps'
                 let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
                 modIfaces <- uses GetModIface cs_exist
@@ -913,6 +913,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
                 shakeExtras <- getShakeExtras
                 let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
                 liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
+            void $ enqueueActions sessionShake initialLoad
         return [keys1, keys2]
 
 -- | Create a new HscEnv from a hieYaml root and a set of options

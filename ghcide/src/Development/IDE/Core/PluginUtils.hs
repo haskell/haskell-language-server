@@ -71,14 +71,16 @@ import qualified StmContainers.Map                    as STM
 -- |ExceptT version of `runAction`, takes a ExceptT Action
 runActionE :: MonadIO m => String -> IdeState -> ExceptT e Action a -> ExceptT e m a
 runActionE herald ide act =
-  mapExceptT liftIO . ExceptT $
-    join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runExceptT act)
+  mapExceptT liftIO . ExceptT $ do
+    delayed <- mkDelayedAction herald Logger.Debug $ runExceptT act
+    join $ shakeEnqueue (shakeExtras ide) delayed
 
 -- |MaybeT version of `runAction`, takes a MaybeT Action
 runActionMT :: MonadIO m => String -> IdeState -> MaybeT Action a -> MaybeT m a
 runActionMT herald ide act =
-  mapMaybeT liftIO . MaybeT $
-    join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
+  mapMaybeT liftIO . MaybeT $ do
+    delayed <- mkDelayedAction herald Logger.Debug $ runMaybeT act
+    join $ shakeEnqueue (shakeExtras ide) delayed
 
 -- |ExceptT version of `use` that throws a PluginRuleFailed upon failure
 useE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
