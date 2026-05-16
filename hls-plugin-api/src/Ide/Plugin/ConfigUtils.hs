@@ -109,6 +109,7 @@ pluginsToDefaultConfig IdePlugins {..} =
           SMethod_TextDocumentPrepareCallHierarchy -> ["callHierarchyOn" A..= plcCallHierarchyOn]
           SMethod_TextDocumentSemanticTokensFull   -> ["semanticTokensOn" A..= plcSemanticTokensOn]
           SMethod_TextDocumentSemanticTokensFullDelta -> ["semanticTokensOn" A..= plcSemanticTokensOn]
+          SMethod_TextDocumentDocumentLink         -> ["documentLinkOn" A..= plcDocumentLinkOn]
           _                                 -> []
 
 -- | Generates json schema used in haskell vscode extension
