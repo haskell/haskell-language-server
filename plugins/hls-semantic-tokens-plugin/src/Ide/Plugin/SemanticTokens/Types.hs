@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -39,12 +40,31 @@ data HsSemanticTokenType
   | TRecordField -- from match bind
   | TOperator-- operator
   | TModule -- module name
-  deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
+  deriving stock (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
+
+data HsSyntacticTokenType
+  = TKeyword
+  | TComment
+  | TStringLit
+  | TNumberLit
+  | TRecordSelector
+  deriving stock (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
+
+data HsTokenType
+  = HsSyntacticTokenType HsSyntacticTokenType
+  | HsSemanticTokenType HsSemanticTokenType
+  deriving stock (Eq, Ord, Show, Generic, Lift)
 
 -- type SemanticTokensConfig = SemanticTokensConfig_ Identity
 instance Default SemanticTokensConfig where
   def = STC
-      { stFunction = SemanticTokenTypes_Function
+      { stKeyword = SemanticTokenTypes_Keyword
+      , stRecordSelector = SemanticTokenTypes_Property
+      , stComment = SemanticTokenTypes_Comment
+      , stStringLit = SemanticTokenTypes_String
+      , stNumberLit = SemanticTokenTypes_Number
+      , stCharLit = SemanticTokenTypes_String
+      , stFunction = SemanticTokenTypes_Function
       , stVariable = SemanticTokenTypes_Variable
       , stDataConstructor = SemanticTokenTypes_EnumMember
       , stTypeVariable = SemanticTokenTypes_TypeParameter
@@ -65,7 +85,13 @@ instance Default SemanticTokensConfig where
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
 data SemanticTokensConfig = STC
-  { stFunction        :: !SemanticTokenTypes
+  { stStringLit       :: !SemanticTokenTypes
+  , stCharLit         :: !SemanticTokenTypes
+  , stNumberLit       :: !SemanticTokenTypes
+  , stComment         :: !SemanticTokenTypes
+  , stKeyword         :: !SemanticTokenTypes
+  , stRecordSelector  :: !SemanticTokenTypes
+  , stFunction        :: !SemanticTokenTypes
   , stVariable        :: !SemanticTokenTypes
   , stDataConstructor :: !SemanticTokenTypes
   , stTypeVariable    :: !SemanticTokenTypes
@@ -113,6 +139,18 @@ instance Hashable GetSemanticTokens
 
 instance NFData GetSemanticTokens
 
+data GetSyntacticTokens = GetSyntacticTokens
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Hashable, NFData)
+
+newtype RangeHsSyntacticTokenTypes = RangeHsSyntacticTokenTypes {rangeSyntacticList :: [(Range, HsSyntacticTokenType)]}
+instance NFData RangeHsSyntacticTokenTypes where rnf = rwhnf
+
+instance Show RangeHsSyntacticTokenTypes where
+  show = unlines . map (\(r, tk) -> showRange r <> " " <> show tk) . rangeSyntacticList
+
+type instance RuleResult GetSyntacticTokens = RangeHsSyntacticTokenTypes
+
 type RangeSemanticTokenTypeList = [(Range, HsSemanticTokenType)]
 
 newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticList :: RangeSemanticTokenTypeList}
@@ -155,6 +193,5 @@ instance Pretty SemanticLog where
                       -> "SemanticTokensDeltaMisMatch: previousIdFromRequest: " <> pretty previousIdFromRequest
                       <> " previousIdFromCache: " <> pretty previousIdFromCache
     LogDependencyError err -> "SemanticTokens' dependency error: " <> pretty err
-
 
 type SemanticTokenId = Text

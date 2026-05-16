@@ -1,7 +1,14 @@
-4:6-9 TTypeConstructor "Foo"
-4:12-15 TDataConstructor "Foo"
-4:16-19 TTypeConstructor "Int"
-5:10-14 TClass "Show"
-5:15-18 TTypeConstructor "Foo"
-6:5-9 TClassMethod "show"
-6:12-21 TVariable "undefined"
+[1:1-7 HsSyntacticTokenType TKeyword "module"]
+[1:33-38 HsSyntacticTokenType TKeyword "where"]
+[4:1-5 HsSyntacticTokenType TKeyword "data"]
+[4:6-9 HsSemanticTokenType TTypeConstructor "Foo"]
+[4:10-11 HsSyntacticTokenType TKeyword "="]
+[4:12-15 HsSemanticTokenType TDataConstructor "Foo"]
+[4:16-19 HsSemanticTokenType TTypeConstructor "Int"]
+[5:1-9 HsSyntacticTokenType TKeyword "instance"]
+[5:10-14 HsSemanticTokenType TClass "Show"]
+[5:15-18 HsSemanticTokenType TTypeConstructor "Foo"]
+[5:19-24 HsSyntacticTokenType TKeyword "where"]
+[6:5-9 HsSemanticTokenType TClassMethod "show"]
+[6:10-11 HsSyntacticTokenType TKeyword "="]
+[6:12-21 HsSemanticTokenType TVariable "undefined"]
