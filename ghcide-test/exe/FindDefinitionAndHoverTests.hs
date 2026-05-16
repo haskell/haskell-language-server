@@ -1,27 +1,20 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE ViewPatterns       #-}
 
 module FindDefinitionAndHoverTests (tests) where
 
-import           Control.Monad
-import           Data.Foldable
+import           Config
+import           Control.Lens               ((^.))
 import           Data.Maybe
 import qualified Data.Text                  as T
+import           Development.IDE.Test       (expectDiagnostics)
+import           Hover
 import qualified Language.LSP.Protocol.Lens as L
 import           Language.LSP.Test
 import           System.Info.Extra          (isWindows)
-
-import           Config
-import           Control.Category           ((>>>))
-import           Control.Lens               ((^.))
-import           Development.IDE.Test       (expectDiagnostics,
-                                             standardizeQuotes)
-import           Hover
-import           Ide.Types                  (Config (..), OptLinkTo (..))
+import           Ide.Types
 import           Test.Hls
 import           Test.Hls.FileSystem        (copyDir)
-import           Text.Regex.TDFA            ((=~))
 
 tests :: TestTree
 tests = let
@@ -34,64 +27,6 @@ tests = let
         found <- get doc pos
         check found targetRange
 
-
-
-  checkHover :: (HasCallStack) => Maybe Hover -> Session [Expect] -> Session ()
-  checkHover hover expectations = traverse_ check =<< expectations where
-
-    check :: (HasCallStack) => Expect -> Session ()
-    check expected =
-      case hover of
-        Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
-        Just Hover{_contents = (InL MarkupContent{_value = standardizeQuotes -> msg})
-                  ,_range    = rangeInHover } ->
-          case expected of
-            ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
-            ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
-            ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
-            ExpectHoverExcludeText snippets -> liftIO $ traverse_ (`assertNotFoundIn` msg) snippets
-            ExpectHoverTextRegex re -> liftIO $ assertBool ("Regex not found in " <> T.unpack msg) (msg =~ re :: Bool)
-            ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
-            _ -> pure () -- all other expectations not relevant to hover
-        _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
-
-  extractLineColFromHoverMsg :: T.Text -> [T.Text]
-  extractLineColFromHoverMsg =
-    -- Hover messages contain multiple lines, and we are looking for the definition
-    -- site
-    T.lines
-    -- The line we are looking for looks like: "*Defined at /tmp/GotoHover.hs:22:3*"
-    -- So filter by the start of the line
-    >>> mapMaybe (T.stripPrefix "*Defined at")
-    -- There can be multiple definitions per hover message!
-    -- See the test "field in record definition" for example.
-    -- The tests check against the last line that contains the above line.
-    >>> last
-    -- [" /tmp/", "22:3*"]
-    >>> T.splitOn (sourceFileName <> ":")
-    -- "22:3*"
-    >>> last
-    -- ["22:3", ""]
-    >>> T.splitOn "*"
-    -- "22:3"
-    >>> head
-    -- ["22", "3"]
-    >>> T.splitOn ":"
-
-  checkHoverRange :: Range -> Maybe Range -> T.Text -> Session ()
-  checkHoverRange expectedRange rangeInHover msg =
-    let
-      lineCol = extractLineColFromHoverMsg msg
-      -- looks like hovers use 1-based numbering while definitions use 0-based
-      -- turns out that they are stored 1-based in RealSrcLoc by GHC itself.
-      adjust Position{_line = l, _character = c} =
-        Position{_line = l + 1, _character = c + 1}
-    in
-    case map (read . T.unpack) lineCol of
-      [l,c] -> liftIO $ adjust (expectedRange ^. L.start) @=? Position l c
-      _     -> liftIO $ assertFailure $
-        "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
-        "\n but got: " <> show (msg, rangeInHover)
 
   sourceFilePath = T.unpack sourceFileName
   sourceFileName = "GotoHover.hs"
@@ -113,9 +48,9 @@ tests = let
                         , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
 
   recordDotSyntaxTests =
-    [ tst (getHover, checkHover) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
-    , tst (getHover, checkHover) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
-    , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
+    [ tst (getHover, checkHoverM) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
+    , tst (getHover, checkHoverM) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
+    , tst (getHover, checkHoverM) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
     ]
 
   test :: (HasCallStack) => (TestTree -> a) -> (TestTree -> b) -> Position -> [Expect] -> String -> (a, b)
@@ -131,7 +66,7 @@ tests = let
     ( runDef   $ tst def   look sourceFilePath expect title
     , runHover $ tst hover look sourceFilePath expect title ) where
       def   = (getDefinitions, checkDefs)
-      hover = (getHover      , checkHover)
+      hover = (getHover      , checkHoverM)
 
   -- search locations            expectations on results
   -- TODO: Lookup of record field should return exactly one result
