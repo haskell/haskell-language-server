@@ -227,7 +227,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
               -- old session and @GetLinkable@ errors.
               -- See Note [Notification vs request restart ordering]
               (modifyForEvaluate queueForEvaluation >> waitForLastRestart st)
-              (modifyForEvaluate unqueueForEvaluation)
+              (modifyForEvaluate unqueueForEvaluation >> waitForLastRestart st)
               (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId

@@ -814,20 +814,20 @@ delayedAction a = do
   liftIO $ shakeEnqueue extras a
 
 data PendingRestart = PendingRestart
-    { pendingRestartVFS         :: !VFSModified
-    , pendingRestartDirtyKeys   :: !KeySet
-    , pendingRestartReasons     :: ![T.Text]
-    , pendingRestartActions     :: ![DelayedActionInternal]
-    , pendingRestartDoneSignals :: ![TMVar ()]
+    { pendingRestartVFS          :: !VFSModified
+    , pendingRestartDirtyActions :: ![IO [Key]]
+    , pendingRestartReasons      :: ![T.Text]
+    , pendingRestartActions      :: ![DelayedActionInternal]
+    , pendingRestartDoneSignals  :: ![TMVar ()]
     }
 
 succeedPendingRestart :: PendingRestart -> PendingRestart -> PendingRestart
 succeedPendingRestart older newer = PendingRestart
     { pendingRestartVFS = succeedVFS (pendingRestartVFS older) (pendingRestartVFS newer)
-    , pendingRestartDirtyKeys = pendingRestartDirtyKeys older <> pendingRestartDirtyKeys newer
-    , pendingRestartReasons = pendingRestartReasons older ++ pendingRestartReasons newer
-    , pendingRestartActions = pendingRestartActions older ++ pendingRestartActions newer
-    , pendingRestartDoneSignals = pendingRestartDoneSignals older ++ pendingRestartDoneSignals newer
+    , pendingRestartDirtyActions = pendingRestartDirtyActions newer ++ pendingRestartDirtyActions older
+    , pendingRestartReasons = pendingRestartReasons newer ++ pendingRestartReasons older
+    , pendingRestartActions = pendingRestartActions newer ++ pendingRestartActions older
+    , pendingRestartDoneSignals = pendingRestartDoneSignals newer ++ pendingRestartDoneSignals older
     }
 
 succeedVFS :: VFSModified -> VFSModified -> VFSModified
@@ -863,9 +863,9 @@ waitForLastRestart IdeState{shakeExtras} =
 
 -- Note [Notification vs request restart ordering]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- @shakeRestart@ is non-blocking. @restartDone@ delays any notification's
+-- @shakeRestart@ is non-blocking, @restartDone@ delays any notification's
 -- @done@ barrier until its restart completes, so any subsequent request waiting
--- on @notificationLocks@ observes the new session.
+-- on @notificationLocks@ observes the side effects and the new session.
 --
 -- Request handlers that call @shakeRestart@ themselves are not covered.
 -- They must call @waitForLastRestart@ before any @runAction@ that needs a
@@ -875,24 +875,17 @@ waitForLastRestart IdeState{shakeExtras} =
 --
 -- Any actions running in the current session will be aborted, but actions added
 -- via 'shakeEnqueue' will be requeued.
+--
+-- NB: the @ioActionBetweenShakeSession@ is deferred to the restart worker.
 shakeRestart :: IdeState -> VFSModified -> T.Text -> [DelayedAction ()] -> IO [Key] -> IO ()
 shakeRestart IdeState{..} vfs reason acts ioActionBetweenShakeSession = do
   restartDone <- newEmptyTMVarIO
   let RestartSlot {..} = restartSlot shakeExtras
-  -- Run the between-session action here (not on the worker) so notification
-  -- side effects are visible by the time the LSP notification handler returns.
-  --
-  -- If not here, then it would be hard to determine exactly where to place
-  -- these side-effects when shake restarts are merged. While these side-effects
-  -- do need to occur here, the keys they invalidate need to propagate to the
-  -- worker so it can be used during the concrete restart.
-  -- See Note [Housekeeping rule cache and dirty key outside of hls-graph].
-  !newDirty <- fromListKeySet <$> ioActionBetweenShakeSession
   atomically $ do
     writeTVar lastRestartBarrier restartDone
     addWorkerTask restartRef $ PendingRestart
       { pendingRestartVFS = vfs
-      , pendingRestartDirtyKeys = newDirty
+      , pendingRestartDirtyActions = [ioActionBetweenShakeSession]
       , pendingRestartReasons = [reason]
       , pendingRestartActions = acts
       , pendingRestartDoneSignals = [restartDone]
@@ -910,13 +903,19 @@ processPendingRestart' :: Recorder (WithPriority Log) -> MVar IdeState -> Pendin
 processPendingRestart' recorder ideMVar PendingRestart{..} = do
     IdeState{..} <- readMVar ideMVar
     flip finally (atomically $ traverse (flip tryPutTMVar ()) (reverse pendingRestartDoneSignals)) $ do
-        let sessionAction runner = do
+        let runDirtyAction io = try @SomeException io >>= \case
+                Right ks -> pure ks
+                Left  e  -> [] <$ logWith recorder Error (LogRestartWorkerException e)
+            sessionAction runner = do
                 (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
-                -- Apply dirty keys after the dying session's work thread is dead
-                -- (cancelShakeSession is synchronous). This is the only placement
-                -- immune to concern 1.2 in
-                --   Note [Housekeeping rule cache and dirty key outside of hls-graph]
-                atomically $ modifyTVar' (dirtyKeys shakeExtras) (<> pendingRestartDirtyKeys)
+                -- Run the queued IO actions and apply dirty keys after the
+                -- dying session's work thread is dead so no inflight rule can
+                -- observe these mutations.
+                --
+                -- See Note [Housekeeping rule cache and dirty key outside of hls-graph]
+                newDirtyLists <- traverse runDirtyAction $ reverse pendingRestartDirtyActions
+                let newDirty = fromListKeySet (concat newDirtyLists)
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) (<> newDirty)
                 res <- shakeDatabaseProfile shakeDb
                 backlog <- readTVarIO $ dirtyKeys shakeExtras
                 queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
