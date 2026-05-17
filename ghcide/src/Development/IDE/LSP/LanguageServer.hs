@@ -328,58 +328,58 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
                     exceptionInHandler e
                     k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally loggedTeardown $ do
-        -- Need to be careful about when the shutdown occurs, it needs to be shut
-        -- down after the session loader and restarting threads, and before the
-        -- hiedb connections are closed.
-        let shutdownSession = tryReadMVar ideMVar >>= traverse_ shutdown
+      -- Need to be careful about when the shutdown occurs, it needs to be shut
+      -- down after the session loader and restarting threads, and before the
+      -- hiedb connections are closed.
+      let shutdownSession = tryReadMVar ideMVar >>= traverse_ shutdown
 
-        -- Ensure that any request waits for all notifications that preceded
-        -- it in the channel to complete, so file edits and config changes
-        -- are applied before a request is handled. Notifications and requests
-        -- are each concurrent within their own kind.
-        --
-        -- Implemented using a list of MVars, one per in-flight notification.
-        -- Requests snapshot this list at dequeue time and wait on all of them.
-        -- Completed MVars are pruned when new notifications are added.
-        notificationLocks <- newTVarIO ([] :: [TMVar ()])
-        let
-          consumeChannel threadQueue = do
-            msg <- readChan $ ctxClientMsgChan lifecycleCtx
-            case msg of
-              ReactorNotification act -> do
-                done <- newEmptyTMVarIO
-                atomically $ do
-                  old <- readTVar notificationLocks
-                  pruned <- filterM (\m -> isNothing <$> tryReadTMVar m) old
-                  writeTVar notificationLocks (done : pruned)
-                let
-                  slot = tRestartSlot threadQueue
-                  -- After the notification handler returns, check whether
-                  -- a shake restart was triggered.
-                  --
-                  -- If so, wait for it to complete before signaling 'done'
-                  -- so that subsequent requests see the updated VFS /
-                  -- session.
-                  restartDone = do
-                    barrier <- atomically $ readTVar (lastRestartBarrier slot)
-                    async $ atomically $ do
-                      readTMVar barrier
-                      putTMVar done ()
+      -- Ensure that any request waits for all notifications that preceded
+      -- it in the channel to complete, so file edits and config changes
+      -- are applied before a request is handled. Notifications and requests
+      -- are each concurrent within their own kind.
+      --
+      -- Implemented using a list of MVars, one per in-flight notification.
+      -- Requests snapshot this list at dequeue time and wait on all of them.
+      -- Completed MVars are pruned when new notifications are added.
+      notificationLocks <- newTVarIO ([] :: [TMVar ()])
+      let
+        consumeChannel threadQueue = do
+          msg <- readChan $ ctxClientMsgChan lifecycleCtx
+          case msg of
+            ReactorNotification act -> do
+              done <- newEmptyTMVarIO
+              atomically $ do
+                old <- readTVar notificationLocks
+                pruned <- filterM (\m -> isNothing <$> tryReadTMVar m) old
+                writeTVar notificationLocks (done : pruned)
+              let
+                slot = tRestartSlot threadQueue
+                -- After the notification handler returns, check whether
+                -- a shake restart was triggered.
+                --
+                -- If so, wait for it to complete before signaling 'done'
+                -- so that subsequent requests see the updated VFS /
+                -- session.
+                restartDone = do
+                  barrier <- atomically $ readTVar (lastRestartBarrier slot)
+                  async $ atomically $ do
+                    readTMVar barrier
+                    putTMVar done ()
 
-                finally (handle exceptionInHandler act) restartDone
-              ReactorRequest _id act k -> do
-                currentNotifications <- readTVarIO notificationLocks
-                void $ async $ do
-                  void $ atomically (traverse readTMVar currentNotifications)
-                  checkCancelled _id act k
+              finally (handle exceptionInHandler act) restartDone
+            ReactorRequest _id act k -> do
+              currentNotifications <- readTVarIO notificationLocks
+              void $ async $ do
+                void $ atomically (traverse readTMVar currentNotifications)
+                checkCancelled _id act k
 
-        runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession ideMVar $ \withHieDb' threadQueue' -> do
-          ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
-          registerIdeConfiguration (shakeExtras ide) initConfig
-          putMVar ideMVar ide
+      runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession ideMVar $ \withHieDb' threadQueue' -> do
+        ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
+        registerIdeConfiguration (shakeExtras ide) initConfig
+        putMVar ideMVar ide
 
-          untilReactorStopSignal $ forever (consumeChannel threadQueue')
-          logWith recorder Info LogReactorThreadStopped
+        untilReactorStopSignal $ forever (consumeChannel threadQueue')
+        logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
     pure $ Right (env, ide)
