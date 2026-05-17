@@ -18,10 +18,10 @@ tests = testGroup "shake restart merging"
         succeedVFS VFSUnmodified vfs1 @?= vfs1
         succeedVFS vfs1 VFSUnmodified @?= vfs1
 
-    , testCase "<> appends reasons in chronological order" $ do
+    , testCase "<> appends reasons in reverse chronological order" $ do
         let p1 = PendingRestart VFSUnmodified mempty ["r1"] [] []
             p2 = PendingRestart VFSUnmodified mempty ["r2"] [] []
-        pendingRestartReasons (succeedPendingRestart p1 p2) @?= ["r1", "r2"]
+        reverse (pendingRestartReasons (succeedPendingRestart p1 p2)) @?= ["r1", "r2"]
 
     , testCase "<> takes VFS from the right operand" $ do
         let olderUri  = toNormalizedUri (Uri "older")

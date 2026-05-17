@@ -813,6 +813,7 @@ delayedAction a = do
   extras <- ask
   liftIO $ shakeEnqueue extras a
 
+-- | NB: The lists in this datatype are with reverse chronological appends.
 data PendingRestart = PendingRestart
     { pendingRestartVFS          :: !VFSModified
     , pendingRestartDirtyActions :: ![IO [Key]]
@@ -895,9 +896,9 @@ processPendingRestart :: Recorder (WithPriority Log) -> MVar IdeState -> Pending
 processPendingRestart recorder ideMVar pendingRestart = do
   processPendingRestart' recorder ideMVar pendingRestart
     `catch` \(e :: SomeException) ->
-        case fromException e of
-            Just AsyncCancelled -> throwIO e
-            _ -> logWith recorder Error (LogRestartWorkerException e)
+      case fromException e of
+        Just AsyncCancelled -> throwIO e
+        _ -> logWith recorder Error (LogRestartWorkerException e)
 
 processPendingRestart' :: Recorder (WithPriority Log) -> MVar IdeState -> PendingRestart -> IO ()
 processPendingRestart' recorder ideMVar PendingRestart{..} = do

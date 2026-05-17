@@ -8,18 +8,11 @@ see Note [Serializing runs in separate thread]
 -}
 module Development.IDE.Core.WorkerThread
   ( LogWorkerThread (..),
-    withWorkerTasks,
     withWorkerQueue,
-    readWorkerTask,
-    awaitWorkerTask,
     TaskQueue,
-    isEmptyTaskQueue,
-    writeTaskQueue,
     withWorkerQueueSimple,
-    workerTaskQueue,
     TaskRef,
     withWorkerRef,
-    workerTaskRef,
     WorkerTasks (..),
   )
 where
@@ -128,27 +121,6 @@ withWorkerTasks WorkerTasks'{..} recorder title workerAction = ContT $ \mainActi
             workerAction t
             logWith recorder Debug $ LogSingleWorkEnded title
             writerThread q b
-
-readWorkerTask :: WorkerTasks STM a -> STM a
-readWorkerTask WorkerTasks {..} = do
-  task <- tryReadWorkerTask
-  case task of
-    Nothing -> retry
-    Just t  -> pure t
-
--- | 'awaitWorkerTask' queues up an 'IO' action to be run by a worker thread,
--- and then blocks until the result is computed. If the action throws an
--- non-async exception, it is rethrown in the calling thread.
-awaitWorkerTask :: WorkerTasks STM (IO ()) -> IO r -> IO r
-awaitWorkerTask WorkerTasks {..} act = do
-  -- Take an action from TQueue, run it and
-  -- use barrier to wait for the result
-  barrier <- newBarrier
-  atomically $ addWorkerTask (try act >>= signalBarrier barrier)
-  resultOrException <- waitBarrier barrier
-  case resultOrException of
-    Left e  -> throwIO (e :: SomeException)
-    Right r -> return r
 
 -- | Creating a class that'll only live in this module doesn't have much value.
 -- Create a simple struct instead describing the interface of worker tasks.
