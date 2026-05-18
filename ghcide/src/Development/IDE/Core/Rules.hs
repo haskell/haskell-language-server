@@ -140,6 +140,13 @@ import qualified Development.IDE.Types.Shake                  as Shake
 import           GHC.Iface.Ext.Types                          (HieASTs (..))
 import           GHC.Iface.Ext.Utils                          (generateReferencesMap)
 import qualified GHC.LanguageExtensions                       as LangExt
+#if MIN_VERSION_ghc(9,11,0)
+import           GHC.ByteCode.Types                           (CompiledByteCode (..))
+import           GHC.Data.FlatBag                             (emptyFlatBag)
+#endif
+#if MIN_VERSION_ghc(9,11,0) && !MIN_VERSION_ghc(9,13,0)
+import           GHC.Types.Name.Env                           (emptyNameEnv)
+#endif
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
 import           GHC.Types.Basic                              (ImportLevel (..))
@@ -1115,6 +1122,33 @@ usePropertyByPathAction path plId p = do
 
 -- ---------------------------------------------------------------------
 
+-- | Argument order matches 'moduleEnvToList'. See Note [TH interpreter loader reuse].
+fakeKeepLinkable :: Module -> UTCTime -> Linkable
+#if MIN_VERSION_ghc(9,13,0)
+fakeKeepLinkable m t = Linkable t m (pure (BCOs emptyCompiledByteCode))
+  where
+    emptyCompiledByteCode = CompiledByteCode
+      { bc_bcos = emptyFlatBag
+      , bc_itbls = []
+      , bc_strs = []
+      , bc_breaks = Nothing
+      , bc_spt_entries = []
+      }
+#elif MIN_VERSION_ghc(9,11,0)
+fakeKeepLinkable m t = Linkable t m (pure (BCOs emptyCompiledByteCode))
+  where
+    emptyCompiledByteCode = CompiledByteCode
+      { bc_bcos = emptyFlatBag
+      , bc_itbls = emptyNameEnv
+      , bc_ffis = []
+      , bc_strs = emptyNameEnv
+      , bc_breaks = Nothing
+      , bc_spt_entries = []
+      }
+#else
+fakeKeepLinkable m t = LM t m [LoadedBCOs []]
+#endif
+
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
@@ -1175,9 +1209,8 @@ getLinkableRule recorder =
               --just before returning it to be loaded. This has a substantial effect on recompile
               --times as the number of loaded modules and splices increases.
               --
-              --We use a dummy DotA linkable part to fake a NativeCode linkable.
-              --The unload function doesn't care about the exact linkable parts.
-              unload (hscEnv session) (map (\(mod', time') -> mkLinkable time' mod' (DotA "dummy")) $ moduleEnvToList to_keep)
+              -- See Note [TH interpreter loader reuse]
+              unload (hscEnv session) (map (uncurry fakeKeepLinkable) $ moduleEnvToList to_keep)
               return (to_keep, ())
         return (fileHash <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash))
 

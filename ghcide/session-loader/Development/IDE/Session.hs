@@ -641,6 +641,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
   let toAbsolutePath = toAbsolute rootDir -- see Note [Root Directory]
 
   sessionState <- newSessionState
+  sharedInterp <- newVar Nothing
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar (version sessionState))
 
   -- This caches the mapping from Mod.hs -> hie.yaml
@@ -684,6 +685,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionClientConfig = clientConfig
               , sessionSharedNameCache = ideNc
               , sessionLoadingOptions = newSessionLoadingOptions
+              , sessionSharedInterp = sharedInterp
               }
 
         addWorkerTask que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
@@ -746,6 +748,8 @@ data SessionEnv = SessionEnv
   , sessionClientConfig    :: Config
   , sessionSharedNameCache :: NameCache
   , sessionLoadingOptions  :: SessionLoadingOptions
+  , sessionSharedInterp    :: Var (Maybe Interp)
+    -- ^ Shared interpreter for all sessions. See Note [TH interpreter loader reuse].
   }
 
 type SessionM = ReaderT SessionEnv IO
@@ -1074,7 +1078,12 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
 emptyHscEnvM :: FilePath -> SessionM HscEnv
 emptyHscEnvM libDir = do
   nc <- asks sessionSharedNameCache
-  liftIO $ Ghc.emptyHscEnv nc libDir
+  sharedInterpVar <- asks sessionSharedInterp
+  env <- liftIO $ Ghc.emptyHscEnv nc libDir
+  liftIO $ modifyVar sharedInterpVar $ \cached ->
+    case (cached, hscInterpMaybe env) of
+      (Nothing, mFresh) -> pure (mFresh, env)
+      (mCached, _)      -> pure (mCached, withHscInterp mCached env)
 
 toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]
 toFlagsMap TargetDetails{..} =

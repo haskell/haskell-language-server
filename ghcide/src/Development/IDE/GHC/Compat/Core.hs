@@ -263,6 +263,9 @@ module Development.IDE.GHC.Compat.Core (
     TargetId(..),
     mkSimpleTarget,
     -- * GHCi
+    Interp,
+    hscInterpMaybe,
+    withHscInterp,
     initObjLinker,
     loadDLL,
     InteractiveImport(..),
@@ -442,6 +445,7 @@ import           GHC.Parser.Header           hiding (getImports)
 import           GHC.Rename.Fixity           (lookupFixityRn)
 import           GHC.Rename.Names
 import           GHC.Rename.Splice
+import           GHC.Runtime.Interpreter     (Interp)
 import qualified GHC.Runtime.Interpreter     as GHCi
 import           GHC.Tc.Instance.Family
 import           GHC.Tc.Module
@@ -688,6 +692,11 @@ mapConPatDetail :: (HsConPatDetails p -> Maybe (HsConPatDetails p)) -> Pat p -> 
 mapConPatDetail f pat@(ConPat _ _ args) = (\args' -> pat { pat_args = args'}) <$> f args
 mapConPatDetail _ _ = Nothing
 
+hscInterpMaybe :: HscEnv -> Maybe Interp
+hscInterpMaybe = hsc_interp
+
+withHscInterp :: Maybe Interp -> HscEnv -> HscEnv
+withHscInterp interp env = env { hsc_interp = interp }
 
 initObjLinker :: HscEnv -> IO ()
 initObjLinker env =

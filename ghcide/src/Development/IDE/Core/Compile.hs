@@ -342,7 +342,6 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #else
            ; let hsc_env' = loadModulesHome (map linkableHomeMod lbs) hsc_env
 #endif
-
              {- load it -}
 #if MIN_VERSION_ghc(9,11,0)
            ; bco_time <- getCurrentTime
@@ -1487,6 +1486,21 @@ As we always generate Linkables from core files, we use the core file hash
 as a (hopefully) deterministic measure of whether the Linkable has changed.
 This is better than using the object file hash (if we have one) because object
 file generation is not deterministic.
+-}
+
+{- Note [TH interpreter loader reuse]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+'loadDecls' (called per TH splice) consults the interpreter's
+'bcos_loaded :: ModuleEnv Linkable': a module with a matching timestamp is
+reused, otherwise it is loaded fresh from the HUG. 'loadModulesHome' only
+updates the HUG, so stale 'bcos_loaded' entries must be evicted via 'unload'.
+
+'getLinkableRule' calls 'unload' on every new linkable. For this to reach
+'loadDecls', all sessions must share the same 'Interp' IORef. 'emptyHscEnvM'
+ensures this by caching the first 'Interp' and overwrites 'hsc_interp' on every
+subsequent call.
+
+See also: Note [Recompilation avoidance in the presence of TH]
 -}
 
 data RecompilationInfo m
