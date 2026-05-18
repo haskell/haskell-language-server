@@ -625,6 +625,9 @@ instance PluginMethod Request Method_WorkspaceExecuteCommand where
 instance PluginMethod Request (Method_CustomMethod m) where
   handlesRequest _ _ _ _ _ = HandlesRequest
 
+instance PluginMethod Request Method_WorkspaceWillRenameFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
 -- Plugin Notifications
 
 instance PluginMethod Notification Method_TextDocumentDidOpen where
@@ -645,6 +648,18 @@ instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders whe
 
 instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidDeleteFiles where
+  handlesRequest :: VFS
+    -> SMethod Method_WorkspaceDidDeleteFiles
+    -> MessageParams Method_WorkspaceDidDeleteFiles
+    -> PluginDescriptor c
+    -> Config
+    -> HandleRequestResult
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidRenameFiles where
   handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_Initialized where
@@ -856,6 +871,8 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
 instance PluginRequestMethod Method_TextDocumentInlayHint where
   combineResponses _ _ _ _ x = sconcat x
 
+instance PluginRequestMethod Method_WorkspaceWillRenameFiles where
+
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
 
@@ -926,6 +943,10 @@ instance PluginNotificationMethod Method_WorkspaceDidChangeWorkspaceFolders wher
 instance PluginNotificationMethod Method_WorkspaceDidChangeConfiguration where
 
 instance PluginNotificationMethod Method_Initialized where
+
+instance PluginNotificationMethod Method_WorkspaceDidDeleteFiles where
+
+instance PluginNotificationMethod Method_WorkspaceDidRenameFiles where
 
 -- ---------------------------------------------------------------------
 
@@ -1257,6 +1278,8 @@ instance HasTracing CompletionItem
 instance HasTracing DocumentLink
 instance HasTracing InlayHint
 instance HasTracing WorkspaceSymbol
+instance HasTracing RenameFilesParams
+instance HasTracing DeleteFilesParams
 -- ---------------------------------------------------------------------
 --Experimental resolve refactoring
 {-# NOINLINE pROCESS_ID #-}
