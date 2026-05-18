@@ -332,38 +332,81 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
       -- down after the session loader and restarting threads, and before the
       -- hiedb connections are closed.
       let shutdownSession = tryReadMVar ideMVar >>= traverse_ shutdown
-      runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession $ \withHieDb' threadQueue' -> do
-        ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
-        putMVar ideMVar ide
-        -- Keep this after putMVar ideMVar ide; otherwise shutdown during
-        -- initialization could leave handleInit blocked indefinitely on readMVar.
-        untilReactorStopSignal $ forever $ do
+
+      -- Ensure that any request waits for all notifications that preceded
+      -- it in the channel to complete, so file edits and config changes
+      -- are applied before a request is handled. Notifications and requests
+      -- are each concurrent within their own kind.
+      --
+      -- Implemented using a list of MVars, one per in-flight notification.
+      -- Requests snapshot this list at dequeue time and wait on all of them.
+      -- Completed MVars are pruned when new notifications are added.
+      notificationLocks <- newTVarIO ([] :: [TMVar ()])
+      let
+        consumeChannel threadQueue = do
           msg <- readChan $ ctxClientMsgChan lifecycleCtx
-          -- We dispatch notifications synchronously and requests asynchronously
-          -- This is to ensure that all file edits and config changes are applied before a request is handled
           case msg of
-            ReactorNotification act  -> handle exceptionInHandler act
-            ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-      logWith recorder Info LogReactorThreadStopped
+            ReactorNotification act -> do
+              done <- newEmptyTMVarIO
+              atomically $ do
+                old <- readTVar notificationLocks
+                pruned <- filterM (\m -> isNothing <$> tryReadTMVar m) old
+                writeTVar notificationLocks (done : pruned)
+              let
+                slot = tRestartSlot threadQueue
+                -- After the notification handler returns, check whether
+                -- a shake restart was triggered.
+                --
+                -- If so, wait for it to complete before signaling 'done'
+                -- so that subsequent requests see the updated VFS /
+                -- session.
+                restartDone = do
+                  barrier <- atomically $ readTVar (lastRestartBarrier slot)
+                  async $ atomically $ do
+                    readTMVar barrier
+                    putTMVar done ()
+
+              finally (handle exceptionInHandler act) restartDone
+            ReactorRequest _id act k -> do
+              currentNotifications <- readTVarIO notificationLocks
+              void $ async $ do
+                void $ atomically (traverse readTMVar currentNotifications)
+                checkCancelled _id act k
+
+      runWithWorkerThreads (cmapWithPrio LogSession recorder) dbLoc shutdownSession ideMVar $ \withHieDb' threadQueue' -> do
+        ide <- ctxGetIdeState lifecycleCtx env root withHieDb' threadQueue'
+        registerIdeConfiguration (shakeExtras ide) initConfig
+        putMVar ideMVar ide
+
+        untilReactorStopSignal $ forever (consumeChannel threadQueue')
+        logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
-    registerIdeConfiguration (shakeExtras ide) initConfig
-    pure $ Right (env,ide)
+    pure $ Right (env, ide)
 
 
 -- | runWithWorkerThreads
 -- create several threads to run the session, db and session loader
 -- see Note [Serializing runs in separate thread]
-runWithWorkerThreads :: Recorder (WithPriority Session.Log) -> FilePath -> IO () -> (WithHieDb -> ThreadQueue -> IO ()) -> IO ()
-runWithWorkerThreads recorder dbLoc shutdownSession f = evalContT $ do
+runWithWorkerThreads
+    :: Recorder (WithPriority Session.Log)
+    -> FilePath
+    -> IO ()
+    -> MVar IdeState
+    -> (WithHieDb -> ThreadQueue -> IO ())
+    -> IO ()
+runWithWorkerThreads recorder dbLoc shutdownSession ideMVar f = evalContT $ do
   (WithHieDbShield hiedb, threadQueue) <- runWithDb recorder dbLoc
   -- The shake session needs to be shut down prior to the hiedb connections
   -- being cleaned up, otherwise shake could be referencing dead connections.
   -- This is passed in via the callsites.
+  let workerRecorder = cmapWithPrio Session.LogSessionWorkerThread recorder
+  let shakeRecorder = cmapWithPrio Session.LogShake recorder
+  sessionRestartTQueue <- withWorkerRef succeedPendingRestart workerRecorder "sessionRestartTQueue" (processPendingRestart shakeRecorder ideMVar)
   ContT $ \action -> action () `finally` shutdownSession
-  sessionRestartTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "RestartTQueue"
-  sessionLoaderTQueue <- withWorkerQueueSimple (cmapWithPrio Session.LogSessionWorkerThread recorder) "SessionLoaderTQueue"
-  liftIO $ f hiedb (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
+  sessionLoaderTQueue <- withWorkerQueueSimple workerRecorder "SessionLoaderTQueue"
+  restartSlot <- liftIO $ newRestartSlot sessionRestartTQueue
+  liftIO $ f hiedb (ThreadQueue threadQueue restartSlot sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   It is important, that the thread that puts the 'MVar' is not dropped before it puts the 'MVar' i.e. it should

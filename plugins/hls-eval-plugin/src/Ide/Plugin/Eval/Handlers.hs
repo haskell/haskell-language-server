@@ -44,7 +44,7 @@ import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
-import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
+import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_, waitForLastRestart)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (OverridingBool (..))
@@ -217,16 +217,17 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText st _uri
 
+            let modifyForEvaluate adjust = do
+                  setSomethingModified VFSUnmodified st "Eval" $ do
+                    _ <- adjust st nfp
+                    return [toKey IsEvaluating nfp]
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
-              (setSomethingModified VFSUnmodified st "Eval" $ do
-                queueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
-                )
-              (setSomethingModified VFSUnmodified st "Eval" $ do
-                unqueueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
-                )
+              -- Without the restart wait, @NeedsCompilation@ is stale in the
+              -- old session and @GetLinkable@ errors.
+              -- See Note [Notification vs request restart ordering]
+              (modifyForEvaluate queueForEvaluation >> waitForLastRestart st)
+              (modifyForEvaluate unqueueForEvaluation >> waitForLastRestart st)
               (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId

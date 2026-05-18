@@ -94,7 +94,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
               let msg = "Closed text document: " <> getUri _uri
-              setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
+              setSomethingModified (VFSModified vfs) ide msg $ do
                 scheduleGarbageCollection ide
                 deleteFileOfInterest ide file
               logWith recorder Debug $ LogClosedTextDocument _uri
@@ -102,23 +102,27 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWatchedFiles $
       \ide vfs _ (DidChangeWatchedFilesParams fileEvents) -> liftIO $ do
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
-        -- what we do with them
-        -- filter out files of interest, since we already know all about those
-        -- filter also uris that do not map to filenames, since we cannot handle them
-        filesOfInterest <- getFilesOfInterest ide
-        let fileEvents' =
+        -- what we do with them.
+        -- Filter URIs that don't map to filenames here; the FOI filter must run inside the
+        -- IO action body (on the restart worker) so that mutations from preceding
+        -- didOpen/didClose IO actions are observed consistently.
+        let rawEvents =
                 [ (nfp, event) | (FileEvent uri event) <- fileEvents
                 , Just fp <- [uriToFilePath uri]
                 , let nfp = toNormalizedFilePath fp
-                , not $ HM.member nfp filesOfInterest
                 ]
-        unless (null fileEvents') $ do
-            let msg = show fileEvents'
-            logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
+        unless (null rawEvents) $ do
+            let msg = Text.pack (show rawEvents)
             setSomethingModified (VFSModified vfs) ide msg $ do
-                ks1 <- resetFileStore ide fileEvents'
-                ks2 <- modifyFileExists ide fileEvents'
-                return (ks1 <> ks2)
+                filesOfInterest <- getFilesOfInterest ide
+                let fileEvents' = filter (not . (`HM.member` filesOfInterest) . fst) rawEvents
+                logWith recorder Debug $ LogWatchedFileEvents msg
+                if null fileEvents'
+                  then pure []
+                  else do
+                    ks1 <- resetFileStore ide fileEvents'
+                    ks2 <- modifyFileExists ide fileEvents'
+                    return (ks1 <> ks2)
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWorkspaceFolders $
       \ide _ _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
