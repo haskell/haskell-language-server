@@ -327,8 +327,8 @@ instance ToJSON PluginConfig where
 
 data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
-                   , pluginDescription  :: !T.Text
                    -- ^ Unique identifier of the plugin.
+                   , pluginDescription  :: !T.Text
                    , pluginPriority     :: Natural
                    -- ^ Plugin handlers are called in priority order, higher priority first
                    , pluginRules        :: !(Rules ())
