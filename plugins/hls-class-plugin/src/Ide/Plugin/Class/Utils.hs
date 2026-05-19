@@ -37,7 +37,7 @@ isBindingName name =
   let bindingName = occNameString $ nameOccName name
    in isPrefixOf bindingPrefix bindingName && not (isSuperClassesBindingPrefix bindingName)
 
--- | Check if some `HasSrcSpan` value in the given range
+-- | Check if some `HasSrcSpan` value is in the given range
 inRange :: Range -> SrcSpan -> Bool
 inRange range s = maybe False (subRange range) (srcSpanToRange s)
 
