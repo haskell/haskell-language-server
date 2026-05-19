@@ -358,7 +358,6 @@ library hls-class-plugin
     , hls-plugin-api  == 2.14.0.0
     , lens
     , lsp
-    , mtl
     , text
     , transformers
 
