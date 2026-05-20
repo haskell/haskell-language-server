@@ -66,6 +66,8 @@ codeActionTests = testGroup
       getActionByTitle "Add placeholders for 'g','h'"
   , goldenWithClass "Creates a placeholder when all top-level decls are indented" "T7" "" $
       getActionByTitle "Add placeholders for 'g','h','i'"
+  , goldenWithClass "Creates a placeholder when non-missing methods have non-default indentation" "T10" "" $
+      getActionByTitle "Add placeholders for 'g'"
   , testGroup "with preprocessors"
     [ knownBrokenInEnv [GhcVer GHC910]
         "See issue https://github.com/haskell/haskell-language-server/issues/4731 for details." $
