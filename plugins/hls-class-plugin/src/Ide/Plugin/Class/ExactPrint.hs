@@ -8,6 +8,9 @@ import           Control.Monad.Trans.Maybe
 import           Data.Either.Extra                       (eitherToMaybe)
 import qualified Data.Text                               as T
 import           Development.IDE.GHC.Compat
+#if !MIN_VERSION_ghc(9,11,0)
+import           GHC.Data.Bag                            (bagToList)
+#endif
 import           GHC.Parser.Annotation
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
@@ -65,15 +68,26 @@ addMethodDecls ps mDecls range withSig
         case break (inRange range . getLoc) allDecls of
             (before, L l inst : after) ->
                 let
-                    instSpan = realSrcSpan $ getLoc l
-#if MIN_VERSION_ghc(9,11,0)
-                    instCol = srcSpanStartCol instSpan - 1
-#else
-                    instCol = srcSpanStartCol instSpan
+                    indent = case inst of
+                                InstD _ (ClsInstD{..}) | fstBind:_ <-
+#if !MIN_VERSION_ghc(9,11,0)
+                                                                      bagToList $
+#endif
+                                                                      cid_binds cid_inst,
+                                                         (RealSrcSpan indent _) <- getLoc fstBind
+                                  -> srcSpanStartCol indent
+                                _ -> defaultIndent + 1
+#if MIN_VERSION_ghc(9,11,0) || !MIN_VERSION_ghc(9,9,0)
+                           - 1
 #endif
 #if MIN_VERSION_ghc(9,9,0)
+                    instSpan = realSrcSpan $ getLoc l
+                    instCol = srcSpanStartCol instSpan
+#if MIN_VERSION_ghc(9,11,0)
+                            - 1
+#endif
                     instRow = srcSpanEndLine instSpan
-                    methodEpAnn = noAnnSrcSpanDP $ deltaPos 1 (instCol + defaultIndent)
+                    methodEpAnn = noAnnSrcSpanDP $ deltaPos 1 indent
                     -- Put each TyCl method/type signature on separate line, indented by 2 spaces relative to instance decl
                     newLine (L _ e) = L methodEpAnn e
 
@@ -85,7 +99,7 @@ addMethodDecls ps mDecls range withSig
                             in setEntryDP followingDecl delta)
 #else
                     newLine (L l e) =
-                        let dp = deltaPos 1 (instCol + defaultIndent - 1)
+                        let dp = deltaPos 1 indent
                         in L (noAnnSrcSpanDP (getLoc l) dp <> l) e
 
                     resetFollowing = id
