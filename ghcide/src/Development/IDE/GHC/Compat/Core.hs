@@ -334,6 +334,7 @@ module Development.IDE.GHC.Compat.Core (
 
     module GHC.Tc.Instance.Family,
     module GHC.Tc.Module,
+    module GHC.Tc.TyCl.Class,
     module GHC.Tc.Types,
     module GHC.Tc.Types.Evidence,
     module GHC.Tc.Utils.Env,
@@ -445,6 +446,7 @@ import           GHC.Rename.Splice
 import qualified GHC.Runtime.Interpreter     as GHCi
 import           GHC.Tc.Instance.Family
 import           GHC.Tc.Module
+import           GHC.Tc.TyCl.Class
 import           GHC.Tc.Types
 import           GHC.Tc.Types.Evidence       hiding ((<.>))
 import           GHC.Tc.Utils.Env
