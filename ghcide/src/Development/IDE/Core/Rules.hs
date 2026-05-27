@@ -763,9 +763,9 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \(GhcSessionDeps_ fullModSummary) file -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \(GhcSessionDeps_ fullModSummary) file -> do
         env <- use_ GhcSession file
-        ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
+        ghcSessionDepsDefinitionCutoff fullModSummary ghcSessionDepsConfig env file
 
 newtype GhcSessionDepsConfig = GhcSessionDepsConfig
     { fullModuleGraph :: Bool
@@ -785,10 +785,25 @@ ghcSessionDepsDefinition
     :: -- | full mod summary
         Bool ->
         GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
-ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file = do
+ghcSessionDepsDefinition fullModSummary cfg hscEnvEq file =
+    snd <$> ghcSessionDepsDefinitionCutoff fullModSummary cfg hscEnvEq file
+
+-- | Like 'ghcSessionDepsDefinition' but also produces a cutoff fingerprint so
+-- the rule can short-circuit when none of its inputs (transitive deps,
+-- own mod summary, dep ifaces) have changed. Combined with the
+-- early-cutoff pointer-identity preservation in 'defineEarlyCutoff'',
+-- this stops generations of equivalent HscEnv\/HPT from accumulating in
+-- the per-file Shake cache.
+ghcSessionDepsDefinitionCutoff
+    :: Bool
+    -> GhcSessionDepsConfig
+    -> HscEnvEq
+    -> NormalizedFilePath
+    -> Action (Maybe BS.ByteString, Maybe HscEnvEq)
+ghcSessionDepsDefinitionCutoff fullModSummary GhcSessionDepsConfig{..} hscEnvEq file = do
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
     case mbdeps of
-        Nothing -> return Nothing
+        Nothing -> return (Nothing, Nothing)
         Just deps -> do
             when fullModuleGraph $ void $ use_ ReportImportCycles file
             msr <- if fullModSummary
@@ -801,6 +816,18 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                 env = msrHscEnv msr
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
+            transDepsFp <- use_ GetModuleGraphTransDepsFingerprints file
+            -- Cutoff fingerprint: HscEnvEq value is determined by this file's
+            -- own source (which feeds msrHscEnv via pragmas\/dflags), this
+            -- file's import-level mod summary, the trans-deps structure, and
+            -- each dep's iface fingerprint. When all match the prior run, the
+            -- value is structurally equivalent and 'defineEarlyCutoff'' will
+            -- reuse the prior pointer.
+            let !cutoffFp = BS.concat $
+                    fingerprintToBS transDepsFp
+                    : fingerprintToBS (msrFingerprint msr)
+                    : fingerprintToBS (ms_hs_hash ms)
+                    : map hiFileFingerPrint ifaces
             -- Load .hs-boot before .hs: the HPT is keyed by module name, and
             -- GHC's addHomeModInfoToHpt overwrites, so the non-boot must be last.
             let inLoadOrder = sortOn (not . isBootHmi)
@@ -837,7 +864,8 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
             -- session, while `ghcSessionDepsDefinition` will be called for each file we need
             -- to compile. `updateHscEnvEq` will refresh the HscEnv (session') and also
             -- generate a new Unique.
-            Just <$> liftIO (updateHscEnvEq hscEnvEq session')
+            session'' <- liftIO (updateHscEnvEq hscEnvEq session')
+            return (Just cutoffFp, Just session'')
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
