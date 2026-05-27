@@ -64,7 +64,7 @@ import           Development.Shake           (Action,
                                               actionBracket, addOracle,
                                               askOracle, command, command_,
                                               getDirectoryFiles, liftIO, need,
-                                              newCache, shakeArgsWith,
+                                              newCache, phony, shakeArgsWith,
                                               shakeOptions, versioned, want)
 import           Development.Shake.Classes
 import           Experiments.Types           (Example (exampleName),
@@ -167,6 +167,22 @@ createBuildSystem config = do
 
   whenJust (profileInterval configStatic) $ \i -> do
     phonyRules "profiled-" binaryName (CheapHeapProfiling i) build (examples configStatic)
+
+  -- Fast smoke target: one small example, a few cheap experiments, only HEAD.
+  -- Intended for tight local iteration while improving perf/memory.
+  -- Sample count is still controlled by `samples:` in config.yaml — drop it
+  -- to ~10 for the fastest turnaround.
+  -- DummyLevel0M01NoTH is a single empty module so `searchSymbol` returns
+  -- Nothing for `identifierP`; pick experiments that don't require it.
+  let smokeExample = "DummyLevel0M01NoTH"
+      smokeExperiments = ["edit", "edit-header", "documentSymbols after edit"]
+      smokeConfigs = [ confName | ConfigurationDescriptor{..} <- configurations configStatic ]
+  phony "smoke" $ need
+    [ build </> "unprofiled" </> smokeExample </> "HEAD" </> conf
+            </> escaped (escapeExperiment (Unescaped experiment)) <.> "csv"
+    | conf <- smokeConfigs
+    , experiment <- smokeExperiments
+    ]
 
   return configStatic
 

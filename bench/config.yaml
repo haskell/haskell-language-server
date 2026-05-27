@@ -1,6 +1,7 @@
 # The number of samples to run per experiment.
-# At least 100 is recommended in order to observe space leaks
-samples: 50
+# At least 100 is recommended in order to observe space leaks.
+# Temporarily lowered to 10 for fast turnaround during initial analysis.
+samples: 10
 
 buildTool: cabal
 
@@ -77,6 +78,23 @@ examples:
     modules:
         - DummyLevel1M01.hs
 
+  # Large synthetic project: 200 layers × 50 modules/layer = 10000 modules,
+  # ~500k import edges (each module imports every module of the prior layer).
+  # This is closer in scale to a real production Haskell codebase than the
+  # default MultiLayerModules. Expect this to be slow: initial cradle load
+  # alone takes many minutes, and each experiment runs `samples:` rounds.
+  # Recommended: drop `samples:` to ~10 and run via single-experiment targets
+  # (e.g. `bench-results/unprofiled/MultiLayerModulesXL/HEAD/All/edit.csv`)
+  # rather than the full matrix.
+  - name: MultiLayerModulesXL
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--depth", "200", "--width", "50"]
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel100M01.hs
+
   # Small but heavily multi-component example
   # Disabled as it is far to slow. hie-bios >0.7.2 should help
   # - name: HLS
@@ -114,6 +132,7 @@ experiments:
     - "hole fit suggestions"
     - "eval execute single-line code lens"
     - "eval execute multi-line code lens"
+    - "memory pressure"
 
 # An ordered list of versions to analyze
 versions:

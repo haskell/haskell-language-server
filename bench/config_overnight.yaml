@@ -1,0 +1,107 @@
+# Overnight Pass 1: GC flag A/B/C across a subset of experiments.
+# Same HLS binary in all cases; only the +RTS args supplied via extra-args differ.
+# Outputs land in bench-results/unprofiled/<example>/HEAD/All/.
+
+samples: 50
+
+buildTool: cabal
+outputFolder: bench-results
+
+# Heap profiling disabled for this pass — we want clean timing.
+# profileInterval: 1
+
+parallelism: 1
+
+examples:
+  # ---------- cabal-3.16.1.0 variants (~235 transitive modules) ----------
+  - name: cabal-default
+    package: Cabal
+    version: 3.16.1.0
+    modules:
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
+    extra-args: []
+
+  - name: cabal-A64m-F1
+    package: Cabal
+    version: 3.16.1.0
+    modules:
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
+    extra-args: ["+RTS", "-A64m", "-F1", "-RTS"]
+
+  - name: cabal-A128m-F11
+    package: Cabal
+    version: 3.16.1.0
+    modules:
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
+    extra-args: ["+RTS", "-A128m", "-F1.1", "-RTS"]
+
+  - name: cabal-chunked
+    package: Cabal
+    version: 3.16.1.0
+    modules:
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
+    extra-args: ["+RTS", "-A32m", "-n4m", "-F1.1", "-RTS"]
+
+  # ---------- MultiLayerModulesNoTH (600 modules) ----------
+  - name: mlm-default
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+    extra-args: []
+
+  - name: mlm-A64m-F1
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+    extra-args: ["+RTS", "-A64m", "-F1", "-RTS"]
+
+# Experiment subset — picked to maximise signal in the slow paths.
+experiments:
+    - "edit"
+    - "semanticTokens after typing burst"
+    - "hover after typing burst"
+    - "completions after typing burst"
+    - "memory pressure"
+    - "eval execute multi-line code lens"
+
+versions:
+- HEAD
+
+configurations:
+- All:
+  - alternateNumberFormat
+  - callHierarchy
+  - changeTypeSignature
+  - class
+  - codeRange
+  - eval
+  - explicitFixity
+  - fourmolu
+  - gadt
+  - ghcide-code-actions-bindings
+  - ghcide-code-actions-fill-holes
+  - ghcide-code-actions-imports-exports
+  - ghcide-code-actions-type-signatures
+  - ghcide-completions
+  - ghcide-type-lenses
+  - hlint
+  - importLens
+  - moduleName
+  - ormolu
+  - pragmas
+  - qualifyImportedNames
+  - rename
+  - stylish-haskell
+  - semanticTokens

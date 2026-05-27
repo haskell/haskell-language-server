@@ -352,6 +352,45 @@ experiments =
               )
         ),
       ---------------------------------------------------------------------------------------
+      ---------------------------------------------------------------------------------------
+      -- Memory-pressure experiment: hammers the server with a variety of
+      -- requests across every open document, interleaved with edits, to force
+      -- the IDE to retain caches/results across many rules. Each sample is one
+      -- "round" so the resulting peak/post-GC heap (via RTS -s) reflects the
+      -- worst case under sustained load. The default sample count makes this
+      -- much longer than other experiments — override with --samples when you
+      -- only need a quick smoke check.
+      bench "memory pressure" $ \docs -> do
+        -- Round 1: typing burst across all docs.
+        applyTypingBurst docs
+        _ <- waitForBuildQueue
+        -- Round 2: exercise hover + getDefinition + completions on every
+        -- doc that has an identifier position. These populate per-rule
+        -- caches across the whole project.
+        forM_ docs $ \DocumentPositions{..} -> do
+          forM_ identifierP $ \p -> do
+            _ <- getHover doc p
+            _ <- getDefinitions doc p
+            _ <- getCompletions doc p
+            return ()
+        _ <- waitForBuildQueue
+        -- Round 3: code actions across every doc — these tend to pull in
+        -- additional rules (suggestions, refactor previews, etc.).
+        forM_ docs $ \DocumentPositions{..} -> do
+          forM_ identifierP $ \p ->
+            void $ getCodeActions doc (Range p p)
+        _ <- waitForBuildQueue
+        -- Round 4: document symbols on every doc — populates the symbol cache.
+        forM_ docs $ \DocumentPositions{..} ->
+          void $ getDocumentSymbols doc
+        _ <- waitForBuildQueue
+        -- Round 5: another typing burst, to ensure the caches above survive
+        -- invalidation rather than getting dropped — this is what catches
+        -- "we recompute everything from scratch on every edit" regressions.
+        applyTypingBurst docs
+        _ <- waitForBuildQueue
+        return True,
+      ---------------------------------------------------------------------------------------
       benchWithSetup
         "eval execute multi-line code lens"
         ( mapM_ $ \DocumentPositions{..} -> do
@@ -533,6 +572,13 @@ runBenchmarksFun dir allBenchmarks = do
         , "rulesTotal"
         , "ruleEdges"
         , "ghcRebuilds"
+        , "userP50"
+        , "userP95"
+        , "userP99"
+        , "userStdDev"
+        , "delayedP50"
+        , "delayedP95"
+        , "delayedP99"
         ]
       rows =
         [ [ name,
@@ -552,7 +598,14 @@ runBenchmarksFun dir allBenchmarks = do
             show rulesVisited,
             show rulesTotal,
             show edgesTotal,
-            show rebuildsTotal
+            show rebuildsTotal,
+            showMs (quantile 0.50 userWaitsSamples),
+            showMs (quantile 0.95 userWaitsSamples),
+            showMs (quantile 0.99 userWaitsSamples),
+            showMs (stdDev   userWaitsSamples),
+            showMs (quantile 0.50 delayedWorkSamples),
+            showMs (quantile 0.95 delayedWorkSamples),
+            showMs (quantile 0.99 delayedWorkSamples)
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -625,6 +678,10 @@ data BenchRun = BenchRun
     runExperiment        :: !Seconds,
     userWaits            :: !Seconds,
     delayedWork          :: !Seconds,
+    -- | Per-sample user-time samples (length == samples on success).
+    userWaitsSamples     :: ![Seconds],
+    -- | Per-sample delayed-work samples (length == samples on success).
+    delayedWorkSamples   :: ![Seconds],
     firstResponse        :: !Seconds,
     firstResponseDelayed :: !Seconds,
     rulesBuilt           :: !Int,
@@ -637,7 +694,26 @@ data BenchRun = BenchRun
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 0 0 0 False
+badRun = BenchRun 0 0 0 0 0 [] [] 0 0 0 0 0 0 0 0 False
+
+-- | Approximate quantile of a list of samples. Uses the nearest-rank
+-- method; good enough for benchmark reporting at n>=20.
+quantile :: Double -> [Seconds] -> Seconds
+quantile _ [] = 0
+quantile q xs =
+    let sorted = sort xs
+        n      = length sorted
+        idx    = max 0 $ min (n - 1) $ floor (q * fromIntegral (n - 1))
+    in sorted !! idx
+
+-- | Population standard deviation.
+stdDev :: [Seconds] -> Seconds
+stdDev [] = 0
+stdDev xs =
+    let n  = fromIntegral (length xs)
+        m  = sum xs / n
+        sq x = let d = x - m in d * d
+    in sqrt (sum (map sq xs) / n)
 
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
@@ -688,8 +764,9 @@ runBench runSess Bench{..} = handleAny (\e -> print e >> return badRun)
 
       liftIO $ output $ "Running " <> name <> " benchmark"
       (runSetup, ()) <- duration $ benchSetup docs
-      let loop' (Just timeForFirstResponse) !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork, timeForFirstResponse)
-          loop' timeForFirstResponse !userWaits !delayedWork n = do
+      -- Accumulate per-sample (t, td) in reverse order; we reverse once at the end.
+      let loop' (Just timeForFirstResponse) !samplesAcc 0 = return $ Just (reverse samplesAcc, timeForFirstResponse)
+          loop' timeForFirstResponse !samplesAcc n = do
             (t, res) <- duration $ experiment docs
             if not res
               then return Nothing
@@ -697,12 +774,16 @@ runBench runSess Bench{..} = handleAny (\e -> print e >> return badRun)
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
                 td <- waitForBuildQueue
-                loop' (timeForFirstResponse <|> Just (t,td)) (userWaits+t) (delayedWork+td) (n -1)
+                loop' (timeForFirstResponse <|> Just (t,td)) ((t,td):samplesAcc) (n -1)
           loop = loop' Nothing
 
-      (runExperiment, result) <- duration $ loop 0 0 samples
+      (runExperiment, result) <- duration $ loop [] samples
       let success = isJust result
-          (userWaits, delayedWork, (firstResponse, firstResponseDelayed)) = fromMaybe (0,0,(0,0)) result
+          (perSample, (firstResponse, firstResponseDelayed)) = fromMaybe ([], (0,0)) result
+          userWaitsSamples = map fst perSample
+          delayedWorkSamples = map snd perSample
+          userWaits = sum userWaitsSamples
+          delayedWork = sum delayedWorkSamples
 
       rulesTotal <- length <$> getStoredKeys
       rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
