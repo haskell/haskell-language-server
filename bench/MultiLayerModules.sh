@@ -2,11 +2,7 @@
 # Generate $DEPTH layers of modules with $WIDTH modules on each layer.
 # Every module on layer N imports all the modules on layer N-1.
 # MultiLayerModules.hs imports all the modules from the last layer.
-#
-# Flags (any order):
-#   --th             enable TemplateHaskell pragma on the top module
-#   --depth N        override DEPTH (default 15)
-#   --width N        override WIDTH (default 40)
+# Flags (any order): --th, --depth N, --width N.
 DEPTH=15
 WIDTH=40
 TH=

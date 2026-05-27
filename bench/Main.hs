@@ -168,12 +168,7 @@ createBuildSystem config = do
   whenJust (profileInterval configStatic) $ \i -> do
     phonyRules "profiled-" binaryName (CheapHeapProfiling i) build (examples configStatic)
 
-  -- Fast smoke target: one small example, a few cheap experiments, only HEAD.
-  -- Intended for tight local iteration while improving perf/memory.
-  -- Sample count is still controlled by `samples:` in config.yaml — drop it
-  -- to ~10 for the fastest turnaround.
-  -- DummyLevel0M01NoTH is a single empty module so `searchSymbol` returns
-  -- Nothing for `identifierP`; pick experiments that don't require it.
+  -- Fast smoke target for local iteration: smallest example, cheapest experiments, HEAD only.
   let smokeExample = "DummyLevel0M01NoTH"
       smokeExperiments = ["edit", "edit-header", "documentSymbols after edit"]
       smokeConfigs = [ confName | ConfigurationDescriptor{..} <- configurations configStatic ]
