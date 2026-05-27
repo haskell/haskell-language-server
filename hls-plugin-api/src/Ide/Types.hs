@@ -42,6 +42,7 @@ module Ide.Types
 , PluginNotificationHandler(..), mkPluginNotificationHandler
 , PluginNotificationHandlers(..)
 , PluginRequestMethod(..)
+, hlsDirectory
 , getProcessID, getPid
 , getVirtualFileFromVFS
 , installSigUsr1Handler
@@ -398,6 +399,8 @@ describePlugin p =
     pdesc = pluginDescription p
   in pretty pid <> ":" <> nest 4 (PP.line <> pretty pdesc)
 
+hlsDirectory :: FilePath
+hlsDirectory = ".hls"
 
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
