@@ -11,8 +11,9 @@
 module Development.IDE.Core.Rules(
     -- * Types
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
-    GhcSessionIO(..), GetClientSettings(..),
+    GhcSessionIO(..), GetClientSettings(..),HieFileCheck(..),
     -- * Functions
+    checkHieFile,
     runAction,
     toIdeResult,
     defineNoFile,
@@ -74,6 +75,7 @@ import           Control.Monad.Trans.Except                   (ExceptT, except,
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                                   (toJSON)
 import qualified Data.Binary                                  as B
+import           Data.Bool                                    (bool)
 import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
@@ -141,11 +143,11 @@ import           GHC.Iface.Ext.Types                          (HieASTs (..))
 import           GHC.Iface.Ext.Utils                          (generateReferencesMap)
 import qualified GHC.LanguageExtensions                       as LangExt
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
 import           GHC.Types.Basic                              (ImportLevel (..))
-import           GHC.Unit.Types                               (GenWithIsBoot(..))
+import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
 import           GHC.Unit.Module.Graph                        (mkModuleEdge)
 import           GHC.Unit.Module.ModNodeKey                   (mnkModuleName)
+import           GHC.Unit.Types                               (GenWithIsBoot (..))
 #endif
 import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
@@ -166,7 +168,8 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty,
                                                                usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId, getVirtualFileFromVFS)
+                                                               PluginId,
+                                                               getVirtualFileFromVFS)
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
@@ -175,7 +178,8 @@ import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           Prelude                                      hiding (mod)
-import           System.Directory                             (doesFileExist)
+import           System.Directory                             (doesFileExist,
+                                                               makeAbsolute)
 import           System.Info.Extra                            (isWindows)
 
 
@@ -188,6 +192,7 @@ data Log
   | LogLoadingHieFile !NormalizedFilePath
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
+  | LogMissingHieFile !NormalizedFilePath
   | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
@@ -205,6 +210,8 @@ instance Pretty Log where
           , pretty (displayException e) ]
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
+    LogMissingHieFile path ->
+      "MISSING HIE FILE" <+> pretty (fromNormalizedFilePath path)
     LogTypecheckedFOI path -> vcat
       [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
       , "This can indicate a bug which results in excessive memory usage."
@@ -869,6 +876,56 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
         (diags, Just x) -> do
           let !fp = Just $! hiFileFingerPrint x
           return (fp, (diags, Just x))
+
+-- | The result of checkHieFile, which returns a reason why an
+-- HIE file should not be indexed, or the data necessary for
+-- indexing in the HieDb database.
+data HieFileCheck
+  = HieFileMissing
+  | HieAlreadyIndexed
+  | CouldNotLoadHie SomeException
+  | DoIndexing Util.Fingerprint HieFile
+
+-- | checkHieFile verifies that an HIE file exists, that it has not already
+-- been indexed, and attempts to load it. This is intended to happen before
+-- any indexing of HIE files in the HieDb database. In addition to returning
+-- a HieFileCheck, this function also handles logging.
+checkHieFile
+  :: Recorder (WithPriority Log)
+  -> ShakeExtras
+  -> String
+  -> NormalizedFilePath
+  -> IO HieFileCheck
+checkHieFile recorder se@ShakeExtras{withHieDb} tag hieFileLocation = do
+  hieFileExists <- doesFileExist $ fromNormalizedFilePath hieFileLocation
+  bool logHieFileMissing checkExistingHieFile hieFileExists
+  where
+    -- Log that the HIE file does not exist where we expect that it should.
+    logHieFileMissing :: IO HieFileCheck
+    logHieFileMissing = do
+      let logMissing :: Log
+          logMissing = LogMissingHieFile hieFileLocation
+      logWith recorder Logger.Debug logMissing
+      pure HieFileMissing
+    -- When we know that the HIE file exists, check that it has not already
+    -- been indexed. If it hasn't, try to load it.
+    checkExistingHieFile :: IO HieFileCheck
+    checkExistingHieFile = do
+      hieFileHash <- Util.getFileHash $ fromNormalizedFilePath hieFileLocation
+      mrow <- withHieDb (\hieDb -> HieDb.lookupHieFileFromHash hieDb hieFileHash)
+      dbHieFileLocation <- traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
+      bool (tryLoadingHieFile hieFileHash) (pure HieAlreadyIndexed) $
+        Just hieFileLocation == fmap toNormalizedFilePath' dbHieFileLocation
+    -- Attempt to load the HIE file, logging on failure (logging happens
+    -- in readHieFileFromDisk). If the file loads successfully, return
+    -- the data necessary for indexing it in the HieDb database.
+    tryLoadingHieFile :: Util.Fingerprint -> IO HieFileCheck
+    tryLoadingHieFile hieFileHash = do
+      ehf <- runIdeAction tag se $ runExceptT $
+        readHieFileFromDisk recorder (fromNormalizedFilePath hieFileLocation)
+      pure $ case ehf of
+        Left err -> CouldNotLoadHie err
+        Right hf -> DoIndexing hieFileHash hf
 
 -- | Check state of hiedb after loading an iface from disk - have we indexed the corresponding `.hie` file?
 -- This function is responsible for ensuring database consistency
