@@ -259,7 +259,7 @@ instance Pretty Log where
 data HieDbWriter
   = HieDbWriter
   { indexQueue             :: IndexQueue
-  , indexPending           :: TVar (HMap.HashMap SomeHaskellInput Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted         :: TVar Int -- ^ to report progress
   , indexProgressReporting :: ProgressReporting
   }
