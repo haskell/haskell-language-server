@@ -466,9 +466,9 @@ parseRTSStats input = RTSStats
     -- Parse the time value (in seconds) at word index `i` (after dropping the label
     -- words). For lines like "  MUT     time    0.012s  (  0.012s elapsed)".
     secondsAt i label = case findLine label of
-        Just l ->
-            let ws = words l
-            in if length ws > i then readDoubleDef (ws !! i) else -1
+        Just l -> case drop i (words l) of
+            (w:_) -> readDoubleDef w
+            _     -> -1
         Nothing -> -1
     -- "Max pause" appears on each Gen line; take the worst.
     parseMaxPause =
