@@ -1288,7 +1288,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
-                (bs, res) <- case mbRes of
+                (bs, freshRes) <- case mbRes of
                     Nothing -> do
                         pure (toShakeValue ShakeStale mbBs, staleV)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult mbBs, Succeeded ver v)
@@ -1299,6 +1299,17 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         -- If we do not have a previous result
                         -- or we got ShakeNoCutoff we always return False.
                         _                                     -> False
+                -- Pointer-identity preservation on early-cutoff match.
+                -- When the cutoff fingerprint matches the prior, reuse the
+                -- previously cached value instead of the freshly computed
+                -- (but structurally equivalent) one. This is critical for
+                -- large shared values like ModuleGraph: downstream rules
+                -- that did not invalidate continue to share a pointer with
+                -- the cache, instead of accumulating multiple equivalent
+                -- copies across rebuilds.
+                let res = case (eq, staleV, freshRes) of
+                        (True, Stale _ _ oldV, Succeeded sver _) -> Succeeded sver oldV
+                        _                                        -> freshRes
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs)
