@@ -71,9 +71,9 @@ import           Data.Aeson                (FromJSON (..), ToJSON (..),
 import           Data.Aeson.Lens           (AsJSON (_JSON), _Object, _String)
 import           Data.ByteString.Lazy      (ByteString)
 import           Data.Char                 (isDigit)
-import           Data.List                 (find, intercalate, isInfixOf,
-                                            isPrefixOf, isSuffixOf, sortBy,
-                                            stripPrefix, transpose)
+import           Data.List                 (find, foldl', intercalate,
+                                            isInfixOf, isPrefixOf, isSuffixOf,
+                                            sortBy, stripPrefix, transpose)
 import           Data.List.Extra           (lower, splitOn)
 import qualified Data.Map.Strict           as Map
 import           Data.Maybe                (fromMaybe)
@@ -328,13 +328,12 @@ benchRules build MkBenchRules{..} = do
               BenchProject {..}
         liftIO $ case prof of
             NoProfiling -> writeFile outHp dummyHp
-            _           -> return ()
-
-        -- Write a co-located top-N heap summary derived from the .hp file.
-        -- Untracked side-effect; regenerated whenever the .hp is.
-        liftIO $ do
-            hp <- readFile outHp
-            writeFile (outHp <.> "csv") (summarizeHpProfile 20 hp)
+            _ -> do
+                -- Write a co-located top-N heap summary derived from the .hp
+                -- file. Untracked side-effect; regenerated whenever the .hp
+                -- is. Skipped under NoProfiling, where outHp is only a dummy.
+                hp <- readFile outHp
+                writeFile (outHp <.> "csv") (summarizeHpProfile 20 hp)
 
         -- extend csv output with allocation data + GC/pause/productivity
         csvContents <- liftIO $ lines <$> readFile outcsv
@@ -369,18 +368,16 @@ benchRules build MkBenchRules{..} = do
         let csvContents' = header' : results'
         writeFileLines outcsv csvContents'
     where
+        -- A negative value is parseRTSStats's "field missing" sentinel; clamp
+        -- to zero so the column stays numeric for downstream CSV parsing.
         showMB :: Int -> String
-        showMB x | x < 0 = "0MB"
-                 | otherwise = show (x `div` 2^(20::Int)) <> "MB"
+        showMB x = show (max 0 x `div` 2^(20::Int)) <> "MB"
         showSeconds :: Double -> String
-        showSeconds x | x < 0 = "0"
-                      | otherwise = printf "%.4f" x
+        showSeconds = printf "%.4f" . max 0
         showDouble :: Double -> String
-        showDouble x | x < 0 = "0"
-                     | otherwise = printf "%.2f" x
+        showDouble = printf "%.2f" . max 0
         showInt :: Int -> String
-        showInt x | x < 0 = "0"
-                  | otherwise = show x
+        showInt = show . max (0 :: Int)
 
 -- | Summarize a GHC heap profile (.hp) file into a top-N cost-centre CSV.
 -- For each cost-centre name we report the maximum retained bytes across
@@ -391,9 +388,11 @@ summarizeHpProfile topN raw =
     let ls = lines raw
         samples = collectSamples ls
         accumOne acc (cc, bs) = Map.insertWith combine cc (bs, bs) acc
-          where combine (newMax, newLast) (oldMax, _) = (max newMax oldMax, newLast)
+          where combine (newMax, newLast) (oldMax, _) =
+                    let m = max newMax oldMax in m `seq` (m, newLast)
         -- Aggregate across all samples: track running max and last value per CC.
-        agg = foldl (\acc s -> foldl accumOne acc s) Map.empty samples
+        -- Strict fold + forced max to avoid a thunk chain over the samples.
+        agg = foldl' (\acc s -> foldl' accumOne acc s) Map.empty samples
         sorted = sortBy (comparing (Down . maxOf)) (Map.toList agg)
         maxOf (_, (m, _)) = m
         header = "costCentre,maxRetainedBytes,finalRetainedBytes"
@@ -456,7 +455,11 @@ parseRTSStats input = RTSStats
     }
   where
     ls = lines input
-    findLine label = find (label `isInfixOf`) ls
+    -- Match summary labels tolerant of GHC's inter-column spacing, which
+    -- varies across versions (e.g. "MUT     time" vs "MUT  time"); both the
+    -- label and each line are whitespace-normalised before comparison.
+    findLine label = let needle = unwords (words label)
+                     in find ((needle `isInfixOf`) . unwords . words) ls
     digitsFirstWord label = case findLine label of
         Just l  -> readIntDef $ filter isDigit $ head (words l ++ [""])
         Nothing -> -1

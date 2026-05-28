@@ -1195,6 +1195,9 @@ useWithoutDependency key file =
 data RuleBody k v
   = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
   | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+  -- | Like 'RuleNoDiagnostics', but reuses the previously cached value on an
+  -- early-cutoff match (see 'defineEarlyCutOffNoFileReuseValue').
+  | RuleNoDiagnosticsReuseValue (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
   | RuleWithCustomNewnessCheck
     { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
     , build :: k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
@@ -1213,11 +1216,10 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe 
             traceDiagnostics diags
             updateFileDiagnostics recorder file ver (newKey key) extras diags
     defineEarlyCutoff' diagnostics (==) False key file old mode $ const $ op key file
-defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
-    let diagnostics _ver diags = do
-            traceDiagnostics diags
-            mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
-    defineEarlyCutoff' diagnostics (==) False key file old mode $ const $ second (mempty,) <$> op key file
+defineEarlyCutoff recorder (RuleNoDiagnostics op) =
+    addNoDiagnosticsRule recorder False op
+defineEarlyCutoff recorder (RuleNoDiagnosticsReuseValue op) =
+    addNoDiagnosticsRule recorder True op
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
@@ -1233,15 +1235,40 @@ defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (o
             updateFileDiagnostics recorder file ver (newKey key) extras diags
     defineEarlyCutoff' diagnostics (==) False key file old mode $ op key file
 
+-- | Shared implementation for the no-diagnostics rule variants. The 'Bool'
+-- selects @defineEarlyCutoff'@'s value-reuse behaviour on an early-cutoff match.
+addNoDiagnosticsRule
+    :: forall k v. IdeRule k v
+    => Recorder (WithPriority Log)
+    -> Bool
+    -> (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+    -> Rules ()
+addNoDiagnosticsRule recorder reuseValueOnMatch op =
+    addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
+        otTracedAction key file mode traceA $ \traceDiagnostics -> do
+            let diagnostics _ver diags = do
+                    traceDiagnostics diags
+                    mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
+            defineEarlyCutoff' diagnostics (==) reuseValueOnMatch key file old mode $
+                const $ second (mempty,) <$> op key file
+
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == emptyFilePath then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
+-- | Body shared by the no-file early-cutoff rule variants: assert the empty
+-- file path and wrap the (fingerprint, value) result.
+noFileBody
+    :: Show k
+    => (k -> Action (BS.ByteString, v))
+    -> k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
+noFileBody f k file
+    | file == emptyFilePath = do (hashString, res) <- f k; return (Just hashString, Just res)
+    | otherwise = fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+
 defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ noFileBody f
 
 -- | Like 'defineEarlyCutOffNoFile', but reuses the previously cached value
 -- when the early-cutoff fingerprint matches the prior run. Preserves pointer
@@ -1253,16 +1280,7 @@ defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnost
 -- Only use for rules whose action has no side effects that depend on the
 -- freshly computed value (no global registration, no unloading the prior).
 defineEarlyCutOffNoFileReuseValue :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFileReuseValue recorder f =
-  addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
-    otTracedAction key file mode traceA $ \traceDiagnostics -> do
-      let diagnostics _ver diags = do
-              traceDiagnostics diags
-              mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
-      defineEarlyCutoff' diagnostics (==) True key file old mode $ const $ do
-        if file == emptyFilePath
-          then do (hashString, res) <- f key; return (Just hashString, (mempty, Just res))
-          else fail $ "Rule " ++ show key ++ " should always be called with the empty string for a file"
+defineEarlyCutOffNoFileReuseValue recorder f = defineEarlyCutoff recorder $ RuleNoDiagnosticsReuseValue $ noFileBody f
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
@@ -1334,9 +1352,13 @@ defineEarlyCutoff' doDiagnostics cmp reuseValueOnMatch key file mbOld mode actio
                 -- For such rules, returning the cached value would leave
                 -- downstream pointing at a representation that the action
                 -- just invalidated. Opt in by passing reuseValueOnMatch=True.
+                -- Reuse only a clean prior value (Stale Nothing): a
+                -- deletion-marked Stale (Just _) may have been
+                -- garbage-collected/invalidated, so fall through to the fresh
+                -- result rather than resurrecting it.
                 let res = case (reuseValueOnMatch, eq, staleV, freshRes) of
-                        (True, True, Stale _ _ oldV, Succeeded sver _) -> Succeeded sver oldV
-                        _                                              -> freshRes
+                        (True, True, Stale Nothing _ oldV, Succeeded sver _) -> Succeeded sver oldV
+                        _                                                    -> freshRes
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs)

@@ -44,7 +44,6 @@ run_experiment() {
         --csv="$outdir/$exp_slug.csv" \
         --ghcide="$(pwd)/$HLS" \
         --select "$experiment" \
-        --lsp-config \
         "${example_args[@]}" \
         --ghcide-options=+RTS \
         --ghcide-options=-p \

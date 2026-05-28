@@ -13,11 +13,11 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --depth)
-      DEPTH=$2
+      DEPTH=${2:?"--depth requires a value"}
       shift 2
       ;;
     --width)
-      WIDTH=$2
+      WIDTH=${2:?"--width requires a value"}
       shift 2
       ;;
     *)

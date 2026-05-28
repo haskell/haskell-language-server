@@ -599,17 +599,19 @@ runBenchmarksFun dir allBenchmarks = do
             show rulesTotal,
             show edgesTotal,
             show rebuildsTotal,
-            showMs (quantile 0.50 userWaitsSamples),
-            showMs (quantile 0.95 userWaitsSamples),
-            showMs (quantile 0.99 userWaitsSamples),
+            showMs (quantileSorted 0.50 sortedUserWaits),
+            showMs (quantileSorted 0.95 sortedUserWaits),
+            showMs (quantileSorted 0.99 sortedUserWaits),
             showMs (stdDev   userWaitsSamples),
-            showMs (quantile 0.50 delayedWorkSamples),
-            showMs (quantile 0.95 delayedWorkSamples),
-            showMs (quantile 0.99 delayedWorkSamples)
+            showMs (quantileSorted 0.50 sortedDelayedWork),
+            showMs (quantileSorted 0.95 sortedDelayedWork),
+            showMs (quantileSorted 0.99 sortedDelayedWork)
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
                 modules = fromIntegral $ length $ exampleModules $ example ?config
+                sortedUserWaits   = sort userWaitsSamples
+                sortedDelayedWork = sort delayedWorkSamples
         ]
       csv = unlines $ map (intercalate ", ") (headers : rows)
   writeFile (outputCSV ?config) csv
@@ -696,14 +698,15 @@ data BenchRun = BenchRun
 badRun :: BenchRun
 badRun = BenchRun 0 0 0 0 0 [] [] 0 0 0 0 0 0 0 0 False
 
--- | Approximate quantile of a list of samples. Uses the nearest-rank
--- method; good enough for benchmark reporting at n>=20.
-quantile :: Double -> [Seconds] -> Seconds
-quantile _ [] = 0
-quantile q xs =
-    let sorted = sort xs
-        n      = length sorted
-        idx    = max 0 $ min (n - 1) $ floor (q * fromIntegral (n - 1))
+-- | Approximate quantile (nearest-rank) of an /already-sorted/ list of
+-- samples. Good enough for benchmark reporting at n>=20. Sorting is the
+-- caller's responsibility so that several quantiles over the same samples
+-- can share a single sort.
+quantileSorted :: Double -> [Seconds] -> Seconds
+quantileSorted _ [] = 0
+quantileSorted q sorted =
+    let n   = length sorted
+        idx = min (n - 1) $ floor (q * fromIntegral (n - 1))
     in sorted !! idx
 
 -- | Population standard deviation.
