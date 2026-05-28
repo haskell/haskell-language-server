@@ -1352,10 +1352,14 @@ defineEarlyCutoff' doDiagnostics cmp reuseValueOnMatch key file mbOld mode actio
                 -- For such rules, returning the cached value would leave
                 -- downstream pointing at a representation that the action
                 -- just invalidated. Opt in by passing reuseValueOnMatch=True.
-                -- Reuse only a clean prior value (Stale Nothing): a
-                -- deletion-marked Stale (Just _) may have been
-                -- garbage-collected/invalidated, so fall through to the fresh
-                -- result rather than resurrecting it.
+                -- Reuse only a clean prior value (Stale Nothing _): that is
+                -- the shape a value successfully computed by this rule takes
+                -- (see the Just Succeeded branch above). A Stale (Just _)
+                -- instead carries a PositionDelta and is only ever written by
+                -- the persistent-rule fallback (lastValueIO), i.e. a value
+                -- loaded from disk rather than produced by this rule's action
+                -- this run, so it is not a trustworthy prior to reuse; fall
+                -- through to the fresh result in that case.
                 let res = case (reuseValueOnMatch, eq, staleV, freshRes) of
                         (True, True, Stale Nothing _ oldV, Succeeded sver _) -> Succeeded sver oldV
                         _                                                    -> freshRes
