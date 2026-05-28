@@ -132,6 +132,7 @@ library
     Development.IDE.Core.Dependencies
     Development.IDE.Core.FileStore
     Development.IDE.Core.FileUtils
+    Development.IDE.Core.HieFile
     Development.IDE.Core.IdeConfiguration
     Development.IDE.Core.LookupMod
     Development.IDE.Core.OfInterest

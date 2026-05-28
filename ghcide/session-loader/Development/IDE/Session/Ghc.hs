@@ -59,7 +59,6 @@ import           GHC.Types.Error                    (errMsgDiagnostic,
                                                      singleMessage)
 import           GHC.Unit.State
 
-
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Driver.Make                    (checkHomeUnitsClosed)
 #endif
@@ -145,13 +144,14 @@ addUnit unit_str = liftEwM $ do
 -- session on GHC 9.4+
 newComponentCache
          :: Recorder (WithPriority Log)
+         -> (HscEnv -> IO ())
          -> [String]           -- ^ File extensions to consider
          -> ProjectHaskellInput -- ^ Path to file that caused the creation of this component
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
          -> IO [ [TargetDetails] ]
-newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
+newComponentCache recorder indexDependencies exts cfp hsc_env old_cis new_cis = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
         -- When we have multiple components with the same uid,
         -- prefer the new one over the old.
@@ -215,6 +215,7 @@ newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
             -- above.
             -- We just need to set the current unit here
             pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
+      indexDependencies thisEnv
       henv <- newHscEnvEq repr thisEnv
       let targetEnv = (if isBad ci then multi_errs else [], Just henv)
           targetDepends = componentDependencyInfo ci
