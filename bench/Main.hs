@@ -64,7 +64,7 @@ import           Development.Shake           (Action,
                                               actionBracket, addOracle,
                                               askOracle, command, command_,
                                               getDirectoryFiles, liftIO, need,
-                                              newCache, shakeArgsWith,
+                                              newCache, phony, shakeArgsWith,
                                               shakeOptions, versioned, want)
 import           Development.Shake.Classes
 import           Experiments.Types           (Example (exampleName),
@@ -167,6 +167,17 @@ createBuildSystem config = do
 
   whenJust (profileInterval configStatic) $ \i -> do
     phonyRules "profiled-" binaryName (CheapHeapProfiling i) build (examples configStatic)
+
+  -- Fast smoke target for local iteration: smallest example, cheapest experiments, HEAD only.
+  let smokeExample = "DummyLevel0M01NoTH"
+      smokeExperiments = ["edit", "edit-header", "documentSymbols after edit"]
+      smokeConfigs = [ confName | ConfigurationDescriptor{..} <- configurations configStatic ]
+  phony "smoke" $ need
+    [ build </> "unprofiled" </> smokeExample </> "HEAD" </> conf
+            </> escaped (escapeExperiment (Unescaped experiment)) <.> "csv"
+    | conf <- smokeConfigs
+    , experiment <- smokeExperiments
+    ]
 
   return configStatic
 

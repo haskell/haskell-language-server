@@ -71,10 +71,13 @@ import           Data.Aeson                (FromJSON (..), ToJSON (..),
 import           Data.Aeson.Lens           (AsJSON (_JSON), _Object, _String)
 import           Data.ByteString.Lazy      (ByteString)
 import           Data.Char                 (isDigit)
-import           Data.List                 (find, intercalate, isInfixOf,
-                                            isSuffixOf, stripPrefix, transpose)
+import           Data.List                 (find, foldl', intercalate,
+                                            isInfixOf, isPrefixOf, isSuffixOf,
+                                            sortBy, stripPrefix, transpose)
 import           Data.List.Extra           (lower, splitOn)
+import qualified Data.Map.Strict           as Map
 import           Data.Maybe                (fromMaybe)
+import           Data.Ord                  (Down (..), comparing)
 import           Data.String               (fromString)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
@@ -325,31 +328,180 @@ benchRules build MkBenchRules{..} = do
               BenchProject {..}
         liftIO $ case prof of
             NoProfiling -> writeFile outHp dummyHp
-            _           -> return ()
+            _ -> do
+                -- Write a co-located top-N heap summary derived from the .hp
+                -- file. Untracked side-effect; regenerated whenever the .hp
+                -- is. Skipped under NoProfiling, where outHp is only a dummy.
+                hp <- readFile outHp
+                writeFile (outHp <.> "csv") (summarizeHpProfile 20 hp)
 
-        -- extend csv output with allocation data
+        -- extend csv output with allocation data + GC/pause/productivity
         csvContents <- liftIO $ lines <$> readFile outcsv
         let header = head csvContents
             results = tail csvContents
-            header' = header <> ", maxResidency, allocatedBytes"
+            extraHeaders =
+                [ "maxResidency"
+                , "allocatedBytes"
+                , "maxSlop"
+                , "mutTimeS"
+                , "gcTimeS"
+                , "maxGcPauseS"
+                , "productivityPct"
+                , "majorGCs"
+                , "minorGCs"
+                ]
+            header' = header <> ", " <> intercalate ", " extraHeaders
         results' <- forM results $ \row -> do
-            (maxResidency, allocations) <- liftIO
-                    (parseMaxResidencyAndAllocations <$> readFile outGc)
-            return $ printf "%s, %s, %s" row (showMB maxResidency) (showMB allocations)
+            stats <- liftIO (parseRTSStats <$> readFile outGc)
+            return $ intercalate ", "
+                [ row
+                , showMB (rtsMaxResidency stats)
+                , showMB (rtsAllocatedBytes stats)
+                , showMB (rtsMaxSlop stats)
+                , showSeconds (rtsMutTime stats)
+                , showSeconds (rtsGcTime stats)
+                , showSeconds (rtsMaxGcPause stats)
+                , showDouble (rtsProductivityPct stats)
+                , showInt (rtsMajorGCs stats)
+                , showInt (rtsMinorGCs stats)
+                ]
         let csvContents' = header' : results'
         writeFileLines outcsv csvContents'
     where
+        -- A negative value is parseRTSStats's "field missing" sentinel; clamp
+        -- to zero so the column stays numeric for downstream CSV parsing.
         showMB :: Int -> String
-        showMB x = show (x `div` 2^(20::Int)) <> "MB"
+        showMB x = show (max 0 x `div` 2^(20::Int)) <> "MB"
+        showSeconds :: Double -> String
+        showSeconds = printf "%.4f" . max 0
+        showDouble :: Double -> String
+        showDouble = printf "%.2f" . max 0
+        showInt :: Int -> String
+        showInt = show . max (0 :: Int)
 
--- Parse the max residency and allocations in RTS -s output
-parseMaxResidencyAndAllocations :: String -> (Int, Int)
-parseMaxResidencyAndAllocations input =
-    (f "maximum residency", f "bytes allocated in the heap")
+-- | Summarize a GHC heap profile (.hp) file into a top-N cost-centre CSV.
+-- For each cost-centre name we report the maximum retained bytes across
+-- all samples, plus the final-sample retained bytes (useful for spotting
+-- leaks that grow without bound).
+summarizeHpProfile :: Int -> String -> String
+summarizeHpProfile topN raw =
+    let ls = lines raw
+        samples = collectSamples ls
+        accumOne acc (cc, bs) = Map.insertWith combine cc (bs, bs) acc
+          where combine (newMax, newLast) (oldMax, _) =
+                    let m = max newMax oldMax in m `seq` (m, newLast)
+        -- Aggregate across all samples: track running max and last value per CC.
+        -- Strict fold + forced max to avoid a thunk chain over the samples.
+        agg = foldl' (\acc s -> foldl' accumOne acc s) Map.empty samples
+        sorted = sortBy (comparing (Down . maxOf)) (Map.toList agg)
+        maxOf (_, (m, _)) = m
+        header = "costCentre,maxRetainedBytes,finalRetainedBytes"
+        body = [ cc <> "," <> show m <> "," <> show l
+               | (cc, (m, l)) <- take topN sorted
+               ]
+    in unlines (header : body)
   where
-    inps = reverse $ lines input
-    f label = case find (label `isInfixOf`) inps of
-        Just l  -> read $ filter isDigit $ head $ words l
+    -- | Group consecutive non-marker lines between BEGIN_SAMPLE/END_SAMPLE pairs.
+    collectSamples :: [String] -> [[(String, Integer)]]
+    collectSamples xs = case dropWhile (not . isBeginSample) xs of
+        [] -> []
+        (_:rest) ->
+            let (sample, rest') = break isEndSample rest
+                parsed = [ p | l <- sample, Just p <- [parseSampleLine l] ]
+            in parsed : case rest' of
+                []    -> []
+                (_:r) -> collectSamples r
+    isBeginSample = ("BEGIN_SAMPLE" `isPrefixOf`) . dropWhile (== ' ')
+    isEndSample   = ("END_SAMPLE"   `isPrefixOf`) . dropWhile (== ' ')
+
+-- | Parse one cost-centre line from a heap profile sample, e.g.
+-- @"GHC.Conc.Sync.CAF" 5678@ or @PINNED 1234@. The cost-centre name may
+-- contain spaces (when quoted), so we treat everything before the trailing
+-- number as the name.
+parseSampleLine :: String -> Maybe (String, Integer)
+parseSampleLine l = case reverse (words l) of
+    (numStr:rest) -> do
+        n <- readMaybe numStr
+        let name = unwords (reverse rest)
+        if null name then Nothing else Just (name, n)
+    _ -> Nothing
+
+-- | Stats extracted from `+RTS -s` (or -S) summary output.
+data RTSStats = RTSStats
+    { rtsMaxResidency    :: !Int
+    , rtsAllocatedBytes  :: !Int
+    , rtsMaxSlop         :: !Int
+    , rtsMutTime         :: !Double  -- ^ MUT time (seconds)
+    , rtsGcTime          :: !Double  -- ^ GC time (seconds)
+    , rtsMaxGcPause      :: !Double  -- ^ Max GC pause across all generations (seconds)
+    , rtsProductivityPct :: !Double  -- ^ Productivity (% of total user time)
+    , rtsMajorGCs        :: !Int     -- ^ Gen 1 collections
+    , rtsMinorGCs        :: !Int     -- ^ Gen 0 collections
+    }
+
+-- | Parse the summary block at the tail of `+RTS -s`/`-S` output.
+-- Each field is best-effort; missing fields return -1.
+parseRTSStats :: String -> RTSStats
+parseRTSStats input = RTSStats
+    { rtsMaxResidency    = digitsFirstWord "maximum residency"
+    , rtsAllocatedBytes  = digitsFirstWord "bytes allocated in the heap"
+    , rtsMaxSlop         = digitsFirstWord "maximum slop"
+    , rtsMutTime         = secondsAt 2 "MUT     time"
+    , rtsGcTime          = secondsAt 2 "GC      time"
+    , rtsMaxGcPause      = parseMaxPause
+    , rtsProductivityPct = parseProductivity
+    , rtsMajorGCs        = parseGenColls "Gen  1"
+    , rtsMinorGCs        = parseGenColls "Gen  0"
+    }
+  where
+    ls = lines input
+    -- Match summary labels tolerant of GHC's inter-column spacing, which
+    -- varies across versions (e.g. "MUT     time" vs "MUT  time"); both the
+    -- label and each line are whitespace-normalised before comparison.
+    findLine label = let needle = unwords (words label)
+                     in find ((needle `isInfixOf`) . unwords . words) ls
+    digitsFirstWord label = case findLine label of
+        Just l  -> readIntDef $ filter isDigit $ head (words l ++ [""])
+        Nothing -> -1
+    readIntDef "" = -1
+    readIntDef s  = fromMaybe (-1) (readMaybe s)
+    readDoubleDef s = fromMaybe (-1) (readMaybe (takeWhile (\c -> isDigit c || c == '.' || c == '-') s))
+    -- Parse the time value (in seconds) at word index `i` (after dropping the label
+    -- words). For lines like "  MUT     time    0.012s  (  0.012s elapsed)".
+    secondsAt i label = case findLine label of
+        Just l -> case drop i (words l) of
+            (w:_) -> readDoubleDef w
+            _     -> -1
+        Nothing -> -1
+    -- "Max pause" appears on each Gen line; take the worst.
+    parseMaxPause =
+        let candidates =
+                [ readDoubleDef w
+                | l <- ls
+                , "Gen " `isInfixOf` l
+                , let ws = words l
+                , not (null ws)
+                , w <- take 1 (reverse ws)
+                ]
+            valid = filter (>= 0) candidates
+        in if null valid then -1 else maximum valid
+    -- "Productivity  81.2% of total user, ..."
+    parseProductivity = case findLine "Productivity" of
+        Just l ->
+            let ws = words l
+            in case ws of
+                (_:n:_) -> readDoubleDef n
+                _       -> -1
+        Nothing -> -1
+    -- "  Gen  0         1 colls,     0 par   ..." → 1
+    parseGenColls genLabel = case findLine genLabel of
+        Just l ->
+            let ws = words l
+                -- Drop "Gen N" prefix, then first numeric word is colls count.
+                rest = drop 2 ws
+            in case rest of
+                (n:_) -> readIntDef (filter isDigit n)
+                _     -> -1
         Nothing -> -1
 
 

@@ -639,7 +639,7 @@ getFileHashRule recorder =
         return (Just (fingerprintToBS fileHash), ([], Just fileHash))
 
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
-getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
+getModuleGraphRule recorder = defineEarlyCutOffNoFileReuseValue (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 

@@ -140,5 +140,8 @@ runs:
     # installed besides the ones we explicitly want.
     - name: "Remove ghcup caches"
       if: runner.os == 'Linux'
-      run: ghcup gc --ghc-old --share-dir --hls-no-ghc --cache --tmpdirs --unset
+      # NB: do not pass --unset here. haskell-actions/setup leaves the active
+      # GHC in an "unset" state, and --unset would then delete its binary,
+      # breaking the subsequent `cabal build`.
+      run: ghcup gc --ghc-old --share-dir --hls-no-ghc --cache --tmpdirs
       shell: bash

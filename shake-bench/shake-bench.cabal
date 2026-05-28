@@ -22,6 +22,7 @@ library
         aeson,
         base == 4.*,
         bytestring,
+        containers,
         directory,
         extra >= 1.7.2,
         filepath,

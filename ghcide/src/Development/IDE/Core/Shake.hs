@@ -41,7 +41,7 @@ module Development.IDE.Core.Shake(
     RuleBody(..),
     define, defineNoDiagnostics,
     defineEarlyCutoff,
-    defineNoFile, defineEarlyCutOffNoFile,
+    defineNoFile, defineEarlyCutOffNoFile, defineEarlyCutOffNoFileReuseValue,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -1195,6 +1195,9 @@ useWithoutDependency key file =
 data RuleBody k v
   = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
   | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+  -- | Like 'RuleNoDiagnostics', but reuses the previously cached value on an
+  -- early-cutoff match (see 'defineEarlyCutOffNoFileReuseValue').
+  | RuleNoDiagnosticsReuseValue (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
   | RuleWithCustomNewnessCheck
     { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
     , build :: k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
@@ -1212,49 +1215,86 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe 
     let diagnostics ver diags = do
             traceDiagnostics diags
             updateFileDiagnostics recorder file ver (newKey key) extras diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ const $ op key file
-defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
-    let diagnostics _ver diags = do
-            traceDiagnostics diags
-            mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ const $ second (mempty,) <$> op key file
+    defineEarlyCutoff' diagnostics (==) False key file old mode $ const $ op key file
+defineEarlyCutoff recorder (RuleNoDiagnostics op) =
+    addNoDiagnosticsRule recorder False op
+defineEarlyCutoff recorder (RuleNoDiagnosticsReuseValue op) =
+    addNoDiagnosticsRule recorder True op
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
             let diagnostics _ver diags = do
                     traceDiagnostics diags
                     mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
-            defineEarlyCutoff' diagnostics newnessCheck key file old mode $
+            defineEarlyCutoff' diagnostics newnessCheck False key file old mode $
                 const $ second (mempty,) <$> build key file
 defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
     let diagnostics ver diags = do
             traceDiagnostics diags
             updateFileDiagnostics recorder file ver (newKey key) extras diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
+    defineEarlyCutoff' diagnostics (==) False key file old mode $ op key file
+
+-- | Shared implementation for the no-diagnostics rule variants. The 'Bool'
+-- selects @defineEarlyCutoff'@'s value-reuse behaviour on an early-cutoff match.
+addNoDiagnosticsRule
+    :: forall k v. IdeRule k v
+    => Recorder (WithPriority Log)
+    -> Bool
+    -> (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+    -> Rules ()
+addNoDiagnosticsRule recorder reuseValueOnMatch op =
+    addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
+        otTracedAction key file mode traceA $ \traceDiagnostics -> do
+            let diagnostics _ver diags = do
+                    traceDiagnostics diags
+                    mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
+            defineEarlyCutoff' diagnostics (==) reuseValueOnMatch key file old mode $
+                const $ second (mempty,) <$> op key file
 
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == emptyFilePath then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
+-- | Body shared by the no-file early-cutoff rule variants: assert the empty
+-- file path and wrap the (fingerprint, value) result.
+noFileBody
+    :: Show k
+    => (k -> Action (BS.ByteString, v))
+    -> k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
+noFileBody f k file
+    | file == emptyFilePath = do (hashString, res) <- f k; return (Just hashString, Just res)
+    | otherwise = fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+
 defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ noFileBody f
+
+-- | Like 'defineEarlyCutOffNoFile', but reuses the previously cached value
+-- when the early-cutoff fingerprint matches the prior run. Preserves pointer
+-- identity across rebuilds — important for large shared values
+-- (e.g. ModuleGraph) so downstream rules whose deps did not change continue
+-- to share a pointer with the cache, rather than accumulating multiple
+-- structurally equivalent copies.
+--
+-- Only use for rules whose action has no side effects that depend on the
+-- freshly computed value (no global registration, no unloading the prior).
+defineEarlyCutOffNoFileReuseValue :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFileReuseValue recorder f = defineEarlyCutoff recorder $ RuleNoDiagnosticsReuseValue $ noFileBody f
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
     => (Maybe Int32 -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
+    -> Bool -- ^ reuse cached value on cutoff match (see Note below)
     -> k
     -> NormalizedFilePath
     -> Maybe BS.ByteString
     -> RunMode
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
-defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
+defineEarlyCutoff' doDiagnostics cmp reuseValueOnMatch key file mbOld mode action = do
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     let trans g x =  withRunInIO $ \run -> g (run x)
@@ -1288,7 +1328,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
-                (bs, res) <- case mbRes of
+                (bs, freshRes) <- case mbRes of
                     Nothing -> do
                         pure (toShakeValue ShakeStale mbBs, staleV)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult mbBs, Succeeded ver v)
@@ -1299,6 +1339,30 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                         -- If we do not have a previous result
                         -- or we got ShakeNoCutoff we always return False.
                         _                                     -> False
+                -- Pointer-identity preservation on early-cutoff match (opt-in).
+                -- When the cutoff fingerprint matches the prior, reuse the
+                -- previously cached value instead of the freshly computed
+                -- (but structurally equivalent) one. This avoids accumulating
+                -- multiple equivalent copies of large shared values like
+                -- ModuleGraph across rebuilds.
+                --
+                -- Only safe for rules whose action body has no
+                -- value-dependent side effects (e.g. registering the fresh
+                -- result in a global table and unloading the stale one).
+                -- For such rules, returning the cached value would leave
+                -- downstream pointing at a representation that the action
+                -- just invalidated. Opt in by passing reuseValueOnMatch=True.
+                -- Reuse only a clean prior value (Stale Nothing _): that is
+                -- the shape a value successfully computed by this rule takes
+                -- (see the Just Succeeded branch above). A Stale (Just _)
+                -- instead carries a PositionDelta and is only ever written by
+                -- the persistent-rule fallback (lastValueIO), i.e. a value
+                -- loaded from disk rather than produced by this rule's action
+                -- this run, so it is not a trustworthy prior to reuse; fall
+                -- through to the fresh result in that case.
+                let res = case (reuseValueOnMatch, eq, staleV, freshRes) of
+                        (True, True, Stale Nothing _ oldV, Succeeded sver _) -> Succeeded sver oldV
+                        _                                                    -> freshRes
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs)
