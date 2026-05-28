@@ -1,34 +1,35 @@
 module Development.IDE.Core.Dependencies
     ( indexDependencyHieFiles
     ) where
-import           Control.Concurrent.STM       (atomically, writeTQueue)
-import           Control.Monad                (unless, void)
-import           Data.Foldable                (traverse_)
-import qualified Data.Map                     as Map
-import           Data.Maybe                   (isNothing)
-import           Data.Set                     (Set)
-import qualified Data.Set                     as Set
-import           Development.IDE              (Recorder, ShakeExtras,
-                                               WithPriority,
-                                               toNormalizedFilePath')
-import           Development.IDE.Core.Compile (indexHieFile)
-import           Development.IDE.Core.Rules   (HieFileCheck (..), Log,
-                                               checkHieFile)
-import           Development.IDE.Core.Shake   (ShakeExtras (lspEnv, withHieDb, hiedbWriter), HieDbWriter (indexQueue))
-import qualified Development.IDE.GHC.Compat   as GHC
-import qualified Development.IDE.GHC.Compat   as Ghc
-import           GHC.Data.ShortText           (unpack)
-import           GHC.Types.Unique.Map         (filterWithKeyUniqMap,
-                                               nonDetEltsUniqMap)
-import qualified GHC.Unit.Info                as GHC
-import           HieDb                        (SourceFile (FakeFile),
-                                               lookupPackage, removeDependencySrcFiles)
-import           Ide.Types                    (hlsDirectory)
-import           Language.LSP.Protocol.Types  (NormalizedFilePath)
-import           Language.LSP.Server          (LanguageContextEnv (resRootPath))
-import           System.Directory             (doesDirectoryExist)
-import           System.FilePath              ((<.>), (</>))
-import Development.IDE.Core.WorkerThread (writeTaskQueue)
+import           Control.Concurrent.STM            (atomically)
+import           Control.Monad                     (unless, void)
+import           Data.Foldable                     (traverse_)
+import qualified Data.Map                          as Map
+import           Data.Maybe                        (isNothing)
+import           Data.Set                          (Set)
+import qualified Data.Set                          as Set
+import           Development.IDE.Core.Compile      (indexHieFile)
+import           Development.IDE.Core.HieFile      (HieFileCheck (..), HieFileLog,
+                                                    checkHieFile)
+import           Development.IDE.Core.Shake        (HieDbWriter (indexQueue),
+                                                    ShakeExtras (hiedbWriter, lspEnv, withHieDb))
+import           Development.IDE.Core.WorkerThread (writeTaskQueue)
+import qualified Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat        as Ghc
+import           Development.IDE.Types.Location    (NormalizedFilePath,
+                                                    toNormalizedFilePath')
+import           GHC.Data.ShortText                (unpack)
+import           GHC.Types.Unique.Map              (filterWithKeyUniqMap,
+                                                    nonDetEltsUniqMap)
+import qualified GHC.Unit.Info                     as GHC
+import           HieDb                             (SourceFile (FakeFile),
+                                                    lookupPackage,
+                                                    removeDependencySrcFiles)
+import           Ide.Logger                        (Recorder, WithPriority)
+import           Ide.Types                         (hlsDirectory)
+import           Language.LSP.Server               (LanguageContextEnv (resRootPath))
+import           System.Directory                  (doesDirectoryExist)
+import           System.FilePath                   ((<.>), (</>))
 
 {- Note [Going to definitions in dependencies]
  - There are two main components of the functionality that enables gotoDefinition for
@@ -78,7 +79,7 @@ instance Ord Package where
 
 -- | indexDependencyHieFiles gets all of the direct and transitive dependencies
 -- from the HscEnv and indexes their HIE files in the HieDb
-indexDependencyHieFiles :: Recorder (WithPriority Log) -> ShakeExtras -> GHC.HscEnv -> IO ()
+indexDependencyHieFiles :: Recorder (WithPriority HieFileLog) -> ShakeExtras -> GHC.HscEnv -> IO ()
 indexDependencyHieFiles recorder se hscEnv = do
     -- Check whether the .hls directory exists
     dotHlsDirExists <- maybe (pure False) doesDirectoryExist mHlsDir

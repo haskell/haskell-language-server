@@ -11,9 +11,8 @@
 module Development.IDE.Core.Rules(
     -- * Types
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
-    GhcSessionIO(..), GetClientSettings(..),HieFileCheck(..),
+    GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
-    checkHieFile,
     runAction,
     toIdeResult,
     defineNoFile,
@@ -181,7 +180,7 @@ import           Prelude                                      hiding (mod)
 import           System.Directory                             (doesFileExist,
                                                                makeAbsolute)
 import           System.Info.Extra                            (isWindows)
-
+import qualified Development.IDE.Core.HieFile as HieFile
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
@@ -194,6 +193,7 @@ data Log
   | LogLoadingHieFileSuccess !FilePath
   | LogMissingHieFile !NormalizedFilePath
   | LogTypecheckedFOI !NormalizedFilePath
+  | LogHieFile HieFile.HieFileLog
   deriving Show
 
 instance Pretty Log where
@@ -220,6 +220,7 @@ instance Pretty Log where
         <+> "the HLS version being used, the plugins enabled, and if possible the codebase and file which"
         <+> "triggered this warning."
       ]
+    LogHieFile msg -> pretty msg
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -608,16 +609,7 @@ readHieFileForSrcFromDisk recorder file = do
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
   liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile file
-  exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
-
-readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
-readHieFileFromDisk recorder hie_loc = do
-  nc <- asks ideNc
-  res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
-  case res of
-    Left e -> liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFileFail hie_loc e
-    Right _ -> liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFileSuccess hie_loc
-  except res
+  exceptToMaybeT $ HieFile.readHieFileFromDisk (cmapWithPrio LogHieFile recorder) (toNormalizedFilePath' hie_loc)
 
 -- | Typechecks a module.
 typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
@@ -877,56 +869,6 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
           let !fp = Just $! hiFileFingerPrint x
           return (fp, (diags, Just x))
 
--- | The result of checkHieFile, which returns a reason why an
--- HIE file should not be indexed, or the data necessary for
--- indexing in the HieDb database.
-data HieFileCheck
-  = HieFileMissing
-  | HieAlreadyIndexed
-  | CouldNotLoadHie SomeException
-  | DoIndexing Util.Fingerprint HieFile
-
--- | checkHieFile verifies that an HIE file exists, that it has not already
--- been indexed, and attempts to load it. This is intended to happen before
--- any indexing of HIE files in the HieDb database. In addition to returning
--- a HieFileCheck, this function also handles logging.
-checkHieFile
-  :: Recorder (WithPriority Log)
-  -> ShakeExtras
-  -> String
-  -> NormalizedFilePath
-  -> IO HieFileCheck
-checkHieFile recorder se@ShakeExtras{withHieDb} tag hieFileLocation = do
-  hieFileExists <- doesFileExist $ fromNormalizedFilePath hieFileLocation
-  bool logHieFileMissing checkExistingHieFile hieFileExists
-  where
-    -- Log that the HIE file does not exist where we expect that it should.
-    logHieFileMissing :: IO HieFileCheck
-    logHieFileMissing = do
-      let logMissing :: Log
-          logMissing = LogMissingHieFile hieFileLocation
-      logWith recorder Logger.Debug logMissing
-      pure HieFileMissing
-    -- When we know that the HIE file exists, check that it has not already
-    -- been indexed. If it hasn't, try to load it.
-    checkExistingHieFile :: IO HieFileCheck
-    checkExistingHieFile = do
-      hieFileHash <- Util.getFileHash $ fromNormalizedFilePath hieFileLocation
-      mrow <- withHieDb (\hieDb -> HieDb.lookupHieFileFromHash hieDb hieFileHash)
-      dbHieFileLocation <- traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
-      bool (tryLoadingHieFile hieFileHash) (pure HieAlreadyIndexed) $
-        Just hieFileLocation == fmap toNormalizedFilePath' dbHieFileLocation
-    -- Attempt to load the HIE file, logging on failure (logging happens
-    -- in readHieFileFromDisk). If the file loads successfully, return
-    -- the data necessary for indexing it in the HieDb database.
-    tryLoadingHieFile :: Util.Fingerprint -> IO HieFileCheck
-    tryLoadingHieFile hieFileHash = do
-      ehf <- runIdeAction tag se $ runExceptT $
-        readHieFileFromDisk recorder (fromNormalizedFilePath hieFileLocation)
-      pure $ case ehf of
-        Left err -> CouldNotLoadHie err
-        Right hf -> DoIndexing hieFileHash hf
-
 -- | Check state of hiedb after loading an iface from disk - have we indexed the corresponding `.hie` file?
 -- This function is responsible for ensuring database consistency
 -- Whenever we read a `.hi` file, we must check to ensure we have also
@@ -960,7 +902,7 @@ getModIfaceFromDiskAndIndexRule recorder =
     -- Not in db, must re-index
     _ -> do
       ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
-        readHieFileFromDisk recorder hie_loc
+        HieFile.readHieFileFromDisk (cmapWithPrio LogHieFile recorder) (toNormalizedFilePath' hie_loc)
       case ehf of
         -- Uh oh, we failed to read the file for some reason, need to regenerate it
         Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
