@@ -38,8 +38,10 @@ test = testGroup "explicit-fields"
     , mkTestNoAction "Prefix" "Prefix" 10 11 10 28
     , mkTestNoAction "PartiallyAppliedCon" "PartiallyAppliedCon" 7 8 7 12
     , mkConversionTest "PolymorphicRecordConstruction" "PolymorphicRecordConstruction" 15 5 15 15
+    , mkConversionTest "QualifiedPositionalConstruction" "QualifiedPositionalConstruction" 9 10 9 15
     , mkConversionTest "CursorAwarePositional" "CursorPositional" 15 26 15 34
     , mkExpansionTest "CursorAwareRecords" "CursorRecords" 9 40 9 40
+    , mkConversionTest "UnicodeStrings" "UnicodeStrings" 10 12 10 17
     ]
   , testGroup "inlay hints"
     [ mkInlayHintsTest "Construction" Nothing 16 $ \ih -> do
@@ -290,6 +292,24 @@ test = testGroup "explicit-fields"
           , defInlayHint { _position = Position 15 15
                          , _label = InR [ baz ]
                          , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
+                         , _paddingLeft = Nothing
+                         }
+          ]
+    , mkInlayHintsTest "UnicodeStrings" Nothing 10 $ \ih -> do
+        let mkLabelPart' = mkLabelPartOffsetLengthSub1 "UnicodeStrings"
+        name  <- mkLabelPart' 5 4 "αβγa="
+        count <- mkLabelPart' 6 4 "count="
+        (@?=) ih
+          [ defInlayHint { _position = Position 10 18
+                         , _label = InR [ name ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { αβγa = \"αβγ\", count = 42 }" 10 12 26 ]
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
+                         , _paddingLeft = Nothing
+                         }
+          , defInlayHint { _position = Position 10 24
+                         , _label = InR [ count ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { αβγa = \"αβγ\", count = 42 }" 10 12 26 ]
                          , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }

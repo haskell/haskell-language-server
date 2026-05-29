@@ -3,6 +3,8 @@
     "checkParents": "CheckOnSave",
     "checkProject": true,
     "formattingProvider": "ormolu",
+    "linkDocTo": "LinkToHackage",
+    "linkSourceTo": "LinkToHackage",
     "maxCompletions": 40,
     "plugin": {
         "alternateNumberFormat": {
@@ -133,9 +135,6 @@
                 "crossModule": true
             },
             "renameOn": true
-        },
-        "retrie": {
-            "globalOn": true
         },
         "semanticTokens": {
             "config": {

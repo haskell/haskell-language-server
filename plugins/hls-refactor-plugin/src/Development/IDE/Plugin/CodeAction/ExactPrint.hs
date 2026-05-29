@@ -243,7 +243,7 @@ moveCommentsToTheEnd (EpAnn entry anns (EpaCommentsBalanced priors following)) =
 #endif
 
 liftParseAST
-    :: forall ast l.  (ASTElement l ast, ExactPrint (LocatedAn l ast))
+    :: forall ast l.  (ASTElement l ast)
     => DynFlags -> String -> TransformT (Either String) (LocatedAn l ast)
 liftParseAST df s = case parseAST df "" s of
   Right x ->  pure (makeDeltaAst x)

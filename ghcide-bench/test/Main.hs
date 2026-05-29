@@ -36,6 +36,8 @@ benchmarkTests =
         | e <- Bench.experiments
         , Bench.name e /= "edit" -- the edit experiment does not ever fail
         , Bench.name e /= "hole fit suggestions" -- is too slow!
+        , not ("semanticTokens" `isInfixOf` Bench.name e) -- ghcide does not load the semantic-tokens plugin
+        , not ("code actions" `isInfixOf` Bench.name e) -- ghcide does not load the code-action plugin
         -- the cradle experiments are way too slow
         , not ("cradle" `isInfixOf` Bench.name e)
     ]

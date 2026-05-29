@@ -18,6 +18,7 @@ import           Control.Lens               ((^.))
 import           Development.IDE.Test       (expectDiagnostics,
                                              standardizeQuotes)
 import           Hover
+import           Ide.Types                  (Config (..), OptLinkTo (..))
 import           Test.Hls
 import           Test.Hls.FileSystem        (copyDir)
 import           Text.Regex.TDFA            ((=~))
@@ -104,7 +105,9 @@ tests = let
           , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _", Just "GHC-88464")])
           ]]
     , testGroup "type-definition" typeDefinitionTests
-    , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
+    , testGroup "hover-record-dot-syntax" recordDotSyntaxTests
+    , testGroup "source-and-doc-links" linkToTests
+    ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
                         , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
@@ -253,3 +256,63 @@ checkFileCompiles fp diag =
    testWithDummyPlugin ("hover: Does " ++ fp ++ " compile") (mkIdeTestFs [copyDir "hover"]) $ do
     _ <- openDoc fp "haskell"
     diag
+
+linkToTests :: [TestTree]
+linkToTests =
+  [ testGroup "LinkToHackage" linkToHackageTests
+  , testGroup "LinkToLocal" linkToLocalTests
+  ]
+  where
+    linkToHackageTests =
+      [ testGroup "doc link uses hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkDocTo = LinkToHackage })) $
+            hoverCheck (Position 24 8) "GotoHover.hs"
+              [ ExpectHoverTextRegex (hackageUrlRegex "Documentation" "text" "v:pack") ]
+        , testWithConfig "type" (hoverConfig (def { linkDocTo = LinkToHackage })) $
+            hoverCheck (Position 8 11) "GotoHover.hs"
+              [ ExpectHoverTextRegex (hackageUrlRegex "Documentation" "text" "t:Text") ]
+        ]
+        , testGroup "source link uses hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkSourceTo = LinkToHackage })) $
+          hoverCheck (Position 24 8) "GotoHover.hs"
+            [ ExpectHoverTextRegex (hackageUrlRegex "Source" "text" "pack") ]
+        , testWithConfig "type" (hoverConfig (def { linkSourceTo = LinkToHackage })) $
+          hoverCheck (Position 8 11) "GotoHover.hs"
+            [ ExpectHoverTextRegex (hackageUrlRegex "Source" "text" "Text") ]
+        ]
+      ]
+    linkToLocalTests =
+      [ testGroup "doc link does not use hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkDocTo = LinkToLocal })) $
+            hoverCheck (Position 24 8) "GotoHover.hs"
+              [ ExpectHoverExcludeText [hackageUrlPrefix "Documentation"] ]
+        , testWithConfig "type" (hoverConfig (def { linkDocTo = LinkToLocal })) $
+            hoverCheck (Position 8 11) "GotoHover.hs"
+              [ ExpectHoverExcludeText [hackageUrlPrefix "Documentation"] ]
+        ]
+        , testGroup "source link does not use hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkSourceTo = LinkToLocal })) $
+          hoverCheck (Position 24 8) "GotoHover.hs"
+            [ ExpectHoverExcludeText [hackageUrlPrefix "Source"] ]
+        , testWithConfig "type" (hoverConfig (def { linkSourceTo = LinkToLocal })) $
+          hoverCheck (Position 8 11) "GotoHover.hs"
+            [ ExpectHoverExcludeText [hackageUrlPrefix "Source"] ]
+        ]
+      ]
+    hackageUrlPrefix linkText = "\\[" <> linkText <> "\\]\\(https://hackage\\.haskell\\.org/package/"
+    hackageUrlRegex linkText pkg anchor
+      = hackageUrlPrefix linkText
+        <> pkg <> "-[0-9\\.]+/docs/[^#)]+\\.html#" <> anchor
+    hoverConfig lspConf = def
+        { testPluginDescriptor = dummyPlugin
+        , testDirLocation = Right (mkIdeTestFs [copyDir "hover"])
+        , testConfigCaps = lspTestCaps
+        , testShiftRoot = True
+        , testLspConfig = lspConf
+        }
+    hoverCheck pos fp expects = do
+        doc <- openDoc fp "haskell"
+        waitForProgressDone
+        _ <- waitForTypecheck doc
+        hover <- getHover doc pos
+        checkHover hover expects

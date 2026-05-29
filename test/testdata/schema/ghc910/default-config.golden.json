@@ -3,6 +3,8 @@
     "checkParents": "CheckOnSave",
     "checkProject": true,
     "formattingProvider": "ormolu",
+    "linkDocTo": "LinkToHackage",
+    "linkSourceTo": "LinkToHackage",
     "maxCompletions": 40,
     "plugin": {
         "alternateNumberFormat": {
@@ -146,6 +148,9 @@
             "globalOn": false
         },
         "signatureHelp": {
+            "globalOn": true
+        },
+        "splice": {
             "globalOn": true
         },
         "stan": {

@@ -584,8 +584,11 @@ getDocMapRule recorder =
       (tmrTypechecked -> tc, _) <- useWithStale_ TypeCheck file
       (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
       (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst file
-
-      dkMap <- liftIO $ mkDocMap hsc rf tc
+      cfg <- getClientConfigAction
+      dkMap <- liftIO $ mkDocMap hsc rf tc $ LinkTargets
+                { linkSource = linkSourceTo cfg
+                , linkDoc = linkDocTo cfg
+                }
       return ([],Just dkMap)
 
 -- | Persistent rule to ensure that hover doesn't block on startup
@@ -798,7 +801,13 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                 env = msrHscEnv msr
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
-            let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
+            -- Load .hs-boot before .hs: the HPT is keyed by module name, and
+            -- GHC's addHomeModInfoToHpt overwrites, so the non-boot must be last.
+            let inLoadOrder = sortOn (not . isBootHmi)
+                  $ map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
+                isBootHmi hmi = case mi_hsc_src (hm_iface hmi) of
+                  HsBootFile -> True
+                  _          -> False
             de <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
             mg <- do
               if fullModuleGraph

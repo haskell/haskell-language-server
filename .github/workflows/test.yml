@@ -162,8 +162,7 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test ${CABAL_ARGS} hls-eval-plugin-tests || cabal test ${CABAL_ARGS} hls-eval-plugin-tests
 
-      # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
+      - if: matrix.test
         name: Test hls-splice-plugin
         run: cabal test ${CABAL_ARGS} hls-splice-plugin-tests || cabal test ${CABAL_ARGS} hls-splice-plugin-tests
 
@@ -240,11 +239,6 @@ jobs:
       - if: matrix.test
         name: Test hls-cabal-plugin test suite
         run: cabal test ${CABAL_ARGS} hls-cabal-plugin-tests || cabal test ${CABAL_ARGS} hls-cabal-plugin-tests
-
-      # TODO enable when it supports 9.10
-      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
-        name: Test hls-retrie-plugin test suite
-        run: cabal test ${CABAL_ARGS} hls-retrie-plugin-tests || cabal test ${CABAL_ARGS} hls-retrie-plugin-tests
 
       - if: matrix.test
         name: Test hls-overloaded-record-dot-plugin test suite
