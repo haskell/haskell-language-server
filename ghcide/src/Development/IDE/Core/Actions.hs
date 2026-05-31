@@ -53,18 +53,25 @@ getAtPoint file pos = runMaybeT $ do
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
   shakeExtras <- lift askShake
-  projectFile <- MaybeT $ pure $ case file of
-    SomeNonProjectHaskellInput _ -> Nothing
-    SomeProjectHaskellInput fp   -> Just fp
-  env <- hscEnv . fst <$> useWithStaleFastMT GhcSession projectFile
-  modSummary <- fst <$> useWithStaleFastMT GetModSummary projectFile
-  dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap projectFile)
-  let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
+  -- The HscEnv and DKMap are not strictly necessary for hover
+  -- to work, so we only calculate them for project files, not
+  -- for dependency files. They provide information that will
+  -- not be displayed in dependency files. See the atPoint
+  -- function in ghcide/src/Development/IDE/Spans/AtPoint.hs
+  -- for the specifics of how they are used.
+  (mEnv, mDkMap, mEnabledExtensions) <- case file of
+    SomeNonProjectHaskellInput _ -> pure (Nothing, Nothing, Nothing)
+    SomeProjectHaskellInput projectFile -> do
+      env <- hscEnv . fst <$> useWithStaleFastMT GhcSession projectFile
+      modSummary <- fst <$> useWithStaleFastMT GetModSummary projectFile
+      dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap projectFile)
+      let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
+      pure (Just env, Just dkMap, Just enabledExtensions)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions
+    AtPoint.atPoint opts shakeExtras hf mDkMap mEnv pos' mEnabledExtensions
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.

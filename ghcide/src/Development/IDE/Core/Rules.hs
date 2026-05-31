@@ -207,7 +207,7 @@ import           System.FilePath                              (dropExtension,
 data Log
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
-  | LogLoadingHieFile !ProjectHaskellInput
+  | LogLoadingHieFile !SomeHaskellInput
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogMissingHieFile !NormalizedFilePath
@@ -531,11 +531,23 @@ getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
       case f of
+        -- For Dependency source files, get the HieAstResult from
+        -- the HIE file in the HieDb database
+        SomeNonProjectHaskellInput _ -> do
+          se <- getShakeExtras
+          mHieFile <- liftIO
+            $ runIdeAction "GetHieAst" se
+            $ runMaybeT
+            -- We can look up the HIE file from its source
+            -- because at this point lookupMod has already been
+            -- called and has created the source file in
+            -- the .hls directory and indexed it
+            $ readHieFileForSrcFromDisk recorder f
+          pure ([], makeHieAstResult <$> mHieFile)
         SomeProjectHaskellInput input -> do
           tmr <- use_ TypeCheck input
           hsc <- hscEnv <$> use_ GhcSessionDeps input
           getHieAstRuleDefinition f hsc tmr
-        _ -> pure ([], Nothing)
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \input -> runMaybeT $ do
@@ -543,7 +555,7 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \input -> runMayb
     SomeProjectHaskellInput projectInput -> Just projectInput
     _                                    -> Nothing
   let file = inputFilePath projectInput
-  res <- readHieFileForSrcFromDisk recorder projectInput
+  res <- readHieFileForSrcFromDisk recorder (SomeProjectHaskellInput projectInput)
   vfsRef <- asks vfsVar
   vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case getVirtualFileFromVFS (VFS vfsData) (filePathToUri' file) of
@@ -616,7 +628,7 @@ getDocMapRule recorder =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty mempty, idDelta, Nothing)
 
-readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> ProjectHaskellInput -> MaybeT IdeAction Compat.HieFile
+readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> SomeHaskellInput -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk recorder input = do
   ShakeExtras{withHieDb} <- ask
   let file = inputFilePath input

@@ -210,6 +210,7 @@ data Log
   | LogShakeGarbageCollection !T.Text !Int !Seconds
   -- * OfInterest Log messages
   | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
+  | LogUnsafeDependencyRule !NormalizedFilePath !T.Text
   deriving Show
 
 instance Pretty Log where
@@ -252,7 +253,12 @@ instance Pretty Log where
     LogSetFilesOfInterest ofInterest ->
         "Set files of interst to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
-
+    LogUnsafeDependencyRule file key ->
+        vcat
+          [ "Unsafe rule requested for dependency source file:"
+          , "File:" <+> pretty (fromNormalizedFilePath file)
+          , "Rule:" <+> pretty key
+          ]
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
 -- a worker thread.
@@ -1322,7 +1328,10 @@ defineEarlyCutoff'
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
-    ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
+    let mbFile = case inputFingerprint input of
+          InputFile file -> Just file
+          _              -> Nothing
+    ShakeExtras{state, progress, dirtyKeys, shakeRecorder} <- getShakeExtras
     options <- getIdeOptions
     let trans g x =  withRunInIO $ \run -> g (run x)
     (case inputFingerprint input of
@@ -1351,13 +1360,20 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (mbBs, (diags, mbRes)) <- actionCatch
+                let doAction = actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         let file = case inputFingerprint input of
                               InputFile file -> file
                               _              -> emptyFilePath
                         pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key input e) | not $ isBadDependency e], Nothing))
+                (mbBs, (diags, mbRes)) <- case mbFile of
+                  Just file
+                    | isDependencyHaskellPath file
+                    , not (isSafeDependencyRule key) -> do
+                        logWith shakeRecorder Error (LogUnsafeDependencyRule file (T.pack (show key)))
+                        doAction
+                  _ -> doAction
 
                 ver <- estimateFileVersionUnsafely key mbRes input
                 (bs, res) <- case mbRes of
@@ -1436,6 +1452,19 @@ prettyBuildSessionFinishException exc = case fromException exc of
     Just ctx -> pretty ctx
   Just AsyncCancelled -> viaShow AsyncCancelled -- We don't want to see the stack trace for a cancelled build session
 
+isSafeDependencyRule :: forall k. Typeable k => k -> Bool
+isSafeDependencyRule _k
+  -- Dependency files need GetHieAst for hover/definition.
+  | Just Refl <- eqT @k @GetHieAst = True
+
+  -- Dependency files can still be files of interest.
+  | Just Refl <- eqT @k @IsFileOfInterest = True
+
+  -- Safe metadata/file watching rules.
+  | Just Refl <- eqT @k @GetModificationTime = True
+  | Just Refl <- eqT @k @AddWatchedFile = True
+
+  | otherwise = False
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Hls-graph contains its own internal running state for each key in the shakeDatabase.
