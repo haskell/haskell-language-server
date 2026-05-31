@@ -162,8 +162,9 @@ rules recorder plId = do
       else return ([], Nothing)
 
   action $ do
-    files <- getFilesOfInterestUntracked
-    void $ uses GetStanDiagnostics $ HM.keys files
+    filesOfInterest <- getFilesOfInterestUntracked
+    let files = HM.keys $ HM.filter (/= ReadOnly) filesOfInterest
+    void $ uses GetStanDiagnostics $ files
   where
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations

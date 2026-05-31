@@ -208,7 +208,8 @@ rules recorder plugin = do
     liftIO $ argsSettings flags
 
   action $ do
-    files <- Map.keys <$> getFilesOfInterestUntracked
+    filesOfInterest <- getFilesOfInterestUntracked
+    let files = Map.keys $ Map.filter (/= ReadOnly) filesOfInterest
     Shake.runWithSignal (Proxy @"kick/start/hlint") (Proxy @"kick/done/hlint") files GetHlintDiagnostics
 
   where

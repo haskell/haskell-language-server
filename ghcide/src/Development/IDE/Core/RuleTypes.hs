@@ -35,8 +35,8 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
 import           GHC.Iface.Ext.Types                          (HieASTs,
-                                                               TypeIndex)
-import           GHC.Iface.Ext.Utils                          (RefMap)
+                                                               TypeIndex, getAsts)
+import           GHC.Iface.Ext.Utils                          (RefMap, generateReferencesMap)
 
 import           Data.ByteString                              (ByteString)
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
@@ -228,6 +228,19 @@ data HieAstResult
   , hieKind   :: !(HieKind a)
   -- ^ Is this hie file loaded from the disk, or freshly computed?
   }
+
+-- | Make an HieAstResult from loaded HieFile
+makeHieAstResult :: HieFile -> HieAstResult
+makeHieAstResult hieFile =
+    HAR
+        (hie_module hieFile)
+        hieAst
+        (generateReferencesMap $ M.elems $ getAsts hieAst)
+        mempty
+        (HieFromDisk hieFile)
+    where
+        hieAst :: HieASTs TypeIndex
+        hieAst = hie_asts hieFile
 
 data HieKind a where
   HieFromDisk :: !HieFile -> HieKind TypeIndex

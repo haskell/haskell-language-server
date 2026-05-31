@@ -203,6 +203,7 @@ data Log
   | LogShakeGarbageCollection !T.Text !Int !Seconds
   -- * OfInterest Log messages
   | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
+  | LogUnsafeDependencyRule !NormalizedFilePath !T.Text
   deriving Show
 
 instance Pretty Log where
@@ -248,7 +249,12 @@ instance Pretty Log where
     LogSetFilesOfInterest ofInterest ->
         "Set files of interst to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
-
+    LogUnsafeDependencyRule file key ->
+        vcat
+          [ "Unsafe rule requested for dependency source file:"
+          , "File:" <+> pretty (fromNormalizedFilePath file)
+          , "Rule:" <+> pretty key
+          ]
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
 -- a worker thread.
@@ -1255,7 +1261,7 @@ defineEarlyCutoff'
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
-    ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
+    ShakeExtras{state, progress, dirtyKeys, shakeRecorder} <- getShakeExtras
     options <- getIdeOptions
     let trans g x =  withRunInIO $ \run -> g (run x)
     (if optSkipProgress options key then id else trans (inProgress progress file)) $ do
@@ -1282,10 +1288,31 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (mbBs, (diags, mbRes)) <- actionCatch
-                    (do v <- action staleV; liftIO $ evaluate $ force v) $
-                    \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
+                let doAction =
+                      actionCatch
+                        (do v <- action staleV; liftIO $ evaluate $ force v) $
+                        \(e :: SomeException) -> do
+                          pure
+                            ( Nothing
+                            , ( [ ideErrorText file (T.pack $ show (key, file) ++ show e)
+                                | not $ isBadDependency e
+                                ]
+                              , Nothing
+                              )
+                            )
+
+                (mbBs, (diags, mbRes)) <- case getSourceFileOrigin file of
+                  FromProject ->
+                    doAction
+
+                  FromDependency
+                    | isSafeDependencyRule key ->
+                        doAction
+
+                    | otherwise -> do
+                        logWith shakeRecorder Error $
+                          LogUnsafeDependencyRule file (T.pack $ show key)
+                        doAction
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1330,6 +1357,19 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
 
+    isSafeDependencyRule :: k -> Bool
+    isSafeDependencyRule _k
+      -- Dependency files need GetHieAst for hover/definition.
+      | Just Refl <- eqT @k @GetHieAst = True
+
+      -- Dependency files can still be files of interest.
+      | Just Refl <- eqT @k @IsFileOfInterest = True
+
+      -- Safe metadata/file watching rules.
+      | Just Refl <- eqT @k @GetModificationTime = True
+      | Just Refl <- eqT @k @AddWatchedFile = True
+
+      | otherwise = False
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Hls-graph contains its own internal running state for each key in the shakeDatabase.

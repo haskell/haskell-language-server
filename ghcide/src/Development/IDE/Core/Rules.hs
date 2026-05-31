@@ -168,6 +168,8 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId,
+                                                               SourceFileOrigin (..),
+                                                               getSourceFileOrigin,
                                                                getVirtualFileFromVFS)
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
@@ -522,9 +524,24 @@ reportImportCyclesRule recorder =
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
-      tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
-      getHieAstRuleDefinition f hsc tmr
+      case getSourceFileOrigin f of
+        -- For Dependency source files, get the HieAstResult from
+        -- the HIE file in the HieDb database
+        FromDependency -> do
+          se <- getShakeExtras
+          mHieFile <- liftIO
+            $ runIdeAction "GetHieAst" se
+            $ runMaybeT
+            -- We can look up the HIE file from its source
+            -- because at this point lookupMod has already been
+            -- called and has created the source file in
+            -- the .hls directory and indexed it
+            $ readHieFileForSrcFromDisk recorder f
+          pure ([], makeHieAstResult <$> mHieFile)
+        FromProject -> do
+          tmr <- use_ TypeCheck f
+          hsc <- hscEnv <$> use_ GhcSessionDeps f
+          getHieAstRuleDefinition f hsc tmr
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do

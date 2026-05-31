@@ -36,6 +36,7 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..),
                                                        normalizedFilePathToUri,
                                                        uriToNormalizedFilePath)
+import Ide.Types (SourceFileOrigin(FromDependency, FromProject), getSourceFileOrigin)
 
 -- IMPORTANT NOTE : make sure all rules `useWithStaleFastMT`d by these have a "Persistent Stale" rule defined,
 -- so we can quickly answer as soon as the IDE is opened
@@ -52,16 +53,25 @@ getAtPoint file pos = runMaybeT $ do
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
   shakeExtras <- lift askShake
-
-  env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
-  modSummary <- fst <$> useWithStaleFastMT GetModSummary file
-  dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
-  let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
+  -- The HscEnv and DKMap are not strictly necessary for hover
+  -- to work, so we only calculate them for project files, not
+  -- for dependency files. They provide information that will
+  -- not be displayed in dependency files. See the atPoint
+  -- function in ghcide/src/Development/IDE/Spans/AtPoint.hs
+  -- for the specifics of how they are used.
+  (mEnv, mDkMap, mEnabledExtensions) <- case getSourceFileOrigin file of
+    FromDependency -> pure (Nothing, Nothing, Nothing)
+    FromProject -> do
+      env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
+      modSummary <- fst <$> useWithStaleFastMT GetModSummary file
+      dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+      let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
+      pure (Just env, Just dkMap, Just enabledExtensions)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions
+    AtPoint.atPoint opts shakeExtras hf mDkMap mEnv pos' mEnabledExtensions
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.
@@ -96,7 +106,9 @@ getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (hf, mapping) <- useWithStaleFastMT GetHieAst file
-    (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
+    (ImportMap imports, _) <- case getSourceFileOrigin file of
+      FromProject -> useWithStaleFastMT GetImportMap file
+      FromDependency -> pure( ImportMap mempty, PositionMapping idDelta)
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
     mapMaybeM (\(location, identifier) -> do
