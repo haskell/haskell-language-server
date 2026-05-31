@@ -42,7 +42,10 @@ module Ide.Types
 , PluginNotificationHandler(..), mkPluginNotificationHandler
 , PluginNotificationHandlers(..)
 , PluginRequestMethod(..)
+, SourceFileOrigin(..)
+, dependenciesDirectory
 , hlsDirectory
+, getSourceFileOrigin
 , getProcessID, getPid
 , getVirtualFileFromVFS
 , installSigUsr1Handler
@@ -82,7 +85,7 @@ import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
 import           Data.Kind                     (Type)
-import           Data.List.Extra               (find, sortOn)
+import           Data.List.Extra               (find, isInfixOf, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
 import           Data.Maybe
@@ -107,6 +110,7 @@ import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative           (ParserInfo)
 import           Prettyprinter                 as PP
+import           System.FilePath               (splitDirectories)
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
 import           UnliftIO                      (MonadUnliftIO)
@@ -399,9 +403,26 @@ describePlugin p =
     pdesc = pluginDescription p
   in pretty pid <> ":" <> nest 4 (PP.line <> pretty pdesc)
 
+data SourceFileOrigin = FromProject | FromDependency deriving Eq
+
 hlsDirectory :: FilePath
 hlsDirectory = ".hls"
 
+dependenciesDirectory :: FilePath
+dependenciesDirectory = "dependencies"
+
+-- | Dependency files are written to the .hls/dependencies directory
+--   under the project root.
+--   If a file is not in this directory, we assume that it is a
+--   project file.
+getSourceFileOrigin :: NormalizedFilePath -> SourceFileOrigin
+getSourceFileOrigin f =
+    case [hlsDirectory, dependenciesDirectory] `isInfixOf` splitDirectories file of
+        True  -> FromDependency
+        False -> FromProject
+  where
+    file :: FilePath
+    file = fromNormalizedFilePath f
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
 

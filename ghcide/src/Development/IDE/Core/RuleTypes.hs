@@ -421,6 +421,7 @@ instance Hashable GetFileHash
 
 data FileOfInterestStatus
   = OnDisk
+  | ReadOnly
   | Modified { firstOpen :: !Bool -- ^ was this file just opened
              }
   deriving (Eq, Show, Generic)

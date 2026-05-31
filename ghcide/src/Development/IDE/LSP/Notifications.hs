@@ -79,7 +79,10 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
           let action' = do
                 ks <- updateKnownTargets (shakeExtras ide) [inputFilePath file] []
                 (<> ks) <$> action
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file action'
+          case file of
+            SomeProjectHaskellInput _ ->
+              setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file action'
+            SomeNonProjectHaskellInput _ -> void (addFileOfInterest ide file ReadOnly)
       logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
@@ -87,14 +90,20 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
           let action = addFileOfInterest ide file Modified{firstOpen=False}
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file action
+          case file of
+            SomeProjectHaskellInput _ ->
+              setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file action
+            SomeNonProjectHaskellInput _ -> void (addFileOfInterest ide file ReadOnly)
         logWith recorder Debug $ LogModifiedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             let action = addFileOfInterest ide file OnDisk
-            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file action
+            case file of
+              SomeProjectHaskellInput _ ->
+                setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file action
+              SomeNonProjectHaskellInput _ -> void (addFileOfInterest ide file ReadOnly)
         logWith recorder Debug $ LogSavedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $

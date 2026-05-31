@@ -79,6 +79,7 @@ ofInterestRules recorder = do
     summarize (IsFOI OnDisk)           = BS.singleton 1
     summarize (IsFOI (Modified False)) = BS.singleton 2
     summarize (IsFOI (Modified True))  = BS.singleton 3
+    summarize (IsFOI ReadOnly)         = BS.singleton 4
 
 ------------------------------------------------------------
 newtype GarbageCollectVar = GarbageCollectVar (Var Bool)
@@ -133,9 +134,10 @@ scheduleGarbageCollection state = do
 --   Could be improved
 kick :: Action ()
 kick = do
-    files <- HashMap.keys <$> getFilesOfInterestUntracked
+    filesOfInterestMap <- getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
-    let normalizedFiles = map inputFilePath files
+    let files = HashMap.keys filesOfInterestMap
+        normalizedFiles = map inputFilePath files
         -- keep project-specific GHC rules run only for project Haskell files.
         projectHaskellFiles = mapMaybe (toProjectHaskellInput . inputFilePath) files
     let signal :: KnownSymbol s => Proxy s -> Action ()
