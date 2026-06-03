@@ -2032,6 +2032,7 @@ test-suite ghcide-tests
     , enummapset
     , extra
     , filepath
+    , ghc
     , ghcide
     , hls-plugin-api
     , lens
