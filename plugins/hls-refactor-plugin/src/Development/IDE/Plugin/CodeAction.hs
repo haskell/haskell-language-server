@@ -54,9 +54,8 @@ import qualified Language.LSP.Protocol.Types                       as TE (TextEd
 import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
                                                                     _TcRnMessage,
                                                                     msgEnvelopeErrorL)
-#if !MIN_VERSION_ghc(9,11,0)
+import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import           Development.IDE.GHC.Compat.Util
-#endif
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint                    as E
@@ -477,8 +476,8 @@ suggestRemoveRedundantImport _ contents
       pprBinding (UnusedImportNameRecField (ParentIs parent) field) = printOutputable parent <> "("<> printOutputable  field <> ")"
       pprBinding (UnusedImportNameRegular name) = printOutputable name
 
-diagInRange :: Diagnostic -> Range -> Bool
-diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
+diagInRange :: FileDiagnostic -> Range -> Bool
+diagInRange FileDiagnostic{fdLspDiagnostic=Diagnostic{_range=dr}} r = dr `subRange` extendedRange
   where
     -- Ensures the range captures full lines. Makes it easier to trigger the correct
     -- "remove redundant" code actions from anywhere on the offending line.
@@ -496,7 +495,7 @@ caRemoveRedundantImports m contents allDiags contextRange uri
     r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) allDiags,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
-    ctxEdits <- [ x | x@(d, _) <- r, fdLspDiagnostic d `diagInRange` contextRange],
+    ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
     not $ null ctxEdits,
     caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
@@ -520,7 +519,7 @@ caRemoveRedundantImports m contents allDiags contextRange uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caRemoveInvalidExports m contents allDiags contextRange uri
   | Just pm <- m,
     Just txt <- contents,
@@ -543,13 +542,14 @@ caRemoveInvalidExports m contents allDiags contextRange uri
       = Just (title, dig, ranges)
       | otherwise = Nothing
 
+    removeSingle :: (T.Text, FileDiagnostic, [Range]) -> Maybe (Command |? CodeAction)
     removeSingle (_, _, []) = Nothing
     removeSingle (title, diagnostic, ranges) = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) $ nubOrd ranges
         _changes = Just $ M.singleton uri tedit
         _title = title
         _kind = Just CodeActionKind_QuickFix
-        _diagnostics = Just [diagnostic]
+        _diagnostics = Just [fdLspDiagnostic diagnostic]
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
@@ -574,24 +574,30 @@ caRemoveInvalidExports m contents allDiags contextRange uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
-suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
-  | msg <- unifySpaces _message
+suggestRemoveRedundantExport :: ParsedModule -> FileDiagnostic -> Maybe (T.Text, [Range])
+suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{..}}
+    | mod <-  fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage >>= unnecessaryExportModule
+  , msg <- unifySpaces _message
   , Just export <- hsmodExports
   , Just exportRange <- getLocatedRange export
   , exports <- unLoc export
   , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
-                         <|> (,[_range]) <$> matchExportItem msg
-                         <|> (,[_range]) <$> matchDupExport msg
+                         <|>  (,[_range]) <$> mod
   , subRange _range exportRange
     = Just ("Remove ‘" <> removeFromExport <> "’ from export", ranges)
   where
-    matchExportItem msg = regexSingleMatch msg "The export item ‘([^’]+)’"
-    matchDupExport msg = regexSingleMatch msg "Duplicate ‘([^’]+)’ in export list"
     getRanges exports txt = case smallerRangesForBindingExport exports (T.unpack txt) of
       []     -> (txt, [_range])
       ranges -> (txt, ranges)
 suggestRemoveRedundantExport _ _ = Nothing
+
+unnecessaryExportModule :: TcRnMessage -> Maybe T.Text
+unnecessaryExportModule (TcRnDupeModuleExport (ModuleName mod))       = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnExportedModNotImported (ModuleName mod)) = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnNullExportedModule (ModuleName mod))     = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnMissingExportList (ModuleName mod))      = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnDodgyExports (GRE {gre_name})) = Just (( printOutputable $ occName gre_name) <> "(..)" )
+unnecessaryExportModule _ = Nothing
 
 suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDeleteUnusedBinding
@@ -733,7 +739,7 @@ caDeleteUnusedBindings m contents allDiags contextRange uri
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+    removeSingle title tedit fd = mkCA title (Just CodeActionKind_QuickFix) Nothing [fdLspDiagnostic fd] WorkspaceEdit{..} where
         _changes = Just $ M.singleton uri tedit
         _documentChanges = Nothing
         _changeAnnotations = Nothing
