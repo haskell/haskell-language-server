@@ -1392,7 +1392,7 @@ library hls-fourmolu-plugin
     , ghcide          == 2.14.0.0
     , hls-plugin-api  == 2.14.0.0
     , lens
-    , lsp
+    , lsp             ^>= 2.8
     , mtl
     , process-extras  >= 0.7.1
     , text
