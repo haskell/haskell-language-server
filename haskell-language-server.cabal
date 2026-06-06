@@ -1585,6 +1585,7 @@ library hls-refactor-plugin
     , ghc-boot
     , regex-tdfa
     , ghcide                == 2.14.0.0
+    , haskell-language-server:hls-exactprint-utils
     , hls-plugin-api        == 2.14.0.0
     , lsp
     , text
@@ -1761,6 +1762,22 @@ test-suite hls-notes-plugin-tests
     , haskell-language-server:hls-notes-plugin
     , hls-test-utils == 2.14.0.0
   default-extensions: OverloadedStrings
+
+-----------------------------
+-- export plugin
+-----------------------------
+
+library hls-exactprint-utils
+  import: defaults, pedantic, warnings
+  exposed-modules:
+    Development.IDE.GHC.ExactPrint.Annotation
+  hs-source-dirs:     hls-exactprint-utils/src
+  build-depends:
+    , ghc
+    , ghc-exactprint
+    , ghcide          == 2.14.0.0
+  default-extensions:
+      CPP
 
 ----------------------------
 ----------------------------

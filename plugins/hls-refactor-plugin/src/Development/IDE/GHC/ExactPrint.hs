@@ -24,13 +24,10 @@ module Development.IDE.GHC.ExactPrint
       modifySigWithM,
       genAnchor1,
       setPrecedingLines,
-      addParens,
       addParensToCtxt,
-      modifyAnns,
       removeComma,
       -- * Helper function
       eqSrcSpan,
-      epl,
       epAnn,
       removeTrailingComma,
       annotateParsedSource,
@@ -67,6 +64,10 @@ import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
                                                           parseType)
 import           Development.IDE.GHC.Compat.ExactPrint
+import           Development.IDE.GHC.ExactPrint.Annotation (addParens, epl,
+                                                            isCommaAnn,
+                                                            modifyAnns,
+                                                            removeTrailingCommaAnn)
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Generics.SYB
@@ -93,11 +94,8 @@ import           Data.Default                            (Default)
 import           GHC                                     ( Anchor (..),
                                                           AnchorOperation,
                                                           EpAnn (..),
-                                                          NameAdornment (NameParens),
-                                                          NameAnn (..),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           SrcSpanAnnA,
-                                                          TrailingAnn (AddCommaAnn),
                                                           emptyComments,
                                                           realSrcSpan,
                                                           spanAsAnchor)
@@ -122,10 +120,7 @@ import           GHC                                     (
 #if MIN_VERSION_ghc(9,11,0)
                                                           EpToken (..),
 #endif
-                                                          NameAdornment (..),
-                                                          NameAnn (..),
                                                           SrcSpanAnnA,
-                                                          TrailingAnn (..),
                                                           deltaPos,
                                                           emptyComments,
                                                           spanAsAnchor)
@@ -783,64 +778,11 @@ addParensToCtxt close_dp = addOpen . addClose
 #endif
         | otherwise = it
 
-epl :: Int -> EpaLocation
-#if MIN_VERSION_ghc(9,11,0)
-epl n = EpaDelta (UnhelpfulSpan UnhelpfulNoLocationInfo) (SameLine n) []
-#else
-epl n = EpaDelta (SameLine n) []
-#endif
-
 epAnn :: SrcSpan -> ann -> EpAnn ann
 epAnn srcSpan anns = EpAnn (spanAsAnchor srcSpan) anns emptyComments
 
-modifyAnns :: LocatedAn a ast -> (a -> a) -> LocatedAn a ast
-#if MIN_VERSION_ghc(9,9,0)
-modifyAnns x f = first (fmap f) x
-#else
-modifyAnns x f = first ((fmap.fmap) f) x
-#endif
-
 removeComma :: SrcSpanAnnA -> SrcSpanAnnA
-#if MIN_VERSION_ghc(9,9,0)
-removeComma  (EpAnn anc (AnnListItem as) cs)
-  = EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs
-  where
-      isCommaAnn AddCommaAnn{} = True
-      isCommaAnn _             = False
-#else
-removeComma it@(SrcSpanAnn EpAnnNotUsed _) = it
-removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
-  = SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l
-  where
-      isCommaAnn AddCommaAnn{} = True
-      isCommaAnn _             = False
-#endif
-
-addParens :: Bool -> GHC.NameAnn -> GHC.NameAnn
-#if MIN_VERSION_ghc(9,11,0)
-addParens True it@NameAnn{} =
-        it{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)) }
-addParens True it@NameAnnCommas{} =
-        it{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)) }
-addParens True it@NameAnnOnly{} =
-        it{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)) }
-addParens True it@NameAnnTrailing{} =
-  NameAnn{nann_adornment = NameParens (EpTok (epl 0)) (EpTok (epl 0)), nann_name = epl 0, nann_trailing = nann_trailing it}
-#else
-addParens True it@NameAnn{} =
-        it{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0 }
-addParens True it@NameAnnCommas{} =
-        it{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0 }
-addParens True it@NameAnnOnly{} =
-        it{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0 }
-addParens True NameAnnTrailing{..} =
-        NameAnn{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0, nann_name = epl 0, ..}
-#endif
-addParens _ it = it
+removeComma = removeTrailingCommaAnn
 
 removeTrailingComma :: GenLocated SrcSpanAnnA ast -> GenLocated SrcSpanAnnA ast
 removeTrailingComma = flip modifyAnns $ \(AnnListItem l) -> AnnListItem $ filter (not . isCommaAnn) l
-
-isCommaAnn :: TrailingAnn -> Bool
-isCommaAnn AddCommaAnn{} = True
-isCommaAnn _             = False
