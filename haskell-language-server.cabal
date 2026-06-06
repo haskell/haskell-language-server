@@ -2020,7 +2020,6 @@ test-suite ghcide-tests
   type:               exitcode-stdio-1.0
   default-language:   GHC2021
   build-tool-depends:
-    , ghcide:ghcide
     , haskell-language-server:ghcide-test-preprocessor
     , implicit-hie:gen-hie
 
