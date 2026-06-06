@@ -1779,6 +1779,61 @@ library hls-exactprint-utils
   default-extensions:
       CPP
 
+flag export
+  description: Enable export plugin
+  default:     True
+  manual:      True
+
+common export
+  if flag(export)
+    build-depends: haskell-language-server:hls-export-plugin
+    cpp-options: -Dhls_export
+
+library hls-export-plugin
+  import: defaults, pedantic, warnings
+  if !flag(export)
+    buildable: False
+  exposed-modules:
+    Ide.Plugin.Export
+  other-modules:
+    Ide.Plugin.Export.Cursor
+    Ide.Plugin.Export.ExactPrint
+    Ide.Plugin.Export.Exports
+    Ide.Plugin.Export.Utils
+  hs-source-dirs:     plugins/hls-export-plugin/src
+  default-language:   GHC2021
+  build-depends:
+    , containers
+    , ghc
+    , ghc-exactprint
+    , ghcide          == 2.14.0.0
+    , haskell-language-server:hls-exactprint-utils
+    , hls-plugin-api  == 2.14.0.0
+    , lens
+    , lsp >=2.8
+    , stm
+    , text
+  default-extensions:
+    , DataKinds
+    , LambdaCase
+    , OverloadedStrings
+
+test-suite hls-export-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(export)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-export-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , filepath
+    , haskell-language-server:hls-export-plugin
+    , hls-test-utils == 2.14.0.0
+    , lens
+    , lsp-types
+    , text
+  default-extensions: OverloadedStrings
+
 ----------------------------
 ----------------------------
 -- HLS
@@ -1817,6 +1872,7 @@ library
                   , overloadedRecordDot
                   , semanticTokens
                   , notes
+                  , export
 
   exposed-modules:
     Ide.Arguments

@@ -262,6 +262,10 @@ jobs:
         name: Test hls-signature-help-plugin test suite
         run: cabal test ${CABAL_ARGS} hls-signature-help-plugin-tests || cabal test ${CABAL_ARGS} hls-signature-help-plugin-tests
 
+      - if: matrix.test
+        name: Test hls-export-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-export-plugin-tests || cabal test ${CABAL_ARGS} hls-export-plugin-tests
+
   test_post_job:
     if: always()
     runs-on: ubuntu-latest
