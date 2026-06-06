@@ -18,7 +18,6 @@ stack*.yaml.lock
 shake.yaml.lock
 
 .vscode
-/test-logs/*.log
 
 # ignore hie.yaml's for testdata
 test/testdata/**/hie.yaml
