@@ -16,15 +16,13 @@ import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
 import           Control.Monad.Trans.Class             (lift)
 import           Control.Monad.Trans.Except            (mapExceptT)
-import           Control.Monad.Trans.Maybe             (hoistMaybe,
-                                                        maybeToExceptT)
 import           Data.Either                           (rights)
 import           Data.Foldable                         (fold, minimumBy)
 import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.List                             (foldl')
+import qualified Data.List                             as List
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         groupWith)
 import qualified Data.List.NonEmpty                    as NE
@@ -122,7 +120,7 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
 renameModuleProvider :: Recorder (WithPriority Log)-> PluginMethodHandler IdeState Method_WorkspaceWillRenameFiles
 renameModuleProvider recorder state _ (RenameFilesParams renames) = do
     renameResults <- mapM renameFile renames
-    pure $ InL $ foldl' combineTextEdits (WorkspaceEdit mempty mempty mempty) $ catMaybes renameResults
+    pure $ InL $ List.foldl' combineTextEdits (WorkspaceEdit mempty mempty mempty) $ catMaybes renameResults
     where
         recorder' = cmapWithPrio LogModuleRename recorder
 

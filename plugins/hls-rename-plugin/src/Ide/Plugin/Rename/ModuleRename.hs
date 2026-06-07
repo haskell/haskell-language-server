@@ -50,7 +50,7 @@ instance Pretty Log where
   pretty log =
     "ModuleRename." <> case log of
       CorrectNames log -> "CorrectNames" <> colon <+> pretty log
-      LogRenameDependencies oldName fps -> "Rename of" <+> pretty oldName <+> "in" <+> (pretty $ map fromNormalizedFilePath fps)
+      LogRenameDependencies oldName fps -> "Rename of" <+> pretty oldName <+> "in files:" <+> (pretty $ map fromNormalizedFilePath fps)
       NoModuleName nfp -> "Could not execute rename of" <+> pretty (fromNormalizedFilePath nfp) <+> "as no module path could be determined."
       LogRenameModuleDeclaration nfp -> "Renaming module declaration for file" <+> pretty (fromNormalizedFilePath nfp)
 
