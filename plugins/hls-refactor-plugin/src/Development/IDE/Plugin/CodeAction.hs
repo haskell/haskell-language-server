@@ -50,7 +50,6 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
-import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
                                                                     _TcRnMessage,
                                                                     msgEnvelopeErrorL)
@@ -582,13 +581,13 @@ unnecessaryExportModule (TcRnMissingExportList (ModuleName mod))      = Just $ T
 unnecessaryExportModule (TcRnDodgyExports (GRE {gre_name})) = Just (( printOutputable $ occName gre_name) <> "(..)" )
 unnecessaryExportModule _ = Nothing
 
-suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
 suggestDeleteUnusedBinding
   ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}}
   contents
-  Diagnostic{_range=_range,..}
--- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
-    | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+  FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just (TcRnUnusedName name _reason) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+    , name <- printOutputable name
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
@@ -701,7 +700,7 @@ suggestDeleteUnusedBinding
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = T.unpack (printOutputable x) == name
 
-caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caDeleteUnusedBindings m contents allDiags contextRange uri
   | Just pm <- m,
     r <- join $ map (\d -> repeat d `zip` suggestDeleteUnusedBinding pm contents d) allDiags,
@@ -748,16 +747,11 @@ data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
 getLocatedRange :: HasSrcSpan a => a -> Maybe Range
 getLocatedRange = srcSpanToRange . getLoc
 
-suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> Maybe (T.Text, TextEdit)
-suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
--- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
--- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
--- Foo.hs:6:1: warning: [-Wunused-top-binds] Defined but not used: data constructor ‘Bar’
+suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> FileDiagnostic -> Maybe (T.Text, TextEdit)
+suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
   | Just source <- srcOpt
-  , Just [_, name] <-
-      matchRegexUnifySpaces
-        _message
-        ".*Defined but not used: (type constructor or class |data constructor )?‘([^ ]+)’"
+  , Just (TcRnUnusedName name _reason) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+  , name <- printOutputable name
   , Just (exportType, _) <-
       find (matchWithDiagnostic _range . snd)
       . mapMaybe (\(L l b) -> if isTopLevel (locA l) then exportsAs b else Nothing)
