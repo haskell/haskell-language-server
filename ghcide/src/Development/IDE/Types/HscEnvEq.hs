@@ -47,8 +47,9 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: HscEnv -> IO HscEnvEq
-newHscEnvEq hscEnv' = do
+newHscEnvEq :: (HscEnv -> IO ()) -> HscEnv -> IO HscEnvEq
+newHscEnvEq indexDependencies hscEnv' = do
+    indexDependencies hscEnv'
 
     mod_cache <- newIORef emptyInstalledModuleEnv
     -- This finder cache is for things which are outside of things which are tracked

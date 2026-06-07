@@ -105,7 +105,6 @@ import qualified System.Random                       as Random
 import           System.Random                       (RandomGen)
 import           Text.ParserCombinators.ReadP        (readP_to_S)
 
-import           Control.Concurrent.Async            (async)
 import           Control.Concurrent.STM              (STM, TVar)
 import qualified Control.Monad.STM                   as STM
 import           Control.Monad.Trans.Reader
@@ -894,7 +893,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
   hscEnv <- initEmptyHscEnv
   ideOptions <- asks sessionIdeOptions
   extras <- asks sessionShakeExtras
-  let indexDependencies env = void $ async $ indexDependencyHieFiles (cmapWithPrio LogHieFile recorder) extras env
+  let indexDependencies env = indexDependencyHieFiles (cmapWithPrio LogHieFile recorder) extras env
       new_cache = newComponentCache (cmapWithPrio LogSessionGhc recorder) indexDependencies (optExtensions ideOptions) cfp hscEnv
   all_target_details <- liftIO $ new_cache old_components_info new_components_info
   (all_targets, this_flags_map) <- liftIO $ addErrorTargetIfUnknown all_target_details hieYaml cfp

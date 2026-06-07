@@ -107,7 +107,7 @@ import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative           (ParserInfo)
 import           Prettyprinter                 as PP
-import           System.FilePath               (splitDirectories)
+import           System.FilePath               (splitDirectories, takeExtension)
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
 import           UnliftIO                      (MonadUnliftIO)
@@ -466,7 +466,16 @@ pluginSupportsFileType (VFS vfs) msgParams pluginDesc =
       languageKindM =
         case mVFE of
           Just x -> virtualFileEntryLanguageKind x
-          _      -> Nothing
+          _      -> dependencyLanguageKind uri
+
+dependencyLanguageKind :: NormalizedUri -> Maybe J.LanguageKind
+dependencyLanguageKind uri = do
+  fp <- uriToFilePath $ fromNormalizedUri uri
+  let pathParts = splitDirectories fp
+  if [hlsDirectory, dependenciesDirectory] `isInfixOf` pathParts
+     && takeExtension fp `elem` [".hs", ".lhs", ".hs-boot"]
+    then Just J.LanguageKind_Haskell
+    else Nothing
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method

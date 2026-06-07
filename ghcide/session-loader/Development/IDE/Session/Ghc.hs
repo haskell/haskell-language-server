@@ -205,8 +205,7 @@ newComponentCache recorder indexDependencies exts _cfp hsc_env old_cis new_cis =
             -- above.
             -- We just need to set the current unit here
             pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
-      indexDependencies thisEnv
-      henv <- newHscEnvEq thisEnv
+      henv <- newHscEnvEq indexDependencies thisEnv
       let targetEnv = (if isBad ci then multi_errs else [], Just henv)
           targetDepends = componentDependencyInfo ci
       logWith recorder Debug $ LogNewComponentCache (targetEnv, targetDepends)
