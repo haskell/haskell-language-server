@@ -189,6 +189,8 @@ tests = let
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
+  typeAppMap = Position 71 22; typeAppMapTxt = [ExpectHoverText ["mapM_ :: (Float ->"]]
+  typeAppAt = Position 71 32; typeAppAtTxt = [ExpectHoverText ["_ :: (Float"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -235,14 +237,16 @@ tests = let
   , testM yes            yes               imported   importedSig   "Imported symbol"
   , if isWindows then
         -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
-        testM no     yes    reexported reexportedSig "Imported symbol reexported"
+        testM no         yes               reexported reexportedSig "Imported symbol reexported"
     else
-        testM yes    yes    reexported reexportedSig "Imported symbol reexported"
-  , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
-  , test yes yes import310 pkgTxt "show package name and its version"
+        testM yes        yes               reexported reexportedSig "Imported symbol reexported"
+  , test  no             yes               thLocL57   thLoc         "TH Splice Hover"
+  , test  yes            yes               import310  pkgTxt        "show package name and its version"
   , test  no             yes               kkkL30     kkkType       "hover shows 'Go to' link for class in constraint"
   , test  no             yes               bbbL16     bbbType       "hover shows 'Go to' link for data constructor's type"
   , test  no             yes               aaaL11     aaaType       "hover shows 'Go to' link for binding's underlying type"
+  , test  yes            yes               typeAppMap typeAppMapTxt "Type application function hover"
+  , test  yes            yes               typeAppAt  typeAppAtTxt  "Type application signature hover"
   ]
   where yes :: (TestTree -> Maybe TestTree)
         yes = Just -- test should run and pass
