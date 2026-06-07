@@ -64,7 +64,7 @@ import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
                                                           parseType)
 import           Development.IDE.GHC.Compat.ExactPrint
-import           Development.IDE.GHC.ExactPrint.Annotation (addParens, epl,
+import           Development.IDE.GHC.ExactPrint.Annotation (epl,
                                                             isCommaAnn,
                                                             modifyAnns,
                                                             removeTrailingCommaAnn)
@@ -100,7 +100,7 @@ import           GHC                                     ( Anchor (..),
                                                           realSrcSpan,
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
-                                                          EpaLocation (EpaDelta),
+                                                          EpaLocation,
                                                           deltaPos)
 import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 #endif
