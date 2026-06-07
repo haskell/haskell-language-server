@@ -68,12 +68,20 @@ showDiff (Second w) = "NOW " <> w
 showDiff (Both w _) = w
 
 -- | Compare the expected output recorded in the 'EvalExpr' with the actual
--- output @out@. When diffing is enabled and there is a recorded output, return
--- a line-by-line diff (see 'showDiffs'); otherwise return @out@ unchanged.
+-- output @out@, returning the result as one 'T.Text' per line. When diffing is
+-- enabled and there is a recorded output, return a line-by-line diff (see
+-- 'showDiffs'); otherwise return @out@ unchanged.
+--
+-- @out@ is normalised to one element per line first: a multi-line result
+-- arrives here as a single element with embedded newlines, whereas the recorded
+-- output is already split per line, and 'getDiff' compares element-wise. Without
+-- this, identical multi-line results would be reported as entirely changed.
 evalExprCheck :: Bool -> (Section, EvalExpr) -> [T.Text] -> [T.Text]
 evalExprCheck diff (section, evalExpr) out
-    | not diff || null (evalExprOutput evalExpr) || sectionLanguage section == Plain = out
-    | otherwise = showDiffs $ getDiff (map T.pack $ evalExprOutput evalExpr) out
+    | not diff || null (evalExprOutput evalExpr) || sectionLanguage section == Plain = outLines
+    | otherwise = showDiffs $ getDiff (map T.pack $ evalExprOutput evalExpr) outLines
+  where
+    outLines = concatMap T.lines out
 
 -- | The number of (expression lines, result lines) an 'EvalExpr' occupies.
 evalExprLengths :: EvalExpr -> (Int, Int)
