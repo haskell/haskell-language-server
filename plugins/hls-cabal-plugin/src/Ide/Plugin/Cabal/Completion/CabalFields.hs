@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Ide.Plugin.Cabal.Completion.CabalFields
   ( findStanzaForColumn
   , getModulesNames
@@ -25,7 +27,10 @@ import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as T
 import           Data.Tuple                        (swap)
 import qualified Distribution.Fields               as Syntax
+import           Distribution.PackageDescription   (LibraryName (LSubLibName),
+                                                    mkUnqualComponentName)
 import qualified Distribution.Parsec.Position      as Syntax
+import           Distribution.Types.ComponentName  (ComponentName (CBenchName, CExeName, CFLibName, CLibName, CTestName))
 import           Ide.Plugin.Cabal.Completion.Types
 import qualified Language.LSP.Protocol.Types       as LSP
 
@@ -155,7 +160,6 @@ getOptionalSectionName (x:xs) = case x of
     Syntax.SecArgName _ name -> Just (T.decodeUtf8 name)
     _                        -> getOptionalSectionName xs
 
-type BuildTargetName = T.Text
 type ModuleName      = T.Text
 
 -- | Given a cabal AST returns pairs of all respective target names
@@ -186,18 +190,28 @@ type ModuleName      = T.Text
 -- * @getModulesNames@ output:
 --
 -- >   [([Just "first-target", Just "second-target"], "Config")]
-getModulesNames :: [Syntax.Field any] -> [([Maybe BuildTargetName], ModuleName)]
+getModulesNames :: [Syntax.Field any] -> [([Maybe ComponentName], ModuleName)]
 getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
   where
     rawModuleTargetPairs = concatMap getSectionModuleNames sections
     sections = getSectionsWithModules fields
 
-    getSectionModuleNames :: Syntax.Field any -> [(ModuleName, Maybe BuildTargetName)]
-    getSectionModuleNames (Syntax.Section _ secArgs fields) = map (, getArgsName secArgs) $ concatMap getFieldModuleNames fields
+    getSectionModuleNames :: Syntax.Field any -> [(ModuleName, Maybe ComponentName)]
+    getSectionModuleNames (Syntax.Section secName secArgs fields) = map (, getArgsName secName secArgs) $ concatMap getFieldModuleNames fields
     getSectionModuleNames _ = []
 
-    getArgsName [Syntax.SecArgName _ name] = Just $ T.decodeUtf8 name
-    getArgsName _                          = Nothing -- Can be only a main library, that has no name
+    getArgsName (Syntax.Name _ secName) [Syntax.SecArgName _ nameBs] =
+      let
+        name = mkUnqualComponentName $ T.unpack $ T.decodeUtf8 nameBs
+      in
+        case secName of
+          "library" -> Just $ CLibName $ LSubLibName name
+          "test-suite" -> Just $ CTestName name
+          "benchmark" -> Just $ CBenchName name
+          "executable" -> Just $ CExeName name
+          "foreign-library" -> Just $ CFLibName name
+          _ -> Nothing
+    getArgsName _ _                          = Nothing -- Can be only a main library, that has no name
                                                      -- since it's impossible to have multiple names for a build target
 
     getFieldModuleNames field@(Syntax.Field _ modules) = if getFieldName field == T.pack "exposed-modules" ||
