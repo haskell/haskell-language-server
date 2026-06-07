@@ -190,7 +190,8 @@ tests = let
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
   typeAppMap = Position 71 22; typeAppMapTxt = [ExpectHoverText ["mapM_ :: (Float ->"]]
-  typeAppAt = Position 71 32; typeAppAtTxt = [ExpectHoverText ["_ :: (Float"]]
+  typeAppAt2 = Position 71 28; typeAppAt2Txt = [ExpectHoverText ["-> IO ()"]]
+  typeAppAt3 = Position 71 32; typeAppAt3Txt = [ExpectHoverText ["_ :: (Float"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -246,7 +247,8 @@ tests = let
   , test  no             yes               bbbL16     bbbType       "hover shows 'Go to' link for data constructor's type"
   , test  no             yes               aaaL11     aaaType       "hover shows 'Go to' link for binding's underlying type"
   , test  yes            yes               typeAppMap typeAppMapTxt "Type application function hover"
-  , test  yes            yes               typeAppAt  typeAppAtTxt  "Type application signature hover"
+  , test  yes            yes               typeAppAt2 typeAppAt2Txt "Type application signature hover (@IO)"
+  , test  yes            yes               typeAppAt3 typeAppAt3Txt "Type application signature hover (@Float)"
   ]
   where yes :: (TestTree -> Maybe TestTree)
         yes = Just -- test should run and pass
