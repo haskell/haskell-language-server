@@ -261,6 +261,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.CabalAdd.Command
     Ide.Plugin.Cabal.CabalAdd.CodeAction
     Ide.Plugin.Cabal.CabalAdd.Types
+    Ide.Plugin.Cabal.CabalAdd.Rename
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
     Ide.Plugin.Cabal.Parse
