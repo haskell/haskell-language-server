@@ -78,6 +78,7 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Default                                 (Default, def)
+import           Data.Either
 import           Data.Foldable
 import           Data.Hashable
 import qualified Data.HashMap.Strict                          as HM
@@ -193,6 +194,7 @@ import           System.FilePath                              (dropExtension,
                                                                splitDirectories,
                                                                takeExtension,
                                                                takeFileName)
+import qualified Data.Vector.Strict as Vector
 
 data Log
   = LogShake Shake.Log
@@ -674,32 +676,43 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 
   cache <- liftIO (readTVarIO moduleToPathCache)
   case Map.lookup (envUnique env_eq) cache of
-    Just res -> pure (mempty, ([], Just res))
+    Just res -> pure (Nothing, ([], Just res))
     Nothing -> do
       let env = hscEnv env_eq
-      let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+      let homeUnitGraph = hugElts $ hsc_HUG env
       opt <- getIdeOptions
-      let exts = (optExtensions opt)
-      let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+      let exts = optExtensions opt
+      let
+        acceptedExtensions =
+          Vector.fromList $ concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
 
-      res <- flip mapM import_dirs $ \(u, dyn) -> do
-        res <- flip mapM (importPaths dyn) $ \dir' -> do
-          let dir = normalise dir'
-          let predicate path = pure (equalFilePath path dir || case takeFileName path of
+      res <- forM homeUnitGraph $ \(u, hue) -> do
+        res <- forM (importPaths $ homeUnitEnv_dflags hue) $ \dir' -> do
+          let import_dir = normalise dir'
+          let predicate path = equalFilePath path import_dir || case takeFileName path of
                []    -> False
-               (x:_) -> isUpper x)
-          let dir_number_directories = length (splitDirectories dir)
+               (x:_) -> isUpper x
+          let dir_number_directories = length (splitDirectories import_dir)
           let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
 
-          -- TODO: we are taking/dropping extension, this could be factorized to save a few cpu cycles ;)
-          -- TODO: do acceptedextensions needs to be a set ? or a vector?
+          let
+            toModTarget f = do
+              guard (takeExtension f `Vector.elem` acceptedExtensions)
+              Just (toModule f, toNormalizedFilePath' f)
+          let
+            searchImportDir = do
+              modCandidates <- liftIO (listFilesInside (pure . predicate) import_dir)
+              pure $ mapMaybe toModTarget modCandidates
+
           -- If the directory is empty, we return an empty list of modules
           -- using 'catch' instead of an exception which would kill the LSP
-          modules <- (fmap (\path -> (toModule path, toNormalizedFilePath' path)) . filter (\y -> takeExtension y `elem` acceptedExtensions) <$> liftIO (listFilesInside predicate dir))
-                 `catch` (\(_ :: IOException) -> pure [])
+          modules <- searchImportDir `catch` (\(_ :: IOException) -> pure [])
           let isSourceModule (_, path) = "-boot" `isSuffixOf` fromNormalizedFilePath path
           let (sourceModules, notSourceModules) = partition isSourceModule modules
-          pure $ ModuleToFilenames { moduleMapSource = fmap (u, ) (Map.fromList sourceModules), moduleMap = fmap (u,) (Map.fromList notSourceModules)}
+          pure ModuleToFilenames
+            { moduleMapSource = fmap (u,) (Map.fromList sourceModules)
+            , moduleMap = fmap (u,) (Map.fromList notSourceModules)
+            }
         pure (mconcat res)
 
       -- Extend the current module map with all the known targets
@@ -707,10 +720,10 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 
       liftIO $ atomically $ modifyTVar' moduleToPathCache (Map.insert (envUnique env_eq) resExtended)
 
-      pure (mempty, ([], Just resExtended))
+      pure (Nothing, ([], Just resExtended))
 
 
--- | Extend the map from module name to filepath (exiting on the drive) with
+-- | Extend the map from module name to filepath (existing on the drive) with
 -- the list of known targets provided by HLS, as well as the VFS.
 --
 -- These known targets are files which were recently created and not yet saved
@@ -731,10 +744,11 @@ extendModuleMapWithKnownTargets file moduleMap = do
 
   env_eq <- use_ GhcSession file
   let env = hscEnv env_eq
-  let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+  let hug_dflags = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
   opt <- getIdeOptions
   let exts = (optExtensions opt)
-  let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+  let acceptedExtensions =
+        Vector.fromList $ concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
 
   let pathsFromTargetsMap = HS.toList $ mconcat (HM.elems knownTargets)
   let pathsFromVFS = catMaybes $ map uriToNormalizedFilePath (Map.keys vfs)
@@ -745,15 +759,10 @@ extendModuleMapWithKnownTargets file moduleMap = do
   -- subject to race condition with boot files and pathsFromVFS may not contain all the files
   let paths = pathsFromTargetsMap <> pathsFromVFS
 
-  let (unzip -> (catMaybes -> new_module_map, catMaybes -> new_module_map_source)) = do
-        (u, dyn) <- import_dirs
-        -- TODO: avoid using so much `FilePath` logic AND please please,
-        -- normalize earlier.
-        --
-        -- The normalise here is in order to remove the trailing `.` which
-        -- could break the comparison later.
-        (normalise -> dir') <- importPaths dyn
-        let dirComponents = splitDirectories dir'
+  let (new_module_map, new_module_map_source) = partitionEithers $ do
+        (u, dflags) <- hug_dflags
+        import_dir <- importPaths dflags
+        let dirComponents = splitDirectories import_dir
         let dir_number_directories = length dirComponents
 
         path <- paths
@@ -765,16 +774,21 @@ extendModuleMapWithKnownTargets file moduleMap = do
         guard $ dirComponents `isPrefixOf` pathComponents
 
         -- Ensure that this extension is accepted
-        guard $ takeExtension pathString `elem` acceptedExtensions
+        guard $ takeExtension pathString `Vector.elem` acceptedExtensions
         let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
         let isSourceModule = "-boot" `isSuffixOf` pathString
         if isSourceModule
         then
-           pure (Nothing, Just (modName, (u, path)))
+          pure (Right (modName, (u, path)))
         else
-           pure (Just (modName, (u, path)), Nothing)
+          pure (Left (modName, (u, path)))
 
-  pure $ ModuleToFilenames { moduleMap = Map.fromList new_module_map, moduleMapSource = Map.fromList new_module_map_source } <> moduleMap
+  pure $
+    ModuleToFilenames
+      { moduleMap = Map.fromList new_module_map
+      , moduleMapSource = Map.fromList new_module_map_source
+      }
+    <> moduleMap
 
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)

@@ -93,22 +93,18 @@ data LocateResult
 locateModuleFile :: ModuleToFilenames -> Bool -> ModuleName -> [(UnitId, S.Set ModuleName)] -> LocateResult
 locateModuleFile ModuleToFilenames{..} isSource modName uid_reexports = do
   case Map.lookup modName (if isSource then moduleMapSource else moduleMap) of
-                 Nothing ->
-                   case find (\(_ , reexports) -> S.member modName reexports) uid_reexports of
-                           Just (uid,_) -> LocateFoundReexport uid
-                           Nothing      -> LocateNotFound
-                 Just (uid, file) -> LocateFoundFile uid file
+    Nothing ->
+      case find (\(_ , reexports) -> S.member modName reexports) uid_reexports of
+        Just (uid,_) -> LocateFoundReexport uid
+        Nothing      -> LocateNotFound
+    Just (uid, file) -> LocateFoundFile uid file
 
--- | This function is used to map a package name to a set of reexports
--- TODO: the rest of this comment seems outdated:
--- It only returns Just for unit-ids which are possible to import into the
--- current module. In particular, it will return Nothing for 'main' components
--- as they can never be imported into another package.
-mkReexports :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, (S.Set ModuleName))
+-- | This function is used to map a package name to a set of reexports.
+mkReexports :: (UnitId, DynFlags) -> (UnitId, (S.Set ModuleName))
 #if MIN_VERSION_ghc(9,11,0)
-mkReexports _env (i, flags) = Just (i, (S.fromList $ map reexportTo $ reexportedModules flags))
+mkReexports (i, flags) = (i, (S.fromList $ map reexportTo $ reexportedModules flags))
 #else
-mkReexports _env (i, flags) = Just (i, (reexportedModules flags))
+mkReexports (i, flags) = (i, (reexportedModules flags))
 #endif
 
 -- | locate a module in either the file system or the package database. Where we go from *daml to
@@ -128,12 +124,12 @@ locateModule moduleMaps env comp_info exts modName mbPkgName isSource = do
     -- 'ThisPkg' just means some home module, not the current unit
     ThisPkg uid
       -- TODO: there are MANY lookup on import_paths, which is a problem considering that it can be large.
-      | Just reexports <- lookup uid import_paths
+      | Just reexports <- lookup uid reexportedModulesFromHomeUnits
           -> lookupLocal uid moduleMaps reexports
       | otherwise -> return $ Left $ notFoundErr env modName $ LookupNotFound []
     -- if a package name is given we only go look for a package
     OtherPkg uid
-      | Just reexports <- lookup uid import_paths
+      | Just reexports <- lookup uid reexportedModulesFromHomeUnits
           -> lookupLocal uid moduleMaps reexports
       | otherwise -> lookupInPackageDB
     NoPkgQual -> do
@@ -141,8 +137,7 @@ locateModule moduleMaps env comp_info exts modName mbPkgName isSource = do
       -- Reexports for current unit have to be empty because they only apply to other units depending on the
       -- current unit. If we set the reexports to be the actual reexports then we risk looping forever trying
       -- to find the module from the perspective of the current unit.
-      let reexports = other_imports
-      let mbFile = locateModuleFile moduleMaps isSource (unLoc modName) reexports
+      let mbFile = locateModuleFile moduleMaps isSource (unLoc modName) homeUnitDependsReexportedModules
 
       case mbFile of
         LocateNotFound -> lookupInPackageDB
@@ -151,9 +146,9 @@ locateModule moduleMaps env comp_info exts modName mbPkgName isSource = do
         LocateFoundFile uid file -> toModLocation uid file
   where
     dflags = hsc_dflags env
-    import_paths = mapMaybe (mkReexports env) comp_info
+    reexportedModulesFromHomeUnits = map mkReexports comp_info
 
-    other_imports =
+    homeUnitDependsReexportedModules =
       -- Instead of bringing all the units into scope, only bring into scope the units
       -- this one depends on.
       -- This way if you have multiple units with the same module names, we won't get confused
@@ -162,11 +157,8 @@ locateModule moduleMaps env comp_info exts modName mbPkgName isSource = do
       -- about which module unit a imports.
       -- Without multi-component support it is hard to recontruct the dependency environment so
       -- unit a will have both unit b and unit c in scope.
-#if MIN_VERSION_ghc(9,11,0)
-      map (\uid -> let this_df = homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue) in (uid, S.fromList $ map reexportTo $ reexportedModules this_df)) hpt_deps
-#else
-      map (\uid -> let this_df = homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue) in (uid, reexportedModules this_df)) hpt_deps
-#endif
+      map (\uid -> mkReexports (uid, homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue))) hpt_deps
+
     ue = hsc_unit_env env
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
     hpt_deps :: [UnitId]
