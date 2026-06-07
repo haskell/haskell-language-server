@@ -49,6 +49,7 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
+import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 #if !MIN_VERSION_ghc(9,11,0)
 import           Development.IDE.GHC.Compat.Util
 #endif
@@ -144,6 +145,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
                <> caRemoveInvalidExports parsedModule textContents allDiags range uri
+               <> caDeleteUnusedBindings parsedModule textContents allDiags range uri
     pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
@@ -185,7 +187,6 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestImplicitParameter
     , wrap suggestNewDefinition
     , wrap Development.IDE.Plugin.Plugins.AddArgument.plugin
-    , wrap suggestDeleteUnusedBinding
     ]
     plId
     "Provides various quick fixes for bindings"
@@ -709,6 +710,47 @@ suggestDeleteUnusedBinding
 
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = T.unpack (printOutputable x) == name
+
+caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caDeleteUnusedBindings m contents allDiags contextRange uri
+  | Just pm <- m,
+    r <- join $ map (\d -> repeat d `zip` suggestDeleteUnusedBinding pm contents d) allDiags,
+    -- `allEdits` contains the representative edits to make.
+    -- Representative means the edit with a range that subsumes the others,
+    -- because GHC emits diagnostics for the top level binding *and* the where clause.
+    allEdits <-
+      -- take the representative and drop the others
+      concatMap headToList $
+      -- deduplicate by creating groups of ranges (same group if any subsumes the other)
+      groupBy subsumesEither
+      -- Sort to put related ranges next to each other
+      (sortOn TE._range [ e | (_, (_, edits)) <- r, e <- edits]),
+    caRemoveAll <- removeAll allEdits,
+    ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
+    not $ null ctxEdits,
+    caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
+      = caRemoveCtx ++ [caRemoveAll]
+  | otherwise = []
+  where
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+        _changes = Just $ M.singleton uri tedit
+        _documentChanges = Nothing
+        _changeAnnotations = Nothing
+    removeAll tedit = InR $ CodeAction{..} where
+        _changes = Just $ M.singleton uri tedit
+        _title = "Delete all unused bindings"
+        _kind = Just CodeActionKind_QuickFix
+        _diagnostics = Nothing
+        _documentChanges = Nothing
+        _edit = Just WorkspaceEdit{..}
+        _isPreferred = Just False
+        _command = Nothing
+        _disabled = Nothing
+        _data_ = Nothing
+        _changeAnnotations = Nothing
+    headToList []      = []
+    headToList (x : _) = [x]
+    subsumesEither (TE._range -> range1) (TE._range -> range2) = subRange range1 range2 || subRange range1 range2
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)

@@ -2508,6 +2508,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "some = ()"
       ]
       (4, 0)
+      1
       "Delete ‘f’"
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
@@ -2525,6 +2526,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "some = ()"
       ]
       (4, 2)
+      1
       "Delete ‘myPlus’"
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
@@ -2547,6 +2549,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , ""
       ]
       (10, 4)
+      1
       "Delete ‘h’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (h, g) where"
@@ -2570,6 +2573,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "c = 5"
       ]
       (4, 0)
+      1
       "Delete ‘a’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (b, c) where"
@@ -2589,6 +2593,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "c = 5"
       ]
       (5, 0)
+      1
       "Delete ‘b’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (a, c) where"
@@ -2608,6 +2613,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "c = 5"
       ]
       (6, 0)
+      1
       "Delete ‘c’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (a, b) where"
@@ -2615,12 +2621,38 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "a, b :: Int"
       , "a = 3"
       , "b = 4"
+      ],
+  testSession "delete all unused level bindings" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "f :: Int -> Int"
+      , "f 1 = let a = 1"
+      , "      in a"
+      , "f 2 = 2"
+      , ""
+      , "some = ()"
+      , "  where"
+      , "    a = 2"
+      , ""
+      , "unusedSome :: ()"
+      , "unusedSome = ()"
+      ]
+      (4, 0)
+      3
+      "Delete all unused bindings"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      , "  where"
       ]
   ]
   where
-    testFor sourceLines pos@(l,c) expectedTitle expectedLines = do
+    testFor sourceLines pos@(l,c) expectedNbrWarnings expectedTitle expectedLines = do
       docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
-      expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used", Nothing)]) ]
+      expectDiagnostics [ ("A.hs", replicate expectedNbrWarnings (DiagnosticSeverity_Warning, pos, "not used", Nothing)) ]
       action <- pickActionWithTitle expectedTitle =<< getCodeActions docId  (R l c l c)
       executeCodeAction action
       contentAfterAction <- documentContents docId
