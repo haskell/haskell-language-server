@@ -72,11 +72,15 @@ showDiff (First w)  = "WAS " <> w
 showDiff (Second w) = "NOW " <> w
 showDiff (Both w _) = w
 
+-- | Compare the expected output recorded in the test with the actual output
+-- @out@. When diffing is enabled and there is a recorded output, return a
+-- line-by-line diff (see 'showDiffs'); otherwise return @out@ unchanged.
 testCheck :: Bool -> (Section, Test) -> [T.Text] -> [T.Text]
 testCheck diff (section, test) out
     | not diff || null (testOutput test) || sectionLanguage section == Plain = out
     | otherwise = showDiffs $ getDiff (map T.pack $ testOutput test) out
 
+-- | The number of (expression lines, result lines) a test occupies.
 testLengths :: Test -> (Int, Int)
 testLengths (Example e r _)  = (NE.length e, length r)
 testLengths (Property _ r _) = (1, length r)
@@ -84,9 +88,13 @@ testLengths (Property _ r _) = (1, length r)
 -- |A one-line Haskell statement
 type Statement = Loc String
 
+-- | The Haskell statements to feed to GHCi for a test, each tagged with its
+-- source line so evaluation errors can be located.
 asStatements :: Test -> [Statement]
 asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. L.start . L.line) (asStmts lt)
 
+-- | The raw statement lines of a test. A 'Property' is wrapped so its result
+-- is evaluated through 'propEvaluation' (see 'propSetup').
 asStmts :: Test -> [Txt]
 asStmts (Example e _ _) = NE.toList e
 asStmts (Property t _ _) =

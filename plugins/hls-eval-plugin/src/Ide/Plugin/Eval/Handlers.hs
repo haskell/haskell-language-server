@@ -150,6 +150,9 @@ codeLens recorder st plId CodeLensParams{_textDocument} = do
             | (range, command) <- rangeCommands
             ]
 
+-- | Find every test in the document and pair its source range with the
+-- 'Command' that evaluates it. Shared by the code action and code lens
+-- providers.
 mkRangeCommands :: Recorder (WithPriority Log) -> IdeState -> PluginId -> TextDocumentIdentifier -> ExceptT PluginError (HandlerM Config) [(Range, Command)]
 mkRangeCommands recorder st plId textDocument =
     let dbg = logWith recorder Debug
@@ -309,6 +312,9 @@ initialiseSessionForEval needs_quickcheck st nfp = do
             getSession
   return env2
 
+-- | Convert the typechecker's import specs into the interface representation,
+-- so the reconstructed iface for the current module records what it imports
+-- (needed when re-adding the rdr env, see 'initialiseSessionForEval').
 #if MIN_VERSION_ghc(9,13,0)
 mkIfaceImports :: [ImportUserSpec] -> [IfaceImport]
 mkIfaceImports = map go
@@ -325,12 +331,15 @@ mkIfaceImports = map go
     go (ImpUserSpec decl (ImpUserEverythingBut ns)) = IfaceImport decl (ImpIfaceEverythingBut ns)
 #endif
 
+-- | Prepend an edit adding a trailing newline when the module does not end in
+-- one, so the appended results land on their own line.
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
 addFinalReturn mdlText edits
     | not (null edits) && not (T.null mdlText) && T.last mdlText /= '\n' =
         finalReturn mdlText : edits
     | otherwise = edits
 
+-- | An empty edit at the very end of the module that inserts a newline.
 finalReturn :: Text -> TextEdit
 finalReturn txt =
     let ls = T.lines txt
@@ -339,6 +348,7 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
+-- | The current (possibly unsaved) contents of the module as seen by the IDE.
 moduleText :: IdeState -> Uri -> ExceptT PluginError (HandlerM config) Text
 moduleText state uri = do
     contents <-
@@ -349,6 +359,8 @@ moduleText state uri = do
                         toNormalizedUri uri
     pure $ Rope.toText contents
 
+-- | Flatten sections into their individual tests, tagging each with the index
+-- ('EvalId') of its containing section.
 testsBySection :: [Section] -> [(Section, EvalId, Test)]
 testsBySection sections =
     [(section, ident, test)
@@ -370,6 +382,9 @@ evalSetup = do
     context <- getContext
     setContext (IIDecl preludeAsP : IIDecl systemIO : IIDecl ghcIOHandle : context)
 
+-- | Evaluate every test and produce the 'TextEdit's that write the results
+-- back into the document, prefixing/padding each result line as the section's
+-- format requires.
 runTests :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
 runTests recorder EvalConfig{..} e tests = do
     df <- getInteractiveDynFlags
@@ -400,6 +415,10 @@ runTests recorder EvalConfig{..} e tests = do
                     "Add QuickCheck to your cabal dependencies to run this test."
     runTest e df test = evals recorder (eval_cfg_exception && not (isProperty test)) e df (asStatements test)
 
+-- | Build the edit that replaces a test's old result with @resultLines@. For a
+-- test that sits on the closing @-}@ line of a block comment, the result is
+-- inserted before @-}@ on fresh lines; otherwise it simply overwrites the
+-- existing result range.
 asEdit :: Format -> Test -> [Text] -> TextEdit
 asEdit (MultiLine commRange) test resultLines
     -- A test in a block comment, ending with @-\}@ without newline in-between.
@@ -618,6 +637,9 @@ ghciLikeCommands =
     , ("type", doTypeCmd)
     ]
 
+-- | Dispatch a GHCi-like command (e.g. @:type@, @:kind@, @:info@) to its
+-- handler, matching by exact name or unique prefix. Throws if no command
+-- matches.
 evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe [Text])
 evalGhciLikeCmd cmd arg = do
     df <- getSessionDynFlags
@@ -630,6 +652,8 @@ evalGhciLikeCmd cmd arg = do
                 <$> hndler df arg
         _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
+-- | Implement @:info@ / @:info!@: show the definition, fixity and instances of
+-- each named thing. The 'Bool' is the @!@ variant, including all instances.
 doInfoCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doInfoCmd allInfo dflags s = do
     sdocs <- mapM infoThing (T.words s)
@@ -675,6 +699,8 @@ doInfoCmd allInfo dflags s = do
                 = ppr fixity <+> pprInfixName (GHC.getName thing)
             | otherwise = empty
 
+-- | Implement @:kind@ / @:kind!@: show a type's kind. The 'Bool' is the @!@
+-- variant, additionally normalising and showing the type itself.
 doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
     let input = T.strip arg
@@ -688,6 +714,8 @@ doKindCmd True df arg = do
         tyDoc = "=" <+> pprSigmaType ty
     pure $ Just $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
 
+-- | Implement @:type@: show the type of an expression. Accepts a leading
+-- @+d@ to request the defaulted type (see 'parseExprMode').
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
@@ -704,6 +732,8 @@ doTypeCmd dflags arg = do
                                 $$ nest 2 ("::" <+> pprSigmaType ty)
                 else expr <> " :: " <> rawType <> "\n"
 
+-- | Split a @:type@ argument into its mode and expression: a leading @+d@
+-- selects defaulting ('TM_Default'), anything else the plain type ('TM_Inst').
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
     ("+d", rest) -> (TM_Default, T.strip rest)
