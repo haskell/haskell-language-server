@@ -372,31 +372,40 @@ type TEnv = String
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()
 evalSetup = do
-    preludeAsP <- parseImportDecl "import qualified Prelude as P"
+    preludeAsP  <- parseImportDecl "import qualified Prelude as P"
     -- 'myExecStmt' redirects the interpreted @stdout@ and @stderr@ to a temporary
     -- file in order to capture output produced as a side effect of evaluating a
     -- statement. The setup and teardown statements it injects need these modules
     -- in scope.
-    systemIO <- parseImportDecl "import qualified System.IO"
+    systemIO    <- parseImportDecl "import qualified System.IO"
     ghcIOHandle <- parseImportDecl "import qualified GHC.IO.Handle"
-    context <- getContext
+    context     <- getContext
     setContext (IIDecl preludeAsP : IIDecl systemIO : IIDecl ghcIOHandle : context)
 
 -- | Evaluate every 'EvalExpr' and produce the 'TextEdit's that write the results
 -- back into the document, prefixing/padding each result line as the section's
 -- format requires.
-runEvalExprs :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, EvalExpr)] -> Ghc [TextEdit]
+runEvalExprs ::
+     Recorder (WithPriority Log)
+  -> EvalConfig
+  -> TEnv
+  -> [(Section, EvalExpr)]
+  -> Ghc [TextEdit]
 runEvalExprs recorder EvalConfig{..} e evalExprs = do
     df <- getInteractiveDynFlags
     evalSetup
-    when (hasQuickCheck df && needsQuickCheck evalExprs) $ void $ evals recorder True e df propSetup
+    when (hasQuickCheck df && needsQuickCheck evalExprs) $
+      void $ evals recorder True e df propSetup
 
     mapM (processEvalExpr e df) evalExprs
   where
     processEvalExpr :: TEnv -> DynFlags -> (Section, EvalExpr) -> Ghc TextEdit
     processEvalExpr fp df (section, evalExpr) = do
         let dbg = logWith recorder Debug
-        let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
+            pre =
+              (if isLiterate fp then ("> " `T.append`) else id) $
+                padPrefix (sectionFormat section)
+            pad = T.append pre
         rs <- runEvalExpr e df evalExpr
         dbg $ LogRunEvalExprResults rs
 
@@ -406,13 +415,19 @@ runEvalExprs recorder EvalConfig{..} e evalExprs = do
         dbg $ LogRunEvalExprEdits edit
         return edit
 
-    -- runEvalExpr :: String -> DynFlags -> Loc EvalExpr -> Ghc [Text]
-    runEvalExpr _ df evalExpr
+    runEvalExpr :: String -> DynFlags -> EvalExpr -> Ghc [Text]
+    runEvalExpr e df evalExpr
         | not (hasQuickCheck df) && isProperty evalExpr =
             return $
                 singleLine
                     "Add QuickCheck to your cabal dependencies to run this property."
-    runEvalExpr e df evalExpr = evals recorder (eval_cfg_exception && not (isProperty evalExpr)) e df (asStatements evalExpr)
+        | otherwise =
+            evals
+              recorder
+              (eval_cfg_exception && not (isProperty evalExpr))
+              e
+              df
+              (asStatements evalExpr)
 
 -- | Build the edit that replaces the old result of an 'EvalExpr' with
 -- @resultLines@. For an 'EvalExpr' that sits on the closing @-}@ line of a
@@ -608,13 +623,6 @@ exceptionLines = (ix 0 %~ ("*** Exception: " <>)) . errorLines
 >>> map (pad_ (T.pack "--")) (map T.pack ["2+2",""])
 ["--2+2","--<BLANKLINE>"]
 -}
-pad_ :: Text -> Text -> Text
-pad_ prefix = (prefix `T.append`) . convertBlank
-
-convertBlank :: Text -> Text
-convertBlank x
-    | T.null x = "<BLANKLINE>"
-    | otherwise = x
 
 padPrefix :: IsString p => Format -> p
 padPrefix SingleLine = "-- "
