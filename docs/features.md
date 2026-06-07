@@ -393,7 +393,6 @@ Known limitations:
 
 To eagerly load all components, you need to
 
-- set `haskell.sessionLoading` to `multipleComponents`,
 - set `hie.yaml` to load all components (currently only cabal supports this),
   ```yaml
   cradle:
@@ -401,6 +400,7 @@ To eagerly load all components, you need to
       component: all
   ```
 - and enable tests and benchmarks in `cabal.project` with `tests: True` and `benchmarks: True`.
+- if you have set `haskell.sessionLoading` to `singleComponent`, you need to change it back to default `multipleComponents`,
 
 ### Fix module names
 
