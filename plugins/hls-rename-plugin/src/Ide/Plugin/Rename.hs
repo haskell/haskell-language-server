@@ -16,15 +16,12 @@ import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
 import           Control.Monad.Trans.Class             (lift)
 import           Control.Monad.Trans.Except            (mapExceptT)
-import           Control.Monad.Trans.Maybe             (hoistMaybe,
-                                                        maybeToExceptT)
 import           Data.Either                           (rights)
 import           Data.Foldable                         (fold, minimumBy)
 import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.List                             (foldl')
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         groupWith)
 import qualified Data.List.NonEmpty                    as NE
