@@ -13,15 +13,16 @@ module Development.IDE.GHC.ExactPrint.Annotation
   , withTrailingComma
   , modifyAnns
   , addParens
+  , parenthesizeName
   ) where
 
 import           Data.Bifunctor                  (first)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans     ()
+import           GHC                             (LocatedN)
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                             (DeltaPos (..), EpAnn (..),
-                                                  EpToken (..),
-                                                  EpaLocation,
+                                                  EpToken (..), EpaLocation,
                                                   EpaLocation' (..),
                                                   NameAdornment (..),
                                                   SrcSpanAnnA, TrailingAnn (..))
@@ -33,11 +34,15 @@ import           GHC                             (DeltaPos (..), EpAnn (..),
                                                   NameAdornment (..),
                                                   SrcSpanAnnA, TrailingAnn (..))
 #else
-import           GHC                             (DeltaPos (..), EpAnn (..),
+import           GHC                             (Anchor (..),
+                                                  AnchorOperation (..),
+                                                  DeltaPos (..), EpAnn (..),
                                                   EpaLocation (..),
                                                   NameAdornment (NameParens),
                                                   SrcSpanAnn' (..), SrcSpanAnnA,
-                                                  TrailingAnn (..))
+                                                  TrailingAnn (..),
+                                                  emptyComments, realSrcSpan)
+import           GHC.Types.SrcLoc                (generatedSrcSpan)
 #endif
 import           Language.Haskell.GHC.ExactPrint (addComma)
 
@@ -112,3 +117,21 @@ addParens True NameAnnTrailing{..} =
   NameAnn{nann_adornment = NameParens, nann_open=epl 0, nann_close=epl 0, nann_name = epl 0, ..}
 #endif
 addParens _ it = it
+
+-- | Parenthesize an operator name for an export/import item, e.g. @(<|)@.
+parenthesizeName :: LocatedN RdrName -> LocatedN RdrName
+#if MIN_VERSION_ghc(9,9,0)
+parenthesizeName ln = modifyAnns ln (addParens True)
+#else
+-- A freshly built name carries EpAnnNotUsed pre-9.9, giving 'addParens' no
+-- NameAnn to act on, so install a concrete annotation first.
+parenthesizeName (L (SrcSpanAnn ann l) rdr) =
+    L (SrcSpanAnn (EpAnn anc (addParens True nameAnn) cs) l) rdr
+  where
+    (anc, nameAnn, cs) = case ann of
+      EpAnn a n c  -> (a, n, c)
+      EpAnnNotUsed -> (genAnchor0, NameAnnTrailing [], emptyComments)
+
+genAnchor0 :: Anchor
+genAnchor0 = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor (SameLine 0))
+#endif

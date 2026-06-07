@@ -49,17 +49,13 @@ import           GHC                                       (EpToken (..),
 #else
 import           GHC                                       (AddEpAnn (..))
 #endif
-import           Development.IDE.GHC.ExactPrint.Annotation (addParens,
-                                                            ensureTrailingComma,
-                                                            epl, modifyAnns,
-                                                            removeTrailingCommaAnn,
-                                                            withTrailingComma)
--- Only the leading-comma separator logic (9.9+) inspects trailing annotations.
-#if MIN_VERSION_ghc(9,9,0)
 import           Data.Maybe                                (listToMaybe)
-import           Development.IDE.GHC.ExactPrint.Annotation (isCommaAnn,
-                                                            trailingAnns)
-#endif
+import           Development.IDE.GHC.ExactPrint.Annotation (ensureTrailingComma,
+                                                            epl, isCommaAnn,
+                                                            parenthesizeName,
+                                                            removeTrailingCommaAnn,
+                                                            trailingAnns,
+                                                            withTrailingComma)
 import           GHC                                       (LocatedN)
 import           Ide.Plugin.Export.Cursor                  (ExportFlavor (..))
 import           Ide.Plugin.Export.Utils
@@ -209,7 +205,7 @@ mkWrappedName kind rdr =
 
 parenthesizeOperator :: LocatedN RdrName -> LocatedN RdrName
 parenthesizeOperator ln
-  | isSymOcc (rdrNameOcc (unLoc ln)) = modifyAnns ln (addParens True)
+  | isSymOcc (rdrNameOcc (unLoc ln)) = parenthesizeName ln
   | otherwise = ln
 
 appendIE :: LIE GhcPs -> LExportList -> LExportList
@@ -225,12 +221,8 @@ appendIE item (L l items) = L l (fixLast items ++ [newItem (not (null items))])
 
 -- | The trailing comma that separates existing items, if the list has any.
 separatorComma :: [LIE GhcPs] -> Maybe TrailingAnn
-#if MIN_VERSION_ghc(9,9,0)
 separatorComma items =
   listToMaybe [c | L ann _ <- items, c <- trailingAnns ann, isCommaAnn c]
-#else
-separatorComma _ = Nothing
-#endif
 
 -- | 'Nothing' iff @ctor@ is already exported (via @T(..)@ or @T(...,ctor,...)@).
 addCtorUnderParent ::
