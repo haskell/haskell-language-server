@@ -400,8 +400,7 @@ runEvalExprs recorder EvalConfig{..} e evalExprs = do
         rs <- runEvalExpr e df evalExpr
         dbg $ LogRunEvalExprResults rs
 
-        let checkedResult = evalExprCheck eval_cfg_diff (section, evalExpr) rs
-        let resultLines = concatMap T.lines checkedResult
+        let resultLines = evalExprCheck eval_cfg_diff (section, evalExpr) rs
 
         let edit = asEdit (sectionFormat section) evalExpr (map pad resultLines)
         dbg $ LogRunEvalExprEdits edit

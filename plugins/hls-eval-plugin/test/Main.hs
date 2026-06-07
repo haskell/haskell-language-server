@@ -153,6 +153,7 @@ tests =
   , goldenWithEval "Variable 'it' works" "TIt" "hs"
   , testGroup "configuration"
     [ goldenWithEval' "Give 'WAS' by default" "TDiff" "hs" "expected.default"
+    , goldenWithEval "Refreshing an identical multi-line result is a no-op" "TDiffMultiline" "hs"
     , goldenWithEvalConfig' "Give the result only if diff is off" "TDiff" "hs" "expected.no-diff" diffOffConfig
     , goldenWithEvalConfig' "Evaluates to exception (not marked)" "TException" "hs" "expected.nomark" (exceptionConfig False)
     , goldenWithEvalConfig' "Evaluates to exception (with mark)" "TException" "hs" "expected.marked" (exceptionConfig True)
