@@ -487,7 +487,7 @@ library hls-eval-plugin
     , hls-graph
     , hls-plugin-api        == 2.14.0.0
     , lens
-    , lsp
+    , lsp                   ^>=2.8
     , lsp-types
     , megaparsec            >=9.0
     , mtl
