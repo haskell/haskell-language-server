@@ -204,4 +204,3 @@ getModulesForPackage (Package package) =
         makeModule :: GHC.ModuleName
                    -> GHC.Module
         makeModule = GHC.mkModule (GHC.mkUnit package)
-

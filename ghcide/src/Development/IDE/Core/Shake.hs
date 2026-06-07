@@ -1360,13 +1360,14 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                let doAction = actionCatch
-                    (do v <- action staleV; liftIO $ evaluate $ force v) $
-                    \(e :: SomeException) -> do
-                        let file = case inputFingerprint input of
-                              InputFile file -> file
-                              _              -> emptyFilePath
-                        pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key input e) | not $ isBadDependency e], Nothing))
+                let doAction =
+                      actionCatch
+                        (do v <- action staleV; liftIO $ evaluate $ force v) $
+                        \(e :: SomeException) -> do
+                          let file = case inputFingerprint input of
+                                InputFile file -> file
+                                _              -> emptyFilePath
+                          pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key input e) | not $ isBadDependency e], Nothing))
                 (mbBs, (diags, mbRes)) <- case mbFile of
                   Just file
                     | isDependencyHaskellPath file

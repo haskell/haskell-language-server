@@ -44,6 +44,7 @@ import           ConstructorHoverTests
 import           CPPTests
 import           CradleTests
 import           DependentFileTest
+import           Dependency
 import           DiagnosticTests
 import           EpsPollutionTests
 import           ExceptionTests
@@ -97,6 +98,7 @@ main = do
     , CradleTests.tests
     , DependentFileTest.tests
     , EpsPollutionTests.tests
+    , Dependency.tests
     , NonLspCommandLine.tests
     , IfaceTests.tests
     , BootTests.tests

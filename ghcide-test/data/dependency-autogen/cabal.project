@@ -1,0 +1,6 @@
+packages: .
+          minimal-autogen
+package *
+  ghc-options: -fwrite-ide-info
+package minimal-autogen
+  ghc-options: -fwrite-ide-info
