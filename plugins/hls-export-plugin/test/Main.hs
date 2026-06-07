@@ -265,7 +265,9 @@ main = defaultTestRunner $ testGroup "Export"
         ]
 
     , testGroup "Export fixes the unused-binding warning"
-        [ testCase "Export action attaches the -Wunused-top-binds diagnostic" $ runExport $ \_dir -> do
+        [ knownBrokenForGhcVersions [GHC96]
+            "TcRnUnusedName provenance is unstructured before GHC 9.8 (GHC #20115)" $
+          testCase "Export action attaches the -Wunused-top-binds diagnostic" $ runExport $ \_dir -> do
             doc <- openDoc "ExportUnusedFix.hs" "haskell"
             waitForKickDone
             actions <- rights . map toEither <$> getCodeActions doc (rangeAt 6 0)  -- on `unused`

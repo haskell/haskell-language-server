@@ -13,7 +13,8 @@ import           Development.IDE.Core.PluginUtils (runActionE, useE)
 import           Development.IDE.Core.Shake       (getDiagnostics)
 import           Development.IDE.GHC.Compat
 -- TcRnUnusedName (and its provenance) only became a structured diagnostic in
--- GHC 9.8. On 9.6 we cannot single out unused top-level binds this way.
+-- GHC 9.8 (GHC #20115, MR !10350). On 9.6 we cannot single out unused top-level
+-- binds this way.
 #if MIN_VERSION_ghc(9,8,0)
 import           Development.IDE.GHC.Compat.Error (_TcRnMessage,
                                                    msgEnvelopeErrorL)
