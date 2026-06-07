@@ -5,10 +5,10 @@
 -- | Expression execution
 module Ide.Plugin.Eval.Code (
     Statement
-  , testRanges
+  , evalExprRanges
   , resultRange
   , propSetup
-  , testCheck
+  , evalExprCheck
   , asStatements
   , execStmtCaptureResult
   ) where
@@ -27,21 +27,21 @@ import           GHC                         (ExecOptions, ExecResult (..),
 import           Ide.Logger                  (Recorder, WithPriority, logWith)
 import qualified Ide.Logger                  as Log
 
-import           Ide.Plugin.Eval.Types       (Language (Plain), Loc,
-                                              Located (..), Log (..),
-                                              Section (sectionLanguage),
-                                              Test (..), Txt, locate, locate0)
+import           Ide.Plugin.Eval.Types       (EvalExpr (..), Language (Plain),
+                                              Loc, Located (..), Log (..),
+                                              Section (sectionLanguage), Txt,
+                                              locate, locate0)
 import           Ide.Plugin.Eval.Util        (gStrictTry)
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Position (Position),
                                               Range (Range))
 import           System.IO.Extra             (newTempFile, readFile')
 
--- | Return the ranges of the expression and result parts of the given test
-testRanges :: Test -> (Range, Range)
-testRanges tst =
-    let startLine = testRange tst ^. L.start . L.line
-        (fromIntegral -> exprLines, fromIntegral -> resultLines) = testLengths tst
+-- | Return the ranges of the expression and result parts of the given 'EvalExpr'.
+evalExprRanges :: EvalExpr -> (Range, Range)
+evalExprRanges tst =
+    let startLine = evalExprRange tst ^. L.start . L.line
+        (fromIntegral -> exprLines, fromIntegral -> resultLines) = evalExprLengths tst
         resLine = startLine + exprLines
      in ( Range
             (Position startLine 0)
@@ -50,14 +50,9 @@ testRanges tst =
         , Range (Position resLine 0) (Position (resLine + resultLines) 0)
         )
 
-{- |The document range where a test is defined
- testRange :: Loc Test -> Range
- testRange = fst . testRanges
--}
-
--- |The document range where the result of the test is defined
-resultRange :: Test -> Range
-resultRange = snd . testRanges
+-- | The document range where the result of the 'EvalExpr' is defined.
+resultRange :: EvalExpr -> Range
+resultRange = snd . evalExprRanges
 
 -- TODO: handle BLANKLINE
 {-
@@ -72,30 +67,31 @@ showDiff (First w)  = "WAS " <> w
 showDiff (Second w) = "NOW " <> w
 showDiff (Both w _) = w
 
--- | Compare the expected output recorded in the test with the actual output
--- @out@. When diffing is enabled and there is a recorded output, return a
--- line-by-line diff (see 'showDiffs'); otherwise return @out@ unchanged.
-testCheck :: Bool -> (Section, Test) -> [T.Text] -> [T.Text]
-testCheck diff (section, test) out
-    | not diff || null (testOutput test) || sectionLanguage section == Plain = out
-    | otherwise = showDiffs $ getDiff (map T.pack $ testOutput test) out
+-- | Compare the expected output recorded in the 'EvalExpr' with the actual
+-- output @out@. When diffing is enabled and there is a recorded output, return
+-- a line-by-line diff (see 'showDiffs'); otherwise return @out@ unchanged.
+evalExprCheck :: Bool -> (Section, EvalExpr) -> [T.Text] -> [T.Text]
+evalExprCheck diff (section, evalExpr) out
+    | not diff || null (evalExprOutput evalExpr) || sectionLanguage section == Plain = out
+    | otherwise = showDiffs $ getDiff (map T.pack $ evalExprOutput evalExpr) out
 
--- | The number of (expression lines, result lines) a test occupies.
-testLengths :: Test -> (Int, Int)
-testLengths (Example e r _)  = (NE.length e, length r)
-testLengths (Property _ r _) = (1, length r)
+-- | The number of (expression lines, result lines) an 'EvalExpr' occupies.
+evalExprLengths :: EvalExpr -> (Int, Int)
+evalExprLengths (Example e r _)  = (NE.length e, length r)
+evalExprLengths (Property _ r _) = (1, length r)
 
 -- |A one-line Haskell statement
 type Statement = Loc String
 
--- | The Haskell statements to feed to GHCi for a test, each tagged with its
--- source line so evaluation errors can be located.
-asStatements :: Test -> [Statement]
-asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. L.start . L.line) (asStmts lt)
+-- | The Haskell statements to feed to GHCi for an 'EvalExpr', each tagged with
+-- its source line so evaluation errors can be located.
+asStatements :: EvalExpr -> [Statement]
+asStatements lt =
+  locate $ Located (fromIntegral $ evalExprRange lt ^. L.start . L.line) (asStmts lt)
 
--- | The raw statement lines of a test. A 'Property' is wrapped so its result
--- is evaluated through 'propEvaluation' (see 'propSetup').
-asStmts :: Test -> [Txt]
+-- | The raw statement lines of an 'EvalExpr'. A 'Property' is wrapped so its
+-- result is evaluated through 'propEvaluation' (see 'propSetup').
+asStmts :: EvalExpr -> [Txt]
 asStmts (Example e _ _) = NE.toList e
 asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
@@ -210,15 +206,15 @@ captureTeardown = unwords
     , "  }"
     ]
 
-{- |GHC declarations required to execute test properties
+{- | GHC declarations required to evaluate property 'EvalExprs'
 
 Example:
 
 prop> \(l::[Bool]) -> reverse (reverse l) == l
-+++ OK, passed 100 tests.
++++ OK, passed 100 evalExprs.
 
 prop> \(l::[Bool]) -> reverse l == l
-*** Failed! Falsified (after 6 tests and 2 shrinks):
+*** Failed! Falsified (after 6 evalExprs and 2 shrinks):
 [True,False]
 -}
 propSetup :: [Loc [Char]]

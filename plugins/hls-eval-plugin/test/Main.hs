@@ -20,7 +20,7 @@ import           Ide.Plugin.Config          (Config)
 import qualified Ide.Plugin.Config          as Plugin
 import qualified Ide.Plugin.Eval            as Eval
 import           Ide.Plugin.Eval.Types      (EvalParams (..), Section (..),
-                                             testOutput)
+                                             evalExprOutput)
 import           Language.LSP.Protocol.Lens (command, range, title)
 import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
@@ -290,8 +290,8 @@ codeLensTestOutput codeLens = do
   CodeLens { _command = Just command } <- [codeLens]
   Command { _arguments = Just args } <- [command]
   Success EvalParams { sections = sections } <- fromJSON @EvalParams <$> args
-  Section { sectionTests = sectionTests } <- sections
-  testOutput =<< sectionTests
+  Section { sectionEvalExprs = sectionEvalExprs } <- sections
+  evalExprOutput =<< sectionEvalExprs
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-eval-plugin" </> "test" </> "testdata"

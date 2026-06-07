@@ -102,8 +102,8 @@ import           Ide.Plugin.Eval.Code                         (Statement,
                                                                execStmtCaptureResult,
                                                                propSetup,
                                                                resultRange,
-                                                               testCheck,
-                                                               testRanges)
+                                                               evalExprCheck,
+                                                               evalExprRanges)
 import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
                                                                getEvalConfig)
 import           Ide.Plugin.Eval.GHC                          (addImport,
@@ -134,8 +134,8 @@ codeAction recorder st plId CodeActionParams{_textDocument,_range} = do
     pure
         $ InL
             [ InL command
-            | (testRange, command) <- rangeCommands
-            , _range `isSubrangeOf` testRange
+            | (evalExprRange, command) <- rangeCommands
+            , _range `isSubrangeOf` evalExprRange
             ]
 
 {- | Code Lens provider
@@ -150,7 +150,7 @@ codeLens recorder st plId CodeLensParams{_textDocument} = do
             | (range, command) <- rangeCommands
             ]
 
--- | Find every test in the document and pair its source range with the
+-- | Find every eval-expr in the document and pair its source range with the
 -- 'Command' that evaluates it. Shared by the code action and code lens
 -- providers.
 mkRangeCommands :: Recorder (WithPriority Log) -> IdeState -> PluginId -> TextDocumentIdentifier -> ExceptT PluginError (HandlerM Config) [(Range, Command)]
@@ -168,14 +168,14 @@ mkRangeCommands recorder st plId textDocument =
                     runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
                 dbg $ LogCodeLensComments comments
 
-                -- Extract tests from source code
+                -- Extract 'EvalExpr's from source code
                 let Sections{..} = commentsToSections isLHS comments
-                    tests = testsBySection nonSetupSections
+                    evalExprs = evalExprsBySection nonSetupSections
                     cmd = mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let rangeCommands =
-                        [ (testRange, cmd')
-                        | (section, ident, test) <- tests
-                        , let (testRange, resultRange) = testRanges test
+                        [ (evalExprRange, cmd')
+                        | (section, ident, evalExpr) <- evalExprs
+                        , let (evalExprRange, resultRange) = evalExprRanges evalExpr
                               args = EvalParams (setupSections ++ [section]) textDocument ident
                               cmd' =
                                 (cmd :: Command)
@@ -187,9 +187,9 @@ mkRangeCommands recorder st plId textDocument =
                                     }
                         ]
 
-                perf "tests" $
-                    dbg $ LogTests
-                            (length tests)
+                perf "evalExprs" $
+                    dbg $ LogEvalExprs
+                            (length evalExprs)
                             (length nonSetupSections)
                             (length setupSections)
                             (length rangeCommands)
@@ -212,7 +212,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
         perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
         cmd :: ExceptT PluginError (HandlerM Config) WorkspaceEdit
         cmd = do
-            let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
+            let evalExprs = map (\(a,_,b) -> (a,b)) $ evalExprsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
@@ -229,7 +229,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
                 unqueueForEvaluation st nfp
                 return [toKey IsEvaluating nfp]
                 )
-              (initialiseSessionForEval (needsQuickCheck tests) st nfp)
+              (initialiseSessionForEval (needsQuickCheck evalExprs) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
@@ -238,7 +238,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
                 perf "edits" $
                     liftIO $
                         evalGhcEnv final_hscEnv $ do
-                            runTests recorder evalCfg fp tests
+                            runEvalExprs recorder evalCfg fp evalExprs
 
             let workspaceEditsMap = Map.singleton _uri (addFinalReturn mdlText edits)
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
@@ -359,13 +359,13 @@ moduleText state uri = do
                         toNormalizedUri uri
     pure $ Rope.toText contents
 
--- | Flatten sections into their individual tests, tagging each with the index
+-- | Flatten sections into their individual 'EvalExpr's, tagging each with the index
 -- ('EvalId') of its containing section.
-testsBySection :: [Section] -> [(Section, EvalId, Test)]
-testsBySection sections =
-    [(section, ident, test)
+evalExprsBySection :: [Section] -> [(Section, EvalId, EvalExpr)]
+evalExprsBySection sections =
+    [(section, ident, evalExpr)
     | (ident, section) <- zip [0..] sections
-    , test <- sectionTests section
+    , evalExpr <- sectionEvalExprs section
     ]
 
 type TEnv = String
@@ -382,59 +382,59 @@ evalSetup = do
     context <- getContext
     setContext (IIDecl preludeAsP : IIDecl systemIO : IIDecl ghcIOHandle : context)
 
--- | Evaluate every test and produce the 'TextEdit's that write the results
+-- | Evaluate every 'EvalExpr' and produce the 'TextEdit's that write the results
 -- back into the document, prefixing/padding each result line as the section's
 -- format requires.
-runTests :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
-runTests recorder EvalConfig{..} e tests = do
+runEvalExprs :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, EvalExpr)] -> Ghc [TextEdit]
+runEvalExprs recorder EvalConfig{..} e evalExprs = do
     df <- getInteractiveDynFlags
     evalSetup
-    when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals recorder True e df propSetup
+    when (hasQuickCheck df && needsQuickCheck evalExprs) $ void $ evals recorder True e df propSetup
 
-    mapM (processTest e df) tests
+    mapM (processEvalExpr e df) evalExprs
   where
-    processTest :: TEnv -> DynFlags -> (Section, Test) -> Ghc TextEdit
-    processTest fp df (section, test) = do
+    processEvalExpr :: TEnv -> DynFlags -> (Section, EvalExpr) -> Ghc TextEdit
+    processEvalExpr fp df (section, evalExpr) = do
         let dbg = logWith recorder Debug
         let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
-        rs <- runTest e df test
-        dbg $ LogRunTestResults rs
+        rs <- runEvalExpr e df evalExpr
+        dbg $ LogRunEvalExprResults rs
 
-        let checkedResult = testCheck eval_cfg_diff (section, test) rs
+        let checkedResult = evalExprCheck eval_cfg_diff (section, evalExpr) rs
         let resultLines = concatMap T.lines checkedResult
 
-        let edit = asEdit (sectionFormat section) test (map pad resultLines)
-        dbg $ LogRunTestEdits edit
+        let edit = asEdit (sectionFormat section) evalExpr (map pad resultLines)
+        dbg $ LogRunEvalExprEdits edit
         return edit
 
-    -- runTest :: String -> DynFlags -> Loc Test -> Ghc [Text]
-    runTest _ df test
-        | not (hasQuickCheck df) && isProperty test =
+    -- runEvalExpr :: String -> DynFlags -> Loc EvalExpr -> Ghc [Text]
+    runEvalExpr _ df evalExpr
+        | not (hasQuickCheck df) && isProperty evalExpr =
             return $
                 singleLine
-                    "Add QuickCheck to your cabal dependencies to run this test."
-    runTest e df test = evals recorder (eval_cfg_exception && not (isProperty test)) e df (asStatements test)
+                    "Add QuickCheck to your cabal dependencies to run this property."
+    runEvalExpr e df evalExpr = evals recorder (eval_cfg_exception && not (isProperty evalExpr)) e df (asStatements evalExpr)
 
--- | Build the edit that replaces a test's old result with @resultLines@. For a
--- test that sits on the closing @-}@ line of a block comment, the result is
--- inserted before @-}@ on fresh lines; otherwise it simply overwrites the
--- existing result range.
-asEdit :: Format -> Test -> [Text] -> TextEdit
-asEdit (MultiLine commRange) test resultLines
-    -- A test in a block comment, ending with @-\}@ without newline in-between.
-    | testRange test ^. L.end . L.line == commRange ^. L.end . L.line
+-- | Build the edit that replaces the old result of an 'EvalExpr' with
+-- @resultLines@. For an 'EvalExpr' that sits on the closing @-}@ line of a
+-- block comment, the result is inserted before @-}@ on fresh lines; otherwise
+-- it simply overwrites the existing result range.
+asEdit :: Format -> EvalExpr -> [Text] -> TextEdit
+asEdit (MultiLine commRange) evalExpr resultLines
+    -- An 'EvalExpr' in a block comment, ending with @-\}@ without newline in-between.
+    | evalExprRange evalExpr ^. L.end . L.line == commRange ^. L.end . L.line
     =
     TextEdit
         (Range
-            (testRange test ^. L.end)
-            (resultRange test ^. L.end)
+            (evalExprRange evalExpr ^. L.end)
+            (resultRange evalExpr ^. L.end)
         )
         ("\n" <> T.unlines (resultLines <> ["-}"]))
-asEdit _ test resultLines =
-    TextEdit (resultRange test) (T.unlines resultLines)
+asEdit _ evalExpr resultLines =
+    TextEdit (resultRange evalExpr) (T.unlines resultLines)
 
 {- |
-The result of evaluating a test line can be:
+The result of evaluating an eval-expr line can be:
 * a value
 * nothing
 * a (possibly multiline) error message
@@ -576,7 +576,7 @@ evals recorder mark_exception fp df stmts = do
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in execStmtCaptureResult recorder stmt opts
 
-needsQuickCheck :: [(Section, Test)] -> Bool
+needsQuickCheck :: [(Section, EvalExpr)] -> Bool
 needsQuickCheck = any (isProperty . snd)
 
 hasQuickCheck :: DynFlags -> Bool
