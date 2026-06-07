@@ -4,32 +4,39 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans   #-}
 {-# LANGUAGE LambdaCase        #-}
 
 module Ide.Plugin.Rename (descriptor, Log) where
 
+import           Control.Applicative                   ((<|>))
 import           Control.Lens                          ((^.))
 import           Control.Monad
 import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
 import           Control.Monad.Trans.Class             (lift)
+import           Control.Monad.Trans.Except            (mapExceptT)
+import           Control.Monad.Trans.Maybe             (hoistMaybe,
+                                                        maybeToExceptT)
 import           Data.Either                           (rights)
-import           Data.Foldable                         (fold)
+import           Data.Foldable                         (fold, minimumBy)
 import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
+import           Data.List                             (foldl')
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         groupWith)
+import qualified Data.List.NonEmpty                    as NE
 import qualified Data.Map                              as M
+import qualified Data.Map.Strict                       as Map
 import           Data.Maybe
 import           Data.Mod.Word
+import           Data.Ord                              (comparing)
 import qualified Data.Text                             as T
-import           Development.IDE                       (Recorder, WithPriority,
-                                                        usePropertyAction)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.Rules            (usePropertyAction)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service          hiding (Log)
 import           Development.IDE.Core.Shake            hiding (Log)
@@ -38,8 +45,10 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint        hiding (Log)
 import qualified Development.IDE.GHC.ExactPrint        as E
+import           Development.IDE.GHC.Util              (evalGhcEnv)
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
+import           Development.IDE.Types.HscEnvEq        (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location
 import           GHC.Iface.Ext.Types                   (HieAST (..),
                                                         HieASTs (..),
@@ -49,11 +58,11 @@ import           GHC.Iface.Ext.Utils                   (generateReferencesMap)
 import           HieDb                                 ((:.) (..))
 import           HieDb.Query
 import           HieDb.Types                           (RefRow (refIsGenerated))
-import           Ide.Logger                            (Pretty (..),
-                                                        cmapWithPrio)
+import           Ide.Logger
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import qualified Ide.Plugin.Rename.ModuleName          as ModuleName
+import qualified Ide.Plugin.Rename.ModuleRename        as ModuleRename
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
@@ -65,11 +74,13 @@ instance Hashable (Mod a) where hash n = hash (unMod n)
 data Log
     = LogExactPrint E.Log
     | LogModuleName ModuleName.Log
+    | LogModuleRename ModuleRename.Log
 
 instance Pretty Log where
     pretty = \ case
         LogExactPrint msg -> pretty msg
         LogModuleName msg -> pretty msg
+        LogModuleRename msg -> pretty msg
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
@@ -78,6 +89,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
               [ mkPluginHandler SMethod_TextDocumentRename renameProvider
               , mkPluginHandler SMethod_TextDocumentPrepareRename prepareRenameProvider
               , mkPluginHandler SMethod_TextDocumentCodeLens (ModuleName.codeLens moduleNameRecorder)
+              , mkPluginHandler SMethod_WorkspaceWillRenameFiles (renameModuleProvider recorder)
               ]
         , pluginCommands = [PluginCommand ModuleName.updateModuleNameCommand "Set name of module to match with file path" (ModuleName.command moduleNameRecorder)]
         , pluginConfigDescriptor = defaultConfigDescriptor
@@ -106,6 +118,35 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
     pure $ case spansWithNamesUnderCursor of
         [] -> InR Null
         srcSpan : _ -> InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)
+
+renameModuleProvider :: Recorder (WithPriority Log)-> PluginMethodHandler IdeState Method_WorkspaceWillRenameFiles
+renameModuleProvider recorder state _ (RenameFilesParams renames) = do
+    renameResults <- mapM renameFile renames
+    pure $ InL $ foldl' combineTextEdits (WorkspaceEdit mempty mempty mempty) $ catMaybes renameResults
+    where
+        recorder' = cmapWithPrio LogModuleRename recorder
+
+        renameFile (FileRename oldUri newUri) = do
+            oldNfp <- fmap toNormalizedFilePath $ uriToFilePathE $ Uri oldUri
+            newNfp <- fmap toNormalizedFilePath $ uriToFilePathE $ Uri newUri
+            pm <- runActionE "Rename.GetParsedModule" state
+                (useE GetParsedModule oldNfp)
+            let oldModuleNameM = moduleNameString . unLoc <$> (hsmodName $ unLoc $ pm_parsed_source pm)
+            newModulePathM <- guessModuleName newNfp oldNfp
+            case (oldModuleNameM, newModulePathM) of
+                (Just oldModulePath, Just newModulePath) -> do
+                    modDeclEdit <- ModuleRename.renameModuleDeclaration recorder' state oldNfp newModulePath
+                    importEdits <- ModuleRename.applyRenameToImports recorder' state (T.pack oldModulePath) newModulePath $ oldNfp
+                    pure $ Just $ combineTextEdits modDeclEdit importEdits
+                _ -> do
+                    logWith  recorder' Info $ ModuleRename.NoModuleName newNfp
+                    pure Nothing
+
+        guessModuleName newNfp oldNfp = do
+            (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession oldNfp
+            srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
+            correctNames <- mapExceptT liftIO $ ModuleName.potentialModuleNames (cmapWithPrio LogModuleName recorder) state (fromNormalizedFilePath newNfp) srcPaths
+            pure $ minimumBy (comparing T.length) <$> NE.nonEmpty correctNames
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
@@ -260,6 +301,18 @@ handleGetHieAst state nfp =
     -- the module compiles, otherwise we can't guarantee that we'll rename everything,
     -- which is bad (see https://github.com/haskell/haskell-language-server/issues/3799)
     fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst nfp
+
+combineTextEdits :: WorkspaceEdit -> WorkspaceEdit -> WorkspaceEdit
+combineTextEdits (WorkspaceEdit c1 dc1 ca1) (WorkspaceEdit c2 dc2 ca2) =
+  WorkspaceEdit c dc ca
+ where
+  c = liftA2 (Map.unionWith (<>)) c1 c2 <|> c1 <|> c2
+  dc = dc1 <> dc2
+  -- We know this might result in information loss due to the monad instance of map,
+  -- but we do not expect our use of workspacedit combination to contain two changeAnnotations
+  -- for the same edit.
+  ca = ca1 <> ca2
+
 
 {- Note [Generated references]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
