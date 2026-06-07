@@ -675,6 +675,7 @@ library hls-hlint-plugin
     , bytestring
     , containers
     , deepseq
+    , extra
     , filepath
     , ghcide                == 2.14.0.0
     , hashable
