@@ -17,6 +17,7 @@ import           Control.Lens                ((^.))
 import           Control.Monad.Catch         (MonadMask, bracket)
 import           Control.Monad.IO.Class
 import           Data.Algorithm.Diff         (Diff, PolyDiff (..), getDiff)
+import           Data.List                   (dropWhileEnd)
 import qualified Data.List.NonEmpty          as NE
 import           Data.Maybe                  (listToMaybe)
 import           Data.String                 (IsString)
@@ -45,7 +46,6 @@ evalExprRanges tst =
         resLine = startLine + exprLines
      in ( Range
             (Position startLine 0)
-            --(Position (startLine + exprLines + resultLines) 0),
             (Position resLine 0)
         , Range (Position resLine 0) (Position (resLine + resultLines) 0)
         )
@@ -54,16 +54,15 @@ evalExprRanges tst =
 resultRange :: EvalExpr -> Range
 resultRange = snd . evalExprRanges
 
--- TODO: handle BLANKLINE
-{-
->>> showDiffs $  getDiff ["abc","def","ghi","end"] ["abc","def","Z","ZZ","end"]
+{- |
+>>> showDiffs $ getDiff ["abc" :: String,"def","ghi","end"] ["abc","def","Z","ZZ","end"]
 ["abc","def","WAS ghi","NOW Z","NOW ZZ","end"]
 -}
 showDiffs :: (Semigroup a, IsString a) => [Diff a] -> [a]
 showDiffs = map showDiff
 
 showDiff :: (Semigroup a, IsString a) => Diff a -> a
-showDiff (First w)  = "WAS " <> w
+showDiff (First  w) = "WAS " <> w
 showDiff (Second w) = "NOW " <> w
 showDiff (Both w _) = w
 
@@ -78,8 +77,13 @@ showDiff (Both w _) = w
 -- this, identical multi-line results would be reported as entirely changed.
 evalExprCheck :: Bool -> (Section, EvalExpr) -> [T.Text] -> [T.Text]
 evalExprCheck diff (section, evalExpr) out
-    | not diff || null (evalExprOutput evalExpr) || sectionLanguage section == Plain = outLines
-    | otherwise = showDiffs $ getDiff (map T.pack $ evalExprOutput evalExpr) outLines
+    |  not diff
+    || null (evalExprOutput evalExpr)
+    || sectionLanguage section == Plain =
+        outLines
+    | otherwise =
+        showDiffs $
+          getDiff (map T.pack $ evalExprOutput evalExpr) outLines
   where
     outLines = concatMap T.lines out
 
@@ -88,7 +92,7 @@ evalExprLengths :: EvalExpr -> (Int, Int)
 evalExprLengths (Example e r _)  = (NE.length e, length r)
 evalExprLengths (Property _ r _) = (1, length r)
 
--- |A one-line Haskell statement
+-- | A one-line Haskell statement
 type Statement = Loc String
 
 -- | The Haskell statements to feed to GHCi for an 'EvalExpr', each tagged with
@@ -121,13 +125,26 @@ execStmtCaptureResult recorder stmt opts = do
       Right (ExecComplete (Left err) _) ->
         pure $ Left $ show err
       Right (ExecComplete (Right _) _) -> do
-        pure $ Right $ toMaybe (output <> result)
+        pure $ Right $ toMaybe (combine output result)
       Right ExecBreak{} ->
         pure $ Right $ Just "breakpoints are not supported"
   where
     toMaybe :: String -> Maybe String
     toMaybe x | null x    = Nothing
               | otherwise = Just x
+
+    -- Join the captured stdout/stderr output with the result value. GHC
+    -- diagnostics (e.g. warnings) written to stderr end with a trailing blank
+    -- line; drop trailing newlines so output and result are separated by a
+    -- single newline rather than a spurious blank line (which would otherwise
+    -- surface unexpectedly in the rendered result).
+    combine :: String -> String -> String
+    combine output result
+        | null trimmed = result
+        | null result = trimmed
+        | otherwise    = trimmed <> "\n" <> result
+      where
+        trimmed = dropWhileEnd (== '\n') output
 
 -- 'System.IO.Extra.withTempFile' is specialized to 'IO'.
 withTempFile :: (MonadIO m, MonadMask m) => (FilePath -> m b) -> m (String, b)
@@ -219,10 +236,10 @@ captureTeardown = unwords
 Example:
 
 prop> \(l::[Bool]) -> reverse (reverse l) == l
-+++ OK, passed 100 evalExprs.
++++ OK, passed 100 tests.
 
 prop> \(l::[Bool]) -> reverse l == l
-*** Failed! Falsified (after 6 evalExprs and 2 shrinks):
+*** Failed! Falsified (after 4 tests and 1 shrink):
 [True,False]
 -}
 propSetup :: [Loc [Char]]

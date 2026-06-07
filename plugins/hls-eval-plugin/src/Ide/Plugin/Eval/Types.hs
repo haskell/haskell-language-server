@@ -156,17 +156,17 @@ hasPropertyEvalExpr = any isProperty . sectionEvalExprs
 splitSections :: [Section] -> ([Section], [Section])
 splitSections = partition ((== "setup") . sectionName)
 
-data EvalExpr
-    = Example {
+data EvalExpr =
+      Example {
           evalExprLines  :: NonEmpty Txt
         , evalExprOutput :: [Txt]
         , evalExprRange  :: Range
         }
     | Property {
-        evalExprLine   :: Txt
-      , evalExprOutput :: [Txt]
-      , evalExprRange  :: Range
-      }
+          evalExprLine   :: Txt
+        , evalExprOutput :: [Txt]
+        , evalExprRange  :: Range
+        }
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
 data IsEvaluating = IsEvaluating
