@@ -208,7 +208,7 @@ instance Default Config where
     -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
-    , sessionLoading              = PreferSingleComponentLoading
+    , sessionLoading              = PreferMultiComponentLoading
     , linkSourceTo                = LinkToHackage
     , linkDocTo                   = LinkToHackage
     , plugins                     = mempty
