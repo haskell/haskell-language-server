@@ -28,8 +28,9 @@ import           GHC                         (ExecOptions, ExecResult (..),
 import           Ide.Logger                  (Recorder, WithPriority, logWith)
 import qualified Ide.Logger                  as Log
 
-import           Ide.Plugin.Eval.Types       (EvalExpr (..), Language (Plain),
-                                              Loc, Located (..), Log (..),
+import           Ide.Plugin.Eval.Types       (CapturePhase (..), EvalExpr (..),
+                                              Language (Plain), Loc,
+                                              Located (..), Log (..),
                                               Section (sectionLanguage), Txt,
                                               locate, locate0)
 import           Ide.Plugin.Eval.Util        (gStrictTry)
@@ -117,7 +118,7 @@ execStmtCaptureResult ::
 execStmtCaptureResult recorder stmt opts = do
     (result, (output, execResultE)) <-
       withCaptureResult recorder $
-        withCaptureStdHandles opts $
+        withCaptureStdHandles recorder opts $
            gStrictTry (execStmt stmt opts)
     case execResultE of
       Left exc ->
@@ -146,7 +147,8 @@ execStmtCaptureResult recorder stmt opts = do
       where
         trimmed = dropWhileEnd (== '\n') output
 
--- 'System.IO.Extra.withTempFile' is specialized to 'IO'.
+-- Like 'System.IO.Extra.withTempFile', but polymorphic (needs to run in 'Ghc'
+-- and 'IO'), and also returns the file's contents.
 withTempFile :: (MonadIO m, MonadMask m) => (FilePath -> m b) -> m (String, b)
 withTempFile k = do
     bracket
@@ -187,20 +189,38 @@ withCaptureResult recorder action = withTempFile $ \resultTemp -> do
 -- may leak. base provides no per-thread standard handles, so this is
 -- unavoidable with this approach.
 withCaptureStdHandles ::
-     ExecOptions
+     Recorder (WithPriority Log)
+  -> ExecOptions
   -> Ghc a
   -> Ghc (String, a)
-withCaptureStdHandles opts action = withTempFile $ \outputTemp -> do
+withCaptureStdHandles recorder opts action = withTempFile $ \outputTemp -> do
     bracket
-      (execStmt (captureSetup outputTemp) opts)
+      (execStmtCheck recorder CaptureSetup (captureSetup outputTemp) opts)
       -- Restore the handles no matter how the statement terminated.
-      (\_ -> execStmt captureTeardown opts)
+      (\_ -> execStmtCheck recorder CaptureTeardown captureTeardown opts)
       (\_ -> action)
+
+-- | Run an internal handle-redirection statement and log on failure.
+execStmtCheck ::
+     Recorder (WithPriority Log)
+  -> CapturePhase
+  -> String
+  -> ExecOptions
+  -> Ghc ()
+execStmtCheck recorder phase stmt opts = do
+    result <- execStmt stmt opts
+    case result of
+      ExecComplete (Left err) _ ->
+        logWith recorder Log.Warning $ LogEvalCaptureStdHandles phase (show err)
+      _ -> pure ()
 
 -- Open a temporary file and redirect the interpreted @stdout@/@stderr@ to
 -- it, saving the original handles in interactive bindings so 'captureTeardown'
 -- can restore them. Bound to a tuple (rather than evaluated as a bare
 -- expression) so GHCi does not pass it to the interactive print function.
+--
+-- @stdin@ is left alone: the server has already pointed it at an empty pipe
+-- (see 'Development.IDE.Main.emptyStdin'), so reads hit end of file.
 captureSetup :: FilePath -> String
 -- Squeeze into one line (executed by GHCi).
 captureSetup outputTemp = unwords
