@@ -23,6 +23,7 @@ module Ide.Types
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
 , Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
+, OptLinkTo(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
@@ -179,6 +180,8 @@ data Config =
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
     , sessionLoading          :: !SessionLoadingPreferenceConfig
+    , linkSourceTo            :: !OptLinkTo
+    , linkDocTo               :: !OptLinkTo
     , plugins                 :: !(Map.Map PluginId PluginConfig)
     } deriving (Show,Eq)
 
@@ -190,6 +193,8 @@ instance ToJSON Config where
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
            , "sessionLoading"              .= sessionLoading
+           , "linkSourceTo"                .= linkSourceTo
+           , "linkDocTo"                   .= linkDocTo
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
 
@@ -204,6 +209,8 @@ instance Default Config where
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
     , sessionLoading              = PreferSingleComponentLoading
+    , linkSourceTo                = LinkToHackage
+    , linkDocTo                   = LinkToHackage
     , plugins                     = mempty
     }
 
@@ -214,6 +221,11 @@ data CheckParents
     | CheckOnSave
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+
+data OptLinkTo = LinkToHackage | LinkToLocal
+  deriving stock (Eq, Ord, Show, Enum, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 
@@ -315,8 +327,8 @@ instance ToJSON PluginConfig where
 
 data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
-                   , pluginDescription  :: !T.Text
                    -- ^ Unique identifier of the plugin.
+                   , pluginDescription  :: !T.Text
                    , pluginPriority     :: Natural
                    -- ^ Plugin handlers are called in priority order, higher priority first
                    , pluginRules        :: !(Rules ())
@@ -613,6 +625,9 @@ instance PluginMethod Request Method_WorkspaceExecuteCommand where
 instance PluginMethod Request (Method_CustomMethod m) where
   handlesRequest _ _ _ _ _ = HandlesRequest
 
+instance PluginMethod Request Method_WorkspaceWillRenameFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
 -- Plugin Notifications
 
 instance PluginMethod Notification Method_TextDocumentDidOpen where
@@ -633,6 +648,15 @@ instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders whe
 
 instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidDeleteFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidRenameFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidCreateFiles where
   handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_Initialized where
@@ -844,6 +868,8 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
 instance PluginRequestMethod Method_TextDocumentInlayHint where
   combineResponses _ _ _ _ x = sconcat x
 
+instance PluginRequestMethod Method_WorkspaceWillRenameFiles where
+
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
 
@@ -914,6 +940,12 @@ instance PluginNotificationMethod Method_WorkspaceDidChangeWorkspaceFolders wher
 instance PluginNotificationMethod Method_WorkspaceDidChangeConfiguration where
 
 instance PluginNotificationMethod Method_Initialized where
+
+instance PluginNotificationMethod Method_WorkspaceDidDeleteFiles where
+
+instance PluginNotificationMethod Method_WorkspaceDidCreateFiles where
+
+instance PluginNotificationMethod Method_WorkspaceDidRenameFiles where
 
 -- ---------------------------------------------------------------------
 
@@ -1245,6 +1277,9 @@ instance HasTracing CompletionItem
 instance HasTracing DocumentLink
 instance HasTracing InlayHint
 instance HasTracing WorkspaceSymbol
+instance HasTracing RenameFilesParams
+instance HasTracing DeleteFilesParams
+instance HasTracing CreateFilesParams
 -- ---------------------------------------------------------------------
 --Experimental resolve refactoring
 {-# NOINLINE pROCESS_ID #-}

@@ -84,7 +84,7 @@ data WithPriority a = WithPriority { priority :: Priority, callStack_ :: CallSta
 --   You shouldn't call warning/error if the user has caused an error, only
 --   if our code has gone wrong and is itself erroneous (e.g. we threw an exception).
 newtype Recorder msg = Recorder
-  { logger_ :: forall m. (MonadIO m) => msg -> m () }
+  { logger_ :: forall m. MonadIO m => msg -> m () }
 
 logWith :: (HasCallStack, MonadIO m) => Recorder (WithPriority msg) -> Priority -> msg -> m ()
 logWith recorder priority msg = withFrozenCallStack $ logger_ recorder (WithPriority priority callStack msg)
@@ -108,7 +108,7 @@ cmap :: (a -> b) -> Recorder b -> Recorder a
 cmap = contramap
 
 cmapWithPrio :: (a -> b) -> Recorder (WithPriority b) -> Recorder (WithPriority a)
-cmapWithPrio f = cmap (fmap f)
+cmapWithPrio = cmap . fmap
 
 cmapIO :: (a -> IO b) -> Recorder b -> Recorder a
 cmapIO f Recorder{ logger_ } =

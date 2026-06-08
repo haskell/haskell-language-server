@@ -9,6 +9,7 @@ import           Development.IDE.GHC.Compat.Core                (flagsForComplet
 import           Distribution.CabalSpecVersion                  (CabalSpecVersion (CabalSpecV2_2),
                                                                  showCabalSpecVersion)
 import           Distribution.Pretty                            (prettyShow)
+import           Distribution.Types.BuildType                   (knownBuildTypes)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
@@ -53,7 +54,7 @@ cabalKeywords =
   Map.fromList
     [ ("name:", nameCompleter),
       ("version:", noopCompleter),
-      ("build-type:", constantCompleter ["Simple", "Custom", "Configure", "Make", "Hooks"]),
+      ("build-type:", constantCompleter (fmap (T.pack . show) knownBuildTypes)),
       ("license:", weightedConstantCompleter licenseNames weightedLicenseNames),
       ("license-file:", filePathCompleter),
       ("license-files:", filePathCompleter),

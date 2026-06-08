@@ -111,6 +111,7 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            PluginDescriptor (PluginDescriptor, pluginCli),
                                                            PluginId (PluginId),
                                                            ipMap, pluginId)
+import qualified Language.LSP.Protocol.Types              as LSP
 import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
@@ -300,7 +301,29 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
     let hlsPlugin = asGhcIdePlugin (cmapWithPrio LogPluginHLS recorder) argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
-        options = argsLspOptions { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands }
+        options =
+          argsLspOptions
+            { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands
+            , LSP.optWorkspaceWillRenameFileOperationRegistrationOptions = fileModificationOptions
+            , LSP.optWorkspaceDidRenameFileOperationRegistrationOptions = fileModificationOptions
+            , LSP.optWorkspaceWillDeleteFileOperationRegistrationOptions = fileModificationOptions
+            , LSP.optWorkspaceDidDeleteFileOperationRegistrationOptions = fileModificationOptions
+            , LSP.optWorkspaceWillCreateFileOperationRegistrationOptions = fileModificationOptions
+            , LSP.optWorkspaceDidCreateFileOperationRegistrationOptions = fileModificationOptions
+            }
+        fileModificationOptions =
+          Just $
+            LSP.FileOperationRegistrationOptions
+              [ LSP.FileOperationFilter
+                  { _scheme = Just "file"
+                  , _pattern =
+                      LSP.FileOperationPattern
+                        { _glob = "**/*.hs"
+                        , _matches = Just LSP.FileOperationPatternKind_File
+                        , _options = Nothing
+                        }
+                  }
+              ]
         argsParseConfig = getConfigFromNotification argsHlsPlugins
         rules = do
             argsRules

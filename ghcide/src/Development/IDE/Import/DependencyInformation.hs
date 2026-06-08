@@ -366,11 +366,11 @@ transitiveReverseDependencies file DependencyInformation{..} = do
     return $ map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
   where
     go :: Int -> IntSet -> IntSet
-    go k i =
+    go k visited =
       let outwards = IntMap.findWithDefault IntSet.empty k depReverseModuleDeps
-          res = IntSet.union i outwards
-          new = IntSet.difference i outwards
-      in IntSet.foldr go res new
+          visited' = IntSet.union visited outwards
+          new = IntSet.difference outwards visited
+      in IntSet.foldr go visited' new
 
 -- | Immediate reverse dependencies of a file
 immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]

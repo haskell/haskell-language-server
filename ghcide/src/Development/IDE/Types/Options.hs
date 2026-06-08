@@ -16,6 +16,8 @@ module Development.IDE.Types.Options
   , IdeGhcSession(..)
   , OptHaddockParse(..)
   , ProgressReportingStyle(..)
+  , LinkTargets(..)
+  , linkTargets
   ) where
 
 import           Control.Lens
@@ -26,7 +28,8 @@ import           Development.IDE.GHC.Compat        as GHC
 import           Development.IDE.Graph
 import           Development.IDE.Types.Diagnostics
 import           Ide.Plugin.Config
-import           Ide.Types                         (DynFlagsModifications)
+import           Ide.Types                         (DynFlagsModifications,
+                                                    OptLinkTo (..))
 import qualified Language.LSP.Protocol.Lens        as L
 import qualified Language.LSP.Protocol.Types       as LSP
 
@@ -85,6 +88,21 @@ data IdeOptions = IdeOptions
       -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
   , optVerifyCoreFile     :: Bool
     -- ^ Verify core files after serialization
+  , optLinkSourceTo       :: OptLinkTo
+    -- ^ `Source` link to Hackage or local sources.
+  , optLinkDocTo          :: OptLinkTo
+    -- ^ `Documentation` link to Hackage or local docs.
+  }
+
+data LinkTargets = LinkTargets
+  { linkSource :: !OptLinkTo
+  , linkDoc    :: !OptLinkTo
+  }
+
+linkTargets :: IdeOptions -> LinkTargets
+linkTargets IdeOptions{..} = LinkTargets
+  { linkSource = optLinkSourceTo
+  , linkDoc = optLinkDocTo
   }
 
 data OptHaddockParse = HaddockParse | NoHaddockParse
@@ -138,6 +156,8 @@ defaultIdeOptions session = IdeOptions
     ,optRunSubset = True
     ,optVerifyCoreFile = False
     ,optMaxDirtyAge = 100
+    ,optLinkSourceTo = LinkToLocal
+    ,optLinkDocTo = LinkToLocal
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool

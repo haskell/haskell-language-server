@@ -83,12 +83,7 @@
             ] ++ lib.optionals (!stdenv.isDarwin)
                    [ # tracy has a build problem on macos.
                      tracy
-                   ]
-              ++ lib.optionals stdenv.isDarwin
-              (with darwin.apple_sdk.frameworks; [
-                Cocoa
-                CoreServices
-              ]);
+                   ];
 
           shellHook = ''
             # @guibou: I'm not sure theses lines are needed
