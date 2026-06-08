@@ -164,5 +164,5 @@
             "globalOn": false
         }
     },
-    "sessionLoading": "singleComponent"
+    "sessionLoading": "multipleComponents"
 }
