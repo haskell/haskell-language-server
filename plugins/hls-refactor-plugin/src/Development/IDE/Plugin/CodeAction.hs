@@ -750,7 +750,7 @@ caDeleteUnusedBindings m contents allDiags contextRange uri
         _changeAnnotations = Nothing
     headToList []      = []
     headToList (x : _) = [x]
-    subsumesEither (TE._range -> range1) (TE._range -> range2) = subRange range1 range2 || subRange range1 range2
+    subsumesEither (TE._range -> range1) (TE._range -> range2) = subRange range1 range2 || subRange range2 range1
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
