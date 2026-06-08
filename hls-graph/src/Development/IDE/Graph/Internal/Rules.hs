@@ -23,6 +23,16 @@ import           Development.IDE.Graph.Internal.Types
 -- | The type mapping between the @key@ or a rule and the resulting @value@.
 type family RuleResult key -- = value
 
+-- | The broad class of input paths a rule is allowed to run on
+data InputClass
+    = ProjectHaskellFiles
+    | AllHaskellFiles
+    | CabalFile
+    | StackYaml
+    | NoFile
+
+-- | Type mapping between a rule as key and the class of file input it accepts as value
+type family RuleInput key :: InputClass
 action :: Action a -> Rules ()
 action x = do
     ref <- Rules $ asks rulesActions
