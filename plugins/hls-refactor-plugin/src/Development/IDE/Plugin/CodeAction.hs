@@ -53,7 +53,6 @@ import           Development.IDE.GHC.Compat                        hiding
 import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
                                                                     _TcRnMessage,
                                                                     msgEnvelopeErrorL)
-import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
@@ -105,6 +104,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
+import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
@@ -125,6 +125,8 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
+import           GHC.Tc.Types.Constraint                           (ctOrigin)
+import           GHC.Tc.Types.Origin                               (CtOrigin (LiteralOrigin))
 #endif
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -830,63 +832,16 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportFamily, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
-suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,..}
--- File.hs:52:41: warning:
---     * Defaulting the following constraint to type ‘Integer’
---        Num p0 arising from the literal ‘1’
---     * In the expression: 1
---       In an equation for ‘f’: f = 1
--- File.hs:52:41: warning:
---     * Defaulting the following constraints to type ‘[Char]’
---        (Show a0)
---          arising from a use of ‘traceShow’
---          at A.hs:228:7-25
---        (IsString a0)
---          arising from the literal ‘"debug"’
---          at A.hs:228:17-23
---     * In the expression: traceShow "debug" a
---       In an equation for ‘f’: f a = traceShow "debug" a
--- File.hs:52:41: warning:
---     * Defaulting the following constraints to type ‘[Char]’
---         (Show a0)
---          arising from a use of ‘traceShow’
---          at A.hs:255:28-43
---        (IsString a0)
---          arising from the literal ‘"test"’
---          at /Users/serhiip/workspace/ghcide/src/Development/IDE/Plugin/CodeAction.hs:255:38-43
---     * In the fourth argument of ‘seq’, namely ‘(traceShow "test")’
---       In the expression: seq "test" seq "test" (traceShow "test")
---       In an equation for ‘f’:
---          f = seq "test" seq "test" (traceShow "test")
---
-    | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True False)
-                    <|> matchRegexUnifySpaces _message (pat False False False True)
-                    <|> matchRegexUnifySpaces _message (pat False False False False)
-
-            = codeEdit _range ty lit (makeAnnotatedLit ty lit)
-    | Just source <- sourceOpt
-    , Just [ty, lit, srcspan] <- matchRegexUnifySpaces _message (pat True True False False)
-    , range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
-                 [s] -> let x = realSrcSpanToRange s
-                   in x{_end = (_end x){_character = succ (_character (_end x))}}
-                 _ -> error "bug in srcspan parser"
-    = let lit' = makeAnnotatedLit ty lit;
-          tir = textInRange range source
-      in codeEdit range ty lit (T.replace lit lit' tir)
+suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestAddTypeAnnotationToSatisfyConstraints _ FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just (TcRnWarnDefaulting cts _ typ ) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+    , (lit:_) <- [x | LiteralOrigin x <- map ctOrigin cts]
+    , typ <- printOutputable typ
+    , lit <- printOutputable lit
+    = codeEdit _range typ lit (makeAnnotatedLit typ lit)
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
-      pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
-                                       , ".*to type ‘([^ ]+)’ "
-                                       , "in the following constraint"
-                                       , if multiple then "s" else " "
-                                       , ".*arising from the literal ‘(.+)’"
-                                       , if inArg then ".+In the.+argument" else ""
-                                       , if at then ".+at ([^ ]*)" else ""
-                                       , if inExpr then ".+In the expression" else ""
-                                       , ".+In the expression"
-                                       ]
       codeEdit range ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
             edits = [TextEdit range replacement]
