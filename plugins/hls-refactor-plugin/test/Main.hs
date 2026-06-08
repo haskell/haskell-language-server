@@ -2533,6 +2533,45 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , ""
       , "some = ()"
       ]
+  , testSession "delete unused top level binding with Haddock comment" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "-- | docs for f"
+      , "f :: Int"
+      , "f = 1"
+      , ""
+      , "some = ()"
+      ]
+      (5, 0)
+      1
+      "Delete ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
+  , testSession "delete unused top level binding with block Haddock comment" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "{-| docs for f"
+      , "-}"
+      , "f :: Int"
+      , "f = 1"
+      , ""
+      , "some = ()"
+      ]
+      (6, 0)
+      1
+      "Delete ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
   , testSession "delete unused binding in where clause" $
     testFor
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
