@@ -86,13 +86,13 @@ type instance RuleInput GetModuleGraph = NoFile
 -- | it only compute the fingerprint of the module graph for a file and its dependencies
 -- we need this to trigger recompilation when the sub module graph for a file changes
 type instance RuleResult GetModuleGraphTransDepsFingerprints = Fingerprint
-type instance RuleInput GetModuleGraphTransDepsFingerprints = NoFile
+type instance RuleInput GetModuleGraphTransDepsFingerprints = ProjectHaskellFiles
 
 type instance RuleResult GetModuleGraphTransReverseDepsFingerprints = Fingerprint
-type instance RuleInput GetModuleGraphTransReverseDepsFingerprints = NoFile
+type instance RuleInput GetModuleGraphTransReverseDepsFingerprints = ProjectHaskellFiles
 
 type instance RuleResult GetModuleGraphImmediateReverseDepsFingerprints = Fingerprint
-type instance RuleInput GetModuleGraphImmediateReverseDepsFingerprints = NoFile
+type instance RuleInput GetModuleGraphImmediateReverseDepsFingerprints = ProjectHaskellFiles
 
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)

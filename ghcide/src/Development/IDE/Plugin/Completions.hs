@@ -20,6 +20,9 @@ import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileStore           (getUriContents)
+import           Development.IDE.Core.InputPath           (generalizeProjectInput,
+                                                           toProjectHaskellInput,
+                                                           unInputPath)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
@@ -84,7 +87,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
     define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
-        let uri = fromNormalizedUri $ normalizedFilePathToUri file
+        let uri = fromNormalizedUri $ normalizedFilePathToUri $ unInputPath file
         mbPm <- useWithStale GetParsedModule file
         case mbPm of
             Just (pm, _) -> do
@@ -106,7 +109,7 @@ produceCompletions recorder = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       visibleMods <- liftIO $ fmap (fromMaybe []) $ envVisibleModuleNames sess
-                      let uri = fromNormalizedUri $ normalizedFilePathToUri file
+                      let uri = fromNormalizedUri $ normalizedFilePathToUri $ unInputPath file
                       let cdata = cacheDataProducer uri visibleMods (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
                   (_diag, _) ->
@@ -127,12 +130,13 @@ resolveCompletion :: ResolveFunction IdeState CompletionResolveData Method_Compl
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
   do
     file <- getNormalizedFilePathE uri
+    input <- handleMaybe PluginStaleResolve $ toProjectHaskellInput file
     (sess,_) <- withExceptT (const PluginStaleResolve)
                   $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
-                  $ useWithStaleFastE GhcSessionDeps file
+                  $ useWithStaleFastE GhcSessionDeps input
     let nc = ideNc $ shakeExtras ide
     name <- liftIO $ lookupNameCache nc mod occ
-    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
+    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap input
     let (dm,km) = case mdkm of
           Just (DKMap docMap tyThingMap _argDocMap, _) -> (docMap,tyThingMap)
           Nothing                                      -> (mempty, mempty)
@@ -170,49 +174,52 @@ getCompletionsLSP ide plId
     fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
-            opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-            localCompls <- useWithStaleFast LocalCompletions npath
-            nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
-            pm <- useWithStaleFast GetParsedModule npath
-            binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
-            let localModules = maybe [] (Map.keys . targetMap) knownTargets
-            let lModules = mempty{importableModules = map toModueNameText localModules}
-            -- set up the exports map including both package and project-level identifiers
-            packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
-            packageExportsMap <- mapM liftIO packageExportsMapIO
-            projectExportsMap <- liftIO $ readTVarIO (exportsMap $ shakeExtras ide)
-            let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
+        case toProjectHaskellInput npath of
+          Nothing -> return (InL [])
+          Just input -> do
+            (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
+              opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
+              localCompls <- useWithStaleFast LocalCompletions input
+              nonLocalCompls <- useWithStaleFast NonLocalCompletions input
+              pm <- useWithStaleFast GetParsedModule input
+              binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings input
+              knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
+              let localModules = maybe [] (Map.keys . targetMap) knownTargets
+              let lModules = mempty{importableModules = map toModueNameText localModules}
+              -- set up the exports map including both package and project-level identifiers
+              packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession input
+              packageExportsMap <- mapM liftIO packageExportsMapIO
+              projectExportsMap <- liftIO $ readTVarIO (exportsMap $ shakeExtras ide)
+              let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
 
-            let moduleExports = getModuleExportsMap exportsMap
-                exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . nonDetOccEnvElts . getExportsMap $ exportsMap
-                exportsCompls = mempty{anyQualCompls = exportsCompItems}
-            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
+              let moduleExports = getModuleExportsMap exportsMap
+                  exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . nonDetOccEnvElts . getExportsMap $ exportsMap
+                  exportsCompls = mempty{anyQualCompls = exportsCompItems}
+              let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
-            -- get HieAst if OverloadedRecordDot is enabled
-            let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
-            ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
-            astres <- case ms of
-              Just ms' | uses_overloaded_record_dot ms'
-                ->  useWithStaleFast GetHieAst npath
-              _ -> return Nothing
+              -- get HieAst if OverloadedRecordDot is enabled
+              let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
+              ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps input
+              astres <- case ms of
+                Just ms' | uses_overloaded_record_dot ms'
+                  ->  useWithStaleFast GetHieAst $ generalizeProjectInput input
+                _ -> return Nothing
 
-            pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
-        case compls of
-          Just (cci', parsedMod, bindMap) -> do
-            let pfix = getCompletionPrefixFromRope position cnts
-            case (pfix, completionContext) of
-              (PosPrefixInfo _ "" _ _, Just CompletionContext { _triggerCharacter = Just "."})
-                -> return (InL [])
-              (_, _) -> do
-                let clientCaps = clientCapabilities $ shakeExtras ide
-                    plugins = idePlugins $ shakeExtras ide
-                config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
+              pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
+            case compls of
+              Just (cci', parsedMod, bindMap) -> do
+                let pfix = getCompletionPrefixFromRope position cnts
+                case (pfix, completionContext) of
+                  (PosPrefixInfo _ "" _ _, Just CompletionContext { _triggerCharacter = Just "."})
+                    -> return (InL [])
+                  (_, _) -> do
+                    let clientCaps = clientCapabilities $ shakeExtras ide
+                        plugins = idePlugins $ shakeExtras ide
+                    config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
-                let allCompletions = getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
-                pure $ InL (orderedCompletions allCompletions)
-          _ -> return (InL [])
+                    let allCompletions = getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
+                    pure $ InL (orderedCompletions allCompletions)
+              _ -> return (InL [])
       _ -> return (InL [])
 
 getCompletionsConfig :: PluginId -> Action CompletionsConfig

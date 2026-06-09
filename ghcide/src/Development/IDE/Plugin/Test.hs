@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE PackageImports     #-}
 -- | A plugin that adds custom messages for use in tests
@@ -29,12 +30,14 @@ import           Data.Maybe                           (isJust)
 import           Data.Proxy
 import           Data.String
 import           Data.Text                            (Text, pack)
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Graph                (Action)
+import           Development.IDE.Graph                (Action,
+                                                       InputClass (ProjectHaskellFiles))
 import qualified Development.IDE.Graph                as Graph
 import           Development.IDE.Graph.Database       (ShakeDatabase,
                                                        shakeGetBuildEdges,
@@ -103,9 +106,13 @@ testRequestHandler _ (BlockSeconds secs) = do
     return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
-    sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
-    let hiPath = hiDir $ hsc_dflags $ hscEnv sess
-    return $ Right (toJSON hiPath)
+    case toProjectHaskellInput nfp of
+      Nothing ->
+        return $ Left $ PluginInvalidParams "GetInterfaceFilesDir is not valid for dependency files"
+      Just input -> do
+        sess <- runAction "Test - GhcSession" s $ use_ GhcSession input
+        let hiPath = hiDir $ hsc_dflags $ hscEnv sess
+        return $ Right (toJSON hiPath)
 testRequestHandler s GetShakeSessionQueueCount = liftIO $ do
     n <- atomically $ countQueue $ actionQueue $ shakeExtras s
     return $ Right (toJSON n)
@@ -164,28 +171,40 @@ getDatabaseKeys field db = do
     return [ k | (k, res) <- keys, field res == Step step]
 
 parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
-parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp
-parseAction "getLocatedImports" fp = Right . isJust <$> use GetLocatedImports fp
-parseAction "getmodsummary" fp = Right . isJust <$> use GetModSummary fp
-parseAction "getmodsummarywithouttimestamps" fp = Right . isJust <$> use GetModSummaryWithoutTimestamps fp
-parseAction "getparsedmodule" fp = Right . isJust <$> use GetParsedModule fp
-parseAction "ghcsession" fp = Right . isJust <$> use GhcSession fp
-parseAction "ghcsessiondeps" fp = Right . isJust <$> use GhcSessionDeps fp
-parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
-parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
+parseAction "typecheck" fp = projectRule TypeCheck fp
+parseAction "getLocatedImports" fp = projectRule GetLocatedImports fp
+parseAction "getmodsummary" fp = projectRule GetModSummary fp
+parseAction "getmodsummarywithouttimestamps" fp = projectRule GetModSummaryWithoutTimestamps fp
+parseAction "getparsedmodule" fp = projectRule GetParsedModule fp
+parseAction "ghcsession" fp = projectRule GhcSession fp
+parseAction "ghcsessiondeps" fp = projectRule GhcSessionDeps fp
+parseAction "gethieast" fp = Right . isJust <$> use GetHieAst (toAllHaskellInput fp)
+parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents (toAllHaskellInput fp)
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
 parseActions :: CI String -> [NormalizedFilePath] -> Action (Either Text [Bool])
-parseActions "typecheck" fps = Right . fmap isJust <$> uses TypeCheck fps
-parseActions "getLocatedImports" fps = Right . fmap isJust <$> uses GetLocatedImports fps
-parseActions "getmodsummary" fps = Right . fmap isJust <$> uses GetModSummary fps
-parseActions "getmodsummarywithouttimestamps" fps = Right . fmap isJust <$> uses GetModSummaryWithoutTimestamps fps
-parseActions "getparsedmodule" fps = Right . fmap isJust <$> uses GetParsedModule fps
-parseActions "ghcsession" fps = Right . fmap isJust <$> uses GhcSession fps
-parseActions "ghcsessiondeps" fps = Right . fmap isJust <$> uses GhcSessionDeps fps
-parseActions "gethieast" fps = Right . fmap isJust <$> uses GetHieAst fps
-parseActions "getFileContents" fps = Right . fmap isJust <$> uses GetFileContents fps
+parseActions "typecheck" fps = projectRules TypeCheck fps
+parseActions "getLocatedImports" fps = projectRules GetLocatedImports fps
+parseActions "getmodsummary" fps = projectRules GetModSummary fps
+parseActions "getmodsummarywithouttimestamps" fps = projectRules GetModSummaryWithoutTimestamps fps
+parseActions "getparsedmodule" fps = projectRules GetParsedModule fps
+parseActions "ghcsession" fps = projectRules GhcSession fps
+parseActions "ghcsessiondeps" fps = projectRules GhcSessionDeps fps
+parseActions "gethieast" fps = Right . fmap isJust <$> uses GetHieAst (map toAllHaskellInput fps)
+parseActions "getFileContents" fps = Right . fmap isJust <$> uses GetFileContents (map toAllHaskellInput fps)
 parseActions other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
+
+projectRule :: IdeRule k ProjectHaskellFiles v => k -> NormalizedFilePath -> Action (Either Text Bool)
+projectRule k fp =
+    case toProjectHaskellInput fp of
+      Nothing -> pure $ Left $ "Rule is not valid for dependency file: " <> pack (show fp)
+      Just input -> Right . isJust <$> use k input
+
+projectRules :: IdeRule k ProjectHaskellFiles v => k -> [NormalizedFilePath] -> Action (Either Text [Bool])
+projectRules k fps =
+    case traverse toProjectHaskellInput fps of
+      Nothing -> pure $ Left "Rule is not valid for one or more dependency files"
+      Just inputs -> Right . fmap isJust <$> uses k inputs
 
 -- | a command that blocks forever. Used for testing
 blockCommandId :: Text
