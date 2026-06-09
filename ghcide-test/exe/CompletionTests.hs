@@ -43,6 +43,7 @@ tests
     , testGroup "package" packageCompletionTests
     , testGroup "project" projectCompletionTests
     , testGroup "other" otherCompletionTests
+    , testGroup "context" contextCompletionTests
     , testGroup "doc" completionDocTests
     ]
 
@@ -515,6 +516,148 @@ projectCompletionTests =
         liftIO $ do
           item ^. L.label @?= "anidentifier"
     ]
+
+contextCompletionTests :: [TestTree]
+contextCompletionTests =
+  [ completionTest
+      "type context filters out value completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "g :: Xxx"
+      ]
+      (Position 4 8)
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = bar"
+      , "  where"
+      , "    helper :: Xxx"
+      , "    helper = bar"
+      ]
+      (Position 6 17)  -- after "Xxx" in "    helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , testSessionSingleFile "value binding in where-clause gives value completions" "A.hs"
+      (T.unlines
+        [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+        , "module A () where"
+        , "data Xxxtype = Xxxcon"
+        , "xxxval = ()"
+        , "foo x = bar"
+        , "  where"
+        , "    helper = xxxv"
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 6 16)  -- after "xxxv"
+      let labels = map (^. L.label) compls
+      liftIO $ assertBool "xxxval should appear in value context" ("xxxval" `elem` labels)
+      liftIO $ assertBool "Xxxtype should not appear in value context"
+                          (not ("Xxxtype" `elem` labels))
+
+  , completionTest
+      "type sig in nested where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo x = outer"
+      , "  where"
+      , "    inner y = result"
+      , "      where"
+      , "        sig :: Xxx"
+      , "        sig = undefined"
+      ]
+      (Position 8 18)
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in match alternative where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo 0 = bar"
+      , "  where helper :: Xxx"
+      , "foo _ = baz"
+      ]
+      (Position 5 21)  -- after "Xxx" in "  where helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in pattern binding where-clause gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "(a, b) = (undefined, undefined)"
+      , "  where"
+      , "    helper :: Xxx"
+      , "    helper = undefined"
+      ]
+      (Position 6 17)  -- after "Xxx" in "    helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , completionTest
+      "type sig in let expression gives type completions"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A () where"
+      , "data Xxxtype = Xxxcon"
+      , "xxxval = ()"
+      , "foo ="
+      , "  let helper :: Xxx"
+      , "      helper = undefined"
+      , "  in helper"
+      ]
+      (Position 5 19)  -- after "Xxx" in "  let helper :: Xxx"
+      [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
+
+  , testSessionSingleFile "export list gives value completions" "A.hs"
+      (T.unlines
+        [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+        , "module A (xxx) where"
+        , "xxx = ()"
+        , "unused = ()"  -- forces a warning so waitForDiagnostics has something to wait on
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 12)  -- inside the export list, within "xxx"
+      let labels = map (^. L.label) compls
+      liftIO $ assertBool "xxx should be completable in the export list" ("xxx" `elem` labels)
+
+  , testSessionSingleFile "import list gives module-export completions" "A.hs"
+      (T.unlines
+        [ "module A where"
+        , "import Data.List (per)"
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 21)  -- inside the import list, after "per"
+      let labels = map (^. L.label) compls
+      liftIO $ assertBool "permutations should complete inside the import list"
+                          ("permutations" `elem` labels)
+
+  , testSessionSingleFile "import hiding list gives module-export completions" "A.hs"
+      (T.unlines
+        [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+        , "module A () where"
+        , "import Data.List hiding (per)"
+        , "unused = ()"  -- force a warning to wait on with waitForDiagnostics
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 2 28)  -- inside the hiding list, after "per"
+      let labels = map (^. L.label) compls
+      liftIO $ assertBool "permutations should complete inside the hiding list"
+                          ("permutations" `elem` labels)
+  ]
 
 completionDocTests :: [TestTree]
 completionDocTests =
