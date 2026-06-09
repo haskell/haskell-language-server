@@ -67,8 +67,8 @@ staleHieProvokesOverlapping =
     -- loadSysInterface(A) then runs and pollutes the EPS.
     changeDoc cdoc [TextDocumentContentChangeEvent . InR .
       TextDocumentContentChangeWholeDocument $ brokenC]
+    void $ waitForDiagnosticsFrom cdoc
     void $ getHover cdoc (hoverOnMyMethod brokenC)
-    void $ waitForDiagnosticsFrom cdoc  -- let the broken state settle
     -- Repair C. The next typecheck legitimately has A in its HPT; with
     -- the polluted EPS it also has A's ClsInst in eps_inst_env, so
     -- instance resolution for 'myMethod x :: AType -> String' finds
