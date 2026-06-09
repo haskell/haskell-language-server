@@ -31,6 +31,7 @@ import           Control.Concurrent.STM.Stats             (atomically,
 import           Data.Aeson                               (toJSON)
 import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes)
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake               hiding (Log)
@@ -66,9 +67,10 @@ ofInterestRules :: Recorder (WithPriority Log) -> Rules ()
 ofInterestRules recorder = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
     addIdeGlobal . GarbageCollectVar =<< liftIO (newVar False)
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsFileOfInterest input -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
+        let f = unInputPath input
         let foi = maybe NotFOI IsFOI $ f `HashMap.lookup` filesOfInterest
             fp  = summarize foi
             res = (Just fp, Just foi)
@@ -139,16 +141,22 @@ kick = do
             mRunLspT lspEnv $
                 LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
                 toJSON $ map fromNormalizedFilePath files
+        files :: [NormalizedFilePath]
+        files = HashMap.keys filesOfInterestMap
+        projectFiles :: [InputPath ProjectHaskellFiles]
+        projectFiles = classifyProjectHaskellInputs files
+        haskellFiles :: [InputPath AllHaskellFiles]
+        haskellFiles = classifyAllHaskellInputs files
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress ProgressNewStarted
 
     -- Update the exports map
-    results <- uses GenerateCore files
-            <* uses GetHieAst files
+    results <- uses GenerateCore projectFiles
+            <* uses GetHieAst haskellFiles
             -- needed to have non local completions on the first edit
             -- when the first edit breaks the module header
-            <* uses NonLocalCompletions files
+            <* uses NonLocalCompletions projectFiles
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
