@@ -3,6 +3,7 @@
 module Development.IDE.Core.InputPath
     ( InputPath
     , unInputPath
+    , unsafeMkInputPath
     , toAllHaskellInput
     , toNoFileInput
     , toProjectHaskellInput
@@ -29,6 +30,15 @@ import           System.FilePath              (splitDirectories)
 newtype InputPath (i :: InputClass) =
     InputPath { unInputPath :: NormalizedFilePath }
     deriving newtype (Eq, Hashable, NFData, Show)
+
+-- | Construct an InputPath without checking whether the path belongs to the
+-- requested input class.
+--
+-- This is only for trusted internals that are rehydrating already-typed rule
+-- keys from the Shake database. Normal call sites should use the smart
+-- constructors below.
+unsafeMkInputPath :: NormalizedFilePath -> InputPath i
+unsafeMkInputPath = InputPath
 
 -- | Any Haskell source path HLS may inspect.
 --
