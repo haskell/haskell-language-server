@@ -18,9 +18,9 @@ import qualified Data.Text                                     ()
 import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
+import           Development.IDE.Core.InputPath                 (toCabalFileInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Shake                    (restartShakeSession)
-import           Development.IDE.Graph                         (Key)
 import           Development.IDE.LSP.HoverDefinition           (foundHover)
 import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
 import           Development.IDE.Types.Shake                   (toKey)
@@ -220,14 +220,19 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
     Just (fileContents, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
-      case mFields of
+      let cabalInput = toCabalFileInput $ toNormalizedFilePath path
+      case cabalInput of
         Nothing ->
           pure $ InL []
-        Just (cabalFields, _) -> do
-          let fields = Maybe.mapMaybe FieldSuggest.fieldErrorName diags
-          results <- forM fields (getSuggestion fileContents path cabalFields)
-          pure $ InL $ map InR $ concat results
+        Just input -> do
+          mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields input
+          case mFields of
+            Nothing ->
+              pure $ InL []
+            Just (cabalFields, _) -> do
+              let fields = Maybe.mapMaybe FieldSuggest.fieldErrorName diags
+              results <- forM fields (getSuggestion fileContents path cabalFields)
+              pure $ InL $ map InR $ concat results
  where
   getSuggestion fileContents fp cabalFields (fieldName, Diagnostic{_range = _range@(Range (Position lineNr col) _)}) = do
     let
@@ -252,12 +257,14 @@ cabalAddDependencyCodeAction _ state plId (CodeActionParams _ _ (TextDocumentIde
       case mbCabalFile of
         Nothing -> pure $ InL []
         Just cabalFilePath -> do
+          let cabalFile = toNormalizedFilePath cabalFilePath
+          cabalInput <- handleMaybe (PluginInvalidParams "Expected cabal file") $ toCabalFileInput cabalFile
           verTxtDocId <-
             runActionE "cabalAdd.getVersionedTextDoc" state $
               lift $
                 getVersionedTextDoc $
                   TextDocumentIdentifier (filePathToUri cabalFilePath)
-          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile cabalInput
           case mbGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
@@ -307,12 +314,13 @@ If the cursor is hovering on a dependency, add a documentation link to that depe
 hover :: PluginMethodHandler IdeState LSP.Method_TextDocumentHover
 hover ide _ msgParam = do
   nfp <- getNormalizedFilePathE uri
-  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields nfp
+  cabalInput <- handleMaybe (PluginInvalidParams "Expected cabal file") $ toCabalFileInput nfp
+  cabalFields <- runActionE "cabal.cabal-hover" ide $ useE ParseCabalFields cabalInput
   case CabalFields.findTextWord cursor cabalFields of
     Nothing ->
       pure $ InR Null
     Just cursorText -> do
-      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile nfp
+      gpd <- runActionE "cabal.GPD" ide $ useE ParseCabalFile cabalInput
       let depsNames = map dependencyName $ allBuildDepends $ flattenPackageDescription gpd
       case filterVersion cursorText of
         Nothing -> pure $ InR Null
@@ -361,17 +369,22 @@ completion recorder ide _ complParams = do
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
-      case mFields of
+      let cabalInput = toCabalFileInput $ toNormalizedFilePath path
+      case cabalInput of
         Nothing ->
           pure . InR $ InR Null
-        Just (fields, _) -> do
-          let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
-              cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
-              res = computeCompletionsAt recorder ide cabalPrefInfo path fields $
-                CompleterTypes.Matcher $
-                  Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
-          liftIO $ fmap InL res
+        Just input -> do
+          mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields input
+          case mFields of
+            Nothing ->
+              pure . InR $ InR Null
+            Just (fields, _) -> do
+              let lspPrefInfo = Ghcide.getCompletionPrefixFromRope position cnts
+                  cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
+                  res = computeCompletionsAt recorder ide cabalPrefInfo path fields $
+                    CompleterTypes.Matcher $
+                      Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
+              liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null
 
 computeCompletionsAt
@@ -383,6 +396,7 @@ computeCompletionsAt
   -> CompleterTypes.Matcher T.Text
   -> IO [CompletionItem]
 computeCompletionsAt recorder ide prefInfo fp fields matcher = do
+  let cabalInput = toCabalFileInput $ toNormalizedFilePath fp
   runMaybeT (context fields) >>= \case
     Nothing -> pure []
     Just ctx -> do
@@ -394,9 +408,14 @@ computeCompletionsAt recorder ide prefInfo fp fields matcher = do
                   -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
                   -- thus, a quick response gives us the desired result most of the time.
                   -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
-                  mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath fp
-                  pure $ fmap fst mGPD
-              , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections $ toNormalizedFilePath fp
+                  case cabalInput of
+                    Nothing -> pure Nothing
+                    Just input -> do
+                      mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile input
+                      pure $ fmap fst mGPD
+              , getCabalCommonSections = case cabalInput of
+                  Nothing -> pure Nothing
+                  Just input -> runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections input
               , cabalPrefixInfo = prefInfo
               , stanzaName =
                   case fst ctx of

@@ -42,6 +42,7 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                           as T
 import           Data.Version
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake          hiding (Log, knownTargets,
                                                       withHieDb)
@@ -906,9 +907,9 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         unless (null new_components_info || not checkProject) $ do
             cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
             void $ enqueueActions sessionShake $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                mmt <- uses GetModificationTime cfps'
+                mmt <- uses GetModificationTime $ classifyAllHaskellInputs cfps'
                 let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-                modIfaces <- uses GetModIface cs_exist
+                modIfaces <- uses GetModIface $ classifyProjectHaskellInputs cs_exist
                 -- update exports map
                 shakeExtras <- getShakeExtras
                 let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces

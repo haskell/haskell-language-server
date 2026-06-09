@@ -23,6 +23,7 @@ import           Data.Maybe                       (catMaybes)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.InputPath   (toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
 import           Development.IDE.GHC.Compat       (hsc_dflags, moduleNameString)
 import qualified Development.IDE.GHC.Compat       as D
@@ -67,7 +68,7 @@ provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler Id
 provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
   fileOpts <-
       maybe [] (fromDyn . hsc_dflags . hscEnv)
-          <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)
+          <$> liftIO (runAction "Ormolu" ideState $ maybe (pure Nothing) (use GhcSession) $ toProjectHaskellInput fp)
   useCLI <- liftIO $ runAction "Ormolu" ideState $ usePropertyAction #external plId properties
 
   if useCLI

@@ -16,12 +16,15 @@ import qualified Data.HashMap.Strict               as HashMap
 import           Data.Proxy
 import qualified Data.Text                         ()
 import           Development.IDE                   as D
+import           Development.IDE.Core.InputPath    (classifyCabalFileInputs,
+                                                    unInputPath)
 import qualified Development.IDE.Core.Shake        as Shake
-import           Development.IDE.Graph             (Key, alwaysRerun)
 import           Development.IDE.Types.Shake       (toKey)
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Completion.Types as Types
 import           Ide.Plugin.Cabal.Orphans          ()
+import           Ide.Types                         (InputClass (CabalFile),
+                                                    Key, RuleInput, alwaysRerun)
 
 data Log
   = LogShake Shake.Log
@@ -55,6 +58,7 @@ instance Hashable IsCabalFileOfInterest
 instance NFData IsCabalFileOfInterest
 
 type instance RuleResult IsCabalFileOfInterest = CabalFileOfInterestResult
+type instance RuleInput IsCabalFileOfInterest = CabalFile
 
 data CabalFileOfInterestResult = NotCabalFOI | IsCabalFOI FileOfInterestStatus
   deriving (Eq, Show, Generic)
@@ -71,7 +75,7 @@ ofInterestRules recorder = do
   Shake.defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsCabalFileOfInterest f -> do
     alwaysRerun
     filesOfInterest <- getCabalFilesOfInterestUntracked
-    let foi = maybe NotCabalFOI IsCabalFOI $ f `HashMap.lookup` filesOfInterest
+    let foi = maybe NotCabalFOI IsCabalFOI $ unInputPath f `HashMap.lookup` filesOfInterest
         fp = summarize foi
         res = (Just fp, Just foi)
     return res
@@ -119,4 +123,4 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
-  Shake.runWithSignal (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") files Types.ParseCabalFile
+  Shake.runWithSignal (Proxy @"kick/start/cabal") (Proxy @"kick/done/cabal") (classifyCabalFileInputs files) Types.ParseCabalFile

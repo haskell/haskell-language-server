@@ -25,6 +25,7 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        realSrcSpanToRange,
                                                        useWithStale_, use_)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.InputPath       (unInputPath)
 import           Development.IDE.Core.Rules           (needsCompilationRule)
 import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        RuleBody (RuleWithCustomNewnessCheck),
@@ -82,10 +83,11 @@ pattern RealSrcSpanAlready x = x
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
 evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
     (pm, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
+    let file = unInputPath nfp
     let comments = foldMap (\case
                 L (RealSrcSpanAlready real) bdy
                     | FastString.unpackFS (srcSpanFile real) ==
-                        fromNormalizedFilePath nfp
+                        fromNormalizedFilePath file
                     , let ran0 = realSrcSpanToRange real
                     , Just curRan <- toCurrentRange posMap ran0
                     ->
@@ -110,7 +112,7 @@ isEvaluatingRule :: Recorder (WithPriority Log) -> Rules ()
 isEvaluatingRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsEvaluating f -> do
     alwaysRerun
     EvaluatingVar var <- getIdeGlobalAction
-    b <- liftIO $ (f `Set.member`) <$> readIORef var
+    b <- liftIO $ (unInputPath f `Set.member`) <$> readIORef var
     return (Just (if b then BS.singleton 1 else BS.empty), Just b)
 
 -- Redefine the NeedsCompilation rule to set the linkable type to Just _
@@ -127,4 +129,3 @@ redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake re
         pure (Just fp, Just (Just linkableType))
     else
         needsCompilationRule f
-

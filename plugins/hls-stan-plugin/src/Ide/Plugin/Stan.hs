@@ -16,7 +16,9 @@ import qualified Development.IDE.Core.Shake  as Shake
 import           Development.IDE.GHC.Compat  (HieFile (..))
 import           GHC.Generics                (Generic)
 import           Ide.Plugin.Config           (PluginConfig (..))
-import           Ide.Types                   (PluginDescriptor (..), PluginId,
+import           Ide.Types                   (InputClass (ProjectHaskellFiles),
+                                              PluginDescriptor (..), PluginId,
+                                              RuleInput,
                                               configHasDiagnostics,
                                               configInitialGenericConfig,
                                               defaultConfigDescriptor,
@@ -102,6 +104,7 @@ instance Hashable GetStanDiagnostics
 instance NFData GetStanDiagnostics
 
 type instance RuleResult GetStanDiagnostics = ()
+type instance RuleInput GetStanDiagnostics = ProjectHaskellFiles
 
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plId = do

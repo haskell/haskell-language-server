@@ -39,6 +39,7 @@ import           Data.Maybe                            (fromMaybe, listToMaybe,
 import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
+import           Development.IDE.Core.InputPath        (toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
@@ -101,8 +102,9 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
         reportEditor msgTy msgs = liftIO $ rio $ pluginSendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
         expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
         expandManually fp = do
+            input <- maybe (throwError $ PluginInternalError "Splice expansion: expected project Haskell file") pure $ toProjectHaskellInput fp
             mresl <-
-                liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
+                liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck input
             (TcModuleResult {..}, _) <-
                 maybe
                 (throwError $ PluginInternalError "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
@@ -176,10 +178,11 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
     res <- liftIO $ runMaybeT $ do
 
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
+            input <- MaybeT $ pure $ toProjectHaskellInput fp
             eedits <-
                 ( lift . runExceptT . withTypeChecked fp
                         =<< MaybeT
-                            (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck fp)
+                            (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck input)
                     )
                     <|> lift (runExceptT $ expandManually fp)
 
@@ -462,9 +465,10 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
+            input <- MaybeT $ pure $ toProjectHaskellInput fp
             ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
-                    use GetParsedModule fp
+                    use GetParsedModule input
             let spn = rangeToRealSrcSpan fp ran
                 mouterSplice = something' (detectSplice spn) pm_parsed_source
             mcmds <- forM mouterSplice $

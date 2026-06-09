@@ -53,6 +53,7 @@ instance Hashable CollectLiterals
 instance NFData CollectLiterals
 
 type instance RuleResult CollectLiterals = CollectLiteralsResult
+type instance RuleInput CollectLiterals = ProjectHaskellFiles
 
 data CollectLiteralsResult = CLR
     { literals          :: RangeMap Literal

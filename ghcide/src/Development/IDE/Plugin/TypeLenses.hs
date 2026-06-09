@@ -159,17 +159,19 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       then do
         -- In this mode we get the global bindings from the
         -- GlobalBindingTypeSigs rule.
-        let input = maybe (error "codeLensProvider: expected a project Haskell file") id $ toProjectHaskellInput nfp
-        (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
-          runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-          $ useWithStaleE GetGlobalBindingTypeSigs input
-        -- Depending on whether we only want exported or not we filter our list
-        -- of signatures to get what we want
-        let relevantGlobalSigs =
-              if mode == Exported
-                then filter gbExported gblSigs
-                else gblSigs
-        pure $ InL $ generateLensFromGlobal relevantGlobalSigs gblSigsMp
+        case toProjectHaskellInput nfp of
+          Nothing -> pure $ InL []
+          Just input -> do
+            (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
+              runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
+              $ useWithStaleE GetGlobalBindingTypeSigs input
+            -- Depending on whether we only want exported or not we filter our list
+            -- of signatures to get what we want
+            let relevantGlobalSigs =
+                  if mode == Exported
+                    then filter gbExported gblSigs
+                    else gblSigs
+            pure $ InL $ generateLensFromGlobal relevantGlobalSigs gblSigsMp
       else do
         -- For this mode we exclusively use diagnostics to create the lenses.
         -- However we will still use the GlobalBindingTypeSigs to resolve them.
@@ -181,7 +183,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
 codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
   nfp <- getNormalizedFilePathE uri
-  let input = maybe (error "codeLensResolveProvider: expected a project Haskell file") id $ toProjectHaskellInput nfp
+  input <- handleMaybe PluginStaleResolve $ toProjectHaskellInput nfp
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
     $ useWithStaleE GetGlobalBindingTypeSigs input

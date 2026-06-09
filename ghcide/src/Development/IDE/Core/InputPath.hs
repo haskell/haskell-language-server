@@ -5,10 +5,14 @@ module Development.IDE.Core.InputPath
     , unInputPath
     , unsafeMkInputPath
     , toAllHaskellInput
+    , toCabalFileInput
     , toNoFileInput
     , toProjectHaskellInput
+    , toStackYamlInput
     , classifyAllHaskellInputs
+    , classifyCabalFileInputs
     , classifyProjectHaskellInputs
+    , classifyStackYamlInputs
     , generalizeProjectInput
     , isDependencyInputPath
     ) where
@@ -19,7 +23,8 @@ import           Data.List.Extra              (isInfixOf)
 import           Data.Maybe                   (mapMaybe)
 import           Development.IDE.Graph        (InputClass (..))
 import           Development.IDE.Types.Location
-import           System.FilePath              (splitDirectories)
+import           System.FilePath              (splitDirectories, takeExtension,
+                                               takeFileName)
 
 -- | A NormalizedFilePath tagged with the class of rules it may be passed to.
 --
@@ -47,6 +52,18 @@ unsafeMkInputPath = InputPath
 toAllHaskellInput :: NormalizedFilePath -> InputPath AllHaskellFiles
 toAllHaskellInput = InputPath
 
+-- | Classify a Cabal package description file.
+toCabalFileInput :: NormalizedFilePath -> Maybe (InputPath CabalFile)
+toCabalFileInput nfp
+    | takeExtension (fromNormalizedFilePath nfp) == ".cabal" = Just (InputPath nfp)
+    | otherwise = Nothing
+
+-- | Classify a Stack project configuration file.
+toStackYamlInput :: NormalizedFilePath -> Maybe (InputPath StackYaml)
+toStackYamlInput nfp
+    | takeFileName (fromNormalizedFilePath nfp) == "stack.yaml" = Just (InputPath nfp)
+    | otherwise = Nothing
+
 -- | The sentinel input for rules that do not operate on a real file.
 toNoFileInput :: InputPath NoFile
 toNoFileInput = InputPath emptyFilePath
@@ -65,9 +82,17 @@ toProjectHaskellInput nfp
 classifyAllHaskellInputs :: [NormalizedFilePath] -> [InputPath AllHaskellFiles]
 classifyAllHaskellInputs = map toAllHaskellInput
 
+-- | Keep only Cabal package description files.
+classifyCabalFileInputs :: [NormalizedFilePath] -> [InputPath CabalFile]
+classifyCabalFileInputs = mapMaybe toCabalFileInput
+
 -- | Keep only paths that are safe to pass to project-only rules.
 classifyProjectHaskellInputs :: [NormalizedFilePath] -> [InputPath ProjectHaskellFiles]
 classifyProjectHaskellInputs = mapMaybe toProjectHaskellInput
+
+-- | Keep only Stack project configuration files.
+classifyStackYamlInputs :: [NormalizedFilePath] -> [InputPath StackYaml]
+classifyStackYamlInputs = mapMaybe toStackYamlInput
 
 -- | A project file can always be used where an all-Haskell file is expected.
 --

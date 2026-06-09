@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
@@ -9,6 +10,8 @@ import           Control.Lens                    ((^.))
 import           Data.Hashable
 import qualified Data.Text                       as T
 import           Development.IDE                 as D
+import           Ide.Types                       (InputClass (CabalFile),
+                                                  RuleInput)
 import qualified Distribution.Fields             as Syntax
 import qualified Distribution.PackageDescription as PD
 import qualified Distribution.Parsec.Position    as Syntax
@@ -41,6 +44,7 @@ instance Pretty Log where
     LogCompletionContext ctx -> "Completion context is:" <+> pretty ctx
 
 type instance RuleResult ParseCabalFile = PD.GenericPackageDescription
+type instance RuleInput ParseCabalFile = CabalFile
 
 data ParseCabalFile = ParseCabalFile
   deriving (Eq, Show, Generic)
@@ -50,6 +54,7 @@ instance Hashable ParseCabalFile
 instance NFData ParseCabalFile
 
 type instance RuleResult ParseCabalFields = [Syntax.Field Syntax.Position]
+type instance RuleInput ParseCabalFields = CabalFile
 
 data ParseCabalFields = ParseCabalFields
   deriving (Eq, Show, Generic)
@@ -59,6 +64,7 @@ instance Hashable ParseCabalFields
 instance NFData ParseCabalFields
 
 type instance RuleResult ParseCabalCommonSections = [Syntax.Field Syntax.Position]
+type instance RuleInput ParseCabalCommonSections = CabalFile
 
 data ParseCabalCommonSections = ParseCabalCommonSections
   deriving (Eq, Show, Generic)

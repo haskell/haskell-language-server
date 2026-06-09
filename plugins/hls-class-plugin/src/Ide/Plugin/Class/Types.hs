@@ -77,6 +77,9 @@ instance NFData ClassInstancesResult where
 
 type instance RuleResult GetClassInstances = ClassInstancesResult
 
+type instance RuleResult GetInstanceBindTypeSigs = InstanceBindTypeSigsResult
+type instance RuleInput GetInstanceBindTypeSigs = ProjectHaskellFiles
+
 -- |The necessary data to execute our code lens
 data InstanceBindLensCommand = InstanceBindLensCommand
     { -- |The URI needed to run actions in the command
@@ -115,6 +118,7 @@ instance NFData InstanceBindLensResult where
     rnf = rwhnf
 
 type instance RuleResult GetInstanceBindLens = InstanceBindLensResult
+type instance RuleInput GetInstanceBindLens = ProjectHaskellFiles
 
 data Log
   = LogImplementedMethods DynFlags Class ClassMinimalDef
