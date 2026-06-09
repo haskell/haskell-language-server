@@ -1373,6 +1373,10 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
       | Just Refl <- eqT @k @IsFileOfInterest = True
 
       -- Safe metadata/file watching rules.
+      | Just Refl <- eqT @k @GetFileContents = True
+      | Just Refl <- eqT @k @GetFileExists = True
+      | Just Refl <- eqT @k @GetFileHash = True
+      | Just Refl <- eqT @k @GetPhysicalModificationTime = True
       | Just Refl <- eqT @k @GetModificationTime = True
       | Just Refl <- eqT @k @AddWatchedFile = True
 

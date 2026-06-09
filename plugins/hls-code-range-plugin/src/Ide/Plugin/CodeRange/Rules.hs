@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -37,9 +38,13 @@ import qualified Data.Map.Strict                    as Map
 import           Data.Vector                        (Vector)
 import qualified Data.Vector                        as V
 import           Development.IDE
+import           Development.IDE.Core.InputPath      (generalizeProjectInput,
+                                                      unInputPath)
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
 import           Development.IDE.GHC.Compat.Util
+import           Ide.Types                          (InputClass (ProjectHaskellFiles),
+                                                     RuleInput)
 import           GHC.Generics                       (Generic)
 import           GHC.Iface.Ext.Types                (HieAST (..), HieASTs (..))
 import           GHC.Iface.Ext.Utils                (RefMap)
@@ -162,15 +167,16 @@ instance Hashable GetCodeRange
 instance NFData   GetCodeRange
 
 type instance RuleResult GetCodeRange = CodeRange
+type instance RuleInput GetCodeRange = ProjectHaskellFiles
 
 codeRangeRule :: Recorder (WithPriority Log) -> Rules ()
 codeRangeRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetCodeRange file -> handleError recorder $ do
         -- We need both 'HieAST' (for basic AST) and api annotations (for comments and some keywords).
         -- See https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
-        HAR{hieAst, refMap} <- lift $ use_ GetHieAst file
+        HAR{hieAst, refMap} <- lift $ use_ GetHieAst $ generalizeProjectInput file
         ast <- maybeToExceptT LogNoAST . MaybeT . pure $
-            getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath) file
+            getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath . unInputPath) file
         let (codeRange, warnings) = runWriter (buildCodeRange ast refMap)
         traverse_ (logWith recorder Warning) warnings
 

@@ -43,6 +43,8 @@ import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
 import           Development.IDE.Core.FileStore                    (getUriContents)
+import           Development.IDE.Core.InputPath                    (toAllHaskellInput,
+                                                                    toProjectHaskellInput)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -139,8 +141,9 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
+        mbInput = mbFile >>= toProjectHaskellInput
     allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
-    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
+    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbInput
     let
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
@@ -236,10 +239,11 @@ extendImportHandler' ideState ExtendImport {..}
       (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
         runAction "extend import" ideState $
           runMaybeT $ do
+            input <- MaybeT $ pure $ toProjectHaskellInput nfp
             -- We want accurate edits, so do not use stale data here
-            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
-            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
-            (_, contents) <- MaybeT $ use GetFileContents nfp
+            msr <- MaybeT $ use GetModSummaryWithoutTimestamps input
+            ps <- MaybeT $ use GetAnnotatedParsedSource input
+            (_, contents) <- MaybeT $ use GetFileContents $ toAllHaskellInput nfp
             return (msr, ps, contents)
       let df = ms_hspp_opts msrModSummary
           wantedModule = mkModuleName (T.unpack importName)

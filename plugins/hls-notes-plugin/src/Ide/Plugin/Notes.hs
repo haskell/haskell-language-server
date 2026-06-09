@@ -16,6 +16,7 @@ import qualified Data.Text                        as T
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Data.Traversable                 (for)
 import           Development.IDE                  hiding (line)
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
 import           Development.IDE.Core.Shake       (toKnownFiles)
 import qualified Development.IDE.Core.Shake       as Shake
@@ -45,6 +46,7 @@ data GetNotesInFile = MkGetNotesInFile
 -- definitions (note name -> position) and a map of note references
 -- (note name -> [position]).
 type instance RuleResult GetNotesInFile = (HM.HashMap Text Position, HM.HashMap Text [Position])
+type instance RuleInput GetNotesInFile = ProjectHaskellFiles
 
 data GetNotes = MkGetNotes
     deriving (Show, Generic, Eq, Ord)
@@ -52,6 +54,7 @@ data GetNotes = MkGetNotes
 -- GetNotes collects all note definition across all files in the
 -- project. It returns a map from note name to pair of (filepath, position).
 type instance RuleResult GetNotes = HashMap Text (NormalizedFilePath, Position)
+type instance RuleInput GetNotes = ProjectHaskellFiles
 
 data GetNoteReferences = MkGetNoteReferences
     deriving (Show, Generic, Eq, Ord)
@@ -59,6 +62,7 @@ data GetNoteReferences = MkGetNoteReferences
 -- GetNoteReferences collects all note references across all files in the
 -- project. It returns a map from note name to list of (filepath, position).
 type instance RuleResult GetNoteReferences = HashMap Text [(NormalizedFilePath, Position)]
+type instance RuleInput GetNoteReferences = ProjectHaskellFiles
 
 instance Pretty Log where
     pretty = \case
@@ -90,14 +94,14 @@ findNotesRules recorder = do
 
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MkGetNotes _ -> do
         targets <- toKnownFiles <$> useNoFile_ GetKnownTargets
-        definedNotes <- catMaybes <$> mapM (\nfp -> fmap (HM.map (nfp,) . fst) <$> use MkGetNotesInFile nfp) (HS.toList targets)
+        definedNotes <- catMaybes <$> mapM (\nfp -> fmap (HM.map (unInputPath nfp,) . fst) <$> use MkGetNotesInFile nfp) (classifyProjectHaskellInputs $ HS.toList targets)
         pure $ Just $ HM.unions definedNotes
 
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MkGetNoteReferences _ -> do
         targets <- toKnownFiles <$> useNoFile_ GetKnownTargets
-        definedReferences <- catMaybes <$> for (HS.toList targets) (\nfp -> do
+        definedReferences <- catMaybes <$> for (classifyProjectHaskellInputs $ HS.toList targets) (\nfp -> do
                 references <- fmap snd <$> use MkGetNotesInFile nfp
-                pure $ fmap (HM.map (fmap (nfp,))) references
+                pure $ fmap (HM.map (fmap (unInputPath nfp,))) references
             )
         pure $ Just $ List.foldl' (HM.unionWith (<>)) HM.empty definedReferences
 
@@ -111,7 +115,7 @@ getNote nfp state (Position l c) =
         FromProject -> do
             contents <-
                 err "Error getting file contents"
-                =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
+                =<< liftIO (runAction "notes.getfileContents" state (getFileContents $ toAllHaskellInput nfp))
             line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
                 (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
             pure $ listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
@@ -163,24 +167,21 @@ jumpToNote state _ param
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
 jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
 
-findNotesInFile :: NormalizedFilePath -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position, HM.HashMap Text [Position]))
-findNotesInFile file recorder =
-    case getSourceFileOrigin file of
-        FromDependency -> pure $ Just (HM.empty, HM.empty)
-        FromProject -> do
-            -- GetFileContents only returns a value if the file is open in the editor of
-            -- the user. If not, we need to read it from disk.
-            contentOpt <- (snd =<<) <$> use GetFileContents file
-            content <- case contentOpt of
-                Just x  -> pure $ Rope.toText x
-                Nothing -> liftIO $ readFileUtf8 $ fromNormalizedFilePath file
-            let noteMatches = (A.! 1) <$> matchAllText noteRegex content
-                notes = toPositions noteMatches content
-            logWith recorder Debug $ LogNotesFound file (HM.toList notes)
-            let refMatches = (A.! 1) <$> matchAllText noteRefRegex content
-                refs = toPositions refMatches content
-            logWith recorder Debug $ LogNoteReferencesFound file (HM.toList refs)
-            pure $ Just (HM.mapMaybe (fmap fst . List.uncons) notes, refs)
+findNotesInFile :: InputPath ProjectHaskellFiles -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position, HM.HashMap Text [Position]))
+findNotesInFile file recorder = do
+    -- GetFileContents only returns a value if the file is open in the editor of
+    -- the user. If not, we need to read it from disk.
+    contentOpt <- (snd =<<) <$> use GetFileContents (generalizeProjectInput file)
+    content <- case contentOpt of
+        Just x  -> pure $ Rope.toText x
+        Nothing -> liftIO $ readFileUtf8 $ fromNormalizedFilePath $ unInputPath file
+    let noteMatches = (A.! 1) <$> matchAllText noteRegex content
+        notes = toPositions noteMatches content
+    logWith recorder Debug $ LogNotesFound (unInputPath file) (HM.toList notes)
+    let refMatches = (A.! 1) <$> matchAllText noteRefRegex content
+        refs = toPositions refMatches content
+    logWith recorder Debug $ LogNoteReferencesFound (unInputPath file) (HM.toList refs)
+    pure $ Just (HM.mapMaybe (fmap fst . List.uncons) notes, refs)
     where
         uint = fromIntegral . toInteger
         -- the regex library returns the character index of the match. However
@@ -290,7 +291,7 @@ hoverNote state _ params
         Nothing -> pure (InR Null)
 
         Just note -> do
-          mbRope <- liftIO $ runAction "notes.hoverLine" state (getFileContents nfp)
+          mbRope <- liftIO $ runAction "notes.hoverLine" state (getFileContents $ toAllHaskellInput nfp)
 
           -- compute precise hover range for highlighting corresponding Note Reference on Hover
           let lineText =

@@ -39,6 +39,7 @@ module Ide.Types
 , PluginNotificationHandler(..), mkPluginNotificationHandler
 , PluginNotificationHandlers(..)
 , PluginRequestMethod(..)
+, InputClass(..), RuleInput, RuleResult, Rules, Key, alwaysRerun
 , SourceFileOrigin(..)
 , dependenciesDirectory
 , hlsDirectory
@@ -71,7 +72,8 @@ import           Control.Monad                 (void)
 import           Control.Monad.Error.Class     (MonadError (throwError))
 import           Control.Monad.IO.Class        (MonadIO)
 import           Control.Monad.Trans.Except    (ExceptT, runExceptT)
-import           Data.Aeson                    hiding (Null, defaultOptions)
+import           Data.Aeson                    hiding (Key, Null,
+                                                defaultOptions)
 import qualified Data.Aeson.Types              as A
 import           Data.Default
 import           Data.Dependent.Map            (DMap)

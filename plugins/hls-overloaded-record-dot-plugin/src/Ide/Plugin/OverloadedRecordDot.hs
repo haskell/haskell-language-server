@@ -54,7 +54,6 @@ import           Development.IDE.GHC.Compat           (Extension (OverloadedReco
                                                        )
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable)
-import           Development.IDE.Graph                (RuleResult)
 import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
@@ -69,9 +68,11 @@ import           Ide.Plugin.Error                     (PluginError (..),
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionHandlerWithResolve)
-import           Ide.Types                            (PluginDescriptor (..),
+import           Ide.Types                            (InputClass (ProjectHaskellFiles),
+                                                       PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
+                                                       RuleInput, RuleResult,
                                                        ResolveFunction,
                                                        defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens           as L
@@ -128,6 +129,7 @@ instance Show CollectRecordSelectorsResult where
     show _ = "<CollectRecordsResult>"
 
 type instance RuleResult CollectRecordSelectors = CollectRecordSelectorsResult
+type instance RuleInput CollectRecordSelectors = ProjectHaskellFiles
 
 -- |Where we store our collected record selectors
 data RecordSelectorExpr = RecordSelectorExpr
@@ -327,4 +329,3 @@ collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
 collectRecSelResult ideState =
     runActionE "overloadedRecordDot.collectRecordSelectors" ideState
         . useE CollectRecordSelectors
-

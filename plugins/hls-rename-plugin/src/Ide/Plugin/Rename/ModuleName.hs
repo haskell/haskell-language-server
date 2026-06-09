@@ -44,6 +44,8 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
 import           Development.IDE.Core.FileStore       (getFileContents)
+import           Development.IDE.Core.InputPath       (toAllHaskellInput,
+                                                       toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
@@ -104,7 +106,7 @@ action recorder state uri = do
     nfp <- getNormalizedFilePathE  uri
     fp <- uriToFilePathE uri
 
-    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents nfp
+    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents $ toAllHaskellInput nfp
     let emptyModule = maybe True (T.null . T.strip . Rope.toText) contents
 
     correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
@@ -166,7 +168,8 @@ pathModuleNames recorder state normFilePath filePath
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
-  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nfp
+  input <- MaybeT $ pure $ toProjectHaskellInput nfp
+  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule input
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   range <- MaybeT . pure $ toCurrentRange mp (realSrcSpanToRange l)
   pure (range, T.pack $ moduleNameString m)

@@ -29,6 +29,8 @@ import           Development.IDE                          hiding (line)
 import           Development.IDE.Core.Compile             (sourceParser,
                                                            sourceTypecheck)
 import           Development.IDE.Core.FileStore           (getVersionedTextDoc)
+import           Development.IDE.Core.InputPath           (toAllHaskellInput,
+                                                           toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error         (GhcHint (SuggestExtension),
@@ -87,11 +89,12 @@ mkCodeActionProvider mkSuggest state _plId
   (LSP.CodeActionParams _ _ docId@LSP.TextDocumentIdentifier{ _uri = uri } caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     normalizedFilePath <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    input <- handleMaybe (PluginInvalidParams "Expected project Haskell file") $ toProjectHaskellInput normalizedFilePath
     -- ghc session to get some dynflags even if module isn't parsed
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
-      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
-    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession input
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents $ toAllHaskellInput normalizedFilePath
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule input
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
     activeDiagnosticsInRange (shakeExtras state) normalizedFilePath caRange >>= \case
@@ -104,11 +107,12 @@ mkCodeActionProvider96 :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> Plug
 mkCodeActionProvider96 mkSuggest state _plId
   (LSP.CodeActionParams _ _ LSP.TextDocumentIdentifier{ _uri = uri } _ (LSP.CodeActionContext diags _monly _)) = do
     normalizedFilePath <- getNormalizedFilePathE uri
+    input <- handleMaybe (PluginInvalidParams "Expected project Haskell file") $ toProjectHaskellInput normalizedFilePath
     -- ghc session to get some dynflags even if module isn't parsed
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
-      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
-    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession input
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents $ toAllHaskellInput normalizedFilePath
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule input
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
         pedits = nubOrdOn snd $ concatMap (mkSuggest parsedModuleDynFlags) diags
