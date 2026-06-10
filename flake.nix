@@ -87,7 +87,6 @@
 
           shellHook = ''
             # @guibou: I'm not sure theses lines are needed
-            export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
             export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
             export PATH=$PATH:$HOME/.local/bin
 
