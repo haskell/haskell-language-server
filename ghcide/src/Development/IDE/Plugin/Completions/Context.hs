@@ -7,6 +7,7 @@
 -- completions to offer.
 module Development.IDE.Plugin.Completions.Context
   ( Context (..)
+  , contextFilter
   , deduceContext
   , getContext
   ) where
@@ -43,17 +44,33 @@ data Context
     DefaultContext
   deriving (Show, Eq)
 
--- | Used during context finding. @(<>)@ keeps the tightest (innermost) match.
 data ContextResult = NoContext | ContextResult !Range !Context
-instance Monoid ContextResult where mempty = NoContext
-instance Semigroup ContextResult where (<>) = tighten
 
+-- | Keep the innermost of two results.
 tighten :: ContextResult -> ContextResult -> ContextResult
 tighten NoContext b = b
 tighten a NoContext = a
 tighten ar@(ContextResult a _) br@(ContextResult b _)
   | b `isSubrangeOf` a = br
   | otherwise          = ar
+
+foldTighten :: (a -> ContextResult) -> [a] -> ContextResult
+foldTighten f = foldr (tighten . f) NoContext
+
+-- | Filter completions for a context. The predicate reports whether a candidate
+-- is a type-level name. An export list accepts both, so it is unfiltered. Import
+-- contexts are dispatched by getCompletions before this runs and never reach
+-- here.
+contextFilter :: (a -> Bool) -> Context -> [a] -> [a]
+contextFilter isTypeCompl ctx = case ctx of
+  TypeContext           -> filter isTypeCompl
+  ValueContext          -> filter (not . isTypeCompl)
+  DefaultContext        -> id
+  ExportContext         -> id
+  ImportModuleContext{} -> dispatchedEarlier
+  ImportListContext{}   -> dispatchedEarlier
+  where
+    dispatchedEarlier = id
 
 -- | Look up the completion context at the given position, accounting for stale
 -- data via the position mapping.
@@ -67,9 +84,9 @@ deduceContext (Just (pm, pmapping)) pos =
 -- (most specific) declaration that contains it, or 'DefaultContext' if none do.
 getContext :: ParsedModule -> PositionResult Position -> Context
 getContext pm query =
-  case foldMap (getExportContext q) (maybeToList hsmodExports)
-       <> foldMap (getImportContext q) hsmodImports
-       <> foldMap (getDeclContext q) hsmodDecls of
+  case foldTighten (getExportContext q) (maybeToList hsmodExports)
+       `tighten` foldTighten (getImportContext q) hsmodImports
+       `tighten` foldTighten (getDeclContext q) hsmodDecls of
     NoContext             -> DefaultContext
     ContextResult _ found -> found
   where
@@ -87,26 +104,36 @@ getImportContext query limp@(L _ imp) =
       inline = case ideclImportList imp of
         Just (_, l) -> contextual (ImportListContext modName) query l
         Nothing     -> NoContext
-   in inline <> contextual (ImportModuleContext modName) query limp
+   in inline `tighten` contextual (ImportModuleContext modName) query limp
 
 getDeclContext :: Range -> LHsDecl GhcPs -> ContextResult
 getDeclContext query =
-  gather (mkQ (mempty, False) (declQ query) `extQ` sigQ query `extQ` bindQ query `extQ` typeQ query)
+  gather (mkQ (NoContext, False) (declQ query) `extQ` sigQ query `extQ` bindQ query `extQ` typeQ query)
 
 -- * SYB query types
 
--- | A declaration node. Type signatures are types and value bindings are
--- values. Other declarations carry no context of their own. We descend into
--- them so nested signatures, bindings, and inline type annotations resolve.
+-- | Does this signature carry a type? Fixity, INLINE, MINIMAL and similar
+-- pragmas do not.
+typeSig :: Sig GhcPs -> Bool
+typeSig TypeSig {}    = True
+typeSig ClassOpSig {} = True
+typeSig PatSynSig {}  = True
+typeSig _             = False
+
+-- | Classify a top-level declaration.
 declQ :: Range -> LHsDecl GhcPs -> (ContextResult, Bool)
 declQ query decl'@(L _ decl) =
   contInRange query (rangeOf decl') $ \declRange -> case decl of
-    SigD {} -> (ContextResult declRange TypeContext, True)
-    ValD {} -> (ContextResult declRange ValueContext, False)
-    _       -> (NoContext, False)
+    SigD _ sig | typeSig sig -> (ContextResult declRange TypeContext, True)
+    ValD {}                  -> (ContextResult declRange ValueContext, False)
+    _                        -> (NoContext, False)
 
+-- | A signature reached by descent (local, class, or instance). Only the
+-- type-bearing ones are a type context.
 sigQ :: Range -> LSig GhcPs -> (ContextResult, Bool)
-sigQ query = stopAt TypeContext query
+sigQ query lsig@(L _ sig)
+  | typeSig sig = stopAt TypeContext query lsig
+  | otherwise   = (NoContext, False)
 
 bindQ :: Range -> LHsBind GhcPs -> (ContextResult, Bool)
 bindQ query = descendInto ValueContext query
@@ -131,21 +158,20 @@ descendInto context query s =
 contextual context query s = fst (stopAt context query s)
 
 -- | Run a continuation with the 'Range' of a source span, returning no context
--- if the span is missing or outside the query range.
+-- if the span is missing or does not contain the query range.
 contInRange :: Range -> Maybe Range -> (Range -> (ContextResult, Bool)) -> (ContextResult, Bool)
 contInRange query range k = case range of
-  Nothing                            -> (NoContext, True)
-  Just range' | outside query range' -> (NoContext, True)
-  Just range'                        -> k range'
+  Just range' | within query range' -> k range'
+  _                                 -> (NoContext, True)
 
 -- * Helpers
 
--- | A query range is outside a source range if it ends before the source
--- starts, or it starts on a line after the source ends. We compare only lines
--- for the trailing boundary so a cursor past the last token on a line still
--- falls inside the node occupying that line.
-outside :: Range -> Range -> Bool
-outside (Range ps pe) (Range qs qe) = pe < qs || _line ps > _line qe
+-- | The trailing edge is widened to the end of the source's final line, so
+-- a cursor past the last token on a line still counts as inside the node
+-- occupying that line.
+within :: Range -> Range -> Bool
+within query (Range start end) =
+  query `isSubrangeOf` Range start (end { _character = maxBound })
 
 #if MIN_VERSION_ghc(9,9,0)
 rangeOf :: HasLoc a => a -> Maybe Range

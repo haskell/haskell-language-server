@@ -44,7 +44,8 @@ import qualified Development.IDE.GHC.Compat                 as GHC
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
-import           Development.IDE.Plugin.Completions.Context (Context (..))
+import           Development.IDE.Plugin.Completions.Context (Context (..),
+                                                             contextFilter)
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
@@ -562,17 +563,9 @@ getCompletions
                 , isLocalCompletion = False
                 })
 
-          -- Completions for the current context. Every constructor is listed
-          -- with no catch-all, so a new context forces a deliberate choice
-          -- here. The import contexts are handled by earlier guards and never
-          -- reach this point.
-          ctxCompls' = case context of
-                        TypeContext           -> filter (isTypeCompl . snd) compls
-                        ValueContext          -> filter (not . isTypeCompl . snd) compls
-                        DefaultContext        -> compls
-                        ExportContext         -> filter (not . isTypeCompl . snd) compls
-                        ImportModuleContext{} -> filter (not . isTypeCompl . snd) compls
-                        ImportListContext{}   -> filter (not . isTypeCompl . snd) compls
+          -- Completions for the current context. The import contexts are
+          -- handled by earlier guards and never reach this point.
+          ctxCompls' = contextFilter (isTypeCompl . snd) context compls
           -- Add whether the text to insert has backticks
           ctxCompls = (fmap.fmap) (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
