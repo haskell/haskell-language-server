@@ -548,7 +548,8 @@ contextCompletionTests =
       (T.unlines
         [ "{-# OPTIONS_GHC -Wunused-binds #-}"
         , "module A () where"
-        , "data Xxxtype = Xxxcon"
+        -- the type shares the value's prefix, so only the context filter excludes it.
+        , "data Xxxvaltype = Xxxcon"
         , "xxxval = ()"
         , "foo x = bar"
         , "  where"
@@ -559,8 +560,8 @@ contextCompletionTests =
       compls <- getCompletions doc (Position 6 16)  -- after "xxxv"
       let labels = map (^. L.label) compls
       liftIO $ assertBool "xxxval should appear in value context" ("xxxval" `elem` labels)
-      liftIO $ assertBool "Xxxtype should not appear in value context"
-                          (not ("Xxxtype" `elem` labels))
+      liftIO $ assertBool "Xxxvaltype should not appear in value context"
+                          (not ("Xxxvaltype" `elem` labels))
 
   , completionTest
       "type sig in nested where-clause gives type completions"
@@ -619,6 +620,26 @@ contextCompletionTests =
       (Position 5 19)  -- after "Xxx" in "  let helper :: Xxx"
       [("Xxxtype", CompletionItemKind_Struct, "Xxxtype", False, True, Nothing)]
 
+  , testSessionSingleFile "nested non-type signature gives value completions" "A.hs"
+      (T.unlines
+        [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+        , "module A () where"
+        -- the type shares the value's prefix, so only the context filter excludes it.
+        , "data Barrvaltype = Barrcon"
+        , "foo = barrval"
+        , "  where"
+        , "    barrval = ()"
+        , "    {-# INLINE barrval #-}"
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 6 20)  -- after "barrv" in the INLINE pragma
+      let labels = map (^. L.label) compls
+      liftIO $ assertBool "barrval should appear (a pragma sig is not a type context)"
+                          ("barrval" `elem` labels)
+      liftIO $ assertBool "Barrvaltype should not appear in value context"
+                          (not ("Barrvaltype" `elem` labels))
+
   , testSessionSingleFile "export list gives value completions" "A.hs"
       (T.unlines
         [ "{-# OPTIONS_GHC -Wunused-binds #-}"
@@ -631,6 +652,20 @@ contextCompletionTests =
       compls <- getCompletions doc (Position 1 12)  -- inside the export list, within "xxx"
       let labels = map (^. L.label) compls
       liftIO $ assertBool "xxx should be completable in the export list" ("xxx" `elem` labels)
+
+  , testSessionSingleFile "export list offers type completions" "A.hs"
+      (T.unlines
+        [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+        , "module A (Xxx) where"
+        , "data Xxxtype = Xxxcon"
+        , "unused = ()"  -- forces a warning so waitForDiagnostics has something to wait on
+        ]) $ do
+      doc <- openDoc "A.hs" "haskell"
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc (Position 1 12)  -- inside the export list, within "Xxx"
+      let labels = map (^. L.label) compls
+      liftIO $ assertBool "the type Xxxtype should be completable in the export list"
+                          ("Xxxtype" `elem` labels)
 
   , testSessionSingleFile "import list gives module-export completions" "A.hs"
       (T.unlines
