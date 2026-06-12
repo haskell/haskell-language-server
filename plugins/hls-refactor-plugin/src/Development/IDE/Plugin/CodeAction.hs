@@ -22,6 +22,8 @@ import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
+import           Control.Lens                                      hiding (List,
+                                                                    uncons, use)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
@@ -29,7 +31,6 @@ import           Control.Monad.Trans.Maybe
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
-import           Data.Functor
 import qualified Data.HashMap.Strict                               as Map
 import qualified Data.HashSet                                      as Set
 import           Data.List.Extra
@@ -49,10 +50,10 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
-import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
-#if !MIN_VERSION_ghc(9,11,0)
+import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
+                                                                    _TcRnMessage,
+                                                                    msgEnvelopeErrorL)
 import           Development.IDE.GHC.Compat.Util
-#endif
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint                    as E
@@ -79,6 +80,9 @@ import           GHC                                               (DeltaPos (..
 import           GHC.Iface.Ext.Types                               (ContextInfo (..),
                                                                     IdentifierDetails (..))
 import qualified GHC.LanguageExtensions                            as Lang
+import           GHC.Tc.Errors.Types                               (ShadowedNameProvenance (..),
+                                                                    UnusedImportName (..),
+                                                                    UnusedImportReason (..))
 import           Ide.Logger                                        hiding
                                                                    (group)
 import           Ide.PluginUtils                                   (extendToFullLines,
@@ -100,6 +104,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
+import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
@@ -120,6 +125,8 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
+import           GHC.Tc.Types.Constraint                           (ctOrigin)
+import           GHC.Tc.Types.Origin                               (CtOrigin (LiteralOrigin))
 #endif
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -139,7 +146,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
+    allDiags <- atomically  $ filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       textContents = fmap Rope.toText contents
@@ -368,31 +375,14 @@ findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a)
 #endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
--- Single:
--- This binding for ‘mod’ shadows the existing binding
---   imported from ‘Prelude’ at haskell-language-server/ghcide/src/Development/IDE/Plugin/CodeAction.hs:10:8-40
---   (and originally defined in ‘GHC.Real’)typecheck(-Wname-shadowing)
--- Multi:
---This binding for ‘pack’ shadows the existing bindings
---  imported from ‘Data.ByteString’ at B.hs:6:1-22
---  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
---  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
-suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
-  | Just [identifier, modName, s] <-
-      matchRegexUnifySpaces
-        _message
-        "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)" =
-    suggests identifier modName s
-  | Just [identifier] <-
-      matchRegexUnifySpaces
-        _message
-        "This binding for ‘([^`]+)’ shadows the existing bindings",
-    Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
-    mods <- [(modName, s) | [_, modName, s] <- matched],
-    result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
+suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> FileDiagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow ps fileContents mTcM mHar FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range=_range,_message=_message}}
+  | Just (TcRnShadowedName occname (ShadowedNameProvenanceGlobal gres)) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage,
+    identifier <- printOutputable $ occname,
+    imps <- [(printOutputable $ importSpecModule mod,importSpecLoc mod) | GRE{ gre_imp = iss } <- gres,mod <- iss],
+    result@(_:_) <- nubOrdBy (compare `on` fst) $ imps >>= uncurry (suggests identifier),
     hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result) =
-    result <> [hideAll]
+     (result <> [hideAll])
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = ps
@@ -400,8 +390,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
-        [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
-        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s' Nothing),
+        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) s,
         mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
         title <- "Hide " <> identifier <> " from " <> modName =
         if modName == "Prelude" && null mDecl
@@ -448,36 +437,31 @@ isUnusedImportedId
       maybe True (not . any (\(_, IdentifierDetails {..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
-suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
---     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
-    | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
-    , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
-    , Just c <- contents
-    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings >>= trySplitIntoOriginalAndRecordField)
+suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveRedundantImport _ contents
+  FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range=_range}}
+    | Just (TcRnUnusedImport impDecl (UnusedImportSome names)) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+      , Just c <- contents
+      , let bindings = names >>= bindingsInImp
+      , ranges <- map (rangesForBindingImport impDecl . T.unpack) bindings
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
     , not (null ranges')
-    = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
-
--- File.hs:16:1: warning:
---     The import of `Data.List' is redundant
---       except perhaps to import instances from `Data.List'
---     To import instances alone, use: import Data.List()
-    | _message =~ ("The( qualified)? import of [^ ]* is redundant" :: String)
-        = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
+      = [( "Remove " <> T.intercalate ", " (pprBinding <$> names) <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
+    | Just (TcRnUnusedImport _ UnusedImportNone) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage =
+      [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
     where
-      -- In case of an unused record field import, the binding from the message will not match any import directly
-      -- In this case, we try if we can additionally extract a record field name
-      -- Example: The import of ‘B(b2)’ from module ‘ModuleB’ is redundant
-      trySplitIntoOriginalAndRecordField :: T.Text -> [T.Text]
-      trySplitIntoOriginalAndRecordField binding =
-        case matchRegexUnifySpaces binding "([^ ]+)\\(([^)]+)\\)" of
-          Just [_, fields] -> [binding, fields]
-          _                -> [binding]
+      bindingsInImp ::UnusedImportName -> [T.Text]
+      bindingsInImp (UnusedImportNameRecField NoParent name) = [printOutputable name]
+      bindingsInImp b@(UnusedImportNameRecField (ParentIs _) field) = [pprBinding b,printOutputable field]
+      bindingsInImp (UnusedImportNameRegular name) = [printOutputable name]
+      pprBinding ::UnusedImportName -> T.Text
+      pprBinding (UnusedImportNameRecField NoParent name) = printOutputable $ occName name
+      pprBinding (UnusedImportNameRecField (ParentIs parent) field) = printOutputable parent <> "("<> printOutputable  field <> ")"
+      pprBinding (UnusedImportNameRegular name) = printOutputable name
 
-diagInRange :: Diagnostic -> Range -> Bool
-diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
+diagInRange :: FileDiagnostic -> Range -> Bool
+diagInRange FileDiagnostic{fdLspDiagnostic=Diagnostic{_range=dr}} r = dr `subRange` extendedRange
   where
     -- Ensures the range captures full lines. Makes it easier to trigger the correct
     -- "remove redundant" code actions from anywhere on the offending line.
@@ -489,7 +473,7 @@ diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
 -- is likely to be removed and less likely the warning will be disabled.
 -- Therefore actions to remove a single or all redundant imports should be
 -- preferred, so that the client can prioritize them higher.
-caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caRemoveRedundantImports m contents allDiags contextRange uri
   | Just pm <- m,
     r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) allDiags,
@@ -501,7 +485,7 @@ caRemoveRedundantImports m contents allDiags contextRange uri
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [fdLspDiagnostic diagnostic] WorkspaceEdit{..} where
         _changes = Just $ M.singleton uri tedit
         _documentChanges = Nothing
         _changeAnnotations = Nothing
@@ -519,7 +503,7 @@ caRemoveRedundantImports m contents allDiags contextRange uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caRemoveInvalidExports m contents allDiags contextRange uri
   | Just pm <- m,
     Just txt <- contents,
@@ -542,13 +526,14 @@ caRemoveInvalidExports m contents allDiags contextRange uri
       = Just (title, dig, ranges)
       | otherwise = Nothing
 
+    removeSingle :: (T.Text, FileDiagnostic, [Range]) -> Maybe (Command |? CodeAction)
     removeSingle (_, _, []) = Nothing
     removeSingle (title, diagnostic, ranges) = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) $ nubOrd ranges
         _changes = Just $ M.singleton uri tedit
         _title = title
         _kind = Just CodeActionKind_QuickFix
-        _diagnostics = Just [diagnostic]
+        _diagnostics = Just [fdLspDiagnostic diagnostic]
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
@@ -573,32 +558,38 @@ caRemoveInvalidExports m contents allDiags contextRange uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
-suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
-  | msg <- unifySpaces _message
+suggestRemoveRedundantExport :: ParsedModule -> FileDiagnostic -> Maybe (T.Text, [Range])
+suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{..}}
+    | mod <-  fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage >>= unnecessaryExportModule
+  , msg <- unifySpaces _message
   , Just export <- hsmodExports
   , Just exportRange <- getLocatedRange export
   , exports <- unLoc export
   , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
-                         <|> (,[_range]) <$> matchExportItem msg
-                         <|> (,[_range]) <$> matchDupExport msg
+                         <|>  (,[_range]) <$> mod
   , subRange _range exportRange
     = Just ("Remove ‘" <> removeFromExport <> "’ from export", ranges)
   where
-    matchExportItem msg = regexSingleMatch msg "The export item ‘([^’]+)’"
-    matchDupExport msg = regexSingleMatch msg "Duplicate ‘([^’]+)’ in export list"
     getRanges exports txt = case smallerRangesForBindingExport exports (T.unpack txt) of
       []     -> (txt, [_range])
       ranges -> (txt, ranges)
 suggestRemoveRedundantExport _ _ = Nothing
 
-suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+unnecessaryExportModule :: TcRnMessage -> Maybe T.Text
+unnecessaryExportModule (TcRnDupeModuleExport (ModuleName mod))       = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnExportedModNotImported (ModuleName mod)) = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnNullExportedModule (ModuleName mod))     = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnMissingExportList (ModuleName mod))      = Just $ T.pack $ "Module " <> unpackFS mod
+unnecessaryExportModule (TcRnDodgyExports (GRE {gre_name})) = Just (( printOutputable $ occName gre_name) <> "(..)" )
+unnecessaryExportModule _ = Nothing
+
+suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
 suggestDeleteUnusedBinding
   ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}}
   contents
-  Diagnostic{_range=_range,..}
--- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
-    | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+  FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just (TcRnUnusedName name _reason) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+    , name <- printOutputable name
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
@@ -711,7 +702,7 @@ suggestDeleteUnusedBinding
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = T.unpack (printOutputable x) == name
 
-caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caDeleteUnusedBindings m contents allDiags contextRange uri
   | Just pm <- m,
     r <- join $ map (\d -> repeat d `zip` suggestDeleteUnusedBinding pm contents d) allDiags,
@@ -732,7 +723,7 @@ caDeleteUnusedBindings m contents allDiags contextRange uri
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+    removeSingle title tedit fd = mkCA title (Just CodeActionKind_QuickFix) Nothing [fdLspDiagnostic fd] WorkspaceEdit{..} where
         _changes = Just $ M.singleton uri tedit
         _documentChanges = Nothing
         _changeAnnotations = Nothing
@@ -758,16 +749,11 @@ data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
 getLocatedRange :: HasSrcSpan a => a -> Maybe Range
 getLocatedRange = srcSpanToRange . getLoc
 
-suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> Maybe (T.Text, TextEdit)
-suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
--- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
--- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
--- Foo.hs:6:1: warning: [-Wunused-top-binds] Defined but not used: data constructor ‘Bar’
+suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> FileDiagnostic -> Maybe (T.Text, TextEdit)
+suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
   | Just source <- srcOpt
-  , Just [_, name] <-
-      matchRegexUnifySpaces
-        _message
-        ".*Defined but not used: (type constructor or class |data constructor )?‘([^ ]+)’"
+  , Just (TcRnUnusedName name _reason) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+  , name <- printOutputable name
   , Just (exportType, _) <-
       find (matchWithDiagnostic _range . snd)
       . mapMaybe (\(L l b) -> if isTopLevel (locA l) then exportsAs b else Nothing)
@@ -846,63 +832,16 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportFamily, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
-suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,..}
--- File.hs:52:41: warning:
---     * Defaulting the following constraint to type ‘Integer’
---        Num p0 arising from the literal ‘1’
---     * In the expression: 1
---       In an equation for ‘f’: f = 1
--- File.hs:52:41: warning:
---     * Defaulting the following constraints to type ‘[Char]’
---        (Show a0)
---          arising from a use of ‘traceShow’
---          at A.hs:228:7-25
---        (IsString a0)
---          arising from the literal ‘"debug"’
---          at A.hs:228:17-23
---     * In the expression: traceShow "debug" a
---       In an equation for ‘f’: f a = traceShow "debug" a
--- File.hs:52:41: warning:
---     * Defaulting the following constraints to type ‘[Char]’
---         (Show a0)
---          arising from a use of ‘traceShow’
---          at A.hs:255:28-43
---        (IsString a0)
---          arising from the literal ‘"test"’
---          at /Users/serhiip/workspace/ghcide/src/Development/IDE/Plugin/CodeAction.hs:255:38-43
---     * In the fourth argument of ‘seq’, namely ‘(traceShow "test")’
---       In the expression: seq "test" seq "test" (traceShow "test")
---       In an equation for ‘f’:
---          f = seq "test" seq "test" (traceShow "test")
---
-    | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True False)
-                    <|> matchRegexUnifySpaces _message (pat False False False True)
-                    <|> matchRegexUnifySpaces _message (pat False False False False)
-
-            = codeEdit _range ty lit (makeAnnotatedLit ty lit)
-    | Just source <- sourceOpt
-    , Just [ty, lit, srcspan] <- matchRegexUnifySpaces _message (pat True True False False)
-    , range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
-                 [s] -> let x = realSrcSpanToRange s
-                   in x{_end = (_end x){_character = succ (_character (_end x))}}
-                 _ -> error "bug in srcspan parser"
-    = let lit' = makeAnnotatedLit ty lit;
-          tir = textInRange range source
-      in codeEdit range ty lit (T.replace lit lit' tir)
+suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+suggestAddTypeAnnotationToSatisfyConstraints _ FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just (TcRnWarnDefaulting cts _ typ ) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+    , (lit:_) <- [x | LiteralOrigin x <- map ctOrigin cts]
+    , typ <- printOutputable typ
+    , lit <- printOutputable lit
+    = codeEdit _range typ lit (makeAnnotatedLit typ lit)
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
-      pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
-                                       , ".*to type ‘([^ ]+)’ "
-                                       , "in the following constraint"
-                                       , if multiple then "s" else " "
-                                       , ".*arising from the literal ‘(.+)’"
-                                       , if inArg then ".+In the.+argument" else ""
-                                       , if at then ".+at ([^ ]*)" else ""
-                                       , if inExpr then ".+In the expression" else ""
-                                       , ".+In the expression"
-                                       ]
       codeEdit range ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
             edits = [TextEdit range replacement]
@@ -1990,7 +1929,7 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 -- | Returns the ranges for a binding in an import declaration
-rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
+rangesForBindingImport :: ImportDecl GhcRn -> String -> [Range]
 rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
   } b =
@@ -2032,7 +1971,7 @@ smallerRangesForBindingExport lies b =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
     ranges' _ = []
 
-rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
+rangesForBinding' :: String -> LIE GhcRn -> [SrcSpan]
 #if MIN_VERSION_ghc(9,9,0)
 rangesForBinding' b (L (locA -> l) (IEVar _ nm _))
 #else
@@ -2071,12 +2010,6 @@ allMatchRegex message regex = message =~~ regex
 
 
 -- functions to help parse multiple import suggestions
-
--- | Returns the first match if found
-regexSingleMatch :: T.Text -> T.Text -> Maybe T.Text
-regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
-    Just (h:_) -> Just h
-    _          -> Nothing
 
 -- | Process a list of (module_name, filename:src_span) values
 --
