@@ -118,6 +118,7 @@ import           GHC                                               (AddEpAnn (Ad
 #if MIN_VERSION_ghc(9,9,0) && !MIN_VERSION_ghc(9,11,0)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     AnnsModule (am_main),
+                                                                    EpAnnComments (..),
                                                                     EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
@@ -125,10 +126,12 @@ import           GHC                                               (AddEpAnn (Ad
 
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                                               (AnnsModule (am_where),
+                                                                    EpAnnComments (..),
                                                                     EpToken (..),
                                                                     EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
+import           GHC.Parser.Annotation                             (epaLocationRealSrcSpan)
 #endif
 
 
@@ -141,7 +144,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     allDiags <- atomically $ fmap fdLspDiagnostic . filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
-    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
+    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModuleWithComments `traverse` mbFile
     let
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
@@ -601,29 +604,25 @@ suggestDeleteUnusedBinding
 -- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
     | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
-      = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
+      = let edits = flip TextEdit "" <$> mergeRanges (sortOn _start $ relatedRanges indexedContent (T.unpack name))
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
     | otherwise = []
     where
+      hsmodSigs = [L l sig | L l (SigD _ sig) <- hsmodDecls]
       relatedRanges indexedContent name =
         concatMap (findRelatedSpans indexedContent name . reLoc) hsmodDecls
       toRange = realSrcSpanToRange
       extendForSpaces = extendToIncludePreviousNewlineIfPossible
 
       findRelatedSpans :: PositionIndexedString -> String -> Located (HsDecl GhcPs) -> [Range]
-      findRelatedSpans
-        indexedContent
-        name
-        (L (RealSrcSpan l _) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
-        case lname of
+      findRelatedSpans indexedContent name decl = case decl of
+        (L (RealSrcSpan l _) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches))))
+         -> case lname of
           (L nLoc _name) | isTheBinding nLoc ->
-            let findSig (L (RealSrcSpan l _) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
-                findSig _ = []
-            in
-              extendForSpaces indexedContent (toRange l) :
-              concatMap (findSig . reLoc) hsmodDecls
+            extendForSpaces indexedContent (toRange l)
+            : concatMap (findRelatedSigSpan' indexedContent name) hsmodSigs
           _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
-      findRelatedSpans _ _ _ = []
+        _ -> []
 
       extractNameAndMatchesFromFunBind
         :: HsBind GhcPs
@@ -635,13 +634,23 @@ suggestDeleteUnusedBinding
           } = Just (reLoc lname, matches)
       extractNameAndMatchesFromFunBind _ = Nothing
 
-      findRelatedSigSpan :: PositionIndexedString -> String -> RealSrcSpan -> Sig GhcPs -> [Range]
-      findRelatedSigSpan indexedContent name l sig =
-        let maybeSpan = findRelatedSigSpan1 name sig
-        in case maybeSpan of
-          Just (_span, True) -> pure $ extendForSpaces indexedContent $ toRange l -- a :: Int
-          Just (RealSrcSpan span _, False) -> pure $ toRange span -- a, b :: Int, a is unused
-          _ -> []
+      -- | For given name, find the span of related type signature.
+      findRelatedSigSpan' :: PositionIndexedString -> String -> LSig GhcPs -> [Range]
+      findRelatedSigSpan' indexedContent name = \case
+#if MIN_VERSION_ghc(9,9,0)
+        (L (EpAnn sigSpan _ c) sig) ->
+          let l = epaLocationRealSrcSpan sigSpan
+          in case findRelatedSigSpan1 name sig of
+            -- On GHC 9.10+ this will include Haddock comments.
+            Just (_span, True) -> pure . extendForSpaces indexedContent . toRange $ l `withCommentSpan` c
+#else
+        (reLoc -> L (RealSrcSpan l _) sig) ->
+          case findRelatedSigSpan1 name sig of
+            Just (_span, True) -> pure . extendForSpaces indexedContent . toRange $ l
+#endif
+            Just (RealSrcSpan span _, False) -> pure $ toRange span
+            _ -> []
+        _ -> []
 
       -- Second of the tuple means there is only one match
       findRelatedSigSpan1 :: String -> Sig GhcPs -> Maybe (SrcSpan, Bool)
@@ -712,10 +721,8 @@ suggestDeleteUnusedBinding
         lsigs
         (L (locA -> (RealSrcSpan l _)) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
         if isTheBinding (getLoc lname)
-        then
-          let findSig (L (RealSrcSpan l _) sig) = findRelatedSigSpan indexedContent name l sig
-              findSig _ = []
-          in extendForSpaces indexedContent (toRange l) : concatMap (findSig . reLoc) lsigs
+        then extendForSpaces indexedContent (toRange l)
+             : concatMap (findRelatedSigSpan' indexedContent name) lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpanForHsBind _ _ _ _ = []
 
@@ -2126,3 +2133,28 @@ matchRegExMultipleImports message = do
                             _            -> Nothing
   imps <- regExImports imports
   return (binding, imps)
+
+#if MIN_VERSION_ghc(9,9,0)
+-- | Expand signature span to include Haddock.
+withCommentSpan :: RealSrcSpan -> EpAnnComments -> RealSrcSpan
+withCommentSpan idL = foldl' combineRealSrcSpans idL . map commsSrc . commsToList
+  where
+    commsSrc :: GenLocated (EpaLocation' a) e -> RealSrcSpan
+    commsSrc (L l _) = epaLocationRealSrcSpan l
+    commsToList :: EpAnnComments -> [LEpaComment]
+    commsToList = \case
+      EpaComments prior -> prior
+      EpaCommentsBalanced prior following -> prior <> following
+#endif
+
+#if MIN_VERSION_ghc(9,9,0) && !MIN_VERSION_ghc(9,11,0)
+-- | Used in the parser only, extract the 'RealSrcSpan' from an
+-- 'EpaLocation'. The parser will never insert a 'DeltaPos', so the
+-- partial function is safe.
+--
+-- GHC compatibility note:
+-- EpaLocation' exists since 9.10, but this function was updated in 9.12
+epaLocationRealSrcSpan :: EpaLocation' a -> RealSrcSpan
+epaLocationRealSrcSpan (EpaSpan (RealSrcSpan r _)) = r
+epaLocationRealSrcSpan _ = panic "epaLocationRealSrcSpan"
+#endif
