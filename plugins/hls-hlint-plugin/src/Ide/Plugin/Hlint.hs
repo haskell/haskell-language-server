@@ -693,7 +693,7 @@ applyRefactorings  =
 #endif
 #endif
 
--- TODO expose from HLint: https://github.com/ndmitchell/hlint/blob/086bf4430362ccced79ba2363840952eec67382a/src/GHC/Util/HsDecl.hs#L16
+-- TODO expose from HLint: https://github.com/ndmitchell/hlint/issues/1697
 declName :: LHsDecl GhcPs -> Maybe String
 declName (L _ x) = occNameString . occName <$> case x of
   TyClD _ FamDecl{tcdFam=FamilyDecl{fdLName}} -> Just $ unLoc fdLName
