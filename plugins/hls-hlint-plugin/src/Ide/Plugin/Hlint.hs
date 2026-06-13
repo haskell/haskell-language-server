@@ -3,6 +3,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NoFieldSelectors      #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
@@ -30,13 +31,15 @@ import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
+import           Control.Monad.Trans                                (lift)
 import           Control.Monad.Trans.Except                         (ExceptT (..),
                                                                      runExceptT)
+import           Control.Monad.Trans.Maybe                          (MaybeT (MaybeT),
+                                                                     runMaybeT)
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
-import           Data.Either.Extra                                  (maybeToEither)
 import           Data.Hashable
 import qualified Data.HashMap.Strict                                as Map
 import           Data.List                                          (find)
@@ -398,25 +401,25 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
         liftIO $
             runAction "Hlint.getVersionedTextDoc" ideState $
                 getVersionedTextDoc documentId
-    liftIO $ fmap (InL . map LSP.InR) $ do
-      allDiagnostics <- atomically $ getDiagnostics ideState
+    allDiagnostics <- liftIO $ atomically $ getDiagnostics ideState
 
-      let numHintsInDoc = length
+    let numHintsInDoc = length
             [lspDiagnostic
             | diag <- allDiagnostics
             , let lspDiagnostic = fdLspDiagnostic diag
             , validCommand lspDiagnostic
             , fdFilePath diag == docNormalizedFilePath
             ]
-      let numHintsInContext = length
+    let numHintsInContext = length
             [diagnostic | diagnostic <- diags
                         , validCommand diagnostic
             ]
-      let singleHintCodeActions = diags >>= diagnosticToCodeActions verTxtDocId
-      if numHintsInDoc > 1 && numHintsInContext > 0 then do
-        pure $ singleHintCodeActions ++ [applyAllAction verTxtDocId]
+    singleHintCodeActions <- concat <$> traverse (diagnosticToCodeActions docNormalizedFilePath ideState verTxtDocId) diags
+    pure . InL . map LSP.InR $
+      if numHintsInDoc > 1 && numHintsInContext > 0 then
+        singleHintCodeActions ++ [applyAllAction verTxtDocId]
       else
-        pure singleHintCodeActions
+        singleHintCodeActions
   | otherwise
   = pure $ InL []
 
@@ -453,14 +456,33 @@ applyRefactAvailable = False
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
-diagnosticToCodeActions :: VersionedTextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
-diagnosticToCodeActions verTxtDocId diagnostic
+diagnosticToCodeActions ::
+  MonadIO m =>
+  NormalizedFilePath -> IdeState -> VersionedTextDocumentIdentifier -> LSP.Diagnostic ->
+  ExceptT PluginError m [LSP.CodeAction]
+diagnosticToCodeActions nfp ideState verTxtDocId diagnostic
   | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code && applyRefactAvailable
   , let hint = T.replace "refact:" "" code
   , let suppressHintTitle s = "Ignore hint \"" <> hint <> "\" in this " <> s
   , let suppressHintArguments = IgnoreHint verTxtDocId hint
-  = catMaybes
+  = do
+    defIgnoreAction <- runMaybeT $ do
+      let err = throwError . PluginInternalError
+      (pm, _) <- lift $ runActionE "Hlint.GetParsedModule" ideState $ useWithStaleE GetParsedModule nfp
+      containingDecl <- maybe (err "no decl found covering expected source position") pure
+        $ find (maybe False (positionInRange start) . srcSpanToRange . getLoc)
+        $ hsmodDecls $ unLoc $ pm_parsed_source pm
+      -- When `declName` returns `Nothing`, that means HLint has no way of naming the declaration.
+      -- And therefore we can't offer an action to ignore the hint locally at all.
+      -- For example, we might be in an instance declaration.
+      name <- maybe (MaybeT $ pure Nothing) pure $ T.pack <$> declName containingDecl
+      line <- case srcSpanStart $ getLoc containingDecl of
+        RealSrcLoc sl _ -> pure (srcLocLine sl - 1)
+        UnhelpfulLoc _  -> err "unhelpful loc"
+      pure $ mkCodeAction (suppressHintTitle "definition") diagnostic
+        (Just $ toJSON $ suppressHintArguments IgnoreInDefinition{line, name}) False
+    pure $ catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
@@ -469,9 +491,9 @@ diagnosticToCodeActions verTxtDocId diagnostic
                Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) True)
            | otherwise -> Nothing
       , Just (mkCodeAction (suppressHintTitle "module") diagnostic (Just (toJSON $ suppressHintArguments IgnoreInModule)) False)
-      , Just (mkCodeAction (suppressHintTitle "definition") diagnostic (Just (toJSON $ suppressHintArguments $ IgnoreInDefinition start)) False)
+      , defIgnoreAction
       ]
-  | otherwise = []
+  | otherwise = pure []
 
 mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe Value -> Bool -> LSP.CodeAction
 mkCodeAction title diagnostic data_  isPreferred =
@@ -508,20 +530,8 @@ ignoreHint scope _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT
           IgnoreInModule ->
             let NextPragmaInfo{nextPragmaLine, lineSplitTextEdits} = getNextPragmaInfo dynFlags (Just contents)
              in pure $ mkSuppressHintTextEdits nextPragmaLine ignoreHintTitle lineSplitTextEdits Nothing
-          IgnoreInDefinition pos -> do
-            (pm, _) <- runActionE "Hlint.GetParsedModule" ideState $ useWithStaleE GetParsedModule nfp
-            let defInfo = do
-                  containingDecl <- maybeToEither "no decl found covering expected source position"
-                    $ find (maybe False (positionInRange pos) . srcSpanToRange . getLoc)
-                    $ hsmodDecls $ unLoc $ pm_parsed_source pm
-                  defStartLine <- case srcSpanStart $ getLoc containingDecl of
-                    RealSrcLoc sl _ -> pure (srcLocLine sl - 1)
-                    UnhelpfulLoc _  -> Left "unhelpful loc"
-                  defName <- maybeToEither "no declName" $ declName containingDecl
-                  pure (defStartLine, T.pack defName)
-            case defInfo of
-              Left s -> throwError $ PluginInternalError s
-              Right (defStartLine, defName) -> pure $ mkSuppressHintTextEdits defStartLine ignoreHintTitle Nothing (Just defName)
+          IgnoreInDefinition defStartLine defName -> do
+            pure $ mkSuppressHintTextEdits defStartLine ignoreHintTitle Nothing (Just defName)
         let workspaceEdit =
                 LSP.WorkspaceEdit
                   (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits))
@@ -554,7 +564,7 @@ data OneHint =
 
 data IgnoreHintScope
   = IgnoreInModule
-  | IgnoreInDefinition Position
+  | IgnoreInDefinition {line :: Int, name :: T.Text}
   deriving (Generic, ToJSON, FromJSON)
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
