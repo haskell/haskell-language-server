@@ -524,20 +524,16 @@ ignoreHint scope _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT
   (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
   (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
   case fileContents of
-    Just contents -> do
-        let dynFlags = ms_hspp_opts $ msrModSummary msr
-        textEdits <- case scope of
+    Just contents -> pure $ LSP.WorkspaceEdit (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits)) Nothing Nothing
+      where
+        dynFlags = ms_hspp_opts $ msrModSummary msr
+        textEdits = case scope of
           IgnoreInModule ->
-            let NextPragmaInfo{nextPragmaLine, lineSplitTextEdits} = getNextPragmaInfo dynFlags (Just contents)
-             in pure $ mkSuppressHintTextEdits nextPragmaLine ignoreHintTitle lineSplitTextEdits Nothing
-          IgnoreInDefinition defStartLine defName -> do
-            pure $ mkSuppressHintTextEdits defStartLine ignoreHintTitle Nothing (Just defName)
-        let workspaceEdit =
-                LSP.WorkspaceEdit
-                  (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits))
-                  Nothing
-                  Nothing
-        pure workspaceEdit
+            mkSuppressHintTextEdits nextPragmaLine ignoreHintTitle lineSplitTextEdits Nothing
+            where
+              NextPragmaInfo{nextPragmaLine, lineSplitTextEdits} = getNextPragmaInfo dynFlags (Just contents)
+          IgnoreInDefinition defStartLine defName ->
+            mkSuppressHintTextEdits defStartLine ignoreHintTitle Nothing (Just defName)
     Nothing -> throwError $ PluginInternalError "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
