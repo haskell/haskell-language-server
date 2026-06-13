@@ -34,7 +34,7 @@ import           Control.Monad.IO.Class                             (MonadIO (li
 import           Control.Monad.Trans                                (lift)
 import           Control.Monad.Trans.Except                         (ExceptT (..),
                                                                      runExceptT)
-import           Control.Monad.Trans.Maybe                          (MaybeT (MaybeT),
+import           Control.Monad.Trans.Maybe                          (hoistMaybe,
                                                                      runMaybeT)
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
@@ -476,7 +476,7 @@ diagnosticToCodeActions nfp ideState verTxtDocId diagnostic
       -- When `declName` returns `Nothing`, that means HLint has no way of naming the declaration.
       -- And therefore we can't offer an action to ignore the hint locally at all.
       -- For example, we might be in an instance declaration.
-      name <- maybe (MaybeT $ pure Nothing) pure $ T.pack <$> declName containingDecl
+      name <- hoistMaybe $ T.pack <$> declName containingDecl
       line <- case srcSpanStart $ getLoc containingDecl of
         RealSrcLoc sl _ -> pure (srcLocLine sl - 1)
         UnhelpfulLoc _  -> err "unhelpful loc"
