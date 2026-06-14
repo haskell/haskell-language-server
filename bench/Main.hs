@@ -59,13 +59,14 @@ import           Development.Benchmark.Rules hiding (parallelism)
 import           Development.Shake           (Action,
                                               Change (ChangeModtimeAndDigestInput),
                                               CmdOption (Cwd, StdinBS),
-                                              RuleResult, Rules,
+                                              Rules,
                                               ShakeOptions (shakeChange, shakeThreads),
                                               actionBracket, addOracle,
                                               askOracle, command, command_,
                                               getDirectoryFiles, liftIO, need,
                                               newCache, shakeArgsWith,
                                               shakeOptions, versioned, want)
+import qualified Development.Shake           as Shake
 import           Development.Shake.Classes
 import           Experiments.Types           (Example (exampleName),
                                               exampleToOptions)
@@ -73,7 +74,7 @@ import           GHC.Exts                    (toList)
 import           GHC.Generics                (Generic)
 import           HlsPlugins                  (idePlugins)
 import qualified Ide.Plugin.Config           as Plugin
-import           Ide.Types                   hiding (Config)
+import           Ide.Types                   hiding (Config, Rules)
 import           Numeric.Natural             (Natural)
 import           System.Console.GetOpt
 import           System.Directory
@@ -94,8 +95,8 @@ readConfigIO :: FilePath -> IO (Config BuildSystem)
 readConfigIO = decodeFileThrow
 
 instance IsExample Example where getExampleName = exampleName
-type instance RuleResult GetExample = Maybe Example
-type instance RuleResult GetExamples = [Example]
+type instance Shake.RuleResult GetExample = Maybe Example
+type instance Shake.RuleResult GetExamples = [Example]
 
 shakeOpts :: ShakeOptions
 shakeOpts =
@@ -185,7 +186,7 @@ disableAllPluginsBut pred = def {Plugin.plugins = pluginsMap} where
     IdePlugins plugins = idePlugins mempty
 
 newtype GetSamples = GetSamples () deriving newtype (Binary, Eq, Hashable, NFData, Show)
-type instance RuleResult GetSamples = Natural
+type instance Shake.RuleResult GetSamples = Natural
 
 --------------------------------------------------------------------------------
 

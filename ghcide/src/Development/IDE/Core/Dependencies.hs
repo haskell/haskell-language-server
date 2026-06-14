@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Development.IDE.Core.Dependencies
     ( indexDependencyHieFiles
     ) where
@@ -19,8 +21,9 @@ import qualified Development.IDE.GHC.Compat        as Ghc
 import           Development.IDE.Types.Location    (NormalizedFilePath,
                                                     toNormalizedFilePath')
 import           GHC.Data.ShortText                (unpack)
-import           GHC.Types.Unique.Map              (filterWithKeyUniqMap,
-                                                    nonDetEltsUniqMap)
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Types.Unique.Map              (nonDetEltsUniqMap)
+#endif
 import qualified GHC.Unit.Info                     as GHC
 import           HieDb                             (SourceFile (FakeFile),
                                                     lookupPackage,
@@ -137,7 +140,7 @@ indexDependencyHieFiles recorder se hscEnv = do
             -- (which shouldn't happen because we check whether each package
             -- has been indexed), then do nothing. Otherwise, call the
             -- indexHieFile function from Core.Compile.
-            hieCheck <- checkHieFile recorder se "newHscEnvEqWithImportPaths" hiePath
+            hieCheck <- checkHieFile recorder se "IndexDependencyHieFiles" hiePath
             case hieCheck of
                 HieFileMissing -> return ()
                 HieAlreadyIndexed -> return ()
@@ -151,8 +154,7 @@ indexDependencyHieFiles recorder se hscEnv = do
         packages :: Set Package
         packages = Set.fromList
             $ map Package
-            $ nonDetEltsUniqMap
-            $ filterWithKeyUniqMap (\uid _ -> uid `Set.member` dependencyIds) unitInfoMap
+            $ unitInfoEltsIn dependencyIds unitInfoMap
             where
                 unitInfoMap :: GHC.UnitInfoMap
                 unitInfoMap = GHC.getUnitInfoMap hscEnv
@@ -185,8 +187,17 @@ calculateTransitiveDependencies unitInfoMap allDependencies newDependencies
         nextNew = flip Set.difference allDependencies
             $ Set.unions
             $ map (Set.fromList . GHC.unitDepends)
-            $ nonDetEltsUniqMap
-            $ filterWithKeyUniqMap (\uid _ -> uid `Set.member` newDependencies) unitInfoMap
+            $ unitInfoEltsIn newDependencies unitInfoMap
+
+unitInfoEltsIn :: Set GHC.UnitId -> GHC.UnitInfoMap -> [GHC.UnitInfo]
+#if MIN_VERSION_ghc(9,7,0)
+unitInfoEltsIn unitIds =
+    filter ((`Set.member` unitIds) . GHC.unitId) . nonDetEltsUniqMap
+#else
+unitInfoEltsIn unitIds =
+    filter ((`Set.member` unitIds) . GHC.unitId) . Map.elems
+#endif
+
 getModulesForPackage :: Package -> [GHC.Module]
 getModulesForPackage (Package package) =
     map makeModule allModules
@@ -204,4 +215,3 @@ getModulesForPackage (Package package) =
         makeModule :: GHC.ModuleName
                    -> GHC.Module
         makeModule = GHC.mkModule (GHC.mkUnit package)
-

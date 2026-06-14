@@ -1316,6 +1316,8 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
                     | isSafeDependencyRule key ->
                         doAction
 
+                    -- If the rule is not safe, Log them
+                    -- For now we still let the Rule trigger. Ideally should not trigger Rule and only log
                     | otherwise -> do
                         logWith shakeRecorder Error $
                           LogUnsafeDependencyRule file (T.pack $ show key)
