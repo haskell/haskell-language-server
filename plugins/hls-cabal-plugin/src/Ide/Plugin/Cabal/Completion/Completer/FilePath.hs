@@ -167,7 +167,10 @@ mkPathCompletionDir complInfo completion =
 mkFilePathCompletion :: PathCompletionInfo -> T.Text -> IO T.Text
 mkFilePathCompletion complInfo completion = do
   let combinedPath = mkPathCompletionDir complInfo completion
-  isFilePath <- doesFileExist $ T.unpack combinedPath
+  -- combinedPath is relative to the cabal file, so the existence check must
+  -- prepend the absolute working directory to avoid relying on process CWD.
+  -- See Note [Root Directory].
+  isFilePath <- doesFileExist $ workingDirectory complInfo FP.</> T.unpack combinedPath
   let completedPath = if isFilePath then applyStringNotation (isStringNotationPath complInfo) combinedPath else combinedPath
   pure completedPath
 
