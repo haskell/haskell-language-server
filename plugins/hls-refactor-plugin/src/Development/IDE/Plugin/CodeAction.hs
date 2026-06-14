@@ -30,6 +30,7 @@ import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
 import           Data.Functor
+import qualified Data.Generics                                     as SYB
 import qualified Data.HashMap.Strict                               as Map
 import qualified Data.HashSet                                      as Set
 import           Data.List.Extra
@@ -662,7 +663,7 @@ suggestDeleteUnusedBinding
               in Just (mkSrcSpan startLoc' endLoc', False)
       findRelatedSigSpan1 _ _ = Nothing
 
-      -- for where clause
+      -- for where and let expression bindings
       findRelatedSpanForMatch
         :: PositionIndexedString
         -> String
@@ -671,7 +672,7 @@ suggestDeleteUnusedBinding
       findRelatedSpanForMatch
         indexedContent
         name
-        (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
+        (L _ Match{m_grhss=GRHSs{grhssLocalBinds, grhssGRHSs}}) = do
         let emptyBag bag =
 #if MIN_VERSION_ghc(9,11,0)
                 null bag
@@ -682,9 +683,22 @@ suggestDeleteUnusedBinding
                   if emptyBag bag
                   then []
                   else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
-        case grhssLocalBinds of
-          (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
-          _                                     -> []
+
+            findLetBinds :: SYB.GenericQ (DL.DList (HsLocalBinds GhcPs))
+            findLetBinds = SYB.everything mappend (mempty `SYB.mkQ` letBinds)
+              where
+                letBinds :: HsExpr GhcPs -> DL.DList (HsLocalBinds GhcPs)
+                letBinds = \case
+#if !MIN_VERSION_ghc(9,9,0)
+                    HsLet _ _ lb _ _ -> pure lb
+#else
+                    HsLet _ lb _ -> pure lb
+#endif
+                    _            -> mempty
+
+        flip concatMap (grhssLocalBinds : DL.toList (findLetBinds grhssGRHSs)) $ \case
+                (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
+                _                                     -> []
 
       findRelatedSpanForHsBind
         :: PositionIndexedString
