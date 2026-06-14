@@ -684,14 +684,14 @@ suggestDeleteUnusedBinding
                   then []
                   else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
 
-            findLetBinds :: SYB.GenericQ [HsLocalBinds GhcPs]
-            findLetBinds = SYB.everything (++) ([] `SYB.mkQ` letBinds)
+            findLetBinds :: SYB.GenericQ (DL.DList (HsLocalBinds GhcPs))
+            findLetBinds = SYB.everything mappend (mempty `SYB.mkQ` letBinds)
               where
                 letBinds = \case
-                    HsLet _ lb _ -> [lb]
-                    _            -> []
+                    HsLet _ lb _ -> pure lb
+                    _            -> mempty
 
-        flip concatMap (grhssLocalBinds : findLetBinds grhssGRHSs) $ \case
+        flip concatMap (grhssLocalBinds : DL.toList (findLetBinds grhssGRHSs)) $ \case
                 (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
                 _                                     -> []
 
