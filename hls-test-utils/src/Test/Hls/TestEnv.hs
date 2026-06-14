@@ -7,13 +7,17 @@ module Test.Hls.TestEnv
   , LspTimeout(..)
   , hlsTestOptions
   , wrapCliTestOptions
+  , getTestRootDir
   ) where
 
 import           Control.Monad      (guard)
 import           Data.Data          (Proxy (..))
 import           Data.Foldable      (traverse_)
 import           Data.Maybe         (catMaybes)
+import           System.Directory   (createDirectoryIfMissing,
+                                     getTemporaryDirectory)
 import           System.Environment (lookupEnv, setEnv, unsetEnv)
+import           System.FilePath    ((</>))
 import           Test.Tasty         (TestTree, askOption, withResource)
 import           Test.Tasty.Options (IsOption (defaultValue, optionCLParser, optionHelp, optionName, parseValue),
                                      OptionDescription (..), flagCLParser,
@@ -92,13 +96,43 @@ wrapCliTestOptions tree =
             , ("HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP", "1") <$ guard harnessNoTestdirCleanup
             , ("LSP_TIMEOUT",) . show                      <$> timeout
             ]
-    in withResource (setOverrides overrides) restoreEnvs (const tree)
+    in withResource (setupRunEnv overrides) restoreEnvs (const tree)
+
+-- | Root directory for all test files. Honours 'HLS_TEST_ROOTDIR', else the
+-- system temp directory.
+getTestRootDir :: IO FilePath
+getTestRootDir = do
+  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
+  case mRootDir of
+    Just rootDir -> pure rootDir
+    Nothing      -> (</> "hls-test-root") <$> getTemporaryDirectory
+
+-- | Apply the per-run environment once, before any test thread starts: the CLI
+-- overrides plus 'HIE_BIOS_CACHE_DIR' under the test root to isolate the cradle
+-- cache. Done once because mutating the process environment concurrently would
+-- force a global lock.
+setupRunEnv :: [(String, String)] -> IO [(String, Maybe String)]
+setupRunEnv overrides = do
+  saved <- setOverrides overrides
+  hieBiosCacheDir <- (</> "hie-bios") <$> getTestRootDir
+  createDirectoryIfMissing True hieBiosCacheDir
+  savedHieBios <- setEnvIfUnset "HIE_BIOS_CACHE_DIR" hieBiosCacheDir
+  pure (saved ++ savedHieBios)
 
 setOverrides :: [(String, String)] -> IO [(String, Maybe String)]
 setOverrides = traverse $ \(k, v) -> do
   old <- lookupEnv k
   setEnv k v
   pure (k, old)
+
+-- | Set @k@ only if unset, so a value the developer exported wins. Returns the
+-- restore entry, empty when we left it untouched.
+setEnvIfUnset :: String -> String -> IO [(String, Maybe String)]
+setEnvIfUnset k v = do
+  old <- lookupEnv k
+  case old of
+    Just _  -> pure []
+    Nothing -> setEnv k v >> pure [(k, Nothing)]
 
 restoreEnvs :: [(String, Maybe String)] -> IO ()
 restoreEnvs = traverse_ $ \(k, mv) -> maybe (unsetEnv k) (setEnv k) mv

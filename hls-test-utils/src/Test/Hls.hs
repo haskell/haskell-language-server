@@ -106,6 +106,8 @@ import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo)
 import           Development.IDE.Plugin.Test              (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                            WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test              as Test
+import           Development.IDE.Session                  (SessionLoadingOptions (..))
+import           Development.IDE.Session.Ghc              (getCacheDirsIn)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.TypeLits
@@ -134,10 +136,9 @@ import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
                                                            createDirectoryIfMissing,
                                                            getCurrentDirectory,
-                                                           getTemporaryDirectory,
                                                            makeAbsolute,
                                                            setCurrentDirectory)
-import           System.Environment                       (lookupEnv, setEnv)
+import           System.Environment                       (lookupEnv)
 import           System.FilePath
 import           System.IO.Extra                          (newTempDirWithin)
 import           System.IO.Unsafe                         (unsafePerformIO)
@@ -145,7 +146,8 @@ import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
-import           Test.Hls.TestEnv                         (hlsTestOptions,
+import           Test.Hls.TestEnv                         (getTestRootDir,
+                                                           hlsTestOptions,
                                                            wrapCliTestOptions)
 import           Test.Hls.Util
 import           Test.Tasty                               hiding (Timeout)
@@ -533,16 +535,16 @@ runSessionWithServerInTmpDir config plugin tree act =
     {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
     (const act)
 
--- | Same as 'withTemporaryDataAndCacheDirectory', but materialises the given
--- 'VirtualFileTree' in the temporary directory.
-withVfsTestDataDirectory :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
+-- | Like 'withTemporaryDataAndCacheDirectory', but first materialises the given
+-- 'VirtualFileTree'. The continuation also receives the per-test cache directory.
+withVfsTestDataDirectory :: VirtualFileTree -> (FileSystem -> FilePath -> IO a) ->  IO a
 withVfsTestDataDirectory tree act = do
-    withTemporaryDataAndCacheDirectory $ \tmpRoot -> do
+    withTemporaryDataAndCacheDirectory $ \tmpRoot cacheDir -> do
         fs <- FS.materialiseVFT tmpRoot tree
-        act fs
+        act fs cacheDir
 
--- | Run an action in a temporary directory.
--- Sets the 'XDG_CACHE_HOME' environment variable to a temporary directory as well.
+-- | Run an action in a temporary directory, passing it both the test root and a
+-- fresh cache directory.
 --
 -- This sets up a temporary directory for HLS tests to run.
 -- Typically, HLS tests copy their test data into the directory and then launch
@@ -550,11 +552,11 @@ withVfsTestDataDirectory tree act = do
 -- This makes sure that the tests are run in isolation, which is good for correctness
 -- but also important to have fast tests.
 --
--- For improved isolation, we also make sure the 'XDG_CACHE_HOME' environment
--- variable points to a temporary directory. So, we never share interface files
--- or the 'hiedb' across tests.
-withTemporaryDataAndCacheDirectory :: (FilePath -> IO a) -> IO a
-withTemporaryDataAndCacheDirectory act = withLock lockForTempDirs $ do
+-- For isolation, each test gets its own cache directory wired into the server
+-- via 'argsGetHieDbLoc' and 'getCacheDirs', so we never share interface files or
+-- the 'hiedb' and never mutate the process-global 'XDG_CACHE_HOME'.
+withTemporaryDataAndCacheDirectory :: (FilePath -> FilePath -> IO a) -> IO a
+withTemporaryDataAndCacheDirectory act = do
     testRoot <- setupTestEnvironment
     helperRecorder <- hlsHelperTestRecorder
     -- Do not clean up the temporary directory if this variable is set to anything but '0'.
@@ -563,39 +565,23 @@ withTemporaryDataAndCacheDirectory act = withLock lockForTempDirs $ do
     let runTestInDir action = case cleanupTempDir of
             Just val | val /= "0" -> do
                 (tempDir, cacheHome, _) <- setupTemporaryTestDirectories testRoot
-                a <- withTempCacheHome cacheHome (action tempDir)
+                a <- action tempDir cacheHome
                 logWith helperRecorder Debug LogNoCleanup
                 pure a
 
             _ -> do
                 (tempDir, cacheHome, cleanup) <- setupTemporaryTestDirectories testRoot
-                a <- withTempCacheHome cacheHome (action tempDir) `finally`  cleanup
+                a <- action tempDir cacheHome `finally`  cleanup
                 logWith helperRecorder Debug LogCleanup
                 pure a
-    runTestInDir $ \tmpDir' -> do
+    runTestInDir $ \tmpDir' cacheHome -> do
         -- we canonicalize the path, so that we do not need to do
         -- canonicalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
         logWith helperRecorder Info $ LogTestDir tmpDir
-        act tmpDir
+        act tmpDir cacheHome
     where
-        cache_home_var = "XDG_CACHE_HOME"
-        -- Set the dir for "XDG_CACHE_HOME".
-        -- When the operation finished, make sure the old value is restored.
-        withTempCacheHome tempCacheHomeDir act =
-            bracket
-              (do
-                old_cache_home <- lookupEnv cache_home_var
-                setEnv cache_home_var tempCacheHomeDir
-                pure old_cache_home)
-              (\old_cache_home ->
-                maybe (pure ()) (setEnv cache_home_var) old_cache_home
-                )
-              (\_ -> act)
-
-        -- Set up a temporary directory for the test files and one for the 'XDG_CACHE_HOME'.
-        -- The 'XDG_CACHE_HOME' is important for independent test runs, i.e. completely empty
-        -- caches.
+        -- A fresh cache directory per test gives empty, independent caches.
         setupTemporaryTestDirectories testRoot = do
             (tempTestCaseDir, cleanup1) <- newTempDirWithin testRoot
             (tempCacheHomeDir, cleanup2) <- newTempDirWithin testRoot
@@ -634,16 +620,9 @@ instance Default (TestConfig b) where
 -- However, it is totally safe to delete the directory between runs.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
-  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
-  case mRootDir of
-    Nothing -> do
-      tmpDirRoot <- getTemporaryDirectory
-      let testRoot = tmpDirRoot </> "hls-test-root"
-      createDirectoryIfMissing True testRoot
-      pure testRoot
-    Just rootDir -> do
-      createDirectoryIfMissing True rootDir
-      pure rootDir
+  testRoot <- getTestRootDir
+  createDirectoryIfMissing True testRoot
+  pure testRoot
 
 goldenWithHaskellDocFormatter
   :: Pretty b
@@ -750,12 +729,6 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
-
-{-# NOINLINE lockForTempDirs #-}
--- | Never run in parallel
-lockForTempDirs :: Lock
-lockForTempDirs = unsafePerformIO newLock
-
 data TestConfig b = TestConfig
   {
     testDirLocation          :: Either FilePath VirtualFileTree
@@ -830,7 +803,7 @@ wrapClientLogger logger = do
 -- For more detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
-    runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
+    runSessionInVFS testDirLocation $ \root cacheDir -> shiftRoot root $ do
     pipeIn@(inR, inW) <- createPipe
     pipeOut@(outR, outW) <- createPipe
     let serverRoot = fromMaybe root testServerRoot
@@ -850,7 +823,7 @@ runSessionWithTestConfig TestConfig{..} session =
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-        arguments = testingArgs serverRoot recorderIde plugins
+        arguments = testingArgs serverRoot cacheDir recorderIde plugins
 
     -- Make an explicit call to keepAlive to protect both pipes from being GC'd.
     --
@@ -882,13 +855,13 @@ runSessionWithTestConfig TestConfig{..} session =
                 else f
         runSessionInVFS (Left testConfigRoot) act = do
             root <- makeAbsolute testConfigRoot
-            withTemporaryDataAndCacheDirectory (const $ act root)
+            withTemporaryDataAndCacheDirectory (\_ cacheDir -> act root cacheDir)
         runSessionInVFS (Right vfs) act =
-            withVfsTestDataDirectory vfs $ \fs -> do
-                act (fsRoot fs)
-        testingArgs prjRoot recorderIde plugins =
+            withVfsTestDataDirectory vfs $ \fs cacheDir -> do
+                act (fsRoot fs) cacheDir
+        testingArgs prjRoot cacheDir recorderIde plugins =
             let
-                arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
+                arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions, argsSessionLoadingOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
                 argsHlsPlugins' = if testDisableDefaultPlugin
                                 then plugins
                                 else argsHlsPlugins
@@ -906,6 +879,10 @@ runSessionWithTestConfig TestConfig{..} session =
                 , argsDefaultHlsConfig = testLspConfig
                 , argsProjectRoot = prjRoot
                 , argsDisableKick = testDisableKick
+                -- Keep interface files and the hiedb under this test's cache
+                -- directory instead of the shared 'XDG_CACHE_HOME'.
+                , argsGetHieDbLoc = const (pure (cacheDir </> "test.hiedb"))
+                , argsSessionLoadingOptions = argsSessionLoadingOptions { getCacheDirs = getCacheDirsIn cacheDir }
                 }
 
 -- | Wait for the next progress begin step
