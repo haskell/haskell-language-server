@@ -687,8 +687,13 @@ suggestDeleteUnusedBinding
             findLetBinds :: SYB.GenericQ (DL.DList (HsLocalBinds GhcPs))
             findLetBinds = SYB.everything mappend (mempty `SYB.mkQ` letBinds)
               where
+                letBinds :: HsExpr GhcPs -> DL.DList (HsLocalBinds GhcPs)
                 letBinds = \case
+#if !MIN_VERSION_ghc(9,9,0)
+                    HsLet _ _ lb _ _ -> pure lb
+#else
                     HsLet _ lb _ -> pure lb
+#endif
                     _            -> mempty
 
         flip concatMap (grhssLocalBinds : DL.toList (findLetBinds grhssGRHSs)) $ \case
