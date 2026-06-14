@@ -69,7 +69,8 @@ module Test.Hls
     Priority(..),
     captureKickDiagnostics,
     kick,
-    TestConfig(..)
+    TestConfig(..),
+    CwdHandling(..)
     )
 where
 
@@ -601,7 +602,7 @@ instance Default (TestConfig b) where
     testDirLocation = Right $ VirtualFileTree [] "",
     testClientRoot = Nothing,
     testServerRoot = Nothing,
-    testShiftRoot = False,
+    testCwdHandling = ServerCwdShift,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
     testPluginDescriptor = mempty,
@@ -725,9 +726,21 @@ keepCurrentDirectory :: IO a -> IO a
 keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 
 {-# NOINLINE lock #-}
--- | Never run in parallel
+-- | Serialises tests that shift the global CWD ('HarnessCwdShift'). See Note [Root Directory].
 lock :: Lock
 lock = unsafePerformIO newLock
+
+-- | How a test drives the process-global current working directory. See Note [Root Directory].
+data CwdHandling
+  = ServerCwdShift
+    -- ^ The server shifts the CWD to the rootUri on init. The historical default.
+  | HarnessCwdShift
+    -- ^ The harness shifts the CWD to the test root under 'lock', for CWD-coupled
+    -- suites (stan, hlint) that cannot run in parallel.
+  | NoCwdShift
+    -- ^ Neither the harness nor the server shifts the CWD, so in-process servers
+    -- can run in parallel.
+  deriving (Eq)
 
 data TestConfig b = TestConfig
   {
@@ -750,8 +763,8 @@ data TestConfig b = TestConfig
     -- Don't forget to use 'TASTY_PATTERN' to debug only a subset of tests.
     --
     -- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
-  , testShiftRoot            :: Bool
-    -- ^ Whether to shift the current directory to the root of the project
+  , testCwdHandling          :: CwdHandling
+    -- ^ How the test drives the process-global CWD. See Note [Root Directory].
   , testClientRoot           :: Maybe FilePath
     -- ^ Specify the root of (the client or LSP context),
     -- if Nothing it is the same as the testDirLocation
@@ -806,8 +819,8 @@ runSessionWithTestConfig TestConfig{..} session =
     runSessionInVFS testDirLocation $ \root cacheDir -> shiftRoot root $ do
     pipeIn@(inR, inW) <- createPipe
     pipeOut@(outR, outW) <- createPipe
-    let serverRoot = fromMaybe root testServerRoot
-    let clientRoot = fromMaybe root testClientRoot
+    let serverRoot = maybe root (root </>) testServerRoot
+    let clientRoot = maybe root (root </>) testClientRoot
 
     (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
     (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
@@ -849,10 +862,13 @@ runSessionWithTestConfig TestConfig{..} session =
       pure result
 
     where
-        shiftRoot shiftTarget f  =
-            if testShiftRoot
-                then withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
-                else f
+        -- NoCwdShift suites avoid the global CWD entirely (server root via
+        -- 'argsProjectRoot', client via rootUri), so they run in parallel.
+        -- HarnessCwdShift suites shift under 'lock', which serialises them.
+        -- See Note [Root Directory].
+        shiftRoot shiftTarget f
+            | testCwdHandling == HarnessCwdShift = withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
+            | otherwise                          = f
         runSessionInVFS (Left testConfigRoot) act = do
             root <- makeAbsolute testConfigRoot
             withTemporaryDataAndCacheDirectory (\_ cacheDir -> act root cacheDir)
@@ -879,6 +895,9 @@ runSessionWithTestConfig TestConfig{..} session =
                 , argsDefaultHlsConfig = testLspConfig
                 , argsProjectRoot = prjRoot
                 , argsDisableKick = testDisableKick
+                -- NoCwdShift suites skip the server's setCurrentDirectory so their
+                -- in-process servers do not race on the global CWD.
+                , argsDisableInitialCwdShift = testCwdHandling == NoCwdShift
                 -- Keep interface files and the hiedb under this test's cache
                 -- directory instead of the shared 'XDG_CACHE_HOME'.
                 , argsGetHieDbLoc = const (pure (cacheDir </> "test.hiedb"))

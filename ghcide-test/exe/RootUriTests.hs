@@ -9,7 +9,7 @@ import           System.FilePath
 -- import Test.QuickCheck.Instances ()
 import           Config
 import           Data.Default             (def)
-import           Test.Hls                 (TestConfig (..),
+import           Test.Hls                 (CwdHandling (..), TestConfig (..),
                                            runSessionWithTestConfig)
 import           Test.Hls.FileSystem      (copyDir)
 import           Test.Tasty
@@ -33,7 +33,7 @@ tests = testCase "use rootUri" . runTest "dirA" "dirB" $ \dir -> do
             , testDirLocation = Right $ mkIdeTestFs [copyDir "rootUri"]
             , testServerRoot = Just dir1
             , testClientRoot = Just dir2
-            , testShiftRoot = True
+            , testCwdHandling = NoCwdShift
         }
 
 

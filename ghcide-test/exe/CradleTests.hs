@@ -35,7 +35,8 @@ import           Language.LSP.Protocol.Types     hiding
                                                   mkRange)
 import           Language.LSP.Test
 import           System.FilePath
-import           Test.Hls                        (TestConfig (..), def,
+import           Test.Hls                        (CwdHandling (..),
+                                                  TestConfig (..), def,
                                                   runSessionWithTestConfig,
                                                   waitForBuildQueue)
 import           Test.Hls.FileSystem
@@ -284,7 +285,7 @@ runWithExtraFilesMultiComponent dirName action = do
         { testPluginDescriptor = dummyPlugin
         , testDirLocation = Right vfs
         , testConfigCaps = lspTestCaps
-        , testShiftRoot = True
+        , testCwdHandling = NoCwdShift
         , testDisableKick = True
         , testLspConfig = lspConfig
         }

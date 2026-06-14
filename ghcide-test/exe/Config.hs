@@ -60,7 +60,7 @@ testSessionWithPlugin fs plugin = runSessionWithTestConfig def
     { testPluginDescriptor = plugin
     , testDirLocation = Right fs
     , testConfigCaps = lspTestCaps
-    , testShiftRoot = True
+    , testCwdHandling = NoCwdShift
     }
 
 -- * A dummy plugin for testing ghcIde
@@ -78,7 +78,7 @@ runWithDummyPlugin' fs = runSessionWithTestConfig def
     { testPluginDescriptor = dummyPlugin
     , testDirLocation = Right fs
     , testConfigCaps = lspTestCaps
-    , testShiftRoot = True
+    , testCwdHandling = NoCwdShift
     }
 
 testWithDummyPlugin :: String -> FS.VirtualFileTree -> Session () -> TestTree

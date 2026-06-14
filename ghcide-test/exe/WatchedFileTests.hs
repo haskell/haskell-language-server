@@ -78,9 +78,9 @@ tests = testGroup "watched files"
           _ <- openDoc hsFile "haskell"
           expectDiagnostics [(hsFile, [(DiagnosticSeverity_Error, (2, 7), "Could not load module \8216Data.List.Split\8217", Nothing)])]
           let cabalFile = "reload.cabal"
-          cabalContent <- liftIO $ T.readFile cabalFile
+          cabalContent <- liftIO $ T.readFile (sessionDir </> cabalFile)
           let fix = T.replace "build-depends:    base" "build-depends:    base, split"
-          liftIO $ atomicFileWriteText cabalFile (fix cabalContent)
+          liftIO $ atomicFileWriteText (sessionDir </> cabalFile) (fix cabalContent)
           sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
             [ FileEvent (filePathToUri $ sessionDir </> cabalFile) FileChangeType_Changed ]
           expectDiagnostics [(hsFile, [])]

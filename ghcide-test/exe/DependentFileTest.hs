@@ -14,6 +14,7 @@ import           Language.LSP.Protocol.Types    hiding
                                                  SemanticTokensEdit (..),
                                                  mkRange)
 import           Language.LSP.Test
+import           System.FilePath                ((</>))
 import           Test.Hls
 import           Test.Hls.FileSystem
 
@@ -21,17 +22,22 @@ import           Test.Hls.FileSystem
 tests :: TestTree
 tests = testGroup "addDependentFile"
     [testGroup "file-changed" [testCase "test" $ runSessionWithTestConfig def
-        { testShiftRoot = True
+        { testCwdHandling = NoCwdShift
         , testDirLocation = Right (mkIdeTestFs [])
         , testPluginDescriptor = dummyPlugin
         } test]
     ]
     where
       test :: FilePath -> Session ()
-      test _ = do
+      test sessionDir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        let depFilePath = "dep-file.txt"
+        -- Absolute path so the splice's qRunIO/readFile and the watched-file
+        -- notification resolve identically regardless of the process CWD.
+        let depFilePath = sessionDir </> "dep-file.txt"
+        -- show gives a properly escaped Haskell string literal, so a Windows
+        -- path's backslashes survive the splice into Foo's source.
+        let depFileLit = T.pack (show depFilePath)
         liftIO $ atomicFileWriteString depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
@@ -39,8 +45,8 @@ tests = testGroup "addDependentFile"
               , "import Language.Haskell.TH.Syntax"
               , "foo :: Int"
               , "foo = 1 + $(do"
-              , "               qAddDependentFile \"" <> T.pack depFilePath <> "\""
-              , "               f <- qRunIO (readFile \"" <> T.pack depFilePath <> "\")"
+              , "               qAddDependentFile " <> depFileLit
+              , "               f <- qRunIO (readFile " <> depFileLit <> ")"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
