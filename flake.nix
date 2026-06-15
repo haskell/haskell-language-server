@@ -72,6 +72,9 @@
             gmp zlib ncurses
             # for compatibility of curl with provided gcc
             curl
+            # for running plugin tests
+            pkgs.haskellPackages.cabal-fmt
+            pkgs.haskellPackages.cabal-gild
             # Changelog tooling
             (gen-hls-changelogs hpkgs)
             # For the documentation
