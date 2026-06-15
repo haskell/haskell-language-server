@@ -2647,6 +2647,33 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , ""
       , "some = ()"
       , "  where"
+      ],
+  testSession "delete unused local let expr bindings" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, b, c) where"
+      , ""
+      , "a = let b = 1 in 2"
+      , ""
+      , "b = let c = 1"
+      , "        d = 1"
+      , "    in let e = 2 in d"
+      , ""
+      , "c = if (let a = 2 in True) then 1 else 1"
+      ]
+      (3, 8)
+      4
+      "Delete all unused bindings"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, b, c) where"
+      , ""
+      , "a = let in 2"
+      , ""
+      , "b = let"
+      , "        d = 1"
+      , "    in let in d"
+      , ""
+      , "c = if (let in True) then 1 else 1"
       ]
   ]
   where
