@@ -396,7 +396,7 @@ examplesPath :: FilePath
 examplesPath = "bench/example"
 
 defConfig :: Config
-Success defConfig = execParserPure defaultPrefs (info configP fullDesc) []
+Success defConfig = execParserPure defaultPrefs (info configP fullDesc) ["--example-name", "examples"]
 
 quiet, verbose :: Config -> Bool
 verbose = (== All) . verbosity

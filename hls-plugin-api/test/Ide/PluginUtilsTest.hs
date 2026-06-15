@@ -155,7 +155,7 @@ prop_rangemapListEq r xs =
 
 
 gitDiff :: FilePath -> FilePath -> [String]
-gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "-w", "--no-index", "--text", "--exit-code", fRef, fNew]
+gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-ext-diff", "-w", "--no-index", "--text", "--exit-code", fRef, fNew]
 
 goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
 goldenGitDiff name = goldenVsStringDiff name gitDiff
