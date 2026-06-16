@@ -119,6 +119,12 @@ jobs:
         run: |
           cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --max-backjumps 10000
 
+      - if: matrix.os == 'windows-latest'
+        name: Run tests serially on Windows
+        # Windows runners are too slow to parallelise: concurrent in-process
+        # sessions starve each other into lsp-test message timeouts.
+        run: echo "GHCIDE_TEST_THREADS=1" >> "$GITHUB_ENV"
+
       - if: matrix.test
         name: Test hls-graph
         run: cabal test ${CABAL_ARGS} hls-graph
