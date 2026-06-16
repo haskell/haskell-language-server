@@ -40,8 +40,7 @@ module Development.IDE.Core.Compile
   ) where
 
 import           Control.Concurrent.STM.Stats                 hiding (orElse)
-import           Control.DeepSeq                              (NFData (..),
-                                                               force, rnf)
+import qualified Control.DeepSeq                              as DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                                 hiding (List, pre,
@@ -110,12 +109,13 @@ import qualified Data.Set                                     as Set
 import qualified GHC                                          as G
 import           GHC.Core.Lint.Interactive
 import           GHC.Driver.Config.CoreToStg.Prep
+import           GHC.Driver.Env                               (runHsc')
+import           GHC.Driver.Main                              (hscDesugar', hscSimplify')
 import           GHC.Iface.Ext.Types                          (HieASTs)
 import qualified GHC.Runtime.Loader                           as Loader
 import           GHC.Tc.Gen.Splice
 import           GHC.Types.Error
 import           GHC.Types.ForeignStubs
-import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -143,6 +143,10 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                writeHieFile)
 #endif
 
+#if !MIN_VERSION_ghc(9,11,0)
+import           GHC.Types.HpcInfo                            (emptyHpcInfo)
+#endif
+
 #if MIN_VERSION_ghc(9,11,0)
 import qualified Data.List.NonEmpty                           as NE
 import           Data.Time                                    (getCurrentTime)
@@ -156,7 +160,6 @@ import           GHC.Unit.Home.Graph                          (UnitEnvGraph(..),
 import           GHC.Unit.Home.PackageTable                   (hptInternalTableRef, hptInternalTableFromRef)
 import           GHC.Unit.Module.ModIface                     (IfaceTopEnv(..))
 import           GHC.Types.Avail                              (emptyDetOrdAvails)
-import           GHC.Types.Basic                              (ImportLevel(..), convImportLevel)
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)
@@ -524,7 +527,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                                   (tcg_import_decls (tmrTypechecked tcm))
                                   simplified_guts
 #else
-  let !partial_iface = force $ mkPartialIface session
+  let !partial_iface = DeepSeq.force $ mkPartialIface session
                                               (cg_binds guts)
                                               details
                                               ms
@@ -665,33 +668,39 @@ compileModule
     -> TcGblEnv
     -> IO (IdeResult ModGuts)
 compileModule (RunSimplifier simplify) session ms tcg =
-    fmap (either (, Nothing) (second Just)) $
-        catchSrcErrors (hsc_dflags session) "compile" $ do
-            (warnings,desugared_guts) <- withWarnings "compile" $ \tweak -> do
-                 -- Breakpoints don't survive roundtripping from disk
-                 -- and this trips up the verify-core-files check
-                 -- They may also lead to other problems.
-                 -- We have to setBackend ghciBackend in 9.8 as otherwise
-                 -- non-exported definitions are stripped out.
-                 -- However, setting this means breakpoints are generated.
-                 -- Solution: prevent breakpoing generation by unsetting
-                 -- Opt_InsertBreakpoints
-               let session' = tweak $ flip hscSetFlags session
+  catchSrcErrors (hsc_dflags session) compilePhase compileAction
+       >>= \case Left diags             -> pure (diags, Nothing)
+                 Right (diags, modGuts) -> pure (diags, Just modGuts)
+
+  where
+    compilePhase = "compile"
+    compileAction = do
+        -- Breakpoints don't survive roundtripping from disk
+        -- and this trips up the verify-core-files check
+        -- They may also lead to other problems.
+        -- We have to setBackend ghciBackend in 9.8 as otherwise
+        -- non-exported definitions are stripped out.
+        -- However, setting this means breakpoints are generated.
+        -- Solution: prevent breakpoing generation by unsetting
+        -- Opt_InsertBreakpoints
+      let session' = flip hscSetFlags session
 #if MIN_VERSION_ghc(9,7,0)
-                                    $ flip gopt_unset Opt_InsertBreakpoints
-                                    $ setBackend ghciBackend
+                   $ flip gopt_unset Opt_InsertBreakpoints
+                   $ setBackend ghciBackend
 #endif
-                                    $ ms_hspp_opts ms
-               -- TODO: maybe settings ms_hspp_opts is unnecessary?
-               -- MP: the flags in ModSummary should be right, if they are wrong then
-               -- the correct place to fix this is when the ModSummary is created.
-               desugar <- hscDesugar session' (ms { ms_hspp_opts = hsc_dflags session' }) tcg
-               if simplify
-               then do
-                 plugins <- readIORef (tcg_th_coreplugins tcg)
-                 hscSimplify session' plugins desugar
-               else pure desugar
-            return (map snd warnings, desugared_guts)
+                   $ ms_hspp_opts ms
+      -- TODO: maybe settings ms_hspp_opts is unnecessary?
+      -- MP: the flags in ModSummary should be right, if they are wrong then
+      -- the correct place to fix this is when the ModSummary is created.
+      (desugar, msgs) <- do
+         runHsc' session' $ do
+           desugar <- hscDesugar' (ms_location (ms { ms_hspp_opts = hsc_dflags session' })) tcg
+           if simplify
+             then do
+               plugins <- liftIO $ readIORef (tcg_th_coreplugins tcg)
+               hscSimplify' plugins desugar
+             else pure desugar
+      pure (diagFromErrMsgs compilePhase (hsc_dflags session') $ getWarningMessages msgs, desugar)
 
 generateObjectCode :: HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
 generateObjectCode session summary guts = do
@@ -1233,8 +1242,8 @@ getModSummaryFromImports env fp mContents = do
 
 
     -- Force bits that might keep the string buffer and DynFlags alive unnecessarily
-    liftIO $ evaluate $ rnf srcImports
-    liftIO $ evaluate $ rnf textualImports
+    liftIO $ evaluate $ DeepSeq.rnf srcImports
+    liftIO $ evaluate $ DeepSeq.rnf textualImports
 
 
     modLoc <- liftIO $ if mod == mAIN_NAME
@@ -1503,9 +1512,9 @@ data RecompilationInfo m
 -- can be later turned into a proper linkable
 data IdeLinkable = GhcLinkable !Linkable | CoreLinkable !UTCTime !CoreFile
 
-instance NFData IdeLinkable where
-  rnf (GhcLinkable lb)      = rnf lb
-  rnf (CoreLinkable time _) = rnf time
+instance DeepSeq.NFData IdeLinkable where
+  rnf (GhcLinkable lb)      = DeepSeq.rnf lb
+  rnf (CoreLinkable time _) = DeepSeq.rnf time
 
 ml_core_file :: ModLocation -> FilePath
 ml_core_file ml = ml_hi_file ml <.> "core"
