@@ -110,6 +110,7 @@ import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Session                  (SessionLoadingOptions (..))
 import           Development.IDE.Session.Ghc              (getCacheDirsIn)
 import           Development.IDE.Types.Options
+import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Handle
 import           GHC.TypeLits
 import           Ide.Logger                               (Pretty (pretty),
@@ -156,6 +157,7 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners                       (NumThreads (..))
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -200,10 +202,20 @@ unCurrent (BrokenCurrent a) = a
 
 -- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapCliTestOptions . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapCliTestOptions . adjustOption (const $ mkTimeout 600000000) . localOption (NumThreads testNumThreads)
   where
     ingredients = includingOptions hlsTestOptions : defaultIngredients
     ingredientsWithRerun = [rerunningTests ingredients]
+
+-- | Thread count shared by tasty (concurrent tests) and the in-process servers'
+-- RTS capabilities ('argsThreads' -> 'withNumCapabilities'), so the two match.
+-- Defaults to @numProcessors@, overridable with @GHCIDE_TEST_THREADS@.
+{-# NOINLINE testNumThreads #-}
+testNumThreads :: Int
+testNumThreads = unsafePerformIO $ do
+  override <- lookupEnv "GHCIDE_TEST_THREADS"
+  np <- getNumProcessors
+  pure $ maybe np read override
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -836,7 +848,10 @@ runSessionWithTestConfig TestConfig{..} session =
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-        arguments = testingArgs serverRoot cacheDir recorderIde plugins
+        -- Pin the server's RTS capability count to 'testNumThreads', the same value
+        -- tasty runs with (see 'defaultTestRunner'), so concurrency and capabilities match.
+        arguments = (testingArgs serverRoot cacheDir recorderIde plugins)
+                      { argsThreads = Just (fromIntegral testNumThreads) }
 
     -- Make an explicit call to keepAlive to protect both pipes from being GC'd.
     --
