@@ -24,7 +24,7 @@ import           Test.Hls
 import           Test.Hls.FileSystem
 
 main :: IO ()
-main = defaultTestRunner tests
+main = defaultTestRunnerWithThreads (NumThreads 1) tests
 
 hlintPlugin :: PluginTestDescriptor HLint.Log
 hlintPlugin = mkPluginTestDescriptor HLint.descriptor "hlint"

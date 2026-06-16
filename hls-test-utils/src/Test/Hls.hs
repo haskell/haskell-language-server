@@ -142,7 +142,6 @@ import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
                                                            createDirectoryIfMissing,
                                                            getCurrentDirectory,
-                                                           makeAbsolute,
                                                            setCurrentDirectory)
 import           System.Environment                       (lookupEnv)
 import           System.FilePath
@@ -216,6 +215,7 @@ defaultTestRunnerWithThreads n tree = do
   -- Pre-initialise the RTS object linker once, single-threaded, before tasty
   -- forks workers, so concurrent sessions do not race linker initialization.
   initObjLinker RetainCAFs
+  _ <- pure $! length originalWorkingDirectory  -- force before tasty forks workers
   defaultMainWithIngredients ingredientsWithRerun
     (localOption n (wrapCliTestOptions (adjustOption (const $ mkTimeout 600000000) tree)))
   where
@@ -757,6 +757,13 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
+{-# NOINLINE originalWorkingDirectory #-}
+-- | Working directory captured at process start, before any 'shiftRoot' runs.
+-- Relative test roots resolve against this, not the live (concurrently shifted)
+-- CWD, so parallel suites cannot double the path.
+originalWorkingDirectory :: FilePath
+originalWorkingDirectory = unsafePerformIO getCurrentDirectory
+
 -- | How a test drives the process-global current working directory. See Note [Root Directory].
 data CwdHandling
   = ServerCwdShift
@@ -900,7 +907,7 @@ runSessionWithTestConfig TestConfig{..} session =
             | testCwdHandling == HarnessCwdShift = withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
             | otherwise                          = f
         runSessionInVFS (Left testConfigRoot) act = do
-            root <- makeAbsolute testConfigRoot
+            let root = normalise (originalWorkingDirectory </> testConfigRoot)
             withTemporaryDataAndCacheDirectory (\_ cacheDir -> act root cacheDir)
         runSessionInVFS (Right vfs) act =
             withVfsTestDataDirectory vfs $ \fs cacheDir -> do

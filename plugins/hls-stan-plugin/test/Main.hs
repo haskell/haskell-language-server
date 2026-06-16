@@ -12,7 +12,7 @@ import           System.FilePath
 import           Test.Hls
 
 main :: IO ()
-main = defaultTestRunner tests
+main = defaultTestRunnerWithThreads (NumThreads 1) tests
 
 tests :: TestTree
 tests =
