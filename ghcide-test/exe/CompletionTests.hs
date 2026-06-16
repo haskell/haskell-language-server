@@ -59,7 +59,7 @@ testSessionSingleFile testName fp txt session =
 completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
 completionTest name src pos expected = testSessionSingleFile name "A.hs" (T.unlines src) $ do
     docId <- openDoc "A.hs" "haskell"
-    _ <- waitForDiagnostics
+    _ <- waitForTypecheck docId
 
     compls <- getAndResolveCompletions docId pos
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
@@ -220,8 +220,7 @@ localCompletionTests = [
         , "  { field1 :: Int"
         , "  , field2 :: Int"
         , "  }"
-        , -- Without the following, this file doesn't trigger any diagnostics, so completionTest waits forever
-          "triggerDiag :: UnknownType"
+        , "triggerDiag :: UnknownType"
         , "foo record = record.f"
         ]
         (Position 7 21)
