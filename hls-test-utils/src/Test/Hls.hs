@@ -224,13 +224,14 @@ defaultTestRunnerWithThreads n tree = do
 
 -- | Thread count shared by tasty (concurrent tests) and the in-process servers'
 -- RTS capabilities ('argsThreads' -> 'withNumCapabilities'), so the two match.
--- Defaults to @numProcessors@, overridable with @GHCIDE_TEST_THREADS@.
+-- Defaults to @numProcessors `div` 2@ (full @numProcessors@ over-subscribes,
+-- since each test is a GHC session), overridable with @GHCIDE_TEST_THREADS@.
 {-# NOINLINE testNumThreads #-}
 testNumThreads :: Int
 testNumThreads = unsafePerformIO $ do
   override <- lookupEnv "GHCIDE_TEST_THREADS"
   np <- getNumProcessors
-  pure $ maybe np read override
+  pure $ maybe (max 1 (np `div` 2)) read override
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
