@@ -52,7 +52,9 @@ common defaults
     , base >=4.12 && <5
 
 common test-defaults
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  -- Capabilities come from 'withNumCapabilities' ('testNumThreads'), not -N.
+  -- -A32M cuts minor-GC frequency so parallel sessions stop the world less.
+  ghc-options: -threaded -rtsopts -with-rtsopts=-A32M
   if impl(ghc >= 9.8)
     -- We allow using partial functions in tests
     ghc-options: -Wno-x-partial
@@ -2090,7 +2092,7 @@ executable ghcide-test-preprocessor
     buildable: False
 
 test-suite ghcide-tests
-  import: warnings, defaults
+  import: warnings, defaults, test-defaults
   type:               exitcode-stdio-1.0
   default-language:   GHC2021
   build-tool-depends:
@@ -2137,7 +2139,7 @@ test-suite ghcide-tests
     build-depends: ghc-typelits-knownnat
 
   hs-source-dirs:     ghcide-test/exe
-  ghc-options:        -threaded -O0
+  ghc-options:        -O0
 
   main-is:            Main.hs
   other-modules:
