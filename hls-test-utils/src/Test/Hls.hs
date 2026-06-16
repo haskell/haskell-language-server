@@ -18,6 +18,8 @@ module Test.Hls
     module Control.Monad.IO.Class,
     module Control.Applicative.Combinators,
     defaultTestRunner,
+    defaultTestRunnerWithThreads,
+    NumThreads (..),
     goldenGitDiff,
     goldenWithHaskellDoc,
     goldenWithHaskellDocInTmpDir,
@@ -113,6 +115,8 @@ import           Development.IDE.Types.Options
 import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Handle
 import           GHC.TypeLits
+import           GHCi.ObjLink                             (ShouldRetainCAFs (..),
+                                                           initObjLinker)
 import           Ide.Logger                               (Pretty (pretty),
                                                            Priority (..),
                                                            Recorder,
@@ -202,7 +206,18 @@ unCurrent (BrokenCurrent a) = a
 
 -- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapCliTestOptions . adjustOption (const $ mkTimeout 600000000) . localOption (NumThreads testNumThreads)
+defaultTestRunner = defaultTestRunnerWithThreads (NumThreads testNumThreads)
+
+-- | Like 'defaultTestRunner' but caps tasty's worker pool at @n@ threads.
+-- Suites whose sessions shift the global working directory pass @NumThreads 1@,
+-- since concurrent shifts race the CWD.
+defaultTestRunnerWithThreads :: NumThreads -> TestTree -> IO ()
+defaultTestRunnerWithThreads n tree = do
+  -- Pre-initialise the RTS object linker once, single-threaded, before tasty
+  -- forks workers, so concurrent sessions do not race linker initialization.
+  initObjLinker RetainCAFs
+  defaultMainWithIngredients ingredientsWithRerun
+    (localOption n (wrapCliTestOptions (adjustOption (const $ mkTimeout 600000000) tree)))
   where
     ingredients = includingOptions hlsTestOptions : defaultIngredients
     ingredientsWithRerun = [rerunningTests ingredients]
