@@ -205,7 +205,7 @@ unCurrent (BrokenCurrent a) = a
 
 -- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultTestRunnerWithThreads (NumThreads testNumThreads)
+defaultTestRunner = defaultTestRunnerWithThreads (NumThreads testTastyThreads)
 
 -- | Like 'defaultTestRunner' but caps tasty's worker pool at @n@ threads.
 -- Suites whose sessions shift the global working directory pass @NumThreads 1@,
@@ -222,16 +222,24 @@ defaultTestRunnerWithThreads n tree = do
     ingredients = includingOptions hlsTestOptions : defaultIngredients
     ingredientsWithRerun = [rerunningTests ingredients]
 
--- | Thread count shared by tasty (concurrent tests) and the in-process servers'
--- RTS capabilities ('argsThreads' -> 'withNumCapabilities'), so the two match.
--- Defaults to @numProcessors `div` 2@ (full @numProcessors@ over-subscribes,
--- since each test is a GHC session), overridable with @GHCIDE_TEST_THREADS@.
+-- | The in-process servers' RTS capability count ('argsThreads' ->
+-- 'withNumCapabilities'), i.e. how parallel each GHC build is. Defaults to
+-- @numProcessors `div` 2@, overridable with @GHCIDE_TEST_THREADS@.
 {-# NOINLINE testNumThreads #-}
 testNumThreads :: Int
 testNumThreads = unsafePerformIO $ do
   override <- lookupEnv "GHCIDE_TEST_THREADS"
   np <- getNumProcessors
   pure $ maybe (max 1 (np `div` 2)) read override
+
+-- | tasty's concurrent-test pool. Defaults to 'testNumThreads' (so
+-- @GHCIDE_TEST_THREADS@ drives both, matching test concurrency to build
+-- capabilities), but @GHCIDE_TEST_TASTY_THREADS@ overrides it alone: CI uses
+-- that to serialise the Windows tests without single-threading their builds.
+{-# NOINLINE testTastyThreads #-}
+testTastyThreads :: Int
+testTastyThreads = unsafePerformIO $
+  maybe testNumThreads read <$> lookupEnv "GHCIDE_TEST_TASTY_THREADS"
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -871,8 +879,9 @@ runSessionWithTestConfig TestConfig{..} session =
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-        -- Pin the server's RTS capability count to 'testNumThreads', the same value
-        -- tasty runs with (see 'defaultTestRunner'), so concurrency and capabilities match.
+        -- Each server builds GHC with 'testNumThreads' capabilities. This is the
+        -- build parallelism, independent of tasty's test concurrency
+        -- ('testTastyThreads'), so serialising tests does not single-thread builds.
         arguments = (testingArgs serverRoot cacheDir recorderIde plugins)
                       { argsThreads = Just (fromIntegral testNumThreads) }
 
