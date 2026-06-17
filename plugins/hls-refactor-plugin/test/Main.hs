@@ -1098,9 +1098,9 @@ removeImportTests = testGroup "remove import actions"
   ]
 
 extendImportTests :: TestTree
-extendImportTests = testGroup "extend import actions"
-  [ testGroup "with checkAll" $ tests True
-  , testGroup "without checkAll" $ tests False
+extendImportTests = dependentTestGroup "extend import actions" AllFinish
+  [ dependentTestGroup "with checkAll" AllFinish $ tests True
+  , dependentTestGroup "without checkAll" AllFinish $ tests False
   ]
   where
     tests overrideCheckProject =
