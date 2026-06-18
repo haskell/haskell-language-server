@@ -29,7 +29,7 @@ test = testGroup "explicit-fields"
     , mkExpansionTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
     , mkExpansionTest "Mixed" "Mixed" 14 10 14 37
     , mkExpansionTest "Construction" "Construction" 16 5 16 15
-    , mkConversionTest "PositionalConstruction" "PositionalConstruction" 15 5 15 15
+    , mkConversionTest "PositionalConstruction" "PositionalConstruction" 17 5 17 15
     , mkExpansionTest "HsExpanded1" "HsExpanded1" 17 10 17 20
     , mkExpansionTest "HsExpanded2" "HsExpanded2" 23 10 23 22
     , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
@@ -79,27 +79,34 @@ test = testGroup "explicit-fields"
                         , _paddingLeft = Just True
                         }]
 
-    , mkInlayHintsTest "PositionalConstruction" Nothing 15 $ \ih -> do
+    , mkInlayHintsTest "PositionalConstruction" Nothing 17 $ \ih -> do
         let mkLabelPart' = mkLabelPartOffsetLengthSub1 "PositionalConstruction"
         foo <- mkLabelPart' 5 4 "foo="
         bar <- mkLabelPart' 6 4 "bar="
         baz <- mkLabelPart' 7 4 "baz="
+        sym <- mkLabelPart' 8 4 "(><)="
         (@?=) ih
-          [ defInlayHint { _position = Position 15 11
+          [ defInlayHint { _position = Position 17 11
                          , _label = InR [ foo ]
-                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c, (><) = d }" 17 5 18 ]
                          , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
-          , defInlayHint { _position = Position 15 13
+          , defInlayHint { _position = Position 17 13
                          , _label = InR [ bar ]
-                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c, (><) = d }" 17 5 18 ]
                          , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }
-          , defInlayHint { _position = Position 15 15
+          , defInlayHint { _position = Position 17 15
                          , _label = InR [ baz ]
-                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c }" 15 5 16 ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c, (><) = d }" 17 5 18 ]
+                         , _tooltip = Just $ InL "Convert to traditional record syntax"
+                         , _paddingLeft = Nothing
+                         }
+          , defInlayHint { _position = Position 17 17
+                         , _label = InR [ sym ]
+                         , _textEdits = Just [ mkLineTextEdit "MyRec { foo = a, bar = b, baz = c, (><) = d }" 17 5 18 ]
                          , _tooltip = Just $ InL "Convert to traditional record syntax"
                          , _paddingLeft = Nothing
                          }

@@ -71,9 +71,9 @@ import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        Var (varName),
                                                        XXExprGhcTc (..),
                                                        conLikeFieldLabels,
-                                                       isGenerated,
+                                                       isGenerated, isSymOcc,
                                                        mkPrintUnqualifiedDefault,
-                                                       nameSrcSpan,
+                                                       nameOccName, nameSrcSpan,
                                                        pprNameUnqualified,
                                                        recDotDot, tcg_rdr_env,
                                                        unLoc)
@@ -331,7 +331,9 @@ inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocume
                         , _data_ = Nothing
                         }
 
-     mkInlayHintLabelPart pprCtx name loc = InlayHintLabelPart (printFieldName pprCtx (pprNameUnqualified name) <> "=") Nothing loc Nothing
+     mkInlayHintLabelPart pprCtx name loc = InlayHintLabelPart (wrappedIfSymOcc rendered name <> "=") Nothing loc Nothing
+       where
+         rendered = printFieldName pprCtx (pprNameUnqualified name)
 
 mkTitle :: [Extension] -> RecordConversionType -> Text
 mkTitle exts = \case
@@ -616,7 +618,9 @@ showRecordApp pprCtx (RecordAppExpr _ recConstr fla)
   = Just $ printOutputableQualified pprCtx recConstr <>  " { "
          <> T.intercalate ", " (showFieldWithArg <$> fla)
          <> " }"
-  where showFieldWithArg (field, arg) = printFieldName pprCtx field <> " = " <> printOutputableQualified pprCtx arg
+  where
+    showFieldWithArg (flSelector . unLoc -> name, arg) =
+          wrappedIfSymOcc (printFieldName pprCtx (pprNameUnqualified name)) name <> " = " <> printOutputableQualified pprCtx arg
 
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everythingBut (<>) (([], False) `mkQ` ignoreGenerated `extQ` getRecPatterns `extQ` getRecCons)
@@ -711,3 +715,7 @@ getRecPatterns _ = ([], False)
 
 printFieldName :: Outputable a => NamePprCtx -> a -> Text
 printFieldName pprCtx = stripOccNamePrefix . printOutputableQualified pprCtx
+
+wrappedIfSymOcc :: Text -> Name -> Text
+wrappedIfSymOcc rendered name | isSymOcc (nameOccName name) = "(" <> rendered <> ")"
+                              | otherwise                   = rendered
