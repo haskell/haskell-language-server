@@ -2533,7 +2533,8 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , ""
       , "some = ()"
       ]
-  , testSession "delete unused top level binding with Haddock comment" $
+  , knownBrokenForGhcVersions [GHC96, GHC98] "Not implemented for GHC <9.10 (AST changed)" $
+    testSession "delete unused top level binding with Haddock comment" $
     testFor
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
@@ -2553,7 +2554,8 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , ""
       , "some = ()"
       ]
-  , testSession "delete unused top level binding with block Haddock comment" $
+  , knownBrokenForGhcVersions [GHC96, GHC98] "Not implemented for GHC <9.10 (AST changed)" $
+    testSession "delete unused top level binding with block Haddock comment" $
     testFor
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
