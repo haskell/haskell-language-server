@@ -2534,21 +2534,40 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "some = ()"
       ]
   , knownBrokenForGhcVersions [GHC96, GHC98] "Not implemented for GHC <9.10 (AST changed)" $
-    testSession "delete unused top level binding with Haddock comment" $
+    testSession "delete unused leading top level binding with Haddock comment" $
     testFor
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
       , ""
-      , "-- | line docs for f"
-      , "f :: Int"
-      -- TODO: , "-- ^ trailing docs for f"
-      , "f = 1"
+      , "-- | line docs for foo"
+      , "foo :: Int"
+      , "foo = 1"
       , ""
       , "some = ()"
       ]
       (5, 0)
       1
-      "Delete ‘f’"
+      "Delete ‘foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
+  , knownBrokenForGhcVersions [GHC96, GHC98] "Not implemented for GHC <9.10 (AST changed)" $
+    testSession "delete unused trailing top level binding with Haddock comment" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "oof = 1"
+      , "oof :: Int"
+      , "-- ^ trailing docs for oof"
+      , ""
+      , "some = ()"
+      ]
+      (3, 0)
+      1
+      "Delete ‘oof’"
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
       , ""

@@ -608,9 +608,10 @@ suggestDeleteUnusedBinding
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
     | otherwise = []
     where
-      hsmodSigs = [L l sig | L l (SigD _ sig) <- hsmodDecls]
+      hsmodDeclsWithDocs = balanceCommentsList hsmodDecls
+      hsmodSigs = [L l sig | L l (SigD _ sig) <- hsmodDeclsWithDocs]
       relatedRanges indexedContent name =
-        concatMap (findRelatedSpans indexedContent name . reLoc) hsmodDecls
+        concatMap (findRelatedSpans indexedContent name . reLoc) hsmodDeclsWithDocs
       toRange = realSrcSpanToRange
       extendForSpaces = extendToIncludePreviousNewlineIfPossible
 
