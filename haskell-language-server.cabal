@@ -479,6 +479,7 @@ library hls-eval-plugin
     , deepseq
     , Diff                  ^>=0.5 || ^>=1.0.0
     , dlist
+    , exceptions
     , extra
     , filepath
     , ghc
@@ -487,7 +488,7 @@ library hls-eval-plugin
     , hls-graph
     , hls-plugin-api        == 2.14.0.0
     , lens
-    , lsp
+    , lsp                   ^>=2.8
     , lsp-types
     , megaparsec            >=9.0
     , mtl
@@ -1392,7 +1393,7 @@ library hls-fourmolu-plugin
     , ghcide          == 2.14.0.0
     , hls-plugin-api  == 2.14.0.0
     , lens
-    , lsp
+    , lsp             ^>= 2.8
     , mtl
     , process-extras  >= 0.7.1
     , text

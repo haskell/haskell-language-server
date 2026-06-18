@@ -20,7 +20,7 @@ import           Ide.Plugin.Config          (Config)
 import qualified Ide.Plugin.Config          as Plugin
 import qualified Ide.Plugin.Eval            as Eval
 import           Ide.Plugin.Eval.Types      (EvalParams (..), Section (..),
-                                             testOutput)
+                                             evalExprOutput)
 import           Language.LSP.Protocol.Lens (command, range, title)
 import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
@@ -128,7 +128,8 @@ tests =
       evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
       evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id" "-- id :: forall a. a -> a"
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
-  , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
+  , goldenWithEval "Support IO expressions, capture and show stdout/stderr output" "TIO" "hs"
+  , goldenWithEval "Support IO expressions, close handles on errors" "TIOError" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
   , knownBrokenInWindowsBeforeGHC912 "The output has path separators in it, which on Windows look different. Just skip it there" $
       goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" $
@@ -144,7 +145,7 @@ tests =
   , goldenWithEval "Test on last line insert results correctly" "TLastLine" "hs"
   , testGroup "with preprocessors"
     [ knownBrokenInEnv [HostOS Windows]
-        "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
+        "CPP eval on Windows fails for some reasons" $
         goldenWithEval "CPP support" "TCPP" "hs"
     , goldenWithEval "Literate Haskell Bird Style" "TLHS" "lhs"
     ]
@@ -152,6 +153,7 @@ tests =
   , goldenWithEval "Variable 'it' works" "TIt" "hs"
   , testGroup "configuration"
     [ goldenWithEval' "Give 'WAS' by default" "TDiff" "hs" "expected.default"
+    , goldenWithEval "Refreshing an identical multi-line result is a no-op" "TDiffMultiline" "hs"
     , goldenWithEvalConfig' "Give the result only if diff is off" "TDiff" "hs" "expected.no-diff" diffOffConfig
     , goldenWithEvalConfig' "Evaluates to exception (not marked)" "TException" "hs" "expected.nomark" (exceptionConfig False)
     , goldenWithEvalConfig' "Evaluates to exception (with mark)" "TException" "hs" "expected.marked" (exceptionConfig True)
@@ -289,8 +291,8 @@ codeLensTestOutput codeLens = do
   CodeLens { _command = Just command } <- [codeLens]
   Command { _arguments = Just args } <- [command]
   Success EvalParams { sections = sections } <- fromJSON @EvalParams <$> args
-  Section { sectionTests = sectionTests } <- sections
-  testOutput =<< sectionTests
+  Section { sectionEvalExprs = sectionEvalExprs } <- sections
+  evalExprOutput =<< sectionEvalExprs
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-eval-plugin" </> "test" </> "testdata"
