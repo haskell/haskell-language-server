@@ -613,7 +613,7 @@ checkoutAction :: Value
 checkoutAction = ghAction "Checkout" "actions/checkout@v4" [] []
 
 uploadArtifacts :: String -> String -> Value
-uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v6"
+uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v7"
   [ "if-no-files-found" .= str "error"
   , "retention-days" .= (2 :: Int)
   , "name" .= name
@@ -621,4 +621,4 @@ uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@
   ] []
 
 downloadArtifacts :: String -> String -> Value
-downloadArtifacts name path = ghAction "Download artifacts" "actions/download-artifact@v7" [ "name" .= name, "path" .= path ] []
+downloadArtifacts name path = ghAction "Download artifacts" "actions/download-artifact@v8" [ "name" .= name, "path" .= path ] []
