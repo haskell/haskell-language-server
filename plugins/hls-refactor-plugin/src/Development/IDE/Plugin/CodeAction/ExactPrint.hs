@@ -25,6 +25,8 @@ import qualified Data.Text                              as T
 import           Development.IDE.GHC.Compat             hiding (Annotation)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.ExactPrint.Annotation (addParens, epl,
+                                                            modifyAnns)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Spans.Common
 import           GHC.Exts                               (IsList (fromList))

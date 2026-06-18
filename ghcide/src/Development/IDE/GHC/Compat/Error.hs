@@ -32,6 +32,7 @@ module Development.IDE.GHC.Compat.Error (
   _TcRnPartialTypeSignatures,
   _TcRnMissingSignature,
   _TcRnSolverReport,
+  _TcRnUnusedTopBind,
   _TcRnMessageWithInfo,
   _TypeHole,
   _ConstraintHole,
@@ -81,6 +82,17 @@ _GhcDriverMessage :: Prism' GhcMessage DriverMessage
 _GhcDriverMessage = prism' GhcDriverMessage (\case
   GhcDriverMessage driverMsg -> Just driverMsg
   _ -> Nothing)
+
+-- | Focus an unused top-level binding warning (@-Wunused-top-binds@). Structured
+-- provenance for this only exists from GHC 9.8 (GHC #20115).
+_TcRnUnusedTopBind :: Fold GhcMessage ()
+#if MIN_VERSION_ghc(9,8,0)
+_TcRnUnusedTopBind = _TcRnMessage . folding (\case
+  TcRnUnusedName _ UnusedNameTopDecl -> Just ()
+  _                                  -> Nothing)
+#else
+_TcRnUnusedTopBind = ignored
+#endif
 
 -- | Some 'TcRnMessage's are nested in other constructors for additional context.
 -- For example, 'TcRnWithHsDocContext' and 'TcRnMessageWithInfo'.

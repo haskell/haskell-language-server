@@ -55,6 +55,9 @@
         "explicit-fixity": {
             "globalOn": true
         },
+        "export": {
+            "globalOn": true
+        },
         "gadt": {
             "globalOn": true
         },
