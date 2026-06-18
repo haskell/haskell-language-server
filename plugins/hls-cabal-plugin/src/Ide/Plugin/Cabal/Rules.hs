@@ -16,6 +16,8 @@ import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as Encoding
 import           Data.Text.Utf16.Rope.Mixed        as Rope
 import           Development.IDE                   as D
+import           Development.IDE.Core.InputPath    (toAllHaskellInput,
+                                                    unInputPath)
 import qualified Development.IDE.Core.Shake        as Shake
 import qualified Distribution.CabalSpecVersion     as Cabal
 import qualified Distribution.Fields               as Syntax
@@ -59,15 +61,15 @@ cabalRules recorder plId = do
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mCabalSource) <- use_ GetFileContents file
-        log' Debug $ LogModificationTime file t
+        (t, mCabalSource) <- use_ GetFileContents $ toAllHaskellInput $ unInputPath file
+        log' Debug $ LogModificationTime (unInputPath file) t
         contents <- case mCabalSource of
           Just sources ->
             pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+            liftIO $ BS.readFile $ fromNormalizedFilePath $ unInputPath file
 
-        case Parse.readCabalFields file contents of
+        case Parse.readCabalFields (unInputPath file) contents of
           Left _ ->
             pure ([], Nothing)
           Right fields ->
@@ -91,20 +93,20 @@ cabalRules recorder plId = do
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mCabalSource) <- use_ GetFileContents file
-        log' Debug $ LogModificationTime file t
+        (t, mCabalSource) <- use_ GetFileContents $ toAllHaskellInput $ unInputPath file
+        log' Debug $ LogModificationTime (unInputPath file) t
         contents <- case mCabalSource of
           Just sources ->
             pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+            liftIO $ BS.readFile $ fromNormalizedFilePath $ unInputPath file
 
         -- Instead of fully reparsing the sources to get a 'GenericPackageDescription',
         -- we would much rather re-use the already parsed results of 'ParseCabalFields'.
         -- Unfortunately, Cabal-syntax doesn't expose the function 'parseGenericPackageDescription''
         -- which allows us to resume the parsing pipeline with '[Field Position]'.
         let (pWarnings, pm) = Parse.parseCabalFileContents contents
-        let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
+        let warningDiags = fmap (Diagnostics.warningDiagnostic (unInputPath file)) pWarnings
         case pm of
           Left (_cabalVersion, pErrorNE) -> do
             let regexUnknownCabalBefore310 :: T.Text
@@ -136,14 +138,14 @@ cabalRules recorder plId = do
                             ]
                             then
                               Diagnostics.warningDiagnostic
-                                file
+                                (unInputPath file)
                                 ( Syntax.PWarning Syntax.PWTOther pos $
                                     unlines
                                       [ text
                                       , unsupportedCabalHelpText
                                       ]
                                 )
-                            else Diagnostics.errorDiagnostic file pe
+                            else Diagnostics.errorDiagnostic (unInputPath file) pe
                       )
                       pErrorNE
                 allDiags = errorDiags <> warningDiags

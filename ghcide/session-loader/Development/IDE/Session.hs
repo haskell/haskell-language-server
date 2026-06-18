@@ -42,6 +42,7 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                           as T
 import           Data.Version
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake          hiding (Log, knownTargets,
                                                       withHieDb)
@@ -108,11 +109,12 @@ import           Text.ParserCombinators.ReadP        (readP_to_S)
 import           Control.Concurrent.STM              (STM, TVar)
 import qualified Control.Monad.STM                   as STM
 import           Control.Monad.Trans.Reader
+import           Development.IDE.Core.Dependencies   (indexDependencyHieFiles)
+import qualified Development.IDE.Core.HieFile        as HieFile
 import qualified Development.IDE.Session.Ghc         as Ghc
 import qualified Development.IDE.Session.OrderedSet  as S
 import qualified Focus
 import qualified StmContainers.Map                   as STM
-
 data Log
   = LogSettingInitialDynFlags
   | LogGetInitialGhcLibDirDefaultCradleFail !CradleError !FilePath !(Maybe FilePath) !(Cradle Void)
@@ -136,6 +138,7 @@ data Log
   | LogLookupSessionCache !FilePath
   | LogTime !String
   | LogSessionGhc Ghc.Log
+  | LogHieFile HieFile.HieFileLog
 deriving instance Show Log
 
 instance Pretty Log where
@@ -207,6 +210,7 @@ instance Pretty Log where
       "Cradle:" <+> viaShow cradle
     LogHieBios msg -> pretty msg
     LogSessionGhc msg -> pretty msg
+    LogHieFile msg -> pretty msg
     LogSessionLoadingChanged ->
       "Session Loading config changed, reloading the full session."
 
@@ -681,6 +685,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionClientConfig = clientConfig
               , sessionSharedNameCache = ideNc
               , sessionLoadingOptions = newSessionLoadingOptions
+              , sessionShakeExtras = extras
               }
 
         writeTaskQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
@@ -743,6 +748,7 @@ data SessionEnv = SessionEnv
   , sessionClientConfig    :: Config
   , sessionSharedNameCache :: NameCache
   , sessionLoadingOptions  :: SessionLoadingOptions
+  , sessionShakeExtras     :: ShakeExtras
   }
 
 type SessionM = ReaderT SessionEnv IO
@@ -887,7 +893,9 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
   -- HscEnv but set the active component accordingly
   hscEnv <- initEmptyHscEnv
   ideOptions <- asks sessionIdeOptions
-  let new_cache = newComponentCache (cmapWithPrio LogSessionGhc recorder) (optExtensions ideOptions) cfp hscEnv
+  extras <- asks sessionShakeExtras
+  let indexDependencies env = indexDependencyHieFiles (cmapWithPrio LogHieFile recorder) extras env
+      new_cache = newComponentCache (cmapWithPrio LogSessionGhc recorder) indexDependencies (optExtensions ideOptions) cfp hscEnv
   all_target_details <- liftIO $ new_cache old_components_info new_components_info
   (all_targets, this_flags_map) <- liftIO $ addErrorTargetIfUnknown all_target_details hieYaml cfp
   -- The VFS doesn't change on cradle edits, re-use the old one.
@@ -906,9 +914,9 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         unless (null new_components_info || not checkProject) $ do
             cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
             void $ enqueueActions sessionShake $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                mmt <- uses GetModificationTime cfps'
+                mmt <- uses GetModificationTime $ classifyAllHaskellInputs cfps'
                 let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-                modIfaces <- uses GetModIface cs_exist
+                modIfaces <- uses GetModIface $ classifyProjectHaskellInputs cs_exist
                 -- update exports map
                 shakeExtras <- getShakeExtras
                 let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces

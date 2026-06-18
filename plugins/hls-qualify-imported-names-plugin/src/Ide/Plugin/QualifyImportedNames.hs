@@ -26,6 +26,8 @@ import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE                  (spanContainsRange)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.InputPath   (generalizeProjectInput,
+                                                   toProjectHaskellInput)
 import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileContents),
                                                    GetHieAst (GetHieAst),
                                                    HieAstResult (HAR, refMap),
@@ -58,7 +60,7 @@ import           Development.IDE.Types.Location   (Position (Position),
 import           GHC.Iface.Ext.Types              (ContextInfo (..), Identifier,
                                                    IdentifierDetails (..), Span)
 import           GHC.Iface.Ext.Utils              (RefMap)
-import           Ide.Plugin.Error                 (PluginError (PluginRuleFailed),
+import           Ide.Plugin.Error                 (PluginError (PluginInvalidParams, PluginRuleFailed),
                                                    getNormalizedFilePathE,
                                                    handleMaybe)
 import           Ide.Types                        (PluginDescriptor (pluginHandlers),
@@ -228,11 +230,12 @@ usedIdentifiersToTextEdits range nameToImportedByMap source usedIdentifiers
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId range _) = do
   normalizedFilePath <- getNormalizedFilePathE (documentId ^. L.uri)
-  TcModuleResult { tmrParsed, tmrTypechecked } <- runActionE "QualifyImportedNames.TypeCheck" ideState $ useE TypeCheck normalizedFilePath
+  input <- handleMaybe (PluginInvalidParams "Expected project Haskell file") $ toProjectHaskellInput normalizedFilePath
+  TcModuleResult { tmrParsed, tmrTypechecked } <- runActionE "QualifyImportedNames.TypeCheck" ideState $ useE TypeCheck input
   if isJust (findLImportDeclAt range tmrParsed)
     then do
-          HAR {..} <- runActionE "QualifyImportedNames.GetHieAst" ideState (useE GetHieAst normalizedFilePath)
-          (_, sourceM) <-  runActionE "QualifyImportedNames.GetFileContents" ideState (useE GetFileContents normalizedFilePath)
+          HAR {..} <- runActionE "QualifyImportedNames.GetHieAst" ideState (useE GetHieAst $ generalizeProjectInput input)
+          (_, sourceM) <-  runActionE "QualifyImportedNames.GetFileContents" ideState (useE GetFileContents $ generalizeProjectInput input)
           source <- handleMaybe (PluginRuleFailed "GetFileContents") sourceM
           let globalRdrEnv = tcg_rdr_env tmrTypechecked
               nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
@@ -240,4 +243,3 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId range _) 
               textEdits = usedIdentifiersToTextEdits range nameToImportedByMap source usedIdentifiers
           pure  $ InL (makeCodeActions (documentId ^. L.uri) textEdits)
     else pure  $ InL []
-

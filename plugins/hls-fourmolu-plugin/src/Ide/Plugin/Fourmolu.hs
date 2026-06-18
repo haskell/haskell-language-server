@@ -25,6 +25,7 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import           Data.Version                     (showVersion)
 import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.InputPath   (toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
 import           Development.IDE.GHC.Compat       as Compat hiding (Cpp,
                                                              Warning, hang,
@@ -77,7 +78,7 @@ provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler Id
 provider recorder plId ideState token typ contents fp fo = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
-            <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
+            <$> liftIO (runAction "Fourmolu" ideState $ maybe (pure Nothing) (use GhcSession) $ toProjectHaskellInput fp)
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     fourmoluExePath <- fmap T.unpack $ liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #path plId properties
     if useCLI

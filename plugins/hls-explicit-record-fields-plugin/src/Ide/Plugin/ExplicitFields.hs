@@ -91,7 +91,6 @@ import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable,
                                                        stripOccNamePrefix)
-import           Development.IDE.Graph                (RuleResult)
 import           Development.IDE.Graph.Classes        (Hashable, NFData)
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
@@ -109,9 +108,11 @@ import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
 import           Ide.PluginUtils                      (subRange)
-import           Ide.Types                            (PluginDescriptor (..),
+import           Ide.Types                            (InputClass (ProjectHaskellFiles),
+                                                       PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
+                                                       RuleInput, RuleResult,
                                                        ResolveFunction,
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
@@ -430,6 +431,7 @@ instance Show CollectRecordsResult where
   show _ = "<CollectRecordsResult>"
 
 type instance RuleResult CollectRecords = CollectRecordsResult
+type instance RuleInput CollectRecords = ProjectHaskellFiles
 
 data CollectNames = CollectNames
                   deriving (Eq, Show, Generic)
@@ -446,6 +448,7 @@ instance Show CollectNamesResult where
   show _ = "<CollectNamesResult>"
 
 type instance RuleResult CollectNames = CollectNamesResult
+type instance RuleInput CollectNames = ProjectHaskellFiles
 
 data Saturated = Saturated | Unsaturated
   deriving (Generic)

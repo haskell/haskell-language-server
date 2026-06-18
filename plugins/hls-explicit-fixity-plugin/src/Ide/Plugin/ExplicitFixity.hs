@@ -18,6 +18,7 @@ import qualified Data.Set                             as S
 import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
+import           Development.IDE.Core.InputPath       (generalizeProjectInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.Shake           (addPersistentRule)
@@ -92,6 +93,7 @@ instance Hashable GetFixity
 instance NFData GetFixity
 
 type instance RuleResult GetFixity = FixityMap
+type instance RuleInput GetFixity = ProjectHaskellFiles
 
 -- | Convert a HieAST to FixityTree with fixity info gathered
 lookupFixities :: MonadIO m => HscEnv -> TcGblEnv -> S.Set Name -> m (M.Map Name Fixity)
@@ -113,7 +115,7 @@ lookupFixities hscEnv tcGblEnv names
 fixityRule :: Recorder (WithPriority Log) -> Rules ()
 fixityRule recorder = do
     define (cmapWithPrio LogShake recorder) $ \GetFixity nfp -> do
-        HAR{refMap} <- use_ GetHieAst nfp
+        HAR{refMap} <- use_ GetHieAst $ generalizeProjectInput nfp
         env <- hscEnv <$> use_ GhcSessionDeps nfp -- deps necessary so that we can consult already loaded in ifaces instead of loading in duplicates
         tcGblEnv <- tmrTypechecked <$> use_ TypeCheck nfp
         fs <- lookupFixities env tcGblEnv (S.mapMonotonic (\(Right n) -> n) $ S.filter isRight $ M.keysSet refMap)

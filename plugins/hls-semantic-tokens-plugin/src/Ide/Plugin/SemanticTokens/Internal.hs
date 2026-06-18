@@ -37,6 +37,8 @@ import           Development.IDE                          (Action,
                                                            hieKind)
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
+import           Development.IDE.Core.InputPath           (generalizeProjectInput,
+                                                           unInputPath)
 import           Development.IDE.Core.Rules               (toIdeResult)
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake               (ShakeExtras (..),
@@ -126,10 +128,11 @@ semanticTokensFullDelta recorder state pid param = do
 getSemanticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
-    (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
+    let file = unInputPath nfp
+    (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst $ generalizeProjectInput nfp
     (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
-    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
-    virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
+    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) file
+    virtualFile <- handleMaybeM LogNoVF $ getVirtualFile file
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
 

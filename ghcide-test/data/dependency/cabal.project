@@ -1,0 +1,7 @@
+packages: .
+package *
+  ghc-options: -fwrite-ide-info
+package async
+  ghc-options: -fwrite-ide-info
+package hashable
+  ghc-options: -fwrite-ide-info

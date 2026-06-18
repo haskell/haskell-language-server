@@ -41,6 +41,7 @@ import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
@@ -96,7 +97,8 @@ instance Pretty Log where
     LogShake msg -> pretty msg
 
 addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
-addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
+addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile input -> do
+  let f = unInputPath input
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
   if isAlreadyWatched then pure (Just True) else
@@ -114,9 +116,10 @@ getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
 
 getModificationTimeImpl
   :: Bool
-  -> NormalizedFilePath
+  -> InputPath AllHaskellFiles
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getModificationTimeImpl missingFileDiags file = do
+getModificationTimeImpl missingFileDiags input = do
+    let file = unInputPath input
     let file' = fromNormalizedFilePath file
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
     mbVf <- getVirtualFile file
@@ -125,12 +128,12 @@ getModificationTimeImpl missingFileDiags file = do
             alwaysRerun
             pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
         Nothing -> do
-            isWF <- use_ AddWatchedFile file
+            isWF <- use_ AddWatchedFile input
             if isWF
                 then -- the file is watched so we can rely on FileWatched notifications,
                         -- but also need a dependency on IsFileOfInterest to reinstall
                         -- alwaysRerun when the file becomes VFS
-                    void (use_ IsFileOfInterest file)
+                    void (use_ IsFileOfInterest input)
                 else if isInterface file
                     then -- interface files are tracked specially using the closed world assumption
                         pure ()
@@ -152,9 +155,10 @@ getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogSh
     getPhysicalModificationTimeImpl file
 
 getPhysicalModificationTimeImpl
-  :: NormalizedFilePath
+  :: InputPath AllHaskellFiles
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getPhysicalModificationTimeImpl file = do
+getPhysicalModificationTimeImpl input = do
+    let file = unInputPath input
     let file' = fromNormalizedFilePath file
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
 
@@ -208,11 +212,12 @@ getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
 getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: NormalizedFilePath
+    :: InputPath AllHaskellFiles
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
-getFileContentsImpl file = do
+getFileContentsImpl input = do
+    let file = unInputPath input
     -- need to depend on modification time to introduce a dependency with Cutoff
-    time <- use_ GetModificationTime file
+    time <- use_ GetModificationTime input
     res <- do
         mbVirtual <- getVirtualFile file
         pure $ _file_text <$> mbVirtual
@@ -220,7 +225,7 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents :: InputPath AllHaskellFiles -> Action (UTCTime, Maybe Rope)
 getFileModTimeContents f = do
     (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
@@ -230,16 +235,16 @@ getFileModTimeContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            posix <- getModTime $ fromNormalizedFilePath f
+            posix <- getModTime $ fromNormalizedFilePath $ unInputPath f
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
-getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
+getFileContents :: InputPath AllHaskellFiles -> Action (Maybe Rope)
 getFileContents f = snd <$> use_ GetFileContents f
 
 getUriContents :: NormalizedUri -> Action (Maybe Rope)
 getUriContents uri =
-    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
+    join <$> traverse (getFileContents . toAllHaskellInput) (uriToNormalizedFilePath uri)
 
 -- | Given a text document identifier, annotate it with the latest version.
 --
@@ -291,12 +296,15 @@ typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) pa
 
 typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
-    revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph nfp
-    case revs of
+    case toProjectHaskellInput nfp of
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
-      Just rs -> do
-        logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
-        void $ uses GetModIface rs
+      Just input -> do
+        revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph input
+        case revs of
+          Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
+          Just rs -> do
+            logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
+            void $ uses GetModIface (classifyProjectHaskellInputs rs)
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that

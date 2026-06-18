@@ -41,6 +41,7 @@ import qualified Data.Unique                          as U (hashUnique,
                                                             newUnique)
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
+import           Development.IDE.Core.InputPath       (toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import qualified Development.IDE.Core.Shake           as Shake
@@ -319,6 +320,7 @@ instance Hashable ImportActions
 instance NFData ImportActions
 
 type instance RuleResult ImportActions = ImportActionsResult
+type instance RuleInput ImportActions = ProjectHaskellFiles
 
 data ResultType = ExplicitImport | RefineImport
   deriving Eq
@@ -379,9 +381,11 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
     ImportMap currIm <- MaybeT $ use GetImportMap nfp
     for currIm $ \path -> do
       -- second layer is from the imports of first layer to their imports
-      ImportMap importIm <- MaybeT $ use GetImportMap path
+      input <- MaybeT $ pure $ toProjectHaskellInput path
+      ImportMap importIm <- MaybeT $ use GetImportMap input
       for importIm $ \imp_path -> do
-        imp_hir <- MaybeT $ use GetModIface imp_path
+        imp_input <- MaybeT $ pure $ toProjectHaskellInput imp_path
+        imp_hir <- MaybeT $ use GetModIface imp_input
         return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports

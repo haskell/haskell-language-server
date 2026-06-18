@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP             #-}
+{-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE PatternSynonyms #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
@@ -11,12 +12,17 @@ import qualified Data.HashMap.Strict         as HM
 import           Data.Maybe                  (mapMaybe)
 import qualified Data.Text                   as T
 import           Development.IDE
+import           Development.IDE.Core.InputPath
+                                             (classifyProjectHaskellInputs,
+                                              unInputPath)
 import           Development.IDE.Core.Rules  (getHieFile)
 import qualified Development.IDE.Core.Shake  as Shake
 import           Development.IDE.GHC.Compat  (HieFile (..))
 import           GHC.Generics                (Generic)
 import           Ide.Plugin.Config           (PluginConfig (..))
-import           Ide.Types                   (PluginDescriptor (..), PluginId,
+import           Ide.Types                   (InputClass (ProjectHaskellFiles),
+                                              PluginDescriptor (..), PluginId,
+                                              RuleInput,
                                               configHasDiagnostics,
                                               configInitialGenericConfig,
                                               defaultConfigDescriptor,
@@ -102,11 +108,13 @@ instance Hashable GetStanDiagnostics
 instance NFData GetStanDiagnostics
 
 type instance RuleResult GetStanDiagnostics = ()
+type instance RuleInput GetStanDiagnostics = ProjectHaskellFiles
 
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
+      let nfp = unInputPath file
       config <- getPluginConfigAction plId
       if plcGlobalOn config && plcDiagnosticsOn config then do
           maybeHie <- getHieFile file
@@ -141,7 +149,7 @@ rules recorder plId = do
 
               -- Note that Stan works in terms of relative paths, but the HIE come in as absolute. Without
               -- making its path relative, the file name(s) won't line up with the associated Map keys.
-              relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath file
+              relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath nfp
               let hieRelative = hie{hie_hs_file=relativeHsFilePath}
 
               (checksMap, ignoredObservations) <- case configTrial of
@@ -158,12 +166,13 @@ rules recorder plId = do
               -- A Map from *relative* file paths (just one, in this case) to language extension info:
               cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
               let analysis = runAnalysis cabalExtensionsMap checksMap ignoredObservations [hieRelative]
-              return (analysisToDiagnostics file analysis, Just ())
+              return (analysisToDiagnostics nfp analysis, Just ())
       else return ([], Nothing)
 
   action $ do
-    files <- getFilesOfInterestUntracked
-    void $ uses GetStanDiagnostics $ HM.keys files
+    filesOfInterest <- getFilesOfInterestUntracked
+    let files = classifyProjectHaskellInputs $ HM.keys $ HM.filter (/= ReadOnly) filesOfInterest
+    void $ uses GetStanDiagnostics $ files
   where
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations

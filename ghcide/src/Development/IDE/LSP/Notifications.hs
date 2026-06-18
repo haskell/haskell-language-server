@@ -69,25 +69,42 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
       whenUriFile _uri $ \file -> do
+          let foiStatus = case getSourceFileOrigin file of
+                FromProject -> Modified{firstOpen = True}
+                FromDependency ->ReadOnly
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=True}
+          case foiStatus of
+            ReadOnly -> void $ addFileOfInterest ide file ReadOnly
+            _ -> setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
+                addFileOfInterest ide file Modified{firstOpen=True}
       logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=False}
+          let foiStatus = case getSourceFileOrigin file of
+                FromProject    -> Modified{firstOpen=False}
+                FromDependency -> ReadOnly
+
+          case foiStatus of
+            ReadOnly -> void $ addFileOfInterest ide file ReadOnly
+            _ -> setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
+                addFileOfInterest ide file foiStatus
         logWith recorder Debug $ LogModifiedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file $
-                addFileOfInterest ide file OnDisk
+          let foiStatus = case getSourceFileOrigin file of
+                FromProject    -> OnDisk
+                FromDependency -> ReadOnly
+
+          case foiStatus of
+            ReadOnly -> void $ addFileOfInterest ide file ReadOnly
+            _ -> setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file $
+                addFileOfInterest ide file foiStatus
         logWith recorder Debug $ LogSavedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $

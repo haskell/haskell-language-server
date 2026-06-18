@@ -258,12 +258,12 @@ atPoint
   :: IdeOptions
   -> ShakeExtras
   -> HieAstResult
-  -> DocAndTyThingMap
-  -> HscEnv
+  -> Maybe DocAndTyThingMap
+  -> Maybe HscEnv
   -> Position
-  -> Util.EnumSet Extension
+  -> Maybe (Util.EnumSet Extension)
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) mDkMap mEnv pos mEnabledExtensions =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -319,11 +319,20 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
             let
               typeSig = case identType dets of
                 Just t -> prettyType (Just n) locationsMap t
-                Nothing -> case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
-                  Just kind -> prettyTypeFromType (Just n) locationsMap kind
-                  Nothing   -> wrapHaskell (printOutputable n)
+                Nothing -> fromMaybe (wrapHaskell (printOutputable n)) maybeKind
+
+              maybeKind = do
+                (DKMap _ km _) <- mDkMap
+                kind <-
+                  safeTyThingType (maybe False (Util.member LinearTypes) mEnabledExtensions)
+                  =<< lookupNameEnv km n
+                pure $ prettyTypeFromType (Just n) locationsMap kind
+
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
-              docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
+
+              docs = maybeToList $ do
+                (DKMap dm _ _ ) <- mDkMap
+                T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
 
             pure $ T.unlines $ [typeSig] ++ definitionLoc ++ docs
           where
@@ -343,7 +352,9 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- the package(with version) this `ModuleName` belongs to.
         packageNameForImportStatement :: ModuleName -> IO T.Text
         packageNameForImportStatement mod = do
-          mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
+          mpkg <- case mEnv of
+            Just env -> findImportedModule (setNonHomeFCHook env) mod
+            Nothing -> pure Nothing
           let moduleName = printOutputable mod
           case mpkg >>= packageNameWithVersion of
             Nothing             -> pure moduleName
@@ -352,12 +363,23 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- Return the package name and version of a module.
         -- For example, given module `Data.List`, it should return something like `base-4.x`.
         packageNameWithVersion :: Module -> Maybe T.Text
-        packageNameWithVersion m = do
-          let pid = moduleUnit m
-          conf <- lookupUnit env pid
-          let pkgName = T.pack $ unitPackageNameString conf
-              version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ pkgName <> "-" <> version
+        packageNameWithVersion m =
+          let pid = moduleUnit m in
+          case mEnv of
+              -- If we have an HscEnv (because this is a project file),
+              -- we can get the package name from that.
+              Just env -> do
+                conf <- lookupUnit env pid
+                let pkgName = T.pack $ unitPackageNameString conf
+                    version = T.pack $ showVersion (unitPackageVersion conf)
+                pure $ pkgName <> "-" <> version
+              -- If we don't have an HscEnv (because this is a dependency file)
+              -- then we get a similar format for the package name
+              -- from the UnitId
+              Nothing ->
+                let uid = toUnitId pid
+                    pkgStr = takeWhile (/= ':') $ show uid
+                in Just $ T.pack pkgStr
 
         -- Type info for the current node, it may contain several symbols
         -- for one range, like wildcard

@@ -27,6 +27,7 @@ import           Development.IDE                      (DocAndTyThingMap (DKMap),
 import           Development.IDE.Core.PluginUtils     (runIdeActionE,
                                                        useWithStaleFastE)
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
+import           Development.IDE.Core.InputPath       (toProjectHaskellInput)
 import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        RealSrcSpan,
                                                        getSourceNodeIds,
@@ -52,7 +53,9 @@ import           GHC.Iface.Ext.Types                  (ContextInfo (Use),
 import           GHC.Iface.Ext.Utils                  (smallestContainingSatisfying)
 import           GHC.Types.Name.Env                   (lookupNameEnv)
 import           GHC.Types.SrcLoc                     (isRealSubspanOf)
-import           Ide.Plugin.Error                     (getNormalizedFilePathE)
+import           Ide.Plugin.Error                     (PluginError (PluginInvalidParams),
+                                                       getNormalizedFilePathE,
+                                                       handleMaybe)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers),
                                                        PluginId,
                                                        PluginMethodHandler,
@@ -127,7 +130,8 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
             )
   (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
     -- see Note [Stale Results in Signature Help]
-    mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
+    input <- handleMaybe (PluginInvalidParams "Expected project Haskell file") $ toProjectHaskellInput nfp
+    mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap input
     case mResult of
       Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
       Nothing -> pure (mempty, mempty)

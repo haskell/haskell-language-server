@@ -129,9 +129,12 @@ library
     Development.IDE.Core.Actions
     Development.IDE.Core.Compile
     Development.IDE.Core.Debouncer
+    Development.IDE.Core.Dependencies
     Development.IDE.Core.FileStore
     Development.IDE.Core.FileUtils
+    Development.IDE.Core.HieFile
     Development.IDE.Core.IdeConfiguration
+    Development.IDE.Core.InputPath
     Development.IDE.Core.LookupMod
     Development.IDE.Core.OfInterest
     Development.IDE.Core.PluginUtils

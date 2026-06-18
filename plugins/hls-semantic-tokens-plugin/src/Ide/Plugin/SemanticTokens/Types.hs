@@ -18,6 +18,8 @@ import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           GHC.Iface.Ext.Types           (TypeIndex)
 import           Ide.Plugin.Error              (PluginError)
+import           Ide.Types                     (InputClass (ProjectHaskellFiles),
+                                                RuleInput)
 import           Language.Haskell.TH.Syntax    (Lift)
 import           Language.LSP.Protocol.Types
 
@@ -130,6 +132,7 @@ showRange :: Range -> String
 showRange (Range (Position l1 c1) (Position l2 c2)) = show l1 <> ":" <> show c1 <> "-" <> show l2 <> ":" <> show c2
 
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
+type instance RuleInput GetSemanticTokens = ProjectHaskellFiles
 
 data HieFunMaskKind kind where
   HieFreshFun :: HieFunMaskKind Type

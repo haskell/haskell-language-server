@@ -39,6 +39,8 @@ import           Development.IDE.Core.FileStore           (isWatchSupported,
 import           Development.IDE.Core.IdeConfiguration    (IdeConfiguration (..),
                                                            modifyClientSettings,
                                                            registerIdeConfiguration)
+import           Development.IDE.Core.InputPath           (classifyProjectHaskellInputs,
+                                                           toAllHaskellInput)
 import           Development.IDE.Core.OfInterest          (FileOfInterestStatus (OnDisk),
                                                            kick,
                                                            setFilesOfInterest)
@@ -435,9 +437,11 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 
             putStrLn "\nStep 4/4: Type checking the files"
             setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
-            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
+            let projectInputs = classifyProjectHaskellInputs $ map toNormalizedFilePath' absoluteFiles
+                haskellInputs = map (toAllHaskellInput . toNormalizedFilePath') absoluteFiles
+            results <- runAction "User TypeCheck" ide $ uses TypeCheck projectInputs
+            _results <- runAction "GetHie" ide $ uses GetHieAst haskellInputs
+            _results <- runAction "GenerateCore" ide $ uses GenerateCore projectInputs
             let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
             when (failed /= []) $
                 putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed

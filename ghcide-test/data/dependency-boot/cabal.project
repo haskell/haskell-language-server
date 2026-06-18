@@ -1,0 +1,5 @@
+packages: .
+package *
+  ghc-options: -fwrite-ide-info
+package containers
+  ghc-options: -fwrite-ide-info

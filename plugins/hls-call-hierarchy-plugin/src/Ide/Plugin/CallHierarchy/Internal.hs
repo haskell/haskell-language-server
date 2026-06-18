@@ -21,6 +21,7 @@ import qualified Data.Set                       as S
 import qualified Data.Text                      as T
 import           Data.Tuple.Extra
 import           Development.IDE
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
@@ -51,7 +52,7 @@ prepareCallHierarchy state _ param = do
     pure $ InL items
 
 prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
-prepareCallHierarchyItem nfp pos = use GetHieAst nfp <&> \case
+prepareCallHierarchyItem nfp pos = use GetHieAst (toAllHaskellInput nfp) <&> \case
     Nothing               -> mempty
     Just (HAR _ hf _ _ _) -> prepareByAst hf pos nfp
 
@@ -273,7 +274,7 @@ queryCalls item queryFunc makeFunc merge
             Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
         getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
-        getSymbolFromAst nfp pos_ = use GetHieAst nfp <&> \case
+        getSymbolFromAst nfp pos_ = use GetHieAst (toAllHaskellInput nfp) <&> \case
             Nothing -> Nothing
             Just (HAR _ hf _ _ _) -> do
                 case listToMaybe $ pointCommand hf pos_ extract of
