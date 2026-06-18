@@ -9,49 +9,51 @@ module Development.IDE.Plugin.HLS
     , Log(..)
     ) where
 
-import           Control.Exception             (SomeException)
-import           Control.Lens                  ((^.))
+import           Control.Exception                (SomeException)
+import           Control.Lens                     ((^.))
 import           Control.Monad
-import qualified Control.Monad.Extra           as Extra
-import           Control.Monad.IO.Class        (MonadIO)
-import           Control.Monad.Trans.Except    (runExceptT)
-import qualified Data.Aeson                    as A
-import           Data.Bifunctor                (first)
-import           Data.Dependent.Map            (DMap)
-import qualified Data.Dependent.Map            as DMap
+import qualified Control.Monad.Extra              as Extra
+import           Control.Monad.IO.Class           (MonadIO)
+import           Control.Monad.Trans.Except       (runExceptT)
+import qualified Data.Aeson                       as A
+import           Data.Bifunctor                   (first)
+import           Data.Dependent.Map               (DMap)
+import qualified Data.Dependent.Map               as DMap
 import           Data.Dependent.Sum
 import           Data.Either
-import qualified Data.List                     as List
-import           Data.List.NonEmpty            (NonEmpty, nonEmpty, toList)
-import qualified Data.List.NonEmpty            as NE
-import qualified Data.Map                      as Map
-import           Data.Maybe                    (isNothing, mapMaybe)
+import qualified Data.List                        as List
+import           Data.List.NonEmpty               (NonEmpty, nonEmpty, toList)
+import qualified Data.List.NonEmpty               as NE
+import qualified Data.Map                         as Map
+import           Data.Maybe                       (isNothing, mapMaybe)
 import           Data.Some
 import           Data.String
-import           Data.Text                     (Text)
-import qualified Data.Text                     as T
-import           Development.IDE.Core.Shake    hiding (Log)
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import           Development.IDE.Core.PluginUtils (injectServerDiagnostics)
+import           Development.IDE.Core.Shake       hiding (Log)
 import           Development.IDE.Core.Tracing
-import           Development.IDE.Graph         (Rules)
+import           Development.IDE.Graph            (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
-import qualified Development.IDE.Plugin        as P
+import qualified Development.IDE.Plugin           as P
 import           Ide.Logger
 import           Ide.Plugin.Config
 import           Ide.Plugin.Error
 import           Ide.Plugin.HandleRequestTypes
-import           Ide.PluginUtils               (getClientConfig)
-import           Ide.Types                     as HLS
-import qualified Language.LSP.Protocol.Lens    as JL
+import           Ide.PluginUtils                  (getClientConfig)
+import           Ide.Types                        as HLS
+import qualified Language.LSP.Protocol.Lens       as JL
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Server           as LSP
+import qualified Language.LSP.Server              as LSP
 import           Language.LSP.VFS
-import           Prettyprinter.Render.String   (renderString)
-import           Text.Regex.TDFA.Text          ()
-import           UnliftIO                      (MonadUnliftIO, liftIO)
-import           UnliftIO.Async                (forConcurrently)
-import           UnliftIO.Exception            (catchAny)
+import           Prettyprinter.Render.String      (renderString)
+import           Text.Regex.TDFA.Text             ()
+import           UnliftIO                         (MonadUnliftIO, liftIO,
+                                                   readTVarIO)
+import           UnliftIO.Async                   (forConcurrently)
+import           UnliftIO.Exception               (catchAny)
 
 -- ---------------------------------------------------------------------
 --
@@ -250,12 +252,14 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
         PluginHandlers hs = HLS.pluginHandlers pluginDesc
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
-      pure $ requestHandler m $ \ide params -> do
+      pure $ requestHandler m $ \ide params' -> do
+        vfs <- readTVarIO $ vfsVar $ shakeExtras ide
+        params <- liftIO $ preprocessMessageParams ide m params'
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are allowed to run on this request, save the
         -- list of disabled plugins incase that's all we have
-        let (fs, dfs) = List.partition (\(_, desc, _) -> handlesRequest m params desc config == HandlesRequest) fs'
-        let disabledPluginsReason = (\(x, desc, _) -> (x, handlesRequest m params desc config)) <$> dfs
+        let (fs, dfs) = List.partition (\(_, desc, _) -> handlesRequest vfs m params desc config == HandlesRequest) fs'
+        let disabledPluginsReason = (\(x, desc, _) -> (x, handlesRequest vfs m params desc config)) <$> dfs
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         -- However, some clients do display ResponseErrors! See for example the issues:
         -- https://github.com/haskell/haskell-language-server/issues/4467
@@ -286,6 +290,18 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
                   Just xs -> pure $ Left $ combineErrors xs
               Just xs -> do
                 pure $ Right $ combineResponses m config caps params xs
+
+
+-- | Preprocess 'MessageParams' and insert custom data.
+--
+-- In issue https://github.com/haskell/haskell-language-server/issues/4056, we
+-- established that HLS should rely on server-side 'Diagnostic's to compute 'CodeAction's
+-- To ensure consistency, we intercept 'CodeAction's requests and explicitly inject
+-- server-side 'Diagnostic's before delegating to the 'PluginHandler'.
+preprocessMessageParams :: IdeState -> SMethod m -> MessageParams m -> IO (MessageParams m)
+preprocessMessageParams ide m params = case m of
+    SMethod_TextDocumentCodeAction -> injectServerDiagnostics ide params
+    _                              -> pure params
 
 -- | Fallback Handler for resolve requests.
 -- For all kinds of `*/resolve` requests, if they don't have a 'data_' value,
@@ -370,7 +386,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
       pure $ notificationHandler m $ \ide vfs params -> do
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are enabled for this request
-        let fs = filter (\(_, desc, _) -> handlesRequest m params desc config == HandlesRequest) fs'
+        let fs = filter (\(_, desc, _) -> handlesRequest vfs m params desc config == HandlesRequest) fs'
         case nonEmpty fs of
           Nothing -> do
             logWith recorder Warning (LogNoPluginForMethod $ Some m)

@@ -4,6 +4,7 @@ module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 import           Control.Monad                             (join)
 import           Control.Monad.Trans.Class                 (lift)
 import           Data.Bifunctor                            (Bifunctor (..))
+import           Data.Char                                 (isUpper)
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
@@ -49,6 +50,11 @@ import           Language.Haskell.GHC.ExactPrint           (d1, setEntryDP)
 import           GHC.Parser.Annotation                     (EpToken (..))
 #endif
 
+#if MIN_VERSION_ghc(9,13,0)
+-- HsArrow was renamed to HsMultAnn in GHC 9.13
+type HsArrow pass = HsMultAnn pass
+#endif
+
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
 --  - there is an unbound variable (GHC provides no type suggestion)
@@ -63,11 +69,20 @@ import           GHC.Parser.Annotation                     (EpToken (..))
 --      In this case a new argument would have to add its type between b and c in the signature.
 plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
 plugin parsedModule Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
+  | Just (name, typ) <- matchVariableNotInScope message
+  , not (isQualifiedName name) = addArgumentAction parsedModule _range name typ
   | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
   | otherwise = pure []
   where
     message = unifySpaces _message
+    -- Qualified names (e.g. NE.toList) always start with an uppercase module
+    -- qualifier. Since "Variable not in scope" only reports variables and
+    -- operators, an unqualified name will never start with an uppercase letter.
+    -- Therefore, checking for an uppercase first character reliably identifies
+    -- qualified names, which can never be valid function argument patterns.
+    isQualifiedName name = case T.uncons name of
+      Just (c, _) -> isUpper c
+      Nothing     -> False
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
 -- returning how many patterns there were in this match prior to the transformation:
@@ -177,7 +192,15 @@ hsTypeFromFunTypeAsList (args, res) =
 addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> LHsSigType GhcPs
 addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
     let (args, res) = hsTypeToFunTypeAsList lsigTy
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,13,0)
+        wildCardAnn = noAnnSrcSpanDP1
+        newArg =
+          ( noAnn
+          , noExtField
+          , HsUnannotated (EpArrow (EpUniTok d1 NormalSyntax))
+          , L wildCardAnn $ HsWildCardTy NoEpTok
+          )
+#elif MIN_VERSION_ghc(9,9,0)
         wildCardAnn = noAnnSrcSpanDP1
         newArg =
           ( noAnn

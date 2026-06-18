@@ -6,8 +6,7 @@ import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
-import qualified Ide.Plugin.Conversion            as Conversion
-import           Properties.Conversion            (conversions)
+import qualified Properties.Conversion            as Conversion
 import           System.FilePath                  ((<.>), (</>))
 import           Test.Hls
 import           Text.Regex.TDFA                  ((=~))
@@ -23,29 +22,36 @@ alternateNumberFormatPlugin = mkPluginTestDescriptor AlternateNumberFormat.descr
 -- to do with how
 test :: TestTree
 test = testGroup "alternateNumberFormat" [
-    codeActionHex "TIntDtoH" 3 13
-    , codeActionOctal "TIntDtoO" 3 13
-    , codeActionBinary "TIntDtoB" 4 13
-    , codeActionNumDecimal "TIntDtoND" 5 13
-    , codeActionFracExp "TFracDtoE" 3 13
-    , codeActionFloatHex "TFracDtoHF" 4 13
-    , codeActionDecimal "TIntHtoD" 3 13
-    , codeActionDecimal "TFracHFtoD" 4 13
+    codeActionHex 0 "TIntDtoH" 3 13
+    , codeActionOctal 0 "TIntDtoO" 3 13
+    , codeActionBinary 0 "TIntDtoB" 4 13
+    , codeActionBinary 6 "TIntDtoBU0toU4MultiplePragma" 4 13
+    , codeActionNumDecimal 0 "TIntDtoND" 5 13
+    , codeActionDecimal 2 "TIntDtoDU0toU3" 4 13
+    , codeActionFracExp 0 "TFracDtoE" 3 13
+    , codeActionFracExp 3 "TFracDtoEU0toU3" 3 13
+    , codeActionFloatHex 0 "TFracDtoHF" 4 13
+    , codeActionFloatHex 6 "TFracDtoHFU0toU2" 4 13
+    , codeActionDecimal 0 "TIntHtoD" 3 13
+    , codeActionDecimal 0 "TFracHFtoD" 4 13
+    , codeActionDecimal 3 "TFracDtoDU0toU3" 3 13
+    , codeActionDecimal 2 "TFracDtoDU3toU4" 3 13
+    , codeActionDecimal 3 "TFracDtoDU3toU0" 3 13
     -- to test we don't duplicate pragmas
-    , codeActionFloatHex "TFracDtoHFWithPragma" 4 13
+    , codeActionFloatHex 0 "TFracDtoHFWithPragma" 4 13
     , codeActionProperties "TFindLiteralIntPattern" [(4, 25), (5,25)] $ \actions -> do
         liftIO $ length actions @?= 8
     , codeActionProperties "TFindLiteralIntCase" [(4, 29)] $ \actions -> do
-        liftIO $ length actions @?= 4
+        liftIO $ length actions @?= 5
     , codeActionProperties "TFindLiteralIntCase2" [(5, 21)] $ \actions -> do
-        liftIO $ length actions @?= 4
+        liftIO $ length actions @?= 5
     , codeActionProperties "TFindLiteralDoReturn" [(6, 10)] $ \actions -> do
-        liftIO $ length actions @?= 4
+        liftIO $ length actions @?= 5
     , codeActionProperties "TFindLiteralDoLet" [(6, 13), (7, 13)] $ \actions -> do
-        liftIO $ length actions @?= 8
+        liftIO $ length actions @?= 12
     , codeActionProperties "TFindLiteralList" [(4, 28)] $ \actions -> do
-        liftIO $ length actions @?= 4
-    , conversions
+        liftIO $ length actions @?= 5
+    , Conversion.conversions
     ]
 
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
@@ -81,26 +87,26 @@ codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
-codeActionDecimal :: FilePath -> Int -> Int -> TestTree
-codeActionDecimal = codeActionTest isDecimalCodeAction
+codeActionDecimal :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionDecimal nrUnderscores = codeActionTest (isDecimalCodeAction nrUnderscores)
 
-codeActionHex :: FilePath -> Int -> Int -> TestTree
-codeActionHex = codeActionTest isHexCodeAction
+codeActionHex :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionHex nrUnderscores = codeActionTest (isHexCodeAction nrUnderscores)
 
-codeActionOctal :: FilePath -> Int -> Int -> TestTree
-codeActionOctal = codeActionTest isOctalCodeAction
+codeActionOctal :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionOctal nrUnderscores = codeActionTest (isOctalCodeAction nrUnderscores)
 
-codeActionBinary :: FilePath -> Int -> Int -> TestTree
-codeActionBinary = codeActionTest isBinaryCodeAction
+codeActionBinary :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionBinary nrUnderscores = codeActionTest (isBinaryCodeAction nrUnderscores)
 
-codeActionNumDecimal :: FilePath -> Int -> Int -> TestTree
-codeActionNumDecimal = codeActionTest isNumDecimalCodeAction
+codeActionNumDecimal :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionNumDecimal nrUnderscores = codeActionTest (isNumDecimalCodeAction nrUnderscores)
 
-codeActionFracExp :: FilePath -> Int -> Int -> TestTree
-codeActionFracExp = codeActionTest isNumDecimalCodeAction
+codeActionFracExp :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionFracExp nrUnderscores = codeActionTest (isNumDecimalCodeAction nrUnderscores)
 
-codeActionFloatHex :: FilePath -> Int -> Int -> TestTree
-codeActionFloatHex = codeActionTest isHexFloatCodeAction
+codeActionFloatHex :: Int -> FilePath -> Int -> Int -> TestTree
+codeActionFloatHex nrUnderscores = codeActionTest (isHexFloatCodeAction nrUnderscores)
 
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle (InR CodeAction {_title}) = Just _title
@@ -115,7 +121,7 @@ pointRange
 convertPrefix, intoInfix, maybeExtension, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
 convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"
 intoInfix = " into "
-maybeExtension = "( \\(needs extension: .*)?"
+maybeExtension = "( \\(needs extensions: .*)?"
 hexRegex = intoInfix <> Conversion.hexRegex <> maybeExtension
 hexFloatRegex = intoInfix <> Conversion.hexFloatRegex <> maybeExtension
 binaryRegex = intoInfix <> Conversion.binaryRegex <> maybeExtension
@@ -123,26 +129,31 @@ octalRegex = intoInfix <> Conversion.octalRegex <> maybeExtension
 numDecimalRegex = intoInfix <> Conversion.numDecimalRegex <> maybeExtension
 decimalRegex = intoInfix <> Conversion.decimalRegex <> maybeExtension
 
-isCodeAction :: Text -> Maybe Text -> Bool
-isCodeAction userRegex (Just txt) = txt =~ Conversion.matchLineRegex (convertPrefix <> userRegex)
-isCodeAction _ _                  = False
+isCodeAction :: Text -> Int -> Maybe Text -> Bool
+isCodeAction userRegex nrUnderscores (Just txt)
+    | matchesUnderscores txt nrUnderscores
+    = txt =~ Conversion.matchLineRegex (convertPrefix <> userRegex)
+isCodeAction _ _ _ = False
 
-isHexCodeAction :: Maybe Text -> Bool
+matchesUnderscores :: Text -> Int -> Bool
+matchesUnderscores txt nrUnderscores = T.count "_" txt == nrUnderscores
+
+isHexCodeAction :: Int -> Maybe Text -> Bool
 isHexCodeAction = isCodeAction hexRegex
 
-isHexFloatCodeAction :: Maybe Text -> Bool
+isHexFloatCodeAction :: Int -> Maybe Text -> Bool
 isHexFloatCodeAction = isCodeAction hexFloatRegex
 
-isBinaryCodeAction :: Maybe Text -> Bool
+isBinaryCodeAction :: Int -> Maybe Text -> Bool
 isBinaryCodeAction = isCodeAction binaryRegex
 
-isOctalCodeAction :: Maybe Text -> Bool
+isOctalCodeAction :: Int -> Maybe Text -> Bool
 isOctalCodeAction = isCodeAction octalRegex
 
 -- This can match EITHER an integer as NumDecimal extension or a Fractional
 -- as in 1.23e-3 (so anything with an exponent really)
-isNumDecimalCodeAction :: Maybe Text -> Bool
+isNumDecimalCodeAction :: Int -> Maybe Text -> Bool
 isNumDecimalCodeAction = isCodeAction numDecimalRegex
 
-isDecimalCodeAction :: Maybe Text -> Bool
+isDecimalCodeAction :: Int -> Maybe Text -> Bool
 isDecimalCodeAction = isCodeAction decimalRegex

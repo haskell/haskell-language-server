@@ -2508,6 +2508,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "some = ()"
       ]
       (4, 0)
+      1
       "Delete ‘f’"
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
@@ -2525,6 +2526,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "some = ()"
       ]
       (4, 2)
+      1
       "Delete ‘myPlus’"
       [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
       , "module A (some) where"
@@ -2547,6 +2549,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , ""
       ]
       (10, 4)
+      1
       "Delete ‘h’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (h, g) where"
@@ -2570,6 +2573,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "c = 5"
       ]
       (4, 0)
+      1
       "Delete ‘a’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (b, c) where"
@@ -2589,6 +2593,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "c = 5"
       ]
       (5, 0)
+      1
       "Delete ‘b’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (a, c) where"
@@ -2608,6 +2613,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "c = 5"
       ]
       (6, 0)
+      1
       "Delete ‘c’"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}"
       , "module A (a, b) where"
@@ -2615,12 +2621,65 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       , "a, b :: Int"
       , "a = 3"
       , "b = 4"
+      ],
+  testSession "delete all unused level bindings" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "f :: Int -> Int"
+      , "f 1 = let a = 1"
+      , "      in a"
+      , "f 2 = 2"
+      , ""
+      , "some = ()"
+      , "  where"
+      , "    a = 2"
+      , ""
+      , "unusedSome :: ()"
+      , "unusedSome = ()"
+      ]
+      (4, 0)
+      3
+      "Delete all unused bindings"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      , "  where"
+      ],
+  testSession "delete unused local let expr bindings" $
+    testFor
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, b, c) where"
+      , ""
+      , "a = let b = 1 in 2"
+      , ""
+      , "b = let c = 1"
+      , "        d = 1"
+      , "    in let e = 2 in d"
+      , ""
+      , "c = if (let a = 2 in True) then 1 else 1"
+      ]
+      (3, 8)
+      4
+      "Delete all unused bindings"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, b, c) where"
+      , ""
+      , "a = let in 2"
+      , ""
+      , "b = let"
+      , "        d = 1"
+      , "    in let in d"
+      , ""
+      , "c = if (let in True) then 1 else 1"
       ]
   ]
   where
-    testFor sourceLines pos@(l,c) expectedTitle expectedLines = do
+    testFor sourceLines pos@(l,c) expectedNbrWarnings expectedTitle expectedLines = do
       docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
-      expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used", Nothing)]) ]
+      expectDiagnostics [ ("A.hs", replicate expectedNbrWarnings (DiagnosticSeverity_Warning, pos, "not used", Nothing)) ]
       action <- pickActionWithTitle expectedTitle =<< getCodeActions docId  (R l c l c)
       executeCodeAction action
       contentAfterAction <- documentContents docId
@@ -3288,7 +3347,7 @@ removeRedundantConstraintsTests = let
     ]
 
   typeSignatureLined3 = T.unlines $ header <>
-    [ "foo :: ( Eq a"
+    [ "foo :: (Eq a"
     , "       , Show a"
     , "       )"
     , "    => a -> Bool"
@@ -3296,7 +3355,7 @@ removeRedundantConstraintsTests = let
     ]
 
   typeSignatureLined3' = T.unlines $ header <>
-    [ "foo :: ( Eq a"
+    [ "foo :: (Eq a"
     , "       )"
     , "    => a -> Bool"
     , "foo x = x == x"
@@ -3379,7 +3438,9 @@ addSigActionTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
-  issue806 = if ghcVersion >= GHC910 then
+  issue806 = if ghcVersion >= GHC914 then
+                  "hello = print"           >:: "hello :: GHC.Internal.Types.ZonkAny 0 -> IO ()" -- GHC 9.14 moved to GHC.Internal.Types
+                else if ghcVersion >= GHC910 then
                   "hello = print"           >:: "hello :: GHC.Types.ZonkAny 0 -> IO ()" -- GHC now returns ZonkAny 0 instead of Any. https://gitlab.haskell.org/ghc/ghc/-/issues/25895
                 else
                   "hello = print"           >:: "hello :: GHC.Types.Any -> IO ()" -- Documents current behavior outlined in #806

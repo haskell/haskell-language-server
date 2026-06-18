@@ -28,7 +28,9 @@ module Development.IDE.GHC.Util(
     disableWarningsAsErrors,
     printOutputable,
     printOutputableOneLine,
+    printOutputableQualified,
     getExtensions,
+    getExtensionsSet,
     stripOccNamePrefix,
     ) where
 
@@ -270,6 +272,10 @@ printOutputable = printOutputable' printWithoutUniques
 printOutputableOneLine :: Outputable a => a -> T.Text
 printOutputableOneLine = printOutputable' printWithoutUniquesOneLine
 
+printOutputableQualified :: Outputable a => PrintUnqualified -> a -> T.Text
+printOutputableQualified ctx =
+    printOutputable' (printSDocQualifiedUnsafe ctx . ppr)
+
 printOutputable' :: Outputable a => (a -> String) -> a -> T.Text
 printOutputable' print =
     -- IfaceTyLit from GHC.Iface.Type implements Outputable with 'show'.
@@ -279,7 +285,10 @@ printOutputable' print =
 {-# INLINE printOutputable #-}
 
 getExtensions :: ParsedModule -> [Extension]
-getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary
+getExtensions = toList . getExtensionsSet
+
+getExtensionsSet :: ParsedModule -> EnumSet Extension
+getExtensionsSet = extensionFlags . ms_hspp_opts . pm_mod_summary
 
 -- | When e.g. DuplicateRecordFields is enabled, compiler generates
 -- names like "$sel:accessor:One" and "$sel:accessor:Two" to
@@ -331,4 +340,3 @@ occNamePrefixes =
   , "$c"
   , "$m"
   ]
-

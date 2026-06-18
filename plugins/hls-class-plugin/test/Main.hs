@@ -11,6 +11,7 @@ import           Control.Lens                  (Prism', prism', view, (^.),
                                                 (^..), (^?))
 import           Control.Monad                 (void)
 import           Data.Foldable                 (find)
+import qualified Data.List                     as List
 import           Data.Maybe
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.Class              as Class
@@ -65,6 +66,16 @@ codeActionTests = testGroup
       getActionByTitle "Add placeholders for 'g','h'"
   , goldenWithClass "Creates a placeholder when all top-level decls are indented" "T7" "" $
       getActionByTitle "Add placeholders for 'g','h','i'"
+  , goldenWithClass "Creates a placeholder when non-missing methods have non-default indentation" "T10" "" $
+      getActionByTitle "Add placeholders for 'g'"
+  , testGroup "with preprocessors"
+    [ knownBrokenInEnv [GhcVer GHC910]
+        "See issue https://github.com/haskell/haskell-language-server/issues/4731 for details." $
+        goldenWithClass "Creates a placeholder for '<>'" "T8" "diamond" $
+      getActionByTitle "Add placeholders for '<>'"
+      ]
+  , goldenWithClass "Creates a placeholder for type classes with super classes" "T9" "" $
+      getActionByTitle "Add placeholders for all missing methods"
   , goldenWithClass "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $
       getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Insert pragma if not exist" "InsertWithoutPragma" "" $
@@ -109,9 +120,9 @@ codeLensTests = testGroup
             doc <- openDoc "CodeLensSimple.hs" "haskell"
             lens <- getAndResolveCodeLenses doc
             let titles = map (^. L.title) $ mapMaybe (^. L.command) lens
-            liftIO $ titles @?=
-                [ "(==) :: B -> B -> Bool"
-                , "(==) :: A -> A -> Bool"
+            liftIO $ List.sort titles @?=
+                [ "(==) :: A -> A -> Bool"
+                , "(==) :: B -> B -> Bool"
                 ]
     , testCase "No lens for TH" $ do
         runSessionWithServer def classPlugin testDataDir $ do
@@ -129,7 +140,7 @@ codeLensTests = testGroup
             liftIO $ length lens > 0 @?= True
         `catch` \(e :: SessionException) -> do
           liftIO $ assertFailure $ "classPluginTestError: "++ show e
-    , goldenCodeLens "Apply code lens" "CodeLensSimple" 1
+    , goldenCodeLens "Apply code lens" "CodeLensSimple" 0
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens "Apply code lens on the same line" "Inline" 0
     , goldenCodeLens "Don't insert pragma while existing" "CodeLensWithPragma" 0
@@ -155,10 +166,10 @@ goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
 goldenCodeLens title path idx =
     goldenWithHaskellDoc def classPlugin title testDataDir path "expected" "hs" $ \doc -> do
         lens <- getAndResolveCodeLenses doc
-        executeCommand $ fromJust $ (lens !! idx) ^. L.command
+        executeCommand $ fromJust $ (List.sort lens !! idx) ^. L.command
         void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
-goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session CodeAction) -> TestTree
+goldenWithClass :: TestName -> FilePath -> FilePath -> ([CodeAction] -> Session CodeAction) -> TestTree
 goldenWithClass title path desc findAction =
   goldenWithHaskellDoc def classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
     _ <- waitForDiagnosticsFrom doc

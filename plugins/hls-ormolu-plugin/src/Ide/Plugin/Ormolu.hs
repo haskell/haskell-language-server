@@ -170,7 +170,12 @@ provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIn
                pure $ InL $ makeDiffTextEdit contents out
            ExitFailure n -> do
                logWith recorder Info $ StdErr err
-               throwError $ PluginInternalError $ "Ormolu failed with exit code " <> T.pack (show n)
+               let cleanErr = T.stripEnd err
+               let cliError = if T.null cleanErr
+                              then ""
+                              else "\n" <> cleanErr
+               throwError $ PluginInternalError $
+                   "Ormolu failed with exit code " <> T.pack (show n) <> cliError
 
 newtype CLIVersionInfo =   CLIVersionInfo
     { noCabal :: Bool

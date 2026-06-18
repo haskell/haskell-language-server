@@ -2,9 +2,7 @@
   description = "haskell-language-server development flake";
 
   inputs = {
-    # Don't use nixpkgs-unstable as aarch64-darwin is currently broken there.
-    # Check again, when https://github.com/NixOS/nixpkgs/pull/414242 is resolved.
-    nixpkgs.url = "github:NixOS/nixpkgs/c742ae7908a82c9bf23ce27bfca92a00e9bcd541";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     # For default.nix
     flake-compat = {
@@ -29,7 +27,7 @@
             ps.myst-parser
             ps.pip
             ps.sphinx
-            ps.sphinx_rtd_theme
+            ps.sphinx-rtd-theme
           ]);
 
         docs = pkgs.stdenv.mkDerivation {
@@ -74,6 +72,9 @@
             gmp zlib ncurses
             # for compatibility of curl with provided gcc
             curl
+            # for running plugin tests
+            pkgs.haskellPackages.cabal-fmt
+            pkgs.haskellPackages.cabal-gild
             # Changelog tooling
             (gen-hls-changelogs hpkgs)
             # For the documentation
@@ -85,16 +86,10 @@
             ] ++ lib.optionals (!stdenv.isDarwin)
                    [ # tracy has a build problem on macos.
                      tracy
-                   ]
-              ++ lib.optionals stdenv.isDarwin
-              (with darwin.apple_sdk.frameworks; [
-                Cocoa
-                CoreServices
-              ]);
+                   ];
 
           shellHook = ''
             # @guibou: I'm not sure theses lines are needed
-            export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
             export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
             export PATH=$PATH:$HOME/.local/bin
 
@@ -111,6 +106,7 @@
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
           shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
           shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
+          shell-ghc914 = mkDevShell pkgs.haskell.packages.ghc914;
         };
 
         packages = { inherit docs; };

@@ -17,7 +17,6 @@ import           Language.LSP.Protocol.Types   hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
-import           System.IO.Extra               hiding (withTempDir)
 import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -29,6 +28,7 @@ tests = testGroup "Interface loading tests"
     , ifaceErrorTest2
     , ifaceErrorTest3
     , ifaceTHTest
+    , ifaceTransitivePropagationTest
     ]
 
 
@@ -137,6 +137,37 @@ ifaceErrorTest2 = testWithExtraFiles "iface-error-test-2" "recomp" $ \dir -> do
       ]
 
     expectNoMoreDiagnostics 2
+
+-- | Saving a file should propagate type errors to its transitive reverse
+-- dependencies, not just immediate importers. The fixture is a 3-module chain
+-- M0 <- M1 <- M2 where M2 does not import M0 directly. Flipping M0's exported
+-- type from Int to Bool must surface a diagnostic in M2.
+ifaceTransitivePropagationTest :: TestTree
+ifaceTransitivePropagationTest = testWithExtraFiles "iface-transitive-propagation" "transitive-recomp" $ \dir -> do
+    configureCheckProject False
+    let m0Path = dir </> "M0.hs"
+        m2Path = dir </> "M2.hs"
+    m0Source <- liftIO $ readFileUtf8 m0Path
+    m2Source <- liftIO $ readFileUtf8 m2Path
+    -- Open M2 first to bring the whole chain (M2 -> M1 -> M0) into the module
+    -- graph. After this we close M2 so it leaves the FOI set.
+    m2doc <- createDoc m2Path "haskell" m2Source
+    expectDiagnostics
+      [("M1.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding", Just "GHC-38417")])]
+    closeDoc m2doc
+    m0doc <- createDoc m0Path "haskell" m0Source
+    -- Flip M0's exported value from Int to Bool.
+    changeDoc m0doc
+      [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
+          T.unlines ["module M0 (m0val) where", "m0val :: Bool", "m0val = True"]]
+    sendNotification SMethod_TextDocumentDidSave (DidSaveTextDocumentParams m0doc Nothing)
+    -- m1val is type-inferred and becomes Bool, so M2 (which has
+    -- m2val :: Int = m1val) now fails. The M2 diagnostic only reaches the
+    -- client if typecheckParents walks the transitive reverse-dep set.
+    expectDiagnostics
+      [ ("M1.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding", Just "GHC-38417")])
+      , ("M2.hs", [(DiagnosticSeverity_Error, (5, 8), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])
+      ]
 
 ifaceErrorTest3 :: TestTree
 ifaceErrorTest3 = testWithExtraFiles "iface-error-test-3" "recomp" $ \dir -> do

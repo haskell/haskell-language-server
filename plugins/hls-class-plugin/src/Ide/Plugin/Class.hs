@@ -10,7 +10,7 @@ import           Language.LSP.Protocol.Message
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId "Provides code actions and lenses for working with typeclasses")
     { pluginCommands = commands plId
-    , pluginRules = getInstanceBindTypeSigsRule recorder >> getInstanceBindLensRule recorder
+    , pluginRules = getClassInstancesRule recorder >> getInstanceBindLensRule recorder
     , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeAction recorder)
         <> mkPluginHandler SMethod_TextDocumentCodeLens codeLens
         <> mkResolveHandler SMethod_CodeLensResolve codeLensResolve

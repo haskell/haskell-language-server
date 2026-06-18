@@ -30,12 +30,12 @@ tests = testGroup "garbage collection"
         , testWithDummyPluginEmpty' "are deleted from the state" $ \dir -> do
             liftIO $ atomicFileWriteString (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
             docA <- generateGarbage "A" dir
-            keys0 <- getStoredKeys
             closeDoc docA
             garbage <- waitForGC
             liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
             keys1 <- getStoredKeys
-            liftIO $ assertBool "keys were not deleted from the state" (length keys1 < length keys0)
+            let garbageStillPresent = Set.intersection (Set.fromList garbage) (Set.fromList keys1)
+            liftIO $ garbageStillPresent @?= mempty
 
         , testWithDummyPluginEmpty' "are not regenerated unless needed" $ \dir -> do
             liftIO $ atomicFileWriteString (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
@@ -43,13 +43,13 @@ tests = testGroup "garbage collection"
             _docB <- generateGarbage "B" dir
 
             -- garbage collect A keys
-            keysBeforeGC <- getStoredKeys
             closeDoc docA
             garbage <- waitForGC
             liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
             keysAfterGC <- getStoredKeys
+            let garbageStillPresent = Set.intersection (Set.fromList garbage) (Set.fromList keysAfterGC)
             liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state"
-                (length keysAfterGC < length keysBeforeGC)
+                (Set.null garbageStillPresent)
 
             -- re-typecheck B and check that the keys for A have not materialized back
             _docB <- generateGarbage "B" dir

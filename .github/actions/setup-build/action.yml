@@ -7,7 +7,7 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.14.2.0"
+    default: "3.16.1.0"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell-actions/setup@v2.8.1
+    - uses: haskell-actions/setup@v2.10.3
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -42,6 +42,13 @@ runs:
       name: (Windows) Platform config
       run: |
         echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
+      shell: bash
+
+    - if: inputs.os == 'Windows'
+      name: (Windows) Platform config (root test directory)
+      run: |
+        mkdir C:\\hls-tests
+        echo "HLS_TEST_ROOTDIR=C:\\hls-tests" >> $GITHUB_ENV
       shell: bash
 
     - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )
@@ -76,7 +83,7 @@ runs:
     # We have to restore package sources before `cabal update`
     # because it overwrites the hackage index with the cached one
     - name: Hackage sources cache
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       env:
         cache-name: hackage-sources
       with:
@@ -89,10 +96,14 @@ runs:
     - run: cabal update
       shell: bash
 
+    # We bump --max-backjumps 10000 because cabal
+    # had trouble to find build plan with the default (4000).
+    # This only happens with GHC 9.6 on Windows, other platforms should work without it.
+    # Remove it from here and other places when we stop supporting GHC 9.6
     - name: Form the package list ('cabal.project.freeze')
       run: |
         rm cabal.project.freeze || \
-        cabal v2-freeze && \
+        cabal v2-freeze --max-backjumps 10000 && \
         echo "" && \
         echo 'Output:' && \
         echo "" && \
@@ -101,7 +112,7 @@ runs:
 
     - name: Compiled deps cache
       id: compiled-deps
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       env:
         cache-name: compiled-deps
       with:
@@ -117,17 +128,24 @@ runs:
       run: rm -f cabal.project.freeze
       shell: bash
 
-    # Make sure to clear all unneeded `ghcup`` caches.
+    # Make sure to clear all unneeded `ghcup` caches.
     # At some point, we were running out of disk space, see issue
     # https://github.com/haskell/haskell-language-server/issues/4386 for details.
     #
     # Using "printf" debugging (`du -sh *` and `df -h /`) and binary searching,
     # we figured out that `ghcup` caches are taking up a sizable portion of the
     # disk space.
-    # Thus, we remove anything we don't need, especially caches and temporary files.
-    # For got measure, we also make sure no other tooling versions are
+    #
+    # Thus, we remove anything we don't need, especially caches and temporary
+    # files. For good measure, we also make sure no other tooling versions are
     # installed besides the ones we explicitly want.
     - name: "Remove ghcup caches"
       if: runner.os == 'Linux'
-      run: ghcup gc --ghc-old --share-dir --hls-no-ghc --cache --tmpdirs --unset
+      # haskell-actions/setup installs the GHC but does not `ghcup set` it, so
+      # ghcup considers the active compiler "unset". Mark it set first, otherwise
+      # `--ghc-old --unset` garbage-collects the active GHC and the following
+      # cabal steps fail with "ghc could not be found".
+      run: |
+        ghcup set ghc "$(ghc --numeric-version)"
+        ghcup gc --ghc-old --share-dir --hls-no-ghc --cache --tmpdirs --unset
       shell: bash

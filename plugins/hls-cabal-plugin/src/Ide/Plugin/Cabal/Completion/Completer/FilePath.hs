@@ -5,6 +5,8 @@ module Ide.Plugin.Cabal.Completion.Completer.FilePath where
 import           Control.Exception                            (evaluate, try)
 import           Control.Monad                                (filterM)
 import           Control.Monad.Extra                          (concatForM, forM)
+import           Data.Char                                    (isUpper)
+import           Data.List                                    (find)
 import qualified Data.Text                                    as T
 import           Distribution.PackageDescription              (GenericPackageDescription)
 import           Ide.Logger
@@ -26,50 +28,39 @@ filePathCompleter recorder cData = do
   let prefInfo = cabalPrefixInfo cData
       complInfo = pathCompletionInfoFromCabalPrefixInfo "" prefInfo
   filePathCompletions <- listFileCompletions recorder complInfo
-  let scored =
-        Fuzzy.simpleFilter
-          Fuzzy.defChunkSize
-          Fuzzy.defMaxResults
-          (pathSegment complInfo)
-          (map T.pack filePathCompletions)
-  forM
-    scored
-    ( \compl' -> do
-        let compl = Fuzzy.original compl'
-        fullFilePath <- mkFilePathCompletion complInfo compl
-        pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
-    )
+  let query = pathSegment complInfo
+      originals = map T.pack filePathCompletions
+      matched = smartCaseFuzzy query originals
+
+  forM matched $ \compl -> do
+    fullFilePath <- mkFilePathCompletion complInfo compl
+    pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
 
 mainIsCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> Completer
 mainIsCompleter extractionFunction recorder cData = do
   mGPD <- getLatestGPD cData
   case mGPD of
     Just gpd -> do
-      let srcDirs = extractionFunction sName gpd
-      concatForM srcDirs
-        (\dir' -> do
+      concatForM srcDirs $ \dir' -> do
         let dir = FP.normalise dir'
-        let pathInfo = pathCompletionInfoFromCabalPrefixInfo dir prefInfo
+            pathInfo = pathCompletionInfoFromCabalPrefixInfo dir prefInfo
+            query = pathSegment pathInfo
+
         completions <- listFileCompletions recorder pathInfo
-        let scored = Fuzzy.simpleFilter
-              Fuzzy.defChunkSize
-              Fuzzy.defMaxResults
-              (pathSegment pathInfo)
-              (map T.pack completions)
-        forM
-          scored
-          ( \compl' -> do
-              let compl = Fuzzy.original compl'
-              fullFilePath <- mkFilePathCompletion pathInfo compl
-              pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
-          )
-        )
+
+        let originals = map T.pack completions
+            matched = smartCaseFuzzy query originals
+
+        forM matched $ \compl -> do
+          fullFilePath <- mkFilePathCompletion pathInfo compl
+          pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
+      where
+          sName = stanzaName cData
+          srcDirs = extractionFunction sName gpd
+          prefInfo = cabalPrefixInfo cData
     Nothing -> do
       logWith recorder Debug LogUseWithStaleFastNoResult
       pure []
-  where
-    sName = stanzaName cData
-    prefInfo = cabalPrefixInfo cData
 
 
 -- | Completer to be used when a directory can be completed for the field.
@@ -79,19 +70,13 @@ directoryCompleter recorder cData = do
   let prefInfo = cabalPrefixInfo cData
       complInfo = pathCompletionInfoFromCabalPrefixInfo "" prefInfo
   directoryCompletions <- listDirectoryCompletions recorder complInfo
-  let scored =
-        Fuzzy.simpleFilter
-          Fuzzy.defChunkSize
-          Fuzzy.defMaxResults
-          (pathSegment complInfo)
-          (map T.pack directoryCompletions)
-  forM
-    scored
-    ( \compl' -> do
-        let compl = Fuzzy.original compl'
-        let fullDirPath = mkPathCompletionDir complInfo compl
-        pure $ mkCompletionItem (completionRange prefInfo) fullDirPath fullDirPath
-    )
+  let query = pathSegment complInfo
+      originals = map T.pack directoryCompletions
+      matched = smartCaseFuzzy query originals
+
+  forM matched $ \compl -> do
+    fullFilePath <- mkFilePathCompletion complInfo compl
+    pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
 
 {- Note [Using correct file path separators]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,3 +170,49 @@ mkFilePathCompletion complInfo completion = do
   isFilePath <- doesFileExist $ T.unpack combinedPath
   let completedPath = if isFilePath then applyStringNotation (isStringNotationPath complInfo) combinedPath else combinedPath
   pure completedPath
+
+-- | Applies smart-case filtering to fuzzy-matched candidates.
+--   If the query contains uppercase characters, candidates must
+--   contain the query as a case-sensitive substring.
+--   If the query is all lowercase, all fuzzy matches are accepted.
+smartCaseFuzzy :: T.Text -> [T.Text] -> [T.Text]
+smartCaseFuzzy query originals =
+  let smartSensitive :: Bool
+      smartSensitive = T.any isUpper query
+
+      filtered :: [T.Text]
+      filtered
+        | smartSensitive = filter (isCaseSensitiveSubsequence query) originals
+        | otherwise =originals
+
+      pairs :: [(T.Text, T.Text)]
+      pairs = [ (o, T.toLower o) | o <- filtered ]
+
+      matchQuery :: T.Text
+      matchSpace :: [T.Text]
+      (matchQuery, matchSpace) =
+        if smartSensitive
+          then (query, map fst pairs)
+          else (T.toLower query, map snd pairs)
+
+      scored :: [Fuzzy.Scored T.Text]
+      scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults matchQuery matchSpace
+
+      restore :: T.Text -> T.Text
+      restore matched =
+        case find (\(o,l) -> o == matched || l == matched) pairs of
+          Just (o, _) -> o
+          Nothing     -> matched
+  in
+    map (restore . Fuzzy.original) scored
+
+-- | Checks whether the query is a case-sensitive subsequence of the candidate.
+--   Characters must appear in order and match exactly (including case).
+isCaseSensitiveSubsequence :: T.Text -> T.Text -> Bool
+isCaseSensitiveSubsequence q c = go (T.unpack q) (T.unpack c)
+  where
+    go [] _          = True
+    go _  []         = False
+    go (x:xs) (y:ys)
+      | x == y       = go xs ys
+      | otherwise    = go (x:xs) ys

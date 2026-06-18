@@ -3,6 +3,8 @@
     "checkParents": "CheckOnSave",
     "checkProject": true,
     "formattingProvider": "ormolu",
+    "linkDocTo": "LinkToHackage",
+    "linkSourceTo": "LinkToHackage",
     "maxCompletions": 40,
     "plugin": {
         "alternateNumberFormat": {
@@ -91,20 +93,14 @@
             },
             "globalOn": true
         },
-        "hlint": {
-            "codeActionsOn": true,
-            "config": {
-                "flags": []
-            },
-            "diagnosticsOn": true
-        },
         "importLens": {
             "codeActionsOn": true,
             "codeLensOn": true,
             "inlayHintsOn": true
         },
-        "moduleName": {
-            "globalOn": true
+        "notes": {
+            "completionOn": true,
+            "hoverOn": true
         },
         "ormolu": {
             "config": {
@@ -127,10 +123,11 @@
             "globalOn": true
         },
         "rename": {
+            "codeLensOn": true,
             "config": {
-                "crossModule": false
+                "crossModule": true
             },
-            "globalOn": true
+            "renameOn": true
         },
         "semanticTokens": {
             "config": {
@@ -153,9 +150,12 @@
         "signatureHelp": {
             "globalOn": true
         },
+        "splice": {
+            "globalOn": true
+        },
         "stan": {
             "globalOn": false
         }
     },
-    "sessionLoading": "singleComponent"
+    "sessionLoading": "multipleComponents"
 }

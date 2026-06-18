@@ -86,7 +86,7 @@ codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT handleGhcidePluginError $ do
     nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
-    let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
+    let actions = map (mkAction . printOutputable . tyClDeclLName . unLoc) inRangeH98Decls
     pure $ InL actions
     where
         mkAction :: T.Text -> Command |? CodeAction

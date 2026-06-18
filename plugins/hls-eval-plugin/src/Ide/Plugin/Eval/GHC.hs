@@ -30,41 +30,12 @@ import           GHC                             (setTopSessionDynFlags,
 import           GHC.Driver.Env
 import           GHC.Driver.Session              (getDynFlags)
 
-{- $setup
->>> import GHC
->>> import GHC.Paths
->>> run act = runGhc (Just libdir) (getInteractiveDynFlags >>= act)
->>> libdir
-"/Users/titto/.ghcup/ghc/8.8.4/lib/ghc-8.8.4"
--}
-
-{- | True if specified package is present in DynFlags
-
--- >>> hasPackageTst pkg = run $ \df -> return (hasPackage df pkg)
->>> hasPackageTst pkg = run $ \_ -> addPackages [pkg] >>= return . either Left (\df -> Right (hasPackage df pkg))
-
->>> hasPackageTst "base"
-Right True
-
->>> hasPackageTst "ghc"
-Right True
-
->>> hasPackageTst "extra"
-Left "<command line>: cannot satisfy -package extra\n    (use -v for more information)"
-
->>> hasPackageTst "QuickCheck"
-Left "<command line>: cannot satisfy -package QuickCheck\n    (use -v for more information)"
--}
 hasPackage :: DynFlags -> String -> Bool
 hasPackage df = hasPackage_ (packageFlags df)
 
 hasPackage_ :: [PackageFlag] -> [Char] -> Bool
 hasPackage_ pkgFlags name = any (name `isPrefixOf`) (pkgNames_ pkgFlags)
 
-{- |
->>> run (return . pkgNames)
-[]
--}
 pkgNames :: DynFlags -> [String]
 pkgNames = pkgNames_ . packageFlags
 
@@ -77,27 +48,6 @@ pkgNames_ =
             _                                 -> Nothing
         )
 
-{- | Expose a list of packages.
->>> addPackagesTest pkgs = run (\_ -> (packageFlags <$>) <$> addPackages pkgs)
-
->>> addPackagesTest []
-Right []
-
->>> addPackagesTest ["base","base","array"]
-Right [-package base{package base True ([])},-package array{package array True ([])}]
-
->>> addPackagesTest ["Cabal"]
-Right [-package Cabal{package Cabal True ([])}]
-
->>> addPackagesTest ["QuickCheck"]
-Left "<command line>: cannot satisfy -package QuickCheck\n    (use -v for more information)"
-
->>> addPackagesTest ["base","notThere"]
-Left "<command line>: cannot satisfy -package notThere\n    (use -v for more information)"
-
-prop> \(x::Int) -> x + x == 2 * x
-+++ OK, passed 100 tests.
--}
 addPackages :: [String] -> Ghc (Either String DynFlags)
 addPackages pkgNames = gStrictTry $
     modifyFlags $ \df ->
@@ -111,37 +61,15 @@ modifyFlags f = do
     _ <- setSessionDynFlags (f df)
     getSessionDynFlags
 
--- modifyFlags f = do
---         modifyDynFlags f
---         getSessionDynFlags
-
-{- | Add import to evaluation context
-
->>> run $ \_ -> addImport "import Data.Maybe"
-Could not find module ‘Data.Maybe’
-Use -v (or `:set -v` in ghci) to see a list of the files searched for.
-
->>> run $ \df -> addPackages ["base"] >> addImport "import Data.Maybe"
-[import Data.Maybe]
-
->>> run $ \df -> addPackages ["base"] >> addImport "import qualified Data.Maybe as M"
-[import qualified Data.Maybe as M]
--}
+-- | Add import to evaluation context
 addImport :: GhcMonad m => String -> m [InteractiveImport]
 addImport i = do
     ctx <- getContext
-    -- dbgO "CONTEXT" ctx
     idecl <- parseImportDecl i
     setContext $ IIDecl idecl : ctx
-    -- ctx' <- getContext
-    -- dbg "CONTEXT'" ctx'
     getContext
 
-{- | Add extension to interactive evaluation session
->>> import GHC.LanguageExtensions.Type(Extension(..))
->>> run $ \_ -> addExtension DeriveGeneric
-()
--}
+-- | Add extension to interactive evaluation session
 addExtension :: GhcMonad m => Extension -> m ()
 addExtension ext =
     modifySession $ \hsc -> hsc{hsc_IC = setExtension (hsc_IC hsc) ext}
@@ -151,7 +79,7 @@ setExtension ic ext = ic{ic_dflags = xopt_set (ic_dflags ic) ext}
 
 deriving instance Read Extension
 
--- Partial display of DynFlags contents, for testing purposes
+-- | Partial display of DynFlags contents, for testing purposes
 showDynFlags :: DynFlags -> String
 showDynFlags df =
     T.unpack . printOutputable . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
@@ -159,12 +87,8 @@ showDynFlags df =
         , ("extensionFlags", ppr . EnumSet.toList . extensionFlags $ df)
         , ("importPaths", vList $ importPaths df)
         , ("generalFlags", pprHsString . fromString . show . EnumSet.toList . generalFlags $ df)
-        , -- , ("includePaths", text . show $ includePaths df)
-          -- ("packageEnv", ppr $ packageEnv df)
-          ("pkgNames", vcat . map text $ pkgNames df)
+        , ("pkgNames", vcat . map text $ pkgNames df)
         , ("packageFlags", vcat . map ppr $ packageFlags df)
-        -- ,("pkgDatabase",(map) (ppr . installedPackageId) . pkgDatabase $ df)
-        -- ("pkgDatabase", text . show <$> pkgDatabase $ df)
         ]
 
 vList :: [String] -> SDoc

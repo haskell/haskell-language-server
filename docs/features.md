@@ -132,7 +132,6 @@ The default Haskell code formatter is `ormolu`, and the Haskell formatter can be
 
 | Formatter       | Provided by                  |
 | --------------- | ---------------------------- |
-| Floskell        | `hls-floskell-plugin`        |
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
@@ -237,24 +236,6 @@ Provided by: `hls-class-plugin`
 Code action kind: `quickfix`
 
 Adds placeholders for missing class methods in a class instance definition.
-
-### Unfold definition
-
-Provided by: `hls-retrie-plugin`
-
-Code action kind: `refactor.extract`
-
-Extracts a definition from the code.
-
-### Fold definition
-
-Provided by: `hls-retrie-plugin`
-
-Code action kind: `refactor.inline`
-
-Inlines a definition from the code.
-
-![Retrie Demo](https://i.imgur.com/Ev7B87k.gif)
 
 ### Insert contents of Template Haskell splice
 
@@ -378,14 +359,6 @@ Provided by: `hls-explicit-imports-plugin`
 
 Shows refined imports and applies them with a click (same as the code action).
 
-### Fix module names
-
-Provided by: `hls-module-name-plugin`
-
-Shows module name matching file path, and applies it with a click.
-
-![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
-
 ## Selection range
 
 Provided by: `hls-code-range-plugin`
@@ -420,7 +393,6 @@ Known limitations:
 
 To eagerly load all components, you need to
 
-- set `haskell.sessionLoading` to `multipleComponents`,
 - set `hie.yaml` to load all components (currently only cabal supports this),
   ```yaml
   cradle:
@@ -428,6 +400,15 @@ To eagerly load all components, you need to
       component: all
   ```
 - and enable tests and benchmarks in `cabal.project` with `tests: True` and `benchmarks: True`.
+- if you have set `haskell.sessionLoading` to `singleComponent`, you need to change it back to default `multipleComponents`,
+
+### Fix module names
+
+Provided by: `hls-rename-plugin`
+
+Shows module name matching file path, and applies it with a click.
+
+![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
 
 ## Semantic tokens
 

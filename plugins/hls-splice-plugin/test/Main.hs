@@ -54,6 +54,14 @@ tests = testGroup "splice"
   , goldenTest "TQQTypeTypeError" Inplace 8 28
   , goldenTest "TSimpleDecl" Inplace 8 1
   , goldenTest "TQQDecl" Inplace 5 1
+  , testGroup "Declaration Splices"
+      [ goldenTest "TDeclForeignImport" Inplace 5 1
+      , goldenTest "TDeclData" Inplace 5 1
+      , goldenTest "TDeclNewtype" Inplace 5 1
+      , goldenTest "TDeclInstance" Inplace 5 1
+      , goldenTest "TDeclPatSyn" Inplace 6 1
+      , goldenTest "TDeclPragma" Inplace 5 1
+      ]
   , goldenTestWithEdit "TTypeKindError" (
         if ghcVersion >= GHC96 then
           "96-expected"

@@ -53,7 +53,8 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util    (Fingerprint)
 import qualified Development.IDE.GHC.Compat.Util    as Util
 import           Development.IDE.GHC.Orphans        ()
-import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
+import           Development.IDE.Import.FindImports (ArtifactsLocation (..),
+                                                     isBootLocation)
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics                       (Generic)
@@ -273,7 +274,25 @@ processDependencyInformation RawDependencyInformation{..} rawBootMap mg shallowF
           foldr (\(p, cs) res ->
             let new = IntMap.fromList (map (, IntSet.singleton (coerce p)) (coerce cs))
             in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
-        reverseModuleMap = mkModuleEnv $ map (\(i,sm) -> (showableModule sm, FilePathId i)) $ IntMap.toList rawModuleMap
+        -- Map 'Module' to 'FilePathId'. A 'Module' does not distinguish boot
+        -- from non-boot, so a real source file and its hs-boot share the same
+        -- key. We list boot entries first and non-boot entries second so that
+        -- 'mkModuleEnv' (right-biased on duplicates) makes the non-boot entry
+        -- win: callers like the 'GetLinkable' rule (via 'lookupModuleFile')
+        -- need the non-boot file because hs-boot files don't have linkables.
+        --
+        -- XXX: It's unclear whether this code can be called in a situation
+        --      where a module ONLY has a boot module. If that situation
+        --      can't occur, the snippet below can be simplified to simply
+        --      filter all boot entries.
+        (bootEntries, srcEntries) = partitionEithers
+          [ if isBootLocation al
+              then Left  (showableModule sm, FilePathId i)
+              else Right (showableModule sm, FilePathId i)
+          | (i, sm) <- IntMap.toList rawModuleMap
+          , Just al <- [IntMap.lookup i (idToPathMap rawPathIdMap)]
+          ]
+        reverseModuleMap = mkModuleEnv (bootEntries ++ srcEntries)
 
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
@@ -347,11 +366,11 @@ transitiveReverseDependencies file DependencyInformation{..} = do
     return $ map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
   where
     go :: Int -> IntSet -> IntSet
-    go k i =
+    go k visited =
       let outwards = IntMap.findWithDefault IntSet.empty k depReverseModuleDeps
-          res = IntSet.union i outwards
-          new = IntSet.difference i outwards
-      in IntSet.foldr go res new
+          visited' = IntSet.union visited outwards
+          new = IntSet.difference outwards visited
+      in IntSet.foldr go visited' new
 
 -- | Immediate reverse dependencies of a file
 immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]

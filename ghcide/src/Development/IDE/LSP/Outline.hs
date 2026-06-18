@@ -256,8 +256,14 @@ hsConDeclsBinders cons
 #endif
     get_flds_gadt _                   = []
 
+#if MIN_VERSION_ghc(9,13,0)
+    get_flds :: Located [LHsConDeclRecField GhcPs]
+             -> [LFieldOcc GhcPs]
+    get_flds flds = concatMap (cdrf_names . unLoc) (unLoc flds)
+#else
     get_flds :: Located [LConDeclField GhcPs]
              -> [LFieldOcc GhcPs]
     get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
+#endif
 
 

@@ -100,8 +100,6 @@ printSDocQualifiedUnsafe unqual doc =
     sty  = mkUserStyle unqual AllTheWay
     doc' = pprWithUnitState emptyUnitState doc
 
-
-
 formatErrorWithQual :: DynFlags -> MsgEnvelope DecoratedSDoc -> String
 formatErrorWithQual dflags e =
   showSDoc dflags (pprNoLocMsgEnvelope e)

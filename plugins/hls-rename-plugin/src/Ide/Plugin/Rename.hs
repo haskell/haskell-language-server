@@ -5,8 +5,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE LambdaCase        #-}
 
-module Ide.Plugin.Rename (descriptor, E.Log) where
+module Ide.Plugin.Rename (descriptor, Log) where
 
 import           Control.Lens                          ((^.))
 import           Control.Monad
@@ -30,12 +31,12 @@ import           Development.IDE                       (Recorder, WithPriority,
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Service          hiding (Log)
+import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.ExactPrint        hiding (Log)
 import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
@@ -48,8 +49,11 @@ import           GHC.Iface.Ext.Utils                   (generateReferencesMap)
 import           HieDb                                 ((:.) (..))
 import           HieDb.Query
 import           HieDb.Types                           (RefRow (refIsGenerated))
+import           Ide.Logger                            (Pretty (..),
+                                                        cmapWithPrio)
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
+import qualified Ide.Plugin.Rename.ModuleName          as ModuleName
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
@@ -58,30 +62,50 @@ import           Language.LSP.Protocol.Types
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
-descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
-    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
+data Log
+    = LogExactPrint E.Log
+    | LogModuleName ModuleName.Log
+
+instance Pretty Log where
+    pretty = \ case
+        LogExactPrint msg -> pretty msg
+        LogModuleName msg -> pretty msg
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
+    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers and module names")
         { pluginHandlers = mconcat
               [ mkPluginHandler SMethod_TextDocumentRename renameProvider
               , mkPluginHandler SMethod_TextDocumentPrepareRename prepareRenameProvider
+              , mkPluginHandler SMethod_TextDocumentCodeLens (ModuleName.codeLens moduleNameRecorder)
               ]
+        , pluginCommands = [PluginCommand ModuleName.updateModuleNameCommand "Set name of module to match with file path" (ModuleName.command moduleNameRecorder)]
         , pluginConfigDescriptor = defaultConfigDescriptor
             { configCustomConfig = mkCustomConfig properties }
         }
+    where
+        exactPrintRecorder = cmapWithPrio LogExactPrint recorder
+        moduleNameRecorder = cmapWithPrio LogModuleName recorder
 
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
     nfp <- getNormalizedFilePathE uri
-    namesUnderCursor <- getNamesAtPos state nfp pos
+    HAR{hieAst} <- handleGetHieAst state nfp
+    let spansWithNamesUnderCursor =
+            [ srcSpan
+            | (names, srcSpan) <- getNamesSpansAtPoint' hieAst pos
+            , not (null names)]
     -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
     -- and doesn't even allow you to create full rename request.
     -- This handler deliberately approximates "things that definitely can't be renamed"
-    -- to mean "there is no Name at given position".
+    -- to mean "there is no Name at given position" (in which case
+    -- `spansWithNamesUnderCursor` would be empty).
     --
     -- In particular it allows some cases through (e.g. cross-module renames),
     -- so that the full rename handler can give more informative error about them.
-    let renameValid = not $ null namesUnderCursor
-    pure $ InL $ PrepareRenameResult $ InR $ InR $ PrepareRenameDefaultBehavior renameValid
+    pure $ case spansWithNamesUnderCursor of
+        [] -> InR Null
+        srcSpan : _ -> InL $ PrepareRenameResult $ InL (realSrcSpanToRange srcSpan)
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
@@ -269,6 +293,12 @@ getNamesAtPoint' :: HieASTs a -> Position -> [Name]
 getNamesAtPoint' hf pos =
   concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
 
+-- | A variant of `getNamesAtPoint'` that also returns source spans.
+getNamesSpansAtPoint' :: HieASTs a -> Position -> [([Name], RealSrcSpan)]
+getNamesSpansAtPoint' hf pos =
+  pointCommand hf pos $
+    \astNode -> (rights . M.keys . getNodeIds $ astNode, nodeSpan astNode)
+
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri
 
@@ -291,4 +321,4 @@ replaceModName name mbModName =
 properties :: Properties '[ 'PropertyKey "crossModule" 'TBoolean]
 properties = emptyProperties
   & defineBooleanProperty #crossModule
-    "Enable experimental cross-module renaming" False
+    "Enable experimental cross-module renaming" True

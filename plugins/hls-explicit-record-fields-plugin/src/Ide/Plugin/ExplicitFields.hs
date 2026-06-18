@@ -19,10 +19,12 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (ToJSON (toJSON))
+import           Data.Function                        (on)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, extQ, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
-import           Data.List                            (find, intersperse)
+import           Data.List                            (find, intersperse,
+                                                       sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        mapMaybe, maybeToList)
@@ -36,8 +38,9 @@ import           Development.IDE                      (IdeState,
                                                        Recorder (..), Rules,
                                                        WithPriority (..),
                                                        defineNoDiagnostics,
-                                                       getDefinition, hsep,
-                                                       printName,
+                                                       getDefinition, hscEnv,
+                                                       hsep, printName,
+                                                       printOutputableQualified,
                                                        realSrcSpanToRange,
                                                        shakeExtras,
                                                        srcSpanToLocation,
@@ -46,29 +49,34 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentPosition,
                                                        toCurrentRange)
-import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
-                                                       TypeCheck (..))
+import           Development.IDE.Core.RuleTypes
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
                                                        FieldOcc (FieldOcc),
                                                        GenLocated (L), GhcPass,
                                                        GhcTc,
                                                        HasSrcSpan (getLoc),
+                                                       HsBindLR (..),
                                                        HsConDetails (RecCon),
                                                        HsExpr (HsApp, HsVar, XExpr),
                                                        HsFieldBind (hfbLHS),
                                                        HsRecFields (..),
-                                                       HsWrap (HsWrap), LPat,
-                                                       Located,
+                                                       HsWrap (HsWrap), LHsBind,
+                                                       LPat, Located,
+                                                       MatchGroup (..),
+                                                       MatchGroupTc (..),
                                                        NamedThing (getName),
                                                        Outputable,
                                                        TcGblEnv (tcg_binds),
                                                        Var (varName),
                                                        XXExprGhcTc (..),
                                                        conLikeFieldLabels,
+                                                       isGenerated,
+                                                       mkPrintUnqualifiedDefault,
                                                        nameSrcSpan,
                                                        pprNameUnqualified,
-                                                       recDotDot, unLoc)
+                                                       recDotDot, tcg_rdr_env,
+                                                       unLoc)
 import           Development.IDE.GHC.Compat.Core      (Extension (NamedFieldPuns),
                                                        HsExpr (RecordCon, rcon_flds),
                                                        HsRecField, LHsExpr,
@@ -90,6 +98,7 @@ import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        insertNewPragma)
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (Identifier)
+import           GHC.Utils.Outputable                 (NamePprCtx)
 import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
@@ -99,6 +108,7 @@ import           Ide.Plugin.Error                     (PluginError (PluginIntern
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
+import           Ide.PluginUtils                      (subRange)
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
@@ -149,25 +159,45 @@ descriptor recorder plId =
   , pluginRules = collectRecordsRule recorder *> collectNamesRule
   }
 
+data RecordConversionType
+  = RecordWildcardExpansion
+  | RecordTraditionalSyntaxConversion
+
+data RecordConversion =
+  RecordConversion
+    Int -- ^ uid
+    RecordConversionType
+
+-- | Given a record, determine whether it is a case of wildcard expansion
+-- or a conversion to the traditional record syntax.
+getConversionType :: RecordInfo -> Maybe RecordConversionType
+getConversionType = \case
+  -- Only fully saturated constructor applications can be converted to
+  -- the record syntax through the code action
+  RecordInfoApp _ (RecordAppExpr Unsaturated _ _) -> Nothing
+  RecordInfoApp {} -> Just RecordTraditionalSyntaxConversion
+  _ -> Just RecordWildcardExpansion
+
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
-  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CodeAction" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
-  let recordUids = [ uid
+  let recordsWithUid = [ (RecordConversion uid conversionType, record)
                       | uid <- RangeMap.filterByRange range crCodeActions
                       , Just record <- [IntMap.lookup uid crCodeActionResolve]
-                      -- Only fully saturated constructor applications can be
-                      -- converted to the record syntax through the code action
-                      , isConvertible record
+                      , Just conversionType <- [getConversionType record]
                       ]
-  let actions = map (mkCodeAction enabledExtensions) recordUids
-  pure $ InL actions
+      recordsOnly = map snd recordsWithUid
+      sortedRecords = sortOn (recordDepth recordsOnly . snd) recordsWithUid
+  pure $ InL $ case sortedRecords of
+    (top : _) -> [mkCodeAction enabledExtensions (fst top)]
+    []        -> []
   where
-    mkCodeAction :: [Extension] -> Int -> Command |? CodeAction
-    mkCodeAction exts uid = InR CodeAction
-      { _title = mkTitle exts -- TODO: `Expand positional record` without NamedFieldPuns if RecordInfoApp
+    mkCodeAction :: [Extension] -> RecordConversion -> Command |? CodeAction
+    mkCodeAction exts (RecordConversion uid conversionType) = InR CodeAction
+      { _title = mkTitle exts conversionType
       , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
       , _isPreferred = Nothing
@@ -177,21 +207,23 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
       , _data_ = Just $ toJSON uid
       }
 
-    isConvertible :: RecordInfo -> Bool
-    isConvertible = \case
-      RecordInfoApp _ (RecordAppExpr Unsaturated _ _) -> False
-      _ -> True
-
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
   nfp <- getNormalizedFilePathE uri
   pragma <- getFirstPragma pId ideState nfp
-  CRR {crCodeActionResolve, nameMap, enabledExtensions} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  (CRR {crCodeActionResolve, nameMap, enabledExtensions}, pprCtx) <- runActionE "ExplicitFields.CodeActionResolve" ideState $ do
+    cr <- useE CollectRecords nfp
+    typechecked <- useE TypeCheck nfp
+    hscEnvEq <- useE GhcSession nfp
+    let reader = tcg_rdr_env (tmrTypechecked typechecked)
+        pprCtx = mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader
+    pure (cr, pprCtx)
+
   -- If we are unable to find the unique id in our IntMap of records, it means
   -- that this resolve is stale.
   record <- handleMaybe PluginStaleResolve $ IntMap.lookup uid crCodeActionResolve
   -- We should never fail to render
-  rendered <- handleMaybe (PluginInternalError "Failed to render") $ renderRecordInfoAsTextEdit nameMap record
+  rendered <- handleMaybe (PluginInternalError "Failed to render") $ renderRecordInfoAsTextEdit nameMap pprCtx record
   let shouldInsertNamedFieldPuns (RecordInfoApp _ _) = False
       shouldInsertNamedFieldPuns _                   = True
       whenMaybe True x  = x
@@ -207,9 +239,13 @@ inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler Id
 inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- getNormalizedFilePathE uri
   pragma <- getFirstPragma pId state nfp
-  runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
+  runIdeActionE "ExplicitFields.InlayHintDotDot" (shakeExtras state) $ do
     (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
-    let -- Get all records with dotdot in current nfp
+    (typechecked, _) <- useWithStaleFastE TypeCheck nfp
+    (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
+    let reader = tcg_rdr_env (tmrTypechecked typechecked)
+        pprCtx = mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader
+        -- Get all records with dotdot in current nfp
         records = [ record
                   | Just range <- [toCurrentRange pm visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions
@@ -219,12 +255,12 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
-    pure $ InL $ mapMaybe (mkInlayHint crr pragma pm) defnLocsList
+    pure $ InL $ mapMaybe (mkInlayHint crr pragma pprCtx pm) defnLocsList
    where
-     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
-     mkInlayHint CRR {enabledExtensions, nameMap} pragma pm (defnLocs, record) =
+     mkInlayHint :: CollectRecordsResult -> NextPragmaInfo -> NamePprCtx -> PositionMapping -> (Maybe [(Location, Identifier)], RecordInfo) -> Maybe InlayHint
+     mkInlayHint CRR {enabledExtensions, nameMap} pragma pprCtx pm (defnLocs, record) =
        let range = recordInfoToDotDotRange record
-           textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap record)
+           textEdits = maybeToList (renderRecordInfoAsTextEdit nameMap pprCtx record)
                     <> maybeToList (pragmaEdit enabledExtensions pragma)
            names = renderRecordInfoAsDotdotLabelName record
        in do
@@ -246,7 +282,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                           , _label = InR label
                           , _kind = Nothing -- neither a type nor a parameter
                           , _textEdits = Just textEdits -- same as CodeAction
-                          , _tooltip = Just $ InL (mkTitle enabledExtensions) -- same as CodeAction
+                          , _tooltip = Just $ InL (mkTitle enabledExtensions RecordWildcardExpansion) -- same as CodeAction
                           , _paddingLeft = Just True -- padding after dotdot
                           , _paddingRight = Nothing
                           , _data_ = Nothing
@@ -257,45 +293,62 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
 inlayHintPosRecProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- getNormalizedFilePathE uri
-  runIdeActionE "ExplicitFields.CollectRecords" (shakeExtras state) $ do
+  runIdeActionE "ExplicitFields.InlayHintPosRec" (shakeExtras state) $ do
     (CRR {crCodeActions, nameMap, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
-    let records = [ record
+    (typechecked, _) <- useWithStaleFastE TypeCheck nfp
+    (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
+    let reader = tcg_rdr_env (tmrTypechecked typechecked)
+        pprCtx = mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader
+        records = [ record
                   | Just range <- [toCurrentRange pm visibleRange]
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
-    pure $ InL (concatMap (mkInlayHints nameMap pm) records)
+    pure $ InL (concatMap (mkInlayHints nameMap pprCtx pm) records)
    where
-     mkInlayHints :: UniqFM Name [Name] -> PositionMapping -> RecordInfo -> [InlayHint]
-     mkInlayHints nameMap pm record@(RecordInfoApp _ (RecordAppExpr _ _ fla)) =
-       let textEdits = renderRecordInfoAsTextEdit nameMap record
-       in mapMaybe (mkInlayHint textEdits pm) fla
-     mkInlayHints _ _ _ = []
+     mkInlayHints :: UniqFM Name [Name] -> NamePprCtx -> PositionMapping -> RecordInfo -> [InlayHint]
+     mkInlayHints nameMap pprCtx pm record@(RecordInfoApp _ (RecordAppExpr sat _ fla)) =
+       -- Only create inlay hints for fully saturated constructors
+       case sat of
+         Saturated -> let textEdits = renderRecordInfoAsTextEdit nameMap pprCtx record
+                      in mapMaybe (mkInlayHint textEdits pprCtx pm) fla
+         Unsaturated -> []
+     mkInlayHints _ _ _ _ = []
 
-     mkInlayHint :: Maybe TextEdit -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
-     mkInlayHint te pm (label, _) =
+     mkInlayHint :: Maybe TextEdit -> NamePprCtx -> PositionMapping -> (Located FieldLabel, HsExpr GhcTc) -> Maybe InlayHint
+     mkInlayHint te pprCtx pm (label, _) =
        let (name, loc) = ((flSelector . unLoc) &&& (srcSpanToLocation . getLoc)) label
            fieldDefLoc = srcSpanToLocation (nameSrcSpan name)
        in do
          (Location _ recRange) <- loc
          currentStart <- toCurrentPosition pm (_start recRange)
          pure InlayHint { _position = currentStart
-                        , _label = InR $ pure (mkInlayHintLabelPart name fieldDefLoc)
+                        , _label = InR $ pure (mkInlayHintLabelPart pprCtx name fieldDefLoc)
                         , _kind = Nothing -- neither a type nor a parameter
                         , _textEdits = Just (maybeToList te) -- same as CodeAction
-                        , _tooltip = Just $ InL "Expand positional record" -- same as CodeAction
+                        , _tooltip = Just $ InL (mkTitle [] RecordTraditionalSyntaxConversion) -- same as CodeAction
                         , _paddingLeft = Nothing
                         , _paddingRight = Nothing
                         , _data_ = Nothing
                         }
 
-     mkInlayHintLabelPart name loc = InlayHintLabelPart (printFieldName (pprNameUnqualified name) <> "=") Nothing loc Nothing
+     mkInlayHintLabelPart pprCtx name loc = InlayHintLabelPart (printFieldName pprCtx (pprNameUnqualified name) <> "=") Nothing loc Nothing
 
-mkTitle :: [Extension] -> Text
-mkTitle exts = "Expand record wildcard"
-                <> if NamedFieldPuns `elem` exts
-                   then mempty
-                   else " (needs extension: NamedFieldPuns)"
+mkTitle :: [Extension] -> RecordConversionType -> Text
+mkTitle exts = \case
+  RecordWildcardExpansion ->
+    "Expand record wildcard"
+      <> if NamedFieldPuns `elem` exts
+         then mempty
+         else " (needs extension: NamedFieldPuns)"
+  RecordTraditionalSyntaxConversion ->
+    "Convert to traditional record syntax"
 
+-- Calculate the nesting depth of a record by counting how many other records
+-- contain it. Used to prioritize more deeply nested records in code actions.
+recordDepth :: [RecordInfo] -> RecordInfo -> Int
+recordDepth allRecords record =
+  let isSubrangeOf = subRange `on` recordInfoToRange
+  in length $ filter (`isSubrangeOf` record) allRecords
 
 pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
 pragmaEdit exts pragma = if NamedFieldPuns `elem` exts
@@ -411,10 +464,12 @@ data RecordInfo
   deriving (Generic)
 
 instance Pretty RecordInfo where
-  pretty (RecordInfoPat ss p) = pretty (printFieldName ss) <> ":" <+> pretty (printOutputable p)
-  pretty (RecordInfoCon ss e) = pretty (printFieldName ss) <> ":" <+> pretty (printOutputable e)
-  pretty (RecordInfoApp ss (RecordAppExpr _ _ fla))
-    = pretty (printFieldName ss) <> ":" <+> hsep (map (pretty . printOutputable) fla)
+  pretty rec = case rec of
+    (RecordInfoPat ss p) -> formatSrcSpan ss <+> pretty (printOutputable p)
+    (RecordInfoCon ss e) -> formatSrcSpan ss <+> pretty (printOutputable e)
+    (RecordInfoApp ss (RecordAppExpr _ _ fla)) -> formatSrcSpan ss <+> hsep (map (pretty . printOutputable) fla)
+   where
+    formatSrcSpan ss = pretty (stripOccNamePrefix (printOutputable ss)) <> ":"
 
 recordInfoToRange :: RecordInfo -> Range
 recordInfoToRange (RecordInfoPat ss _) = realSrcSpanToRange ss
@@ -426,10 +481,10 @@ recordInfoToDotDotRange (RecordInfoPat _ (ConPat _ _ (RecCon flds))) = srcSpanTo
 recordInfoToDotDotRange (RecordInfoCon _ (RecordCon _ _ flds)) = srcSpanToRange . getLoc =<< rec_dotdot flds
 recordInfoToDotDotRange _ = Nothing
 
-renderRecordInfoAsTextEdit :: UniqFM Name [Name] -> RecordInfo -> Maybe TextEdit
-renderRecordInfoAsTextEdit names (RecordInfoPat ss pat) = TextEdit (realSrcSpanToRange ss) <$> showRecordPat names pat
-renderRecordInfoAsTextEdit _ (RecordInfoCon ss expr) = TextEdit (realSrcSpanToRange ss) <$> showRecordCon expr
-renderRecordInfoAsTextEdit _ (RecordInfoApp ss appExpr) = TextEdit (realSrcSpanToRange ss) <$> showRecordApp appExpr
+renderRecordInfoAsTextEdit :: UniqFM Name [Name] -> NamePprCtx -> RecordInfo -> Maybe TextEdit
+renderRecordInfoAsTextEdit names pprCtx (RecordInfoPat ss pat) = TextEdit (realSrcSpanToRange ss) <$> showRecordPat names pprCtx pat
+renderRecordInfoAsTextEdit _ pprCtx (RecordInfoCon ss expr) = TextEdit (realSrcSpanToRange ss) <$> showRecordCon pprCtx expr
+renderRecordInfoAsTextEdit _ pprCtx (RecordInfoApp ss appExpr) = TextEdit (realSrcSpanToRange ss) <$> showRecordApp pprCtx appExpr
 
 renderRecordInfoAsDotdotLabelName :: RecordInfo -> Maybe [Name]
 renderRecordInfoAsDotdotLabelName (RecordInfoPat _ pat)  = showRecordPatFlds pat
@@ -519,9 +574,8 @@ processRecordFlds flds = flds { rec_dotdot = Nothing , rec_flds = puns' }
     -- explained above).
     puns' = map (mapLoc (\fld -> fld { hfbPun = True })) puns
 
-
-showRecordPat :: Outputable (Pat GhcTc) => UniqFM Name [Name] -> Pat GhcTc -> Maybe Text
-showRecordPat names = fmap printFieldName . mapConPatDetail (\case
+showRecordPat :: Outputable (Pat GhcTc) => UniqFM Name [Name] -> NamePprCtx -> Pat GhcTc -> Maybe Text
+showRecordPat names pprCtx = fmap (printFieldName pprCtx) . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
 
@@ -542,11 +596,11 @@ showRecordPatFlds (ConPat _ _ args) = do
     getFieldName = getOccName . unLoc . hfbLHS . unLoc
 showRecordPatFlds _ = Nothing
 
-showRecordCon :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
-showRecordCon expr@(RecordCon _ _ flds) =
-  Just $ printOutputable $
+showRecordCon :: Outputable (HsExpr (GhcPass c)) => NamePprCtx -> HsExpr (GhcPass c) -> Maybe Text
+showRecordCon pprCtx expr@(RecordCon _ _ flds) =
+  Just $ printOutputableQualified pprCtx $
     expr { rcon_flds = preprocessRecordCon flds }
-showRecordCon _ = Nothing
+showRecordCon _ _ = Nothing
 
 showRecordConFlds :: p ~ GhcTc => HsExpr p -> Maybe [Name]
 showRecordConFlds (RecordCon _ _ flds) =
@@ -557,15 +611,23 @@ showRecordConFlds (RecordCon _ _ flds) =
     getFieldName = getVarName . unLoc . hfbRHS . unLoc
 showRecordConFlds _ = Nothing
 
-showRecordApp :: RecordAppExpr -> Maybe Text
-showRecordApp (RecordAppExpr _ recConstr fla)
-  = Just $ printOutputable recConstr <>  " { "
+showRecordApp :: NamePprCtx -> RecordAppExpr -> Maybe Text
+showRecordApp pprCtx (RecordAppExpr _ recConstr fla)
+  = Just $ printOutputableQualified pprCtx recConstr <>  " { "
          <> T.intercalate ", " (showFieldWithArg <$> fla)
          <> " }"
-  where showFieldWithArg (field, arg) = printFieldName field <> " = " <> printOutputable arg
+  where showFieldWithArg (field, arg) = printFieldName pprCtx field <> " = " <> printOutputableQualified pprCtx arg
 
 collectRecords :: GenericQ [RecordInfo]
-collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` getRecCons)
+collectRecords = everythingBut (<>) (([], False) `mkQ` ignoreGenerated `extQ` getRecPatterns `extQ` getRecCons)
+
+-- | Prevent the SYB traversal to descend further if the matching group
+-- in question is compiler-generated (e.g. TH, deriving). Doing so is necessary
+-- in order to not create inlay hints for TH-generated records.
+ignoreGenerated :: LHsBind GhcTc -> ([RecordInfo], Bool)
+ignoreGenerated (unLoc -> FunBind _ _ (MG (MatchGroupTc _ _ origin) _))
+  | isGenerated origin = ([], True)
+ignoreGenerated _ = ([], False)
 
 -- | Collect 'Name's into a map, indexed by the names' unique identifiers.
 -- The 'Eq' instance of 'Name's makes use of their unique identifiers, hence
@@ -602,7 +664,11 @@ getRecCons e@(unLoc -> RecordCon _ _ flds)
 getRecCons expr@(unLoc -> app@(HsApp _ _ _)) =
   let fieldss = maybeToList $ getFields app []
       recInfo = concatMap mkRecInfo fieldss
-  in (recInfo, not (null recInfo))
+  -- Search control for positional constructors.
+  -- True stops further (nested) searching; False allows recursive search.
+  -- Currently hardcoded to False to enable nested positional searches.
+  -- Use `in (recInfo, not (null recInfo))` to disable nested searching.
+  in (recInfo, False)
   where
     mkRecInfo :: RecordAppExpr -> [RecordInfo]
     mkRecInfo appExpr =
@@ -643,6 +709,5 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
       [ RecordInfoPat realSpan' (unLoc pat) | RealSrcSpan realSpan' _ <- [ getLoc pat ]]
 getRecPatterns _ = ([], False)
 
-printFieldName :: Outputable a => a -> Text
-printFieldName = stripOccNamePrefix . printOutputable
-
+printFieldName :: Outputable a => NamePprCtx -> a -> Text
+printFieldName pprCtx = stripOccNamePrefix . printOutputableQualified pprCtx

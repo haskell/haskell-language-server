@@ -14,14 +14,14 @@ import           Ide.Logger                                     (Priority (..),
                                                                  WithPriority,
                                                                  logWith)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath (listFileCompletions,
-                                                                 mkCompletionDirectory)
+                                                                 mkCompletionDirectory,
+                                                                 smartCaseFuzzy)
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
 import           System.Directory                               (doesFileExist)
 import qualified System.FilePath                                as FP
-import qualified Text.Fuzzy.Parallel                            as Fuzzy
 
 -- | Completer to be used when module paths can be completed for the field.
 --
@@ -33,8 +33,7 @@ modulesCompleter extractionFunction recorder cData = do
   case mGPD of
     Just gpd -> do
       let sourceDirs = extractionFunction sName gpd
-      filePathCompletions <-
-        filePathsForExposedModules recorder sourceDirs prefInfo
+      filePathCompletions <- filePathsForExposedModules recorder sourceDirs prefInfo (matcher cData)
       pure $ map (\compl -> mkSimpleCompletionItem (completionRange prefInfo) compl) filePathCompletions
     Nothing -> do
       logWith recorder Debug LogUseWithStaleFastNoResult
@@ -45,8 +44,13 @@ modulesCompleter extractionFunction recorder cData = do
 
 -- | Takes a list of source directories and returns a list of path completions
 --  relative to any of the passed source directories which fit the passed prefix info.
-filePathsForExposedModules :: Recorder (WithPriority Log) -> [FilePath] -> CabalPrefixInfo -> IO [T.Text]
-filePathsForExposedModules recorder srcDirs prefInfo = do
+filePathsForExposedModules
+  :: Recorder (WithPriority Log)
+  -> [FilePath]
+  -> CabalPrefixInfo
+  -> Matcher T.Text
+  -> IO [T.Text]
+filePathsForExposedModules recorder srcDirs prefInfo _matcher = do
   concatForM
     srcDirs
     ( \dir' -> do
@@ -54,19 +58,17 @@ filePathsForExposedModules recorder srcDirs prefInfo = do
             pathInfo = pathCompletionInfoFromCabalPrefixInfo dir modPrefInfo
         completions <- listFileCompletions recorder pathInfo
         validExposedCompletions <- filterM (isValidExposedModulePath pathInfo) completions
-        let toMatch = pathSegment pathInfo
-            scored = Fuzzy.simpleFilter
-              Fuzzy.defChunkSize
-              Fuzzy.defMaxResults
-              toMatch
-              (map T.pack validExposedCompletions)
-        forM
-          scored
-          ( \compl' -> do
-              let compl = Fuzzy.original compl'
-              fullFilePath <- mkExposedModulePathCompletion pathInfo $ T.unpack compl
-              pure fullFilePath
-          )
+
+        let query = pathSegment pathInfo
+            candidates :: [T.Text]
+            candidates = map T.pack validExposedCompletions
+
+            matched :: [T.Text]
+            matched = smartCaseFuzzy query candidates
+
+        forM matched $ \compl -> do
+          fullFilePath <- mkExposedModulePathCompletion pathInfo (T.unpack compl)
+          pure fullFilePath
     )
   where
     prefix =

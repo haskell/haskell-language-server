@@ -8,7 +8,7 @@ set -eux
 . .github/scripts/env.sh
 . .github/scripts/common.sh
 
-test_package="text-2.1.2"
+test_package="text-2.1.3"
 test_module="src/Data/Text.hs"
 
 create_cradle() {
@@ -49,18 +49,28 @@ test_all_hls() {
         bin_noexe=${bin/.exe/}
         if ! [[ "${bin_noexe}" =~ "haskell-language-server-wrapper" ]] && ! [[ "${bin_noexe}" =~ "~" ]] ; then
             if ghcup install ghc --set "${bin_noexe/haskell-language-server-/}" ; then
+                # To work around the cabal-3.16.1.0 bug report https://github.com/haskell/cabal/issues/11417
+                # We should be able to remove this hacky removal of the builddir, once we upgrade
+                # TODO: REMOVEME
+                rm -rf dist-newstyle/
                 "${hls}" --debug typecheck "${test_module}" || fail "failed to typecheck with HLS for GHC ${bin_noexe/haskell-language-server-/}"
 
                 # After running the test, free up disk space by deleting the unneeded GHC version.
                 # Helps us staying beneath the 14GB SSD disk limit.
                 ghcup rm ghc "${bin_noexe/haskell-language-server-/}"
+                ghcup gc --ghc-old --profiling-libs --share-dir --cache --tmpdirs
             else
                 fail "GHCup failed to install GHC ${bin_noexe/haskell-language-server-/}"
             fi
         fi
     done
     # install the recommended GHC version so the wrapper can launch HLS
-    ghcup install ghc --set 9.10.2
+    ghcup install ghc --set 9.10.3
+
+    # To work around the cabal-3.16.1.0 bug report https://github.com/haskell/cabal/issues/11417
+    # We should be able to remove this hacky removal of the builddir, once we upgrade
+    # TODO: REMOVEME
+    rm -rf dist-newstyle/
     "$bindir/haskell-language-server-wrapper${ext}" typecheck "${test_module}" || fail "failed to typecheck with HLS wrapper"
 }
 
@@ -71,7 +81,9 @@ env
 
 # ensure ghcup
 install_ghcup
-ghcup install ghc --set 9.4.8
+ghcup install ghc --set 9.6.7
+# Remove everything that we don't need to stay beneath the 14GB SSD disk limit.
+ghcup gc --ghc-old --profiling-libs --share-dir --cache --tmpdirs
 
 (cd .. && ecabal update) # run cabal update outside project dir
 

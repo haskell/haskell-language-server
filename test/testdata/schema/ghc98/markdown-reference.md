@@ -33,7 +33,7 @@
 ## rename
 | Property | Description | Default | Allowed values |
 | --- | --- | --- | --- |
-| `crossModule` | Enable experimental cross-module renaming | `False` |  &nbsp;  |
+| `crossModule` | Enable experimental cross-module renaming | `True` |  &nbsp;  |
 
 ## semanticTokens
 | Property | Description | Default | Allowed values |

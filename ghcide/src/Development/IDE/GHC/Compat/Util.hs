@@ -31,6 +31,7 @@ module Development.IDE.GHC.Compat.Util (
     Pair(..),
     -- * EnumSet
     EnumSet,
+    member,
     toList,
     -- * FastString exports
     FastString,

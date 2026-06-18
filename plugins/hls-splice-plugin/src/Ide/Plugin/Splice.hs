@@ -60,7 +60,9 @@ import           Data.Foldable                         (Foldable (foldl'))
 
 import           GHC.Data.Bag                          (Bag)
 
-#if MIN_VERSION_ghc(9,9,0)
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Parser.Annotation                 (EpAnn (..), EpToken (..))
+#elif MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                 (EpAnn (..))
 #else
 import           GHC.Parser.Annotation                 (SrcSpanAnn' (..))
@@ -305,10 +307,18 @@ class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast wher
 instance HasSplice AnnListItem HsExpr where
     type SpliceOf HsExpr = HsSpliceCompat
     matchSplice _ (HsUntypedSplice _ spl) = Just (UntypedSplice spl)
+#if MIN_VERSION_ghc(9,13,0)
+    matchSplice _ (HsTypedSplice _ (HsTypedSpliceExpr _ spl)) = Just (TypedSplice spl)
+#else
     matchSplice _ (HsTypedSplice _ spl)   = Just (TypedSplice spl)
+#endif
     matchSplice _ _                       = Nothing
     expandSplice _ (UntypedSplice e) = fmap (first Right) $ rnUntypedSpliceExpr e
+#if MIN_VERSION_ghc(9,13,0)
+    expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice (HsTypedSpliceExpr NoEpTok e)
+#else
     expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice e
+#endif
 
 instance HasSplice AnnListItem Pat where
     type SpliceOf Pat = HsUntypedSplice
@@ -397,10 +407,18 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
         dflags = hsc_dflags hscEnv
         showErrors = showBag
 
+#if MIN_VERSION_ghc(9,13,0)
+showBag :: (Error.Diagnostic a, Error.DiagnosticHint a ~ Error.GhcHint) => Bag (Error.MsgEnvelope a) -> String
+#else
 showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
+#endif
 showBag = show . fmap (fmap toDiagnosticMessage)
 
+#if MIN_VERSION_ghc(9,13,0)
+toDiagnosticMessage :: forall a. (Error.Diagnostic a, Error.DiagnosticHint a ~ Error.GhcHint) => a -> Error.DiagnosticMessage
+#else
 toDiagnosticMessage :: forall a. Error.Diagnostic a => a -> Error.DiagnosticMessage
+#endif
 toDiagnosticMessage message =
     Error.DiagnosticMessage
         { diagMessage = Error.diagnosticMessage

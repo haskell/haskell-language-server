@@ -94,7 +94,7 @@ help when a space char is inserted, we probably have to use up-to-date results.
 
 {-
 Here is a brief description of the algorithm of finding relevant bits from HIE AST
-1. let 'hsAppNode' = the smallest 'HsApp' AST node which contains the cursor postion
+1. let 'hsAppNode' = the smallest 'HsApp' AST node which contains the cursor position
    See 'extractInfoFromSmallestContainingFunctionApplicationAst'
 2. let 'functionNode' = the left-most node of 'hsAppNode'
    See 'getLeftMostNode'

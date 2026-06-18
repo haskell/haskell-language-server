@@ -6,29 +6,56 @@
 # $ hlint --git -j4
 
 # Warnings currently triggered by our code
-- ignore: {name: "Use <$>"}
-- ignore: {name: "Use :"}
-- ignore: {name: "Redundant do"}
-- ignore: {name: "Avoid lambda"}
-- ignore: {name: "Use newtype instead of data"}
-- ignore: {name: "Use unless"}
-- ignore: {name: "Move brackets to avoid $"}
-- ignore: {name: "Eta reduce"}
-- ignore: {name: "Parse error"}
-- ignore: {name: "Reduce duplication"}
-- ignore: {name: "Use ++"}
-- ignore: {name: "Use $>"}
-- ignore: {name: "Use section"}
-- ignore: {name: "Use record patterns"}
-- ignore: {name: "Use camelCase"}
-- ignore: {name: "Use uncurry"}
-- ignore: {name: "Avoid lambda using `infix`"}
-- ignore: {name: "Replace case with fromMaybe"}
+- ignore: {name: "Avoid NonEmpty.unzip"} # 2 hints
+- ignore: {name: "Avoid lambda"} # 14 hints
+- ignore: {name: "Avoid lambda using `infix`"} # 6 hints
+- ignore: {name: "Eta reduce"} # 63 hints
+- ignore: {name: "Evaluate"} # 1 hint
+- ignore: {name: "Functor law"} # 1 hint
+- ignore: {name: "Hoist not"} # 2 hints
+- ignore: {name: "Move brackets to avoid $"} # 30 hints
+- ignore: {name: "Parse error: on input `)'"} # 1 hint
+- ignore: {name: "Redundant $"} # 8 hints
+- ignore: {name: "Redundant <$>"} # 2 hints
+- ignore: {name: "Redundant bracket"} # 12 hints
+- ignore: {name: "Redundant guard"} # 1 hint
+- ignore: {name: "Redundant lambda"} # 2 hints
+- ignore: {name: "Redundant seq"} # 1 hint
+- ignore: {name: "Replace case with fromMaybe"} # 1 hint
+- ignore: {name: "Replace case with maybe"} # 5 hints
+- ignore: {name: "Unused LANGUAGE pragma"} # 14 hints
+- ignore: {name: "Use :"} # 9 hints
+- ignore: {name: "Use <$>"} # 29 hints
+- ignore: {name: "Use ?~"} # 3 hints
+- ignore: {name: "Use atomicModifyIORef'_"} # 3 hints
+- ignore: {name: "Use camelCase"} # 35 hints
+- ignore: {name: "Use concatForM"} # 2 hints
+- ignore: {name: "Use concatMap"} # 1 hint
+- ignore: {name: "Use const"} # 2 hints
+- ignore: {name: "Use curry"} # 1 hint
+- ignore: {name: "Use drop1"} # 4 hints
+- ignore: {name: "Use dropPrefix"} # 1 hint
+- ignore: {name: "Use enumerate"} # 1 hint
+- ignore: {name: "Use fewer imports"} # 15 hints
+- ignore: {name: "Use fmap"} # 1 hint
+- ignore: {name: "Use for_"} # 1 hint
+- ignore: {name: "Use guards"} # 1 hint
+- ignore: {name: "Use head"} # 1 hint
+- ignore: {name: "Use lambda-case"} # 1 hint
+- ignore: {name: "Use lower"} # 1 hint
+- ignore: {name: "Use newtype instead of data"} # 13 hints
+- ignore: {name: "Use record patterns"} # 3 hints
+- ignore: {name: "Use section"} # 7 hints
+- ignore: {name: "Use traverse_"} # 3 hints
+- ignore: {name: "Use uncurry"} # 1 hint
+- ignore: {name: "Use unless"} # 4 hints
+- ignore: {name: "Use whenJust"} # 1 hint
+- ignore: {name: "Use whenMaybe"} # 1 hint
 
 # Gives at least one suggestion we don't like.
-- ignore: {name: "Use <=<"}
-- ignore: {name: "Use zipFrom"}
-- ignore: {name: "Use zipWithFrom"}
+- ignore: {name: "Use <=<"} # 2 hints
+- ignore: {name: "Use zipFrom"} # 4 hints
+- ignore: {name: "Use zipWithFrom"} # 2 hints
 
 # We are using the "redundant" return/pure to assign a name. We do not want to
 # delete it. In particular, this is not an improvement:
@@ -37,11 +64,11 @@
 #      pure options
 # Perhaps:
 #   do somethingComplicated
-- ignore: {name: "Redundant return"}
-- ignore: {name: "Redundant pure"}
+- ignore: {name: "Redundant pure"} # 10 hints
+- ignore: {name: "Redundant return"} # 3 hints
 
 # Off by default hints we like
-- warn: {name: Use module export list}
+- warn: {name: "Use module export list"} # 86 hints
 
 # Condemn nub and friends
 - warn: {lhs: nub (sort x), rhs: Data.List.Extra.nubSort x}
@@ -236,3 +263,11 @@
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.
 - error: {name: Avoid restricted function}
+
+- group: {name: extra, enabled: true}
+
+- arguments:
+    - --ignore-glob=**/test/data/**
+    - --ignore-glob=**/testdata/**
+    - --ignore-glob=dist-*
+    - --ignore-glob=docs/contributing/plugin-tutorial.lhs

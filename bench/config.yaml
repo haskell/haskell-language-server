@@ -21,7 +21,7 @@ examples:
   # Medium-sized project without TH
   - name: cabal
     package: Cabal
-    version: 3.10.2.1
+    version: 3.16.1.0
     modules:
         - src/Distribution/Simple.hs
         - src/Distribution/Types/ComponentLocalBuildInfo.hs
@@ -29,7 +29,7 @@ examples:
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
-    version: 2.1.1.0
+    version: 2.4.0.0
     modules:
         - src/Language/LSP/Protocol/Types/SemanticTokens.hs
         - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
@@ -95,16 +95,22 @@ experiments:
     - "edit"
     - "hover"
     - "semanticTokens"
+    - "semanticTokens after typing burst"
     - "hover after edit"
+    - "hover after typing burst"
     # - "hover after cradle edit"
     - "getDefinition"
     - "getDefinition after edit"
+    - "getDefinition after typing burst"
     - "completions"
     - "completions after edit"
+    - "completions after typing burst"
     - "code actions"
     - "code actions after edit"
+    - "code actions after typing burst"
     - "code actions after cradle edit"
     - "documentSymbols after edit"
+    - "documentSymbols after typing burst"
     - "hole fit suggestions"
     - "eval execute single-line code lens"
     - "eval execute multi-line code lens"
@@ -180,7 +186,6 @@ configurations:
   - codeRange
   - eval
   - explicitFixity
-  - floskell
   - fourmolu
   - gadt
   - ghcide-code-actions-bindings
@@ -205,7 +210,6 @@ configurations:
 # - codeRange
 # - eval
 # - explicitFixity
-# # - floskell
 # # - fourmolu
 # - gadt
 # - ghcide-code-actions-bindings
@@ -223,7 +227,6 @@ configurations:
 # - pragmas
 # - qualifyImportedNames
 # - rename
-# - retrie
 # - splice
 # - stan
 # # - stylish-haskell

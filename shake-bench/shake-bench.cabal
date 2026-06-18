@@ -16,20 +16,12 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  if impl(ghc > 9.11)
-    buildable: False
   exposed-modules:  Development.Benchmark.Rules
   hs-source-dirs:   src
   build-depends:
         aeson,
         base == 4.*,
         bytestring,
-        Chart,
-        Chart-diagrams,
-        diagrams-contrib,
-        diagrams-core,
-        diagrams-lib,
-        diagrams-svg,
         directory,
         extra >= 1.7.2,
         filepath,

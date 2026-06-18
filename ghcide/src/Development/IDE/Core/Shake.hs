@@ -25,7 +25,7 @@ module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
-    IdeRule, IdeResult,
+    IdeRule, IdeResult, RestartQueue,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
     shakeEnqueue,
@@ -76,7 +76,8 @@ module Development.IDE.Core.Shake(
     Log(..),
     VFSModified(..), getClientConfigAction,
     ThreadQueue(..),
-    runWithSignal
+    runWithSignal,
+    askShake
     ) where
 
 import           Control.Concurrent.Async
@@ -132,10 +133,16 @@ import qualified Language.LSP.Server                    as LSP
 
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Core.WorkerThread
+#if MIN_VERSION_ghc(9,13,0)
+import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater,
+                                                         newNameCache)
+#else
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater,
                                                          initNameCache,
                                                          knownKeyNames)
+#endif
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue,
                                                          action)
@@ -217,10 +224,12 @@ instance Pretty Log where
       hsep
         [ "Finished:" <+> pretty (actionName delayedAct)
         , "Took:" <+> pretty (showDuration seconds) ]
-    LogBuildSessionFinish e ->
-      vcat
+    LogBuildSessionFinish e -> case e of
+      Nothing -> "Finished build session"
+      Just e -> vcat
         [ "Finished build session"
-        , pretty (fmap displayException e) ]
+        , pretty (displayException e)
+        ]
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
@@ -255,12 +264,15 @@ data HieDbWriter
 -- | Actions to queue up on the index worker thread
 -- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
 -- with (currently) retry functionality
-type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
+type IndexQueue = TaskQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
+type RestartQueue = TaskQueue (IO ())
+type LoaderQueue = TaskQueue (IO ())
+
 
 data ThreadQueue = ThreadQueue {
     tIndexQueue     :: IndexQueue
-    , tRestartQueue :: TQueue (IO ())
-    , tLoaderQueue  :: TQueue (IO ())
+    , tRestartQueue :: RestartQueue
+    , tLoaderQueue  :: LoaderQueue
 }
 
 -- Note [Semantic Tokens Cache Location]
@@ -331,9 +343,9 @@ data ShakeExtras = ShakeExtras
       -- ^ Default HLS config, only relevant if the client does not provide any Config
     , dirtyKeys :: TVar KeySet
       -- ^ Set of dirty rule keys since the last Shake run
-    , restartQueue :: TQueue (IO ())
+    , restartQueue :: RestartQueue
       -- ^ Queue of restart actions to be run.
-    , loaderQueue :: TQueue (IO ())
+    , loaderQueue :: LoaderQueue
       -- ^ Queue of loader actions to be run.
     }
 
@@ -395,7 +407,8 @@ class Typeable a => IsIdeGlobal a where
 getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
-  pure $! Map.lookup (filePathToUri' nf) vfs -- Don't leak a reference to the entire map
+  pure $!  -- Don't leak a reference to the entire map
+    getVirtualFileFromVFS (VFS vfs) $ filePathToUri' nf
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
@@ -442,7 +455,9 @@ getIdeOptions = do
         Just env -> do
             config <- liftIO $ LSP.runLspT env HLS.getClientConfig
             return x{optCheckProject = pure $ checkProject config,
-                     optCheckParents = pure $ checkParents config
+                     optCheckParents = pure $ checkParents config,
+                     optLinkSourceTo = linkSourceTo config,
+                     optLinkDocTo = linkDocTo config
                 }
 
 getIdeOptionsIO :: ShakeExtras -> IO IdeOptions
@@ -666,7 +681,11 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
         restartQueue = tRestartQueue threadQueue
         loaderQueue = tLoaderQueue threadQueue
 
+#if MIN_VERSION_ghc(9,13,0)
+    ideNc <- newNameCache
+#else
     ideNc <- initNameCache 'r' knownKeyNames
+#endif
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO
@@ -895,8 +914,9 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
           return $ do
               let exception =
                     case res of
-                      Left e -> Just e
-                      _      -> Nothing
+                      Left (fromException -> Just AsyncCancelled) -> Nothing
+                      Left e                                      -> Just e
+                      _                                           -> Nothing
               logWith recorder Debug $ LogBuildSessionFinish exception
 
     -- Do the work in a background thread

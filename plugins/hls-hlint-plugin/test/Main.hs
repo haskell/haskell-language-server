@@ -218,8 +218,8 @@ suggestionsTests =
         doc <- openDoc "TwoHints.hs" "haskell"
         _ <- hlintCaptureKick
 
-        firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 0 0)
-        secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 1 0)
+        firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 1 0)
+        secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 2 0)
         thirdLine <- map fromAction <$> getCodeActions doc (mkRange 2 0 2 0)
         multiLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 2 0)
 

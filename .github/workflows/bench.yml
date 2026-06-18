@@ -19,7 +19,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      bench_ghc_versions: ${{ steps.set_ghc_versions.outputs.versions }}
     steps:
+      - id: set_ghc_versions
+        run: |
+          # benching the two latest GHCs we support now
+          # since benchmark are expansive.
+          # choosing the two latest are easier to maintain and more forward looking
+          # see discussion https://github.com/haskell/haskell-language-server/pull/4118
+          # Benchmarking only the two latest GHCs we support now
+          # since benchmark are expensive.
+          # Choosing the two latest is easier to maintain and more forward looking.
+          # See discussion https://github.com/haskell/haskell-language-server/pull/4118
+          # also possible to add more GHCs if we perform better in the future.
+          echo 'versions=["9.12", "9.14"]' >> $GITHUB_OUTPUT
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
@@ -27,7 +40,6 @@ jobs:
           paths_ignore: '[ "**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
-                         , ".circleci/**"
                          , "**.nix"
                          , "**/test/**"
                          , "flake.lock"
@@ -46,14 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # benching the two latest GHCs we support now
-        # since benchmark are expansive.
-        # choosing the two latest are easier to maintain and more forward looking
-        # see discussion https://github.com/haskell/haskell-language-server/pull/4118
-        # also possible to add more GHCs if we performs better in the future.
-        ghc:
-          - '9.8'
-          - '9.10'
+        ghc: ${{ fromJSON(needs.pre_job.outputs.bench_ghc_versions) }}
         os:
           - ubuntu-latest
 
@@ -100,14 +105,14 @@ jobs:
         tar -czf cabal.tar.gz *
 
     - name: Upload workspace
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: workspace-${{ matrix.ghc }}-${{ matrix.os }}
         retention-days: 1
         path: workspace.tar.gz
 
     - name: Upload .cabal
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: cabal-home-${{ matrix.ghc }}-${{ matrix.os }}
         retention-days: 1
@@ -121,26 +126,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.8', '9.10']
+        ghc: ${{ fromJSON(needs.pre_job.outputs.bench_ghc_versions) }}
         os: [ubuntu-latest]
-        cabal: ['3.14']
+        cabal: ['3.16']
         example: ['cabal', 'lsp-types']
 
     steps:
-    - uses: haskell-actions/setup@v2.8.1
+    - uses: haskell-actions/setup@v2.10.3
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
     - name: Download cabal home
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v7
       with:
         name: cabal-home-${{ matrix.ghc }}-${{ matrix.os }}
         path: .
 
     - name: Download workspace
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v7
       with:
         name: workspace-${{ matrix.ghc }}-${{ matrix.os }}
         path: .
@@ -162,10 +167,10 @@ jobs:
         column -s, -t < bench-results/unprofiled/${{ matrix.example }}/resultDiff.csv | tee bench-results/unprofiled/${{ matrix.example }}/resultDiff.txt
 
     - name: tar benchmarking artifacts
-      run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
+      run:  find bench-results -name "*.csv" | xargs tar -czf benchmark-artifacts.tar.gz
 
     - name: Archive benchmarking artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: bench-results-${{ matrix.example }}-${{ runner.os }}-${{ matrix.ghc }}
         path: benchmark-artifacts.tar.gz
@@ -175,7 +180,7 @@ jobs:
       run: find bench-results -name "*.log" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
 
     - name: Archive benchmark logs
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: bench-logs-${{ matrix.example }}-${{ runner.os }}-${{ matrix.ghc }}
         path: benchmark-logs.tar.gz

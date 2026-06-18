@@ -1,0 +1,104 @@
+name: Stack builds
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v3
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5.3.1
+        with:
+          cancel_others: false
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".gitlab-ci.yaml"
+                         , ".gitlab/**"
+                         ]'
+
+  stack:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs: pre_job
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stack-yaml: stack.yaml
+            ghc: "9.8.4"
+            lts: "lts23"
+          - stack-yaml: stack-lts24.yaml
+            ghc: "9.10.3"
+            lts: "lts24"
+
+    name: stackage-${{ matrix.lts }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup GHC and Stack
+        uses: haskell-actions/setup@v2.10.3
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          enable-stack: true
+          stack-no-global: true
+
+      - name: Restore ~/.stack cache
+        id: stack-cache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.stack
+          key: stack-${{ runner.os }}-${{ matrix.stack-yaml }}-${{ hashFiles(matrix.stack-yaml) }}
+          restore-keys: |
+            stack-${{ runner.os }}-${{ matrix.stack-yaml }}-
+
+      - name: Build
+        # builds tests but does not run them
+        run: |
+          stack \
+            --stack-yaml=${{ matrix.stack-yaml }} \
+            --system-ghc \
+            --no-terminal \
+            build --test --no-run-tests
+
+      - name: Save ~/.stack cache
+        # save cache when pushed to master
+        if: github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.stack
+          key: stack-${{ runner.os }}-${{ matrix.stack-yaml }}-${{ hashFiles(matrix.stack-yaml) }}
+
+  stack_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, stack]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1

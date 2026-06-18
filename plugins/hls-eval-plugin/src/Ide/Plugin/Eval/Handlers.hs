@@ -7,11 +7,10 @@
 {-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-{- |
-A plugin inspired by the REPLoid feature of <https://github.com/jyp/dante Dante>, <https://www.haskell.org/haddock/doc/html/ch03s08.html#idm140354810775744 Haddock>'s Examples and Properties and <https://hackage.haskell.org/package/doctest Doctest>.
-
-For a full example see the "Ide.Plugin.Eval.Tutorial" module.
--}
+-- | A plugin inspired by the REPLoid feature of
+-- [Dante](https://github.com/jyp/dante),
+-- [Haddock examples and properties](https://haskell-haddock.readthedocs.io/latest/markup.html#examples),
+-- and [Doctest](https://hackage.haskell.org/package/doctest).
 module Ide.Plugin.Eval.Handlers (
     codeAction,
     codeLens,
@@ -87,6 +86,11 @@ import           Data.List.Extra                              (unsnoc)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Types.Avail                              (DetOrdAvails (DefinitelyDeterministicAvails),
+                                                               sortAvails)
+import           GHC.Types.Name.Set                           (nameSetElemsStable)
+#endif
 import           Ide.Logger                                   (Priority (..),
                                                                Recorder,
                                                                WithPriority,
@@ -95,11 +99,11 @@ import           Ide.Plugin.Error                             (PluginError (Plug
                                                                handleMaybeM)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
-                                                               myExecStmt,
+                                                               execStmtCaptureResult,
                                                                propSetup,
                                                                resultRange,
-                                                               testCheck,
-                                                               testRanges)
+                                                               evalExprCheck,
+                                                               evalExprRanges)
 import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
                                                                getEvalConfig)
 import           Ide.Plugin.Eval.GHC                          (addImport,
@@ -130,8 +134,8 @@ codeAction recorder st plId CodeActionParams{_textDocument,_range} = do
     pure
         $ InL
             [ InL command
-            | (testRange, command) <- rangeCommands
-            , _range `isSubrangeOf` testRange
+            | (evalExprRange, command) <- rangeCommands
+            , _range `isSubrangeOf` evalExprRange
             ]
 
 {- | Code Lens provider
@@ -146,6 +150,9 @@ codeLens recorder st plId CodeLensParams{_textDocument} = do
             | (range, command) <- rangeCommands
             ]
 
+-- | Find every eval-expr in the document and pair its source range with the
+-- 'Command' that evaluates it. Shared by the code action and code lens
+-- providers.
 mkRangeCommands :: Recorder (WithPriority Log) -> IdeState -> PluginId -> TextDocumentIdentifier -> ExceptT PluginError (HandlerM Config) [(Range, Command)]
 mkRangeCommands recorder st plId textDocument =
     let dbg = logWith recorder Debug
@@ -161,14 +168,14 @@ mkRangeCommands recorder st plId textDocument =
                     runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
                 dbg $ LogCodeLensComments comments
 
-                -- Extract tests from source code
+                -- Extract 'EvalExpr's from source code
                 let Sections{..} = commentsToSections isLHS comments
-                    tests = testsBySection nonSetupSections
+                    evalExprs = evalExprsBySection nonSetupSections
                     cmd = mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let rangeCommands =
-                        [ (testRange, cmd')
-                        | (section, ident, test) <- tests
-                        , let (testRange, resultRange) = testRanges test
+                        [ (evalExprRange, cmd')
+                        | (section, ident, evalExpr) <- evalExprs
+                        , let (evalExprRange, resultRange) = evalExprRanges evalExpr
                               args = EvalParams (setupSections ++ [section]) textDocument ident
                               cmd' =
                                 (cmd :: Command)
@@ -180,9 +187,9 @@ mkRangeCommands recorder st plId textDocument =
                                     }
                         ]
 
-                perf "tests" $
-                    dbg $ LogTests
-                            (length tests)
+                perf "evalExprs" $
+                    dbg $ LogEvalExprs
+                            (length evalExprs)
                             (length nonSetupSections)
                             (length setupSections)
                             (length rangeCommands)
@@ -205,7 +212,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
         perf = timed (\lbl duration -> dbg $ LogExecutionTime lbl duration)
         cmd :: ExceptT PluginError (HandlerM Config) WorkspaceEdit
         cmd = do
-            let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
+            let evalExprs = map (\(a,_,b) -> (a,b)) $ evalExprsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
@@ -222,7 +229,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
                 unqueueForEvaluation st nfp
                 return [toKey IsEvaluating nfp]
                 )
-              (initialiseSessionForEval (needsQuickCheck tests) st nfp)
+              (initialiseSessionForEval (needsQuickCheck evalExprs) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
@@ -231,7 +238,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
                 perf "edits" $
                     liftIO $
                         evalGhcEnv final_hscEnv $ do
-                            runTests recorder evalCfg fp tests
+                            runEvalExprs recorder evalCfg fp evalExprs
 
             let workspaceEditsMap = Map.singleton _uri (addFinalReturn mdlText edits)
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
@@ -262,11 +269,12 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     -- it back to the iface for the current module.
     tm <- tmrTypechecked <$> use_ TypeCheck nfp
     let rdr_env = tcg_rdr_env tm
-    let linkable_hsc = loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
         addRdrEnv hmi
           | iface <- hm_iface hmi
           , ms_mod ms == mi_module iface
-#if MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,13,0)
+          = hmi { hm_iface = set_mi_top_env (IfaceTopEnv (sortAvails $ gresToAvailInfo $ globalRdrEnvElts $ globalRdrEnvLocal rdr_env) (mkIfaceImports $ tcg_import_decls tm)) iface}
+#elif MIN_VERSION_ghc(9,11,0)
           = hmi { hm_iface = set_mi_top_env (Just $ IfaceTopEnv (forceGlobalRdrEnv (globalRdrEnvLocal rdr_env)) (mkIfaceImports $ tcg_import_decls tm)) iface}
 #else
           = hmi { hm_iface = iface { mi_globals = Just $!
@@ -277,12 +285,20 @@ initialiseSessionForEval needs_quickcheck st nfp = do
                 }}
 #endif
           | otherwise = hmi
-
+#if MIN_VERSION_ghc(9,13,0)
+    linkable_hsc <- liftIO $ loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
+#else
+    let linkable_hsc = loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
+#endif
     return (ms, linkable_hsc)
   -- Bit awkward we need to use evalGhcEnv here but setContext requires to run
   -- in the Ghc monad
   env2 <- liftIO $ evalGhcEnv env1 $ do
+#if MIN_VERSION_ghc(9,13,0)
+            setContext [Compat.IIModule (ms_mod ms)]
+#else
             setContext [Compat.IIModule (moduleName (ms_mod ms))]
+#endif
             let df = flip xopt_set    LangExt.ExtendedDefaultRules
                    . flip xopt_unset  LangExt.MonomorphismRestriction
                    . flip gopt_set    Opt_ImplicitImportQualified
@@ -296,7 +312,17 @@ initialiseSessionForEval needs_quickcheck st nfp = do
             getSession
   return env2
 
-#if MIN_VERSION_ghc(9,11,0)
+-- | Convert the typechecker's import specs into the interface representation,
+-- so the reconstructed iface for the current module records what it imports
+-- (needed when re-adding the rdr env, see 'initialiseSessionForEval').
+#if MIN_VERSION_ghc(9,13,0)
+mkIfaceImports :: [ImportUserSpec] -> [IfaceImport]
+mkIfaceImports = map go
+  where
+    go (ImpUserSpec decl ImpUserAll) = IfaceImport decl ImpIfaceAll
+    go (ImpUserSpec decl (ImpUserExplicit avails parents)) = IfaceImport decl (ImpIfaceExplicit (DefinitelyDeterministicAvails avails) (nameSetElemsStable parents))
+    go (ImpUserSpec decl (ImpUserEverythingBut ns)) = IfaceImport decl (ImpIfaceEverythingBut (nameSetElemsStable ns))
+#elif MIN_VERSION_ghc(9,11,0)
 mkIfaceImports :: [ImportUserSpec] -> [IfaceImport]
 mkIfaceImports = map go
   where
@@ -305,12 +331,15 @@ mkIfaceImports = map go
     go (ImpUserSpec decl (ImpUserEverythingBut ns)) = IfaceImport decl (ImpIfaceEverythingBut ns)
 #endif
 
+-- | Prepend an edit adding a trailing newline when the module does not end in
+-- one, so the appended results land on their own line.
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
 addFinalReturn mdlText edits
     | not (null edits) && not (T.null mdlText) && T.last mdlText /= '\n' =
         finalReturn mdlText : edits
     | otherwise = edits
 
+-- | An empty edit at the very end of the module that inserts a newline.
 finalReturn :: Text -> TextEdit
 finalReturn txt =
     let ls = T.lines txt
@@ -319,6 +348,7 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
+-- | The current (possibly unsaved) contents of the module as seen by the IDE.
 moduleText :: IdeState -> Uri -> ExceptT PluginError (HandlerM config) Text
 moduleText state uri = do
     contents <-
@@ -329,67 +359,96 @@ moduleText state uri = do
                         toNormalizedUri uri
     pure $ Rope.toText contents
 
-testsBySection :: [Section] -> [(Section, EvalId, Test)]
-testsBySection sections =
-    [(section, ident, test)
+-- | Flatten sections into their individual 'EvalExpr's, tagging each with the index
+-- ('EvalId') of its containing section.
+evalExprsBySection :: [Section] -> [(Section, EvalId, EvalExpr)]
+evalExprsBySection sections =
+    [(section, ident, evalExpr)
     | (ident, section) <- zip [0..] sections
-    , test <- sectionTests section
+    , evalExpr <- sectionEvalExprs section
     ]
 
 type TEnv = String
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()
 evalSetup = do
-    preludeAsP <- parseImportDecl "import qualified Prelude as P"
-    context <- getContext
-    setContext (IIDecl preludeAsP : context)
+    preludeAsP  <- parseImportDecl "import qualified Prelude as P"
+    -- 'myExecStmt' redirects the interpreted @stdout@ and @stderr@ to a temporary
+    -- file in order to capture output produced as a side effect of evaluating a
+    -- statement. The setup and teardown statements it injects need these modules
+    -- in scope.
+    systemIO    <- parseImportDecl "import qualified System.IO"
+    ghcIOHandle <- parseImportDecl "import qualified GHC.IO.Handle"
+    context     <- getContext
+    setContext (IIDecl preludeAsP : IIDecl systemIO : IIDecl ghcIOHandle : context)
 
-runTests :: Recorder (WithPriority Log) -> EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
-runTests recorder EvalConfig{..} e tests = do
+-- | Evaluate every 'EvalExpr' and produce the 'TextEdit's that write the results
+-- back into the document, prefixing/padding each result line as the section's
+-- format requires.
+runEvalExprs ::
+     Recorder (WithPriority Log)
+  -> EvalConfig
+  -> TEnv
+  -> [(Section, EvalExpr)]
+  -> Ghc [TextEdit]
+runEvalExprs recorder EvalConfig{..} e evalExprs = do
     df <- getInteractiveDynFlags
     evalSetup
-    when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals recorder True e df propSetup
+    when (hasQuickCheck df && needsQuickCheck evalExprs) $
+      void $ evals recorder True e df propSetup
 
-    mapM (processTest e df) tests
+    mapM (processEvalExpr e df) evalExprs
   where
-    processTest :: TEnv -> DynFlags -> (Section, Test) -> Ghc TextEdit
-    processTest fp df (section, test) = do
+    processEvalExpr :: TEnv -> DynFlags -> (Section, EvalExpr) -> Ghc TextEdit
+    processEvalExpr fp df (section, evalExpr) = do
         let dbg = logWith recorder Debug
-        let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
-        rs <- runTest e df test
-        dbg $ LogRunTestResults rs
+            pre =
+              (if isLiterate fp then ("> " `T.append`) else id) $
+                padPrefix (sectionFormat section)
+            pad = T.append pre
+        rs <- runEvalExpr e df evalExpr
+        dbg $ LogRunEvalExprResults rs
 
-        let checkedResult = testCheck eval_cfg_diff (section, test) rs
-        let resultLines = concatMap T.lines checkedResult
+        let resultLines = evalExprCheck eval_cfg_diff (section, evalExpr) rs
 
-        let edit = asEdit (sectionFormat section) test (map pad resultLines)
-        dbg $ LogRunTestEdits edit
+        let edit = asEdit (sectionFormat section) evalExpr (map pad resultLines)
+        dbg $ LogRunEvalExprEdits edit
         return edit
 
-    -- runTest :: String -> DynFlags -> Loc Test -> Ghc [Text]
-    runTest _ df test
-        | not (hasQuickCheck df) && isProperty test =
+    runEvalExpr :: String -> DynFlags -> EvalExpr -> Ghc [Text]
+    runEvalExpr e df evalExpr
+        | not (hasQuickCheck df) && isProperty evalExpr =
             return $
                 singleLine
-                    "Add QuickCheck to your cabal dependencies to run this test."
-    runTest e df test = evals recorder (eval_cfg_exception && not (isProperty test)) e df (asStatements test)
+                    "Add QuickCheck to your cabal dependencies to run this property."
+        | otherwise =
+            evals
+              recorder
+              (eval_cfg_exception && not (isProperty evalExpr))
+              e
+              df
+              (asStatements evalExpr)
 
-asEdit :: Format -> Test -> [Text] -> TextEdit
-asEdit (MultiLine commRange) test resultLines
-    -- A test in a block comment, ending with @-\}@ without newline in-between.
-    | testRange test ^. L.end . L.line == commRange ^. L.end . L.line
+-- | Build the edit that replaces the old result of an 'EvalExpr' with
+-- @resultLines@. For an 'EvalExpr' that sits on the closing @-}@ line of a
+-- block comment, the result is inserted before @-}@ on fresh lines; otherwise
+-- it simply overwrites the existing result range.
+asEdit :: Format -> EvalExpr -> [Text] -> TextEdit
+asEdit (MultiLine commRange) evalExpr resultLines
+    -- An 'EvalExpr' in a block comment, ending with @-\}@ without newline in-between.
+    | evalExprRange evalExpr ^. L.end . L.line == commRange ^. L.end . L.line
     =
     TextEdit
         (Range
-            (testRange test ^. L.end)
-            (resultRange test ^. L.end)
+            (evalExprRange evalExpr ^. L.end)
+            (resultRange evalExpr ^. L.end)
         )
         ("\n" <> T.unlines (resultLines <> ["-}"]))
-asEdit _ test resultLines =
-    TextEdit (resultRange test) (T.unlines resultLines)
+asEdit _ evalExpr resultLines =
+    TextEdit (resultRange evalExpr) (T.unlines resultLines)
 
 {- |
-The result of evaluating a test line can be:
+The result of evaluating an eval-expr line can be:
 * a value
 * nothing
 * a (possibly multiline) error message
@@ -397,12 +456,15 @@ The result of evaluating a test line can be:
 A value is returned for a correct expression.
 
 Either a pure value:
->>> 'h' :"askell"
+>>> 'h' : "askell"
 "haskell"
 
-Or an 'IO a' (output on stdout/stderr is ignored):
->>> print "OK" >> return "ABC"
-"ABC"
+Or an 'IO a' (output on stdout/stderr is captured):
+>>> putStrLn "Hello," >> pure "World!"
+Hello,
+"World!"
+
+Note the quotes around @World!@, which are a result of using 'show'.
 
 Nothing is returned for a correct directive:
 
@@ -426,11 +488,15 @@ A, possibly multi line, error is returned for a wrong declaration, directive or 
 Some flags have not been recognized: -XNonExistent
 
 >>> cls C
-Variable not in scope: cls :: t0 -> t
-Data constructor not in scope: C
+Illegal term-level use of the class `C'
+  defined at <interactive>:1:2
+In the first argument of `cls', namely `C'
+In the expression: cls C
+In an equation for `it_a1kSJ': it_a1kSJ = cls C
+Variable not in scope: cls :: t0_a1kU9[tau:1] -> t1_a1kUb[tau:1]
 
 >>> "A
-lexical error in string/character literal at end of input
+lexical error at end of input
 
 Exceptions are shown as if printed, but it can be configured to include prefix like
 in GHCi or doctest. This allows it to be used as a hack to simulate print until we
@@ -446,7 +512,8 @@ bad times
 Or for a value that does not have a Show instance and can therefore not be displayed:
 >>> data V = V
 >>> V
-No instance for (Show V) arising from a use of ‘evalPrint’
+No instance for `Show V' arising from a use of `evalPrint'
+In a stmt of an interactive GHCi command: evalPrint it_a1l4V
 -}
 evals :: Recorder (WithPriority Log) -> Bool -> TEnv -> DynFlags -> [Statement] -> Ghc [Text]
 evals recorder mark_exception fp df stmts = do
@@ -455,7 +522,7 @@ evals recorder mark_exception fp df stmts = do
         Left err -> errorLines err
         Right rs -> concat . catMaybes $ rs
   where
-    dbg = logWith recorder Debug
+    dbg  = logWith recorder Debug
     eval :: Statement -> Ghc (Maybe [Text])
     eval (Located l stmt)
         | -- GHCi flags
@@ -463,10 +530,18 @@ evals recorder mark_exception fp df stmts = do
             dbg $ LogEvalFlags flags
             ndf <- getInteractiveDynFlags
             dbg $ LogEvalPreSetDynFlags ndf
+#if MIN_VERSION_ghc(9,13,0)
+            hsc_env <- getSession
+            eans <-
+                liftIO $ try @GhcException $
+                parseDynamicFlagsCmdLine (hsc_logger hsc_env) ndf
+                    (map (L $ UnhelpfulSpan unhelpfulReason) flags)
+#else
             eans <-
                 liftIO $ try @GhcException $
                 parseDynamicFlagsCmdLine ndf
                 (map (L $ UnhelpfulSpan unhelpfulReason) flags)
+#endif
             dbg $ LogEvalParsedFlags eans
             case eans of
                 Left err -> pure $ Just $ errorLines $ show err
@@ -513,9 +588,9 @@ evals recorder mark_exception fp df stmts = do
     unhelpfulReason = UnhelpfulInteractive
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
-         in myExecStmt stmt opts
+         in execStmtCaptureResult recorder stmt opts
 
-needsQuickCheck :: [(Section, Test)] -> Bool
+needsQuickCheck :: [(Section, EvalExpr)] -> Bool
 needsQuickCheck = any (isProperty . snd)
 
 hasQuickCheck :: DynFlags -> Bool
@@ -548,13 +623,6 @@ exceptionLines = (ix 0 %~ ("*** Exception: " <>)) . errorLines
 >>> map (pad_ (T.pack "--")) (map T.pack ["2+2",""])
 ["--2+2","--<BLANKLINE>"]
 -}
-pad_ :: Text -> Text -> Text
-pad_ prefix = (prefix `T.append`) . convertBlank
-
-convertBlank :: Text -> Text
-convertBlank x
-    | T.null x = "<BLANKLINE>"
-    | otherwise = x
 
 padPrefix :: IsString p => Format -> p
 padPrefix SingleLine = "-- "
@@ -576,6 +644,9 @@ ghciLikeCommands =
     , ("type", doTypeCmd)
     ]
 
+-- | Dispatch a GHCi-like command (e.g. @:type@, @:kind@, @:info@) to its
+-- handler, matching by exact name or unique prefix. Throws if no command
+-- matches.
 evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe [Text])
 evalGhciLikeCmd cmd arg = do
     df <- getSessionDynFlags
@@ -588,6 +659,8 @@ evalGhciLikeCmd cmd arg = do
                 <$> hndler df arg
         _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
+-- | Implement @:info@ / @:info!@: show the definition, fixity and instances of
+-- each named thing. The 'Bool' is the @!@ variant, including all instances.
 doInfoCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doInfoCmd allInfo dflags s = do
     sdocs <- mapM infoThing (T.words s)
@@ -633,6 +706,8 @@ doInfoCmd allInfo dflags s = do
                 = ppr fixity <+> pprInfixName (GHC.getName thing)
             | otherwise = empty
 
+-- | Implement @:kind@ / @:kind!@: show a type's kind. The 'Bool' is the @!@
+-- variant, additionally normalising and showing the type itself.
 doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
     let input = T.strip arg
@@ -646,6 +721,8 @@ doKindCmd True df arg = do
         tyDoc = "=" <+> pprSigmaType ty
     pure $ Just $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
 
+-- | Implement @:type@: show the type of an expression. Accepts a leading
+-- @+d@ to request the defaulted type (see 'parseExprMode').
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
@@ -662,6 +739,8 @@ doTypeCmd dflags arg = do
                                 $$ nest 2 ("::" <+> pprSigmaType ty)
                 else expr <> " :: " <> rawType <> "\n"
 
+-- | Split a @:type@ argument into its mode and expression: a leading @+d@
+-- selects defaulting ('TM_Default'), anything else the plain type ('TM_Inst').
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
     ("+d", rest) -> (TM_Default, T.strip rest)

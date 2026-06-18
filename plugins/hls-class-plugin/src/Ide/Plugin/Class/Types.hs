@@ -8,14 +8,13 @@
 module Ide.Plugin.Class.Types where
 
 import           Control.DeepSeq                  (rwhnf)
-import           Control.Monad.Extra              (mapMaybeM, whenMaybe)
+import           Control.Monad.Extra              (mapMaybeM)
 import           Control.Monad.IO.Class           (liftIO)
-import           Control.Monad.Trans.Maybe        (MaybeT (MaybeT, runMaybeT))
+import           Control.Monad.Trans.Maybe        (runMaybeT)
 import           Data.Aeson
 import qualified Data.IntMap                      as IntMap
-import           Data.List.Extra                  (firstJust)
-import           Data.Maybe                       (catMaybes, mapMaybe,
-                                                   maybeToList)
+import           Data.Maybe                       (fromMaybe, listToMaybe,
+                                                   mapMaybe, maybeToList)
 import qualified Data.Text                        as T
 import           Data.Unique                      (hashUnique, newUnique)
 import           Development.IDE
@@ -26,6 +25,7 @@ import           Development.IDE.GHC.Compat.Util  (bagToList)
 import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
+import qualified Ide.Plugin.RangeMap              as RangeMap
 import           Ide.Types
 import           Language.LSP.Protocol.Types      (TextEdit,
                                                    VersionedTextDocumentIdentifier)
@@ -49,27 +49,33 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
     }
     deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
--- |The InstanceBindTypeSigs Rule collects the instance bindings type
--- signatures (both name and type). It is used by both the code actions and the
--- code lenses
-data GetInstanceBindTypeSigs = GetInstanceBindTypeSigs
+-- | Indexes the instances declared in a module by their source span, giving
+-- each instance's class and the full instantiated type of every class method.
+-- Both the placeholder code action (to enumerate missing methods) and the
+-- code lens (to display inferred signatures) consume this rule.
+data GetClassInstances = GetClassInstances
     deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
-data InstanceBindTypeSig = InstanceBindTypeSig
-    { bindName :: Name
-    , bindType :: Type
+data InstanceInfo = InstanceInfo
+    { instSpan    :: SrcSpan
+      -- ^ Source span of the instance declaration.
+    , instClass   :: Class
+    , instMethods :: [(Name, Type)]
+      -- ^ Each class method paired with its type instantiated for this
+      -- instance, including any instance context (e.g. @Eq a@ for
+      -- @instance Eq a => C [a]@).
     }
 
-newtype InstanceBindTypeSigsResult =
-    InstanceBindTypeSigsResult [InstanceBindTypeSig]
+newtype ClassInstancesResult =
+    ClassInstancesResult (RangeMap.RangeMap InstanceInfo)
 
-instance Show InstanceBindTypeSigsResult where
-    show _ = "<InstanceBindTypeSigs>"
+instance Show ClassInstancesResult where
+    show _ = "<ClassInstances>"
 
-instance NFData InstanceBindTypeSigsResult where
+instance NFData ClassInstancesResult where
     rnf = rwhnf
 
-type instance RuleResult GetInstanceBindTypeSigs = InstanceBindTypeSigsResult
+type instance RuleResult GetClassInstances = ClassInstancesResult
 
 -- |The necessary data to execute our code lens
 data InstanceBindLensCommand = InstanceBindLensCommand
@@ -80,11 +86,10 @@ data InstanceBindLensCommand = InstanceBindLensCommand
     , commandEdit :: TextEdit }
     deriving (Generic, FromJSON, ToJSON)
 
--- | The InstanceBindLens rule is specifically for code lenses. It  relies on
--- the InstanceBindTypeSigs rule, filters out irrelevant matches and signatures
--- that can't be matched to a source span. It provides all the signatures linked
--- to a unique ID to aid in resolving. It also provides a list of enabled
--- extensions.
+-- | The InstanceBindLens rule is specifically for code lenses. It correlates
+-- user-written instance method bindings (those without an explicit signature)
+-- to the instance's 'InstanceInfo', and emits range/name/type triples with
+-- unique IDs for resolve.
 data GetInstanceBindLens = GetInstanceBindLens
     deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
@@ -123,11 +128,14 @@ instance Pretty Log where
         <+> pretty (showSDoc dflags $ ppr methods)
     LogShake log -> pretty log
 
+-- | A user-written instance binding without an explicit signature. The 'Name'
+-- is the renamer-level method name (e.g. @(==)@), used to look up the
+-- instance-level type in 'instMethods'.
 data BindInfo = BindInfo
-    { bindSpan     :: SrcSpan
+    { bindSpan    :: SrcSpan
       -- ^ SrcSpan of the whole binding
-    , bindNameSpan :: SrcSpan
-      -- ^ SrcSpan of the binding name
+    , bindFunName :: Name
+      -- ^ The renamed method name of the binding.
     }
 
 getInstanceBindLensRule :: Recorder (WithPriority Log) -> Rules ()
@@ -138,35 +146,34 @@ getInstanceBindLensRule recorder = do
 #else
         tmr@(tmrRenamed ->  (hs_tyclds -> tycls, _, _, _)) <- useMT TypeCheck nfp
 #endif
-        (InstanceBindTypeSigsResult allBinds) <- useMT GetInstanceBindTypeSigs nfp
+        ClassInstancesResult instMap <- useMT GetClassInstances nfp
 
-        let -- declared instance methods without signatures
-            bindInfos = [ bind
-                        | instds <- map group_instds tycls -- class instance decls
-                        , instd <- instds
-                        , inst <- maybeToList $ getClsInstD (unLoc instd)
-                        , bind <- getBindSpanWithoutSig inst
-                        ]
-            targetSigs = matchBind bindInfos allBinds
-        rangeIntNameType <- liftIO $ mapMaybeM getRangeWithSig targetSigs
+        let -- Correlate renamed ClsInstDecls with their InstanceInfo by source
+            -- span (the only link between the renamed tree and tcg_insts), then
+            -- collect user-written bindings that lack an explicit signature.
+            entries =
+                [ (bind, ty)
+                | instds <- map group_instds tycls
+                , instd <- instds
+                , inst <- maybeToList $ getClsInstD (unLoc instd)
+                , info <- maybeToList $ do
+                    instdRange <- srcSpanToRange (getLocA instd)
+                    listToMaybe (RangeMap.elementsInRange instdRange instMap)
+                , bind <- getBindSpanWithoutSig inst
+                , ty <- maybeToList (lookup (bindFunName bind) (instMethods info))
+                ]
+        rangeIntNameType <- liftIO $ mapMaybeM tagEntry entries
         let lensRange = (\(range, int, _, _) -> (range, int)) <$> rangeIntNameType
-            lensDetails = IntMap.fromList $ (\(range, int, name, typ) -> (int, (range, name, typ))) <$> rangeIntNameType
+            lensDetails = IntMap.fromList $
+                (\(range, int, name, typ) -> (int, (range, name, typ))) <$> rangeIntNameType
             lensEnabledExtensions = getExtensions $ tmrParsed tmr
         pure $ InstanceBindLensResult $ InstanceBindLens{..}
     where
-        -- Match Binds with their signatures
-        -- We try to give every `InstanceBindTypeSig` a `SrcSpan`,
-        -- hence we can display signatures for `InstanceBindTypeSig` with span later.
-        matchBind :: [BindInfo] -> [InstanceBindTypeSig] -> [Maybe (InstanceBindTypeSig, SrcSpan)]
-        matchBind existedBinds allBindWithSigs =
-            [firstJust (go bindSig) existedBinds | bindSig <- allBindWithSigs]
-            where
-                go :: InstanceBindTypeSig -> BindInfo -> Maybe (InstanceBindTypeSig,  SrcSpan)
-                go bindSig bind = do
-                    range <- (srcSpanToRange . bindNameSpan) bind
-                    if inRange range (getSrcSpan $ bindName bindSig)
-                    then Just (bindSig, bindSpan bind)
-                    else Nothing
+        tagEntry (bind, ty) = case srcSpanToRange (bindSpan bind) of
+            Nothing -> pure Nothing
+            Just r  -> do
+                uniqueID <- hashUnique <$> newUnique
+                pure $ Just (r, uniqueID, bindFunName bind, ty)
 
         getClsInstD (ClsInstD _ d) = Just d
         getClsInstD _              = Nothing
@@ -183,52 +190,54 @@ getInstanceBindLensRule recorder = do
                                 cid_binds
                 go (L l bind) = case bind of
                     FunBind{..}
-                        -- `Generated` tagged for Template Haskell,
-                        -- here we filter out nonsense generated bindings
-                        -- that are nonsense for displaying code lenses.
-                        --
-                        -- See https://github.com/haskell/haskell-language-server/issues/3319
-                        | not $ isGenerated (groupOrigin fun_matches)
-                            -> Just $ L l fun_id
-                    _       -> Nothing
+                      -- `Generated` tagged for Template Haskell,
+                      -- here we filter out nonsense generated bindings
+                      -- that are nonsense for displaying code lenses.
+                      --
+                      -- See https://github.com/haskell/haskell-language-server/issues/3319
+                      | not $ isGenerated (groupOrigin fun_matches)
+                      -> Just $ L l fun_id
+                    _ -> Nothing
                 -- Existed signatures' name
-                sigNames = concat $ mapMaybe (\(L _ r) -> getSigName r) cid_sigs
-                toBindInfo (L l (L l' _)) = BindInfo
-                    (locA l) -- bindSpan
-                    (locA l') -- bindNameSpan
-            in toBindInfo <$> filter (\(L _ name) -> unLoc name `notElem` sigNames) bindNames
+                existingSigNames = concat $ mapMaybe (\(L _ r) -> getSigName r) cid_sigs
+                toBindInfo (L l (L _ n)) = BindInfo (locA l) n
+            in toBindInfo <$> filter (\(L _ name) -> unLoc name `notElem` existingSigNames) bindNames
 
-        -- Get bind definition range with its rendered signature text
-        getRangeWithSig :: Maybe (InstanceBindTypeSig, SrcSpan) -> IO (Maybe (Range, Int, Name, Type))
-        getRangeWithSig (Just (bind, span)) = runMaybeT $ do
-            range <- MaybeT . pure $ srcSpanToRange span
-            uniqueID <- liftIO $ hashUnique <$> newUnique
-            pure (range, uniqueID, bindName bind, bindType bind)
-        getRangeWithSig Nothing = pure Nothing
-
-
-getInstanceBindTypeSigsRule :: Recorder (WithPriority Log) -> Rules ()
-getInstanceBindTypeSigsRule recorder = do
-    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetInstanceBindTypeSigs nfp -> runMaybeT $ do
-        (tmrTypechecked -> gblEnv ) <- useMT TypeCheck nfp
+getClassInstancesRule :: Recorder (WithPriority Log) -> Rules ()
+getClassInstancesRule recorder = do
+    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetClassInstances nfp -> runMaybeT $ do
+        (tmrTypechecked -> gblEnv) <- useMT TypeCheck nfp
         (hscEnv -> hsc) <- useMT GhcSession nfp
-        let binds = collectHsBindsBinders $ tcg_binds gblEnv
-        (_, maybe [] catMaybes -> instanceBinds) <- liftIO $
+        (_, mInfos) <- liftIO $
             initTcWithGbl hsc gblEnv ghostSpan
 #if MIN_VERSION_ghc(9,7,0)
               $ liftZonkM
 #endif
-              $ traverse bindToSig binds
-        pure $ InstanceBindTypeSigsResult instanceBinds
+              $ mkInfos gblEnv
+        pure $ ClassInstancesResult $ RangeMap.fromList'
+            $ mapMaybe (\i -> (,i) <$> srcSpanToRange (instSpan i)) (fromMaybe [] mInfos)
     where
-        bindToSig id = do
-            let name = idName id
-            whenMaybe (isBindingName name) $ do
-                env <- tcInitTidyEnv
+        mkInfos gblEnv = do
+            env <- tcInitTidyEnv
+            pure $ map (mkInfo env) (tcg_insts gblEnv)
+
+        mkInfo env inst = do
+            -- forall tvs. theta => cls tys
+            let (_tvs, theta, cls, tys) = instanceSig inst
+                -- Canonicalise internal GHC type-variable names (e.g. a_1 -> a).
+                tidy ty =
 #if MIN_VERSION_ghc(9,11,0)
-                let ty =
+                    tidyOpenType env ty
 #else
-                let (_, ty) =
+                    snd (tidyOpenType env ty)
 #endif
-                              tidyOpenType env (idType id)
-                pure $ InstanceBindTypeSig name ty
+                -- `instantiateMethod` substitutes the instance head types into
+                -- the method's type and drops the leading class predicate, but
+                -- not the instance's own constraints (`theta`). Re-prepend them
+                -- so we get every method's full instantiated type.
+                mkMeth m = (idName m, tidy (mkInvisFunTys theta (instantiateMethod cls m tys)))
+            InstanceInfo
+              { instSpan    = getSrcSpan (is_dfun inst)
+              , instClass   = cls
+              , instMethods = map mkMeth (classMethods cls)
+              }

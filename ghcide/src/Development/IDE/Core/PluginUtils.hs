@@ -27,18 +27,18 @@ module Development.IDE.Core.PluginUtils
 -- * Diagnostics
 , activeDiagnosticsInRange
 , activeDiagnosticsInRangeMT
+, injectServerDiagnostics
 -- * Formatting handlers
 , mkFormattingHandlers) where
 
 import           Control.Concurrent.STM
-import           Control.Lens                         ((^.))
+import           Control.Lens
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader                 (runReaderT)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
-import           Data.Functor.Identity
 import qualified Data.Text                            as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE.Core.FileStore
@@ -60,6 +60,7 @@ import           Ide.PluginUtils                      (rangesOverlap)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
+import           Language.LSP.Protocol.Types          (CodeActionParams)
 import qualified Language.LSP.Protocol.Types          as LSP
 import qualified StmContainers.Map                    as STM
 
@@ -222,6 +223,18 @@ activeDiagnosticsInRangeMT ide nfp range = do
 -- | Just like 'activeDiagnosticsInRangeMT'. See the docs of 'activeDiagnosticsInRangeMT' for details.
 activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m (Maybe [FileDiagnostic])
 activeDiagnosticsInRange ide nfp range = runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
+
+-- Prefer server-side diagnostics if available; they are authoritative.
+injectServerDiagnostics :: IdeState -> CodeActionParams -> IO CodeActionParams
+injectServerDiagnostics ide params@LSP.CodeActionParams{_textDocument=LSP.TextDocumentIdentifier{_uri}, _range} = do
+  serverDiags <- case LSP.uriToNormalizedFilePath (LSP.toNormalizedUri _uri) of
+    Nothing  -> pure []
+    Just nfp -> do
+      mDiags <- activeDiagnosticsInRange (shakeExtras ide) nfp _range
+      case mDiags of
+        Nothing    -> pure []
+        Just diags -> pure $ diags ^.. traverse . fdLspDiagnosticL
+  pure $ params & LSP.context . LSP.diagnostics .~ serverDiags
 
 -- ----------------------------------------------------------------------------
 -- Formatting handlers

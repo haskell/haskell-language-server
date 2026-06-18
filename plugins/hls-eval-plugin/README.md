@@ -259,40 +259,18 @@ This is a problem if you want, for example, to pretty print a value (in this cas
 "[ 1\n, 2\n, 3\n]"
 ```
 
-We could try to print the pretty-print output, but stdout is not captured so we get just a ():
-
+Instead, we can do
 ```
->>> print $ pShowNoColor [1..7]
-()
+>>> mapM_ putStrLn $ lines pShowNoColor [1..7]
+-- [ 1
+-- , 2
+-- , 3
+-- ]
 ```
-
-To display it properly, we can exploit the fact that the output of an error is displayed as a multi-line text:
-
-```
->>> import qualified Data.Text.Lazy as TL
->>> import Text.Pretty.Simple
->>> prettyPrint v = error (TL.unpack $ pShowNoColor v) :: IO String
->>> prettyPrint [1..3]
-[ 1
-, 2
-, 3
-]
-```
-
-This assumes you did not turn on exception marking (see [Marking exceptions](#marking-exceptions) below).
 
 # Differences with doctest
 
 Though the Eval plugin functionality is quite similar to that of [doctest](https://hackage.haskell.org/package/doctest), some doctest's features are not supported.
-
-### Capturing Stdout
-
-Only the value of an IO expression is spliced in, not its output:
-
-```
->>> print "foo"
-()
-```
 
 ###  Marking exceptions
 

@@ -198,9 +198,10 @@ lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetN
 -- better ways to get the path.
 --
 -- Examples: (output is system dependent)
---   >>> toHaskellFile "My.Module.Lib"
---   "My/Module/Lib.hs"
---   >>> toHaskellFile "Main"
---   "Main.hs"
+--
+-- >>> toHaskellFile "My.Module.Lib"
+-- "My/Module/Lib.hs"
+-- >>> toHaskellFile "Main"
+-- "Main.hs"
 toHaskellFile :: T.Text -> FilePath
 toHaskellFile moduleName = joinPath (map T.unpack $ T.splitOn "." moduleName) <.> ".hs"

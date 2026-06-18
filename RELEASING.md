@@ -39,7 +39,7 @@
   - Afterwards, the artifacts are available at: `https://downloads.haskell.org/~hls/haskell-language-server-<version>/`
   - Run `SIGNING_KEY=... ../../release/upload.sh purge_all` to remove CDN caches
 - [ ] create PR to [ghcup-metadata](https://github.com/haskell/ghcup-metadata)
-  - [ ] update `ghcup-vanilla-0.0.8.yaml` and `ghcup-vanilla-0.0.7.yaml`
+  - [ ] update `ghcup-vanilla-0.0.9.yaml`
     - can use `sh scripts/release/create-yaml-snippet.sh <version>` to generate a snippet that can be manually inserted into the yaml files
   - ~~update `hls-metadata-0.0.1.json`~~ Currently unnecessary, GHCup builds its own HLS binaries and updates that file.
     - utilize `cabal run ghcup-gen -- generate-hls-ghcs -f ghcup-0.0.7.yaml --format json --stdout` in the root of ghcup-metadata repository
@@ -54,4 +54,5 @@
   - https://github.com/haskell/ghcup-hs/blob/master/docs/install.md#supported-platforms
   - https://github.com/haskell/ghcup-metadata/blob/44c6e2b5d0fcae15abeffff03e87544edf76dd7a/ghcup-gen/Main.hs#L67
 - [ ] post release on discourse and reddit
+  - Include links to the plugin support table (https://haskell-language-server.readthedocs.io/en/2.13.0.0/support/plugin-support.html) and ghc version support table (https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html)
 - [ ] merge release PR to master or forward port relevant changes

@@ -17,6 +17,8 @@ import           Control.Category           ((>>>))
 import           Control.Lens               ((^.))
 import           Development.IDE.Test       (expectDiagnostics,
                                              standardizeQuotes)
+import           Hover
+import           Ide.Types                  (Config (..), OptLinkTo (..))
 import           Test.Hls
 import           Test.Hls.FileSystem        (copyDir)
 import           Text.Regex.TDFA            ((=~))
@@ -91,16 +93,6 @@ tests = let
         "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
         "\n but got: " <> show (msg, rangeInHover)
 
-  assertFoundIn :: T.Text -> T.Text -> Assertion
-  assertFoundIn part whole = assertBool
-    (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
-    (part `T.isInfixOf` whole)
-
-  assertNotFoundIn :: T.Text -> T.Text -> Assertion
-  assertNotFoundIn part whole = assertBool
-    (T.unpack $ "found unexpected: `" <> part <> "` in hover message:\n" <> whole)
-    (not . T.isInfixOf part $ whole)
-
   sourceFilePath = T.unpack sourceFileName
   sourceFileName = "GotoHover.hs"
 
@@ -113,7 +105,9 @@ tests = let
           , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _", Just "GHC-88464")])
           ]]
     , testGroup "type-definition" typeDefinitionTests
-    , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
+    , testGroup "hover-record-dot-syntax" recordDotSyntaxTests
+    , testGroup "source-and-doc-links" linkToTests
+    ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
                         , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
@@ -146,9 +140,12 @@ tests = let
   fffL14 = Position 18  7  ;
   aL20   = Position 19 15
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
+  kkkL30 = Position 30 2   ;  kkkType = [ExpectHoverTextRegex "Go to \\[MyClass\\]\\(.*GotoHover\\.hs#L26\\)"]
+  bbbL16 = Position 16 7   ;  bbbType = [ExpectHoverTextRegex "Go to \\[TypeConstructor\\]\\(.*GotoHover\\.hs#L8\\)"]
+  aaaL11 = Position 11 1   ;  aaaType = [ExpectHoverTextRegex "Go to \\[TypeConstructor\\]\\(.*GotoHover\\.hs#L8\\)"]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
-  xtcL5  = Position  9 11  ;  xtc    = [ExpectHoverText ["Int", "Defined in ", "GHC.Types", "ghc-prim"]]
+  xtcL5  = Position  9 11  ;  xtc    = [ExpectHoverText ["Int", "Defined in ", if ghcVersion >= GHC914 then "GHC.Internal.Types" else "GHC.Types", if ghcVersion >= GHC914 then "ghc-internal" else "ghc-prim"]]
   tcL6   = Position 10 11  ;  tcData = [mkR   7  0    9 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:8:1"]]
   vvL16  = Position 20 12  ;  vv     = [mkR  20  4   20  6]
   opL16  = Position 20 15  ;  op     = [mkR  21  2   21  4]
@@ -185,10 +182,10 @@ tests = let
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner"], mkR 53 2 53 7]; innSig' = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
-  cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
+  cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex $ if ghcVersion >= GHC914 then "\\*Defined in 'GHC.Internal.Types'\\* \\*\\(ghc-internal-[0-9.]+\\)\\*\n\n" else "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14
-  reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], if ghcVersion < GHC910 || not isWindows then mkL bar 3 5 3 8 else mkL bar 3 0 3 14]
+  reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
@@ -243,6 +240,9 @@ tests = let
         testM yes    yes    reexported reexportedSig "Imported symbol reexported"
   , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   , test yes yes import310 pkgTxt "show package name and its version"
+  , test  no             yes               kkkL30     kkkType       "hover shows 'Go to' link for class in constraint"
+  , test  no             yes               bbbL16     bbbType       "hover shows 'Go to' link for data constructor's type"
+  , test  no             yes               aaaL11     aaaType       "hover shows 'Go to' link for binding's underlying type"
   ]
   where yes :: (TestTree -> Maybe TestTree)
         yes = Just -- test should run and pass
@@ -256,3 +256,63 @@ checkFileCompiles fp diag =
    testWithDummyPlugin ("hover: Does " ++ fp ++ " compile") (mkIdeTestFs [copyDir "hover"]) $ do
     _ <- openDoc fp "haskell"
     diag
+
+linkToTests :: [TestTree]
+linkToTests =
+  [ testGroup "LinkToHackage" linkToHackageTests
+  , testGroup "LinkToLocal" linkToLocalTests
+  ]
+  where
+    linkToHackageTests =
+      [ testGroup "doc link uses hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkDocTo = LinkToHackage })) $
+            hoverCheck (Position 24 8) "GotoHover.hs"
+              [ ExpectHoverTextRegex (hackageUrlRegex "Documentation" "text" "v:pack") ]
+        , testWithConfig "type" (hoverConfig (def { linkDocTo = LinkToHackage })) $
+            hoverCheck (Position 8 11) "GotoHover.hs"
+              [ ExpectHoverTextRegex (hackageUrlRegex "Documentation" "text" "t:Text") ]
+        ]
+        , testGroup "source link uses hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkSourceTo = LinkToHackage })) $
+          hoverCheck (Position 24 8) "GotoHover.hs"
+            [ ExpectHoverTextRegex (hackageUrlRegex "Source" "text" "pack") ]
+        , testWithConfig "type" (hoverConfig (def { linkSourceTo = LinkToHackage })) $
+          hoverCheck (Position 8 11) "GotoHover.hs"
+            [ ExpectHoverTextRegex (hackageUrlRegex "Source" "text" "Text") ]
+        ]
+      ]
+    linkToLocalTests =
+      [ testGroup "doc link does not use hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkDocTo = LinkToLocal })) $
+            hoverCheck (Position 24 8) "GotoHover.hs"
+              [ ExpectHoverExcludeText [hackageUrlPrefix "Documentation"] ]
+        , testWithConfig "type" (hoverConfig (def { linkDocTo = LinkToLocal })) $
+            hoverCheck (Position 8 11) "GotoHover.hs"
+              [ ExpectHoverExcludeText [hackageUrlPrefix "Documentation"] ]
+        ]
+        , testGroup "source link does not use hackage URL"
+        [ testWithConfig "function" (hoverConfig (def { linkSourceTo = LinkToLocal })) $
+          hoverCheck (Position 24 8) "GotoHover.hs"
+            [ ExpectHoverExcludeText [hackageUrlPrefix "Source"] ]
+        , testWithConfig "type" (hoverConfig (def { linkSourceTo = LinkToLocal })) $
+          hoverCheck (Position 8 11) "GotoHover.hs"
+            [ ExpectHoverExcludeText [hackageUrlPrefix "Source"] ]
+        ]
+      ]
+    hackageUrlPrefix linkText = "\\[" <> linkText <> "\\]\\(https://hackage\\.haskell\\.org/package/"
+    hackageUrlRegex linkText pkg anchor
+      = hackageUrlPrefix linkText
+        <> pkg <> "-[0-9\\.]+/docs/[^#)]+\\.html#" <> anchor
+    hoverConfig lspConf = def
+        { testPluginDescriptor = dummyPlugin
+        , testDirLocation = Right (mkIdeTestFs [copyDir "hover"])
+        , testConfigCaps = lspTestCaps
+        , testShiftRoot = True
+        , testLspConfig = lspConf
+        }
+    hoverCheck pos fp expects = do
+        doc <- openDoc fp "haskell"
+        waitForProgressDone
+        _ <- waitForTypecheck doc
+        hover <- getHover doc pos
+        checkHover hover expects

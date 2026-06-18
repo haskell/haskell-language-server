@@ -72,7 +72,9 @@ module Development.IDE.GHC.Compat.Core (
 #if MIN_VERSION_ghc(9,11,0)
     pattern ModIface,
     set_mi_top_env,
+#if !MIN_VERSION_ghc(9,13,0)
     set_mi_usages,
+#endif
 #endif
     HscSource(..),
     WhereFrom(..),
@@ -332,6 +334,7 @@ module Development.IDE.GHC.Compat.Core (
 
     module GHC.Tc.Instance.Family,
     module GHC.Tc.Module,
+    module GHC.Tc.TyCl.Class,
     module GHC.Tc.Types,
     module GHC.Tc.Types.Evidence,
     module GHC.Tc.Utils.Env,
@@ -443,6 +446,7 @@ import           GHC.Rename.Splice
 import qualified GHC.Runtime.Interpreter     as GHCi
 import           GHC.Tc.Instance.Family
 import           GHC.Tc.Module
+import           GHC.Tc.TyCl.Class
 import           GHC.Tc.Types
 import           GHC.Tc.Types.Evidence       hiding ((<.>))
 import           GHC.Tc.Utils.Env
@@ -482,7 +486,6 @@ import qualified GHC.Utils.Panic.Plain       as Plain
 
 import           Data.Foldable               (toList)
 import           GHC.Core.Multiplicity       (scaledThing)
-import           GHC.Data.Bag
 import qualified GHC.Data.Strict             as Strict
 import qualified GHC.Driver.Config.Finder    as GHC
 import qualified GHC.Driver.Config.Tidy      as GHC
@@ -522,19 +525,21 @@ import           GHC.Unit.Finder             hiding (mkHomeModLocation)
 import qualified GHC.Unit.Finder             as GHC
 import           GHC.Unit.Finder.Types
 import           GHC.Unit.Home.ModInfo
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC.Unit.Home.PackageTable  (addToHpt, addListToHpt)
+#endif
 import           GHC.Unit.Module.Graph
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-#if !MIN_VERSION_ghc(9,9,0)
-import           GHC.Hs                      (SrcSpanAnn')
-#endif
 import           GHC.Unit.Module.ModIface    (IfaceExport, ModIface,
                                               ModIface_ (..), mi_fix
 #if MIN_VERSION_ghc(9,11,0)
                                              , pattern ModIface
                                              , set_mi_top_env
+#if !MIN_VERSION_ghc(9,13,0)
                                              , set_mi_usages
+#endif
 #endif
                                              )
 import           GHC.Unit.Module.ModSummary  (ModSummary (..))
@@ -550,6 +555,10 @@ import           Language.Haskell.Syntax     hiding (FunDep)
 import System.OsPath
 #endif
 
+#if MIN_VERSION_ghc(9,13,0)
+import qualified System.FilePath as FP
+#endif
+
 #if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail             (greNamePrintableName)
 #endif
@@ -559,7 +568,17 @@ import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
-#if MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,13,0)
+mkHomeModLocation df mn f =
+  let (basename, ext) = FP.splitExtension f
+      osBasename = unsafeEncodeUtf basename
+      osExt = unsafeEncodeUtf ext
+      hscSrc = case ext of
+        ".hs-boot" -> HsBootFile
+        ".hsig" -> HsigFile
+        _ -> HsSrcFile
+  in pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn osBasename osExt hscSrc
+#elif MIN_VERSION_ghc(9,11,0)
 mkHomeModLocation df mn f =
   let osf = unsafeEncodeUtf f
   in pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn osf

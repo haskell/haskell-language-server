@@ -83,6 +83,12 @@ headerEdit =
         , _text = "-- header comment \n"
         }
 
+typingBurstEditCount :: Int
+typingBurstEditCount = 5
+
+typingBurstDelay :: Seconds
+typingBurstDelay = 0.25
+
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
     identifierP    :: Maybe Position,
@@ -100,6 +106,14 @@ allWithIdentifierPos f docs = case applicableDocs of
   where
     applicableDocs = filter (isJust . identifierP) docs
 
+applyTypingBurst :: [DocumentPositions] -> Session ()
+applyTypingBurst docs =
+    forM_ [1..typingBurstEditCount] $ \n -> do
+        forM_ docs $ \DocumentPositions{..} ->
+            changeDoc doc [charEdit stringLiteralP]
+        when (n < typingBurstEditCount) $
+            liftIO $ sleep typingBurstDelay
+
 experiments :: HasConfig => [Bench]
 experiments =
     [
@@ -115,12 +129,26 @@ experiments =
                 Nothing -> return False
         return $ and r,
       ---------------------------------------------------------------------------------------
+      bench "semanticTokens after typing burst" $ \docs -> do
+        applyTypingBurst docs
+        r <- forM docs $ \DocumentPositions{..} -> do
+            tks <- getSemanticTokens doc
+            case tks ^? LSP._L of
+                Just _  -> return True
+                Nothing -> return False
+        return $ and r,
+      ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "hover after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          isJust <$> getHover doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "hover after typing burst" $ \docs -> do
+        applyTypingBurst docs
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
@@ -158,10 +186,15 @@ experiments =
         hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition after edit" $ \docs -> do
-          forM_ docs $ \DocumentPositions{..} ->
-            changeDoc doc [charEdit stringLiteralP]
-          flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-            hasDefinitions <$> getDefinitions doc (fromJust identifierP),
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          hasDefinitions <$> getDefinitions doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "getDefinition after typing burst" $ \docs -> do
+        applyTypingBurst docs
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -172,6 +205,11 @@ experiments =
         flip allM docs $ \DocumentPositions{..} ->
           either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
+      bench "documentSymbols after typing burst" $ \docs -> do
+        applyTypingBurst docs
+        flip allM docs $ \DocumentPositions{..} ->
+          either (not . null) (not . null) <$> getDocumentSymbols doc,
+      ---------------------------------------------------------------------------------------
       bench "completions" $ \docs -> do
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
@@ -179,6 +217,11 @@ experiments =
       bench "completions after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          not . null <$> getCompletions doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench "completions after typing burst" $ \docs -> do
+        applyTypingBurst docs
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
@@ -201,6 +244,17 @@ experiments =
               changeDoc doc [charEdit stringLiteralP]
               waitForProgressStart
             waitForProgressDone
+            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+              forM identifierP $ \p ->
+                getCodeActions doc (Range p p))
+        ),
+      ---------------------------------------------------------------------------------------
+      bench
+        "code actions after typing burst"
+        ( \docs -> do
+            unless (any (isJust . identifierP) docs) $
+                error "None of the example modules is suitable for this experiment"
+            applyTypingBurst docs
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
@@ -342,7 +396,7 @@ examplesPath :: FilePath
 examplesPath = "bench/example"
 
 defConfig :: Config
-Success defConfig = execParserPure defaultPrefs (info configP fullDesc) []
+Success defConfig = execParserPure defaultPrefs (info configP fullDesc) ["--example-name", "examples"]
 
 quiet, verbose :: Config -> Bool
 verbose = (== All) . verbosity
@@ -383,7 +437,7 @@ configP =
 
       packageP = ExamplePackage
             <$> strOption (long "example-package-name" <> value "Cabal")
-            <*> option versionP (long "example-package-version" <> value (makeVersion [3,6,0,0]))
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,16,1,0]))
       pathOrScriptP = ExamplePath   <$> strOption (long "example-path")
                   <|> ExampleScript <$> strOption (long "example-script") <*> many (strOption (long "example-script-args" <> help "arguments for the example generation script"))
 
@@ -708,21 +762,20 @@ setup = do
             package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
-        unless alreadySetup $
-          case buildTool ?config of
+        case buildTool ?config of
             Cabal -> do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
-                callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
-                let hieYamlPath = path </> "hie.yaml"
+                unless alreadySetup $
+                    callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 writeFile hieYamlPath simpleCabalCradleContent
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
-                    "packages: ."
+                    (cabalProjectForPackage ExamplePackage{..})
                 writeFile
                     (path </> "cabal.project.local")
                     ""
-            Stack -> do
+            Stack -> unless alreadySetup $ do
                 let stackVerbosity = case verbosity ?config of
                         Quiet  -> "--silent"
                         Normal -> ""
@@ -745,6 +798,11 @@ setup = do
                 writeFile hieYamlPath simpleStackCradleContent
         return path
 
+  checkExampleModulesExist benchDir (example ?config)
+  case (buildTool ?config, exampleDetails (example ?config)) of
+      (Cabal, ExampleHackage{}) -> buildCabalExample benchDir
+      _                         -> return ()
+
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
   let cleanUp = case exampleDetails (example ?config) of
@@ -755,6 +813,30 @@ setup = do
       runBenchmarks = runBenchmarksFun benchDir
 
   return SetupResult{..}
+
+checkExampleModulesExist :: FilePath -> Example -> IO ()
+checkExampleModulesExist benchDir Example{..} =
+    forM_ exampleModules $ \target -> do
+        let fullPath = benchDir </> target
+        exists <- doesFileExist fullPath
+        unless exists $
+            fail $ "Benchmark example " <> show exampleName
+                <> " is missing target file " <> show target
+                <> " at " <> fullPath
+
+buildCabalExample :: HasConfig => FilePath -> IO ()
+buildCabalExample path = do
+    output $ "cabal build all -j in " <> path
+    cmd_ (Cwd path) ("cabal" :: String) (["build", "all", "-j"] :: [String])
+
+cabalProjectForPackage :: ExamplePackage -> String
+cabalProjectForPackage ExamplePackage{packageName = "lsp-types"} =
+    unlines
+        [ "packages: ."
+        , "allow-newer: boring:base"
+        ]
+cabalProjectForPackage _ =
+    "packages: ."
 
 setupDocumentContents :: Config -> Session [DocumentPositions]
 setupDocumentContents config =

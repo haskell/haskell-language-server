@@ -41,7 +41,7 @@ test :: TestTree
 test = testGroup "changeTypeSignature" [
         testRegexes
         , codeActionTest "TExpectedActual" 4 11
-        , knownBrokenForGhcVersions [GHC96 .. GHC912] "Error Message in 9.6+ does not provide enough info" $
+        , knownBrokenForGhcVersions [GHC96 .. GHC914] "Error Message in 9.6+ does not provide enough info" $
             codeActionTest "TRigidType" 4 14
         , codeActionTest "TRigidType2" 4 8
         , codeActionTest "TLocalBinding" 7 22

@@ -20,14 +20,12 @@
     |       └── <HLS plugin>
     │           ├── <experiment>.gcStats.log          - RTS -s output
     │           ├── <experiment>.csv                  - stats for the experiment
-    │           ├── <experiment>.svg                  - Graph of bytes over elapsed time
-    │           ├── <experiment>.diff.svg             - idem, including the previous version
     │           ├── <experiment>.log                  - ghcide-bench output
     │           └── results.csv                       - results of all the experiments for the example
     ├── results.csv        - aggregated results of all the experiments and versions
-    └── <experiment>.svg   - graph of bytes over elapsed time, for all the included versions
+    └── resultDiff.csv     - diff of aggregated results compared with previous version
 
-   For diff graphs, the "previous version" is the preceding entry in the list of versions
+   For diff results, the "previous version" is the preceding entry in the list of versions
    in the config file. A possible improvement is to obtain this info via `git rev-list`.
 
    To execute the script:
@@ -36,8 +34,8 @@
 
    To build a specific analysis, enumerate the desired file artifacts
 
-   > stack bench --ba "bench-results/HEAD/results.csv bench-results/HEAD/edit.diff.svg"
-   > cabal bench --benchmark-options "bench-results/HEAD/results.csv bench-results/HEAD/edit.diff.svg"
+   > stack bench --ba "bench-results/HEAD/results.csv"
+   > cabal bench --benchmark-options "bench-results/HEAD/results.csv"
 
  -}
 {-# LANGUAGE DeriveAnyClass     #-}
@@ -165,8 +163,6 @@ createBuildSystem config = do
   benchRules build (MkBenchRules (askOracle $ GetSamples ()) benchHls warmupHls "haskell-language-server" (parallelism configStatic))
   addGetParentOracle
   csvRules build
-  svgRules build
-  heapProfileRules build
   phonyRules "" binaryName NoProfiling build (examples configStatic)
 
   whenJust (profileInterval configStatic) $ \i -> do

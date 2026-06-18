@@ -30,6 +30,7 @@ import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
 import           Data.Functor
+import qualified Data.Generics                                     as SYB
 import qualified Data.HashMap.Strict                               as Map
 import qualified Data.HashSet                                      as Set
 import           Data.List.Extra
@@ -49,6 +50,7 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
+import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 #if !MIN_VERSION_ghc(9,11,0)
 import           Development.IDE.GHC.Compat.Util
 #endif
@@ -144,6 +146,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
                <> caRemoveInvalidExports parsedModule textContents allDiags range uri
+               <> caDeleteUnusedBindings parsedModule textContents allDiags range uri
     pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
@@ -185,7 +188,6 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestImplicitParameter
     , wrap suggestNewDefinition
     , wrap Development.IDE.Plugin.Plugins.AddArgument.plugin
-    , wrap suggestDeleteUnusedBinding
     ]
     plId
     "Provides various quick fixes for bindings"
@@ -661,7 +663,7 @@ suggestDeleteUnusedBinding
               in Just (mkSrcSpan startLoc' endLoc', False)
       findRelatedSigSpan1 _ _ = Nothing
 
-      -- for where clause
+      -- for where and let expression bindings
       findRelatedSpanForMatch
         :: PositionIndexedString
         -> String
@@ -670,7 +672,7 @@ suggestDeleteUnusedBinding
       findRelatedSpanForMatch
         indexedContent
         name
-        (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
+        (L _ Match{m_grhss=GRHSs{grhssLocalBinds, grhssGRHSs}}) = do
         let emptyBag bag =
 #if MIN_VERSION_ghc(9,11,0)
                 null bag
@@ -681,9 +683,22 @@ suggestDeleteUnusedBinding
                   if emptyBag bag
                   then []
                   else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
-        case grhssLocalBinds of
-          (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
-          _                                     -> []
+
+            findLetBinds :: SYB.GenericQ (DL.DList (HsLocalBinds GhcPs))
+            findLetBinds = SYB.everything mappend (mempty `SYB.mkQ` letBinds)
+              where
+                letBinds :: HsExpr GhcPs -> DL.DList (HsLocalBinds GhcPs)
+                letBinds = \case
+#if !MIN_VERSION_ghc(9,9,0)
+                    HsLet _ _ lb _ _ -> pure lb
+#else
+                    HsLet _ lb _ -> pure lb
+#endif
+                    _            -> mempty
+
+        flip concatMap (grhssLocalBinds : DL.toList (findLetBinds grhssGRHSs)) $ \case
+                (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
+                _                                     -> []
 
       findRelatedSpanForHsBind
         :: PositionIndexedString
@@ -709,6 +724,47 @@ suggestDeleteUnusedBinding
 
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = T.unpack (printOutputable x) == name
+
+caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caDeleteUnusedBindings m contents allDiags contextRange uri
+  | Just pm <- m,
+    r <- join $ map (\d -> repeat d `zip` suggestDeleteUnusedBinding pm contents d) allDiags,
+    -- `allEdits` contains the representative edits to make.
+    -- Representative means the edit with a range that subsumes the others,
+    -- because GHC emits diagnostics for the top level binding *and* the where clause.
+    allEdits <-
+      -- take the representative and drop the others
+      concatMap headToList $
+      -- deduplicate by creating groups of ranges (same group if any subsumes the other)
+      groupBy subsumesEither
+      -- Sort to put related ranges next to each other
+      (sortOn TE._range [ e | (_, (_, edits)) <- r, e <- edits]),
+    caRemoveAll <- removeAll allEdits,
+    ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
+    not $ null ctxEdits,
+    caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
+      = caRemoveCtx ++ [caRemoveAll]
+  | otherwise = []
+  where
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+        _changes = Just $ M.singleton uri tedit
+        _documentChanges = Nothing
+        _changeAnnotations = Nothing
+    removeAll tedit = InR $ CodeAction{..} where
+        _changes = Just $ M.singleton uri tedit
+        _title = "Delete all unused bindings"
+        _kind = Just CodeActionKind_QuickFix
+        _diagnostics = Nothing
+        _documentChanges = Nothing
+        _edit = Just WorkspaceEdit{..}
+        _isPreferred = Just False
+        _command = Nothing
+        _disabled = Nothing
+        _data_ = Nothing
+        _changeAnnotations = Nothing
+    headToList []      = []
+    headToList (x : _) = [x]
+    subsumesEither (TE._range -> range1) (TE._range -> range2) = subRange range1 range2 || subRange range2 range1
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
@@ -964,7 +1020,7 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
+suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
@@ -992,6 +1048,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             Just ident <- lookupExportMap binding mod
           = [ ( "Add " <> renderImportStyle importStyle <> " to the import list of " <> mod
               , quickFixImportKind' "extend" importStyle
+              , True
               , uncurry extendImport (unImportStyle importStyle) decl
               )
             | importStyle <- NE.toList $ importStyles ident
@@ -1434,7 +1491,7 @@ removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagno
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1454,6 +1511,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
           Just decl ->
             [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleText,
                 quickFixImportKind' "extend" style,
+                True,
                 [Right $ uncurry extendImport (unImportStyle style) decl]
               )
               | style <- importStyle
@@ -1462,7 +1520,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
           _
             | Just (range, indent) <- newImportInsertRange ps fileContents
             ->
-             (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
+             (\(kind, unNewImport -> x) -> (x, kind, True, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
             [ (quickFixImportKind' "new" style, newUnqualImport moduleText rendered False)
               | style <- importStyle,
                 let rendered = renderImportStyle style
@@ -1471,7 +1529,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             | otherwise -> []
         where moduleText = moduleNameText identInfo
 
-suggestNewImport :: DynFlags -> ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestNewImport :: DynFlags -> ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, TextEdit)]
 suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
@@ -1491,7 +1549,7 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   = let qis = qualifiedImportStyle df
         suggestions = nubSortBy simpleCompareImportSuggestion
           (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
-    map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
+    map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, True, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     L _ HsModule {..} = ps
 suggestNewImport _ _ _ _ _ = []
@@ -1872,11 +1930,11 @@ extractQualifiedModuleName x
 --         ‘Data.Functor’ nor ‘Data.Text’ exports ‘putStrLn’.
 extractDoesNotExportModuleName :: T.Text -> Maybe T.Text
 extractDoesNotExportModuleName x
-  | Just [m] <- case ghcVersion of
-                  GHC912 -> matchRegexUnifySpaces x "The module ‘([^’]*)’ does not export"
-                            <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
-                  _ ->      matchRegexUnifySpaces x "the module ‘([^’]*)’ does not export"
-                            <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
+  | Just [m] <- if ghcVersion >= GHC912
+                  then matchRegexUnifySpaces x "The module ‘([^’]*)’ does not export"
+                       <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
+                  else matchRegexUnifySpaces x "the module ‘([^’]*)’ does not export"
+                       <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
   = Just m
   | otherwise
   = Nothing

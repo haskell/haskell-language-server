@@ -12,6 +12,7 @@ import qualified Data.ByteString                                as ByteString
 import qualified Data.ByteString.Char8                          as BS8
 import           Data.Maybe                                     (mapMaybe)
 import qualified Data.Text                                      as T
+import           Development.IDE.Plugin.Completions.Types       (cursorPos)
 import qualified Development.IDE.Plugin.Completions.Types       as Ghcide
 import qualified Distribution.Fields                            as Syntax
 import           Distribution.PackageDescription                (GenericPackageDescription)
@@ -21,13 +22,18 @@ import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple   (importCompleter)
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..))
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..),
+                                                                 Matcher (..))
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo (..),
                                                                  StanzaName)
 import qualified Language.LSP.Protocol.Lens                     as L
 import           System.FilePath
 import           Test.Hls
+import           Test.Hls.FileSystem                            (file,
+                                                                 mkVirtualFileTree,
+                                                                 text)
+import qualified Text.Fuzzy.Parallel                            as Fuzzy
 import           Utils
 
 completerTests :: TestTree
@@ -71,7 +77,20 @@ basicCompleterTests =
         let complTexts = getTextEditTexts compls
         liftIO $ assertBool "suggests f2" $ "f2.hs" `elem` complTexts
         liftIO $ assertBool "does not suggest" $ "Content.hs" `notElem` complTexts
-    ]
+    , parameterisedCursorTestM "extensions completion" libraryStanzaData
+        [ \_ actual -> assertBool "suggests FieldSelectors" $ "FieldSelectors" `elem` actual
+        , \_ actual -> assertBool "suggests OverloadedStrings" $ "OverloadedStrings" `elem` actual
+        , \_ actual -> assertBool "suggests something" $ not . null $ actual
+        , \_ actual -> assertBool "suggests NoLambdaCase" $ "NoLambdaCase" `elem` actual
+        , \_ actual -> assertBool "suggests RecordWildCards" $ "RecordWildCards" `elem` actual
+        ]
+        $ \fileContent posPrefInfo -> do
+            let vFileTree = mkVirtualFileTree "" $ [file "cabalFile.cabal" $ text fileContent]
+            runCabalSessionVft vFileTree $ do
+              doc <- openDoc "cabalFile.cabal" "cabal"
+              compls <- getCompletions doc (cursorPos posPrefInfo)
+              let complTexts = getTextEditTexts compls
+              pure complTexts]
     where
       getTextEditTexts :: [CompletionItem] -> [T.Text]
       getTextEditTexts compls = mapMaybe (^? L.textEdit . _Just . _L . L.newText) compls
@@ -82,16 +101,19 @@ fileCompleterTests =
     "File Completer Tests"
     [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeFilePath "" filePathComplTestDir
-        completions @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
+        completions @?== [".hidden", "Content.hs", "Dir4/", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeFilePath "./" filePathComplTestDir
-        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
+        completions @?== ["./.hidden", "./Content.hs", "./Dir4/", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
       testCase "Current Directory - hidden file start" $ do
         completions <- completeFilePath "." filePathComplTestDir
         completions @?== ["Content.hs", ".hidden", "textfile.txt", "main-is.cabal"],
       testCase "Current Directory - incomplete directory path written" $ do
         completions <- completeFilePath "di" filePathComplTestDir
-        completions @?== ["dir1/", "dir2/"],
+        completions @?== ["dir1/", "dir2/","Dir4/"],
+      testCase "Current Directory - fuzzy Smart casing" $ do
+        completions <- completeFilePath "Dr" filePathComplTestDir
+        completions @?== ["Dir4/"],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeFilePath "te" filePathComplTestDir
         completions @?== ["Content.hs", "textfile.txt"],
@@ -101,6 +123,12 @@ fileCompleterTests =
       testCase "Subdirectory - incomplete filepath written" $ do
         completions <- completeFilePath "dir2/dir3/MA" filePathComplTestDir
         completions @?== ["dir2/dir3/MARKDOWN.md"],
+      testCase "Subdirectory - lowerCase" $ do
+        completions <- completeFilePath "dir2/dir3/md" filePathComplTestDir
+        completions @?== ["dir2/dir3/MARKDOWN.md"],
+      testCase "Subdirectory - smart casing mismatch" $ do
+        completions <- completeFilePath "dir2/dir3/Ma" filePathComplTestDir
+        completions @?== [],
       testCase "Nonexistent directory" $ do
         completions <- completeFilePath "dir2/dir4/" filePathComplTestDir
         completions @?== []
@@ -152,7 +180,7 @@ filePathCompletionContextTests =
                 queryDirectory = "",
                 workingDirectory = filePathComplTestDir
               }
-        compls @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
+        compls @?== [".hidden", "Content.hs", "Dir4/", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
       testCase "In directory" $ do
         compls <-
           listFileCompletions
@@ -181,13 +209,19 @@ directoryCompleterTests =
     "Directory Completer Tests"
     [ testCase "Current Directory - no leading ./ by default" $ do
         completions <- completeDirectory "" filePathComplTestDir
-        completions @?== ["dir1/", "dir2/"],
+        completions @?== ["Dir4/", "dir1/", "dir2/"],
       testCase "Current Directory - alternative writing" $ do
         completions <- completeDirectory "./" filePathComplTestDir
-        completions @?== ["./dir1/", "./dir2/"],
+        completions @?== ["./Dir4/", "./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete directory path written" $ do
-        completions <- completeDirectory "di" filePathComplTestDir
-        completions @?== ["dir1/", "dir2/"],
+        completions <- completeDirectory "dr" filePathComplTestDir
+        completions @?== ["Dir4/", "dir1/", "dir2/"],
+      testCase "Current Directory - correct smart casing" $ do
+        completions <- completeDirectory "Dr" filePathComplTestDir
+        completions @?== ["Dir4/"],
+      testCase "Current Directory - incorrect smart casing" $ do
+        completions <- completeDirectory "DI" filePathComplTestDir
+        completions @?== [],
       testCase "Current Directory - incomplete filepath written" $ do
         completions <- completeDirectory "te" filePathComplTestDir
         completions @?== [],
@@ -270,7 +304,7 @@ filePathExposedModulesTests =
     callFilePathsForExposedModules :: [FilePath] -> IO [T.Text]
     callFilePathsForExposedModules srcDirs = do
       let prefInfo = simpleCabalPrefixInfoFromFp "" exposedTestDir
-      filePathsForExposedModules mempty srcDirs prefInfo
+      filePathsForExposedModules mempty srcDirs prefInfo $ Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
 
 exposedModuleCompleterTests :: TestTree
 exposedModuleCompleterTests =
@@ -296,7 +330,16 @@ exposedModuleCompleterTests =
         completions @?== ["File3"],
       testCase "Name nothing but not library" $ do
         completions <- callModulesCompleter Nothing sourceDirsExtractionTestSuite "3"
-        completions @?== []
+        completions @?== [],
+      testCase "Exposed modules - smart casing rejects mixed-case mismatch" $ do
+        completions <- callModulesCompleter (Just "benchie") sourceDirsExtractionBenchmark "FL"
+        completions @?== [],
+      testCase "Exposed modules - smart casing preserves fuzzy matching" $ do
+        completions <- callModulesCompleter (Just "benchie") sourceDirsExtractionBenchmark "Fl1"
+        completions @?== ["File1"],
+      testCase "Exposed modules - lowercase remains case-insensitive" $ do
+        completions <- callModulesCompleter (Just "benchie") sourceDirsExtractionBenchmark "fl"
+        completions @?== ["File1"]
     ]
   where
     callModulesCompleter :: Maybe StanzaName -> (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> T.Text -> IO [T.Text]
@@ -366,11 +409,19 @@ simpleCompleterData sName dir pref = do
         cabalContents <- ByteString.readFile $ testDataDir </> "exposed.cabal"
         pure $ parseGenericPackageDescriptionMaybe cabalContents,
       getCabalCommonSections = undefined,
-      stanzaName = sName
+      stanzaName = sName,
+      matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
     }
 
 mkCompleterData :: CabalPrefixInfo -> CompleterData
-mkCompleterData prefInfo = CompleterData {getLatestGPD = undefined, getCabalCommonSections = undefined, cabalPrefixInfo = prefInfo, stanzaName = Nothing}
+mkCompleterData prefInfo =
+  CompleterData
+    { getLatestGPD = undefined,
+      getCabalCommonSections = undefined,
+      cabalPrefixInfo = prefInfo,
+      stanzaName = Nothing,
+      matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
+    }
 
 exposedTestDir :: FilePath
 exposedTestDir = addTrailingPathSeparator $ testDataDir </> "src-modules"
@@ -391,40 +442,27 @@ extract item = case item ^. L.textEdit of
   Just (InL v) -> v ^. L.newText
   _            -> error ""
 
-importTestData :: T.Text
-importTestData = [__i|
-  cabal-version:      3.0
-  name:               hls-cabal-plugin
-  version:            0.1.0.0
-  synopsis:
-  homepage:
-  license:            MIT
-  license-file:       LICENSE
-  author:             Fendor
-  maintainer:         fendor@posteo.de
-  category:           Development
-  extra-source-files: CHANGELOG.md
+-- ------------------------------------------------------------------------
+-- Test Data
+-- ------------------------------------------------------------------------
 
-  common defaults
-    default-language: GHC2021
-    -- Should have been in GHC2021, an oversight
-    default-extensions: ExplicitNamespaces
-
-  common test-defaults
-    ghc-options: -threaded -rtsopts -with-rtsopts=-N
-
-  library
-      import:
-              ^
-      exposed-modules:  IDE.Plugin.Cabal
-      build-depends:    base ^>=4.14.3.0
-      hs-source-dirs:   src
-      default-language: Haskell2010
-
-  common notForLib
-    default-language: GHC2021
-
-  test-suite tests
-    import:
-            ^
+libraryStanzaData :: T.Text
+libraryStanzaData = [__i|
+    cabal-version:      3.0
+    name:               simple-cabal
+    common mylib
+      default-extensions: Field
+                               ^
+    library
+        default-extensions: Ov
+                              ^
+    test-suite mysuite
+        default-extensions:
+                            ^
+    executable myexe
+        default-extensions: NoLam
+                                 ^
+    benchmark mybench
+        other-extensions: RecordW
+                                 ^
 |]

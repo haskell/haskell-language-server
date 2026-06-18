@@ -12,14 +12,14 @@ module Ide.Plugin.Eval.Types
     ( Log(..),
       locate,
       locate0,
-      Test (..),
+      EvalExpr (..),
       isProperty,
       Format (..),
       Language (..),
       Section (..),
       Sections (..),
-      hasTests,
-      hasPropertyTest,
+      hasEvalExprs,
+      hasPropertyEvalExpr,
       splitSections,
       Loc,
       Located (..),
@@ -61,9 +61,9 @@ data Log
     | LogCodeLensFp FilePath
     | LogCodeLensComments Comments
     | LogExecutionTime T.Text Extra.Seconds
-    | LogTests !Int !Int !Int !Int
-    | LogRunTestResults [T.Text]
-    | LogRunTestEdits TextEdit
+    | LogEvalExprs !Int !Int !Int !Int
+    | LogRunEvalExprResults [T.Text]
+    | LogRunEvalExprEdits TextEdit
     | LogEvalFlags [String]
     | LogEvalPreSetDynFlags Core.DynFlags
     | LogEvalParsedFlags
@@ -75,6 +75,7 @@ data Log
     | LogEvalStmtResult (Maybe [T.Text])
     | LogEvalImport String
     | LogEvalDeclaration String
+    | LogEvalFailedSettingInteractivePrintFunction
 
 instance Pretty Log where
     pretty = \case
@@ -82,9 +83,10 @@ instance Pretty Log where
         LogCodeLensFp fp -> "fp" <+> pretty fp
         LogCodeLensComments comments -> "comments" <+> viaShow comments
         LogExecutionTime lbl duration -> pretty lbl <> ":" <+> pretty (Extra.showDuration duration)
-        LogTests nTests nNonSetupSections nSetupSections nLenses -> "Tests" <+> fillSep
-            [ pretty nTests
-            , "tests in"
+        LogEvalExprs nEvalExprs nNonSetupSections nSetupSections nLenses ->
+          "EvalExprs" <+> fillSep [
+              pretty nEvalExprs
+            , "expressions to evaluate in"
             , pretty nNonSetupSections
             , "sections"
             , pretty nSetupSections
@@ -92,8 +94,8 @@ instance Pretty Log where
             , pretty nLenses
             , "lenses."
             ]
-        LogRunTestResults results ->  "TEST RESULTS" <+> viaShow results
-        LogRunTestEdits edits -> "TEST EDIT" <+> viaShow edits
+        LogRunEvalExprResults results ->  "EVAL EXPR RESULTS" <+> viaShow results
+        LogRunEvalExprEdits edits -> "EVAL EXPR EDIT" <+> viaShow edits
         LogEvalFlags flags -> "{:SET" <+> pretty flags
         LogEvalPreSetDynFlags dynFlags -> "pre set" <+> pretty (showDynFlags dynFlags)
         LogEvalParsedFlags eans -> "parsed flags" <+> viaShow (eans
@@ -103,6 +105,9 @@ instance Pretty Log where
         LogEvalStmtResult result -> "STMT}" <+> pretty result
         LogEvalImport stmt -> "{IMPORT" <+> pretty stmt
         LogEvalDeclaration stmt -> "{DECL" <+> pretty stmt
+        LogEvalFailedSettingInteractivePrintFunction -> pretty $
+               "Return value will not be captured: "
+            ++ "Failed setting the interactive print function."
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -134,26 +139,34 @@ data Sections = Sections
     deriving (Show, Eq, Generic)
 
 data Section = Section
-    { sectionName     :: Txt
-    , sectionTests    :: [Test]
-    , sectionLanguage :: Language
-    , sectionFormat   :: Format
+    { sectionName      :: Txt
+    , sectionEvalExprs :: [EvalExpr]
+    , sectionLanguage  :: Language
+    , sectionFormat    :: Format
     }
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
-hasTests :: Section -> Bool
-hasTests = not . null . sectionTests
+hasEvalExprs :: Section -> Bool
+hasEvalExprs = not . null . sectionEvalExprs
 
-hasPropertyTest :: Section -> Bool
-hasPropertyTest = any isProperty . sectionTests
+hasPropertyEvalExpr :: Section -> Bool
+hasPropertyEvalExpr = any isProperty . sectionEvalExprs
 
 -- |Split setup and normal sections
 splitSections :: [Section] -> ([Section], [Section])
 splitSections = partition ((== "setup") . sectionName)
 
-data Test
-    = Example {testLines :: NonEmpty Txt, testOutput :: [Txt], testRange :: Range}
-    | Property {testline :: Txt, testOutput :: [Txt], testRange :: Range}
+data EvalExpr =
+      Example {
+          evalExprLines  :: NonEmpty Txt
+        , evalExprOutput :: [Txt]
+        , evalExprRange  :: Range
+        }
+    | Property {
+          evalExprLine   :: Txt
+        , evalExprOutput :: [Txt]
+        , evalExprRange  :: Range
+        }
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
 data IsEvaluating = IsEvaluating
@@ -210,14 +223,14 @@ instance Semigroup Comments where
 instance Monoid Comments where
     mempty = Comments mempty mempty
 
-isProperty :: Test -> Bool
+isProperty :: EvalExpr -> Bool
 isProperty Property {} = True
 isProperty _           = False
 
 data Format
     = SingleLine
     | -- | @Range@ is that of surrounding entire block comment, not section.
-      -- Used for detecting no-newline test commands.
+      -- Used for detecting no-newline eval-expr commands.
       MultiLine Range
     deriving (Eq, Show, Ord, Generic, FromJSON, ToJSON, NFData)
 
@@ -237,10 +250,10 @@ instance IsString LineChunk where
 
 type EvalId = Int
 
--- | Specify the test section to execute
+-- | Specify the eval-expr sections to execute
 data EvalParams = EvalParams
     { sections :: [Section]
     , module_  :: !TextDocumentIdentifier
-    , evalId   :: !EvalId -- ^ unique group id; for test uses
+    , evalId   :: !EvalId -- ^ unique group id; for eval-expr uses
     }
     deriving (Eq, Show, Generic, FromJSON, ToJSON)

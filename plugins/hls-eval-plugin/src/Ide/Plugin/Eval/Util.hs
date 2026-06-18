@@ -48,19 +48,26 @@ timed out name op = do
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT PluginError (HandlerM c) WorkspaceEdit -> ExceptT PluginError (HandlerM c) (Value |? Null)
+response' ::
+     ExceptT PluginError (HandlerM c) WorkspaceEdit
+  -> ExceptT PluginError (HandlerM c) (Value |? Null)
 response' act = do
     res <-  ExceptT (runExceptT act
              `catchAny` \e -> do
                 res <- showErr e
                 pure . Left  . PluginInternalError $ fromString res)
-    _ <- lift $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
+    _ <-
+      lift $
+        pluginSendRequest
+          SMethod_WorkspaceApplyEdit
+          (ApplyWorkspaceEditParams Nothing res)
+          (\_ -> pure ())
     pure $ InR Null
 
 gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)
-gStrictTry op =
+gStrictTry action =
     catch
-        (op >>= fmap Right . gevaluate)
+        (action >>= fmap Right . gevaluate)
         (fmap Left . showErr)
 
 gevaluate :: MonadIO m => a -> m a

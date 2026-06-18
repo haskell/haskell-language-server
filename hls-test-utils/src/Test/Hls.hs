@@ -29,6 +29,7 @@ module Test.Hls
     goldenWithCabalDocFormatter,
     goldenWithCabalDocFormatterInTmpDir,
     goldenWithTestConfig,
+    hlsHelperTestRecorder,
     def,
     -- * Running HLS for integration tests
     runSessionWithServer,
@@ -36,6 +37,7 @@ module Test.Hls
     runSessionWithTestConfig,
     -- * Running parameterised tests for a set of test configurations
     parameterisedCursorTest,
+    parameterisedCursorTestM,
     -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
@@ -80,6 +82,7 @@ import           Control.Lens.Extras                      (is)
 import           Control.Monad                            (guard, unless, void)
 import           Control.Monad.Extra                      (forM)
 import           Control.Monad.IO.Class
+import           Control.Monad.Primitive                  (keepAlive)
 import           Data.Aeson                               (Result (Success),
                                                            Value (Null),
                                                            fromJSON, toJSON)
@@ -142,6 +145,8 @@ import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
+import           Test.Hls.TestEnv                         (hlsTestOptions,
+                                                           wrapCliTestOptions)
 import           Test.Hls.Util
 import           Test.Tasty                               hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
@@ -152,6 +157,17 @@ import           Test.Tasty.Ingredients.Rerun
 data Log
   = LogIDEMain IDEMain.Log
   | LogTestHarness LogTestHarness
+
+data TestRunLog
+  = TestRunFinished
+  | TestServerExitTimeoutSeconds Int
+  | TestServerCancelFinished String
+
+instance Pretty TestRunLog where
+    pretty :: TestRunLog -> Logger.Doc ann
+    pretty TestRunFinished = "Test run finished"
+    pretty (TestServerExitTimeoutSeconds secs) = "Server does not exit in " <> pretty secs <> "s, canceling the async task..."
+    pretty (TestServerCancelFinished took) = "Finishing canceling (took " <> pretty took <> "s)"
 
 instance Pretty Log where
   pretty = \case
@@ -179,9 +195,12 @@ data ExpectBroken (k :: BrokenBehavior) a where
 unCurrent :: ExpectBroken 'Current a -> a
 unCurrent (BrokenCurrent a) = a
 
--- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
+-- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapCliTestOptions . adjustOption (const $ mkTimeout 600000000)
+  where
+    ingredients = includingOptions hlsTestOptions : defaultIngredients
+    ingredientsWithRerun = [rerunningTests ingredients]
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -383,8 +402,15 @@ goldenWithDocInTmpDir languageKind config plugin title tree path desc ext act =
 -- The quasi quoter '__i' is very helpful to define such tests, as it additionally
 -- allows to interpolate haskell values and functions. We reexport this quasi quoter
 -- for easier usage.
-parameterisedCursorTest :: (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
-parameterisedCursorTest title content expectations act
+parameterisedCursorTest :: forall a . (Show a, Eq a) => String -> T.Text -> [a] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
+parameterisedCursorTest title content expectations act = parameterisedCursorTestM title content assertions act
+  where
+    assertions = map testCaseAssertion expectations
+    testCaseAssertion :: a -> PosPrefixInfo -> a -> Assertion
+    testCaseAssertion expected info actual = assertEqual (mkParameterisedLabel info) expected actual
+
+parameterisedCursorTestM :: String -> T.Text -> [(PosPrefixInfo -> a -> Assertion)] -> (T.Text -> PosPrefixInfo -> IO a) -> TestTree
+parameterisedCursorTestM title content expectations act
   | lenPrefs /= lenExpected = error $ "parameterisedCursorTest: Expected " <> show lenExpected <> " cursors but found: " <> show lenPrefs
   | otherwise = testGroup title $
       map singleTest testCaseSpec
@@ -395,9 +421,9 @@ parameterisedCursorTest title content expectations act
 
     testCaseSpec = zip [1 ::Int ..] (zip expectations prefInfos)
 
-    singleTest (n, (expected, info)) = testCase (title <> " " <> show n) $ do
+    singleTest (n, (assert, info)) = testCase (title <> " " <> show n) $ do
       actual <- act cleanText info
-      assertEqual (mkParameterisedLabel info) expected actual
+      assert info actual
 
 -- ------------------------------------------------------------
 -- Helper function for initialising plugins under test
@@ -507,8 +533,28 @@ runSessionWithServerInTmpDir config plugin tree act =
     {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
     (const act)
 
-runWithLockInTempDir :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
-runWithLockInTempDir tree act = withLock lockForTempDirs $ do
+-- | Same as 'withTemporaryDataAndCacheDirectory', but materialises the given
+-- 'VirtualFileTree' in the temporary directory.
+withVfsTestDataDirectory :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
+withVfsTestDataDirectory tree act = do
+    withTemporaryDataAndCacheDirectory $ \tmpRoot -> do
+        fs <- FS.materialiseVFT tmpRoot tree
+        act fs
+
+-- | Run an action in a temporary directory.
+-- Sets the 'XDG_CACHE_HOME' environment variable to a temporary directory as well.
+--
+-- This sets up a temporary directory for HLS tests to run.
+-- Typically, HLS tests copy their test data into the directory and then launch
+-- the HLS session in that directory.
+-- This makes sure that the tests are run in isolation, which is good for correctness
+-- but also important to have fast tests.
+--
+-- For improved isolation, we also make sure the 'XDG_CACHE_HOME' environment
+-- variable points to a temporary directory. So, we never share interface files
+-- or the 'hiedb' across tests.
+withTemporaryDataAndCacheDirectory :: (FilePath -> IO a) -> IO a
+withTemporaryDataAndCacheDirectory act = withLock lockForTempDirs $ do
     testRoot <- setupTestEnvironment
     helperRecorder <- hlsHelperTestRecorder
     -- Do not clean up the temporary directory if this variable is set to anything but '0'.
@@ -516,23 +562,44 @@ runWithLockInTempDir tree act = withLock lockForTempDirs $ do
     cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
     let runTestInDir action = case cleanupTempDir of
             Just val | val /= "0" -> do
-                (tempDir, _) <- newTempDirWithin testRoot
-                a <- action tempDir
+                (tempDir, cacheHome, _) <- setupTemporaryTestDirectories testRoot
+                a <- withTempCacheHome cacheHome (action tempDir)
                 logWith helperRecorder Debug LogNoCleanup
                 pure a
 
             _ -> do
-                (tempDir, cleanup) <- newTempDirWithin testRoot
-                a <- action tempDir `finally` cleanup
+                (tempDir, cacheHome, cleanup) <- setupTemporaryTestDirectories testRoot
+                a <- withTempCacheHome cacheHome (action tempDir) `finally`  cleanup
                 logWith helperRecorder Debug LogCleanup
                 pure a
     runTestInDir $ \tmpDir' -> do
         -- we canonicalize the path, so that we do not need to do
-        -- cannibalization during the test when we compare two paths
+        -- canonicalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
         logWith helperRecorder Info $ LogTestDir tmpDir
-        fs <- FS.materialiseVFT tmpDir tree
-        act fs
+        act tmpDir
+    where
+        cache_home_var = "XDG_CACHE_HOME"
+        -- Set the dir for "XDG_CACHE_HOME".
+        -- When the operation finished, make sure the old value is restored.
+        withTempCacheHome tempCacheHomeDir act =
+            bracket
+              (do
+                old_cache_home <- lookupEnv cache_home_var
+                setEnv cache_home_var tempCacheHomeDir
+                pure old_cache_home)
+              (\old_cache_home ->
+                maybe (pure ()) (setEnv cache_home_var) old_cache_home
+                )
+              (\_ -> act)
+
+        -- Set up a temporary directory for the test files and one for the 'XDG_CACHE_HOME'.
+        -- The 'XDG_CACHE_HOME' is important for independent test runs, i.e. completely empty
+        -- caches.
+        setupTemporaryTestDirectories testRoot = do
+            (tempTestCaseDir, cleanup1) <- newTempDirWithin testRoot
+            (tempCacheHomeDir, cleanup2) <- newTempDirWithin testRoot
+            pure (tempTestCaseDir, tempCacheHomeDir, cleanup1 >> cleanup2)
 
 runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer config plugin fp act =
@@ -565,18 +632,18 @@ instance Default (TestConfig b) where
 -- It returns the root to the testing directory that tests should use.
 -- This directory is not fully cleaned between reruns.
 -- However, it is totally safe to delete the directory between runs.
---
--- Additionally, this overwrites the 'XDG_CACHE_HOME' variable to isolate
--- the tests from existing caches. 'hie-bios' and 'ghcide' honour the
--- 'XDG_CACHE_HOME' environment variable and generate their caches there.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
-  tmpDirRoot <- getTemporaryDirectory
-  let testRoot = tmpDirRoot </> "hls-test-root"
-      testCacheDir = testRoot </> ".cache"
-  createDirectoryIfMissing True testCacheDir
-  setEnv "XDG_CACHE_HOME" testCacheDir
-  pure testRoot
+  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
+  case mRootDir of
+    Nothing -> do
+      tmpDirRoot <- getTemporaryDirectory
+      let testRoot = tmpDirRoot </> "hls-test-root"
+      createDirectoryIfMissing True testRoot
+      pure testRoot
+    Just rootDir -> do
+      createDirectoryIfMissing True rootDir
+      pure rootDir
 
 goldenWithHaskellDocFormatter
   :: Pretty b
@@ -692,7 +759,6 @@ lockForTempDirs = unsafePerformIO newLock
 data TestConfig b = TestConfig
   {
     testDirLocation          :: Either FilePath VirtualFileTree
-    -- ^ Client capabilities
     -- ^ The file tree to use for the test, either a directory or a virtual file tree
     -- if using a virtual file tree,
     -- Creates a temporary directory, and materializes the VirtualFileTree
@@ -747,19 +813,32 @@ wrapClientLogger logger = do
     return (lspLogRecorder <> logger, cb1)
 
 -- | Host a server, and run a test session on it.
--- For setting custom timeout, set the environment variable 'LSP_TIMEOUT'
--- * LSP_TIMEOUT=10 cabal test
+--
+-- Environment variables are used to influence logging verbosity, test cleanup and test execution:
+--
+-- * @LSP_TIMEOUT@: Set a specific test timeout in seconds.
+-- * @LSP_TEST_LOG_MESSAGES@: Log the LSP messages between the client and server.
+-- * @LSP_TEST_LOG_STDERR@: Log the stderr of the server to the stderr of this process.
+-- * @HLS_TEST_HARNESS_STDERR@: Log test setup messages.
+--
+-- Test specific environment variables:
+--
+-- * @HLS_TEST_PLUGIN_LOG_STDERR@: Log all messages of the hls plugin under test to stderr.
+-- * @HLS_TEST_LOG_STDERR@: Log all HLS messages to stderr.
+-- * @HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP@: Don't remove the test directories after test execution.
+--
 -- For more detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
     runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
-    (inR, inW) <- createPipe
-    (outR, outW) <- createPipe
+    pipeIn@(inR, inW) <- createPipe
+    pipeOut@(outR, outW) <- createPipe
     let serverRoot = fromMaybe root testServerRoot
     let clientRoot = fromMaybe root testClientRoot
 
     (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
     (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
+    testRecorder <- hlsHelperTestRecorder
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
     let lspRecorderPlugin = pluginDescToIdePlugins [(defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
@@ -772,18 +851,29 @@ runSessionWithTestConfig TestConfig{..} session =
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
         arguments = testingArgs serverRoot recorderIde plugins
-    server <- async $
-        IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
-            arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
-    result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
-    hClose inW
-    timeout 3 (wait server) >>= \case
-        Just () -> pure ()
-        Nothing -> do
-            putStrLn "Server does not exit in 3s, canceling the async task..."
-            (t, _) <- duration $ cancel server
-            putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
-    pure result
+
+    -- Make an explicit call to keepAlive to protect both pipes from being GC'd.
+    --
+    -- If not done, a race condition forms from the handles of either pipe
+    -- being closed during the LSP shutdown process. For example, consider
+    -- lsp-test initiates the shutdown process, whereafter ghcide shuts down.
+    -- If it's write handle is closed due to GC, lsp-test, which has been
+    -- asynchronously reading from that handle's read end, will encounter a EOF
+    -- and crash.
+    keepAlive (pipeIn, pipeOut) $ do
+      server <- async $
+          IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
+              arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
+      result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
+      hClose inW
+      timeout 3 (wait server) >>= \case
+          Just () -> pure ()
+          Nothing -> do
+              logWith testRecorder Info (TestServerExitTimeoutSeconds 3)
+              (t, _) <- duration $ cancel server
+              logWith testRecorder Info (TestServerCancelFinished (showDuration t))
+      logWith testRecorder Info TestRunFinished
+      pure result
 
     where
         shiftRoot shiftTarget f  =
@@ -792,8 +882,10 @@ runSessionWithTestConfig TestConfig{..} session =
                 else f
         runSessionInVFS (Left testConfigRoot) act = do
             root <- makeAbsolute testConfigRoot
-            act root
-        runSessionInVFS (Right vfs) act = runWithLockInTempDir vfs $ \fs -> act (fsRoot fs)
+            withTemporaryDataAndCacheDirectory (const $ act root)
+        runSessionInVFS (Right vfs) act =
+            withVfsTestDataDirectory vfs $ \fs -> do
+                act (fsRoot fs)
         testingArgs prjRoot recorderIde plugins =
             let
                 arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins

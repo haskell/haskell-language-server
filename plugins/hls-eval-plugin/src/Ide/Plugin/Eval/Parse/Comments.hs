@@ -90,16 +90,16 @@ newtype PropLine = PropLine {getPropLine :: String}
 newtype ExampleLine = ExampleLine {getExampleLine :: String}
     deriving (Show)
 
-data TestComment
+data EvalExprComment
     = AProp
-        { testCommentRange :: Range
-        , lineProp         :: PropLine
-        , propResults      :: [String]
+        { evalExprCommentRange :: Range
+        , lineProp             :: PropLine
+        , propResults          :: [String]
         }
     | AnExample
-        { testCommentRange :: Range
-        , lineExamples     :: NonEmpty ExampleLine
-        , exampleResults   :: [String]
+        { evalExprCommentRange :: Range
+        , lineExamples         :: NonEmpty ExampleLine
+        , exampleResults       :: [String]
         }
     deriving (Show)
 
@@ -174,19 +174,19 @@ commentsToSections isLHS Comments {..} =
                 -- block comment body.
                 $ Map.toList blockComments
         lineSections =
-            lineSectionSeeds <&> uncurry (testsToSection Line)
+            lineSectionSeeds <&> uncurry (evalExprsToSection Line)
         multilineSections =
             Map.mapWithKey
-                (uncurry . testsToSection . Block)
+                (uncurry . evalExprsToSection . Block)
                 blockSeed
         setupSections =
             -- Setups doesn't need Dummy position
             map
-                ( \(style, tests) ->
-                    testsToSection
+                ( \(style, evalExprs) ->
+                    evalExprsToSection
                         style
                         (Named "setup")
-                        tests
+                        evalExprs
                 )
                 $ DL.toList $
                     F.fold $
@@ -214,12 +214,12 @@ type CommentRange = Range
 
 type SectionRange = Range
 
-testsToSection ::
+evalExprsToSection ::
     CommentStyle ->
     CommentFlavour ->
-    [TestComment] ->
+    [EvalExprComment] ->
     Section
-testsToSection style flav tests =
+evalExprsToSection style flav evalExprs =
     let sectionName
             | Named name <- flav = name
             | otherwise = ""
@@ -227,25 +227,25 @@ testsToSection style flav tests =
             HaddockNext -> Haddock
             HaddockPrev -> Haddock
             _           -> Plain
-        sectionTests = map fromTestComment tests
+        sectionEvalExprs = map fromEvalExprComment evalExprs
         sectionFormat =
             case style of
                 Line      -> SingleLine
                 Block ran -> MultiLine ran
      in Section {..}
 
-fromTestComment :: TestComment -> Test
-fromTestComment AProp {..} =
-    Property
-        { testline = getPropLine lineProp
-        , testOutput = propResults
-        , testRange = testCommentRange
+fromEvalExprComment :: EvalExprComment -> EvalExpr
+fromEvalExprComment AProp {..} =
+    Property {
+          evalExprLine   = getPropLine lineProp
+        , evalExprOutput = propResults
+        , evalExprRange  = evalExprCommentRange
         }
-fromTestComment AnExample {..} =
-    Example
-        { testLines = getExampleLine <$> lineExamples
-        , testOutput = exampleResults
-        , testRange = testCommentRange
+fromEvalExprComment AnExample {..} =
+    Example {
+          evalExprLines  = getExampleLine <$> lineExamples
+        , evalExprOutput = exampleResults
+        , evalExprRange  = evalExprCommentRange
         }
 
 -- * Block comment parser
@@ -256,11 +256,11 @@ fromTestComment AnExample {..} =
 -}
 
 -- >>> parseE (blockCommentBP True dummyPos) "{- |\n  >>> 5+5\n  11\n  -}"
--- (HaddockNext,[AnExample {testCommentRange = Position {_line = 1, _character = 0}, lineExamples = ExampleLine {getExampleLine = " 5+5"} :| [], exampleResults = ["  11"]}])
+-- (HaddockNext,[AnExample {evalExprCommentRange = Position {_line = 1, _character = 0}, lineExamples = ExampleLine {getExampleLine = " 5+5"} :| [], exampleResults = ["  11"]}])
 
 blockCommentBP ::
     -- | True if Literate Haskell
-    BlockCommentParser (CommentFlavour, [TestComment])
+    BlockCommentParser (CommentFlavour, [EvalExprComment])
 blockCommentBP = do
     skipCount 2 anySingle -- "{-"
     void $ optional $ char ' '
@@ -281,10 +281,10 @@ skipNormalCommentBlock = do
     BlockEnv {..} <- ask
     skipManyTill (normalLineP isLhs $ Block blockRange) $
         False <$ try (optional (chunk "-}") *> eof)
-            <|> True <$ lookAhead (try $ testSymbol isLhs $ Block blockRange)
+            <|> True <$ lookAhead (try $ evalExprSymbol isLhs $ Block blockRange)
 
-testSymbol :: Bool -> CommentStyle -> LineParser ()
-testSymbol isLHS style =
+evalExprSymbol :: Bool -> CommentStyle -> LineParser ()
+evalExprSymbol isLHS style =
     -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
     -- it must skip one space after a comment!
     -- This prevents Eval Plugin from working on
@@ -297,7 +297,7 @@ eob = eof <|> try (optional (chunk "-}") *> eof) <|> void eol
 
 blockExamples
     , blockProp ::
-        BlockCommentParser TestComment
+        BlockCommentParser EvalExprComment
 blockExamples = do
     BlockEnv {..} <- ask
     (ran, examples) <- withRange $ NE.some $ exampleLineStrP isLhs $ Block blockRange
@@ -340,10 +340,10 @@ sourcePosToPosition SourcePos {..} =
 
 -- * Line Group Parser
 
-{- |
-Result: a tuple of ordinary line tests and setting sections.
+{- | Result: a tuple of ordinary line evaluation expressions and setting
+sections.
 
-TODO: Haddock comment can adjacent to vanilla comment:
+TODO: Haddock comment can be adjacent to a vanilla comment:
 
     @
         -- Vanilla comment
@@ -351,12 +351,12 @@ TODO: Haddock comment can adjacent to vanilla comment:
         -- | This parses as Haddock comment as GHC
     @
 
-This behaviour is not yet handled correctly in Eval Plugin;
+This behaviour is not yet handled correctly in the Eval Plugin;
 but for future extension for this, we use a tuple here instead of 'Either'.
 -}
 lineGroupP ::
     LineGroupParser
-        (Maybe (CommentFlavour, [TestComment]), [TestComment])
+        (Maybe (CommentFlavour, [EvalExprComment]), [EvalExprComment])
 lineGroupP = do
     (_, flav) <- lookAhead $ parseLine (commentFlavourP <* takeRest)
     case flav of
@@ -386,7 +386,7 @@ lineCommentHeadP = do
     void $ optional $ char ' '
 
 lineCommentSectionsP ::
-    LineGroupParser [TestComment]
+    LineGroupParser [EvalExprComment]
 lineCommentSectionsP = do
     skipMany normalLineCommentP
     many $
@@ -411,7 +411,7 @@ nonEmptyLGP =
             parseLine $
                 fst <$ commentFlavourP <*> nonEmptyNormalLineP False Line
 
-exampleLinesGP :: LineGroupParser TestComment
+exampleLinesGP :: LineGroupParser EvalExprComment
 exampleLinesGP =
     lexemeLine $
         uncurry AnExample . first convexHullRange . NE.unzip
@@ -485,7 +485,7 @@ normalLineP ::
     LineParser (String, Position)
 normalLineP isLHS style = do
     notFollowedBy
-        (try $ testSymbol isLHS style)
+        (try $ evalExprSymbol isLHS style)
     when (isLHS && is _Block style) $
         void $ count' 0 2 $ char ' '
     consume style
@@ -499,10 +499,10 @@ consume style =
 getPosition :: (Ord v, TraversableStream s) => ParsecT v s m Position
 getPosition = sourcePosToPosition <$> getSourcePos
 
--- | Parses example test line.
+-- | Parses example line.
 exampleLineStrP ::
-    -- | True if Literate Haskell
     Bool ->
+    -- ^ True if Literate Haskell
     CommentStyle ->
     LineParser (ExampleLine, Position)
 exampleLineStrP isLHS style =
@@ -522,10 +522,10 @@ exampleSymbol =
 propSymbol :: LineParser ()
 propSymbol = chunk "prop>" *> P.notFollowedBy (char '>')
 
--- | Parses prop test line.
+-- | Parses property line.
 propLineStrP ::
-    -- | True if Literate HAskell
     Bool ->
+    -- ^ True if Literate Haskell
     CommentStyle ->
     LineParser (PropLine, Position)
 propLineStrP isLHS style =

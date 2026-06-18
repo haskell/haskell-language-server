@@ -1,8 +1,3 @@
-## hlint
-| Property | Description | Default | Allowed values |
-| --- | --- | --- | --- |
-| `flags` | Flags used by hlint | `TODO: Array values` |  &nbsp;  |
-
 ## cabal-fmt
 | Property | Description | Default | Allowed values |
 | --- | --- | --- | --- |
@@ -33,7 +28,7 @@
 ## rename
 | Property | Description | Default | Allowed values |
 | --- | --- | --- | --- |
-| `crossModule` | Enable experimental cross-module renaming | `False` |  &nbsp;  |
+| `crossModule` | Enable experimental cross-module renaming | `True` |  &nbsp;  |
 
 ## semanticTokens
 | Property | Description | Default | Allowed values |

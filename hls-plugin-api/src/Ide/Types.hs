@@ -23,6 +23,7 @@ module Ide.Types
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
 , Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
+, OptLinkTo(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
@@ -39,6 +40,7 @@ module Ide.Types
 , PluginNotificationHandlers(..)
 , PluginRequestMethod(..)
 , getProcessID, getPid
+, getVirtualFileFromVFS
 , installSigUsr1Handler
 , lookupCommandProvider
 , ResolveFunction
@@ -94,13 +96,13 @@ import           Ide.Plugin.Properties
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Types   as J
 import           Language.LSP.Server
 import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative           (ParserInfo)
 import           Prettyprinter                 as PP
-import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
 import           UnliftIO                      (MonadUnliftIO)
@@ -178,6 +180,8 @@ data Config =
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
     , sessionLoading          :: !SessionLoadingPreferenceConfig
+    , linkSourceTo            :: !OptLinkTo
+    , linkDocTo               :: !OptLinkTo
     , plugins                 :: !(Map.Map PluginId PluginConfig)
     } deriving (Show,Eq)
 
@@ -189,6 +193,8 @@ instance ToJSON Config where
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
            , "sessionLoading"              .= sessionLoading
+           , "linkSourceTo"                .= linkSourceTo
+           , "linkDocTo"                   .= linkDocTo
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
 
@@ -197,13 +203,14 @@ instance Default Config where
     { checkParents                = CheckOnSave
     , checkProject                = True
     , formattingProvider          = "ormolu"
-    -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
     , cabalFormattingProvider     = "cabal-gild"
     -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
-    , sessionLoading              = PreferSingleComponentLoading
+    , sessionLoading              = PreferMultiComponentLoading
+    , linkSourceTo                = LinkToHackage
+    , linkDocTo                   = LinkToHackage
     , plugins                     = mempty
     }
 
@@ -214,6 +221,11 @@ data CheckParents
     | CheckOnSave
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+
+data OptLinkTo = LinkToHackage | LinkToLocal
+  deriving stock (Eq, Ord, Show, Enum, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 
@@ -315,8 +327,8 @@ instance ToJSON PluginConfig where
 
 data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
-                   , pluginDescription  :: !T.Text
                    -- ^ Unique identifier of the plugin.
+                   , pluginDescription  :: !T.Text
                    , pluginPriority     :: Natural
                    -- ^ Plugin handlers are called in priority order, higher priority first
                    , pluginRules        :: !(Rules ())
@@ -326,7 +338,7 @@ data PluginDescriptor (ideState :: Type) =
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
                    , pluginCli            :: Maybe (ParserInfo (IdeCommand ideState))
-                   , pluginFileType       :: [T.Text]
+                   , pluginLanguageIds    :: [J.LanguageKind]
                    -- ^ File extension of the files the plugin is responsible for.
                    --   The plugin is only allowed to handle files with these extensions.
                    --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
@@ -419,14 +431,18 @@ pluginResolverResponsible _ _ = DoesNotHandleRequest $ NotResolveOwner "(unable 
 -- We are passing the msgParams here even though we only need the URI URI here.
 -- If in the future we need to be able to provide only an URI it can be
 -- separated again.
-pluginSupportsFileType :: (L.HasTextDocument m doc, L.HasUri doc Uri) => m -> PluginDescriptor c -> HandleRequestResult
-pluginSupportsFileType msgParams pluginDesc =
-  case mfp of
-    Just fp | T.pack (takeExtension fp) `elem` pluginFileType pluginDesc -> HandlesRequest
-    _ -> DoesNotHandleRequest $ DoesNotSupportFileType (maybe "(unable to determine file type)" (T.pack . takeExtension) mfp)
+pluginSupportsFileType :: (L.HasTextDocument m doc, L.HasUri doc Uri) => VFS -> m -> PluginDescriptor c -> HandleRequestResult
+pluginSupportsFileType (VFS vfs) msgParams pluginDesc =
+  case languageKindM of
+    Just languageKind | languageKind `elem` pluginLanguageIds pluginDesc -> HandlesRequest
+    _ -> DoesNotHandleRequest $ DoesNotSupportFileType (maybe "(unable to determine file type)" (T.pack . show) languageKindM)
     where
-      mfp = uriToFilePath uri
-      uri = msgParams ^. L.textDocument . L.uri
+      mVFE = getVirtualFileFromVFSIncludingClosed (VFS vfs) uri
+      uri = toNormalizedUri $ msgParams ^. L.textDocument . L.uri
+      languageKindM =
+        case mVFE of
+          Just x -> virtualFileEntryLanguageKind x
+          _      -> Nothing
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -455,7 +471,9 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
   --
   -- But there is no use to split it up into two different methods for now.
   handlesRequest
-    :: SMethod m
+    :: VFS
+    -- ^ The virtual file system, contains the language kind of the file.
+    -> SMethod m
     -- ^ Method type.
     -> MessageParams m
     -- ^ Whether a plugin is enabled might depend on the message parameters
@@ -471,24 +489,24 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
     -- with the given parameters?
 
   default handlesRequest :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
-                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> HandleRequestResult
-  handlesRequest _ params desc conf =
-    pluginEnabledGlobally desc conf <> pluginSupportsFileType params desc
+                              => VFS -> SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> HandleRequestResult
+  handlesRequest vfs _ params desc conf =
+    pluginEnabledGlobally desc conf <> pluginSupportsFileType vfs params desc
 
 -- | Check if a plugin is enabled, if one of it's specific config's is enabled,
 -- and if it supports the file
 pluginEnabledWithFeature :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
-                              => (PluginConfig -> Bool) -> SMethod m -> MessageParams m
+                              => (PluginConfig -> Bool) -> VFS -> SMethod m -> MessageParams m
                               -> PluginDescriptor c -> Config -> HandleRequestResult
-pluginEnabledWithFeature feature _ msgParams pluginDesc config =
+pluginEnabledWithFeature feature vfs _ msgParams pluginDesc config =
   pluginEnabledGlobally pluginDesc config
   <> pluginFeatureEnabled feature pluginDesc config
-  <> pluginSupportsFileType msgParams pluginDesc
+  <> pluginSupportsFileType vfs msgParams pluginDesc
 
 -- | Check if a plugin is enabled, if one of it's specific configs is enabled,
 -- and if it's the plugin responsible for a resolve request.
-pluginEnabledResolve :: L.HasData_ s (Maybe Value) => (PluginConfig -> Bool) -> p -> s -> PluginDescriptor c -> Config -> HandleRequestResult
-pluginEnabledResolve feature _ msgParams pluginDesc config =
+pluginEnabledResolve :: L.HasData_ s (Maybe Value) => (PluginConfig -> Bool) -> VFS -> p -> s -> PluginDescriptor c -> Config -> HandleRequestResult
+pluginEnabledResolve feature _ _ msgParams pluginDesc config =
     pluginEnabledGlobally pluginDesc config
     <> pluginFeatureEnabled feature pluginDesc config
     <> pluginResolverResponsible msgParams pluginDesc
@@ -501,23 +519,23 @@ instance PluginMethod Request Method_CodeActionResolve where
   handlesRequest = pluginEnabledResolve plcCodeActionsOn
 
 instance PluginMethod Request Method_TextDocumentDefinition where
-  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
+  handlesRequest vfs _ msgParams pluginDesc _ = pluginSupportsFileType vfs msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentTypeDefinition where
-  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
+  handlesRequest vfs _ msgParams pluginDesc _ = pluginSupportsFileType vfs msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentImplementation where
-  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
+  handlesRequest vfs _ msgParams pluginDesc _ = pluginSupportsFileType vfs msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentDocumentHighlight where
-  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
+  handlesRequest vfs _ msgParams pluginDesc _ = pluginSupportsFileType vfs msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentReferences where
-  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
+  handlesRequest vfs _ msgParams pluginDesc _ = pluginSupportsFileType vfs msgParams pluginDesc
 
 instance PluginMethod Request Method_WorkspaceSymbol where
   -- Unconditionally enabled, but should it really be?
-  handlesRequest _ _ _ _ = HandlesRequest
+  handlesRequest _ _ _ _ _ = HandlesRequest
 
 instance PluginMethod Request Method_TextDocumentInlayHint where
   handlesRequest = pluginEnabledWithFeature plcInlayHintsOn
@@ -555,22 +573,22 @@ instance PluginMethod Request Method_TextDocumentCompletion where
   handlesRequest = pluginEnabledWithFeature plcCompletionOn
 
 instance PluginMethod Request Method_TextDocumentFormatting where
-  handlesRequest _ msgParams pluginDesc conf =
+  handlesRequest vfs _ msgParams pluginDesc conf =
     (if PluginId (formattingProvider conf) == pid
           || PluginId (cabalFormattingProvider conf) == pid
         then HandlesRequest
         else DoesNotHandleRequest (NotFormattingProvider (formattingProvider conf)) )
-    <> pluginSupportsFileType msgParams pluginDesc
+    <> pluginSupportsFileType vfs msgParams pluginDesc
     where
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentRangeFormatting where
-  handlesRequest _ msgParams pluginDesc conf =
+  handlesRequest vfs _ msgParams pluginDesc conf =
     (if PluginId (formattingProvider conf) == pid
           || PluginId (cabalFormattingProvider conf) == pid
         then HandlesRequest
         else DoesNotHandleRequest (NotFormattingProvider (formattingProvider conf)))
-    <> pluginSupportsFileType msgParams pluginDesc
+    <> pluginSupportsFileType vfs msgParams pluginDesc
     where
       pid = pluginId pluginDesc
 
@@ -591,21 +609,24 @@ instance PluginMethod Request Method_TextDocumentFoldingRange where
 
 instance PluginMethod Request Method_CallHierarchyIncomingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  handlesRequest _ _ pluginDesc conf =
+  handlesRequest _ _ _ pluginDesc conf =
       pluginEnabledGlobally pluginDesc conf
     <> pluginFeatureEnabled plcCallHierarchyOn pluginDesc conf
 
 instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  handlesRequest _ _ pluginDesc conf =
+  handlesRequest _ _ _ pluginDesc conf =
       pluginEnabledGlobally pluginDesc conf
     <> pluginFeatureEnabled plcCallHierarchyOn pluginDesc conf
 
 instance PluginMethod Request Method_WorkspaceExecuteCommand where
-  handlesRequest _ _ _ _= HandlesRequest
+  handlesRequest _ _ _ _ _ = HandlesRequest
 
 instance PluginMethod Request (Method_CustomMethod m) where
-  handlesRequest _ _ _ _ = HandlesRequest
+  handlesRequest _ _ _ _ _ = HandlesRequest
+
+instance PluginMethod Request Method_WorkspaceWillRenameFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 -- Plugin Notifications
 
@@ -619,19 +640,28 @@ instance PluginMethod Notification Method_TextDocumentDidClose where
 
 instance PluginMethod Notification Method_WorkspaceDidChangeWatchedFiles where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidDeleteFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidRenameFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
+instance PluginMethod Notification Method_WorkspaceDidCreateFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_Initialized where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
 
 -- ---------------------------------------------------------------------
@@ -838,6 +868,8 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
 instance PluginRequestMethod Method_TextDocumentInlayHint where
   combineResponses _ _ _ _ x = sconcat x
 
+instance PluginRequestMethod Method_WorkspaceWillRenameFiles where
+
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
 
@@ -908,6 +940,12 @@ instance PluginNotificationMethod Method_WorkspaceDidChangeWorkspaceFolders wher
 instance PluginNotificationMethod Method_WorkspaceDidChangeConfiguration where
 
 instance PluginNotificationMethod Method_Initialized where
+
+instance PluginNotificationMethod Method_WorkspaceDidDeleteFiles where
+
+instance PluginNotificationMethod Method_WorkspaceDidCreateFiles where
+
+instance PluginNotificationMethod Method_WorkspaceDidRenameFiles where
 
 -- ---------------------------------------------------------------------
 
@@ -1063,7 +1101,7 @@ defaultPluginDescriptor plId desc =
     mempty
     mempty
     Nothing
-    [".hs", ".lhs", ".hs-boot"]
+    [J.LanguageKind_Haskell, J.LanguageKind_Custom "literate haskell"]
 
 -- | Set up a plugin descriptor, initialized with default values.
 -- This plugin descriptor is prepared for @.cabal@ files and as such,
@@ -1084,7 +1122,7 @@ defaultCabalPluginDescriptor plId desc =
     mempty
     mempty
     Nothing
-    [".cabal"]
+    [J.LanguageKind_Custom "cabal"]
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)
@@ -1239,6 +1277,9 @@ instance HasTracing CompletionItem
 instance HasTracing DocumentLink
 instance HasTracing InlayHint
 instance HasTracing WorkspaceSymbol
+instance HasTracing RenameFilesParams
+instance HasTracing DeleteFilesParams
+instance HasTracing CreateFilesParams
 -- ---------------------------------------------------------------------
 --Experimental resolve refactoring
 {-# NOINLINE pROCESS_ID #-}
@@ -1259,6 +1300,20 @@ mkLspCmdId pid (PluginId plid) (CommandId cid)
 -- and different from that of any other currently running instance.
 getPid :: IO T.Text
 getPid = T.pack . show <$> getProcessID
+
+getVirtualFileFromVFS :: VFS -> NormalizedUri -> Maybe VirtualFile
+getVirtualFileFromVFS (VFS vfs) uri =
+  case Map.lookup uri vfs of
+    Just (Open x)   -> Just x
+    Just (Closed _) -> Nothing
+    Nothing         -> Nothing
+
+getVirtualFileFromVFSIncludingClosed :: VFS -> NormalizedUri -> Maybe VirtualFileEntry
+getVirtualFileFromVFSIncludingClosed (VFS vfs) uri =
+  case Map.lookup uri vfs of
+    Just x  -> Just x
+    Nothing -> Nothing
+
 
 getProcessID :: IO Int
 installSigUsr1Handler :: IO () -> IO ()
