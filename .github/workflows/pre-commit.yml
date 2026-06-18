@@ -12,7 +12,7 @@ jobs:
       git-diff: ${{ steps.git-diff.outputs.diff }}
     steps:
         - name: Checkout code
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: Find changed files
           uses: technote-space/get-diff-action@v6.1.2
           id: git-diff
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: file-diff
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: ./.github/actions/setup-build
       with:
         # select a stable GHC version
