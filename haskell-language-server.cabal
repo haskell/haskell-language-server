@@ -1388,7 +1388,7 @@ library hls-fourmolu-plugin
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
   build-depends:
     , filepath
-    , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16 || ^>=0.17 || ^>=0.18 || ^>=0.19
+    , fourmolu        ^>= 0.14 || ^>= 0.15 || ^>= 0.16 || ^>=0.17 || ^>=0.18 || ^>=0.19 || ^>=0.20
     , ghc-boot-th
     , ghcide          == 2.14.0.0
     , hls-plugin-api  == 2.14.0.0
