@@ -608,7 +608,11 @@ suggestDeleteUnusedBinding
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
     | otherwise = []
     where
+#if MIN_VERSION_ghc(9,9,0)
       hsmodDeclsWithDocs = balanceCommentsList hsmodDecls
+#else
+      hsmodDeclsWithDocs = hsmodDecls -- comments are not deleted on GHC<9.10
+#endif
       hsmodSigs = [L l sig | L l (SigD _ sig) <- hsmodDeclsWithDocs]
       relatedRanges indexedContent name =
         concatMap (findRelatedSpans indexedContent name . reLoc) hsmodDeclsWithDocs
