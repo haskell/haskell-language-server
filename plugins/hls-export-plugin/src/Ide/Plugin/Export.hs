@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Ide.Plugin.Export (descriptor) where
@@ -12,15 +11,8 @@ import           Development.IDE
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
 import           Development.IDE.Core.Shake       (getDiagnostics)
 import           Development.IDE.GHC.Compat
--- TcRnUnusedName (and its provenance) only became a structured diagnostic in
--- GHC 9.8 (GHC #20115, MR !10350). On 9.6 we cannot single out unused top-level
--- binds this way.
-#if MIN_VERSION_ghc(9,8,0)
-import           Development.IDE.GHC.Compat.Error (_TcRnMessage,
+import           Development.IDE.GHC.Compat.Error (_TcRnUnusedTopBind,
                                                    msgEnvelopeErrorL)
-import           GHC.Tc.Errors.Types              (TcRnMessage (TcRnUnusedName),
-                                                   UnusedNameProv (UnusedNameTopDecl))
-#endif
 import           Ide.Plugin.Error                 (getNormalizedFilePathE)
 import           Ide.Plugin.Export.Cursor
 import           Ide.Plugin.Export.ExactPrint
@@ -68,14 +60,8 @@ unusedTopBindDiagnostics state nfp = do
   diags <- atomically $ getDiagnostics state
   pure [ fdLspDiagnostic d | d <- diags, fdFilePath d == nfp, isUnusedTopBind d ]
   where
-#if MIN_VERSION_ghc(9,8,0)
-    isUnusedTopBind d =
-      case d ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
-        Just (TcRnUnusedName _ UnusedNameTopDecl) -> True
-        _                                         -> False
-#else
-    isUnusedTopBind _ = False
-#endif
+    isUnusedTopBind =
+      has (fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnUnusedTopBind)
 
 addAction :: UnderCursor -> ParsedSource -> Maybe (Text, Text, [TextEdit])
 addAction under ps = case under of
