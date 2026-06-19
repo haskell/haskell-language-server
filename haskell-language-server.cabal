@@ -1771,11 +1771,15 @@ library hls-exactprint-utils
   import: defaults, pedantic, warnings
   exposed-modules:
     Development.IDE.GHC.ExactPrint.Annotation
+    Development.IDE.GHC.ExactPrint.CPP
   hs-source-dirs:     hls-exactprint-utils/src
   build-depends:
     , ghc
     , ghc-exactprint
     , ghcide          == 2.14.0.0
+    , lsp             >=2.8
+    , text
+    , text-rope
   default-extensions:
       CPP
 
