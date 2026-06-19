@@ -9,13 +9,13 @@ module Ide.Plugin.Export.ExactPrint
   , appendIE
   , addCtorUnderParent
   , printExportList
-  , toDeltaExportList
+  , printIE
+  , freshCtorEntry
   ) where
 
 import           Control.Lens                              (_last, over)
 import           Data.Bifunctor                            (first)
 import           Data.List.NonEmpty                        (NonEmpty (..))
-import qualified Data.List.NonEmpty                        as NE
 import           Data.Text                                 (Text)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
@@ -40,7 +40,6 @@ import           GHC                                       (DeltaPos (..),
 
 import           Language.Haskell.GHC.ExactPrint           (addComma,
                                                             exactPrint,
-                                                            makeDeltaAst,
                                                             setEntryDP)
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -167,9 +166,8 @@ mkTypeWithIE parent ctors =
     Nothing
 #endif
   where
-    children = case NE.toList ctors of
-      []     -> [] -- impossible
-      (c:cs) -> mkIEName c : map (\x -> first addComma (mkIEName x)) cs
+    children = mkIEName c : map (first addComma . mkIEName) cs
+    c :| cs = ctors
 
 -- | Map over an @IEThingWith@'s listed constructors, a no-op for any other item.
 overThingWithChildren :: ([LIEWrappedName GhcPs] -> [LIEWrappedName GhcPs]) -> IE GhcPs -> IE GhcPs
@@ -226,58 +224,70 @@ separatorComma items =
 
 -- | 'Nothing' iff @ctor@ is already exported (via @T(..)@ or @T(...,ctor,...)@).
 addCtorUnderParent ::
-  RdrName {- ^ parent -} ->
-  RdrName {- ^ ctor -} ->
+  -- | parent
+  RdrName ->
+  -- | ctor
+  RdrName ->
   LExportList ->
   Maybe LExportList
 addCtorUnderParent parent ctor lst@(L l items) =
-  case findParent items of
-    ParentNotFound -> Just $ appendIE (mkTypeWithIE parent (ctor :| [])) lst
-    FoundIEThingAll -> Nothing
-    FoundIEThingWith CtorPresent -> Nothing
-    FoundIEThingWith CtorAbsent -> Just (L l (map (transformParent extendThingWith) items))
-    FoundIEThingAbs ->
-      let upgraded = unLoc (mkTypeWithIE parent (ctor :| []))
-      in Just (L l (map (transformParent (const upgraded)) items))
+  case ctorExportEdit parent ctor items of
+    AlreadyExported -> Nothing
+    AppendParent    -> Just (appendIE newThing lst)
+    UpgradeBare     -> Just (L l (map (transformParent (const (unLoc newThing))) items))
+    AddChild        -> Just (L l (map (transformParent (addCtorChildren ctor)) items))
   where
-    parentFS = rdrNameFS parent
-    ctorFS = rdrNameFS ctor
-
-    ctorPresence cs
-      | any ((== ctorFS) . lieWrappedNameFS) cs = CtorPresent
-      | otherwise = CtorAbsent
-
-    findParent [] = ParentNotFound
-    findParent (L _ ie : rest)
-      | parentNameIs parentFS ie =
-          case ie of
-            IEThingAll{} -> FoundIEThingAll
-            IEThingAbs{} -> FoundIEThingAbs
-            _ | Just cs <- ieThingWithChildren ie -> FoundIEThingWith (ctorPresence cs)
-              | otherwise                         -> findParent rest
-      | otherwise = findParent rest
-
+    newThing = mkTypeWithIE parent (ctor :| [])
     transformParent f (L itemLoc ie)
-      | parentNameIs parentFS ie = L itemLoc (f ie)
+      | parentNameIs (rdrNameFS parent) ie = L itemLoc (f ie)
       | otherwise = L itemLoc ie
 
-    extendThingWith :: IE GhcPs -> IE GhcPs
-    extendThingWith = overThingWithChildren $ \cs ->
-      let hasSibling = not (null cs)
-          newChild = setEntryDP (mkIEName ctor) (SameLine (if hasSibling then 1 else 0))
-      in (if hasSibling then map (first ensureTrailingComma) cs else cs) ++ [newChild]
+-- | Append @ctor@ to an @IEThingWith@'s children, reusing the sibling separator
+-- comma. No-op for other items.
+addCtorChildren :: RdrName -> IE GhcPs -> IE GhcPs
+addCtorChildren ctor = overThingWithChildren $ \cs ->
+  let hasSibling = not (null cs)
+      newChild = setEntryDP (mkIEName ctor) (SameLine (if hasSibling then 1 else 0))
+   in (if hasSibling then map (first ensureTrailingComma) cs else cs) ++ [newChild]
 
 printExportList :: LExportList -> Text
 printExportList l = T.pack (exactPrint (setEntryDP l (SameLine 0)))
 
-toDeltaExportList :: LExportList -> LExportList
-toDeltaExportList = makeDeltaAst
+-- | Exactprint a single item, without the surrounding list layout. The
+-- trailing separator comma counts as layout: dropping it keeps a spliced item
+-- from carrying a stray comma into text that already supplies its own.
+printIE :: LIE GhcPs -> Text
+printIE item = T.pack (exactPrint (setEntryDP (first removeTrailingCommaAnn item) (SameLine 0)))
 
-data FindParentResult
-  = ParentNotFound
-  | FoundIEThingAll
-  | FoundIEThingWith CtorPresence
-  | FoundIEThingAbs
+-- | A fresh @T(ctor)@ export entry rendered as text, or 'Nothing' if @ctor@ is
+-- already exported in the parsed list. Under CPP this adds a standalone entry so
+-- the splice never reprints an existing @T(...)@ span, which can straddle a
+-- directive.
+freshCtorEntry :: RdrName -> RdrName -> [LIE GhcPs] -> Maybe Text
+freshCtorEntry parent ctor items = case ctorExportEdit parent ctor items of
+  AlreadyExported -> Nothing
+  _               -> Just (printIE (mkTypeWithIE parent (ctor :| [])))
 
-data CtorPresence = CtorAbsent | CtorPresent
-  deriving Eq
+-- | How to add @ctor@ to an export list so its parent type @T@ exports it.
+data CtorEdit
+  = AlreadyExported  -- ^ @T(..)@ or @T(..., ctor, ...)@, nothing to do
+  | AppendParent     -- ^ no entry for @T@ yet, add a fresh @T(ctor)@
+  | UpgradeBare      -- ^ replace the bare @T@ entry with @T(ctor)@
+  | AddChild         -- ^ add @ctor@ to the existing @T(...)@ entry
+
+-- | Decide how @ctor@ should be added under @parent@, classifying the first
+-- matching export item by its constructor-carrying shape.
+ctorExportEdit :: RdrName -> RdrName -> [LIE GhcPs] -> CtorEdit
+ctorExportEdit parent ctor = go
+  where
+    parentFS = rdrNameFS parent
+    ctorFS = rdrNameFS ctor
+    go [] = AppendParent
+    go (L _ ie : rest)
+      | parentNameIs parentFS ie = case ie of
+          IEThingAll {} -> AlreadyExported
+          IEThingAbs {} -> UpgradeBare
+          _ | Just cs <- ieThingWithChildren ie ->
+                if any ((== ctorFS) . lieWrappedNameFS) cs then AlreadyExported else AddChild
+            | otherwise -> go rest
+      | otherwise = go rest
