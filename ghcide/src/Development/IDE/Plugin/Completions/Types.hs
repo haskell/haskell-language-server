@@ -14,6 +14,7 @@ import qualified Data.Text                    as T
 
 import           Data.Aeson
 import           Data.Aeson.Types
+import           Data.Default                 (def)
 import           Data.Function                (on)
 import           Data.Hashable                (Hashable)
 import qualified Data.List                    as L
@@ -26,7 +27,8 @@ import           Development.IDE.Spans.Common ()
 import           GHC.Generics                 (Generic)
 import qualified GHC.Types.Name.Occurrence    as Occ
 import           Ide.Plugin.Properties
-import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
+import           Language.LSP.Protocol.Types  (CompletionItem (..),
+                                               CompletionItemKind (..), Uri)
 import qualified Language.LSP.Protocol.Types  as J
 
 -- | Produce completions info for a file
@@ -150,6 +152,11 @@ data CompItem = CI
   , isLocalCompletion   :: Bool              -- ^ Is it from this module?
   }
   deriving (Eq, Show)
+
+defaultCompletionItemWithLabel :: T.Text -> CompletionItem
+defaultCompletionItemWithLabel label =
+    CompletionItem label def def def def def def def def def
+                         def def def def def def def def def
 
 -- Associates a module's qualifier with its members
 newtype QualCompls
