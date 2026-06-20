@@ -40,6 +40,7 @@ import qualified Data.HashSet                             as HashSet
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.Text                (lineAt)
 import           Development.IDE.GHC.Compat               hiding (isQual, ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
@@ -876,8 +877,7 @@ getCompletionPrefixFromRope pos@(Position l c) ropetext =
             lastMaybe = headMaybe . reverse
 
         -- grab the entire line the cursor is at
-        curLine <- headMaybe $ Rope.lines
-                             $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
+        curLine <- lineAt (fromIntegral l) ropetext
         let beforePos = T.take (fromIntegral c) curLine
         -- the word getting typed, after previous space and before cursor
         curWord <-
