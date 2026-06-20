@@ -6,6 +6,7 @@
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeApplications      #-}
 
 module Development.IDE.Test
   ( Cursor
@@ -24,6 +25,7 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
+  , waitForActionError
   , getInterfaceFilesDir
   , garbageCollectDirtyKeys
   , getFilesOfInterest
@@ -215,6 +217,14 @@ waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResul
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
+waitForActionError :: String -> TextDocumentIdentifier -> Session Text
+waitForActionError key TextDocumentIdentifier{_uri} = do
+    res <- tryCallTestPlugin @WaitForIdeRuleResult (WaitForIdeRule key _uri)
+    case res of
+        Left (TResponseError _ err _) -> pure err
+        Right _ -> liftIO $ assertFailure $
+            "Expected rule " <> key <> " to fail for " <> show _uri
+
 getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
 
@@ -261,4 +271,3 @@ referenceReady pred = satisfyMaybe $ \case
     , symbolVal p == "ghcide/reference/ready"
     -> Just fp
   _ -> Nothing
-

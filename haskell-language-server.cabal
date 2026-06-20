@@ -2183,6 +2183,7 @@ test-suite ghcide-tests
     SafeTests
     SymlinkTests
     THTests
+    TypedRuleTests
     UnitTests
     WatchedFileTests
 
