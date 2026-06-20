@@ -23,6 +23,7 @@
 /plugins/hls-explicit-fixity-plugin
 /plugins/hls-explicit-imports-plugin
 /plugins/hls-explicit-record-fields-plugin @ozkutuk
+/plugins/hls-export-plugin @crtschin
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
 /plugins/hls-hlint-plugin @eddiemundo
