@@ -32,7 +32,7 @@
 /plugins/hls-overloaded-record-dot-plugin @joyfulmantis
 /plugins/hls-pragmas-plugin @eddiemundo
 /plugins/hls-qualify-imported-names-plugin @eddiemundo
-/plugins/hls-refactor-plugin @santiweight
+/plugins/hls-refactor-plugin
 /plugins/hls-rename-plugin
 /plugins/hls-semantic-tokens-plugin @soulomoon
 /plugins/hls-signature-help-plugin @jian-lin
