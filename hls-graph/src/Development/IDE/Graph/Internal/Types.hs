@@ -152,7 +152,7 @@ data Result = Result {
     resultValue     :: !Value,
     resultBuilt     :: !Step, -- ^ the step when it was last recomputed
     resultChanged   :: !Step, -- ^ the step when it last changed
-    resultVisited   :: !Step, -- ^ the step when it was last looked up
+    resultVisited   :: !Step, -- ^ the step when it was last looked up/produced the result.
     resultDeps      :: !ResultDeps,
     resultExecution :: !Seconds, -- ^ How long it took, last time it ran
     resultData      :: !BS.ByteString

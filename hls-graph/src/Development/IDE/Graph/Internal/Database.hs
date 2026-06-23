@@ -17,7 +17,7 @@ import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats         (STM, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
-                                                       readTVarIO)
+                                                       readTVar, readTVarIO)
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
@@ -180,10 +180,40 @@ refresh db stack key result = case (addStack key stack, result) of
     (Right stack, _) ->
         asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
 
+{- Note [Discard superseded computations]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A restart cancels the running build with an async exception, but the computation
+it spawned can outlive it and finish under a later build. 'compute' stamps the
+result with whatever the step is *now*, so a value read from stale inputs is
+recorded as freshly built and dependents skip recomputing it:
+
+    step 1   build A starts rule R, reading its inputs at step 1
+    step 2   a restart bumps the step to 2 and marks R dirty
+     ...     A finally finishes and, unguarded, commits Clean@2,
+               a stale result, but its timestamp claims it is fresh
+
+Guard: 'compute' samples the step into 'startStep' before running and re-reads it
+before storing.
+
+    startStep == now : commit Clean, the normal path
+    startStep <  now : R was superseded. Mark the key Dirty, keeping the prior
+                       result as payload (as a restart does) so the next build
+                       recomputes it and can still cut off.
+
+A newer build may already own the slot, so demoting blindly would drop its
+in-flight result or dirty its fresh one into a duplicate run. Take care not to
+clobber validly refreshed results:
+
+    Running s : keep if s > startStep
+    Clean r   : keep if resultVisited r > startStep
+-}
+
 -- | Compute a key.
 compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> IO Result
 -- compute _ st k _ _ | traceShow ("compute", st, k) False = undefined
 compute db@Database{..} stack key mode result = do
+    -- See Note [Discard superseded computations]
+    startStep <- readTVarIO databaseStep
     let act = runRule databaseRules key (fmap resultData result) mode
     deps <- newIORef UnknownDeps
     (execution, RunResult{..}) <-
@@ -218,14 +248,29 @@ compute db@Database{..} stack key mode result = do
                     deps
         _ -> pure ()
     atomicallyNamed "compute and run hook" $ do
-        runHook
-        SMap.focus (updateStatus $ Clean res) key databaseValues
+        -- See Note [Discard superseded computations]
+        stepNow <- readTVar databaseStep
+        if stepNow == startStep
+          then runHook >> SMap.focus (updateStatus $ Clean res) key databaseValues
+          else SMap.focus (demoteSuperseded startStep) key databaseValues
     pure res
 
 updateStatus :: Monad m => Status -> Focus.Focus KeyDetails m ()
 updateStatus res = Focus.alter
     (Just . maybe (KeyDetails res mempty)
     (\it -> it{keyStatus = res}))
+
+-- | Demote a superseded key to Dirty unless a newer build already wrote a result.
+-- See Note [Discard superseded computations].
+demoteSuperseded :: Monad m => Step -> Focus.Focus KeyDetails m ()
+demoteSuperseded startStep = Focus.adjust $ \kd ->
+    let st = keyStatus kd
+    in if newerOwns st then kd else kd{keyStatus = Dirty (getResult st)}
+  where
+    newerOwns (Running s _ _ _) = s > startStep
+    -- resultVisited, since `ChangedNothing` backdates `resultBuilt` time steps.
+    newerOwns (Clean r)         = resultVisited r > startStep
+    newerOwns _                 = False
 
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
 getDirtySet :: Database -> IO [(Key, Int)]
