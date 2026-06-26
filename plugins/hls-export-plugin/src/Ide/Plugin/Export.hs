@@ -2,6 +2,7 @@
 
 module Ide.Plugin.Export (descriptor) where
 
+import           Control.Applicative              ((<|>))
 import           Control.Concurrent.STM           (atomically)
 import           Control.Lens
 import           Control.Monad.IO.Class           (liftIO)
@@ -59,6 +60,7 @@ quickCodeActionHandlers state _plId (CodeActionParams _ _ doc range _) = do
         [ ca
         | Just (verb, title, edits) <-
             [ addAction msrc under ps
+            , removeAction msrc under ps
             ]
         , let fixes = [ d | d <- unusedDiags, locateUnderCursor (d ^. L.range . L.start) ps == Just under ]
               ca = mkAction (verb <> " `" <> title <> "`")
@@ -86,4 +88,15 @@ addAction msrc under ps = case under of
     | otherwise ->
         ("Export", T.pack (printRdrName t) <> "(" <> T.pack (printRdrName c) <> ")",)
           <$> addConstructorExport msrc t c ps
+  Header -> Nothing
+
+removeAction :: Maybe Rope -> UnderCursor -> ParsedSource -> Maybe (Text, Text, [TextEdit])
+removeAction msrc under ps = case under of
+  Decl _ n -> ("Unexport", T.pack (printRdrName n),) <$> removeExport msrc ps n
+  -- A bare uppercase entry denotes the type, so when the constructor shares the
+  -- type's name, skip the standalone-removal fallback.
+  Constructor t c ->
+    ("Unexport", T.pack (printRdrName c),) <$>
+      (removeConstructorExport msrc t c ps
+        <|> if rdrNameFS c == rdrNameFS t then Nothing else removeExport msrc ps c)
   Header -> Nothing

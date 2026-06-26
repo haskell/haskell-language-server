@@ -3,6 +3,8 @@ module Ide.Plugin.Export.Exports
   , isExported
   , addExport
   , addConstructorExport
+  , removeExport
+  , removeConstructorExport
   ) where
 
 import           Data.Maybe                         (isJust)
@@ -56,11 +58,27 @@ addConstructorExport msrc parent ctor ps =
     (\txt -> [insertAfterOpen full txt]) <$> freshCtorEntry parent ctor (unLoc exports)
 
 -- | Splice @itemTxt@ in right after the opening paren with a trailing comma,
--- @( <itemTxt>, <existing> )@. Valid in every CPP branch: a first item needs no
--- leading separator and a trailing comma is always legal.
+-- @( <itemTxt>, <existing> )@.
 insertAfterOpen :: Range -> Text -> TextEdit
 insertAfterOpen (Range (Position sl sc) _) itemTxt =
   TextEdit (Range pos pos) (" " <> itemTxt <> ",")
   where
     -- `sc` is the column of `(`, so insert just past it.
     pos = Position sl (sc + 1)
+
+-- | Reprinting would drop the directives the parser stripped, so unexport is
+-- declined when the export list holds a directive.
+removeExport :: Maybe Rope -> ParsedSource -> RdrName -> Maybe [TextEdit]
+removeExport msrc ps name =
+  withExportList msrc ps (removeMatchingIE matches) declineUnderCpp
+  where
+    matches = parentNameIs (rdrNameFS name)
+
+removeConstructorExport :: Maybe Rope -> RdrName -> RdrName -> ParsedSource -> Maybe [TextEdit]
+removeConstructorExport msrc parent ctor ps =
+  withExportList msrc ps (removeCtorUnderParent parent ctor) declineUnderCpp
+
+-- | An 'onCpp' handler that declines: the edit has no safe surgical form, so it
+-- is offered only when the list reprints cleanly.
+declineUnderCpp :: Range -> LExportList -> Maybe [TextEdit]
+declineUnderCpp _ _ = Nothing
