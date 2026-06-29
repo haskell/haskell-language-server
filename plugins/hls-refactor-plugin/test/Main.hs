@@ -1097,6 +1097,13 @@ removeImportTests = testGroup "remove import actions"
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
+#if !MIN_VERSION_tasty(1,5,4)
+-- tasty 1.5.4 renamed 'sequentialTestGroup' to 'dependentTestGroup'; supply the
+-- new name on the older tasty that stackage LTS snapshots still ship.
+dependentTestGroup :: TestName -> DependencyType -> [TestTree] -> TestTree
+dependentTestGroup = sequentialTestGroup
+#endif
+
 extendImportTests :: TestTree
 extendImportTests = dependentTestGroup "extend import actions" AllFinish
   [ dependentTestGroup "with checkAll" AllFinish $ tests True
