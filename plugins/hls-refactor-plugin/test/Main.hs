@@ -2174,10 +2174,12 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
 
 suggestHideShadowTests :: TestTree
 suggestHideShadowTests =
-  testGroup
+  dependentTestGroup
     "suggest hide shadow"
-    [ testGroup
+    AllFinish
+    [ dependentTestGroup
         "single"
+        AllFinish
         [ testOneCodeAction
             "hide unused"
             "Hide on from Data.Function"
@@ -2244,8 +2246,9 @@ suggestHideShadowTests =
             , "f on = on"
             ]
         ]
-    , testGroup
+    , dependentTestGroup
         "multi"
+        AllFinish
         [ testOneCodeAction
             "hide from B"
             "Hide ++ from B"
