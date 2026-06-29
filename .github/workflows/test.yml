@@ -23,7 +23,7 @@ jobs:
       ghcs: ${{ steps.ghcs.outputs.ghcs }}
     steps:
       # Need the repo checked out in order to read the file
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: ghcs
         run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
@@ -102,7 +102,7 @@ jobs:
       CABAL_ARGS: "--builddir b"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-build
         with:

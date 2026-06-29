@@ -610,7 +610,7 @@ ghRun name shell env script = object $
        xs -> [ "env" .= object xs ]
 
 checkoutAction :: Value
-checkoutAction = ghAction "Checkout" "actions/checkout@v4" [] []
+checkoutAction = ghAction "Checkout" "actions/checkout@v7" [] []
 
 uploadArtifacts :: String -> String -> Value
 uploadArtifacts name path = ghAction "Upload artifact" "actions/upload-artifact@v7"
