@@ -67,7 +67,7 @@ jobs:
 
       - name: Restore ~/.stack cache
         id: stack-cache-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ~/.stack
           key: stack-${{ runner.os }}-${{ matrix.stack-yaml }}-${{ hashFiles(matrix.stack-yaml) }}
@@ -86,7 +86,7 @@ jobs:
       - name: Save ~/.stack cache
         # save cache when pushed to master
         if: github.ref == 'refs/heads/master'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ~/.stack
           key: stack-${{ runner.os }}-${{ matrix.stack-yaml }}-${{ hashFiles(matrix.stack-yaml) }}
