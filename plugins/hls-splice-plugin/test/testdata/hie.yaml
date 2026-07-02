@@ -19,3 +19,16 @@ cradle:
     - TTypeTypeError.hs
     - TQQExp.hs
     - TSimpleDecl.hs
+    # TODO add these as separate commit?
+    # and also leave comment I guess about not realising there were already two Decl tests
+    # and I don't know or can't remember why they didn't fail before my previous fix, but these did
+    # actually, make a final cleanup PR which also adds a trailing newline and anything else needed for Geolog FFI
+    # oh, it's not just trailing newlines - various things can go wrong when there's existing code after the splice...
+    - TDeclBindgen.hs
+    - TDeclPrelude.hs
+    - TDeclData.hs
+    - TDeclForeignImport.hs
+    - TDeclInstance.hs
+    - TDeclNewtype.hs
+    - TDeclPatSyn.hs
+    - TDeclPragma.hs
