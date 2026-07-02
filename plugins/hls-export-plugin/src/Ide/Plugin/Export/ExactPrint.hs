@@ -7,7 +7,9 @@ module Ide.Plugin.Export.ExactPrint
   ( LExportList
   , mkExportIE
   , appendIE
+  , removeMatchingIE
   , addCtorUnderParent
+  , removeCtorUnderParent
   , printExportList
   , printIE
   , freshCtorEntry
@@ -15,6 +17,7 @@ module Ide.Plugin.Export.ExactPrint
 
 import           Control.Lens                              (_last, over)
 import           Data.Bifunctor                            (first)
+import           Data.List                                 (mapAccumL)
 import           Data.List.NonEmpty                        (NonEmpty (..))
 import           Data.Text                                 (Text)
 import qualified Data.Text                                 as T
@@ -40,6 +43,7 @@ import           GHC                                       (DeltaPos (..),
 
 import           Language.Haskell.GHC.ExactPrint           (addComma,
                                                             exactPrint,
+                                                            getEntryDP,
                                                             setEntryDP)
 
 #if MIN_VERSION_ghc(9,11,0)
@@ -222,6 +226,27 @@ separatorComma :: [LIE GhcPs] -> Maybe TrailingAnn
 separatorComma items =
   listToMaybe [c | L ann _ <- items, c <- trailingAnns ann, isCommaAnn c]
 
+-- | Drop the first element matching @p@. A removed head hands its entry delta
+-- to the next element so the list keeps its start, and the new last element
+-- sheds its separator comma.
+--
+-- - @Nothing@ if nothing matches
+-- - @Just []@ if the sole element was removed.
+removeListItem
+  :: (LocatedAn AnnListItem a -> Bool)
+  -> [LocatedAn AnnListItem a]
+  -> Maybe [LocatedAn AnnListItem a]
+removeListItem p items = case break p items of
+  (_, [])               -> Nothing
+  (pre, removed : post) ->
+    let survivors = case (pre, post) of
+          ([], next : rest) -> setEntryDP next (getEntryDP removed) : rest
+          _                 -> pre ++ post
+     in Just (over _last (first removeTrailingCommaAnn) survivors)
+
+removeMatchingIE :: (IE GhcPs -> Bool) -> LExportList -> Maybe LExportList
+removeMatchingIE p (L l items) = L l <$> removeListItem (p . unLoc) items
+
 -- | 'Nothing' iff @ctor@ is already exported (via @T(..)@ or @T(...,ctor,...)@).
 addCtorUnderParent ::
   -- | parent
@@ -250,12 +275,48 @@ addCtorChildren ctor = overThingWithChildren $ \cs ->
       newChild = setEntryDP (mkIEName ctor) (SameLine (if hasSibling then 1 else 0))
    in (if hasSibling then map (first ensureTrailingComma) cs else cs) ++ [newChild]
 
+-- | Remove @ctor@ from the export entries listing it under @parent@, or
+-- 'Nothing' if none does. Removing the last child downgrades @T(ctor)@ to @T@.
+removeCtorUnderParent ::
+  -- | parent
+  RdrName ->
+  -- | ctor
+  RdrName ->
+  LExportList ->
+  Maybe LExportList
+removeCtorUnderParent parent ctor (L l items)
+  | edited    = Just (L l items')
+  | otherwise = Nothing
+  where
+    (edited, items') = mapAccumL dropCtor False items
+    parentFS = rdrNameFS parent
+    ctorFS = rdrNameFS ctor
+    isCtor = (== ctorFS) . lieWrappedNameFS
+
+    dropCtor changed item@(L itemLoc ie)
+      | parentNameIs parentFS ie
+      , Just children <- ieThingWithChildren ie
+      , Just kept <- removeListItem isCtor children
+      = (True, L itemLoc (rebuild ie kept))
+      | otherwise = (changed, item)
+
+    -- An empty child list means @ctor@ was the only child, so collapse @T(ctor)@
+    -- to a bare @T@.
+    rebuild ie []   = downgradeToAbs ie
+    rebuild ie kept = overThingWithChildren (const kept) ie
+
+    -- Reuse the head so @type@/operator wrapping survives, e.g. @type (:<)(C)@
+    -- becomes @type (:<)@.
+    downgradeToAbs ie = case ieThingWithHead ie of
+      Just n  -> unLoc (mkTypeAbsIE' (setEntryDP n (SameLine 0)))
+      Nothing -> ie
+
 printExportList :: LExportList -> Text
 printExportList l = T.pack (exactPrint (setEntryDP l (SameLine 0)))
 
--- | Exactprint a single item, without the surrounding list layout. The
--- trailing separator comma counts as layout: dropping it keeps a spliced item
--- from carrying a stray comma into text that already supplies its own.
+-- | Exactprint a single item, without the surrounding list layout. Dropping
+-- the trailing comma keeps a spliced item from carrying it into text that
+-- already supplies its own.
 printIE :: LIE GhcPs -> Text
 printIE item = T.pack (exactPrint (setEntryDP (first removeTrailingCommaAnn item) (SameLine 0)))
 
