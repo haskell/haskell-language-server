@@ -129,3 +129,97 @@ spec = do
     res `shouldBe` [[True]]
     Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
     resultDeps res `shouldBe` UnknownDeps
+
+  describe "Discard superseded computations" $ do
+    it "leaves a key dirty when a restart bumps the step mid-computation" $ do
+      started <- C.newEmptyMVar
+      proceed <- C.newEmptyMVar
+      done    <- C.newEmptyMVar
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $
+        addRule $ \(Rule :: Rule ()) _old _mode -> do
+          liftIO $ C.putMVar started ()
+          liftIO $ C.takeMVar proceed
+          return $ RunResult ChangedRecomputeDiff "" () (return ())
+      -- Fork so a restart can bump the step while the rule is still computing.
+      _ <- C.forkIO $ shakeRunDatabase db [apply1 (Rule @())] >>= C.putMVar done
+      C.takeMVar started
+      -- Bumps the step without dirtying anything, so only the guard can leave
+      -- this key dirty.
+      incDatabase theDb (Just [])
+      C.putMVar proceed ()
+      _ <- C.takeMVar done
+      Just status <- lookup (newKey (Rule @())) <$> getDatabaseValues theDb
+      case status of
+        Dirty{}   -> pure ()
+        Clean{}   -> expectationFailure "superseded computation was committed clean"
+        Running{} -> expectationFailure "superseded computation left running"
+    it "commits clean when the step does not advance" $ do
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $
+        addRule $ \(Rule :: Rule ()) _old _mode ->
+          return $ RunResult ChangedRecomputeDiff "" () (return ())
+      _ <- shakeRunDatabase db [apply1 (Rule @())]
+      Just status <- lookup (newKey (Rule @())) <$> getDatabaseValues theDb
+      case status of
+        Clean{} -> pure ()
+        _       -> expectationFailure "expected a clean commit"
+    it "leaves a newer build's Running intact instead of stomping it" $
+      withSupersededRespawn $ \theDb proceedA doneA proceedB doneB -> do
+        -- A finishes while B is still Running{2}. Guard must keep B's Running.
+        C.putMVar proceedA ()
+        _ <- C.takeMVar doneA
+        status <- lookup (newKey (Rule @())) <$> getDatabaseValues theDb
+        -- Release B before asserting so its thread finishes.
+        C.putMVar proceedB ()
+        _ <- C.takeMVar doneB
+        case status of
+          Just Running{} -> pure ()
+          Just Dirty{}   -> expectationFailure "superseded build unnecessary marked dirty"
+          Just Clean{}   -> expectationFailure "newer build committed too early"
+          Nothing        -> expectationFailure "key missing from the database"
+    it "leaves a newer build's committed Clean intact instead of dirtying it" $
+      withSupersededRespawn $ \theDb proceedA doneA proceedB doneB -> do
+        -- B commits Clean{2} before A demotes. Guard must keep B's Clean.
+        C.putMVar proceedB ()
+        _ <- C.takeMVar doneB
+        C.putMVar proceedA ()
+        _ <- C.takeMVar doneA
+        status <- lookup (newKey (Rule @())) <$> getDatabaseValues theDb
+        case status of
+          Just Clean{}   -> pure ()
+          Just Dirty{}   -> expectationFailure "superseded build unnecessary marked dirty"
+          Just Running{} -> expectationFailure "newer build didn't commit"
+          Nothing        -> expectationFailure "key missing from the database"
+  where
+    -- Two builds of the same key.
+    --
+    -- 1. A, the superseded build, runs at step 1.
+    -- 2. B, the re-spawn, runs at step 2. B's shakeRunDatabase bumps the step
+    --    and re-dirties A's in-flight key, so the rule runs again and leaves B
+    --    Running{2}.
+    --
+    -- Both are started and blocked before the continuation runs. The
+    -- continuation picks the release ordering that decides whether the guard
+    -- meets B as Running or as Clean.
+    withSupersededRespawn
+      :: (Database -> MVar () -> MVar () -> MVar () -> MVar () -> IO ())
+      -> IO ()
+    withSupersededRespawn k = do
+      calls    <- newTVarIO (0 :: Int)
+      startedA <- C.newEmptyMVar
+      proceedA <- C.newEmptyMVar
+      startedB <- C.newEmptyMVar
+      proceedB <- C.newEmptyMVar
+      doneA    <- C.newEmptyMVar
+      doneB    <- C.newEmptyMVar
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $
+        addRule $ \(Rule :: Rule ()) _old _mode -> do
+          n <- liftIO $ atomically $ modifyTVar' calls (+1) >> readTVar calls
+          liftIO $ if n == 1
+            then C.putMVar startedA () >> C.takeMVar proceedA
+            else C.putMVar startedB () >> C.takeMVar proceedB
+          return $ RunResult ChangedRecomputeDiff "" () (return ())
+      _ <- C.forkIO $ shakeRunDatabase db [apply1 (Rule @())] >> C.putMVar doneA ()
+      C.takeMVar startedA
+      _ <- C.forkIO $ shakeRunDatabase db [apply1 (Rule @())] >> C.putMVar doneB ()
+      C.takeMVar startedB
+      k theDb proceedA doneA proceedB doneB
