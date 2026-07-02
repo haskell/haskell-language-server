@@ -67,6 +67,7 @@
             # Compiler toolchain
             hpkgs.ghc
             hpkgs.haskell-language-server
+            pkgs.stack
             pkgs.haskellPackages.cabal-install
             # Dependencies needed to build some parts of Hackage
             gmp zlib ncurses
@@ -113,11 +114,5 @@
       });
 
   nixConfig = {
-    extra-substituters = [
-      "https://haskell-language-server.cachix.org"
-    ];
-    extra-trusted-public-keys = [
-      "haskell-language-server.cachix.org-1:juFfHrwkOxqIOZShtC4YC1uT1bBcq2RSvC7OMKx0Nz8="
-    ];
   };
 }
