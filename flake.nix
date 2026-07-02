@@ -106,8 +106,42 @@
           shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
           shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
           shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
-          shell-ghc914 = mkDevShell pkgs.haskell.packages.ghc914;
+          shell-ghc914 = mkDevShell (pkgs.haskell.packages.ghc914.override {
+            overrides = self: super:
+              let
+              hlib = pkgs.haskell.lib;
+              in
+                {
+              Cabal-syntax_3_14_2_0 = hlib.doJailbreak super.Cabal-syntax_3_14_2_0;
+              Cabal_3_14_2_0 = hlib.disableLibraryProfiling (hlib.overrideCabal
+                super.Cabal_3_14_2_0 (old: {
+                postPatch = (old.postPatch or "") + ''
+                sed -i 's/time\s*>= 1\.4\.0\.1\s*&& < 1\.15/time >=1.4.0.1/' Cabal.cabal
+                sed -i 's/containers\s*>= 0\.5\.8\.0\s*&& < 0\.8/containers >=0.5.8.0/' Cabal.cabal
+                '';
+              }));
+              algebraic-graphs = super.algebraic-graphs_0_8;
+              haskell-language-server = pkgs.lib.pipe super.haskell-language-server [(hlib.compose.disableCabalFlag "hlint")
+                (hlib.compose.overrideCabal (
+                    oldAttrs:{
+                      buildDepends = builtins.filter
+                        (pkg: ! (builtins.elem (pkg.pname or "") ["refact" "apply-refact" "hlint"]) )
+                        (oldAttrs.buildDepends or []);
+                      libraryHaskellDepends = builtins.filter
+                        (pkg: ! (builtins.elem (pkg.pname or "") [ "stan" "ormolu" "fourmolu"]) )
+                        (oldAttrs.libraryHaskellDepends or []);
+                      doCheck=false;
+
+                    }
+                  ))
+                  ];
+            } //
+          (builtins.listToAttrs (map
+            (name:{inherit name; value = hlib.dontCheck(hlib.doJailbreak super.${name});})
+            ["clay" "dec" "ghc-lib-parser" "ghc-trace-events" "hie-compat" "lucid" "singleton-bool" "http-lib-api" "http-api-data" "binary-instances" "lukko" "constraints-extras" "tasty-hspec" "tomland" "string-interpolate" "rebase" "dependent-map" "lsp-types" "lsp" "lsp-test" "ghcide" "HTTP" "relude" "generic-lens" "enummapset" "hiedb"]));
+          });
         };
+
 
         packages = { inherit docs; };
       });
