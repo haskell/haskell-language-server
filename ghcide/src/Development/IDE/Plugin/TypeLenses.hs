@@ -38,6 +38,7 @@ import           Development.IDE                      (FileDiagnostic (..),
                                                        srcSpanToRange,
                                                        usePropertyAction)
 import           Development.IDE.Core.Compile         (TcModuleResult (..))
+import           Development.IDE.Core.InputPath       (toProjectHaskellInput)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentRange,
@@ -54,6 +55,8 @@ import           Development.IDE.GHC.Compat.Error     (_TcRnMessage,
                                                        msgEnvelopeErrorL)
 import           Development.IDE.GHC.Util             (printName)
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph                (InputClass (ProjectHaskellFiles),
+                                                       RuleInput)
 import           Development.IDE.Types.Location       (Position (Position, _line),
                                                        Range (Range, _end, _start))
 import           GHC.Core.TyCo.Tidy                   (tidyOpenType)
@@ -156,16 +159,19 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       then do
         -- In this mode we get the global bindings from the
         -- GlobalBindingTypeSigs rule.
-        (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
-          runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-          $ useWithStaleE GetGlobalBindingTypeSigs nfp
-        -- Depending on whether we only want exported or not we filter our list
-        -- of signatures to get what we want
-        let relevantGlobalSigs =
-              if mode == Exported
-                then filter gbExported gblSigs
-                else gblSigs
-        pure $ InL $ generateLensFromGlobal relevantGlobalSigs gblSigsMp
+        case toProjectHaskellInput nfp of
+          Nothing -> pure $ InL []
+          Just input -> do
+            (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
+              runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
+              $ useWithStaleE GetGlobalBindingTypeSigs input
+            -- Depending on whether we only want exported or not we filter our list
+            -- of signatures to get what we want
+            let relevantGlobalSigs =
+                  if mode == Exported
+                    then filter gbExported gblSigs
+                    else gblSigs
+            pure $ InL $ generateLensFromGlobal relevantGlobalSigs gblSigsMp
       else do
         -- For this mode we exclusively use diagnostics to create the lenses.
         -- However we will still use the GlobalBindingTypeSigs to resolve them.
@@ -177,9 +183,10 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
 codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
   nfp <- getNormalizedFilePathE uri
+  input <- handleMaybe PluginStaleResolve $ toProjectHaskellInput nfp
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-    $ useWithStaleE GetGlobalBindingTypeSigs nfp
+    $ useWithStaleE GetGlobalBindingTypeSigs input
   -- regardless of how the original lens was generated, we want to get the range
   -- that the global bindings rule would expect here, hence the need to reverse
   -- position map the range, regardless of whether it was position mapped in the
@@ -310,6 +317,7 @@ instance NFData GlobalBindingTypeSigsResult where
   rnf = rwhnf
 
 type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
+type instance RuleInput GetGlobalBindingTypeSigs = ProjectHaskellFiles
 
 rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do

@@ -19,6 +19,7 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
 import           Data.List                             (partition)
 import           Data.Maybe
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.FileStore        hiding (Log, LogShake)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
@@ -133,7 +134,7 @@ fromChange FileChangeType_Changed = Nothing
 -------------------------------------------------------------------------------------
 
 -- | Returns True if the file exists
-getFileExists :: NormalizedFilePath -> Action Bool
+getFileExists :: InputPath AllHaskellFiles -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
@@ -197,7 +198,8 @@ fileExistsRules recorder lspEnv = do
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
 fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileExistsRulesFast recorder isWatched =
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists input -> do
+        let file = unInputPath input
         isWF <- isWatched file
         if isWF
             then fileExistsFast file
@@ -238,7 +240,8 @@ summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
 fileExistsRulesSlow :: Recorder (WithPriority Log) -> Rules ()
 fileExistsRulesSlow recorder =
-  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow file
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists input ->
+      fileExistsSlow (unInputPath input)
 
 fileExistsSlow :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsSlow file = do

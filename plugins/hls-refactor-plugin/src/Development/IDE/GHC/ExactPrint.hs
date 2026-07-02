@@ -72,6 +72,9 @@ import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Generics.SYB
 import           Generics.SYB.GHC
+import           Ide.Types                              (InputClass (ProjectHaskellFiles),
+                                                        RuleInput, RuleResult,
+                                                        Rules)
 import qualified GHC.Generics                            as GHC
 import           Ide.Logger                              (Pretty (pretty),
                                                           Recorder,
@@ -145,6 +148,7 @@ data GetAnnotatedParsedSource = GetAnnotatedParsedSource
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = ParsedSource
+type instance RuleInput GetAnnotatedParsedSource = ProjectHaskellFiles
 
 instance Show (HsModule GhcPs) where
   show _ = "<HsModule GhcPs>"

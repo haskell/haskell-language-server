@@ -66,6 +66,7 @@ import           RootUriTests
 import           SafeTests
 import           SymlinkTests
 import           THTests
+import           TypedRuleTests
 import           UnitTests
 import           WatchedFileTests
 
@@ -87,6 +88,7 @@ main = do
     , PluginSimpleTests.tests
     , PreprocessorTests.tests
     , THTests.tests
+    , TypedRuleTests.tests
     , SymlinkTests.tests
     , SafeTests.tests
     , UnitTests.tests

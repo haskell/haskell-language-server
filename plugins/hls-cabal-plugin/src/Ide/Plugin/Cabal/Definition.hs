@@ -13,6 +13,7 @@ import           Data.List                                     (find)
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import           Development.IDE                               as D
+import           Development.IDE.Core.InputPath                 (toCabalFileInput)
 import           Development.IDE.Core.PluginUtils
 import qualified Distribution.Fields                           as Syntax
 import           Distribution.PackageDescription               (Benchmark (..),
@@ -55,15 +56,16 @@ import           System.FilePath                               (joinPath,
 gotoDefinition :: PluginMethodHandler IdeState LSP.Method_TextDocumentDefinition
 gotoDefinition ide _ msgParam = do
     nfp <- getNormalizedFilePathE uri
-    cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields nfp
+    cabalInput <- handleMaybe (PluginInvalidParams "Expected cabal file") $ toCabalFileInput nfp
+    cabalFields <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalFields cabalInput
     -- Trim the AST tree, so multiple passes in subfunctions won't hurt the performance.
     let fieldsOfInterest = maybe cabalFields (:[] ) $ CabalFields.findFieldSection cursor cabalFields
 
-    commonSections <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalCommonSections nfp
+    commonSections <- runActionE "cabal-plugin.commonSections" ide $ useE ParseCabalCommonSections cabalInput
     let mCommonSectionsDef = gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest
 
     mModuleDef <- do
-      mGPD <- liftIO $ runAction "cabal.GPD" ide $ useWithStale ParseCabalFile nfp
+      mGPD <- liftIO $ runAction "cabal.GPD" ide $ useWithStale ParseCabalFile cabalInput
       case mGPD of
         Nothing -> pure Nothing
         Just (gpd, _) -> liftIO $ gotoModulesDefinition nfp gpd cursor fieldsOfInterest

@@ -1,4 +1,8 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE KindSignatures        #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Development.IDE.Core.PluginUtils
 (-- * Wrapped Action functions
   runActionE
@@ -42,6 +46,7 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.Text                            as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE.Core.FileStore
+import           Development.IDE.Core.InputPath
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Service         (runAction)
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
@@ -81,31 +86,32 @@ runActionMT herald ide act =
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
 
 -- |ExceptT version of `use` that throws a PluginRuleFailed upon failure
-useE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
+useE :: (IdeRule k i v, ToInputArg i a) => k -> a -> ExceptT PluginError Action v
 useE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useMT k
 
 -- |MaybeT version of `use`
-useMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
-useMT k = MaybeT . Shake.use k
+useMT :: (IdeRule k i v, ToInputArg i a) => k -> a -> MaybeT Action v
+useMT k = MaybeT . maybe (pure Nothing) (Shake.use k) . toInputArg
 
 -- |ExceptT version of `uses` that throws a PluginRuleFailed upon failure
-usesE :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> ExceptT PluginError Action (f v)
+usesE :: (Traversable f, IdeRule k i v, ToInputArg i a) => k -> f a -> ExceptT PluginError Action (f v)
 usesE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . usesMT k
 
 -- |MaybeT version of `uses`
-usesMT :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> MaybeT Action (f v)
-usesMT k xs = MaybeT $ sequence <$> Shake.uses k xs
+usesMT :: (Traversable f, IdeRule k i v, ToInputArg i a) => k -> f a -> MaybeT Action (f v)
+usesMT k xs = MaybeT $ traverse toInputArg xs & maybe (pure Nothing) (fmap sequence . Shake.uses k)
 
 -- |ExceptT version of `useWithStale` that throws a PluginRuleFailed upon
 -- failure
-useWithStaleE :: IdeRule k v
-    => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
+useWithStaleE :: (IdeRule k i v, ToInputArg i a)
+    => k -> a -> ExceptT PluginError Action (v, PositionMapping)
 useWithStaleE key = maybeToExceptT (PluginRuleFailed (T.pack $ show key)) . useWithStaleMT key
 
 -- |MaybeT version of `useWithStale`
-useWithStaleMT :: IdeRule k v
-    => k -> NormalizedFilePath -> MaybeT Action (v, PositionMapping)
-useWithStaleMT key file = MaybeT $ runIdentity <$> Shake.usesWithStale key (Identity file)
+useWithStaleMT :: (IdeRule k i v, ToInputArg i a)
+    => k -> a -> MaybeT Action (v, PositionMapping)
+useWithStaleMT key file =
+  MaybeT $ maybe (pure Nothing) (fmap runIdentity . Shake.usesWithStale key . Identity) (toInputArg file)
 
 -- ----------------------------------------------------------------------------
 -- IdeAction wrappers
@@ -121,12 +127,30 @@ runIdeActionMT _herald s i = MaybeT $ liftIO $ runReaderT (Shake.runIdeActionT $
 
 -- |ExceptT version of `useWithStaleFast` that throws a PluginRuleFailed upon
 -- failure
-useWithStaleFastE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
+useWithStaleFastE :: (IdeRule k i v, ToInputArg i a) => k -> a -> ExceptT PluginError IdeAction (v, PositionMapping)
 useWithStaleFastE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useWithStaleFastMT k
 
 -- |MaybeT version of `useWithStaleFast`
-useWithStaleFastMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
-useWithStaleFastMT k = MaybeT . Shake.useWithStaleFast k
+useWithStaleFastMT :: (IdeRule k i v, ToInputArg i a) => k -> a -> MaybeT IdeAction (v, PositionMapping)
+useWithStaleFastMT k = MaybeT . maybe (pure Nothing) (Shake.useWithStaleFast k) . toInputArg
+
+class ToInputArg (i :: InputClass) a where
+  toInputArg :: a -> Maybe (InputPath i)
+
+instance ToInputArg i (InputPath i) where
+  toInputArg = Just
+
+instance ToInputArg ProjectHaskellFiles NormalizedFilePath where
+  toInputArg = toProjectHaskellInput
+
+instance ToInputArg AllHaskellFiles NormalizedFilePath where
+  toInputArg = Just . toAllHaskellInput
+
+instance ToInputArg CabalFile NormalizedFilePath where
+  toInputArg = toCabalFileInput
+
+instance ToInputArg StackYaml NormalizedFilePath where
+  toInputArg = toStackYamlInput
 
 -- ----------------------------------------------------------------------------
 -- Location wrappers
@@ -252,7 +276,7 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
     provider m ide _pid params
       | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
-        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nfp
+        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents $ toAllHaskellInput nfp
         case contentsMaybe of
           Just contents -> do
             let (typ, mtoken) = case m of

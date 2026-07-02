@@ -49,6 +49,8 @@ import qualified Development.IDE.GHC.Compat.Core as Core
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                    (Generic)
 import           Ide.Logger
+import           Ide.Types                       (InputClass (ProjectHaskellFiles),
+                                                  RuleInput)
 import           Ide.Plugin.Eval.GHC             (showDynFlags)
 import           Ide.Plugin.Eval.Util
 import           Language.LSP.Protocol.Types     (TextDocumentIdentifier,
@@ -175,6 +177,7 @@ instance Hashable IsEvaluating
 instance NFData   IsEvaluating
 
 type instance RuleResult IsEvaluating = Bool
+type instance RuleInput IsEvaluating = ProjectHaskellFiles
 
 data GetEvalComments = GetEvalComments
     deriving (Eq, Show, Generic)
@@ -182,6 +185,7 @@ instance Hashable GetEvalComments
 instance NFData   GetEvalComments
 
 type instance RuleResult GetEvalComments = Comments
+type instance RuleInput GetEvalComments = ProjectHaskellFiles
 data Comments = Comments
     { lineComments  :: Map Range RawLineComment
     , blockComments :: Map Range RawBlockComment

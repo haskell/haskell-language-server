@@ -21,7 +21,9 @@ import           Development.IDE
 import           Development.IDE.Core.PluginUtils (useMT)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (newUnique, (<+>))
+#if !MIN_VERSION_ghc(9,11,0)
 import           Development.IDE.GHC.Compat.Util  (bagToList)
+#endif
 import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
@@ -76,6 +78,7 @@ instance NFData ClassInstancesResult where
     rnf = rwhnf
 
 type instance RuleResult GetClassInstances = ClassInstancesResult
+type instance RuleInput GetClassInstances = ProjectHaskellFiles
 
 -- |The necessary data to execute our code lens
 data InstanceBindLensCommand = InstanceBindLensCommand
@@ -115,6 +118,7 @@ instance NFData InstanceBindLensResult where
     rnf = rwhnf
 
 type instance RuleResult GetInstanceBindLens = InstanceBindLensResult
+type instance RuleInput GetInstanceBindLens = ProjectHaskellFiles
 
 data Log
   = LogImplementedMethods DynFlags Class ClassMinimalDef
