@@ -128,8 +128,9 @@ tests =
       evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
       evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id" "-- id :: forall a. a -> a"
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
-  , goldenWithEval "Support IO expressions, capture and show stdout/stderr output" "TIO" "hs"
-  , goldenWithEval "Support IO expressions, close handles on errors" "TIOError" "hs"
+  , goldenWithEval "Support IO expressions (stdout), capture and show stdout output" "TIOStdout" "hs"
+  , goldenWithEval "Support IO expressions (stderr), capture and show stderr output" "TIOStderr" "hs"
+  , goldenWithEval "Support IO expressions (stdin)" "TIOStdin" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
   , knownBrokenInWindowsBeforeGHC912 "The output has path separators in it, which on Windows look different. Just skip it there" $
       goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" $
