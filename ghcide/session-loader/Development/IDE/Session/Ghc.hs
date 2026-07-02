@@ -280,6 +280,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
               Nothing   -> compRoot
               Just wdir -> compRoot </> wdir
         let dflags''' =
+              normaliseImportsPaths $
               setWorkingDirectory root $
               disableWarningsAsErrors $
               -- disabled, generated directly by ghcide instead
@@ -295,6 +296,9 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
               makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
               dflags''
         return (HomeUnitConfig dflags''' targets mHash)
+
+normaliseImportsPaths :: DynFlags -> DynFlags
+normaliseImportsPaths dflags = dflags { importPaths = fmap normalise (importPaths dflags)}
 
 addComponentInfo ::
   MonadUnliftIO m =>
