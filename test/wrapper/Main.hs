@@ -5,7 +5,7 @@ import           System.Process
 import           Test.Hls
 
 main :: IO ()
-main = defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
+main = defaultTestRunnerWithThreads (NumThreads 1) $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"

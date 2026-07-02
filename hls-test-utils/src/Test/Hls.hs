@@ -18,6 +18,8 @@ module Test.Hls
     module Control.Monad.IO.Class,
     module Control.Applicative.Combinators,
     defaultTestRunner,
+    defaultTestRunnerWithThreads,
+    NumThreads (..),
     goldenGitDiff,
     goldenWithHaskellDoc,
     goldenWithHaskellDocInTmpDir,
@@ -69,7 +71,8 @@ module Test.Hls
     Priority(..),
     captureKickDiagnostics,
     kick,
-    TestConfig(..)
+    TestConfig(..),
+    CwdHandling(..)
     )
 where
 
@@ -106,9 +109,14 @@ import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo)
 import           Development.IDE.Plugin.Test              (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                            WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test              as Test
+import           Development.IDE.Session                  (SessionLoadingOptions (..))
+import           Development.IDE.Session.Ghc              (getCacheDirsIn)
 import           Development.IDE.Types.Options
+import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Handle
 import           GHC.TypeLits
+import           GHCi.ObjLink                             (ShouldRetainCAFs (..),
+                                                           initObjLinker)
 import           Ide.Logger                               (Pretty (pretty),
                                                            Priority (..),
                                                            Recorder,
@@ -134,10 +142,8 @@ import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
                                                            createDirectoryIfMissing,
                                                            getCurrentDirectory,
-                                                           getTemporaryDirectory,
-                                                           makeAbsolute,
                                                            setCurrentDirectory)
-import           System.Environment                       (lookupEnv, setEnv)
+import           System.Environment                       (lookupEnv)
 import           System.FilePath
 import           System.IO.Extra                          (newTempDirWithin)
 import           System.IO.Unsafe                         (unsafePerformIO)
@@ -145,7 +151,8 @@ import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
-import           Test.Hls.TestEnv                         (hlsTestOptions,
+import           Test.Hls.TestEnv                         (getTestRootDir,
+                                                           hlsTestOptions,
                                                            wrapCliTestOptions)
 import           Test.Hls.Util
 import           Test.Tasty                               hiding (Timeout)
@@ -153,6 +160,7 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners                       (NumThreads (..))
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -197,10 +205,41 @@ unCurrent (BrokenCurrent a) = a
 
 -- | Run main with rerun, limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithIngredients ingredientsWithRerun . wrapCliTestOptions . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultTestRunnerWithThreads (NumThreads testTastyThreads)
+
+-- | Like 'defaultTestRunner' but caps tasty's worker pool at @n@ threads.
+-- Suites whose sessions shift the global working directory pass @NumThreads 1@,
+-- since concurrent shifts race the CWD.
+defaultTestRunnerWithThreads :: NumThreads -> TestTree -> IO ()
+defaultTestRunnerWithThreads n tree = do
+  -- Pre-initialise the RTS object linker once, single-threaded, before tasty
+  -- forks workers, so concurrent sessions do not race linker initialization.
+  initObjLinker RetainCAFs
+  _ <- pure $! length originalWorkingDirectory  -- force before tasty forks workers
+  defaultMainWithIngredients ingredientsWithRerun
+    (localOption n (wrapCliTestOptions (adjustOption (const $ mkTimeout 600000000) tree)))
   where
     ingredients = includingOptions hlsTestOptions : defaultIngredients
     ingredientsWithRerun = [rerunningTests ingredients]
+
+-- | The in-process servers' RTS capability count ('argsThreads' ->
+-- 'withNumCapabilities'), i.e. how parallel each GHC build is. Defaults to
+-- @numProcessors `div` 2@, overridable with @GHCIDE_TEST_THREADS@.
+{-# NOINLINE testNumThreads #-}
+testNumThreads :: Int
+testNumThreads = unsafePerformIO $ do
+  override <- lookupEnv "GHCIDE_TEST_THREADS"
+  np <- getNumProcessors
+  pure $ maybe (max 1 (np `div` 2)) read override
+
+-- | tasty's concurrent-test pool. Defaults to 'testNumThreads' (so
+-- @GHCIDE_TEST_THREADS@ drives both, matching test concurrency to build
+-- capabilities), but @GHCIDE_TEST_TASTY_THREADS@ overrides it alone: CI uses
+-- that to serialise the Windows tests without single-threading their builds.
+{-# NOINLINE testTastyThreads #-}
+testTastyThreads :: Int
+testTastyThreads = unsafePerformIO $
+  maybe testNumThreads read <$> lookupEnv "GHCIDE_TEST_TASTY_THREADS"
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -533,16 +572,16 @@ runSessionWithServerInTmpDir config plugin tree act =
     {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
     (const act)
 
--- | Same as 'withTemporaryDataAndCacheDirectory', but materialises the given
--- 'VirtualFileTree' in the temporary directory.
-withVfsTestDataDirectory :: VirtualFileTree -> (FileSystem -> IO a) ->  IO a
+-- | Like 'withTemporaryDataAndCacheDirectory', but first materialises the given
+-- 'VirtualFileTree'. The continuation also receives the per-test cache directory.
+withVfsTestDataDirectory :: VirtualFileTree -> (FileSystem -> FilePath -> IO a) ->  IO a
 withVfsTestDataDirectory tree act = do
-    withTemporaryDataAndCacheDirectory $ \tmpRoot -> do
+    withTemporaryDataAndCacheDirectory $ \tmpRoot cacheDir -> do
         fs <- FS.materialiseVFT tmpRoot tree
-        act fs
+        act fs cacheDir
 
--- | Run an action in a temporary directory.
--- Sets the 'XDG_CACHE_HOME' environment variable to a temporary directory as well.
+-- | Run an action in a temporary directory, passing it both the test root and a
+-- fresh cache directory.
 --
 -- This sets up a temporary directory for HLS tests to run.
 -- Typically, HLS tests copy their test data into the directory and then launch
@@ -550,11 +589,11 @@ withVfsTestDataDirectory tree act = do
 -- This makes sure that the tests are run in isolation, which is good for correctness
 -- but also important to have fast tests.
 --
--- For improved isolation, we also make sure the 'XDG_CACHE_HOME' environment
--- variable points to a temporary directory. So, we never share interface files
--- or the 'hiedb' across tests.
-withTemporaryDataAndCacheDirectory :: (FilePath -> IO a) -> IO a
-withTemporaryDataAndCacheDirectory act = withLock lockForTempDirs $ do
+-- For isolation, each test gets its own cache directory wired into the server
+-- via 'argsGetHieDbLoc' and 'getCacheDirs', so we never share interface files or
+-- the 'hiedb' and never mutate the process-global 'XDG_CACHE_HOME'.
+withTemporaryDataAndCacheDirectory :: (FilePath -> FilePath -> IO a) -> IO a
+withTemporaryDataAndCacheDirectory act = do
     testRoot <- setupTestEnvironment
     helperRecorder <- hlsHelperTestRecorder
     -- Do not clean up the temporary directory if this variable is set to anything but '0'.
@@ -563,39 +602,23 @@ withTemporaryDataAndCacheDirectory act = withLock lockForTempDirs $ do
     let runTestInDir action = case cleanupTempDir of
             Just val | val /= "0" -> do
                 (tempDir, cacheHome, _) <- setupTemporaryTestDirectories testRoot
-                a <- withTempCacheHome cacheHome (action tempDir)
+                a <- action tempDir cacheHome
                 logWith helperRecorder Debug LogNoCleanup
                 pure a
 
             _ -> do
                 (tempDir, cacheHome, cleanup) <- setupTemporaryTestDirectories testRoot
-                a <- withTempCacheHome cacheHome (action tempDir) `finally`  cleanup
+                a <- action tempDir cacheHome `finally`  cleanup
                 logWith helperRecorder Debug LogCleanup
                 pure a
-    runTestInDir $ \tmpDir' -> do
+    runTestInDir $ \tmpDir' cacheHome -> do
         -- we canonicalize the path, so that we do not need to do
         -- canonicalization during the test when we compare two paths
         tmpDir <- canonicalizePath tmpDir'
         logWith helperRecorder Info $ LogTestDir tmpDir
-        act tmpDir
+        act tmpDir cacheHome
     where
-        cache_home_var = "XDG_CACHE_HOME"
-        -- Set the dir for "XDG_CACHE_HOME".
-        -- When the operation finished, make sure the old value is restored.
-        withTempCacheHome tempCacheHomeDir act =
-            bracket
-              (do
-                old_cache_home <- lookupEnv cache_home_var
-                setEnv cache_home_var tempCacheHomeDir
-                pure old_cache_home)
-              (\old_cache_home ->
-                maybe (pure ()) (setEnv cache_home_var) old_cache_home
-                )
-              (\_ -> act)
-
-        -- Set up a temporary directory for the test files and one for the 'XDG_CACHE_HOME'.
-        -- The 'XDG_CACHE_HOME' is important for independent test runs, i.e. completely empty
-        -- caches.
+        -- A fresh cache directory per test gives empty, independent caches.
         setupTemporaryTestDirectories testRoot = do
             (tempTestCaseDir, cleanup1) <- newTempDirWithin testRoot
             (tempCacheHomeDir, cleanup2) <- newTempDirWithin testRoot
@@ -615,7 +638,7 @@ instance Default (TestConfig b) where
     testDirLocation = Right $ VirtualFileTree [] "",
     testClientRoot = Nothing,
     testServerRoot = Nothing,
-    testShiftRoot = False,
+    testCwdHandling = ServerCwdShift,
     testDisableKick = False,
     testDisableDefaultPlugin = False,
     testPluginDescriptor = mempty,
@@ -634,16 +657,9 @@ instance Default (TestConfig b) where
 -- However, it is totally safe to delete the directory between runs.
 setupTestEnvironment :: IO FilePath
 setupTestEnvironment = do
-  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
-  case mRootDir of
-    Nothing -> do
-      tmpDirRoot <- getTemporaryDirectory
-      let testRoot = tmpDirRoot </> "hls-test-root"
-      createDirectoryIfMissing True testRoot
-      pure testRoot
-    Just rootDir -> do
-      createDirectoryIfMissing True rootDir
-      pure rootDir
+  testRoot <- getTestRootDir
+  createDirectoryIfMissing True testRoot
+  pure testRoot
 
 goldenWithHaskellDocFormatter
   :: Pretty b
@@ -746,15 +762,28 @@ keepCurrentDirectory :: IO a -> IO a
 keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 
 {-# NOINLINE lock #-}
--- | Never run in parallel
+-- | Serialises tests that shift the global CWD ('HarnessCwdShift'). See Note [Root Directory].
 lock :: Lock
 lock = unsafePerformIO newLock
 
+{-# NOINLINE originalWorkingDirectory #-}
+-- | Working directory captured at process start, before any 'shiftRoot' runs.
+-- Relative test roots resolve against this, not the live (concurrently shifted)
+-- CWD, so parallel suites cannot double the path.
+originalWorkingDirectory :: FilePath
+originalWorkingDirectory = unsafePerformIO getCurrentDirectory
 
-{-# NOINLINE lockForTempDirs #-}
--- | Never run in parallel
-lockForTempDirs :: Lock
-lockForTempDirs = unsafePerformIO newLock
+-- | How a test drives the process-global current working directory. See Note [Root Directory].
+data CwdHandling
+  = ServerCwdShift
+    -- ^ The server shifts the CWD to the rootUri on init. The historical default.
+  | HarnessCwdShift
+    -- ^ The harness shifts the CWD to the test root under 'lock', for CWD-coupled
+    -- suites (stan, hlint) that cannot run in parallel.
+  | NoCwdShift
+    -- ^ Neither the harness nor the server shifts the CWD, so in-process servers
+    -- can run in parallel.
+  deriving (Eq)
 
 data TestConfig b = TestConfig
   {
@@ -777,8 +806,8 @@ data TestConfig b = TestConfig
     -- Don't forget to use 'TASTY_PATTERN' to debug only a subset of tests.
     --
     -- For plugin test logs, look at the documentation of 'mkPluginTestDescriptor'.
-  , testShiftRoot            :: Bool
-    -- ^ Whether to shift the current directory to the root of the project
+  , testCwdHandling          :: CwdHandling
+    -- ^ How the test drives the process-global CWD. See Note [Root Directory].
   , testClientRoot           :: Maybe FilePath
     -- ^ Specify the root of (the client or LSP context),
     -- if Nothing it is the same as the testDirLocation
@@ -830,11 +859,11 @@ wrapClientLogger logger = do
 -- For more detail of the test configuration, see 'TestConfig'
 runSessionWithTestConfig :: Pretty b => TestConfig b -> (FilePath -> Session a) -> IO a
 runSessionWithTestConfig TestConfig{..} session =
-    runSessionInVFS testDirLocation $ \root -> shiftRoot root $ do
+    runSessionInVFS testDirLocation $ \root cacheDir -> shiftRoot root $ do
     pipeIn@(inR, inW) <- createPipe
     pipeOut@(outR, outW) <- createPipe
-    let serverRoot = fromMaybe root testServerRoot
-    let clientRoot = fromMaybe root testClientRoot
+    let serverRoot = maybe root (root </>) testServerRoot
+    let clientRoot = maybe root (root </>) testClientRoot
 
     (recorder, cb1) <- wrapClientLogger =<< hlsPluginTestRecorder
     (recorderIde, cb2) <- wrapClientLogger =<< hlsHelperTestRecorder
@@ -850,7 +879,11 @@ runSessionWithTestConfig TestConfig{..} session =
     let plugins = testPluginDescriptor recorder <> lspRecorderPlugin
     timeoutOverride <- fmap read <$> lookupEnv "LSP_TIMEOUT"
     let sconf' = testConfigSession { lspConfig = hlsConfigToClientConfig testLspConfig, messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-        arguments = testingArgs serverRoot recorderIde plugins
+        -- Each server builds GHC with 'testNumThreads' capabilities. This is the
+        -- build parallelism, independent of tasty's test concurrency
+        -- ('testTastyThreads'), so serialising tests does not single-thread builds.
+        arguments = (testingArgs serverRoot cacheDir recorderIde plugins)
+                      { argsThreads = Just (fromIntegral testNumThreads) }
 
     -- Make an explicit call to keepAlive to protect both pipes from being GC'd.
     --
@@ -876,19 +909,22 @@ runSessionWithTestConfig TestConfig{..} session =
       pure result
 
     where
-        shiftRoot shiftTarget f  =
-            if testShiftRoot
-                then withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
-                else f
+        -- NoCwdShift suites avoid the global CWD entirely (server root via
+        -- 'argsProjectRoot', client via rootUri), so they run in parallel.
+        -- HarnessCwdShift suites shift under 'lock', which serialises them.
+        -- See Note [Root Directory].
+        shiftRoot shiftTarget f
+            | testCwdHandling == HarnessCwdShift = withLock lock $ keepCurrentDirectory $ setCurrentDirectory shiftTarget >> f
+            | otherwise                          = f
         runSessionInVFS (Left testConfigRoot) act = do
-            root <- makeAbsolute testConfigRoot
-            withTemporaryDataAndCacheDirectory (const $ act root)
+            let root = normalise (originalWorkingDirectory </> testConfigRoot)
+            withTemporaryDataAndCacheDirectory (\_ cacheDir -> act root cacheDir)
         runSessionInVFS (Right vfs) act =
-            withVfsTestDataDirectory vfs $ \fs -> do
-                act (fsRoot fs)
-        testingArgs prjRoot recorderIde plugins =
+            withVfsTestDataDirectory vfs $ \fs cacheDir -> do
+                act (fsRoot fs) cacheDir
+        testingArgs prjRoot cacheDir recorderIde plugins =
             let
-                arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
+                arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLspOptions, argsSessionLoadingOptions } = defaultArguments (cmapWithPrio LogIDEMain recorderIde) prjRoot plugins
                 argsHlsPlugins' = if testDisableDefaultPlugin
                                 then plugins
                                 else argsHlsPlugins
@@ -906,6 +942,13 @@ runSessionWithTestConfig TestConfig{..} session =
                 , argsDefaultHlsConfig = testLspConfig
                 , argsProjectRoot = prjRoot
                 , argsDisableKick = testDisableKick
+                -- NoCwdShift suites skip the server's setCurrentDirectory so their
+                -- in-process servers do not race on the global CWD.
+                , argsDisableInitialCwdShift = testCwdHandling == NoCwdShift
+                -- Keep interface files and the hiedb under this test's cache
+                -- directory instead of the shared 'XDG_CACHE_HOME'.
+                , argsGetHieDbLoc = const (pure (cacheDir </> "test.hiedb"))
+                , argsSessionLoadingOptions = argsSessionLoadingOptions { getCacheDirs = getCacheDirsIn cacheDir }
                 }
 
 -- | Wait for the next progress begin step

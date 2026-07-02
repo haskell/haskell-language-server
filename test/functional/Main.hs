@@ -9,7 +9,7 @@ import           Progress
 import           Test.Hls
 
 main :: IO ()
-main = defaultTestRunner $ testGroup "haskell-language-server"
+main = defaultTestRunnerWithThreads (NumThreads 1) $ testGroup "haskell-language-server"
     [ Config.tests
     , ConfigSchema.tests
     , ignoreInEnv [HostOS Windows] "Tests gets stuck in ci" Format.tests

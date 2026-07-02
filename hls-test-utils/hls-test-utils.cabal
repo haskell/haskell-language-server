@@ -44,6 +44,7 @@ library
     , directory
     , extra
     , filepath
+    , ghci
     , ghcide                  == 2.14.0.0
     , hls-plugin-api          == 2.14.0.0
     , lens

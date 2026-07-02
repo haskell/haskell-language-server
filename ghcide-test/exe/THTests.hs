@@ -2,6 +2,8 @@
 module THTests (tests) where
 
 import           Config
+import           Control.Applicative         ((<|>))
+import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
@@ -9,6 +11,7 @@ import           Development.IDE.GHC.Util
 import           Development.IDE.Test        (expectCurrentDiagnostics,
                                               expectDiagnostics,
                                               expectNoMoreDiagnostics)
+import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
@@ -288,7 +291,23 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent . InR $ TextDocumentContentChangeWholeDocument bSource']
-    _ <- waitForDiagnostics
+
+    -- The reload renames THA's splice (th_a -> th) and re-splices it in THB.
+    -- While THA relinks, THB transiently reports "th_a not in scope", and a single
+    -- 'waitForDiagnostics' could catch that transient (see the note in Main.hs).
+    -- Wait for THB's own settled "Top-level binding" warning, matched on THB's uri.
+    let bUri = bdoc ^. L.uri
+        settledTHB params =
+          params ^. L.uri == bUri && case params ^. L.diagnostics of
+            [d] -> d ^. L.severity == Just DiagnosticSeverity_Warning
+                   && "Top-level binding" `T.isInfixOf` (d ^. L.message)
+            _   -> False
+        -- next PublishDiagnostics, skipping any non-diagnostic messages
+        nextPublishDiagnostics = publishDiagnosticsNotification <|> (anyMessage *> nextPublishDiagnostics)
+        waitForSettledTHB = do
+          notif <- nextPublishDiagnostics
+          if settledTHB (notif ^. L.params) then pure () else waitForSettledTHB
+    waitForSettledTHB
 
     expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding", Just "GHC-38417")]
 

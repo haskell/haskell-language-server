@@ -12,7 +12,7 @@ import           System.FilePath
 import           Test.Hls
 
 main :: IO ()
-main = defaultTestRunner tests
+main = defaultTestRunnerWithThreads (NumThreads 1) tests
 
 tests :: TestTree
 tests =
@@ -78,7 +78,7 @@ runStanSession subdir =
   failIfSessionTimeout
   . runSessionWithTestConfig def{
     testConfigCaps=codeActionNoResolveCaps
-    , testShiftRoot=True
+    , testCwdHandling=HarnessCwdShift
     , testPluginDescriptor=stanPlugin
     , testDirLocation=Left (testDir </> subdir)
     }

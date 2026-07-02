@@ -206,22 +206,23 @@ commandP plugins =
 
 
 data Arguments = Arguments
-    { argsProjectRoot           :: FilePath
-    , argCommand                :: Command
-    , argsRules                 :: Rules ()
-    , argsHlsPlugins            :: IdePlugins IdeState
-    , argsGhcidePlugin          :: Plugin Config  -- ^ Deprecated
-    , argsSessionLoadingOptions :: SessionLoadingOptions
-    , argsIdeOptions            :: Config -> Action IdeGhcSession -> IdeOptions
-    , argsLspOptions            :: LSP.Options
-    , argsDefaultHlsConfig      :: Config
-    , argsGetHieDbLoc           :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
-    , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
-    , argsHandleIn              :: IO Handle
-    , argsHandleOut             :: IO Handle
-    , argsThreads               :: Maybe Natural
-    , argsMonitoring            :: IO Monitoring
-    , argsDisableKick           :: Bool -- ^ flag to disable kick used for testing
+    { argsProjectRoot            :: FilePath
+    , argCommand                 :: Command
+    , argsRules                  :: Rules ()
+    , argsHlsPlugins             :: IdePlugins IdeState
+    , argsGhcidePlugin           :: Plugin Config  -- ^ Deprecated
+    , argsSessionLoadingOptions  :: SessionLoadingOptions
+    , argsIdeOptions             :: Config -> Action IdeGhcSession -> IdeOptions
+    , argsLspOptions             :: LSP.Options
+    , argsDefaultHlsConfig       :: Config
+    , argsGetHieDbLoc            :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
+    , argsDebouncer              :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
+    , argsHandleIn               :: IO Handle
+    , argsHandleOut              :: IO Handle
+    , argsThreads                :: Maybe Natural
+    , argsMonitoring             :: IO Monitoring
+    , argsDisableKick            :: Bool -- ^ flag to disable kick used for testing
+    , argsDisableInitialCwdShift :: Bool -- ^ skip the init-time setCurrentDirectory, for in-process parallel tests
     }
 
 defaultArguments :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
@@ -266,6 +267,7 @@ defaultArguments recorder projectRoot plugins = Arguments
                 return newStdout
         , argsMonitoring = OpenTelemetry.monitoring
         , argsDisableKick = False
+        , argsDisableInitialCwdShift = False
         }
 
 
@@ -379,7 +381,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   putMVar ideStateVar ide
                   pure ide
 
-            let setup ideStateVar = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsGetHieDbLoc (pluginHandlers plugins) (getIdeState ideStateVar)
+            let setup ideStateVar = setupLSP (cmapWithPrio LogLanguageServer recorder) argsProjectRoot argsDisableInitialCwdShift argsGetHieDbLoc (pluginHandlers plugins) (getIdeState ideStateVar)
                 -- See Note [Client configuration in Rules]
                 onConfigChange ideStateVar cfg = do
                   -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint

@@ -7,7 +7,8 @@ import           Control.Concurrent (threadDelay)
 
 {- Capture stdout, returns value.
 
-Has a delay in order to show progress reporting.
+Small delay only: a large one widens the stdout capture window so the test
+reporter's output for concurrent tests races into it under parallel runs.
 
->>> threadDelay 2000000 >> print "ABC" >> return "XYZ"
+>>> threadDelay 1000 >> print "ABC" >> return "XYZ"
 -}
