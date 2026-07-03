@@ -37,28 +37,36 @@ import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls                        (TestConfig (..), def,
                                                   runSessionWithTestConfig,
-                                                  waitForBuildQueue)
+                                                  waitForBuildQueue, setHlsConfig)
 import           Test.Hls.FileSystem
 import           Test.Hls.Util                   (EnvSpec (..), OS (..),
                                                   ignoreInEnv)
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import Control.Monad (when)
 
 
 tests :: TestTree
 tests = testGroup "cradle"
-    [testGroup "dependencies" [sessionDepsArePickedUp]
-    ,testGroup "ignore-fatal" [ignoreFatalWarning]
-    ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
+    [testGroup "dependencies" $ bothLoadings1 sessionDepsArePickedUp
+    ,testGroup "ignore-fatal" $ bothLoadings1 ignoreFatalWarning
+    ,testGroup "loading" $ bothLoadings $ \initM -> [loadCradleOnlyonce initM, retryFailedCradle initM]
     ,testGroup "regression.batch" batchLoadRegressionTests
     ,testGroup "multi"   (multiTests "multi")
     ,testGroup "multi-unit" (multiTests "multi-unit")
-    ,testGroup "sub-directory"   [simpleSubDirectoryTest]
-    ,testGroup "multi-unit-rexport" [multiRexportTest]
+    ,testGroup "sub-directory" $ bothLoadings1 simpleSubDirectoryTest
+    ,testGroup "multi-unit-rexport" $ bothLoadings1 multiRexportTest
     ]
 
-loadCradleOnlyonce :: TestTree
-loadCradleOnlyonce = testGroup "load cradle only once"
+-- | Test both with the default `componentsLoading` and WholeProject.
+bothLoadings :: (Session () -> [TestTree]) -> [TestTree]
+bothLoadings m = [testGroup "default" (m (return ()))
+                , testGroup "whole-project" (m setWholeProjectLoading)]
+bothLoadings1 :: (Session () -> TestTree) -> [TestTree]
+bothLoadings1 m = bothLoadings $ \ initM -> [m initM]
+
+loadCradleOnlyonce :: Session () -> TestTree
+loadCradleOnlyonce initM = testGroup "load cradle only once"
     [ testWithDummyPluginEmpty' "implicit" implicit
     , testWithDummyPluginEmpty' "direct"   direct
     ]
@@ -69,6 +77,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             test dir
         implicit dir = test dir
         test _dir = do
+            initM
             doc <- createDoc "B.hs" "haskell" "module B where\nimport Data.Foo"
             msgs <- someTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 1
@@ -79,8 +88,9 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 0
 
-retryFailedCradle :: TestTree
-retryFailedCradle = testWithDummyPluginEmpty' "retry failed" $ \dir -> do
+retryFailedCradle :: Session () -> TestTree
+retryFailedCradle initM = testWithDummyPluginEmpty' "retry failed" $ \dir -> do
+  initM
   -- The false cradle always fails
   let hieContents = "cradle: {bios: {shell: \"false\"}}"
       hiePath = dir </> "hie.yaml"
@@ -108,16 +118,18 @@ cradleLoadedMessage = satisfy $ \case
 cradleLoadedMethod :: String
 cradleLoadedMethod = "ghcide/cradle/loaded"
 
-ignoreFatalWarning :: TestTree
-ignoreFatalWarning = testCase "ignore-fatal-warning" $ runWithExtraFiles "ignore-fatal" $ \dir -> do
+ignoreFatalWarning :: Session () -> TestTree
+ignoreFatalWarning initM = testCase "ignore-fatal-warning" $ runWithExtraFiles "ignore-fatal" $ \dir -> do
+    initM
     let srcPath = dir </> "IgnoreFatal.hs"
     src <- liftIO $ readFileUtf8 srcPath
     _ <- createDoc srcPath "haskell" src
     expectNoMoreDiagnostics 5
 
-simpleSubDirectoryTest :: TestTree
-simpleSubDirectoryTest =
+simpleSubDirectoryTest :: Session () -> TestTree
+simpleSubDirectoryTest initM =
   testCase "simple-subdirectory" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    initM
     let mainPath = dir </> "a/src/Main.hs"
     mainSource <- liftIO $ readFileUtf8 mainPath
     _mdoc <- createDoc mainPath "haskell" mainSource
@@ -127,18 +139,31 @@ simpleSubDirectoryTest =
     expectNoMoreDiagnostics 0.5
 
 multiTests :: FilePath -> [TestTree]
-multiTests dir =
-  [ simpleMultiTest dir
-  , simpleMultiTest2 dir
-  , simpleMultiTest3 dir
-  , simpleMultiDefTest dir
-  ]
+multiTests odir =
+    [ testGroup "default" $ tests (return ())
+    , testGroup "whole-project" $ tests setWholeProjectLoading
+    ]
+  where
+    tests initM =
+      [ ignoreForWindows testName $ testCase testName $ runWithExtraFiles odir $ \dir -> initM >> test dir
+      | (name,test) <-
+      [ ("test",simpleMultiTest)
+      , ("test2",simpleMultiTest2)
+      , ("test3",simpleMultiTest3)
+      , ("def-test",simpleMultiDefTest)
+      ]
+      ,
+      let testName = multiTestName odir name
+      ]
+    ignoreForWindows testName
+        | testName == "simple-multi-def-test" = ignoreInEnv [HostOS Windows] "Test is flaky on Windows, see #4270"
+        | otherwise = id
 
 multiTestName :: FilePath -> String -> String
 multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
 
-simpleMultiTest :: FilePath -> TestTree
-simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest :: FilePath -> Session ()
+simpleMultiTest = \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -153,8 +178,8 @@ simpleMultiTest variant = testCase (multiTestName variant "test") $ runWithExtra
     expectNoMoreDiagnostics 0.5
 
 -- Like simpleMultiTest but open the files in the other order
-simpleMultiTest2 :: FilePath -> TestTree
-simpleMultiTest2 variant = testCase (multiTestName variant "test2") $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest2 :: FilePath -> Session ()
+simpleMultiTest2 = \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     bdoc <- openDoc bPath "haskell"
@@ -167,9 +192,8 @@ simpleMultiTest2 variant = testCase (multiTestName variant "test2") $ runWithExt
     expectNoMoreDiagnostics 0.5
 
 -- Now with 3 components
-simpleMultiTest3 :: FilePath -> TestTree
-simpleMultiTest3 variant =
-  testCase (multiTestName variant "test3") $ runWithExtraFiles variant $ \dir -> do
+simpleMultiTest3 :: FilePath -> Session ()
+simpleMultiTest3 = \ dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
         cPath = dir </> "c/C.hs"
@@ -273,12 +297,31 @@ batchLoadRegressionTests =
   , testCase "s1-no-stale-outcomes-across-restart-paths" $
       runWithExtraFilesMultiComponent "multi" regressionNoStaleOutcomesOnRestart
   ]
+  ++ [ testGroup "whole-project"
+  [ testCase "m1-open-a-then-b-batch-pending-and-success" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" runRegressionMultiOpenAThenB
+  , testCase "m2-open-b-then-a-batch-pending-and-success" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" runRegressionMultiOpenBThenA
+  , testCase "m3-open-b-then-a-then-c-batch-pending-and-success" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" runRegressionMultiOpenBThenAThenC
+  , testCase "f1-batch-pending-failure-does-not-isolate-broken-component" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" regressionBatchFailureDoesNotIsolateBrokenComponent
+  , testCase "f2-failed-file-keeps-failing-until-cradle-fix" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" $ regressionFailedFileKeepsFailingUntilFix' False
+  , testCase "r1-failed-file-recovers-after-cradle-fix" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" regressionFailedFileRecoversAfterFix
+  , testCase "s1-no-stale-outcomes-across-restart-paths" $
+      runWithExtraFilesMultiComponent' PreferMultiWholeProjectLoading "multi" $ regressionNoStaleOutcomesOnRestart' False
+  ]]
 
 runWithExtraFilesMultiComponent :: String -> (FilePath -> Session a) -> IO a
-runWithExtraFilesMultiComponent dirName action = do
+runWithExtraFilesMultiComponent = runWithExtraFilesMultiComponent' PreferMultiComponentLoading
+
+runWithExtraFilesMultiComponent' :: SessionLoadingPreferenceConfig -> String -> (FilePath -> Session a) -> IO a
+runWithExtraFilesMultiComponent' sesLoading dirName action = do
   let vfs = mkIdeTestFs [copyDir dirName]
       lspConfig :: Config
-      lspConfig = def { sessionLoading = PreferMultiComponentLoading }
+      lspConfig = def { componentsLoading = sesLoading }
       conf :: TestConfig ()
       conf = def
         { testPluginDescriptor = dummyPlugin
@@ -321,6 +364,11 @@ assertTypeCheckFailure doc msg = do
   WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ assertBool msg (not ideResultSuccess)
 
+setWholeProjectLoading :: Session ()
+setWholeProjectLoading = do
+  setIgnoringConfigurationRequests False
+  setHlsConfig def{componentsLoading = PreferMultiWholeProjectLoading}
+
 regressionBatchFailureIsolatesBrokenFile :: FilePath -> Session ()
 regressionBatchFailureIsolatesBrokenFile dir = do
   writeBrokenMultiHieYaml dir
@@ -333,8 +381,24 @@ regressionBatchFailureIsolatesBrokenFile dir = do
   liftIO $ assertBool "A should typecheck when B cradle mapping is broken" (ideResultSuccess aRes)
   liftIO $ assertBool "B should fail with a broken cradle mapping" (not $ ideResultSuccess bRes)
 
+-- | With whole-project loading a failed component blocks the whole session.
+regressionBatchFailureDoesNotIsolateBrokenComponent :: FilePath -> Session ()
+regressionBatchFailureDoesNotIsolateBrokenComponent dir = do
+  writeBrokenMultiHieYaml dir
+  let aPath = dir </> "a/A.hs"
+      bPath = dir </> "b/B.hs"
+  adoc <- openDoc aPath "haskell"
+  bdoc <- openDoc bPath "haskell"
+  _ <- waitForBuildQueue
+  [aRes, bRes] <- waitForTypeChecksBatched [adoc, bdoc]
+  liftIO $ assertBool "A should not typecheck when B cradle mapping is broken" (not $ ideResultSuccess aRes)
+  liftIO $ assertBool "B should fail with a broken cradle mapping" (not $ ideResultSuccess bRes)
+
 regressionFailedFileKeepsFailingUntilFix :: FilePath -> Session ()
-regressionFailedFileKeepsFailingUntilFix dir = do
+regressionFailedFileKeepsFailingUntilFix = regressionFailedFileKeepsFailingUntilFix' True
+
+regressionFailedFileKeepsFailingUntilFix' :: Bool -> FilePath -> Session ()
+regressionFailedFileKeepsFailingUntilFix' isolated dir = do
   writeBrokenMultiHieYaml dir
   let aPath = dir </> "a/A.hs"
       bPath = dir </> "b/B.hs"
@@ -347,10 +411,11 @@ regressionFailedFileKeepsFailingUntilFix dir = do
     [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ bSource <> "\n"]
   assertTypeCheckFailure bdoc "B should keep failing until the cradle is fixed"
 
-  adoc <- openDoc aPath "haskell"
-  cdoc <- openDoc cPath "haskell"
-  assertTypeCheckSuccess adoc "A should still typecheck while B remains broken"
-  assertTypeCheckSuccess cdoc "C should still typecheck while B remains broken"
+  when isolated $ do
+    adoc <- openDoc aPath "haskell"
+    cdoc <- openDoc cPath "haskell"
+    assertTypeCheckSuccess adoc "A should still typecheck while B remains broken"
+    assertTypeCheckSuccess cdoc "C should still typecheck while B remains broken"
 
 regressionFailedFileRecoversAfterFix :: FilePath -> Session ()
 regressionFailedFileRecoversAfterFix dir = do
@@ -371,7 +436,10 @@ regressionFailedFileRecoversAfterFix dir = do
   assertTypeCheckSuccess bdoc "B should recover after restoring the cradle"
 
 regressionNoStaleOutcomesOnRestart :: FilePath -> Session ()
-regressionNoStaleOutcomesOnRestart dir = do
+regressionNoStaleOutcomesOnRestart = regressionNoStaleOutcomesOnRestart' True
+
+regressionNoStaleOutcomesOnRestart' :: Bool -> FilePath -> Session ()
+regressionNoStaleOutcomesOnRestart' isolated dir = do
   let hiePath = dir </> "hie.yaml"
       aPath = dir </> "a/A.hs"
       bPath = dir </> "b/B.hs"
@@ -382,8 +450,9 @@ regressionNoStaleOutcomesOnRestart dir = do
   bdoc <- openDoc bPath "haskell"
   assertTypeCheckFailure bdoc "B should fail before cradle fix"
 
-  adoc <- openDoc aPath "haskell"
-  assertTypeCheckSuccess adoc "A should remain healthy while B is broken"
+  when isolated $ do
+    adoc <- openDoc aPath "haskell"
+    assertTypeCheckSuccess adoc "A should remain healthy while B is broken"
 
   liftIO $ atomicFileWriteStringUTF8 hiePath (T.unpack validHie)
   notifyHieYamlChanged dir
@@ -397,9 +466,8 @@ regressionNoStaleOutcomesOnRestart dir = do
   assertTypeCheckSuccess bdoc "B should not keep stale failure after cradle restart"
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
-simpleMultiDefTest :: FilePath -> TestTree
-simpleMultiDefTest variant = ignoreForWindows $ testCase testName $
-    runWithExtraFiles variant $ \dir -> do
+simpleMultiDefTest :: FilePath -> Session ()
+simpleMultiDefTest = \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -411,15 +479,11 @@ simpleMultiDefTest variant = ignoreForWindows $ testCase testName $
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
-  where
-    testName = multiTestName variant "def-test"
-    ignoreForWindows
-        | testName == "simple-multi-def-test" = ignoreInEnv [HostOS Windows] "Test is flaky on Windows, see #4270"
-        | otherwise = id
 
-multiRexportTest :: TestTree
-multiRexportTest =
+multiRexportTest :: Session () -> TestTree
+multiRexportTest initM =
   testCase "multi-unit-reexport-test"  $ runWithExtraFiles "multi-unit-reexport" $ \dir -> do
+    initM
     let cPath = dir </> "c/C.hs"
     cdoc <- openDoc cPath "haskell"
     WaitForIdeRuleResult {} <- waitForAction "TypeCheck" cdoc
@@ -429,10 +493,11 @@ multiRexportTest =
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
-sessionDepsArePickedUp :: TestTree
-sessionDepsArePickedUp = testWithDummyPluginEmpty'
+sessionDepsArePickedUp :: Session () -> TestTree
+sessionDepsArePickedUp initM = testWithDummyPluginEmpty'
   "session-deps-are-picked-up"
   $ \dir -> do
+    initM
     liftIO $
       atomicFileWriteStringUTF8
         (dir </> "hie.yaml")

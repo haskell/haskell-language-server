@@ -2,6 +2,7 @@
     "cabalFormattingProvider": "cabal-gild",
     "checkParents": "CheckOnSave",
     "checkProject": true,
+    "componentsLoading": "multi: needed-only",
     "formattingProvider": "ormolu",
     "linkDocTo": "LinkToHackage",
     "linkSourceTo": "LinkToHackage",
@@ -166,6 +167,5 @@
         "stan": {
             "globalOn": false
         }
-    },
-    "sessionLoading": "multipleComponents"
+    }
 }

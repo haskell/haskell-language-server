@@ -734,7 +734,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
                 [ B.encode (hash (sessionVersion res))
                 -- When the session version changes, reload all session
                 -- hsc env sessions
-                , B.encode (show (sessionLoading config))
+                , B.encode (show (componentsLoading config))
                 -- The loading config affects session loading.
                 -- Invalidate all build nodes.
                 -- Changing the session loading config will increment
