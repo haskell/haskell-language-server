@@ -155,7 +155,7 @@
                 "typeVariableToken": "typeParameter",
                 "variableToken": "variable"
             },
-            "globalOn": false
+            "globalOn": true
         },
         "signatureHelp": {
             "globalOn": true

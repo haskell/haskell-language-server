@@ -18,7 +18,6 @@ descriptor recorder plId =
       Ide.Types.pluginRules = Internal.getSemanticTokensRule recorder,
       pluginConfigDescriptor =
         defaultConfigDescriptor
-          { configInitialGenericConfig = (configInitialGenericConfig defaultConfigDescriptor) {plcGlobalOn = False}
-          , configCustomConfig = mkCustomConfig Internal.semanticConfigProperties
+          { configCustomConfig = mkCustomConfig Internal.semanticConfigProperties
           }
     }
