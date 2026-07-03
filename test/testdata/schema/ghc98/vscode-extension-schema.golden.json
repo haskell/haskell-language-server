@@ -1050,7 +1050,7 @@
         "type": "string"
     },
     "haskell.plugin.semanticTokens.globalOn": {
-        "default": false,
+        "default": true,
         "description": "Enables semanticTokens plugin",
         "scope": "resource",
         "type": "boolean"
