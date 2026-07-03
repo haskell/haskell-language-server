@@ -17,7 +17,8 @@ import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats         (STM, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
-                                                       readTVarIO)
+                                                       readTVar, readTVarIO,
+                                                       stateTVar)
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
@@ -27,6 +28,7 @@ import qualified Control.Monad.Trans.State.Strict     as State
 import           Data.Dynamic
 import           Data.Either
 import           Data.Foldable                        (for_, traverse_)
+import qualified Data.IntMap.Strict                   as IntMap
 import           Data.IORef.Extra
 import           Data.Maybe
 import           Data.Traversable                     (for)
@@ -52,6 +54,7 @@ import           Data.List.NonEmpty                   (unzip)
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
     databaseStep <- newTVarIO $ Step 0
+    databaseAsyncs <- newTVarIO (0, IntMap.empty)
     databaseValues <- atomically SMap.new
     pure Database{..}
 
@@ -60,6 +63,9 @@ newDatabase databaseExtra databaseRules = do
 incDatabase :: Database -> Maybe [Key] -> IO ()
 -- only some keys are dirty
 incDatabase db (Just kk) = do
+    -- Cancel threads that escaped the previous scope before the step bump.
+    -- See Note [Cancelling escaped rule computations].
+    cancelTrackedAsyncs db
     atomicallyNamed "incDatabase" $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
     transitiveDirtyKeys <- transitiveDirtySet db kk
     for_ (toListKeySet transitiveDirtyKeys) $ \k ->
@@ -70,6 +76,7 @@ incDatabase db (Just kk) = do
 
 -- all keys are dirty
 incDatabase db Nothing = do
+    cancelTrackedAsyncs db
     atomically $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
     let list = SMap.listT (databaseValues db)
     atomicallyNamed "incDatabase - all " $ flip ListT.traverse_ list $ \(k,_) ->
@@ -132,7 +139,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
             pure (id, val)
 
     toForceList <- liftIO $ readTVarIO toForce
-    let waitAll = run $ waitConcurrently_ toForceList
+    let waitAll = run $ waitConcurrently_ db toForceList
     case toForceList of
         [] -> return $ Left results
         _ -> return $ Right $ do
@@ -176,9 +183,9 @@ refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
-    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> asyncWithCleanUp $ refreshDeps mempty db stack key me (reverse deps)
+    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> asyncWithCleanUp db $ refreshDeps mempty db stack key me (reverse deps)
     (Right stack, _) ->
-        asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
+        asyncWithCleanUp db $ liftIO $ compute db stack key RunDependenciesChanged result
 
 -- | Compute a key.
 compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> IO Result
@@ -310,15 +317,63 @@ runAIO (AIO act) = do
     asyncs <- newIORef []
     runReaderT act asyncs `onException` cleanupAsync asyncs
 
+{- Note [Cancelling escaped rule computations]
+
+Rule computations run as asyncs inside a per-'build' AIO scope, and that scope's
+'cleanupAsync' drains them when it ends. Two kinds of thread escape that drain:
+
+  - one registered after the scope had already drained,
+  - one forced by a later build.
+
+On a restart 'incDatabase' bumps the step, and an escaped thread left running can
+read across the bump or leak.
+
+'trackedAsync' registers every spawned async on the 'Database', keyed by a
+monotonic id and self-removing when it finishes. The registry outlives any
+single scope, so 'cancelTrackedAsyncs' can reach and kill every escaped thread
+before the next step bump.
+-}
+
+-- | Spawn an async and register it on the 'Database' for its whole lifetime,
+--   self-removing when it finishes.
+--   See Note [Cancelling escaped rule computations].
+trackedAsync :: Database -> IO a -> IO (Async a)
+trackedAsync Database{..} act = mask_ $ do
+    -- Park the child until it is registered, so its self-removal 'finally'
+    -- cannot fire before its entry exists.
+    gate <- newEmptyMVar
+    ident <- atomically $ stateTVar databaseAsyncs $ \(next, m) -> (next, (next + 1, m))
+    -- Wrap the gate wait too. A restart can cancel the child while it is still
+    -- parked, and it must still drop its entry, or 'cancelTrackedAsyncs' spins
+    -- on an entry that never deregisters.
+    a <- async $
+            (takeMVar gate >> act)
+              `finally` atomically (modifyTVar' databaseAsyncs (second (IntMap.delete ident)))
+    atomically $ modifyTVar' databaseAsyncs (second (IntMap.insert ident (void a)))
+    putMVar gate ()
+    pure a
+
+-- | Cancel every tracked async and wait for it to die. Loops until the registry
+-- is empty to catch threads a dying thread spawns.
+cancelTrackedAsyncs :: Database -> IO ()
+cancelTrackedAsyncs Database{..} =
+  let go = do
+        as <- atomically $ IntMap.elems . snd <$> readTVar databaseAsyncs
+        unless (null as) $ do
+          mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) as
+          mapM_ waitCatch as
+          go
+  in go
+
 -- | Like 'async' but with built-in cancellation.
 --   Returns an IO action to wait on the result.
-asyncWithCleanUp :: AIO a -> AIO (IO a)
-asyncWithCleanUp act = do
+asyncWithCleanUp :: Database -> AIO a -> AIO (IO a)
+asyncWithCleanUp db act = do
     st <- AIO ask
     io <- unliftAIO act
     -- mask to make sure we keep track of the spawned async
     liftIO $ uninterruptibleMask $ \restore -> do
-        a <- async $ restore io
+        a <- trackedAsync db $ restore io
         atomicModifyIORef'_ st (void a :)
         return $ wait a
 
@@ -357,19 +412,19 @@ fmapWait :: (IO () -> IO ()) -> Wait -> Wait
 fmapWait f (Wait io)  = Wait (f io)
 fmapWait f (Spawn io) = Spawn (f io)
 
-waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
-waitOrSpawn (Wait io)  = pure $ Left io
-waitOrSpawn (Spawn io) = Right <$> async io
+waitOrSpawn :: Database -> Wait -> IO (Either (IO ()) (Async ()))
+waitOrSpawn _  (Wait io)  = pure $ Left io
+waitOrSpawn db (Spawn io) = Right <$> trackedAsync db io
 
-waitConcurrently_ :: [Wait] -> AIO ()
-waitConcurrently_ [] = pure ()
-waitConcurrently_ [one] = liftIO $ justWait one
-waitConcurrently_ many = do
+waitConcurrently_ :: Database -> [Wait] -> AIO ()
+waitConcurrently_ _ [] = pure ()
+waitConcurrently_ _ [one] = liftIO $ justWait one
+waitConcurrently_ db many = do
     ref <- AIO ask
     -- spawn the async computations.
     -- mask to make sure we keep track of all the asyncs.
     (asyncs, syncs) <- liftIO $ uninterruptibleMask $ \unmask -> do
-        waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
+        waits <- liftIO $ traverse (waitOrSpawn db . fmapWait unmask) many
         let (syncs, asyncs) = partitionEithers waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return (asyncs, syncs)
