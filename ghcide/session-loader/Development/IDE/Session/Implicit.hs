@@ -78,12 +78,12 @@ stackCradle fp = do
   pkgsWithComps <- liftIO $ catMaybes <$> mapM (nestedPkg fp) pkgs
   let yaml = fp </> "stack.yaml"
   pure $ (,fp) $ case pkgsWithComps of
-    [] -> Stack (StackType Nothing (Just yaml))
+    [] -> Stack (StackType Nothing (Just yaml) Nothing)
     ps -> StackMulti mempty $ do
       Package n cs <- ps
       c <- cs
       let (prefix, comp) = Implicit.stackComponent n c
-      pure (prefix, StackType (Just comp) (Just yaml))
+      pure (prefix, StackType (Just comp) (Just yaml) Nothing)
 
 -- | By default, we generate a simple cabal cradle which is equivalent to the
 -- following hie.yaml:
@@ -95,7 +95,7 @@ stackCradle fp = do
 --
 -- Note, this only works reliable for reasonably modern cabal versions >= 3.2.
 simpleCabalCradle :: FilePath -> (CradleTree a, FilePath)
-simpleCabalCradle fp = (Cabal $ CabalType Nothing Nothing, fp)
+simpleCabalCradle fp = (Cabal $ CabalType Nothing Nothing Nothing, fp)
 
 cabalExecutable :: MaybeT IO FilePath
 cabalExecutable = MaybeT $ findExecutable "cabal"

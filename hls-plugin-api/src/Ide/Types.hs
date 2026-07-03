@@ -78,6 +78,7 @@ import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
 import           Data.Kind                     (Type)
+import qualified Data.List                     as List
 import           Data.List.Extra               (find, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
@@ -179,7 +180,7 @@ data Config =
     , formattingProvider      :: !T.Text
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
-    , sessionLoading          :: !SessionLoadingPreferenceConfig
+    , componentsLoading       :: !SessionLoadingPreferenceConfig
     , linkSourceTo            :: !OptLinkTo
     , linkDocTo               :: !OptLinkTo
     , plugins                 :: !(Map.Map PluginId PluginConfig)
@@ -192,7 +193,7 @@ instance ToJSON Config where
            , "formattingProvider"          .= formattingProvider
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
-           , "sessionLoading"              .= sessionLoading
+           , "componentsLoading"           .= componentsLoading
            , "linkSourceTo"                .= linkSourceTo
            , "linkDocTo"                   .= linkDocTo
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
@@ -208,7 +209,7 @@ instance Default Config where
     -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
-    , sessionLoading              = PreferMultiComponentLoading
+    , componentsLoading           = PreferMultiComponentLoading
     , linkSourceTo                = LinkToHackage
     , linkDocTo                   = LinkToHackage
     , plugins                     = mempty
@@ -240,24 +241,46 @@ data SessionLoadingPreferenceConfig
     --
     -- The cradle can decide how to handle these situations, and whether
     -- to honour the preference at all.
+    | PreferMultiWholeProjectLoading
+    -- ^ Prefer loading all the components specified in the cradle, if possible.
   deriving stock (Eq, Ord, Show, Generic)
 
 instance Pretty SessionLoadingPreferenceConfig where
-    pretty PreferSingleComponentLoading = "Prefer Single Component Loading"
-    pretty PreferMultiComponentLoading  = "Prefer Multiple Components Loading"
+    pretty PreferSingleComponentLoading   = "Prefer Single Component Loading"
+    pretty PreferMultiComponentLoading    = "Prefer Multiple Components Loading"
+    pretty PreferMultiWholeProjectLoading = "Prefer Whole Project Loading"
+
+-- | Labels for @SessionLoadingPreferenceConfig@ json format.
+singleComponent, multipleComponents, single, multiNeededOnly, multiWholeProject :: T.Text
+singleComponent = "singleComponent"
+multipleComponents = "multipleComponents"
+single = "single"
+multiNeededOnly = "multi: needed-only"
+multiWholeProject = "multi: whole-project"
 
 instance ToJSON SessionLoadingPreferenceConfig where
     toJSON PreferSingleComponentLoading =
-        String "singleComponent"
+        String single
     toJSON PreferMultiComponentLoading =
-        String "multipleComponents"
+        String multiNeededOnly
+    toJSON PreferMultiWholeProjectLoading =
+        String multiWholeProject
 
 instance FromJSON SessionLoadingPreferenceConfig where
-    parseJSON (String val) = case val of
-        "singleComponent"    -> pure PreferSingleComponentLoading
-        "multipleComponents" -> pure PreferMultiComponentLoading
-        _ -> A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
-            (A.parseFail $ "Expected one of \"singleComponent\" or \"multipleComponents\" but got " <> T.unpack val )
+    parseJSON (String val)
+        | val `elem` [singleComponent, single] = pure PreferSingleComponentLoading
+        | val `elem` [multipleComponents, multiNeededOnly] = pure PreferMultiComponentLoading
+        | val == multiWholeProject = pure PreferMultiWholeProjectLoading
+        | otherwise = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.parseFail $ unwords ["Expected one of", expected,  "but got", T.unpack val] )
+          where
+            expected = concat ["[", List.intercalate ", " fields, "]"]
+            fields = map show
+              [single, multiNeededOnly, multiWholeProject]
+              ++
+              [ show old_value ++ " (deprecated)"
+              | old_value <- [singleComponent,multipleComponents]
+              ]
     parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
             (A.typeMismatch "String" o)
 
