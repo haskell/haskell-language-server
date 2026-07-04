@@ -620,9 +620,8 @@ suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> 
 suggestDeleteUnusedBinding
   ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}}
   contents
-  FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
--- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
-    | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+  fd@FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just name <- unusedName fd
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
@@ -747,6 +746,17 @@ suggestDeleteUnusedBinding
 
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = T.unpack (printOutputable x) == name
+
+unusedName :: FileDiagnostic -> Maybe T.Text
+#if MIN_VERSION_ghc(9,7,0)
+unusedName FileDiagnostic{fdStructuredMessage} = do
+  (TcRnUnusedName name _reason) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+  return $ printOutputable name
+#else
+unusedName FileDiagnostic{fdLspDiagnostic=Diagnostic{_message}} = do
+  [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+  return name
+#endif
 
 caDeleteUnusedBindings :: Maybe ParsedModule -> Maybe T.Text -> [FileDiagnostic] -> Range -> Uri -> [Command |? CodeAction]
 caDeleteUnusedBindings m contents allDiags contextRange uri
