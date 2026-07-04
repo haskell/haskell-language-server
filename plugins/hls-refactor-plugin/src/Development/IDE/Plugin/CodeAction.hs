@@ -111,6 +111,9 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,7,0)
 import           GHC.Tc.Errors.Types                               (UnusedImportName (..),
                                                                     UnusedImportReason (..))
+import           GHC.Tc.Types.Constraint                           (ctLoc,
+                                                                    ctOrigin)
+--import           GHC.Types.Name.Occurrence (OccName,occNameSpace)
 #endif
 
 #if !MIN_VERSION_ghc(9,9,0)
@@ -129,15 +132,27 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
 #endif
+#if MIN_VERSION_ghc(9,7,0) && !MIN_VERSION_ghc(9,11,0)
+import           GHC.Tc.Types.Constraint                           (ctl_env)
+import           GHC.Tc.Types.CtLocEnv                             (getCtLocEnvLoc)
+#endif
 
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Tc.Errors.Types                               (ShadowedNameProvenance (..),
+                                                                    UnusedImportName (..),
+                                                                    UnusedImportReason (..))
+#endif
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                                               (AnnsModule (am_where),
                                                                     EpToken (..),
                                                                     EpaLocation,
                                                                     EpaLocation' (..),
                                                                     HasLoc (..))
+import           GHC.Tc.Types.CtLoc                                (ctl_env,
+                                                                    getCtLocEnvLoc)
 #endif
 
+import           GHC.Tc.Types.Origin                               (CtOrigin (LiteralOrigin))
 
 -------------------------------------------------------------------------------------------------
 
@@ -620,7 +635,7 @@ suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> FileDiagnostic -> 
 suggestDeleteUnusedBinding
   ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}}
   contents
-  fd@FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+  fd@FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
     | Just name <- unusedName fd
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
@@ -802,8 +817,23 @@ caDeleteUnusedBindings m contents allDiags contextRange uri
 getLocatedRange :: HasSrcSpan a => a -> Maybe Range
 getLocatedRange = srcSpanToRange . getLoc
 
-suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,..}
+suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
+#if MIN_VERSION_ghc(9,7,0)
+suggestAddTypeAnnotationToSatisfyConstraints _ FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just (TcRnWarnDefaulting cts _ typ ) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+    , ((lit,ct):_) <- [(lit , x) |   x <- cts, LiteralOrigin lit <- [ctOrigin x]]
+    , typ <- printOutputable typ
+    , lit <- printOutputable lit
+    = codeEdit (realSrcSpanToRange$ getCtLocEnvLoc $ ctl_env $ ctLoc ct) typ lit (makeAnnotatedLit typ lit)
+    | otherwise = []
+    where
+      makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
+      codeEdit range ty lit replacement =
+        let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
+            edits = [TextEdit range replacement]
+        in  [( title, edits )]
+#else
+suggestAddTypeAnnotationToSatisfyConstraints sourceOpt FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
 -- File.hs:52:41: warning:
 --     * Defaulting the following constraint to type ‘Integer’
 --        Num p0 arising from the literal ‘1’
@@ -863,6 +893,7 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
             edits = [TextEdit range replacement]
         in  [( title, edits )]
+#endif
 
 -- | GHC strips out backticks in case of infix functions as well as single quote
 --   in case of quoted name when using TemplateHaskellQuotes. Which is not desired.
