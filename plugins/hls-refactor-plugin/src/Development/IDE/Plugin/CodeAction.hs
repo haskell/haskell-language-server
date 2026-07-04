@@ -80,6 +80,8 @@ import           GHC                                               (DeltaPos (..
 import           GHC.Iface.Ext.Types                               (ContextInfo (..),
                                                                     IdentifierDetails (..))
 import qualified GHC.LanguageExtensions                            as Lang
+
+import           GHC.Tc.Errors.Types                               (ShadowedNameProvenance (..))
 import           Ide.Logger                                        hiding
                                                                    (group)
 import           Ide.PluginUtils                                   (extendToFullLines,
@@ -373,31 +375,14 @@ findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a)
 #endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
--- Single:
--- This binding for ‘mod’ shadows the existing binding
---   imported from ‘Prelude’ at haskell-language-server/ghcide/src/Development/IDE/Plugin/CodeAction.hs:10:8-40
---   (and originally defined in ‘GHC.Real’)typecheck(-Wname-shadowing)
--- Multi:
---This binding for ‘pack’ shadows the existing bindings
---  imported from ‘Data.ByteString’ at B.hs:6:1-22
---  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
---  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
-suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
-  | Just [identifier, modName, s] <-
-      matchRegexUnifySpaces
-        _message
-        "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)" =
-    suggests identifier modName s
-  | Just [identifier] <-
-      matchRegexUnifySpaces
-        _message
-        "This binding for ‘([^`]+)’ shadows the existing bindings",
-    Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
-    mods <- [(modName, s) | [_, modName, s] <- matched],
-    result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
+suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> FileDiagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow ps fileContents mTcM mHar FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range=_range,_message=_message}}
+  | Just (TcRnShadowedName occname (ShadowedNameProvenanceGlobal gres)) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage,
+    identifier <- printOutputable $ occname,
+    imps <- [(printOutputable $ importSpecModule mod,importSpecLoc mod) | GRE{ gre_imp = iss } <- gres,mod <- iss],
+    result@(_:_) <- nubOrdBy (compare `on` fst) $ imps >>= uncurry (suggests identifier),
     hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result) =
-    result <> [hideAll]
+     (result <> [hideAll])
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = ps
@@ -405,8 +390,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
-        [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
-        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s' Nothing),
+        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) s,
         mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
         title <- "Hide " <> identifier <> " from " <> modName =
         if modName == "Prelude" && null mDecl
@@ -2033,12 +2017,6 @@ allMatchRegex message regex = message =~~ regex
 
 
 -- functions to help parse multiple import suggestions
-
--- | Returns the first match if found
-regexSingleMatch :: T.Text -> T.Text -> Maybe T.Text
-regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
-    Just (h:_) -> Just h
-    _          -> Nothing
 
 -- | Process a list of (module_name, filename:src_span) values
 --
