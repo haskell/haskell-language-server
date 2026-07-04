@@ -3573,7 +3573,7 @@ removeExportTests = testGroup "remove export actions"
         , "a :: ()"
         , "a = ()"
         ]
-        "Remove ‘module B’ from export"
+        "Remove ‘Module B’ from export"
         [ "module A () where"
         , "a :: ()"
         , "a = ()"
