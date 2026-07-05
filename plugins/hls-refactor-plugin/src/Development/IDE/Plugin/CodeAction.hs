@@ -30,7 +30,6 @@ import           Control.Monad.Trans.Maybe
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
-import           Data.Functor
 import qualified Data.Generics                                     as SYB
 import qualified Data.HashMap.Strict                               as Map
 import qualified Data.HashSet                                      as Set
